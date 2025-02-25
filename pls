@@ -18876,90 +18876,6 @@ pub mod mortal
         impl_mut_op!{ BitOrAssign, bitor_assign, union }
         impl_mut_op!{ BitXorAssign, bitxor_assign, symmetric_difference }
         impl_mut_op!{ SubAssign, sub_assign, difference }
-
-        #[cfg(test)]
-        mod test {
-            use super::{Signal, SignalSet};
-
-            #[test]
-            fn test_signal_set() {
-                let mut set = SignalSet::new();
-
-                assert!(set.is_empty());
-
-                set.insert(Signal::Break);
-
-                assert!(set.contains(Signal::Break));
-
-                set |= Signal::Continue | Signal::Interrupt;
-
-                assert!(set.contains(Signal::Break));
-                assert!(set.contains(Signal::Continue));
-                assert!(set.contains(Signal::Interrupt));
-
-                set ^= Signal::Interrupt | Signal::Quit;
-
-                assert!(set.contains(Signal::Break));
-                assert!(!set.contains(Signal::Interrupt));
-                assert!(set.contains(Signal::Quit));
-
-                set &= Signal::Break | Signal::Suspend;
-
-                assert!(set.contains(Signal::Break));
-                assert!(!set.contains(Signal::Continue));
-                assert!(!set.contains(Signal::Interrupt));
-                assert!(!set.contains(Signal::Suspend));
-                assert!(!set.contains(Signal::Quit));
-
-                set -= SignalSet::from(Signal::Break);
-
-                assert!(!set.contains(Signal::Break));
-            }
-
-            #[test]
-            fn test_signal_set_all() {
-                let mut all = SignalSet::all();
-
-                assert!(all.contains(Signal::Break));
-                assert!(all.contains(Signal::Continue));
-                assert!(all.contains(Signal::Interrupt));
-                assert!(all.contains(Signal::Resize));
-                assert!(all.contains(Signal::Suspend));
-                assert!(all.contains(Signal::Quit));
-
-                assert_eq!(all, !SignalSet::new());
-                assert_eq!(!all, SignalSet::new());
-
-                all.remove(Signal::Break);
-                all.remove(Signal::Continue);
-                all.remove(Signal::Interrupt);
-                all.remove(Signal::Resize);
-                all.remove(Signal::Suspend);
-                all.remove(Signal::Quit);
-
-                assert_eq!(all.0, 0);
-            }
-
-            #[test]
-            fn test_signal_set_debug() {
-                let mut set = SignalSet::new();
-
-                assert_eq!(format!("{:?}", set), "SignalSet()");
-
-                set.insert(Signal::Break);
-                assert_eq!(format!("{:?}", set), "SignalSet(Break)");
-
-                set.insert(Signal::Continue);
-                assert_eq!(format!("{:?}", set), "SignalSet(Break | Continue)");
-
-                set.insert(Signal::Interrupt);
-                assert_eq!(format!("{:?}", set), "SignalSet(Break | Continue | Interrupt)");
-
-                set = SignalSet::all();
-                assert_eq!(format!("{:?}", set),
-                    "SignalSet(Break | Continue | Interrupt | Resize | Suspend | Quit)");
-            }
-        }
     }
 
     pub mod terminal
@@ -19158,8 +19074,6 @@ pub mod mortal
         }
 
         /// Represents the visual appearance of the cursor in the terminal
-        ///
-        /// Some cursor states may not be available on all systems.
         #[derive(Copy, Clone, Debug, Eq, PartialEq)]
         pub enum CursorMode {
             /// Normal mode
@@ -19178,25 +19092,12 @@ pub mod mortal
             /// Mouse event
             Mouse(MouseEvent),
             /// Raw data read
-            ///
-            /// A value of this variant can only be returned when using the
-            /// platform-dependent extension trait, `TerminalExt`.
-            ///
-            /// On Unix, this trait is [`mortal::unix::TerminalExt`].
-            ///
-            /// On Windows, this trait is [`mortal::windows::TerminalExt`].
-            ///
-            /// [`mortal::unix::TerminalExt`]: ../unix/trait.TerminalExt.html
-            /// [`mortal::windows::TerminalExt`]: ../windows/trait.TerminalExt.html
             Raw(usize),
             /// Terminal window size changed; contained value is the new size.
             Resize(Size),
             /// Terminal signal received
             Signal(Signal),
             /// No event
-            ///
-            /// Returned when a low-level terminal event does not correspond
-            /// to a reported event type.
             NoEvent,
         }
 
@@ -19234,18 +19135,6 @@ pub mod mortal
             /// Character key
             Char(char),
             /// Control character
-            ///
-            /// # Notes
-            ///
-            /// The contained `char` value must always be lowercase;
-            /// e.g. `Ctrl('a')` and **not** `Ctrl('A')`.
-            ///
-            /// On Unix, certain special `Key` values are represented as control
-            /// characters; therefore, the following combinations will not generate a
-            /// `Ctrl(_)` value:
-            ///
-            /// * Ctrl-I instead generates `Tab`
-            /// * Ctrl-J and Ctrl-M instead generate `Enter`
             Ctrl(char),
             /// Function `n` key; e.g. F1, F2, ...
             F(u32),
@@ -19274,11 +19163,6 @@ pub mod mortal
             /// The input event that occurred
             pub input: MouseInput,
             /// Modifier keys held when the input event occurred
-            ///
-            /// # Notes
-            ///
-            /// On some systems, certain combinations of mouse button and modifier may
-            /// be interpreted by the system and not reported as terminal events.
             pub modifiers: ModifierState,
         }
 
@@ -19324,90 +19208,24 @@ pub mod mortal
         }
 
         /// Configures a [`Terminal`] or [`Screen`] instance to read special input.
-        ///
-        /// This struct implements the [`Default`] trait, providing default
-        /// values for all options.
-        ///
-        /// To override only some options while using the remaining default values,
-        /// one may use the following construct:
-        ///
-        /// ```no_run
-        /// # use std::io;
-        /// # fn example() -> io::Result<()> {
-        /// use mortal::{Terminal, PrepareConfig};
-        ///
-        /// let term = Terminal::new()?;
-        ///
-        /// let state = term.prepare(PrepareConfig{
-        ///     enable_keypad: false,
-        ///     enable_mouse: true,
-        ///     .. PrepareConfig::default()
-        /// })?;
-        ///
-        /// // ...
-        ///
-        /// term.restore(state)?;
-        /// # Ok(())
-        /// # }
-        /// ```
-        ///
-        /// [`Default`]: https://doc.rust-lang.org/std/default/trait.Default.html
-        /// [`Terminal`]: struct.Terminal.html
-        /// [`Screen`]: ../screen/struct.Screen.html
         #[derive(Copy, Clone, Debug)]
         pub struct PrepareConfig {
             /// Whether to block signals that result from user input.
-            ///
-            /// If `true`, e.g. when the user presses Ctrl-C,
-            /// `Key(Ctrl('c'))` will be read instead of `Signal(Interrupt)`.
-            ///
-            /// The default is `true`.
             pub block_signals: bool,
             /// Whether to enable control flow characters.
-            ///
-            /// The default is `false`.
-            ///
-            /// # Notes
-            ///
-            /// On Unix, when this setting is enabled, Ctrl-S and Ctrl-Q
-            /// will stop and start, respectively, terminal input from being processed.
-            ///
-            /// On Windows, this setting has no effect.
             pub enable_control_flow: bool,
             /// If `true`, the terminal will be configured to generate events from
             /// function keys.
-            ///
-            /// The default is `true`.
-            ///
-            /// # Notes
-            ///
-            /// On Unix, this may be required to receive events for arrow keys.
-            ///
-            /// On Windows, this setting has no effect.
             pub enable_keypad: bool,
             /// If `true`, the terminal will be configured to generate events for
             /// mouse input, if supported, and `read_event` may return `Event::Mouse(_)`.
-            ///
-            /// The default is `false`.
-            ///
-            /// # Notes
-            ///
-            /// This setting may not be supported on all systems.
             pub enable_mouse: bool,
             /// If `true`, mouse motion events will always be reported.
             /// If `false`, such events will only be reported while at least one mouse
             /// button is pressed.
-            ///
-            /// Mouse events are only reported if `enable_mouse` is `true`.
-            ///
-            /// The default is `false`.
             pub always_track_motion: bool,
             /// For each signal in the set, a signal handler will intercept the signal
             /// and report it by returning an `Event::Signal(_)` value.
-            ///
-            /// `block_signals` must be `false` for any of these signals to be received.
-            ///
-            /// By default, no signals are reported.
             pub report_signals: SignalSet,
         }
 
@@ -19425,21 +19243,11 @@ pub mod mortal
         }
 
         /// Represents a previous device state of a [`Terminal`].
-        ///
-        /// A value of this type is returned by [`Terminal::prepare`].
-        ///
-        /// Required to revert terminal state using [`Terminal::restore`].
-        ///
-        /// [`Terminal`]: struct.Terminal.html
-        /// [`Terminal::prepare`]: struct.Terminal.html#method.prepare
-        /// [`Terminal::restore`]: struct.Terminal.html#method.restore
         #[must_use = "the result of `terminal.prepare()` should be passed to \
             `terminal.restore()` to restore terminal to its original state"]
         pub struct PrepareState(sys::PrepareState);
 
         /// Represents the size of a terminal window
-        ///
-        /// A valid size must not have zero lines or zero columns.
         #[derive(Copy, Clone, Debug, Eq, PartialEq)]
         pub struct Size {
             /// Number of lines in the terminal
@@ -19450,10 +19258,6 @@ pub mod mortal
 
         impl Size {
             /// Returns the total number of cells in a terminal of the given size.
-            ///
-            /// # Panics
-            ///
-            /// If `lines * columns` would overflow.
             #[inline]
             pub fn area(&self) -> usize {
                 self.checked_area().unwrap_or_else(
@@ -19461,8 +19265,6 @@ pub mod mortal
             }
 
             /// Returns the total number of cells in a terminal of the given size.
-            ///
-            /// Returns `None` in case of overflow.
             #[inline]
             pub fn checked_area(&self) -> Option<usize> {
                 self.lines.checked_mul(self.columns)
@@ -19470,32 +19272,12 @@ pub mod mortal
         }
 
         /// Provides concurrent read and write access to a terminal device
-        ///
-        /// # Concurrency
-        ///
-        /// Access to read and write operations is controlled by two internal locks:
-        /// One for [reading] and one for [writing]. Each lock may be held independently
-        /// of the other.
-        ///
-        /// If any one thread wishes to hold both locks, the read lock
-        /// must be acquired first, in order to prevent deadlocks.
-        ///
-        /// [reading]: struct.TerminalReadGuard.html
-        /// [writing]: struct.TerminalWriteGuard.html
         pub struct Terminal(pub(crate) sys::Terminal);
 
         /// Holds an exclusive lock for read operations on a `Terminal`
-        ///
-        /// See [`Terminal`] documentation for details on locking.
-        ///
-        /// [`Terminal`]: struct.Terminal.html
         pub struct TerminalReadGuard<'a>(sys::TerminalReadGuard<'a>);
 
         /// Holds an exclusive lock for write operations on a `Terminal`
-        ///
-        /// See [`Terminal`] documentation for details on locking.
-        ///
-        /// [`Terminal`]: struct.Terminal.html
         pub struct TerminalWriteGuard<'a>(sys::TerminalWriteGuard<'a>);
 
         impl Terminal {
@@ -19510,44 +19292,30 @@ pub mod mortal
             }
 
             /// Returns the name of the terminal.
-            ///
-            /// # Notes
-            ///
-            /// On Unix, this method returns the contents of the `TERM` environment variable.
-            ///
-            /// On Windows, this method always returns the string `"windows-console"`.
             #[inline]
             pub fn name(&self) -> &str {
                 self.0.name()
             }
 
             /// Attempts to acquire an exclusive lock on terminal read operations.
-            ///
-            /// The current thread will block until the lock can be acquired.
             #[inline]
             pub fn lock_read(&self) -> LockResult<TerminalReadGuard> {
                 map_lock_result(self.0.lock_read(), TerminalReadGuard)
             }
 
             /// Attempts to acquire an exclusive lock on terminal write operations.
-            ///
-            /// The current thread will block until the lock can be acquired.
             #[inline]
             pub fn lock_write(&self) -> LockResult<TerminalWriteGuard> {
                 map_lock_result(self.0.lock_write(), TerminalWriteGuard)
             }
 
             /// Attempts to acquire an exclusive lock on terminal read operations.
-            ///
-            /// If the lock cannot be acquired immediately, `Err(_)` is returned.
             #[inline]
             pub fn try_lock_read(&self) -> TryLockResult<TerminalReadGuard> {
                 map_try_lock_result(self.0.try_lock_read(), TerminalReadGuard)
             }
 
             /// Attempts to acquire an exclusive lock on terminal write operations.
-            ///
-            /// If the lock cannot be acquired immediately, `Err(_)` is returned.
             #[inline]
             pub fn try_lock_write(&self) -> TryLockResult<TerminalWriteGuard> {
                 map_try_lock_result(self.0.try_lock_write(), TerminalWriteGuard)
@@ -19557,28 +19325,8 @@ pub mod mortal
         /// # Locking
         ///
         /// The following methods internally acquire both the read and write locks.
-        ///
-        /// The locks are released before the method returns.
-        ///
-        /// These methods are also implemented on [`TerminalReadGuard`],
-        /// which holds the `Terminal` read lock until the value is dropped.
-        ///
-        /// [`TerminalReadGuard`]: struct.TerminalReadGuard.html
         impl Terminal {
             /// Prepares the terminal to read input.
-            ///
-            /// When reading operations have concluded, [`restore`] should be called
-            /// with the resulting `PrepareState` value to restore the terminal to
-            /// its previous state.
-            ///
-            /// This method may be called more than once before a corresponding
-            /// `restore` call. However, each `restore` call must receive the most
-            /// recently created `PrepareState` value.
-            ///
-            /// See [`PrepareConfig`] for details.
-            ///
-            /// [`PrepareConfig`]: struct.PrepareConfig.html
-            /// [`restore`]: #method.restore
             pub fn prepare(&self, config: PrepareConfig) -> io::Result<PrepareState> {
                 self.0.prepare(config).map(PrepareState)
             }
@@ -19592,28 +19340,13 @@ pub mod mortal
         /// # Locking
         ///
         /// The following methods internally acquire the read lock.
-        ///
-        /// The lock is released before the method returns.
-        ///
-        /// These methods are also implemented on [`TerminalReadGuard`],
-        /// which holds the `Terminal` read lock until the value is dropped.
-        ///
-        /// [`TerminalReadGuard`]: struct.TerminalReadGuard.html
         impl Terminal {
             /// Waits for an event from the terminal.
-            ///
-            /// Returns `Ok(false)` if `timeout` elapses without an event occurring.
-            ///
-            /// If `timeout` is `None`, this method will wait indefinitely.
             pub fn wait_event(&self, timeout: Option<Duration>) -> io::Result<bool> {
                 self.0.wait_event(timeout)
             }
 
             /// Waits for input and reads an event from the terminal.
-            ///
-            /// Returns `Ok(None)` if `timeout` elapses without an event occurring.
-            ///
-            /// If `timeout` is `None`, this method will wait indefinitely.
             pub fn read_event(&self, timeout: Option<Duration>) -> io::Result<Option<Event>>  {
                 self.0.read_event(timeout)
             }
@@ -19622,13 +19355,6 @@ pub mod mortal
         /// # Locking
         ///
         /// The following methods internally acquire the write lock.
-        ///
-        /// The lock is released before the method returns.
-        ///
-        /// These methods are also implemented on [`TerminalWriteGuard`],
-        /// which holds the `Terminal` write lock until the value is dropped.
-        ///
-        /// [`TerminalWriteGuard`]: struct.TerminalWriteGuard.html
         impl Terminal {
             /// Returns the size of the terminal.
             #[inline]
@@ -19637,10 +19363,6 @@ pub mod mortal
             }
 
             /// Clears the terminal screen, placing the cursor at the first line and column.
-            ///
-            /// If the terminal contains a scrolling window over a buffer, the window
-            /// will be scrolled downward, preserving as much of the existing buffer
-            /// as possible.
             pub fn clear_screen(&self) -> io::Result<()> {
                 self.0.clear_screen()
             }
@@ -19681,13 +19403,6 @@ pub mod mortal
             }
 
             /// Set the current cursor mode.
-            ///
-            /// This setting is a visible hint to the user.
-            /// It produces no change in behavior.
-            ///
-            /// # Notes
-            ///
-            /// On some systems, this setting may have no effect.
             pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> {
                 self.0.set_cursor_mode(mode)
             }
@@ -19729,42 +19444,31 @@ pub mod mortal
             }
 
             /// Adds bold to the current style setting.
-            ///
-            /// This is equivalent to `self.add_style(Style::BOLD)`.
             pub fn bold(&self) -> io::Result<()> {
                 self.add_style(Style::BOLD)
             }
 
             /// Adds italic to the current style setting.
-            ///
-            /// This is equivalent to `self.add_style(Style::ITALIC)`.
             pub fn italic(&self) -> io::Result<()> {
                 self.add_style(Style::ITALIC)
             }
 
             /// Adds underline to the current style setting.
-            ///
-            /// This is equivalent to `self.add_style(Style::UNDERLINE)`.
             pub fn underline(&self) -> io::Result<()> {
                 self.add_style(Style::UNDERLINE)
             }
 
             /// Adds reverse to the current style setting.
-            ///
-            /// This is equivalent to `self.add_style(Style::REVERSE)`.
             pub fn reverse(&self) -> io::Result<()> {
                 self.add_style(Style::REVERSE)
             }
 
             /// Writes output to the terminal with the given color and style.
-            ///
-            /// All attributes are removed after the given text is written.
-            pub fn write_styled<F, B, S>(&self, fg: F, bg: B, style: S, s: &str)
-                    -> io::Result<()> where
-                    F: Into<Option<Color>>,
-                    B: Into<Option<Color>>,
-                    S: Into<Option<Style>>,
-                    {
+            pub fn write_styled<F, B, S>(&self, fg: F, bg: B, style: S, s: &str) -> io::Result<()> where
+            F: Into<Option<Color>>,
+            B: Into<Option<Color>>,
+            S: Into<Option<Style>>,
+            {
                 self.0.write_styled(fg.into(), bg.into(), style.into().unwrap_or_default(), s)
             }
 
@@ -19782,25 +19486,6 @@ pub mod mortal
 
             /// Writes formatted text to the terminal
             /// using the current style and color settings.
-            ///
-            /// This method enables `Terminal` to be used as the receiver to
-            /// the [`write!`] and [`writeln!`] macros.
-            ///
-            /// # Examples
-            ///
-            /// ```no_run
-            /// # use std::io;
-            /// # use mortal::Terminal;
-            /// # fn example() -> io::Result<()> {
-            /// let term = Terminal::new()?;
-            ///
-            /// writeln!(term, "Hello, world!")?;
-            /// # Ok(())
-            /// # }
-            /// ```
-            ///
-            /// [`write!`]: https://doc.rust-lang.org/std/macro.write.html
-            /// [`writeln!`]: https://doc.rust-lang.org/std/macro.writeln.html
             pub fn write_fmt(&self, args: fmt::Arguments) -> io::Result<()> {
                 let s = args.to_string();
                 self.write_str(&s)
@@ -19814,78 +19499,33 @@ pub mod mortal
 
         impl<'a> TerminalReadGuard<'a> {
             /// Prepares the terminal to read input.
-            ///
-            /// When reading operations have concluded, [`restore`]
-            /// should be called with the resulting `PrepareState` value to restore
-            /// the terminal to its previous state.
-            ///
-            /// This method may be called more than once before a corresponding
-            /// `restore` call. However, each `restore` call must receive the most recently
-            /// created `PrepareState` value.
-            ///
-            /// See [`PrepareConfig`] for details.
-            ///
-            /// [`PrepareConfig`]: struct.PrepareConfig.html
-            /// [`restore`]: #method.restore
-            ///
-            /// ## Locking
-            ///
-            /// This method internally acquires the [`Terminal`] write lock.
-            ///
-            /// If the write lock is already held by the current thread,
-            /// call [`prepare_with_lock`], in order to prevent deadlocks.
-            ///
-            /// [`Terminal`]: struct.Terminal.html
-            /// [`prepare_with_lock`]: #method.prepare_with_lock
             pub fn prepare(&mut self, config: PrepareConfig) -> io::Result<PrepareState> {
                 self.0.prepare(config).map(PrepareState)
             }
 
             /// Performs terminal preparation using both [`Terminal`] locks.
-            ///
-            /// [`Terminal`]: struct.Terminal.html
             pub fn prepare_with_lock(&mut self, writer: &mut TerminalWriteGuard,
                     config: PrepareConfig) -> io::Result<PrepareState> {
                 self.0.prepare_with_lock(&mut writer.0, config).map(PrepareState)
             }
 
             /// Restores the terminal to its previous state.
-            ///
-            /// ## Locking
-            ///
-            /// This method internally acquires the [`Terminal`] write lock.
-            ///
-            /// If the write lock is already held by the current thread,
-            /// call [`restore_with_lock`], in order to prevent deadlocks.
-            ///
-            /// [`Terminal`]: struct.Terminal.html
-            /// [`restore_with_lock`]: #method.restore_with_lock
             pub fn restore(&mut self, state: PrepareState) -> io::Result<()> {
                 self.0.restore(state.0)
             }
 
             /// Performs terminal state restoration using both [`Terminal`] locks.
-            ///
-            /// [`Terminal`]: struct.Terminal.html
             pub fn restore_with_lock(&mut self, writer: &mut TerminalWriteGuard,
                     state: PrepareState) -> io::Result<()> {
                 self.0.restore_with_lock(&mut writer.0, state.0)
             }
 
             /// Waits for an event from the terminal.
-            ///
-            /// Returns `Ok(false)` if `timeout` elapses without an event occurring.
-            ///
-            /// If `timeout` is `None`, this method will wait indefinitely.
             pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool> {
                 self.0.wait_event(timeout)
             }
 
             /// Waits for input and reads an event from the terminal.
-            ///
-            /// Returns `Ok(None)` if `timeout` elapses without an event occurring.
-            ///
-            /// If `timeout` is `None`, this method will wait indefinitely.
             pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>>  {
                 self.0.read_event(timeout)
             }
@@ -19893,8 +19533,6 @@ pub mod mortal
 
         impl<'a> TerminalWriteGuard<'a> {
             /// Flush all output to the terminal device.
-            ///
-            /// This is called automatically when the `TerminalWriteGuard` is dropped.
             pub fn flush(&mut self) -> io::Result<()> {
                 self.0.flush()
             }
@@ -19906,10 +19544,6 @@ pub mod mortal
             }
 
             /// Clears the terminal screen, placing the cursor at the first line and column.
-            ///
-            /// If the terminal contains a scrolling window over a buffer, the window
-            /// will be scrolled downward, preserving as much of the existing buffer
-            /// as possible.
             pub fn clear_screen(&mut self) -> io::Result<()> {
                 self.0.clear_screen()
             }
@@ -19950,13 +19584,6 @@ pub mod mortal
             }
 
             /// Set the current cursor mode.
-            ///
-            /// This setting is a visible hint to the user.
-            /// It produces no change in behavior.
-            ///
-            /// # Notes
-            ///
-            /// On some systems, this setting may have no effect.
             pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> {
                 self.0.set_cursor_mode(mode)
             }
@@ -19998,36 +19625,26 @@ pub mod mortal
             }
 
             /// Adds bold to the current style setting.
-            ///
-            /// This is equivalent to `self.add_style(Style::BOLD)`.
             pub fn bold(&mut self) -> io::Result<()> {
                 self.add_style(Style::BOLD)
             }
 
             /// Adds italic to the current style setting.
-            ///
-            /// This is equivalent to `self.add_style(Style::ITALIC)`.
             pub fn italic(&mut self) -> io::Result<()> {
                 self.add_style(Style::ITALIC)
             }
 
             /// Adds underline to the current style setting.
-            ///
-            /// This is equivalent to `self.add_style(Style::UNDERLINE)`.
             pub fn underline(&mut self) -> io::Result<()> {
                 self.add_style(Style::UNDERLINE)
             }
 
             /// Adds reverse to the current style setting.
-            ///
-            /// This is equivalent to `self.add_style(Style::REVERSE)`.
             pub fn reverse(&mut self) -> io::Result<()> {
                 self.add_style(Style::REVERSE)
             }
 
             /// Writes output to the terminal with the given color and style added.
-            ///
-            /// All attributes are removed after the given text is written.
             pub fn write_styled<F, B, S>(&mut self, fg: F, bg: B, style: S, s: &str)
                     -> io::Result<()> where
                     F: Into<Option<Color>>,
@@ -20051,12 +19668,6 @@ pub mod mortal
 
             /// Writes formatted text to the terminal
             /// using the current style and color settings.
-            ///
-            /// This method enables `TerminalWriteGuard` to be used as the receiver to
-            /// the [`write!`] and [`writeln!`] macros.
-            ///
-            /// [`write!`]: https://doc.rust-lang.org/std/macro.write.html
-            /// [`writeln!`]: https://doc.rust-lang.org/std/macro.writeln.html
             pub fn write_fmt(&mut self, args: fmt::Arguments) -> io::Result<()> {
                 let s = args.to_string();
                 self.write_str(&s)
@@ -20124,8 +19735,6 @@ pub mod mortal
         use std::str::CharIndices;
 
         /// Returns the width of a character in the terminal.
-        ///
-        /// Returns `None` or `Some(0)` for control characters.
         #[inline]
         pub fn char_width(ch: char) -> Option<usize> {
             use unicode_width::UnicodeWidthChar;
@@ -20145,22 +19754,12 @@ pub mod mortal
         const UNCTRL_BIT: u8 = 0x40;
 
         /// Returns the control character corresponding to the given character.
-        ///
-        /// # Examples
-        ///
-        /// ```
-        /// # use mortal::util::ctrl;
-        /// // Ctrl-C
-        /// assert_eq!(ctrl('c'), '\x03');
-        /// ```
         #[inline]
         pub fn ctrl(ch: char) -> char {
             ((ch as u8) & CTRL_MASK) as char
         }
 
         /// Returns whether the given character is a control character.
-        ///
-        /// Control characters are in the range `'\0'` ... `'\x1f'`, inclusive.
         #[inline]
         pub fn is_ctrl(ch: char) -> bool {
             let ch = ch as u32;
@@ -20168,67 +19767,28 @@ pub mod mortal
         }
 
         /// Returns the ASCII character corresponding to the given control character.
-        ///
-        /// If `ch` is not a control character, the result is unspecified.
-        ///
-        /// # Examples
-        ///
-        /// ```
-        /// # use mortal::util::unctrl_upper;
-        /// // Ctrl-C
-        /// assert_eq!(unctrl_upper('\x03'), 'C');
-        /// ```
         #[inline]
         pub fn unctrl_upper(ch: char) -> char {
             ((ch as u8) | UNCTRL_BIT) as char
         }
 
         /// Returns the lowercase ASCII character corresponding to the given control character.
-        ///
-        /// If `ch` is not a control character, the result is unspecified.
-        ///
-        /// # Examples
-        ///
-        /// ```
-        /// # use mortal::util::unctrl_lower;
-        ///
-        /// // Ctrl-C
-        /// assert_eq!(unctrl_lower('\x03'), 'c');
-        /// ```
         #[inline]
         pub fn unctrl_lower(ch: char) -> char {
             unctrl_upper(ch).to_ascii_lowercase()
         }
 
         /// Iterator over string prefixes.
-        ///
-        /// An instance of this type is returned by the free function [`prefixes`].
-        ///
-        /// [`prefixes`]: fn.prefixes.html
         pub struct Prefixes<'a> {
             s: &'a str,
             iter: CharIndices<'a>,
         }
 
-        /// Returns an iterator over all non-empty prefixes of `s`, beginning with
-        /// the shortest.
-        ///
-        /// If `s` is an empty string, the iterator will yield no elements.
-        ///
-        /// # Examples
-        ///
-        /// ```
-        /// # use mortal::util::prefixes;
-        /// let mut pfxs = prefixes("foo");
-        ///
-        /// assert_eq!(pfxs.next(), Some("f"));
-        /// assert_eq!(pfxs.next(), Some("fo"));
-        /// assert_eq!(pfxs.next(), Some("foo"));
-        /// assert_eq!(pfxs.next(), None);
-        /// ```
-        #[inline]
-        pub fn prefixes(s: &str) -> Prefixes {
-            Prefixes{
+        /// Returns an iterator over all non-empty prefixes of `s`, beginning with the shortest.
+        #[inline] pub fn prefixes(s: &str) -> Prefixes 
+        {
+            Prefixes
+            {
                 s,
                 iter: s.char_indices(),
             }
@@ -20239,45 +19799,6 @@ pub mod mortal
 
             fn next(&mut self) -> Option<&'a str> {
                 self.iter.next().map(|(idx, ch)| &self.s[..idx + ch.len_utf8()])
-            }
-        }
-
-        #[cfg(test)]
-        mod test {
-            use super::{ctrl, is_ctrl, unctrl_lower, unctrl_upper, prefixes};
-
-            #[test]
-            fn test_unctrl() {
-                for ch in 0u8..255 {
-                    let ch = ch as char;
-
-                    if is_ctrl(ch) {
-                        assert_eq!(ch, ctrl(unctrl_lower(ch)));
-                        assert_eq!(ch, ctrl(unctrl_upper(ch)));
-                    }
-                }
-            }
-
-            #[test]
-            fn test_prefix_iter() {
-                let mut pfxs = prefixes("foobar");
-
-                assert_eq!(pfxs.next(), Some("f"));
-                assert_eq!(pfxs.next(), Some("fo"));
-                assert_eq!(pfxs.next(), Some("foo"));
-                assert_eq!(pfxs.next(), Some("foob"));
-                assert_eq!(pfxs.next(), Some("fooba"));
-                assert_eq!(pfxs.next(), Some("foobar"));
-                assert_eq!(pfxs.next(), None);
-
-                let mut pfxs = prefixes("a");
-
-                assert_eq!(pfxs.next(), Some("a"));
-                assert_eq!(pfxs.next(), None);
-
-                let mut pfxs = prefixes("");
-
-                assert_eq!(pfxs.next(), None);
             }
         }
     }
@@ -22366,42 +21887,6 @@ pub mod linefeed
         pub fn unctrl_lower(c: char) -> char {
             unctrl(c).to_ascii_lowercase()
         }
-
-        #[cfg(test)]
-        mod test {
-            use super::{ctrl, unctrl, unctrl_lower, escape_sequence, parse_char_name};
-
-            #[test]
-            fn test_ctrl() {
-                assert_eq!(ctrl('A'), '\x01');
-                assert_eq!(ctrl('I'), '\t');
-                assert_eq!(ctrl('J'), '\n');
-                assert_eq!(ctrl('M'), '\r');
-
-                assert_eq!(unctrl('\x01'), 'A');
-                assert_eq!(unctrl('\t'), 'I');
-                assert_eq!(unctrl('\n'), 'J');
-                assert_eq!(unctrl('\r'), 'M');
-            }
-
-            #[test]
-            fn test_unctrl() {
-                assert_eq!(unctrl('\x1d'), ']');
-                assert_eq!(unctrl_lower('\x1d'), ']');
-            }
-
-            #[test]
-            fn test_escape() {
-                assert_eq!(escape_sequence("\x1b\x7f"), r"\e\C-?");
-            }
-
-            #[test]
-            fn test_parse_char() {
-                assert_eq!(parse_char_name("Escape"), Some("\x1b".to_owned()));
-                assert_eq!(parse_char_name("Control-u"), Some("\x15".to_owned()));
-                assert_eq!(parse_char_name("Meta-tab"), Some("\x1b\t".to_owned()));
-            }
-        }
     }
     /*
     */
@@ -23487,88 +22972,6 @@ pub mod linefeed
                 chars = clone;
             }
         }
-
-        #[cfg(test)]
-        mod test {
-            use super::{Directive, parse_text};
-            use crate::command::Command;
-
-            fn one<T>(v: Vec<T>) -> T {
-                assert_eq!(v.len(), 1);
-                v.into_iter().next().unwrap()
-            }
-
-            #[test]
-            fn test_parse() {
-                assert_matches!(one(parse_text("<test>", "Ctrl-k: kill-line")),
-                    Directive::Bind(ref seq, Command::KillLine)
-                        if seq == "\x0b");
-                assert_matches!(one(parse_text("<test>", r#""foo": "bar""#)),
-                    Directive::Bind(ref seq, Command::Macro(ref mac))
-                        if seq == "foo" && mac == "bar");
-
-                assert_matches!(one(parse_text("<test>", "set foo bar")),
-                    Directive::SetVariable(ref name, ref val)
-                        if name == "foo" && val == "bar");
-
-                assert_matches!(one(parse_text("<test>", r#""\xab": "a""#)),
-                    Directive::Bind(ref seq, Command::Macro(ref mac))
-                        if seq == "\u{ab}" && mac == "a");
-
-                assert_matches!(one(parse_text("<test>", r#""\u{2022}": "b""#)),
-                    Directive::Bind(ref seq, Command::Macro(ref mac))
-                        if seq == "\u{2022}" && mac == "b");
-
-                assert_matches!(one(parse_text("<test>", r#""\123": "c""#)),
-                    Directive::Bind(ref seq, Command::Macro(ref mac))
-                        if seq == "S" && mac == "c");
-            }
-
-            #[test]
-            fn test_conditional() {
-                let cond = one(parse_text("<test>", "
-                    $if foo=bar
-                        set var 123
-                    $endif
-                    "));
-
-                assert_matches!(cond,
-                    Directive::Conditional{name: Some(ref name), ref value, ..}
-                        if name == "foo" && value == "bar");
-
-                if let Directive::Conditional{then_group, else_group, ..} = cond {
-                    assert_matches!(one(then_group),
-                        Directive::SetVariable(ref name, ref val)
-                            if name == "var" && val == "123");
-                    assert!(else_group.is_empty());
-                }
-            }
-
-            #[test]
-            fn test_conditional_else() {
-                let cond = one(parse_text("<test>", "
-                    $if foo
-                        set var 123
-                    $else
-                        Tab: tab-insert
-                    $endif
-                    "));
-
-                assert_matches!(cond,
-                    Directive::Conditional{name: None, ref value, ..}
-                        if value == "foo");
-
-                if let Directive::Conditional{then_group, else_group, ..} = cond {
-                    assert_matches!(one(then_group),
-                        Directive::SetVariable(ref name, ref val)
-                            if name == "var" && val == "123");
-
-                    assert_matches!(one(else_group),
-                        Directive::Bind(ref seq, Command::TabInsert)
-                            if seq == "\t");
-                }
-            }
-        }
     }
     /*
     */
@@ -24637,89 +24040,6 @@ pub mod linefeed
 
             fn flush(&mut self) -> io::Result<()> { Ok(()) }
         }
-
-        #[cfg(test)]
-        mod test {
-            use super::MemoryTerminal;
-            use crate::terminal::Size;
-
-            fn assert_lines(mem: &MemoryTerminal, tests: &[&str]) {
-                let mut lines = mem.lines();
-                let mut test_iter = tests.iter();
-
-                while let Some(line) = lines.next() {
-                    let test = test_iter.next().unwrap();
-                    assert!(line.iter().cloned().eq(test.chars()),
-                        "mem: {:?}; tests: {:?}", mem.lock_writer().memory, tests);
-                }
-            }
-
-            #[test]
-            fn test_memory_term() {
-                let mem = MemoryTerminal::with_size(Size{lines: 3, columns: 4});
-
-                assert_lines(&mem, &["    "; 3]);
-
-                mem.write("ab");
-                assert_lines(&mem, &["ab  ", "    ", "    "]);
-
-                mem.write("c\nd");
-                assert_lines(&mem, &["abc ", "d   ", "    "]);
-
-                mem.write("efg\nhi");
-                assert_lines(&mem, &["abc ", "defg", "hi  "]);
-
-                mem.write("\njk\n");
-                assert_lines(&mem, &["hi  ", "jk  ", "    "]);
-
-                mem.write("\n\n\n\n\nlmno");
-                assert_lines(&mem, &["    ", "    ", "lmno"]);
-
-                mem.move_up(1);
-                mem.move_left(3);
-                mem.write("xx");
-                assert_lines(&mem, &["    ", " xx ", "lmno"]);
-
-                mem.clear_all();
-                mem.write("xyz");
-                assert_lines(&mem, &["xyz ", "    ", "    "]);
-
-                mem.write("\nabcd");
-                assert_lines(&mem, &["xyz ", "abcd", "    "]);
-
-                mem.move_to_first_column();
-                mem.write("ab");
-                mem.clear_to_end();
-                assert_lines(&mem, &["xyz ", "ab  ", "    "]);
-
-                mem.move_to_first_column();
-                mem.move_down(1);
-                mem.write("c");
-                mem.move_right(1);
-                mem.write("d");
-                assert_lines(&mem, &["xyz ", "ab  ", "c d "]);
-            }
-
-            #[test]
-            fn test_resize() {
-                let mem = MemoryTerminal::with_size(Size{lines: 3, columns: 4});
-
-                assert_lines(&mem, &["    "; 3]);
-
-                mem.write("xxxx\nxxxx\nxxxx");
-                assert_lines(&mem, &["xxxx"; 3]);
-
-                mem.resize(Size{lines: 4, columns: 3});
-                assert_lines(&mem, &["xxx", "xxx", "xxx", "   "]);
-
-                mem.clear_all();
-                mem.write("yyy\nyyy\nyyy\nyyy");
-                assert_lines(&mem, &["yyy"; 4]);
-
-                mem.resize(Size{lines: 3, columns: 4});
-                assert_lines(&mem, &["yyy ", "yyy ", "yyy "]);
-            }
-        }
     }
     /*
     */
@@ -24757,15 +24077,6 @@ pub mod linefeed
 
         /// Provides access to the current state of input while a `read_line` call
         /// is in progress.
-        ///
-        /// Holds read and write locks on terminal operations.
-        /// See [`Interface`] for more information about concurrent operations.
-        ///
-        /// Instances of this type cannot be constructed by public methods.
-        /// Instead, an instance is created internally during a call to [`read_line`].
-        ///
-        /// [`Interface`]: ../interface/struct.Interface.html
-        /// [`read_line`]: ../interface/struct.Interface.html#method.read_line
         pub struct Prompter<'a, 'b: 'a, Term: 'b + Terminal> {
             pub(crate) read: &'a mut ReadLock<'b, Term>,
             write: WriteLock<'b, Term>,
@@ -24778,27 +24089,11 @@ pub mod linefeed
             }
 
             /// Returns a `Writer` instance using the currently held write lock.
-            ///
-            /// This method will move the cursor to a new line after the prompt,
-            /// allowing output to be written without corrupting the prompt text.
-            /// The prompt will be redrawn when the `Writer` instance is dropped.
-            ///
-            /// To instead erase the prompt and write text, use [`writer_erase`].
-            ///
-            /// [`writer_erase`]: #method.writer_erase
             pub fn writer_append<'c>(&'c mut self) -> io::Result<Writer<'c, 'b, Term>> {
                 Writer::with_ref(&mut self.write, false)
             }
 
             /// Returns a `Writer` instance using the currently held write lock.
-            ///
-            /// This method will erase the prompt, allowing output to be written
-            /// without corrupting the prompt text. The prompt will be redrawn
-            /// when the `Writer` instance is dropped.
-            ///
-            /// To instead write text after the prompt, use [`writer_append`].
-            ///
-            /// [`writer_append`]: #method.writer_append
             pub fn writer_erase<'c>(&'c mut self) -> io::Result<Writer<'c, 'b, Term>> {
                 Writer::with_ref(&mut self.write, true)
             }
@@ -24968,16 +24263,11 @@ pub mod linefeed
             }
 
             /// Returns the "backup" buffer.
-            ///
-            /// When the user is currently editing a history entry, the backup buffer
-            /// contains the original user input.
             pub fn backup_buffer(&self) -> &str {
                 &self.write.backup_buffer
             }
 
             /// Returns the command `Category` of the most recently executed command.
-            ///
-            /// Some commands may use this to influence behavior of repeated commands.
             pub fn last_command_category(&self) -> Category {
                 self.read.last_cmd
             }
@@ -24988,8 +24278,6 @@ pub mod linefeed
             }
 
             /// Sets the buffer to the given value.
-            ///
-            /// The cursor is moved to the end of the buffer.
             pub fn set_buffer(&mut self, buf: &str) -> io::Result<()> {
                 self.write.set_buffer(buf)
             }
@@ -25000,21 +24288,11 @@ pub mod linefeed
             }
 
             /// Sets the cursor to the given position within the buffer.
-            ///
-            /// # Panics
-            ///
-            /// If the given position is out of bounds or is not aligned to `char` boundaries.
             pub fn set_cursor(&mut self, pos: usize) -> io::Result<()> {
                 self.write.set_cursor(pos)
             }
 
             /// Sets the prompt that will be displayed when `read_line` is called.
-            ///
-            /// # Notes
-            ///
-            /// If `prompt` contains any terminal escape sequences (e.g. color codes),
-            /// such escape sequences should be immediately preceded by the character
-            /// `'\x01'` and immediately followed by the character `'\x02'`.
             pub fn set_prompt(&mut self, prompt: &str) -> io::Result<()> {
                 self.write.set_prompt(prompt)
             }
@@ -25050,8 +24328,6 @@ pub mod linefeed
             }
 
             /// Returns the index into history currently being edited.
-            ///
-            /// If the user is not editing a line of history, `None` is returned.
             pub fn history_index(&self) -> Option<usize> {
                 self.write.history_index
             }
@@ -25070,42 +24346,21 @@ pub mod linefeed
             }
 
             /// Selects the history entry currently being edited by the user.
-            ///
-            /// Setting the entry to `None` will result in editing the input buffer.
-            ///
-            /// # Panics
-            ///
-            /// If the index is out of bounds.
             pub fn select_history_entry(&mut self, new: Option<usize>) -> io::Result<()> {
                 self.write.select_history_entry(new)
             }
 
             /// Returns the current set of completions.
-            ///
-            /// Unless the most recent command executed was one operating on completion
-            /// sets, the result is `None`.
             pub fn completions(&self) -> Option<&[Completion]> {
                 self.read.completions.as_ref().map(|v| &v[..])
             }
 
             /// Sets the current set of completions.
-            ///
-            /// This completion set is accessed by commands such as `complete` and
-            /// `possible-completions`.
-            ///
-            /// This set will only remain active until the end of the next
-            /// non-completion command's execution. Therefore, any `Function`
-            /// that uses this method must be of the `Complete` category.
             pub fn set_completions(&mut self, completions: Option<Vec<Completion>>) {
                 self.read.completions = completions;
             }
 
             /// Attempts to execute the current sequence.
-            ///
-            /// If no bindings match and the sequence contains only printable characters,
-            /// the sequence will be inserted as text.
-            ///
-            /// Returns `true` if a complete sequence was found and executed.
             fn execute_sequence(&mut self) -> io::Result<()> {
                 match self.find_binding(&self.read.sequence) {
                     FindResult::Found(cmd) => {
@@ -25155,8 +24410,7 @@ pub mod linefeed
             }
 
             /// Execute the command `SelfInsert` on the first character in the input
-            /// sequence, if it is printable. Then, queue the remaining characters
-            /// so they may be reinterpreted.
+            /// sequence, if it is printable.
             fn insert_first_char(&mut self) -> io::Result<()> {
                 let (first, rest) = {
                     let mut chars = self.read.sequence.chars();
@@ -25790,8 +25044,6 @@ pub mod linefeed
 
                 if self.read.page_completions &&
                         n_completions >= self.read.completion_query_items {
-                    // TODO: Replace borrowed data in `Table` with owned data.
-                    // Then, store table here to avoid regenerating column widths
                     self.start_page_completions(n_completions)
                 } else {
                     self.show_list_completions(table)?;
@@ -26021,20 +25273,12 @@ pub mod linefeed
             }
 
             /// Deletes a range of text from the input buffer.
-            ///
-            /// # Panics
-            ///
-            /// If the given range is out of bounds or is not aligned to `char` boundaries.
             pub fn delete_range<R: RangeArgument<usize>>(&mut self, range: R) -> io::Result<()> {
                 self.write.delete_range(range)
             }
 
             /// Deletes a range from the buffer and adds the removed text to the
             /// kill ring.
-            ///
-            /// # Panics
-            ///
-            /// If the given range is out of bounds or is not aligned to `char` boundaries.
             pub fn kill_range<R: RangeArgument<usize>>(&mut self, range: R) -> io::Result<()> {
                 let start = range.start().cloned().unwrap_or(0);
                 let end = range.end().cloned().unwrap_or_else(|| self.write.buffer.len());
@@ -26087,19 +25331,12 @@ pub mod linefeed
             }
 
             /// Transposes two regions of the buffer, `src` and `dest`.
-            /// The cursor is placed at the end of the new location of `src`.
-            ///
-            /// # Panics
-            ///
-            /// If `src` and `dest` overlap, are out of bounds,
-            /// or are not aligned to `char` boundaries.
             pub fn transpose_range(&mut self, src: Range<usize>, dest: Range<usize>)
                     -> io::Result<()> {
                 self.write.transpose_range(src, dest)
             }
 
             /// Insert text from the front of the kill ring at the current cursor position.
-            /// The cursor is placed at the end of the new text.
             pub fn yank(&mut self) -> io::Result<()> {
                 if let Some(kill) = self.read.kill_ring.front().cloned() {
                     let start = self.write.cursor;
@@ -26293,15 +25530,6 @@ pub mod linefeed
         const MAX_KILLS: usize = 10;
 
         /// Provides access to data related to reading and processing user input.
-        ///
-        /// Holds a lock on terminal read operations.
-        /// See [`Interface`] for more information about concurrent operations.
-        ///
-        /// An instance of this type can be constructed using the
-        /// [`Interface::lock_reader`] method.
-        ///
-        /// [`Interface`]: ../interface/struct.Interface.html
-        /// [`Interface::lock_reader`]: ../interface/struct.Interface.html#method.lock_reader
         pub struct Reader<'a, Term: 'a + Terminal> {
             iface: &'a Interface<Term>,
             lock: ReadLock<'a, Term>,
@@ -26369,8 +25597,6 @@ pub mod linefeed
         }
 
         /// Returned from [`read_line`] to indicate user input
-        ///
-        /// [`read_line`]: ../interface/struct.Interface.html#method.read_line
         #[derive(Debug)]
         pub enum ReadResult {
             /// User issued end-of-file
@@ -26399,129 +25625,84 @@ pub mod linefeed
             QuotedInsert(usize),
         }
 
-        impl<'a, Term: 'a + Terminal> Reader<'a, Term> {
-            pub(crate) fn new(iface: &'a Interface<Term>, lock: ReadLock<'a, Term>)
-                    -> Reader<'a, Term> {
+        impl<'a, Term: 'a + Terminal> Reader<'a, Term> 
+        {
+            pub(crate) fn new(iface: &'a Interface<Term>, lock: ReadLock<'a, Term>) -> Reader<'a, Term>
+            {
                 Reader{iface, lock}
             }
 
             /// Interactively reads a line from the terminal device.
-            ///
-            /// User input is collected until one of the following conditions is met:
-            ///
-            /// * If the user issues an end-of-file, `ReadResult::Eof` is returned.
-            /// * When the user inputs a newline (`'\n'`), the resulting input
-            ///   (not containing a trailing newline character) is returned as
-            ///   `ReadResult::Input(_)`.
-            /// * When a reported signal (see [`set_report_signal`]) is received,
-            ///   it is returned as `ReadResult::Signal(_)`. The `read_line` operation may
-            ///   then be either resumed with another call to `read_line` or ended by
-            ///   calling [`cancel_read_line`].
-            ///
-            /// [`cancel_read_line`]: #method.cancel_read_line
-            /// [`set_report_signal`]: #method.set_report_signal
-            pub fn read_line(&mut self) -> io::Result<ReadResult> {
-                loop {
-                    if let Some(res) = self.read_line_step(None)? {
-                        return Ok(res);
-                    }
+            pub fn read_line(&mut self) -> io::Result<ReadResult> 
+            {
+                loop 
+                {
+                    if let Some(res) = self.read_line_step(None)?
+                    { return Ok(res); }
                 }
             }
 
             /// Performs one step of the interactive `read_line` loop.
-            ///
-            /// This method can be used to drive the `read_line` process asynchronously.
-            /// It will wait for input only up to the specified duration, then process
-            /// any available input from the terminal.
-            ///
-            /// If the user completes the input process, `Ok(Some(result))` is returned.
-            /// Otherwise, `Ok(None)` is returned to indicate that the interactive loop
-            /// may continue.
-            ///
-            /// The interactive prompt may be cancelled prematurely using the
-            /// [`cancel_read_line`] method.
-            ///
-            /// See [`read_line`] for details on the return value.
-            ///
-            /// [`cancel_read_line`]: #method.cancel_read_line
-            /// [`read_line`]: #method.read_line
-            pub fn read_line_step(&mut self, timeout: Option<Duration>)
-                    -> io::Result<Option<ReadResult>> {
+            pub fn read_line_step(&mut self, timeout: Option<Duration>) -> io::Result<Option<ReadResult>> 
+            {
                 self.initialize_read_line()?;
-
                 let state = self.prepare_term()?;
                 let res = self.read_line_step_impl(timeout);
                 self.lock.term.restore(state)?;
-
                 res
             }
 
             /// Cancels an in-progress `read_line` operation.
-            ///
-            /// This method will reset internal data structures to their original state
-            /// and move the terminal cursor to a new, empty line.
-            ///
-            /// This method is called to prematurely end the interactive loop when
-            /// using the [`read_line_step`] method.
-            ///
-            /// It is not necessary to call this method if using the [`read_line`] method.
-            ///
-            /// [`read_line`]: #method.read_line
-            /// [`read_line_step`]: #method.read_line_step
-            pub fn cancel_read_line(&mut self) -> io::Result<()> {
-                self.end_read_line()
-            }
+            pub fn cancel_read_line(&mut self) -> io::Result<()> 
+            { self.end_read_line() }
 
-            fn initialize_read_line(&mut self) -> io::Result<()> {
-                if !self.lock.is_active() {
-                    self.prompter().start_read_line()?;
-                }
+            fn initialize_read_line(&mut self) -> io::Result<()>
+            {
+                if !self.lock.is_active()
+                { self.prompter().start_read_line()?; }
+
                 Ok(())
             }
 
-            fn read_line_step_impl(&mut self, timeout: Option<Duration>)
-                    -> io::Result<Option<ReadResult>> {
-                let do_read = if self.lock.is_input_available() {
-                    // This branch will be taken only if a macro has buffered some input.
-                    // We check for input with a zero duration to see if the user has
-                    // entered Ctrl-C, e.g. to interrupt an infinitely recursive macro.
+            fn read_line_step_impl(&mut self, timeout: Option<Duration>) -> io::Result<Option<ReadResult>>
+            {
+                let do_read = if self.lock.is_input_available() 
+                {
                     self.lock.term.wait_for_input(Some(Duration::from_secs(0)))?
-                } else {
+                } 
+                else 
+                {
                     let timeout = limit_duration(timeout, self.lock.max_wait_duration);
                     self.lock.term.wait_for_input(timeout)?
                 };
 
-                if do_read {
-                    self.lock.read_input()?;
-                }
+                if do_read
+                { self.lock.read_input()?; }
 
-                if let Some(size) = self.lock.take_resize() {
-                    self.handle_resize(size)?;
-                }
+                if let Some(size) = self.lock.take_resize()
+                { self.handle_resize(size)?; }
 
-                if let Some(sig) = self.lock.take_signal() {
-                    if self.lock.report_signals.contains(sig) {
-                        return Ok(Some(ReadResult::Signal(sig)));
-                    }
-                    if !self.lock.ignore_signals.contains(sig) {
-                        self.handle_signal(sig)?;
-                    }
+                if let Some(sig) = self.lock.take_signal()
+                {
+                    if self.lock.report_signals.contains(sig)
+                    { return Ok(Some(ReadResult::Signal(sig))); }
+                    
+                    if !self.lock.ignore_signals.contains(sig)
+                    { self.handle_signal(sig)?; }
                 }
 
                 // Acquire the write lock and process all available input
                 {
                     let mut prompter = self.prompter();
-
                     prompter.check_expire_timeout()?;
-
-                    // If the macro buffer grows in size while input is being processed,
-                    // we end this step and let the caller try again. This is to allow
-                    // reading Ctrl-C to interrupt (perhaps infinite) macro execution.
+                    
                     let mut macro_len = prompter.read.data.macro_buffer.len();
-
-                    while prompter.read.is_input_available() {
-                        if let Some(ch) = prompter.read.read_char()? {
-                            if let Some(r) = prompter.handle_input(ch)? {
+                    while prompter.read.is_input_available()
+                    {
+                        if let Some(ch) = prompter.read.read_char()?
+                        {
+                            if let Some(r) = prompter.handle_input(ch)?
+                            {
                                 prompter.end_read_line()?;
                                 return Ok(Some(r));
                             }
@@ -26529,9 +25710,8 @@ pub mod linefeed
 
                         let new_macro_len = prompter.read.data.macro_buffer.len();
 
-                        if new_macro_len != 0 && new_macro_len >= macro_len {
-                            break;
-                        }
+                        if new_macro_len != 0 && new_macro_len >= macro_len
+                        { break; }
 
                         macro_len = new_macro_len;
                     }
@@ -26540,462 +25720,331 @@ pub mod linefeed
                 Ok(None)
             }
 
-            fn end_read_line(&mut self) -> io::Result<()> {
-                if self.lock.is_active() {
-                    self.prompter().end_read_line()?;
-                }
+            fn end_read_line(&mut self) -> io::Result<()>
+            {
+                if self.lock.is_active()
+                { self.prompter().end_read_line()?; }
+
                 Ok(())
             }
 
-            fn prepare_term(&mut self) -> io::Result<Term::PrepareState> {
-                if self.read_next_raw() {
-                    self.lock.term.prepare(true, SignalSet::new())
-                } else {
+            fn prepare_term(&mut self) -> io::Result<Term::PrepareState>
+            {
+                if self.read_next_raw()
+                { self.lock.term.prepare(true, SignalSet::new()) }
+                
+                else 
+                {
                     let mut signals = self.lock.report_signals.union(self.lock.ignore_signals);
-
-                    if self.lock.catch_signals {
-                        // Ctrl-C is always intercepted (unless we're catching no signals).
-                        // By default, linefeed handles it by clearing the current input state.
-                        signals.insert(Signal::Interrupt);
-                    }
+                    if self.lock.catch_signals 
+                    { signals.insert(Signal::Interrupt); }
 
                     let block_signals = !self.lock.catch_signals;
-
                     self.lock.term.prepare(block_signals, signals)
                 }
             }
 
-            fn read_next_raw(&self) -> bool {
-                match self.lock.state {
+            fn read_next_raw(&self) -> bool
+            {
+                match self.lock.state
+                {
                     InputState::QuotedInsert(_) => true,
                     _ => false
                 }
             }
 
             /// Sets the input buffer to the given string.
-            ///
-            /// This method internally acquires the `Interface` write lock.
-            ///
-            /// # Notes
-            ///
-            /// To prevent invalidating the cursor, this method sets the cursor
-            /// position to the end of the new buffer.
-            pub fn set_buffer(&mut self, buf: &str) -> io::Result<()> {
-                if self.lock.is_active() {
-                    self.prompter().set_buffer(buf)
-                } else {
+            pub fn set_buffer(&mut self, buf: &str) -> io::Result<()>
+            {
+                if self.lock.is_active()
+                { self.prompter().set_buffer(buf) } 
+                else 
+                {
                     self.iface.lock_write_data().set_buffer(buf);
                     Ok(())
                 }
             }
 
             /// Sets the cursor position in the input buffer.
-            ///
-            /// This method internally acquires the `Interface` write lock.
-            ///
-            /// # Panics
-            ///
-            /// If the given position is out of bounds or not on a `char` boundary.
-            pub fn set_cursor(&mut self, pos: usize) -> io::Result<()> {
-                if self.lock.is_active() {
-                    self.prompter().set_cursor(pos)
-                } else {
+            pub fn set_cursor(&mut self, pos: usize) -> io::Result<()>
+            {
+                if self.lock.is_active()
+                { self.prompter().set_cursor(pos) } 
+                else 
+                {
                     self.iface.lock_write_data().set_cursor(pos);
                     Ok(())
                 }
             }
 
             /// Sets the prompt that will be displayed when `read_line` is called.
-            ///
-            /// This method internally acquires the `Interface` write lock.
-            ///
-            /// # Notes
-            ///
-            /// If `prompt` contains any terminal escape sequences (e.g. color codes),
-            /// such escape sequences should be immediately preceded by the character
-            /// `'\x01'` and immediately followed by the character `'\x02'`.
-            pub fn set_prompt(&mut self, prompt: &str) -> io::Result<()> {
-                self.prompter().set_prompt(prompt)
-            }
+            pub fn set_prompt(&mut self, prompt: &str) -> io::Result<()>
+            { self.prompter().set_prompt(prompt) }
 
             /// Adds a line to history.
-            ///
-            /// This method internally acquires the `Interface` write lock.
-            ///
-            /// If a `read_line` call is in progress, this method has no effect.
-            pub fn add_history(&self, line: String) {
-                if !self.lock.is_active() {
-                    self.iface.lock_write().add_history(line);
-                }
+            pub fn add_history(&self, line: String)
+            {
+                if !self.lock.is_active()
+                { self.iface.lock_write().add_history(line); }
             }
 
             /// Adds a line to history, unless it is identical to the most recent entry.
-            ///
-            /// This method internally acquires the `Interface` write lock.
-            ///
-            /// If a `read_line` call is in progress, this method has no effect.
-            pub fn add_history_unique(&self, line: String) {
-                if !self.lock.is_active() {
-                    self.iface.lock_write().add_history_unique(line);
-                }
+            pub fn add_history_unique(&self, line: String)
+            {
+                if !self.lock.is_active()
+                { self.iface.lock_write().add_history_unique(line); }
             }
 
             /// Removes all history entries.
-            ///
-            /// This method internally acquires the `Interface` write lock.
-            ///
-            /// If a `read_line` call is in progress, this method has no effect.
-            pub fn clear_history(&self) {
-                if !self.lock.is_active() {
-                    self.iface.lock_write().clear_history();
-                }
+            pub fn clear_history(&self)
+            {
+                if !self.lock.is_active()
+                { self.iface.lock_write().clear_history(); }
             }
 
             /// Removes the history entry at the given index.
-            ///
-            /// This method internally acquires the `Interface` write lock.
-            ///
-            /// If the index is out of bounds, this method has no effect.
-            ///
-            /// If a `read_line` call is in progress, this method has no effect.
-            pub fn remove_history(&self, idx: usize) {
-                if !self.lock.is_active() {
+            pub fn remove_history(&self, idx: usize)
+            {
+                if !self.lock.is_active()
+                {
                     self.iface.lock_write().remove_history(idx);
                 }
             }
 
             /// Sets the maximum number of history entries.
-            ///
-            /// This method internally acquires the `Interface` write lock.
-            ///
-            /// If `n` is less than the current number of history entries,
-            /// the oldest entries are truncated to meet the given requirement.
-            ///
-            /// If a `read_line` call is in progress, this method has no effect.
-            pub fn set_history_size(&self, n: usize) {
-                if !self.lock.is_active() {
-                    self.iface.lock_write().set_history_size(n);
-                }
+            pub fn set_history_size(&self, n: usize)
+            {
+                if !self.lock.is_active()
+                { self.iface.lock_write().set_history_size(n); }
             }
 
             /// Truncates history to the only the most recent `n` entries.
-            ///
-            /// This method internally acquires the `Interface` write lock.
-            ///
-            /// If a `read_line` call is in progress, this method has no effect.
-            pub fn truncate_history(&self, n: usize) {
-                if !self.lock.is_active() {
-                    self.iface.lock_write().truncate_history(n);
-                }
+            pub fn truncate_history(&self, n: usize) 
+            {
+                if !self.lock.is_active()
+                { self.iface.lock_write().truncate_history(n); }
             }
 
             /// Returns the application name
-            pub fn application(&self) -> &str {
-                &self.lock.application
-            }
+            pub fn application(&self) -> &str
+            { &self.lock.application }
 
             /// Sets the application name
-            pub fn set_application<T>(&mut self, application: T)
-                    where T: Into<Cow<'static, str>> {
-                self.lock.application = application.into();
-            }
+            pub fn set_application<T>(&mut self, application: T) where 
+            T: Into<Cow<'static, str>> 
+            { self.lock.application = application.into(); }
 
             /// Returns a reference to the current completer instance.
-            pub fn completer(&self) -> &Arc<dyn Completer<Term>> {
-                &self.lock.completer
-            }
+            pub fn completer(&self) -> &Arc<dyn Completer<Term>>
+            { &self.lock.completer }
 
             /// Replaces the current completer, returning the previous instance.
-            pub fn set_completer(&mut self, completer: Arc<dyn Completer<Term>>)
-                    -> Arc<dyn Completer<Term>> {
-                replace(&mut self.lock.completer, completer)
-            }
+            pub fn set_completer(&mut self, completer: Arc<dyn Completer<Term>>) -> Arc<dyn Completer<Term>>
+            { replace(&mut self.lock.completer, completer) }
 
-            /// Returns the value of the named variable or `None`
-            /// if no such variable exists.
-            pub fn get_variable(&self, name: &str) -> Option<Variable> {
-                self.lock.get_variable(name)
-            }
+            /// Returns the value of the named variable or `None` if no such variable exists.
+            pub fn get_variable(&self, name: &str) -> Option<Variable>
+            { self.lock.get_variable(name) }
 
-            /// Sets the value of the named variable and returns the previous
-            /// value.
-            ///
-            /// If `name` does not refer to a variable or the `value` is not
-            /// a valid value for the variable, `None` is returned.
-            pub fn set_variable(&mut self, name: &str, value: &str) -> Option<Variable> {
-                self.lock.set_variable(name, value)
-            }
+            /// Sets the value of the named variable and returns the previous value.
+            pub fn set_variable(&mut self, name: &str, value: &str) -> Option<Variable>
+            { self.lock.set_variable(name, value) }
 
             /// Returns an iterator over stored variables.
-            pub fn variables(&self) -> VariableIter {
-                self.lock.variables.iter()
-            }
+            pub fn variables(&self) -> VariableIter 
+            { self.lock.variables.iter() }
 
             /// Returns whether to "blink" matching opening parenthesis character
             /// when a closing parenthesis character is entered.
-            ///
-            /// The default value is `false`.
-            pub fn blink_matching_paren(&self) -> bool {
-                self.lock.blink_matching_paren
-            }
+            pub fn blink_matching_paren(&self) -> bool 
+            { self.lock.blink_matching_paren }
 
             /// Sets the `blink-matching-paren` variable.
-            pub fn set_blink_matching_paren(&mut self, set: bool) {
-                self.lock.blink_matching_paren = set;
-            }
+            pub fn set_blink_matching_paren(&mut self, set: bool)
+            { self.lock.blink_matching_paren = set; }
 
             /// Returns whether `linefeed` will catch certain signals.
-            pub fn catch_signals(&self) -> bool {
-                self.lock.catch_signals
-            }
+            pub fn catch_signals(&self) -> bool 
+            { self.lock.catch_signals }
 
             /// Sets whether `linefeed` will catch certain signals.
-            ///
-            /// This setting is `true` by default. It can be disabled to allow the
-            /// host program to handle signals itself.
-            pub fn set_catch_signals(&mut self, enabled: bool) {
-                self.lock.catch_signals = enabled;
-            }
+            pub fn set_catch_signals(&mut self, enabled: bool) 
+            { self.lock.catch_signals = enabled; }
 
             /// Returns whether the given `Signal` is ignored.
-            pub fn ignore_signal(&self, signal: Signal) -> bool {
-                self.lock.ignore_signals.contains(signal)
-            }
+            pub fn ignore_signal(&self, signal: Signal) -> bool
+            { self.lock.ignore_signals.contains(signal) }
 
             /// Sets whether the given `Signal` will be ignored.
-            pub fn set_ignore_signal(&mut self, signal: Signal, set: bool) {
-                if set {
+            pub fn set_ignore_signal(&mut self, signal: Signal, set: bool)
+            {
+                if set 
+                {
                     self.lock.ignore_signals.insert(signal);
                     self.lock.report_signals.remove(signal);
-                } else {
-                    self.lock.ignore_signals.remove(signal);
-                }
+                } 
+                
+                else
+                { self.lock.ignore_signals.remove(signal); }
             }
 
             /// Returns whether the given `Signal` is to be reported.
-            pub fn report_signal(&self, signal: Signal) -> bool {
-                self.lock.report_signals.contains(signal)
-            }
+            pub fn report_signal(&self, signal: Signal) -> bool
+            { self.lock.report_signals.contains(signal) }
 
             /// Sets whether to report the given `Signal`.
-            ///
-            /// When a reported signal is received via the terminal, it will be returned
-            /// from `Interface::read_line` as `Ok(Signal(signal))`.
-            pub fn set_report_signal(&mut self, signal: Signal, set: bool) {
-                if set {
+            pub fn set_report_signal(&mut self, signal: Signal, set: bool)
+            {
+                if set
+                {
                     self.lock.report_signals.insert(signal);
                     self.lock.ignore_signals.remove(signal);
-                } else {
-                    self.lock.report_signals.remove(signal);
                 }
+                
+                else
+                { self.lock.report_signals.remove(signal); }
             }
 
             /// Returns whether Tab completion is disabled.
-            ///
-            /// The default value is `false`.
-            pub fn disable_completion(&self) -> bool {
-                self.lock.disable_completion
-            }
+            pub fn disable_completion(&self) -> bool 
+            { self.lock.disable_completion }
 
             /// Sets the `disable-completion` variable.
-            pub fn set_disable_completion(&mut self, disable: bool) {
-                self.lock.disable_completion = disable;
-            }
+            pub fn set_disable_completion(&mut self, disable: bool)
+            { self.lock.disable_completion = disable; }
 
             /// When certain control characters are pressed, a character sequence
             /// equivalent to this character will be echoed.
-            ///
-            /// The default value is `true`.
-            pub fn echo_control_characters(&self) -> bool {
-                self.lock.echo_control_characters
-            }
+            pub fn echo_control_characters(&self) -> bool
+            { self.lock.echo_control_characters }
 
             /// Sets the `echo-control-characters` variable.
-            pub fn set_echo_control_characters(&mut self, echo: bool) {
-                self.lock.echo_control_characters = echo;
-            }
+            pub fn set_echo_control_characters(&mut self, echo: bool)
+            { self.lock.echo_control_characters = echo; }
 
             /// Returns the character, if any, that is appended to a successful completion.
-            pub fn completion_append_character(&self) -> Option<char> {
-                self.lock.completion_append_character
-            }
+            pub fn completion_append_character(&self) -> Option<char>
+            { self.lock.completion_append_character }
 
             /// Sets the character, if any, that is appended to a successful completion.
-            pub fn set_completion_append_character(&mut self, ch: Option<char>) {
-                self.lock.completion_append_character = ch;
-            }
+            pub fn set_completion_append_character(&mut self, ch: Option<char>)
+            { self.lock.completion_append_character = ch; }
 
             /// Returns the width of completion listing display.
-            ///
-            /// If this value is greater than the terminal width, terminal width is used
-            /// instead.
-            ///
-            /// The default value is equal to `usize::max_value()`.
-            pub fn completion_display_width(&self) -> usize {
-                self.lock.completion_display_width
-            }
+            pub fn completion_display_width(&self) -> usize
+            { self.lock.completion_display_width }
 
             /// Sets the `completion-display-width` variable.
-            pub fn set_completion_display_width(&mut self, n: usize) {
-                self.lock.completion_display_width = n;
-            }
+            pub fn set_completion_display_width(&mut self, n: usize)
+            { self.lock.completion_display_width = n; }
 
-            /// Returns the minimum number of completion items that require user
-            /// confirmation before listing.
-            ///
-            /// The default value is `100`.
-            pub fn completion_query_items(&self) -> usize {
-                self.lock.completion_query_items
-            }
+            /// Returns the minimum number of completion items that require user confirmation before listing.
+            pub fn completion_query_items(&self) -> usize
+            { self.lock.completion_query_items }
 
             /// Sets the `completion-query-items` variable.
-            pub fn set_completion_query_items(&mut self, n: usize) {
-                self.lock.completion_query_items = n;
-            }
+            pub fn set_completion_query_items(&mut self, n: usize)
+            { self.lock.completion_query_items = n; }
 
-            /// Returns the timeout to wait for further user input when an ambiguous
-            /// sequence has been entered. If the value is `None`, wait is indefinite.
-            ///
-            /// The default value 500 milliseconds.
-            pub fn keyseq_timeout(&self) -> Option<Duration> {
-                self.lock.keyseq_timeout
-            }
+            /// Returns timeout to wait for further user input when an ambiguous sequence has been entered.
+            pub fn keyseq_timeout(&self) -> Option<Duration>
+            { self.lock.keyseq_timeout }
 
             /// Sets the `keyseq-timeout` variable.
-            pub fn set_keyseq_timeout(&mut self, timeout: Option<Duration>) {
-                self.lock.keyseq_timeout = timeout;
-            }
+            pub fn set_keyseq_timeout(&mut self, timeout: Option<Duration>)
+            { self.lock.keyseq_timeout = timeout; }
 
             /// Returns whether to list possible completions one page at a time.
-            ///
-            /// The default value is `true`.
-            pub fn page_completions(&self) -> bool {
-                self.lock.page_completions
-            }
+            pub fn page_completions(&self) -> bool
+            { self.lock.page_completions }
 
             /// Sets the `page-completions` variable.
-            pub fn set_page_completions(&mut self, set: bool) {
-                self.lock.page_completions = set;
-            }
+            pub fn set_page_completions(&mut self, set: bool)
+            { self.lock.page_completions = set; }
 
-            /// Returns whether to list completions horizontally, rather than down
-            /// the screen.
-            ///
-            /// The default value is `false`.
-            pub fn print_completions_horizontally(&self) -> bool {
-                self.lock.print_completions_horizontally
-            }
+            /// Returns whether to list completions horizontally, rather than down the screen.
+            pub fn print_completions_horizontally(&self) -> bool
+            { self.lock.print_completions_horizontally }
 
             /// Sets the `print-completions-horizontally` variable.
-            pub fn set_print_completions_horizontally(&mut self, set: bool) {
-                self.lock.print_completions_horizontally = set;
-            }
+            pub fn set_print_completions_horizontally(&mut self, set: bool)
+            { self.lock.print_completions_horizontally = set; }
 
             /// Returns the set of characters that delimit strings.
-            pub fn string_chars(&self) -> &str {
-                &self.lock.string_chars
-            }
+            pub fn string_chars(&self) -> &str
+            { &self.lock.string_chars }
 
             /// Sets the set of characters that delimit strings.
-            pub fn set_string_chars<T>(&mut self, chars: T)
-                    where T: Into<Cow<'static, str>> {
-                self.lock.string_chars = chars.into();
-            }
+            pub fn set_string_chars<T>(&mut self, chars: T) where
+            T: Into<Cow<'static, str>>
+            { self.lock.string_chars = chars.into(); }
 
             /// Returns the set of characters that indicate a word break.
-            pub fn word_break_chars(&self) -> &str {
-                &self.lock.word_break
-            }
+            pub fn word_break_chars(&self) -> &str
+            { &self.lock.word_break }
 
             /// Sets the set of characters that indicate a word break.
-            pub fn set_word_break_chars<T>(&mut self, chars: T)
-                    where T: Into<Cow<'static, str>> {
-                self.lock.word_break = chars.into();
-            }
+            pub fn set_word_break_chars<T>(&mut self, chars: T) where 
+            T: Into<Cow<'static, str>>
+            { self.lock.word_break = chars.into(); }
 
             /// Returns an iterator over bound sequences
-            pub fn bindings(&self) -> BindingIter {
-                self.lock.bindings()
-            }
+            pub fn bindings(&self) -> BindingIter
+            { self.lock.bindings() }
 
             /// Binds a sequence to a command.
-            ///
-            /// Returns the previously bound command.
-            pub fn bind_sequence<T>(&mut self, seq: T, cmd: Command) -> Option<Command>
-                    where T: Into<Cow<'static, str>> {
-                self.lock.bind_sequence(seq, cmd)
-            }
+            pub fn bind_sequence<T>(&mut self, seq: T, cmd: Command) -> Option<Command> where 
+            T: Into<Cow<'static, str>>
+            { self.lock.bind_sequence(seq, cmd) }
 
-            /// Binds a sequence to a command, if and only if the given sequence
-            /// is not already bound to a command.
-            ///
-            /// Returns `true` if a new binding was created.
-            pub fn bind_sequence_if_unbound<T>(&mut self, seq: T, cmd: Command) -> bool
-                    where T: Into<Cow<'static, str>> {
-                self.lock.bind_sequence_if_unbound(seq, cmd)
-            }
+            /// Binds a sequence to a command, if and only if the given sequence is not already bound to a command.
+            pub fn bind_sequence_if_unbound<T>(&mut self, seq: T, cmd: Command) -> bool where 
+            T: Into<Cow<'static, str>>
+            { self.lock.bind_sequence_if_unbound(seq, cmd) }
 
             /// Removes a binding for the given sequence.
-            ///
-            /// Returns the previously bound command.
-            pub fn unbind_sequence(&mut self, seq: &str) -> Option<Command> {
-                self.lock.unbind_sequence(seq)
-            }
+            pub fn unbind_sequence(&mut self, seq: &str) -> Option<Command>
+            { self.lock.unbind_sequence(seq) }
 
             /// Defines a named function to which sequences may be bound.
-            ///
-            /// The name should consist of lowercase ASCII letters and numbers,
-            /// containing no spaces, with words separated by hyphens. However,
-            /// this is not a requirement.
-            ///
-            /// Returns the function previously defined with the same name.
-            pub fn define_function<T>(&mut self, name: T, cmd: Arc<dyn Function<Term>>)
-                    -> Option<Arc<dyn Function<Term>>> where T: Into<Cow<'static, str>> {
-                self.lock.define_function(name, cmd)
-            }
+            pub fn define_function<T>(&mut self, name: T, cmd: Arc<dyn Function<Term>>) -> Option<Arc<dyn Function<Term>>> where 
+            T: Into<Cow<'static, str>> 
+            { self.lock.define_function(name, cmd) }
 
             /// Removes a function defined with the given name.
-            ///
-            /// Returns the defined function.
-            pub fn remove_function(&mut self, name: &str) -> Option<Arc<dyn Function<Term>>> {
-                self.lock.remove_function(name)
-            }
+            pub fn remove_function(&mut self, name: &str) -> Option<Arc<dyn Function<Term>>>
+            { self.lock.remove_function(name) }
 
-            pub(crate) fn evaluate_directives(&mut self, term: &Term, dirs: Vec<Directive>) {
-                self.lock.data.evaluate_directives(term, dirs)
-            }
+            pub(crate) fn evaluate_directives(&mut self, term: &Term, dirs: Vec<Directive>)
+            { self.lock.data.evaluate_directives(term, dirs) }
 
-            pub(crate) fn evaluate_directive(&mut self, term: &Term, dir: Directive) {
-                self.lock.data.evaluate_directive(term, dir)
-            }
+            pub(crate) fn evaluate_directive(&mut self, term: &Term, dir: Directive)
+            { self.lock.data.evaluate_directive(term, dir) }
 
-            fn prompter<'b>(&'b mut self) -> Prompter<'b, 'a, Term> {
-                Prompter::new(
+            fn prompter<'b>(&'b mut self) -> Prompter<'b, 'a, Term>
+            {
+                Prompter::new
+                (
                     &mut self.lock,
-                    self.iface.lock_write())
+                    self.iface.lock_write()
+                )
             }
 
-            fn handle_resize(&mut self, size: Size) -> io::Result<()> {
-                self.prompter().handle_resize(size)
-            }
+            fn handle_resize(&mut self, size: Size) -> io::Result<()>
+            { self.prompter().handle_resize(size) }
 
-            fn handle_signal(&mut self, sig: Signal) -> io::Result<()> {
-                self.prompter().handle_signal(sig)
-            }
+            fn handle_signal(&mut self, sig: Signal) -> io::Result<()>
+            { self.prompter().handle_signal(sig) }
         }
 
-        impl<'a, Term: 'a + Terminal> ReadLock<'a, Term> {
+        impl<'a, Term: 'a + Terminal> ReadLock<'a, Term> 
+        {
             pub fn new(term: Box<dyn TerminalReader<Term> + 'a>, data: MutexGuard<'a, Read<Term>>)
                     -> ReadLock<'a, Term> {
                 ReadLock{term, data}
             }
 
             /// Reads the next character of input.
-            ///
-            /// Performs a non-blocking read from the terminal, if necessary.
-            ///
-            /// If non-input data was received (e.g. a signal) or insufficient input
-            /// is available, `Ok(None)` is returned.
             pub fn read_char(&mut self) -> io::Result<Option<char>> {
                 if let Some(ch) = self.macro_pop() {
                     Ok(Some(ch))
@@ -27404,17 +26453,13 @@ pub mod linefeed
     pub mod table
     {
         //! Provides utilities for formatting strings in a table
-
-        use std::cmp::min;
+        use ::cmp::min;
 
         const COL_SPACE: usize = 2;
 
-        /// Represents a table of strings, formatted into rows and columns
-        ///
-        /// A `Table` is an `Iterator` yielding `Line` elements, which are in turn
-        /// iterators yielding `(usize, &str)` elements, describing the width and content
-        /// of each cell in a given row.
-        pub struct Table<'a, S: 'a> {
+        /// Represents a table of strings, formatted into rows and columns.
+        pub struct Table<'a, S: 'a> 
+        {
             strings: &'a [S],
             sizes: Option<&'a [usize]>,
             offset: usize,
@@ -27423,33 +26468,15 @@ pub mod linefeed
             horizontal: bool,
         }
 
-        impl<'a, S: 'a + AsRef<str>> Table<'a, S> {
-            /// Constructs a new table from the given set of strings, using the given
-            /// column sizes.
-            ///
-            /// If `horizontal` is `true`, items will be list horizontally first.
-            ///
-            /// # Horizontal
-            ///
-            /// ```text
-            /// a b c
-            /// d e f
-            /// g h i
-            /// ```
-            ///
-            /// # Vertical
-            ///
-            /// ```text
-            /// a d g
-            /// b e h
-            /// c f i
-            /// ```
-            pub fn new(strs: &'a [S], mut sizes: Option<&'a [usize]>,
-                    horizontal: bool) -> Table<'a, S> {
-                if let Some(sz) = sizes {
-                    if sz.is_empty() {
-                        sizes = None;
-                    }
+        impl<'a, S: 'a + AsRef<str>> Table<'a, S> 
+        {
+            /// Constructs a new table from the given set of strings, using the given column sizes.
+            pub fn new(strs: &'a [S], mut sizes: Option<&'a [usize]>, horizontal: bool) -> Table<'a, S> 
+            {
+                if let Some(sz) = sizes 
+                {
+                    if sz.is_empty() 
+                    { sizes = None; }
                 }
 
                 let n_strs = strs.len();
@@ -27457,7 +26484,8 @@ pub mod linefeed
 
                 let rows = n_strs / n_cols + (n_strs % n_cols != 0) as usize;
 
-                Table{
+                Table
+                {
                     strings: strs,
                     sizes: sizes,
                     offset: 0,
@@ -27468,30 +26496,32 @@ pub mod linefeed
             }
 
             /// Returns whether more lines are present in the table.
-            pub fn has_more(&self) -> bool {
-                self.offset < self.rows
-            }
+            pub fn has_more(&self) -> bool
+            { self.offset < self.rows }
 
-            fn num_cols(&self) -> usize {
-                self.sizes.map_or(1, |sz| sz.len())
-            }
+            fn num_cols(&self) -> usize 
+            { self.sizes.map_or(1, |sz| sz.len()) }
         }
 
-        impl<'a, S: 'a + AsRef<str>> Iterator for Table<'a, S> {
+        impl<'a, S: 'a + AsRef<str>> Iterator for Table<'a, S> 
+        {
             type Item = Line<'a, S>;
 
-            fn next(&mut self) -> Option<Line<'a, S>> {
-                if self.offset == self.rows {
-                    return None;
-                }
+            fn next(&mut self) -> Option<Line<'a, S>>
+            {
+                if self.offset == self.rows 
+                { return None; }
 
                 let n = self.num_cols();
 
-                let (start, end, stride) = if self.horizontal {
+                let (start, end, stride) = if self.horizontal
+                {
                     let start = self.offset * n;
                     let end = min(self.strings.len(), start + n);
                     (start, end, 1)
-                } else {
+                } 
+                else
+                {
                     let start = self.offset;
                     let end = min(self.strings.len(), start + self.per_col * n);
                     (start, end, self.per_col)
@@ -27499,33 +26529,38 @@ pub mod linefeed
 
                 self.offset += 1;
 
-                Some(Line{
-                    strings: &self.strings[start..end],
-                    sizes: self.sizes,
-                    stride: stride,
-                    offset: 0,
-                })
+                Some
+                (
+                    Line
+                    {
+                        strings: &self.strings[start..end],
+                        sizes: self.sizes,
+                        stride: stride,
+                        offset: 0,
+                    }
+                )
             }
         }
 
-        /// Represents a single line of the table
-        ///
-        /// A `Line` is an `Iterator` yielding `(usize, &str)` elements, describing
-        /// the width and content of each cell in a given row.
-        pub struct Line<'a, S: 'a> {
+        /// Represents a single line of the table.
+        pub struct Line<'a, S: 'a> 
+        {
             strings: &'a [S],
             sizes: Option<&'a [usize]>,
             stride: usize,
             offset: usize,
         }
 
-        impl<'a, S: 'a + AsRef<str>> Iterator for Line<'a, S> {
+        impl<'a, S: 'a + AsRef<str>> Iterator for Line<'a, S>
+        {
             type Item = (usize, &'a str);
 
-            fn next(&mut self) -> Option<(usize, &'a str)> {
+            fn next(&mut self) -> Option<(usize, &'a str)>
+            {
                 let s = self.strings.get(self.offset * self.stride)?.as_ref();
 
-                let width = self.sizes.and_then(|sz| sz.get(self.offset).cloned())
+                let width = self.sizes
+                    .and_then(|sz| sz.get(self.offset).cloned())
                     .unwrap_or_else(|| s.chars().count());
 
                 self.offset += 1;
@@ -27535,16 +26570,10 @@ pub mod linefeed
         }
 
         /// Formats a series of strings into columns, fitting within a given screen width.
-        /// Returns the size of each resulting column, including spacing.
-        ///
-        /// If the strings cannot be formatted into columns (e.g. one or more strings
-        /// are longer than the screen width) or the result would be only one column,
-        /// `None` is returned.
-        pub fn format_columns<S: AsRef<str>>(strs: &[S], screen_width: usize,
-                horizontal: bool) -> Option<Vec<usize>> {
-            if strs.is_empty() {
-                return None;
-            }
+        pub fn format_columns<S: AsRef<str>>(strs: &[S], screen_width: usize, horizontal: bool) -> Option<Vec<usize>>
+        {
+            if strs.is_empty()
+            { return None; }
 
             let n_strs = strs.len();
 
@@ -27556,47 +26585,46 @@ pub mod linefeed
             let mut min_cols = min(n_strs, screen_width / max_len);
             let max_cols = min(n_strs, screen_width / min_len);
 
-            if min_cols <= 1 {
-                // No point in checking whether text can fit within one column
-                min_cols = 2;
-            }
+            if min_cols <= 1 
+            { min_cols = 2; }
 
-            if max_cols <= 1 {
-                return None;
-            }
+            if max_cols <= 1
+            { return None; }
 
-            let mut col_sizes = if min_cols == max_cols {
-                vec![vec![0; max_cols]]
-            } else {
-                (min_cols..max_cols + 1)
-                    .map(|n| vec![0; n]).collect::<Vec<_>>()
-            };
+            let mut col_sizes = if min_cols == max_cols
+            { vec![vec![0; max_cols]] } 
 
-            for (i, s) in strs.iter().enumerate() {
+            else 
+            { (min_cols..max_cols + 1).map(|n| vec![0; n]).collect::<Vec<_>>() };
+
+            for (i, s) in strs.iter().enumerate()
+            {
                 let len = s.as_ref().chars().count();
 
-                for cols in &mut col_sizes {
+                for cols in &mut col_sizes
+                {
                     let n_cols = cols.len();
 
-                    let col = if horizontal {
-                        i % n_cols
-                    } else {
+                    let col = if horizontal
+                    { i % n_cols }
+
+                    else 
+                    {
                         let per_col = (n_strs + (n_cols - 1)) / n_cols;
                         i / per_col
                     };
 
                     let real_len = if col == n_cols - 1 { len } else { len + COL_SPACE };
 
-                    if real_len > cols[col] {
-                        cols[col] = real_len;
-                    }
+                    if real_len > cols[col]
+                    { cols[col] = real_len; }
                 }
             }
 
-            for cols in col_sizes.into_iter().rev() {
-                if cols.iter().fold(0, |a, b| a + b) <= screen_width {
-                    return Some(cols);
-                }
+            for cols in col_sizes.into_iter().rev()
+            {
+                if cols.iter().fold(0, |a, b| a + b) <= screen_width
+                { return Some(cols); }
             }
 
             None
@@ -27616,27 +26644,6 @@ pub mod linefeed
             }
 
             (min, max)
-        }
-
-        #[cfg(test)]
-        mod test {
-            use std::iter::repeat;
-            use super::format_columns;
-
-            #[test]
-            fn test_long_item() {
-                let strs = (1..500).map(|n| repeat('x').take(n).collect())
-                    .collect::<Vec<String>>();
-
-                assert_matches!(format_columns(&strs, 80, false), None);
-            }
-
-            #[test]
-            fn test_zero_item() {
-                let strs = ["", "", ""];
-
-                assert_eq!(format_columns(&strs, 80, false), Some(vec![2, 2, 0]));
-            }
         }
     }
     /*
@@ -30260,4 +29267,4 @@ pub mod linefeed
 pub fn main() 
 {
     
-} // 30263
+} // 29270
