@@ -3609,12 +3609,13 @@ pub mod connect
             types::{ ToSql, ValueRef },
             raw::{ RawStatement },
             version::{ * },
-            Connection, InterruptHandle, OpenFlags, PrepFlags, Result, str_for_sqlite, version_number,
+            InterruptHandle, OpenFlags, PrepFlags, Result, str_for_sqlite, version_number,
         },
         default::{ Default },
         ffi::{ c_char, c_int, c_uint, CStr, CString },
         path::{ Path },
         sync::{ Arc, Mutex },
+        *,
     };
 
     pub mod bind
@@ -4428,6 +4429,91 @@ pub mod connect
         unsafe impl Send for InnerConnection {}
     }
 
+    pub mod limits
+    {
+        //! Run-Time Limits
+
+        use crate::{ffi, Connection, Result};
+        use std::ffi::c_int;
+
+        /// Run-Time limit categories, for use with [`Connection::limit`] and
+        /// [`Connection::set_limit`].
+        ///
+        /// See the official documentation for more information:
+        /// - <https://www.sqlite.org/c3ref/c_limit_attached.html>
+        /// - <https://www.sqlite.org/limits.html>
+        #[derive(Copy, Clone, Debug)]
+        #[repr(i32)]
+        #[non_exhaustive]
+        #[expect(non_camel_case_types)]
+        #[cfg_attr(docsrs, doc(cfg(feature = "limits")))]
+        pub enum Limit {
+            /// The maximum size of any string or BLOB or table row, in bytes.
+            SQLITE_LIMIT_LENGTH = ffi::SQLITE_LIMIT_LENGTH,
+            /// The maximum length of an SQL statement, in bytes.
+            SQLITE_LIMIT_SQL_LENGTH = ffi::SQLITE_LIMIT_SQL_LENGTH,
+            /// The maximum number of columns in a table definition or in the result set
+            /// of a SELECT or the maximum number of columns in an index or in an
+            /// ORDER BY or GROUP BY clause.
+            SQLITE_LIMIT_COLUMN = ffi::SQLITE_LIMIT_COLUMN,
+            /// The maximum depth of the parse tree on any expression.
+            SQLITE_LIMIT_EXPR_DEPTH = ffi::SQLITE_LIMIT_EXPR_DEPTH,
+            /// The maximum number of terms in a compound SELECT statement.
+            SQLITE_LIMIT_COMPOUND_SELECT = ffi::SQLITE_LIMIT_COMPOUND_SELECT,
+            /// The maximum number of instructions in a virtual machine program used to
+            /// implement an SQL statement.
+            SQLITE_LIMIT_VDBE_OP = ffi::SQLITE_LIMIT_VDBE_OP,
+            /// The maximum number of arguments on a function.
+            SQLITE_LIMIT_FUNCTION_ARG = ffi::SQLITE_LIMIT_FUNCTION_ARG,
+            /// The maximum number of attached databases.
+            SQLITE_LIMIT_ATTACHED = ffi::SQLITE_LIMIT_ATTACHED,
+            /// The maximum length of the pattern argument to the LIKE or GLOB
+            /// operators.
+            SQLITE_LIMIT_LIKE_PATTERN_LENGTH = ffi::SQLITE_LIMIT_LIKE_PATTERN_LENGTH,
+            /// The maximum index number of any parameter in an SQL statement.
+            SQLITE_LIMIT_VARIABLE_NUMBER = ffi::SQLITE_LIMIT_VARIABLE_NUMBER,
+            /// The maximum depth of recursion for triggers.
+            SQLITE_LIMIT_TRIGGER_DEPTH = ffi::SQLITE_LIMIT_TRIGGER_DEPTH,
+            /// The maximum number of auxiliary worker threads that a single prepared
+            /// statement may start.
+            SQLITE_LIMIT_WORKER_THREADS = ffi::SQLITE_LIMIT_WORKER_THREADS,
+            /// Only used for testing
+            #[cfg(test)]
+            INVALID = -1,
+        }
+
+        impl Connection {
+            /// Returns the current value of a [`Limit`].
+            #[inline]
+            #[cfg_attr(docsrs, doc(cfg(feature = "limits")))]
+            pub fn limit(&self, limit: Limit) -> Result<i32> {
+                let c = self.db.borrow();
+                let rc = unsafe { ffi::sqlite3_limit(c.db(), limit as c_int, -1) };
+                if rc < 0 {
+                    return Err(err!(ffi::SQLITE_RANGE, "{limit:?} is invalid"));
+                }
+                Ok(rc)
+            }
+
+            /// Changes the [`Limit`] to `new_val`, returning the prior
+            /// value of the limit.
+            #[inline]
+            #[cfg_attr(docsrs, doc(cfg(feature = "limits")))]
+            pub fn set_limit(&self, limit: Limit, new_val: i32) -> Result<i32> {
+                if new_val < 0 {
+                    return Err(err!(ffi::SQLITE_RANGE, "{new_val} is invalid"));
+                }
+                let c = self.db.borrow_mut();
+                let rc = unsafe { ffi::sqlite3_limit(c.db(), limit as c_int, new_val) };
+                if rc < 0 {
+                    return Err(err!(ffi::SQLITE_RANGE, "{limit:?} is invalid"));
+                }
+                Ok(rc)
+            }
+        }
+
+    }
+
     pub mod load
     {
         use ::connect::{Connection, Result};
@@ -4673,6 +4759,241 @@ pub mod connect
         I::Item: ToSql
         {
             #[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> { stmt.bind_parameters(self.0) }
+        }
+    }
+
+    pub mod pragma
+    {
+        //! Pragma helpers
+        use ::
+        {
+            connect::
+            {
+                self,
+                types::{ToSql, ToSqlOutput, ValueRef},
+                Connection, DatabaseName, Result, Row,
+            },
+            ops::{ Deref },
+            str::{ from_utf8 },
+            *,
+        };
+
+        pub struct Sql
+        {
+            buf: String,
+        }
+
+        impl Sql
+        {
+            pub fn new() -> Self { Self { buf: String::new() } }
+
+            pub fn push_pragma( &mut self, schema_name: Option<DatabaseName<'_>>, pragma_name: &str ) -> Result<()>
+            {
+                self.push_keyword("PRAGMA")?;
+                self.push_space();
+                if let Some(schema_name) = schema_name
+                {
+                    self.push_schema_name(schema_name);
+                    self.push_dot();
+                }
+
+                self.push_keyword(pragma_name)
+            }
+
+            pub fn push_keyword(&mut self, keyword: &str) -> Result<()>
+            {
+                if !keyword.is_empty() && is_identifier(keyword)
+                {
+                    self.buf.push_str(keyword);
+                    Ok(())
+                }
+                
+                else { Err(err!( connect::ffi::SQLITE_MISUSE, "Invalid keyword \"{keyword}\"")) }
+            }
+
+            pub fn push_schema_name(&mut self, schema_name: DatabaseName<'_>)
+            {
+                match schema_name
+                {
+                    DatabaseName::Main => self.buf.push_str("main"),
+                    DatabaseName::Temp => self.buf.push_str("temp"),
+                    DatabaseName::Attached(s) => self.push_identifier(s),
+                    DatabaseName::C(s) => self.push_identifier(s.to_str().expect("invalid database name")),
+                };
+            }
+
+            pub fn push_identifier(&mut self, s: &str)
+            {
+                if is_identifier(s) { self.buf.push_str(s); }
+                else { self.wrap_and_escape(s, '"'); }
+            }
+
+            pub fn push_value(&mut self, value: &dyn ToSql) -> Result<()>
+            {
+                let value = value.to_sql()?;
+                let value = match value
+                {
+                    ToSqlOutput::Borrowed(v) => v,
+                    ToSqlOutput::Owned(ref v) => ValueRef::from(v),
+                    _ => 
+                    {
+                        return Err(err!( connect::ffi::SQLITE_MISUSE, "Unsupported value \"{value:?}\""));
+                    }
+                };
+
+                match value
+                {
+                    ValueRef::Integer(i) => { self.push_int(i); }
+                    ValueRef::Real(r) => { self.push_real(r); }
+                    ValueRef::Text(s) =>
+                    {
+                        let s = std::str::from_utf8(s)?;
+                        self.push_string_literal(s);
+                    }
+                    _ => {
+                        return Err(err!( connect::ffi::SQLITE_MISUSE, "Unsupported value \"{value:?}\""));
+                    }
+                };
+                Ok(())
+            }
+
+            pub fn push_string_literal(&mut self, s: &str) { self.wrap_and_escape(s, '\''); }
+
+            pub fn push_int(&mut self, i: i64) { self.buf.push_str(&i.to_string()); }
+
+            pub fn push_real(&mut self, f: f64) { self.buf.push_str(&f.to_string()); }
+
+            pub fn push_space(&mut self) { self.buf.push(' '); }
+
+            pub fn push_dot(&mut self) { self.buf.push('.'); }
+
+            pub fn push_equal_sign(&mut self) { self.buf.push('='); }
+
+            pub fn open_brace(&mut self) { self.buf.push('('); }
+
+            pub fn close_brace(&mut self) { self.buf.push(')'); }
+
+            pub fn as_str(&self) -> &str { &self.buf }
+
+            fn wrap_and_escape(&mut self, s: &str, quote: char)
+            {
+                self.buf.push(quote);
+                let chars = s.chars();
+                for ch in chars
+                {
+                    if ch == quote { self.buf.push(ch); }
+                    self.buf.push(ch);
+                }
+
+                self.buf.push(quote);
+            }
+        }
+
+        impl Deref for Sql
+        {
+            type Target = str;
+            fn deref(&self) -> &str { self.as_str() }
+        }
+
+        impl Connection
+        {
+            /// Query the current value of `pragma_name`.
+            pub fn pragma_query_value<T, F>( &self, schema_name: Option<DatabaseName<'_>>, pragma_name: &str, f: F ) -> 
+            Result<T> where
+            F: FnOnce(&Row<'_>) -> Result<T>
+            {
+                let mut query = Sql::new();
+                query.push_pragma(schema_name, pragma_name)?;
+                self.query_row(&query, [], f)
+            }
+            /// Query the current rows/values of `pragma_name`.
+            pub fn pragma_query<F>( &self, schema_name: Option<DatabaseName<'_>>, pragma_name: &str, mut f: F ) ->
+            Result<()> where
+            F: FnMut(&Row<'_>) -> Result<()>
+            {
+                let mut query = Sql::new();
+                query.push_pragma(schema_name, pragma_name)?;
+                let mut stmt = self.prepare(&query)?;
+                let mut rows = stmt.query([])?;
+                
+                while let Some(result_row) = rows.next()?
+                {
+                    let row = result_row;
+                    f(row)?;
+                }
+
+                Ok(())
+            }
+            /// Query the current value(s) of `pragma_name` associated to `pragma_value`.
+            pub fn pragma<F, V>
+            ( &self, schema_name: Option<DatabaseName<'_>>, pragma_name: &str, pragma_value: V, mut f: F ) ->
+            Result<()> where
+            F: FnMut(&Row<'_>) -> Result<()>,
+            V: ToSql
+            {
+                let mut sql = Sql::new();
+                sql.push_pragma(schema_name, pragma_name)?;
+                sql.open_brace();
+                sql.push_value(&pragma_value)?;
+                sql.close_brace();
+                let mut stmt = self.prepare(&sql)?;
+                let mut rows = stmt.query([])?;
+                while let Some(result_row) = rows.next()?
+                {
+                    let row = result_row;
+                    f(row)?;
+                }
+
+                Ok(())
+            }
+            /// Set a new value to `pragma_name`.
+            pub fn pragma_update<V>( &self, schema_name: Option<DatabaseName<'_>>, pragma_name: &str, pragma_value: V ) ->
+            Result<()> where
+            V: ToSql
+            {
+                let mut sql = Sql::new();
+                sql.push_pragma(schema_name, pragma_name)?;
+                sql.push_equal_sign();
+                sql.push_value(&pragma_value)?;
+                self.execute_batch(&sql)
+            }
+            /// Set a new value to `pragma_name` and return the updated value.
+            pub fn pragma_update_and_check<F, T, V>
+            ( &self, schema_name: Option<DatabaseName<'_>>, pragma_name: &str, pragma_value: V, f: F ) -> 
+            Result<T> where
+            F: FnOnce(&Row<'_>) -> Result<T>,
+            V: ToSql
+            {
+                let mut sql = Sql::new();
+                sql.push_pragma(schema_name, pragma_name)?;
+                sql.push_equal_sign();
+                sql.push_value(&pragma_value)?;
+                self.query_row(&sql, [], f)
+            }
+        }
+        
+        fn is_identifier(s: &str) -> bool
+        {
+            let chars = s.char_indices();
+            
+            for (i, ch) in chars
+            {
+                if i == 0 { if !is_identifier_start(ch) { return false; } }
+                else if !is_identifier_continue(ch) { return false; }
+            }
+            true
+        }
+
+        fn is_identifier_start(c: char) -> bool { c.is_ascii_uppercase() || c == '_' || c.is_ascii_lowercase() || c > '\x7F' }
+
+        fn is_identifier_continue(c: char) -> bool
+        {
+            c == '$'
+            || c.is_ascii_digit()
+            || c.is_ascii_uppercase()
+            || c == '_'
+            || c.is_ascii_lowercase()
+            || c > '\x7F'
         }
     }
 
@@ -4972,7 +5293,6 @@ pub mod connect
         {
             fn as_ref(&self) -> &Statement<'stmt> { self.stmt }
         }
-
         /// Debug `Row` with column name as key except that for `Type::Blob` only its size is printed (not its content).
         impl ::fmt::Debug for Row<'_>
         {
@@ -5036,6 +5356,183 @@ pub mod connect
 
         tuples_try_from_row!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P);
     }
+    
+    pub mod serialize
+    {
+        //! Serialize a database.
+        use ::
+        {
+            connect::
+            {
+                self,
+                error::{error_from_handle, error_from_sqlite_code},
+                Connection, DatabaseName, Error,
+            },
+            io::{ Read },
+            marker::{ PhantomData },
+            mem::{ Deref, forget },
+            ptr::{ NonNull },
+            slice::{ from_raw_parts },
+            *,
+        };
+        /// Shared (SQLITE_SERIALIZE_NOCOPY) serialized database
+        pub struct SharedData<'conn>
+        {
+            phantom: PhantomData<&'conn Connection>,
+            ptr: NonNull<u8>,
+            sz: usize,
+        }
+        /// Owned serialized database
+        pub struct OwnedData 
+        {
+            ptr: NonNull<u8>,
+            sz: usize,
+        }
+
+        impl OwnedData 
+        {
+            pub unsafe fn from_raw_nonnull(ptr: NonNull<u8>, sz: usize) -> Self 
+            { Self { ptr, sz } }
+
+            fn into_raw(self) -> (*mut u8, usize)
+            {
+                let raw = (self.ptr.as_ptr(), self.sz);
+                forget(self);
+                raw
+            }
+        }
+
+        impl Drop for OwnedData
+        {
+            fn drop(&mut self) { unsafe { connect::ffi::sqlite3_free(self.ptr.as_ptr().cast()); }}
+        }
+        /// Serialized database
+        pub enum Data<'conn>
+        {
+            /// Shared (SQLITE_SERIALIZE_NOCOPY) serialized database
+            Shared(SharedData<'conn>),
+            /// Owned serialized database
+            Owned(OwnedData),
+        }
+
+        impl Deref for Data<'_>
+        {
+            type Target = [u8];
+            fn deref(&self) -> &[u8]
+            {
+                let (ptr, sz) = match self
+                {
+                    Data::Owned(OwnedData { ptr, sz }) => (ptr.as_ptr(), *sz),
+                    Data::Shared(SharedData { ptr, sz, .. }) => (ptr.as_ptr(), *sz),
+                };
+                unsafe { from_raw_parts(ptr, sz) }
+            }
+        }
+
+        impl Connection
+        {
+            /// Serialize a database.
+            pub fn serialize(&self, schema: DatabaseName) -> Result<Data> 
+            {
+                let schema = schema.as_cstr()?;
+                let mut sz = 0;
+                let mut ptr: *mut u8 = unsafe
+                {
+                    connect::ffi::sqlite3_serialize
+                    (
+                        self.handle(),
+                        schema.as_ptr(),
+                        &mut sz,
+                        connect::ffi::SQLITE_SERIALIZE_NOCOPY,
+                    )
+                };
+
+                Ok(if ptr.is_null()
+                {
+                    ptr = unsafe { connect::ffi::sqlite3_serialize(self.handle(), schema.as_ptr(), &mut sz, 0) };
+                    
+                    if ptr.is_null() 
+                    { return Err(unsafe { error_from_handle(self.handle(), connect::ffi::SQLITE_NOMEM) }); }
+
+                    Data::Owned(OwnedData 
+                    {
+                        ptr: NonNull::new(ptr).unwrap(),
+                        sz: sz.try_into().unwrap(),
+                    })
+                }
+                
+                else
+                {
+                    Data::Shared(SharedData
+                    {
+                        ptr: NonNull::new(ptr).unwrap(),
+                        sz: sz.try_into().unwrap(),
+                        phantom: PhantomData,
+                    })
+                })
+            }
+            /// Deserialize from stream
+            pub fn deserialize_read_exact<R:Read>
+            ( &mut self, schema: DatabaseName<'_>, mut read: R, sz: usize, read_only: bool ) -> Result<()>
+            {
+                let ptr = unsafe { connect::ffi::sqlite3_malloc(sz.try_into().unwrap()) }.cast::<u8>();
+                if ptr.is_null() { return Err(error_from_sqlite_code( connect::ffi::SQLITE_NOMEM, None)); }
+                let buf = unsafe { from_raw_parts_mut(ptr, sz) };
+                read.read_exact(buf).map_err(|e|
+                {
+                    Error::SqliteFailure
+                    (
+                        connect::ffi::Error
+                        {
+                            code: connect::ffi::ErrorCode::CannotOpen,
+                            extended_code: connect::ffi::SQLITE_IOERR,
+                        },
+                        Some(format!("{}", e)),
+                    )
+                })?;
+                let ptr = NonNull::new(ptr).unwrap();
+                let data = unsafe { OwnedData::from_raw_nonnull(ptr, sz) };
+                self.deserialize(schema, data, read_only)
+            }
+            /// Deserialize `include_bytes` as a read only database
+            pub fn deserialize_bytes( &mut self, schema: DatabaseName<'_>, data: &'static [u8] ) -> Result<()>
+            {
+                let sz = data.len().try_into().unwrap();
+                self.deserialize_
+                (
+                    schema,
+                    data.as_ptr() as *mut _,
+                    sz,
+                    connect::ffi::SQLITE_DESERIALIZE_READONLY,
+                )
+            }
+            /// Deserialize a database.
+            pub fn deserialize( &mut self, schema: DatabaseName<'_>, data: OwnedData, read_only: bool ) -> Result<()>
+            {
+                let (data, sz) = data.into_raw();
+                let sz = sz.try_into().unwrap();
+                let flags = if read_only
+                { connect::ffi::SQLITE_DESERIALIZE_FREEONCLOSE | connect::ffi::SQLITE_DESERIALIZE_READONLY }
+                else { connect::ffi::SQLITE_DESERIALIZE_FREEONCLOSE | connect::ffi::SQLITE_DESERIALIZE_RESIZEABLE };
+                self.deserialize_(schema, data, sz, flags)
+            }
+
+            fn deserialize_
+            (
+                &mut self, 
+                schema: DatabaseName<'_>, 
+                data: *mut u8, 
+                sz: connect::ffi::sqlite_int64, 
+                flags: connect::ffi::c_uint
+            ) -> Result<()>
+            {
+                let schema = schema.as_cstr()?;
+                let rc = unsafe { connect::ffi::sqlite3_deserialize(self.handle(), schema.as_ptr(), data, sz, sz, flags) };
+                if rc != connect::ffi::SQLITE_OK { return Err(unsafe { error_from_handle(self.handle(), rc) }); }
+                Ok(())
+            }
+        }
+    }
 
     pub mod session
     {
@@ -5059,55 +5556,48 @@ pub mod connect
         };
         
         type Filter = Option<Box<dyn Fn(&str) -> bool>>;
-
         /// An instance of this object is a session that can be used to record changes to a database.
-        pub struct Session<'conn> {
+        pub struct Session<'conn>
+        {
             phantom: PhantomData<&'conn Connection>,
             s: *mut connect::ffi::sqlite3_session,
             filter: Filter,
         }
 
-        impl Session<'_> {
+        impl Session<'_>
+        {
             /// Create a new session object
-            #[inline] pub fn new(db: &Connection) -> Result<Session<'_>> {
-                Session::new_with_name(db, DatabaseName::Main)
-            }
-
+            #[inline] pub fn new(db: &Connection) -> Result<Session<'_>> { Session::new_with_name(db, DatabaseName::Main) }
             /// Create a new session object
-            #[inline]
-            pub fn new_with_name<'conn>(
-                db: &'conn Connection,
-                name: DatabaseName<'_>,
-            ) -> Result<Session<'conn>> {
+            #[inline] pub fn new_with_name<'conn>( db: &'conn Connection, name: DatabaseName<'_> ) 
+            -> Result<Session<'conn>>
+            {
                 let name = name.as_cstr()?;
-
                 let db = db.db.borrow_mut().db;
 
                 let mut s: *mut connect::ffi::sqlite3_session = ptr::null_mut();
                 check(unsafe { connect::ffi::sqlite3session_create(db, name.as_ptr(), &mut s) })?;
 
-                Ok(Session {
+                Ok(Session
+                {
                     phantom: PhantomData,
                     s,
                     filter: None,
                 })
             }
-
             /// Set a table filter
-            pub fn table_filter<F>(&mut self, filter: Option<F>)
-            where
-                F: Fn(&str) -> bool + Send + 'static,
+            pub fn table_filter<F>(&mut self, filter: Option<F>) where
+            F: Fn(&str) -> bool + Send + 'static
             {
-                unsafe extern "C" fn call_boxed_closure<F>(
-                    p_arg: *mut c_void,
-                    tbl_str: *const c_char,
-                ) -> c_int
-                where
-                    F: Fn(&str) -> bool,
+                unsafe extern "C" fn call_boxed_closure<F>( p_arg: *mut c_void, tbl_str: *const c_char, ) -> 
+                c_int where
+                F: Fn(&str) -> bool
                 {
                     let tbl_name = CStr::from_ptr(tbl_str).to_str();
-                    c_int::from(
-                        catch_unwind(|| {
+                    c_int::from
+                    (
+                        catch_unwind(|| 
+                        {
                             let boxed_filter: *mut F = p_arg.cast::<F>();
                             (*boxed_filter)(tbl_name.expect("non-utf8 table name"))
                         })
@@ -5115,11 +5605,15 @@ pub mod connect
                     )
                 }
 
-                match filter {
-                    Some(filter) => {
+                match filter
+                {
+                    Some(filter) =>
+                    {
                         let boxed_filter = Box::new(filter);
-                        unsafe {
-                            connect::ffi::sqlite3session_table_filter(
+                        unsafe
+                        {
+                            connect::ffi::sqlite3session_table_filter
+                            (
                                 self.s,
                                 Some(call_boxed_closure::<F>),
                                 &*boxed_filter as *const F as *mut _,
@@ -5127,139 +5621,120 @@ pub mod connect
                         }
                         self.filter = Some(boxed_filter);
                     }
-                    _ => {
+
+                    _ =>
+                    {
                         unsafe { connect::ffi::sqlite3session_table_filter(self.s, None, ptr::null_mut()) }
                         self.filter = None;
                     }
                 };
             }
-
             /// Attach a table. `None` means all tables.
-            pub fn attach(&mut self, table: Option<&str>) -> Result<()> {
-                let table = if let Some(table) = table {
-                    Some(str_to_cstring(table)?)
-                } else {
-                    None
-                };
+            pub fn attach(&mut self, table: Option<&str>) -> Result<()>
+            {
+                let table = if let Some(table) = table { Some(str_to_cstring(table)?) }
+                else { None };
                 let table = table.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
                 check(unsafe { connect::ffi::sqlite3session_attach(self.s, table) })
             }
-
             /// Generate a Changeset
-            pub fn changeset(&mut self) -> Result<Changeset> {
+            pub fn changeset(&mut self) -> Result<Changeset>
+            {
                 let mut n = 0;
                 let mut cs: *mut c_void = ptr::null_mut();
                 check(unsafe { connect::ffi::sqlite3session_changeset(self.s, &mut n, &mut cs) })?;
                 Ok(Changeset { cs, n })
             }
-
             /// Write the set of changes represented by this session to `output`.
-            #[inline]
-            pub fn changeset_strm(&mut self, output: &mut dyn Write) -> Result<()> {
+            #[inline] pub fn changeset_strm(&mut self, output: &mut dyn Write) -> Result<()>
+            {
                 let output_ref = &output;
-                check(unsafe {
-                    connect::ffi::sqlite3session_changeset_strm(
+                check(unsafe
+                {
+                    connect::ffi::sqlite3session_changeset_strm
+                    (
                         self.s,
                         Some(x_output),
                         output_ref as *const &mut dyn Write as *mut c_void,
                     )
                 })
             }
-
             /// Generate a Patchset
-            #[inline]
-            pub fn patchset(&mut self) -> Result<Changeset> {
+            #[inline] pub fn patchset(&mut self) -> Result<Changeset>
+            {
                 let mut n = 0;
                 let mut ps: *mut c_void = ptr::null_mut();
                 check(unsafe { connect::ffi::sqlite3session_patchset(self.s, &mut n, &mut ps) })?;
-                // TODO Validate: same struct
+
                 Ok(Changeset { cs: ps, n })
             }
-
             /// Write the set of patches represented by this session to `output`.
-            #[inline]
-            pub fn patchset_strm(&mut self, output: &mut dyn Write) -> Result<()> {
+            #[inline] pub fn patchset_strm(&mut self, output: &mut dyn Write) -> Result<()>
+            {
                 let output_ref = &output;
-                check(unsafe {
-                    connect::ffi::sqlite3session_patchset_strm(
+                check(unsafe
+                {
+                    connect::ffi::sqlite3session_patchset_strm
+                    (
                         self.s,
                         Some(x_output),
                         output_ref as *const &mut dyn Write as *mut c_void,
                     )
                 })
             }
-
             /// Load the difference between tables.
-            pub fn diff(&mut self, from: DatabaseName<'_>, table: &str) -> Result<()> {
+            pub fn diff(&mut self, from: DatabaseName<'_>, table: &str) -> Result<()>
+            {
                 let from = from.as_cstr()?;
                 let table = str_to_cstring(table)?;
                 let table = table.as_ptr();
-                unsafe {
+                unsafe
+                {
                     let mut errmsg = ptr::null_mut();
-                    let r =
-                        connect::ffi::sqlite3session_diff(self.s, from.as_ptr(), table, &mut errmsg as *mut *mut _);
-                    if r != connect::ffi::SQLITE_OK {
+                    let r = connect::ffi::sqlite3session_diff(self.s, from.as_ptr(), table, &mut errmsg as *mut *mut _);
+                    if r != connect::ffi::SQLITE_OK
+                    {
                         let errmsg: *mut c_char = errmsg;
                         let message = errmsg_to_string(&*errmsg);
                         connect::ffi::sqlite3_free(errmsg as *mut c_void);
                         return Err(error_from_sqlite_code(r, Some(message)));
                     }
                 }
+
                 Ok(())
             }
-
             /// Test if a changeset has recorded any changes
-            #[inline]
-            pub fn is_empty(&self) -> bool {
-                unsafe { connect::ffi::sqlite3session_isempty(self.s) != 0 }
-            }
-
+            #[inline] pub fn is_empty(&self) -> bool { unsafe { connect::ffi::sqlite3session_isempty(self.s) != 0 } }
             /// Query the current state of the session
-            #[inline]
-            pub fn is_enabled(&self) -> bool {
-                unsafe { connect::ffi::sqlite3session_enable(self.s, -1) != 0 }
-            }
-
+            #[inline] pub fn is_enabled(&self) -> bool { unsafe { connect::ffi::sqlite3session_enable(self.s, -1) != 0 } }
             /// Enable or disable the recording of changes
-            #[inline]
-            pub fn set_enabled(&mut self, enabled: bool) {
-                unsafe {
-                    connect::ffi::sqlite3session_enable(self.s, c_int::from(enabled));
-                }
-            }
-
+            #[inline] pub fn set_enabled(&mut self, enabled: bool) 
+            { unsafe { connect::ffi::sqlite3session_enable(self.s, c_int::from(enabled)); } }
             /// Query the current state of the indirect flag
-            #[inline]
-            pub fn is_indirect(&self) -> bool {
-                unsafe { connect::ffi::sqlite3session_indirect(self.s, -1) != 0 }
-            }
-
+            #[inline] pub fn is_indirect(&self) -> bool
+            { unsafe { connect::ffi::sqlite3session_indirect(self.s, -1) != 0 } }
             /// Set or clear the indirect change flag
-            #[inline]
-            pub fn set_indirect(&mut self, indirect: bool) {
-                unsafe {
-                    connect::ffi::sqlite3session_indirect(self.s, c_int::from(indirect));
-                }
-            }
+            #[inline] pub fn set_indirect(&mut self, indirect: bool)
+            { unsafe { connect::ffi::sqlite3session_indirect(self.s, c_int::from(indirect)); } }
         }
 
-        impl Drop for Session<'_> {
-            #[inline]
-            fn drop(&mut self) {
-                if self.filter.is_some() {
-                    self.table_filter(None::<fn(&str) -> bool>);
-                }
+        impl Drop for Session<'_>
+        {
+            #[inline] fn drop(&mut self)
+            {
+                if self.filter.is_some() { self.table_filter(None::<fn(&str) -> bool>); }
                 unsafe { connect::ffi::sqlite3session_delete(self.s) };
             }
         }
-
         /// Invert a changeset
-        #[inline]
-        pub fn invert_strm(input: &mut dyn Read, output: &mut dyn Write) -> Result<()> {
+        #[inline] pub fn invert_strm(input: &mut dyn Read, output: &mut dyn Write) -> Result<()>
+        {
             let input_ref = &input;
             let output_ref = &output;
-            check(unsafe {
-                connect::ffi::sqlite3changeset_invert_strm(
+            check(unsafe
+            {
+                connect::ffi::sqlite3changeset_invert_strm
+                (
                     Some(x_input),
                     input_ref as *const &mut dyn Read as *mut c_void,
                     Some(x_output),
@@ -5267,19 +5742,17 @@ pub mod connect
                 )
             })
         }
-
         /// Combine two changesets
-        #[inline]
-        pub fn concat_strm(
-            input_a: &mut dyn Read,
-            input_b: &mut dyn Read,
-            output: &mut dyn Write,
-        ) -> Result<()> {
+        #[inline] pub fn concat_strm( input_a: &mut dyn Read, input_b: &mut dyn Read, output: &mut dyn Write ) -> 
+        Result<()>
+        {
             let input_a_ref = &input_a;
             let input_b_ref = &input_b;
             let output_ref = &output;
-            check(unsafe {
-                connect::ffi::sqlite3changeset_concat_strm(
+            check(unsafe
+            {
+                connect::ffi::sqlite3changeset_concat_strm
+                (
                     Some(x_input),
                     input_a_ref as *const &mut dyn Read as *mut c_void,
                     Some(x_input),
@@ -5289,17 +5762,18 @@ pub mod connect
                 )
             })
         }
-
         /// Changeset or Patchset
-        pub struct Changeset {
+        pub struct Changeset
+        {
             cs: *mut c_void,
             n: c_int,
         }
 
-        impl Changeset {
+        impl Changeset
+        {
             /// Invert a changeset
-            #[inline]
-            pub fn invert(&self) -> Result<Changeset> {
+            #[inline] pub fn invert(&self) -> Result<Changeset>
+            {
                 let mut n = 0;
                 let mut cs = ptr::null_mut();
                 check(unsafe {
@@ -5307,403 +5781,386 @@ pub mod connect
                 })?;
                 Ok(Changeset { cs, n })
             }
-
             /// Create an iterator to traverse a changeset
-            #[inline]
-            pub fn iter(&self) -> Result<ChangesetIter<'_>> {
+            #[inline] pub fn iter(&self) -> Result<ChangesetIter<'_>>
+            {
                 let mut it = ptr::null_mut();
                 check(unsafe { connect::ffi::sqlite3changeset_start(&mut it as *mut *mut _, self.n, self.cs) })?;
-                Ok(ChangesetIter {
+                Ok(ChangesetIter
+                {
                     phantom: PhantomData,
                     it,
                     item: None,
                 })
             }
-
             /// Concatenate two changeset objects
-            #[inline]
-            pub fn concat(a: &Changeset, b: &Changeset) -> Result<Changeset> {
+            #[inline] pub fn concat(a: &Changeset, b: &Changeset) -> Result<Changeset>
+            {
                 let mut n = 0;
                 let mut cs = ptr::null_mut();
                 check(unsafe {
                     connect::ffi::sqlite3changeset_concat(a.n, a.cs, b.n, b.cs, &mut n, &mut cs as *mut *mut _)
                 })?;
+
                 Ok(Changeset { cs, n })
             }
         }
 
-        impl Drop for Changeset {
-            #[inline]
-            fn drop(&mut self) {
-                unsafe {
-                    connect::ffi::sqlite3_free(self.cs);
-                }
-            }
+        impl Drop for Changeset
+        {
+            #[inline] fn drop(&mut self) { unsafe { connect::ffi::sqlite3_free(self.cs); } }
         }
-
-        /// Cursor for iterating over the elements of a changeset
-        /// or patchset.
-        pub struct ChangesetIter<'changeset> {
+        /// Cursor for iterating over the elements of a changeset or patchset.
+        pub struct ChangesetIter<'changeset>
+        {
             phantom: PhantomData<&'changeset Changeset>,
             it: *mut connect::ffi::sqlite3_changeset_iter,
             item: Option<ChangesetItem>,
         }
 
-        impl ChangesetIter<'_> {
+        impl ChangesetIter<'_>
+        {
             /// Create an iterator on `input`
-            #[inline]
-            pub fn start_strm<'input>(input: &&'input mut dyn Read) -> Result<ChangesetIter<'input>> {
-                let mut it = ptr::null_mut();
-                check(unsafe {
-                    connect::ffi::sqlite3changeset_start_strm(
-                        &mut it as *mut *mut _,
-                        Some(x_input),
-                        input as *const &mut dyn Read as *mut c_void,
-                    )
-                })?;
-                Ok(ChangesetIter {
-                    phantom: PhantomData,
-                    it,
-                    item: None,
-                })
+            #[inline] pub fn start_strm<'input>(input: &&'input mut dyn Read) -> Result<ChangesetIter<'input>>
+            {
+                unsafe
+                {
+                    let mut it = ptr::null_mut();
+                    check
+                    (
+                        connect::ffi::sqlite3changeset_start_strm
+                        (
+                            &mut it as *mut *mut _,
+                            Some(x_input),
+                            input as *const &mut dyn Read as *mut c_void,
+                        )
+                    )?;
+                    
+                    Ok(ChangesetIter
+                    {
+                        phantom: PhantomData,
+                        it,
+                        item: None,
+                    })
+                }
             }
         }
 
-        impl FallibleStreamingIterator for ChangesetIter<'_> {
+        impl FallibleStreamingIterator for ChangesetIter<'_>
+        {
             type Error = Error;
             type Item = ChangesetItem;
+            #[inline] fn advance(&mut self) -> Result<()>
+            {
+                unsafe
+                {
+                    let rc =  connect::ffi::sqlite3changeset_next(self.it);
+                    match rc
+                    {
+                        connect::ffi::SQLITE_ROW =>
+                        {
+                            self.item = Some(ChangesetItem { it: self.it });
+                            Ok(())
+                        }
 
-            #[inline]
-            fn advance(&mut self) -> Result<()> {
-                let rc = unsafe { connect::ffi::sqlite3changeset_next(self.it) };
-                match rc {
-                    connect::ffi::SQLITE_ROW => {
-                        self.item = Some(ChangesetItem { it: self.it });
-                        Ok(())
+                        connect::ffi::SQLITE_DONE =>
+                        {
+                            self.item = None;
+                            Ok(())
+                        }
+                        code => Err(error_from_sqlite_code(code, None)),
                     }
-                    connect::ffi::SQLITE_DONE => {
-                        self.item = None;
-                        Ok(())
-                    }
-                    code => Err(error_from_sqlite_code(code, None)),
                 }
             }
 
-            #[inline]
-            fn get(&self) -> Option<&ChangesetItem> {
-                self.item.as_ref()
-            }
+            #[inline] fn get(&self) -> Option<&ChangesetItem> { self.item.as_ref() }
         }
-
         /// Operation
-        pub struct Operation<'item> {
+        pub struct Operation<'item>
+        {
             table_name: &'item str,
             number_of_columns: i32,
             code: Action,
             indirect: bool,
         }
 
-        impl Operation<'_> {
+        impl Operation<'_>
+        {
             /// Returns the table name.
-            #[inline]
-            pub fn table_name(&self) -> &str {
-                self.table_name
-            }
-
+            #[inline] pub fn table_name(&self) -> &str { self.table_name }
             /// Returns the number of columns in table
-            #[inline]
-            pub fn number_of_columns(&self) -> i32 {
-                self.number_of_columns
-            }
-
+            #[inline] pub fn number_of_columns(&self) -> i32 { self.number_of_columns }
             /// Returns the action code.
-            #[inline]
-            pub fn code(&self) -> Action {
-                self.code
-            }
-
+            #[inline] pub fn code(&self) -> Action { self.code }
             /// Returns `true` for an 'indirect' change.
-            #[inline]
-            pub fn indirect(&self) -> bool {
-                self.indirect
-            }
+            #[inline] pub fn indirect(&self) -> bool { self.indirect }
         }
 
-        impl Drop for ChangesetIter<'_> {
-            #[inline]
-            fn drop(&mut self) {
-                unsafe {
-                    connect::ffi::sqlite3changeset_finalize(self.it);
-                }
-            }
+        impl Drop for ChangesetIter<'_>
+        {
+            #[inline] fn drop(&mut self) { unsafe { connect::ffi::sqlite3changeset_finalize(self.it); } }
         }
-
-        /// An item passed to a conflict-handler by
-        /// [`Connection::apply`](Connection::apply), or an item generated by
-        /// [`ChangesetIter::next`](ChangesetIter::next).
-        // TODO enum ? Delete, Insert, Update, ...
-        pub struct ChangesetItem {
+        /// An item passed to a conflict-handler by , or an item generated by ChangesetIter::next.
+        pub struct ChangesetItem
+        {
             it: *mut connect::ffi::sqlite3_changeset_iter,
         }
 
-        impl ChangesetItem {
-            /// Obtain conflicting row values
-            ///
-            /// May only be called with an `SQLITE_CHANGESET_DATA` or
-            /// `SQLITE_CHANGESET_CONFLICT` conflict handler callback.
-            #[inline]
-            pub fn conflict(&self, col: usize) -> Result<ValueRef<'_>> {
-                unsafe {
+        impl ChangesetItem
+        {
+            /// Obtain conflicting row values.
+            #[inline] pub fn conflict(&self, col: usize) -> Result<ValueRef<'_>>
+            {
+                unsafe
+                {
                     let mut p_value: *mut connect::ffi::sqlite3_value = ptr::null_mut();
-                    check( connect::ffi::sqlite3changeset_conflict(
+                    check( connect::ffi::sqlite3changeset_conflict
+                    (
                         self.it,
                         col as i32,
                         &mut p_value,
                     ))?;
-                    if p_value.is_null() {
-                        Err(Error::InvalidColumnIndex(col))
-                    } else {
-                        Ok(ValueRef::from_value(p_value))
-                    }
+
+                    if p_value.is_null() { Err(Error::InvalidColumnIndex(col)) }
+                    else { Ok(ValueRef::from_value(p_value)) }
                 }
             }
-
-            /// Determine the number of foreign key constraint violations
-            ///
-            /// May only be called with an `SQLITE_CHANGESET_FOREIGN_KEY` conflict
-            /// handler callback.
-            #[inline]
-            pub fn fk_conflicts(&self) -> Result<i32> {
-                unsafe {
+            /// Determine the number of foreign key constraint violations.
+            #[inline] pub fn fk_conflicts(&self) -> Result<i32>
+            {
+                unsafe
+                {
                     let mut p_out = 0;
                     check( connect::ffi::sqlite3changeset_fk_conflicts(self.it, &mut p_out))?;
                     Ok(p_out)
                 }
             }
-
-            /// Obtain new.* Values
-            ///
-            /// May only be called if the type of change is either `SQLITE_UPDATE` or
-            /// `SQLITE_INSERT`.
-            #[inline]
-            pub fn new_value(&self, col: usize) -> Result<ValueRef<'_>> {
-                unsafe {
+            /// Obtain new.* Values.
+            #[inline] pub fn new_value(&self, col: usize) -> Result<ValueRef<'_>>
+            {
+                unsafe
+                {
                     let mut p_value: *mut connect::ffi::sqlite3_value = ptr::null_mut();
                     check( connect::ffi::sqlite3changeset_new(self.it, col as i32, &mut p_value))?;
-                    if p_value.is_null() {
-                        Err(Error::InvalidColumnIndex(col))
-                    } else {
-                        Ok(ValueRef::from_value(p_value))
-                    }
+                    if p_value.is_null() { Err(Error::InvalidColumnIndex(col)) } 
+                    else { Ok(ValueRef::from_value(p_value)) }
                 }
             }
-
-            /// Obtain old.* Values
-            ///
-            /// May only be called if the type of change is either `SQLITE_DELETE` or
-            /// `SQLITE_UPDATE`.
-            #[inline]
-            pub fn old_value(&self, col: usize) -> Result<ValueRef<'_>> {
-                unsafe {
+            /// Obtain old.* Values.
+            #[inline] pub fn old_value(&self, col: usize) -> Result<ValueRef<'_>>
+            {
+                unsafe 
+                {
                     let mut p_value: *mut connect::ffi::sqlite3_value = ptr::null_mut();
                     check( connect::ffi::sqlite3changeset_old(self.it, col as i32, &mut p_value))?;
-                    if p_value.is_null() {
-                        Err(Error::InvalidColumnIndex(col))
-                    } else {
-                        Ok(ValueRef::from_value(p_value))
-                    }
+                    if p_value.is_null() { Err(Error::InvalidColumnIndex(col)) }
+                    else { Ok(ValueRef::from_value(p_value)) }
                 }
             }
-
             /// Obtain the current operation
-            #[inline]
-            pub fn op(&self) -> Result<Operation<'_>> {
-                let mut number_of_columns = 0;
-                let mut code = 0;
-                let mut indirect = 0;
-                let tab = unsafe {
-                    let mut pz_tab: *const c_char = ptr::null();
-                    check( connect::ffi::sqlite3changeset_op(
-                        self.it,
-                        &mut pz_tab,
-                        &mut number_of_columns,
-                        &mut code,
-                        &mut indirect,
-                    ))?;
-                    CStr::from_ptr(pz_tab)
-                };
-                let table_name = tab.to_str()?;
-                Ok(Operation {
-                    table_name,
-                    number_of_columns,
-                    code: Action::from(code),
-                    indirect: indirect != 0,
-                })
-            }
+            #[inline] pub fn op(&self) -> Result<Operation<'_>>
+            {
+                unsafe
+                {
+                    let mut number_of_columns = 0;
+                    let mut code = 0;
+                    let mut indirect = 0;
+                    let tab =
+                    {
+                        let mut pz_tab: *const c_char = ptr::null();
+                        check( connect::ffi::sqlite3changeset_op
+                        (
+                            self.it,
+                            &mut pz_tab,
+                            &mut number_of_columns,
+                            &mut code,
+                            &mut indirect,
+                        ))?;
+                        
+                        CStr::from_ptr(pz_tab)
+                    };
 
+                    let table_name = tab.to_str()?;
+                    Ok(Operation 
+                    {
+                        table_name,
+                        number_of_columns,
+                        code: Action::from(code),
+                        indirect: indirect != 0,
+                    })
+                }
+            }
             /// Obtain the primary key definition of a table
-            #[inline]
-            pub fn pk(&self) -> Result<&[u8]> {
-                let mut number_of_columns = 0;
-                unsafe {
+            #[inline] pub fn pk(&self) -> Result<&[u8]>
+            {
+                unsafe 
+                {
+                    let mut number_of_columns = 0;
                     let mut pks: *mut c_uchar = ptr::null_mut();
-                    check( connect::ffi::sqlite3changeset_pk(
+                    check( connect::ffi::sqlite3changeset_pk
+                    (
                         self.it,
                         &mut pks,
                         &mut number_of_columns,
                     ))?;
+                    
                     Ok(from_raw_parts(pks, number_of_columns as usize))
                 }
             }
         }
-
-        /// Used to combine two or more changesets or
-        /// patchsets
-        pub struct Changegroup {
+        /// Used to combine two or more changesets or patchsets
+        pub struct Changegroup
+        {
             cg: *mut connect::ffi::sqlite3_changegroup,
         }
 
-        impl Changegroup {
+        impl Changegroup
+        {
             /// Create a new change group.
-            #[inline]
-            pub fn new() -> Result<Self> {
+            #[inline] pub fn new() -> Result<Self>
+            {
                 let mut cg = ptr::null_mut();
                 check(unsafe { connect::ffi::sqlite3changegroup_new(&mut cg) })?;
                 Ok(Changegroup { cg })
             }
-
             /// Add a changeset
-            #[inline]
-            pub fn add(&mut self, cs: &Changeset) -> Result<()> {
-                check(unsafe { connect::ffi::sqlite3changegroup_add(self.cg, cs.n, cs.cs) })
-            }
-
+            #[inline] pub fn add(&mut self, cs: &Changeset) -> Result<()> 
+            { check(unsafe { connect::ffi::sqlite3changegroup_add(self.cg, cs.n, cs.cs) }) }
             /// Add a changeset read from `input` to this change group.
-            #[inline]
-            pub fn add_stream(&mut self, input: &mut dyn Read) -> Result<()> {
-                let input_ref = &input;
-                check(unsafe {
-                    connect::ffi::sqlite3changegroup_add_strm(
+            #[inline] pub fn add_stream(&mut self, input: &mut dyn Read) -> Result<()> 
+            {
+                unsafe
+                {
+                    let input_ref = &input;
+                    check(connect::ffi::sqlite3changegroup_add_strm
+                    (
                         self.cg,
                         Some(x_input),
                         input_ref as *const &mut dyn Read as *mut c_void,
-                    )
-                })
+                    ))
+                }
             }
-
             /// Obtain a composite Changeset
-            #[inline]
-            pub fn output(&mut self) -> Result<Changeset> {
-                let mut n = 0;
-                let mut output: *mut c_void = ptr::null_mut();
-                check(unsafe { connect::ffi::sqlite3changegroup_output(self.cg, &mut n, &mut output) })?;
-                Ok(Changeset { cs: output, n })
+            #[inline] pub fn output(&mut self) -> Result<Changeset>
+            {
+                unsafe
+                {
+                    let mut n = 0;
+                    let mut output: *mut c_void = ptr::null_mut();
+                    check(connect::ffi::sqlite3changegroup_output(self.cg, &mut n, &mut output))?;
+                    Ok(Changeset { cs: output, n })
+                }
             }
-
             /// Write the combined set of changes to `output`.
-            #[inline]
-            pub fn output_strm(&mut self, output: &mut dyn Write) -> Result<()> {
-                let output_ref = &output;
-                check(unsafe {
-                    connect::ffi::sqlite3changegroup_output_strm(
-                        self.cg,
-                        Some(x_output),
-                        output_ref as *const &mut dyn Write as *mut c_void,
+            #[inline] pub fn output_strm(&mut self, output: &mut dyn Write) -> Result<()>
+            {
+                unsafe
+                {
+                    let output_ref = &output;
+                    check
+                    (
+                        connect::ffi::sqlite3changegroup_output_strm
+                        (
+                            self.cg,
+                            Some(x_output),
+                            output_ref as *const &mut dyn Write as *mut c_void,
+                        )
                     )
-                })
-            }
-        }
-
-        impl Drop for Changegroup {
-            #[inline]
-            fn drop(&mut self) {
-                unsafe {
-                    connect::ffi::sqlite3changegroup_delete(self.cg);
                 }
             }
         }
 
-        impl Connection {
-            /// Apply a changeset to a database
-            pub fn apply<F, C>(&self, cs: &Changeset, filter: Option<F>, conflict: C) -> Result<()>
-            where
-                F: Fn(&str) -> bool + Send + 'static,
-                C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static,
-            {
-                let db = self.db.borrow_mut().db;
-
-                let filtered = filter.is_some();
-                let tuple = &mut (filter, conflict);
-                check(unsafe {
-                    if filtered {
-                        connect::ffi::sqlite3changeset_apply(
-                            db,
-                            cs.n,
-                            cs.cs,
-                            Some(call_filter::<F, C>),
-                            Some(call_conflict::<F, C>),
-                            tuple as *mut (Option<F>, C) as *mut c_void,
-                        )
-                    } else {
-                        connect::ffi::sqlite3changeset_apply(
-                            db,
-                            cs.n,
-                            cs.cs,
-                            None,
-                            Some(call_conflict::<F, C>),
-                            tuple as *mut (Option<F>, C) as *mut c_void,
-                        )
-                    }
-                })
-            }
-
-            /// Apply a changeset to a database
-            pub fn apply_strm<F, C>(
-                &self,
-                input: &mut dyn Read,
-                filter: Option<F>,
-                conflict: C,
-            ) -> Result<()>
-            where
-                F: Fn(&str) -> bool + Send + 'static,
-                C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static,
-            {
-                let input_ref = &input;
-                let db = self.db.borrow_mut().db;
-
-                let filtered = filter.is_some();
-                let tuple = &mut (filter, conflict);
-                check(unsafe {
-                    if filtered {
-                        connect::ffi::sqlite3changeset_apply_strm(
-                            db,
-                            Some(x_input),
-                            input_ref as *const &mut dyn Read as *mut c_void,
-                            Some(call_filter::<F, C>),
-                            Some(call_conflict::<F, C>),
-                            tuple as *mut (Option<F>, C) as *mut c_void,
-                        )
-                    } else {
-                        ffi::sqlite3changeset_apply_strm(
-                            db,
-                            Some(x_input),
-                            input_ref as *const &mut dyn Read as *mut c_void,
-                            None,
-                            Some(call_conflict::<F, C>),
-                            tuple as *mut (Option<F>, C) as *mut c_void,
-                        )
-                    }
-                })
-            }
+        impl Drop for Changegroup
+        {
+            #[inline] fn drop(&mut self) { unsafe { connect::ffi::sqlite3changegroup_delete( self.cg ); }}
         }
 
-        /// Constants passed to the conflict handler
-        /// See [here](https://sqlite.org/session.html#SQLITE_CHANGESET_CONFLICT) for details.
-        #[allow(missing_docs)]
-        #[repr(i32)]
-        #[derive(Debug, PartialEq, Eq)]
-        #[non_exhaustive]
-        pub enum ConflictType {
+        impl Connection
+        {
+            /// Apply a changeset to a database
+            pub fn apply<F, C>(&self, cs: &Changeset, filter: Option<F>, conflict: C) -> Result<()> where
+            F: Fn(&str) -> bool + Send + 'static,
+            C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static
+            {
+                unsafe
+                {
+                    let db = self.db.borrow_mut().db;
+                    let filtered = filter.is_some();
+                    let tuple = &mut (filter, conflict);
+                    check
+                    (
+                        if filtered
+                        {
+                            connect::ffi::sqlite3changeset_apply
+                            (
+                                db,
+                                cs.n,
+                                cs.cs,
+                                Some(call_filter::<F, C>),
+                                Some(call_conflict::<F, C>),
+                                tuple as *mut (Option<F>, C) as *mut c_void,
+                            )
+                        }
+                        else
+                        {
+                            connect::ffi::sqlite3changeset_apply
+                            (
+                                db,
+                                cs.n,
+                                cs.cs,
+                                None,
+                                Some(call_conflict::<F, C>),
+                                tuple as *mut (Option<F>, C) as *mut c_void,
+                            )
+                        }
+                    )
+                }
+            }
+            /// Apply a changeset to a database
+            pub fn apply_strm<F, C>( &self, input: &mut dyn Read, filter: Option<F>, conflict: C ) -> Result<()> where
+            F: Fn(&str) -> bool + Send + 'static,
+            C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static
+            {
+                unsafe
+                {
+                    let input_ref = &input;
+                    let db = self.db.borrow_mut().db;
+                    let filtered = filter.is_some();
+                    let tuple = &mut (filter, conflict);
+                    check
+                    (
+                        if filtered
+                        {
+                            connect::ffi::sqlite3changeset_apply_strm
+                            (
+                                db,
+                                Some(x_input),
+                                input_ref as *const &mut dyn Read as *mut c_void,
+                                Some(call_filter::<F, C>),
+                                Some(call_conflict::<F, C>),
+                                tuple as *mut (Option<F>, C) as *mut c_void,
+                            )
+                        }
+                        else
+                        {
+                            ffi::sqlite3changeset_apply_strm
+                            (
+                                db,
+                                Some(x_input),
+                                input_ref as *const &mut dyn Read as *mut c_void,
+                                None,
+                                Some(call_conflict::<F, C>),
+                                tuple as *mut (Option<F>, C) as *mut c_void,
+                            )
+                        }
+                    )
+                }
+            }
+        }
+        /// Constants passed to the conflict handler.
+        #[repr(i32)] #[derive(Debug, PartialEq, Eq)] #[non_exhaustive]
+        pub enum ConflictType
+        {
             UNKNOWN = -1,
             SQLITE_CHANGESET_DATA = connect::ffi::SQLITE_CHANGESET_DATA,
             SQLITE_CHANGESET_NOTFOUND = connect::ffi::SQLITE_CHANGESET_NOTFOUND,
@@ -5711,9 +6168,13 @@ pub mod connect
             SQLITE_CHANGESET_CONSTRAINT = connect::ffi::SQLITE_CHANGESET_CONSTRAINT,
             SQLITE_CHANGESET_FOREIGN_KEY = connect::ffi::SQLITE_CHANGESET_FOREIGN_KEY,
         }
-        impl From<i32> for ConflictType {
-            fn from(code: i32) -> ConflictType {
-                match code {
+
+        impl From<i32> for ConflictType
+        {
+            fn from(code: i32) -> ConflictType
+            {
+                match code
+                {
                     connect::ffi::SQLITE_CHANGESET_DATA => ConflictType::SQLITE_CHANGESET_DATA,
                     connect::ffi::SQLITE_CHANGESET_NOTFOUND => ConflictType::SQLITE_CHANGESET_NOTFOUND,
                     connect::ffi::SQLITE_CHANGESET_CONFLICT => ConflictType::SQLITE_CHANGESET_CONFLICT,
@@ -5723,86 +6184,72 @@ pub mod connect
                 }
             }
         }
-
-        /// Constants returned by the conflict handler
-        /// See [here](https://sqlite.org/session.html#SQLITE_CHANGESET_ABORT) for details.
-        #[allow(missing_docs)]
-        #[repr(i32)]
-        #[derive(Debug, PartialEq, Eq)]
-        #[non_exhaustive]
-        pub enum ConflictAction {
+        /// Constants returned by the conflict handler.
+        #[repr(i32)] #[derive(Debug, PartialEq, Eq)] #[non_exhaustive]
+        pub enum ConflictAction
+        {
             SQLITE_CHANGESET_OMIT = connect::ffi::SQLITE_CHANGESET_OMIT,
             SQLITE_CHANGESET_REPLACE = connect::ffi::SQLITE_CHANGESET_REPLACE,
             SQLITE_CHANGESET_ABORT = connect::ffi::SQLITE_CHANGESET_ABORT,
         }
 
-        unsafe extern "C" fn call_filter<F, C>(p_ctx: *mut c_void, tbl_str: *const c_char) -> c_int
-        where
-            F: Fn(&str) -> bool + Send + 'static,
-            C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static,
+        unsafe extern "C" fn call_filter<F, C>(p_ctx: *mut c_void, tbl_str: *const c_char) -> c_int where
+        F: Fn(&str) -> bool + Send + 'static,
+        C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static
         {
             let tbl_name = CStr::from_ptr(tbl_str).to_str();
-            c_int::from(
-                catch_unwind(|| {
+            c_int::from
+            (
+                catch_unwind(||
+                {
                     let tuple: *mut (Option<F>, C) = p_ctx.cast::<(Option<F>, C)>();
-                    if let Some(ref filter) = (*tuple).0 {
-                        filter(tbl_name.expect("illegal table name"))
-                    } else {
-                        true
-                    }
+                    if let Some(ref filter) = (*tuple).0 { filter(tbl_name.expect("illegal table name")) } 
+                    else { true }
                 })
                 .unwrap_or_default(),
             )
         }
 
-        unsafe extern "C" fn call_conflict<F, C>(
-            p_ctx: *mut c_void,
-            e_conflict: c_int,
-            p: *mut connect::ffi::sqlite3_changeset_iter,
-        ) -> c_int
-        where
-            F: Fn(&str) -> bool + Send + 'static,
-            C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static,
+        unsafe extern "C" fn call_conflict<F, C>
+        ( p_ctx:*mut c_void, e_conflict:c_int, p:*mut connect::ffi::sqlite3_changeset_iter, ) -> c_int where
+        F: Fn(&str) -> bool + Send + 'static,
+        C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static
         {
             let conflict_type = ConflictType::from(e_conflict);
             let item = ChangesetItem { it: p };
-            if let Ok(action) = catch_unwind(|| {
+            if let Ok(action) = catch_unwind(||
+            {
                 let tuple: *mut (Option<F>, C) = p_ctx.cast::<(Option<F>, C)>();
                 (*tuple).1(conflict_type, item)
-            }) {
-                action as c_int
-            } else {
-                connect::ffi::SQLITE_CHANGESET_ABORT
-            }
+            }){ action as c_int }
+            else { connect::ffi::SQLITE_CHANGESET_ABORT }
         }
 
-        unsafe extern "C" fn x_input(p_in: *mut c_void, data: *mut c_void, len: *mut c_int) -> c_int {
-            if p_in.is_null() {
-                return connect::ffi::SQLITE_MISUSE;
-            }
+        unsafe extern "C" fn x_input(p_in: *mut c_void, data: *mut c_void, len: *mut c_int) -> c_int
+        {
+            if p_in.is_null() { return connect::ffi::SQLITE_MISUSE; }
             let bytes: &mut [u8] = from_raw_parts_mut(data as *mut u8, *len as usize);
             let input = p_in as *mut &mut dyn Read;
-            match (*input).read(bytes) {
-                Ok(n) => {
-                    *len = n as i32; // TODO Validate: n = 0 may not mean the reader will always no longer be able to
-                                    // produce bytes.
+            match (*input).read(bytes)
+            {
+                Ok(n) =>
+                {
+                    *len = n as i32;
                     connect::ffi::SQLITE_OK
                 }
-                Err(_) => connect::ffi::SQLITE_IOERR_READ, // TODO check if err is a (ru)sqlite Error => propagate
+                Err(_) => connect::ffi::SQLITE_IOERR_READ,
             }
         }
 
-        unsafe extern "C" fn x_output(p_out: *mut c_void, data: *const c_void, len: c_int) -> c_int {
-            if p_out.is_null() {
-                return connect::ffi::SQLITE_MISUSE;
-            }
-            // The sessions module never invokes an xOutput callback with the third
-            // parameter set to a value less than or equal to zero.
+        unsafe extern "C" fn x_output(p_out: *mut c_void, data: *const c_void, len: c_int) -> c_int
+        {
+            if p_out.is_null() { return connect::ffi::SQLITE_MISUSE; }
             let bytes: &[u8] = from_raw_parts(data as *const u8, len as usize);
             let output = p_out as *mut &mut dyn Write;
-            match (*output).write_all(bytes) {
+            match (*output).write_all(bytes)
+            {
                 Ok(_) => connect::ffi::SQLITE_OK,
-                Err(_) => connect::ffi::SQLITE_IOERR_WRITE, // TODO check if err is a (ru)sqlite Error => propagate
+                Err(_) => connect::ffi::SQLITE_IOERR_WRITE,
             }
         }
     }
@@ -5912,18 +6359,15 @@ pub mod connect
             {
                 let expected = self.stmt.bind_parameter_count();
                 let mut index = 0;
-                for p in params {
-                    index += 1; // The leftmost SQL parameter has an index of 1.
-                    if index > expected {
-                        break;
-                    }
+                for p in params
+                 {
+                    index += 1;
+                    if index > expected { break; }
                     self.bind_parameter(&p, index)?;
                 }
-                if index != expected {
-                    Err(Error::InvalidParameterCount(index, expected))
-                } else {
-                    Ok(())
-                }
+                
+                if index != expected { Err(Error::InvalidParameterCount(index, expected)) }
+                else { Ok(()) }
             }
 
             #[inline] pub(crate) fn ensure_parameter_count(&self, n: usize) -> Result<()>
@@ -6963,24 +7407,471 @@ pub mod connect
     {
 
     }
+    /// Shorthand for [`DatabaseName::Main`].
+    pub const MAIN_DB: DatabaseName<'static> = DatabaseName::Main;
+    /// Shorthand for [`DatabaseName::Temp`].
+    pub const TEMP_DB: DatabaseName<'static> = DatabaseName::Temp;
+    /// Number of cached prepared statements we'll hold on to.
+    const STATEMENT_CACHE_DEFAULT_CAPACITY: usize = 16;
+    /// A macro making it more convenient to pass longer lists of parameters as a `&[&dyn ToSql]`.
+    #[macro_export] macro_rules! params
+    {
+        () => { &[] as &[&dyn $crate::connect::ToSql] };
+        ($($param:expr),+ $(,)?) => { &[$(&$param as &dyn ::connect::ToSql),+] as &[&dyn ::connect::ToSql] };
+    }
+    /// A macro making it more convenient to pass lists of named parameters as a `&[(&str, &dyn ToSql)]`.
+    #[macro_export] macro_rules! named_params
+    {
+        () => { &[] as &[(&str, &dyn $crate::ToSql)] };
+        ($($param_name:literal: $param_val:expr),+ $(,)?) => 
+        { &[$(($param_name, &$param_val as &dyn $crate::connect::ToSql)),+] as &[(&str, &dyn $crate::connect::ToSql)] };
+    }
+    /// Captured identifiers in SQL.
+    #[macro_export] macro_rules! prepare_and_bind
+    {
+        ($conn:expr, $sql:literal) => 
+        {{
+            let mut stmt = $conn.prepare($sql)?;
+            $crate::connect::__bind!(stmt $sql);
+            stmt
+        }};
+    }
+    /// Captured identifiers in SQL.
+    #[macro_export] macro_rules! prepare_cached_and_bind
+    {
+        ($conn:expr, $sql:literal) => 
+        {{
+            let mut stmt = $conn.prepare_cached($sql)?;
+            $crate::connect::__bind!(stmt $sql);
+            stmt
+        }};
+    }
+    /// A typedef of the result returned by many methods.
+    pub type Result<T, E = Error> = result::Result<T, E>;
+    /// See the [method documentation](#tymethod.optional).
+    pub trait OptionalExtension<T>
+    {
+        /// Converts a `Result<T>` into a `Result<Option<T>>`.
+        fn optional(self) -> Result<Option<T>>;
+    }
+
+    impl<T> OptionalExtension<T> for Result<T>
+    {
+        fn optional(self) -> Result<Option<T>>
+        {
+            match self
+            {
+                Ok(value) => Ok(Some(value)),
+                Err(Error::QueryReturnedNoRows) => Ok(None),
+                Err(e) => Err(e),
+            }
+        }
+    }
+
+    unsafe fn errmsg_to_string(errmsg: *const c_char) -> String { CStr::from_ptr(errmsg).to_string_lossy().into_owned() }
+
+    fn str_to_cstring(s: &str) -> Result<SmallCString> { Ok(SmallCString::new(s)?) }
+    /// Returns `Ok((string ptr, len as c_int, SQLITE_STATIC | SQLITE_TRANSIENT))` normally.
+    fn str_for_sqlite(s: &[u8]) -> Result<(*const c_char, c_int, self::ffi::sqlite3_destructor_type)>
+    {
+        let len = len_as_c_int(s.len())?;
+
+        let (ptr, dtor_info) = if len != 0 { (s.as_ptr().cast::<c_char>(), self::ffi::SQLITE_TRANSIENT()) }
+        else { ("".as_ptr().cast::<c_char>(), self::ffi::SQLITE_STATIC()) };
+
+        Ok((ptr, len, dtor_info))
+    }
+    
+    fn len_as_c_int(len: usize) -> Result<c_int>
+    {
+        if len >= (c_int::MAX as usize) { Err(err!( self::ffi::SQLITE_TOOBIG )) }
+        else { Ok(len as c_int) }
+    }
+    
+    fn path_to_cstring(p: &Path) -> Result<CString>
+    {
+        use std::os::unix::ffi::OsStrExt;
+        Ok(CString::new(p.as_os_str().as_bytes())?)
+    }
+    /// Name for a database within a SQLite connection.
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+    pub enum DatabaseName<'a>
+    {
+        /// The main database.
+        Main,
+        /// The temporary database (e.g., any "CREATE TEMPORARY TABLE" tables).
+        Temp,
+        /// A database that has been attached via "ATTACH DATABASE ...".
+        Attached(&'a str),
+        /// Optim
+        C(&'a CStr),
+    }
+
+    impl DatabaseName<'_>
+    {
+        #[inline] fn as_cstr(&self) -> Result<std::borrow::Cow<'_, CStr>>
+        {
+            Ok(match *self
+            {
+                DatabaseName::Main => std::borrow::Cow::Borrowed(r#"main"#),
+                DatabaseName::Temp => std::borrow::Cow::Borrowed(r#"temp"#),
+                DatabaseName::Attached(s) => std::borrow::Cow::Owned(CString::new(s)?),
+                DatabaseName::C(s) => std::borrow::Cow::Borrowed(s),
+            })
+        }
+        
+        pub(crate) fn from_cstr(cs: &CStr) -> DatabaseName<'_>
+        {
+            if cs == r#"main"# { DatabaseName::Main }
+            else if cs == r#"temp"# { DatabaseName::Temp }
+            else { DatabaseName::C(cs) }
+        }
+    }
     /// A connection to a SQLite database.
     pub struct Connection
     {
         db: RefCell<InnerConnection>,
         cache: StatementCache,
         transaction_behavior: TransactionBehavior,
-    }   
+    }
+
+    unsafe impl Send for Connection {}
+
+    impl Drop for Connection
+    {
+        #[inline] fn drop(&mut self) { self.flush_prepared_statement_cache(); }
+    }
 
     impl Connection
     {
-        /// Prepare a SQL statement for execution, returning a previously prepared statement if one is available.
-        #[inline] pub fn prepare_cached(&self, sql: &str) -> Result<CachedStatement<'_>> { self.cache.get(self, sql) }
+        /// Open a new connection to a SQLite database. If a database does not exist at the path, one is created.
+        #[inline] pub fn open<P: AsRef<Path>>(path: P) -> Result<Self>
+        {
+            let flags = OpenFlags::default();
+            Self::open_with_flags(path, flags)
+        }
+        /// Open a new connection to an in-memory SQLite database.
+        #[inline] pub fn open_in_memory() -> Result<Self>
+        {
+            let flags = OpenFlags::default();
+            Self::open_in_memory_with_flags(flags)
+        }
+        /// Open a new connection to a SQLite database.
+        #[inline] pub fn open_with_flags<P: AsRef<Path>>(path: P, flags: OpenFlags) -> Result<Self>
+        {
+            let c_path = path_to_cstring(path.as_ref())?;
+            InnerConnection::open_with_flags(&c_path, flags, None).map(|db| Self
+            {
+                db: RefCell::new(db),
+                cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
+                transaction_behavior: TransactionBehavior::Deferred,
+            })
+        }
+        /// Open a new connection to a SQLite database using the specific flags and vfs name.
+        #[inline] pub fn open_with_flags_and_vfs<P: AsRef<Path>>( path: P, flags: OpenFlags, vfs: &str ) -> Result<Self>
+        {
+            let c_path = path_to_cstring(path.as_ref())?;
+            let c_vfs = str_to_cstring(vfs)?;
+            InnerConnection::open_with_flags(&c_path, flags, Some(&c_vfs)).map(|db| Self
+            {
+                db: RefCell::new(db),
+                cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
+                transaction_behavior: TransactionBehavior::Deferred,
+            })
+        }
+        /// Open a new connection to an in-memory SQLite database.
+        #[inline] pub fn open_in_memory_with_flags(flags: OpenFlags) -> Result<Self>
+        { Self::open_with_flags(":memory:", flags) }
+        /// Open a new connection to an in-memory SQLite database using the specific flags and vfs name.
+        #[inline] pub fn open_in_memory_with_flags_and_vfs(flags: OpenFlags, vfs: &str) -> Result<Self>
+        { Self::open_with_flags_and_vfs(":memory:", flags, vfs) }
+        /// Convenience method to run multiple SQL statements (that cannot take any parameters).
+        pub fn execute_batch(&self, sql: &str) -> Result<()>
+        {
+            let mut sql = sql;
+            while !sql.is_empty()
+            {
+                let stmt = self.prepare(sql)?;
+                if !stmt.stmt.is_null() && stmt.step()? { return Err(Error::ExecuteReturnedResults); }
+                let tail = stmt.stmt.tail();
+                if tail == 0 || tail >= sql.len() { break; }
+                sql = &sql[tail..];
+            }
+            Ok(())
+        }
+        /// Convenience method to prepare and execute a single SQL statement.
+        #[inline] pub fn execute<P: Params>(&self, sql: &str, params: P) -> Result<usize>
+        { self.prepare(sql).and_then(|mut stmt| stmt.check_no_tail().and_then(|()| stmt.execute(params))) }
+        /// Returns the path to the database file, if one exists and is known.
+        #[inline] pub fn path(&self) -> Option<&str>
+        { unsafe { crate::inner_connection::db_filename(self.handle(), DatabaseName::Main) } }
+        /// Attempts to free as much heap memory as possible from the database connection.
+        #[inline] pub fn release_memory(&self) -> Result<()>  { self.db.borrow_mut().release_memory() }
+        /// Get the SQLite rowid of the most recent successful INSERT.
+        #[inline] pub fn last_insert_rowid(&self) -> i64 { self.db.borrow_mut().last_insert_rowid() }
+        /// Convenience method to execute a query that is expected to return a single row.
+        #[inline] pub fn query_row<T, P, F>(&self, sql: &str, params: P, f: F) -> Result<T> where
+        P: Params,
+        F: FnOnce(&Row<'_>) -> Result<T>
+        {
+            let mut stmt = self.prepare(sql)?;
+            stmt.check_no_tail()?;
+            stmt.query_row(params, f)
+        }
+        /// Convenience method to execute a query that is expected to return a single row, 
+        /// and execute a mapping via `f` on that returned row with the possibility of failure.
+        #[inline] pub fn query_row_and_then<T, E, P, F>(&self, sql: &str, params: P, f: F) -> Result<T, E> where
+        P: Params,
+        F: FnOnce(&Row<'_>) -> Result<T, E>,
+        E: From<Error>
+        {
+            let mut stmt = self.prepare(sql)?;
+            stmt.check_no_tail()?;
+            let mut rows = stmt.query(params)?;
+            rows.get_expected_row().map_err(E::from).and_then(f)
+        }
+        /// Prepare a SQL statement for execution.
+        #[inline]
+        pub fn prepare(&self, sql: &str) -> Result<Statement<'_>> { self.prepare_with_flags(sql, PrepFlags::default()) }
+        /// Prepare a SQL statement for execution.
+        #[inline] pub fn prepare_with_flags(&self, sql: &str, flags: PrepFlags) -> Result<Statement<'_>>
+        { self.db.borrow_mut().prepare(self, sql, flags) }
+        /// Close the SQLite connection.
+        #[inline] pub fn close(self) -> Result<(), (Self, Error)>
+        {
+            self.flush_prepared_statement_cache();
+            let r = self.db.borrow_mut().close();
+            r.map_err(move |err| (self, err))
+        }
+        /// Enable loading of SQLite extensions from both SQL queries and Rust.
+        #[inline] pub unsafe fn load_extension_enable(&self) -> Result<()>
+        { self.db.borrow_mut().enable_load_extension(1) }
+        /// Disable loading of SQLite extensions.
+        #[inline] pub fn load_extension_disable(&self) -> Result<()>
+        { unsafe { self.db.borrow_mut().enable_load_extension(0) } }
+        /// Load the SQLite extension at `dylib_path`. `dylib_path` is passed
+        /// through to `sqlite3_load_extension`, which may attempt OS-specific
+        /// modifications if the file cannot be loaded directly (for example
+        /// converting `"some/ext"` to `"some/ext.so"`, `"some\\ext.dll"`, ...).
+        #[inline] pub unsafe fn load_extension<P: AsRef<Path>>( &self, dylib_path: P, entry_point: Option<&str> ) -> 
+        Result<()>
+        {
+            self.db
+            .borrow_mut()
+            .load_extension(dylib_path.as_ref(), entry_point)
+        }
+        /// Get access to the underlying SQLite database connection handle.
+        #[inline]
+        pub unsafe fn handle(&self) -> *mut self::ffi::sqlite3 { self.db.borrow().db() }
+        /// Create a `Connection` from a raw handle.
+        #[inline] pub unsafe fn from_handle(db: *mut self::ffi::sqlite3) -> Result<Self>
+        {
+            let db = InnerConnection::new(db, false);
+            Ok(Self
+            {
+                db: RefCell::new(db),
+                cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
+                transaction_behavior: TransactionBehavior::Deferred,
+            })
+        }
+        /// Helper to register an SQLite extension written in Rust.
+        pub unsafe fn extension_init2
+        ( 
+            db: *mut self::ffi::sqlite3, 
+            pz_err_msg: *mut *mut c_char, 
+            p_api: *mut self::ffi::sqlite3_api_routines, 
+            init: fn(Self) -> Result<bool> 
+        ) -> c_int 
+        {
+            if p_api.is_null() { return self::ffi::SQLITE_ERROR; }
 
-        /// Set the maximum number of cached prepared statements this connection will hold.
-        #[inline] pub fn set_prepared_statement_cache_capacity(&self, capacity: usize) { self.cache.set_capacity(capacity); }
+            match ffi::rusqlite_extension_init2(p_api)
+            .map_err(Error::from)
+            .and(Self::from_handle(db))
+            .and_then(init)
+            {
+                Err(err) => to_sqlite_error(&err, pz_err_msg),
+                Ok(true) => ffi::SQLITE_OK_LOAD_PERMANENTLY,
+                _ => ffi::SQLITE_OK,
+            }
+        }
+        /// Create a `Connection` from a raw owned handle.
+        #[inline] pub unsafe fn from_handle_owned(db: *mut ffi::sqlite3) -> Result<Self>
+        {
+            let db = InnerConnection::new(db, true);
+            Ok(Self
+            {
+                db: RefCell::new(db),
+                cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
+                transaction_behavior: TransactionBehavior::Deferred,
+            })
+        }
+        /// Get access to a handle that can be used to interrupt long-running queries from another thread.
+        #[inline] pub fn get_interrupt_handle(&self) -> InterruptHandle { self.db.borrow().get_interrupt_handle() }
 
-        /// Remove/finalize all prepared statements currently in the cache.
-        #[inline] pub fn flush_prepared_statement_cache(&self) { self.cache.flush(); }
+        #[inline] fn decode_result(&self, code: c_int) -> Result<()> { self.db.borrow().decode_result(code) }
+
+        /// Return the number of rows modified, inserted or deleted by the most recently completed 
+        /// INSERT, UPDATE or DELETE statement on the database connection.
+        #[inline] pub fn changes(&self) -> u64 { self.db.borrow().changes() }
+        /// Return the total number of rows modified, inserted or deleted by all completed 
+        /// INSERT, UPDATE or DELETE statements since the database connection was opened, 
+        /// including those executed as part of trigger programs.
+        #[inline] pub fn total_changes(&self) -> u64 { self.db.borrow().total_changes() }
+        /// Autocommit mode is on by default.
+        #[inline] pub fn is_autocommit(&self) -> bool { self.db.borrow().is_autocommit() }
+        /// Determine if all associated prepared statements have been reset.
+        #[inline] pub fn is_busy(&self) -> bool { self.db.borrow().is_busy() }
+        /// Flush caches to disk mid-transaction
+        pub fn cache_flush(&self) -> Result<()> { self.db.borrow_mut().cache_flush() }
+        /// Determine if a database is read-only
+        pub fn is_readonly(&self, db_name: DatabaseName<'_>) -> Result<bool> { self.db.borrow().db_readonly(db_name) }
+        /// Return the schema name for a database connection.
+        pub fn db_name(&self, index: usize) -> Result<String>
+        {
+            unsafe
+            {
+                let db = self.handle();
+                let name = ffi::sqlite3_db_name(db, index as c_int);
+                if name.is_null() { Err(Error::InvalidDatabaseIndex(index)) }
+                else { Ok(CStr::from_ptr(name).to_str()?.to_owned()) }
+            }
+        }
+        /// Determine whether an interrupt is currently in effect.
+        pub fn is_interrupted(&self) -> bool { self.db.borrow().is_interrupted() }
+    }
+
+    impl fmt::Debug for Connection
+    {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+        {
+            f.debug_struct("Connection")
+            .field("path", &self.path())
+            .finish()
+        }
+    }
+    /// Batch fallible iterator
+    #[derive(Debug)]
+    pub struct Batch<'conn, 'sql>
+    {
+        conn: &'conn Connection,
+        sql: &'sql str,
+        tail: usize,
+    }
+
+    impl<'conn, 'sql> Batch<'conn, 'sql>
+    {
+        pub fn new(conn: &'conn Connection, sql: &'sql str) -> Self
+        {
+            Batch { conn, sql, tail: 0 }
+        }
+    }
+
+    impl<'conn> fallible_iterator::FallibleIterator for Batch<'conn, '_>
+    {
+        type Error = Error;
+        type Item = Statement<'conn>;
+        /// Iterates on each batch statements.
+        fn next(&mut self) -> Result<Option<Statement<'conn>>>
+        {
+            while self.tail < self.sql.len()
+            {
+                let sql = &self.sql[self.tail..];
+                let next = self.conn.prepare(sql)?;
+                let tail = next.stmt.tail();
+
+                if tail == 0 { self.tail = self.sql.len(); }
+                else { self.tail += tail; }
+
+                if next.stmt.is_null() { continue; }
+                
+                return Ok(Some(next));
+            }
+
+            Ok(None)
+        }
+    }
+
+    bitflags::bitflags!
+    {
+        /// Flags for opening SQLite database connections.
+        #[repr(C)] #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+        pub struct OpenFlags: c_int
+        {
+            /// The database is opened in read-only mode.
+            const SQLITE_OPEN_READ_ONLY = ffi::SQLITE_OPEN_READONLY;
+            /// The database is opened for reading and writing if possible,
+            /// or reading only if the file is write-protected by the operating system.
+            const SQLITE_OPEN_READ_WRITE = ffi::SQLITE_OPEN_READWRITE;
+            /// The database is created if it does not already exist
+            const SQLITE_OPEN_CREATE = ffi::SQLITE_OPEN_CREATE;
+            /// The filename can be interpreted as a URI if this flag is set.
+            const SQLITE_OPEN_URI = ffi::SQLITE_OPEN_URI;
+            /// The database will be opened as an in-memory database.
+            const SQLITE_OPEN_MEMORY = ffi::SQLITE_OPEN_MEMORY;
+            /// The new database connection will not use a per-connection mutex (the
+            /// connection will use the "multi-thread" threading mode, in SQLite
+            /// parlance).
+            const SQLITE_OPEN_NO_MUTEX = ffi::SQLITE_OPEN_NOMUTEX;
+            /// The new database connection will use a per-connection mutex -- the
+            /// "serialized" threading mode, in SQLite parlance.
+            const SQLITE_OPEN_FULL_MUTEX = ffi::SQLITE_OPEN_FULLMUTEX;
+            /// The database is opened with shared cache enabled.
+            const SQLITE_OPEN_SHARED_CACHE = 0x0002_0000;
+            /// The database is opened shared cache disabled.
+            const SQLITE_OPEN_PRIVATE_CACHE = 0x0004_0000;
+            /// The database filename is not allowed to be a symbolic link. (3.31.0)
+            const SQLITE_OPEN_NOFOLLOW = 0x0100_0000;
+            /// Extended result codes. (3.37.0)
+            const SQLITE_OPEN_EXRESCODE = 0x0200_0000;
+        }
+    }
+
+    impl Default for OpenFlags
+    {
+        #[inline] fn default() -> Self
+        {
+            Self::SQLITE_OPEN_READ_WRITE
+            | Self::SQLITE_OPEN_CREATE
+            | Self::SQLITE_OPEN_NO_MUTEX
+            | Self::SQLITE_OPEN_URI
+        }
+    }
+
+    bitflags::bitflags!
+    {
+        /// Prepare flags.
+        #[repr(C)] #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+        pub struct PrepFlags: c_uint
+        {
+            /// A hint to the query planner that the prepared statement will be retained for a long time and probably reused many times.
+            const SQLITE_PREPARE_PERSISTENT = 0x01;
+            /// Causes the SQL compiler to return an error (error code SQLITE_ERROR) if the statement uses any virtual tables.
+            const SQLITE_PREPARE_NO_VTAB = 0x04;
+            /// Prevents SQL compiler errors from being sent to the error log.
+            const SQLITE_PREPARE_DONT_LOG = 0x10;
+        }
+    }
+    /// Allows interrupting a long-running computation.
+    pub struct InterruptHandle
+    {
+        db_lock: Arc<Mutex<*mut ffi::sqlite3>>,
+    }
+
+    unsafe impl Send for InterruptHandle {}
+    unsafe impl Sync for InterruptHandle {}
+
+    impl InterruptHandle
+    {
+        /// Interrupt the query currently executing on another thread.
+        pub fn interrupt(&self)
+        {
+            let db_handle = self.db_lock.lock().unwrap();
+            if !db_handle.is_null()
+            {
+                unsafe { ffi::sqlite3_interrupt(*db_handle) }
+            }
+        }
     }
 }
 pub mod f32 { pub use std::f32::{ * }; }
@@ -36599,4 +37490,4 @@ fn main()
     }
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 36602
+// 37493
