@@ -81,6 +81,7 @@ extern crate smallvec;
 extern crate time as timing;
 extern crate unicode_normalization;
 extern crate unicode_width;
+extern crate url;
 /*
     #[macro_use] extern crate pest_derive;
     extern crate errno;
@@ -410,7 +411,8 @@ pub mod builtins
                 dir_to = format!( "{}/{}", str_current_dir, dir_to );
             }
 
-            if !Path::new( &dir_to ).exists() {
+            if !Path::new( &dir_to ).exists()
+            {
                 let info = format!( "pls:cd:{}:No such file or directory", &args[1] );
                 print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
                 return cr;
@@ -418,11 +420,11 @@ pub mod builtins
 
             match Path::new( &dir_to ).canonicalize()
             {
-                Ok( p ) => {
-                    dir_to = p.as_path().to_string_lossy().to_string();
+                Ok( p ) =>
+        {                   dir_to = p.as_path().to_string_lossy().to_string();
                 }
-                Err( e ) => {
-                    let info = format!( "pls:cd:error:{}", e );
+                Err( e ) =>
+        {                   let info = format!( "pls:cd:error:{}", e );
                     print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
                     return cr;
                 }
@@ -430,8 +432,8 @@ pub mod builtins
 
             match env::set_current_dir( &dir_to )
             {
-                Ok( _ ) => {
-                    sh.current_dir = dir_to.clone();
+                Ok( _ ) =>
+        {                   sh.current_dir = dir_to.clone();
                     if str_current_dir != dir_to {
                         sh.previous_dir = str_current_dir.clone();
                         env::set_var( "PWD", &sh.current_dir );
@@ -439,8 +441,8 @@ pub mod builtins
                     cr.status = 0;
                     cr
                 }
-                Err( e ) => {
-                    let info = format!( "pls:cd:{}", e );
+                Err( e ) =>
+        {                   let info = format!( "pls:cd:{}", e );
                     print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
                     cr
                 }
@@ -561,11 +563,11 @@ pub mod builtins
             if tokens.len() == 2 {
                 let _code = &tokens[1].1;
                 match _code.parse::<i32>() {
-                    Ok( x ) => {
-                        process::exit( x );
+                    Ok( x ) =>
+        {                       process::exit( x );
                     }
-                    Err( _ ) => {
-                        let info = format!( "pls:exit:{}:numeric argument required", _code );
+                    Err( _ ) =>
+        {                       let info = format!( "pls:exit:{}:numeric argument required", _code );
                         print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
                         process::exit( 255 );
                     }
@@ -652,7 +654,8 @@ pub mod builtins
             let tokens = cmd.tokens.clone();
             let mut cr = CommandResult::new();
 
-            if sh.jobs.is_empty() {
+            if sh.jobs.is_empty()
+            {
                 let info = "pls:fg:no job found";
                 print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
                 return cr;
@@ -673,8 +676,8 @@ pub mod builtins
 
                 match job_str.parse::<i32>() {
                     Ok( n ) => job_id = n,
-                    Err( _ ) => {
-                        let info = "pls:fg:invalid job id";
+                    Err( _ ) =>
+        {                       let info = "pls:fg:invalid job id";
                         print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
                         return cr;
                     }
@@ -698,8 +701,8 @@ pub mod builtins
                 }
 
                 match result {
-                    Some( job ) => {
-                        print_stderr_with_capture( &job.cmd, &mut cr, cl, cmd, capture );
+                    Some( job ) =>
+        {                       print_stderr_with_capture( &job.cmd, &mut cr, cl, cmd, capture );
                         cr.status = 0;
 
                         unsafe {
@@ -712,8 +715,8 @@ pub mod builtins
                             gid = job.gid;
                         }
                     }
-                    None => {
-                        let info = "pls:fg:no such job";
+                    None =>
+        {                       let info = "pls:fg:no such job";
                         print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
                         return cr;
                     }
@@ -813,7 +816,8 @@ pub mod builtins
             let mut cr = CommandResult::new();
             let hfile = get::history_file();
             let path = Path::new( hfile.as_str() );
-            if !path.exists() {
+            if !path.exists()
+            {
                 let info = "no history file";
                 print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
                 return cr;
@@ -821,8 +825,8 @@ pub mod builtins
             let conn = match Conn::open( &hfile )
             {
                 Ok( x ) => x,
-                Err( e ) => {
-                    let info = format!( "history:sqlite error:{:?}", e );
+                Err( e ) =>
+        {                   let info = format!( "history:sqlite error:{:?}", e );
                     print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
                     return cr;
                 }
@@ -835,10 +839,10 @@ pub mod builtins
             let opt = OptMain::from_iter_safe( args );
             match opt
             {
-                Ok( opt ) => {
-                    match opt.cmd {
-                        Some( SubCommand::Delete {rowid:rowids} ) => {
-                            let mut _count = 0;
+                Ok( opt ) =>
+        {                   match opt.cmd {
+                        Some( SubCommand::Delete {rowid:rowids} ) =>
+        {                           let mut _count = 0;
                             for rowid in rowids {
                                 let _deleted = delete_history_item( &conn, rowid );
                                 if _deleted {
@@ -851,13 +855,13 @@ pub mod builtins
                             }
                             cr
                         }
-                        Some( SubCommand::Add {timestamp:ts, input} ) => {
-                            let ts = ts.unwrap_or( 0 as f64 );
+                        Some( SubCommand::Add {timestamp:ts, input} ) =>
+        {                           let ts = ts.unwrap_or( 0 as f64 );
                             add_history( sh, ts, &input );
                             cr
                         }
-                        None => {
-                            let ( str_out, str_err ) = list_current_history( sh, &conn, &opt );
+                        None =>
+        {                           let ( str_out, str_err ) = list_current_history( sh, &conn, &opt );
                             if !str_out.is_empty() {
                                 print_stdout_with_capture( &str_out, &mut cr, cl, cmd, capture );
                             }
@@ -868,8 +872,8 @@ pub mod builtins
                         }
                     }
                 }
-                Err( e ) => {
-                    let info = format!( "{}", e );
+                Err( e ) =>
+        {                   let info = format!( "{}", e );
                     if show_usage {
                         print_stdout_with_capture( &info, &mut cr, cl, cmd, capture );
                         cr.status = 0;
@@ -916,8 +920,8 @@ pub mod builtins
             let mut stmt = match conn.prepare( &sql )
             {
                 Ok( x ) => x,
-                Err( e ) => {
-                    let info = format!( "history:prepare select error:{:?}", e );
+                Err( e ) =>
+        {                   let info = format!( "history:prepare select error:{:?}", e );
                     result_stderr.push_str( &info );
                     return ( result_stdout, result_stderr );
                 }
@@ -926,8 +930,8 @@ pub mod builtins
             let mut rows = match stmt.query( [] )
             {
                 Ok( x ) => x,
-                Err( e ) => {
-                    let info = format!( "history:query error:{:?}", e );
+                Err( e ) =>
+        {                   let info = format!( "history:query error:{:?}", e );
                     result_stderr.push_str( &info );
                     return ( result_stdout, result_stderr );
                 }
@@ -936,20 +940,20 @@ pub mod builtins
             let mut lines = Vec::new();
             loop {
                 match rows.next() {
-                    Ok( _rows ) => {
-                        if let Some( row ) = _rows {
+                    Ok( _rows ) =>
+        {                       if let Some( row ) = _rows {
                             let row_id:i32 = match row.get( 0 ) {
                                 Ok( x ) => x,
-                                Err( e ) => {
-                                    let info = format!( "history:error:{:?}", e );
+                                Err( e ) =>
+        {                                   let info = format!( "history:error:{:?}", e );
                                     result_stderr.push_str( &info );
                                     return ( result_stdout, result_stderr );
                                 }
                             };
                             let inp:String = match row.get( 1 ) {
                                 Ok( x ) => x,
-                                Err( e ) => {
-                                    let info = format!( "history:error:{:?}", e );
+                                Err( e ) =>
+        {                                   let info = format!( "history:error:{:?}", e );
                                     result_stderr.push_str( &info );
                                     return ( result_stdout, result_stderr );
                                 }
@@ -962,8 +966,8 @@ pub mod builtins
                             } else if opt.show_date {
                                 let tsb:f64 = match row.get( 2 ) {
                                     Ok( x ) => x,
-                                    Err( e ) => {
-                                        let info = format!( "history:error:{:?}", e );
+                                    Err( e ) =>
+        {                                       let info = format!( "history:error:{:?}", e );
                                         result_stderr.push_str( &info );
                                         return ( result_stdout, result_stderr );
                                     }
@@ -977,8 +981,8 @@ pub mod builtins
                             break;
                         }
                     }
-                    Err( e ) => {
-                        let info = format!( "history:rows next error:{:?}", e );
+                    Err( e ) =>
+        {                       let info = format!( "history:rows next error:{:?}", e );
                         result_stderr.push_str( &info );
                         return ( result_stdout, result_stderr );
                     }
@@ -1030,7 +1034,8 @@ pub mod builtins
             let mut lines = Vec::new();
             let jobs = sh.jobs.clone();
             let no_trim = cmd.tokens.len() >= 2 && cmd.tokens[1].1 == "-f";
-            for ( _i, job ) in jobs.iter() {
+            for ( _i, job ) in jobs.iter()
+            {
                 let line = get::job_line( job, !no_trim );
                 lines.push( line );
             }
@@ -1091,8 +1096,8 @@ pub mod builtins
             } else {
                 match io::stdin().read_line( &mut buffer ) {
                     Ok( _ ) => {}
-                    Err( e ) => {
-                        let info = format!( "pls:read:error in reading stdin:{:?}", e );
+                    Err( e ) =>
+        {                       let info = format!( "pls:read:error in reading stdin:{:?}", e );
                         print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
                         return cr;
                     }
@@ -1177,7 +1182,8 @@ pub mod builtins
             }
 
             let input = &tokens[1].1;
-            if !sh.remove_alias( input ) {
+            if !sh.remove_alias( input )
+            {
                 let info = format!( "pls:unalias:{}:not found", input );
                 print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
                 return cr;
@@ -1233,8 +1239,8 @@ pub mod builtins
             let env_path = match env::var( "PATH" )
             {
                 Ok( x ) => x,
-                Err( _ ) => {
-                    return String::from( "vox:cannot read PATH env" );
+                Err( _ ) =>
+        {                   return String::from( "vox:cannot read PATH env" );
                 }
             };
 
@@ -1266,13 +1272,13 @@ pub mod builtins
 
             if len == 1 || ( len == 2 && subcmd == "ls" ) {
                 match get::virtual_environments() {
-                    Ok( venvs ) => {
-                        let info = venvs.join( "\n" );
+                    Ok( venvs ) =>
+        {                       let info = venvs.join( "\n" );
                         print_stdout_with_capture( &info, &mut cr, cl, cmd, capture );
                         return cr;
                     }
-                    Err( reason ) => {
-                        print_stderr_with_capture( &reason, &mut cr, cl, cmd, capture );
+                    Err( reason ) =>
+        {                       print_stderr_with_capture( &reason, &mut cr, cl, cmd, capture );
                         return cr;
                     }
                 }
@@ -1448,8 +1454,8 @@ pub mod builtins
                     all_stderr.push_str( &err );
                     true
                 }
-                Some( Some( value ) ) => {
-                    let err = set_limit( limit_name, value, for_hard );
+                Some( Some( value ) ) =>
+        {                   let err = set_limit( limit_name, value, for_hard );
                     if !err.is_empty() {
                         all_stderr.push_str( &err );
                     }
@@ -1480,13 +1486,13 @@ pub mod builtins
  );
             match fd
             {
-                Ok( fd ) => {
-                    let info = format!( "{}", fd );
+                Ok( fd ) =>
+        {                   let info = format!( "{}", fd );
                     print_stdout_with_capture( &info, &mut cr, cl, cmd, capture );
                     unsafe { libc::close( fd ); }
                 }
-                Err( e ) => {
-                    println_stderr!( "pls:minfd:error:{}", e );
+                Err( e ) =>
+        {                   println_stderr!( "pls:minfd:error:{}", e );
                 }
             }
 
@@ -1526,8 +1532,8 @@ pub mod builtins
 
             let opt = OptMain::from_iter_safe( args );
             match opt {
-                Ok( opt ) => {
-                    if opt.exit_on_error {
+                Ok( opt ) =>
+        {                   if opt.exit_on_error {
                         sh.exit_on_error = true;
                         cr
                     } else {
@@ -1536,8 +1542,8 @@ pub mod builtins
                         cr
                     }
                 }
-                Err( e ) => {
-                    let info = format!( "{}", e );
+                Err( e ) =>
+        {                   let info = format!( "{}", e );
                     if show_usage {
                         print_stdout_with_capture( &info, &mut cr, cl, cmd, capture );
                         cr.status = 0;
@@ -1600,7 +1606,8 @@ pub mod builtins
             }
 
             let input = &tokens[1].1;
-            if !sh.remove_env( input ) {
+            if !sh.remove_env( input )
+            {
                 let info = format!( "pls:unset:invalid varname:{:?}", input );
                 print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
                 return cr;
@@ -1651,8 +1658,7 @@ pub mod c
             }
 
             pub fn unix_timestamp( &self ) -> f64
-            {
-                self.odt.unix_timestamp_nanos() as f64 / 1000000000.0
+            { self.odt.unix_timestamp_nanos() as f64 / 1000000000.0
             }
         }
 
@@ -1768,32 +1774,32 @@ pub mod c
                 Some( WF::WUNTRACED | WF::WCONTINUED | WF::WNOHANG )
             };
             match waitpid( Pid::from_raw( wpid ), options ) {
-                Ok( WS::Exited( pid, status ) ) => {
-                    let pid = i32::from( pid );
+                Ok( WS::Exited( pid, status ) ) =>
+        {                   let pid = i32::from( pid );
                     types::WaitStatus::from_exited( pid, status )
                 }
-                Ok( WS::Stopped( pid, sig ) ) => {
-                    let pid = i32::from( pid );
+                Ok( WS::Stopped( pid, sig ) ) =>
+        {                   let pid = i32::from( pid );
                     types::WaitStatus::from_stopped( pid, sig as i32 )
                 }
-                Ok( WS::Continued( pid ) ) => {
-                    let pid = i32::from( pid );
+                Ok( WS::Continued( pid ) ) =>
+        {                   let pid = i32::from( pid );
                     types::WaitStatus::from_continuted( pid )
                 }
-                Ok( WS::Signaled( pid, sig, _core_dumped ) ) => {
-                    let pid = i32::from( pid );
+                Ok( WS::Signaled( pid, sig, _core_dumped ) ) =>
+        {                   let pid = i32::from( pid );
                     types::WaitStatus::from_signaled( pid, sig as i32 )
                 }
-                Ok( WS::StillAlive ) => {
-                    types::WaitStatus::empty()
+                Ok( WS::StillAlive ) =>
+        {                   types::WaitStatus::empty()
                 }
-                Ok( _others ) => {
-                    // this is for PtraceEvent and PtraceSyscall on Linux,
+                Ok( _others ) =>
+        {                   // this is for PtraceEvent and PtraceSyscall on Linux,
                     // unreachable on other platforms.
                     types::WaitStatus::from_others()
                 }
-                Err( e ) => {
-                    types::WaitStatus::from_error( e as i32 )
+                Err( e ) =>
+        {                   types::WaitStatus::from_error( e as i32 )
                 }
             }
         }
@@ -2083,8 +2089,8 @@ pub mod completers
             let mut f;
             match File::open( &dot_file ) {
                 Ok( x ) => f = x,
-                Err( e ) => {
-                    println_stderr!( "\ncicada:open dot_file error:{:?}", e );
+                Err( e ) =>
+        {                   println_stderr!( "\ncicada:open dot_file error:{:?}", e );
                     return res;
                 }
             }
@@ -2092,33 +2098,33 @@ pub mod completers
             let mut s = String::new();
             match f.read_to_string( &mut s ) {
                 Ok( _ ) => {}
-                Err( e ) => {
-                    println_stderr!( "\ncicada:read_to_string error:{:?}", e );
+                Err( e ) =>
+        {                   println_stderr!( "\ncicada:read_to_string error:{:?}", e );
                     return res;
                 }
             }
 
             let docs = match YamlLoader::load_from_str( &s ) {
                 Ok( x ) => x,
-                Err( e ) => {
-                    println_stderr!( "\ncicada:Bad Yaml file:{}:{:?}", dot_file, e );
+                Err( e ) =>
+        {                   println_stderr!( "\ncicada:Bad Yaml file:{}:{:?}", dot_file, e );
                     return res;
                 }
             };
 
             for doc in docs.iter() {
                 match *doc {
-                    Yaml::Array( ref v ) => {
-                        for x in v {
+                    Yaml::Array( ref v ) =>
+        {                       for x in v {
                             match *x {
-                                Yaml::String( ref name ) => {
-                                    if !sub_cmd.is_empty() {
+                                Yaml::String( ref name ) =>
+        {                                   if !sub_cmd.is_empty() {
                                         continue;
                                     }
                                     handle_lv1_string( &mut res, name, word );
                                 }
-                                Yaml::Hash( ref h ) => {
-                                    if sub_cmd.is_empty() {
+                                Yaml::Hash( ref h ) =>
+        {                                   if sub_cmd.is_empty() {
                                         for k in h.keys() {
                                             if let Yaml::String( value ) = k {
                                                 handle_lv1_string( &mut res, value, word );
@@ -2132,14 +2138,14 @@ pub mod completers
                                         handle_lv1_hash( &mut res, h, word );
                                     }
                                 }
-                                _ => {
-                                    println_stderr!( "\nThis yaml file is in bad format:{}", dot_file );
+                                _ =>
+        {                                   println_stderr!( "\nThis yaml file is in bad format:{}", dot_file );
                                 }
                             }
                         }
                     }
-                    _ => {
-                        println_stderr!( "\nThis yaml file is in bad format:{}", dot_file );
+                    _ =>
+        {                       println_stderr!( "\nThis yaml file is in bad format:{}", dot_file );
                     }
                 }
             }
@@ -2173,7 +2179,8 @@ pub mod completers
                 _reader:&Prompter<Term>,
                 _start:usize,
                 _end:usize,
- ) -> Option<Vec<Completion>> {
+ ) -> Option<Vec<Completion>>
+            {
                 let sh = Arc::try_unwrap( self.sh.clone() );
                 match sh {
                     Ok( x ) => Some( complete_env( &x, word ) ),
@@ -2191,7 +2198,8 @@ pub mod completers
             let mut prefix = path.to_string();
             prefix.remove( 0 );
 
-            for ( key, _ ) in env::vars_os() {
+            for ( key, _ ) in env::vars_os()
+            {
                 let env_name = key.to_string_lossy().to_string();
                 if env_name.starts_with( &prefix ) {
                     res.push( Completion {
@@ -2241,27 +2249,28 @@ pub mod completers
                 _reader:&Prompter<Term>,
                 _start:usize,
                 _end:usize,
- ) -> Option<Vec<Completion>> {
-                Some( complete_make( word ) )
+ ) -> Option<Vec<Completion>>
+        {               Some( complete_make( word ) )
             }
         }
 
         fn handle_file( ci:&mut Vec<Completion>, path:&str, file_path:&str, current_dir:&str )
         {
-            if let Ok( f ) = File::open( file_path ) {
+            if let Ok( f ) = File::open( file_path )
+            {
                 let file = BufReader::new( &f );
                 let re_cmd = match Regex::new( r"^ *( [^ ]+ ):" ) {
                     Ok( x ) => x,
-                    Err( e ) => {
-                        println_stderr!( "pls:regex build error:{:?}", e );
+                    Err( e ) =>
+        {                       println_stderr!( "pls:regex build error:{:?}", e );
                         return;
                     }
                 };
 
                 let re_include = match Regex::new( r"^ *include  *( [^ ]+ ) *$" ) {
                     Ok( x ) => x,
-                    Err( e ) => {
-                        println_stderr!( "pls:regex build error:{:?}", e );
+                    Err( e ) =>
+        {                       println_stderr!( "pls:regex build error:{:?}", e );
                         return;
                     }
                 };
@@ -2300,13 +2309,13 @@ pub mod completers
             let current_dir = match env::current_dir() {
                 Ok( dir ) => match dir.to_str() {
                     Some( s ) => s.to_string(),
-                    None => {
-                        println!( "pls:to_str error" );
+                    None =>
+        {                       println!( "pls:to_str error" );
                         return res;
                     }
                 },
-                Err( e ) => {
-                    println!( "pls:get current_dir error:{:?}", e );
+                Err( e ) =>
+        {                   println!( "pls:get current_dir error:{:?}", e );
                     return res;
                 }
             };
@@ -2351,7 +2360,8 @@ pub mod completers
                 _reader:&Prompter<Term>,
                 _start:usize,
                 _end:usize,
- ) -> Option<Vec<Completion>> {
+ ) -> Option<Vec<Completion>>
+            {
                 let sh = Arc::try_unwrap( self.sh.clone() );
                 match sh {
                     Ok( x ) => Some( complete_bin( &x, word ) ),
@@ -2368,8 +2378,8 @@ pub mod completers
                 _reader:&Prompter<Term>,
                 _start:usize,
                 _end:usize,
- ) -> Option<Vec<Completion>> {
-                Some( complete_path( word, false ) )
+ ) -> Option<Vec<Completion>>
+        {               Some( complete_path( word, false ) )
             }
         }
 
@@ -2381,8 +2391,8 @@ pub mod completers
                 _reader:&Prompter<Term>,
                 _start:usize,
                 _end:usize,
- ) -> Option<Vec<Completion>> {
-                Some( complete_path( word, true ) )
+ ) -> Option<Vec<Completion>>
+        {               Some( complete_path( word, true ) )
             }
         }
 
@@ -2474,7 +2484,8 @@ pub mod completers
         // Split optional directory and prefix. ( see its test cases for more details )
         fn split_pathname( path:&str, prefix:&str ) -> ( String, String, String )
         {
-            if is::pipelined( path ) {
+            if is::pipelined( path )
+            {
                 let tokens:Vec<&str> = path.rsplitn( 2, '|' ).collect();
                 let prefix = format!( "{}|", tokens[1] );
                 return split_pathname( tokens[0], &prefix );
@@ -2495,8 +2506,8 @@ pub mod completers
             let ( prefix, _, fname ) = split_pathname( path, "" );
             let env_path = match env::var( "PATH" ) {
                 Ok( x ) => x,
-                Err( e ) => {
-                    println_stderr!( "pls:env error when complete_bin:{:?}", e );
+                Err( e ) =>
+        {                   println_stderr!( "pls:env error when complete_bin:{:?}", e );
                     return res;
                 }
             };
@@ -2563,8 +2574,8 @@ pub mod completers
                             if name.starts_with( &fname ) {
                                 let _mode = match entry.metadata() {
                                     Ok( x ) => x,
-                                    Err( e ) => {
-                                        println_stderr!( "pls:metadata error:{:?}", e );
+                                    Err( e ) =>
+        {                                       println_stderr!( "pls:metadata error:{:?}", e );
                                         continue;
                                     }
                                 };
@@ -2622,8 +2633,8 @@ pub mod completers
                 _reader:&Prompter<Term>,
                 _start:usize,
                 _end:usize,
- ) -> Option<Vec<Completion>> {
-                Some( complete_ssh( word ) )
+ ) -> Option<Vec<Completion>>
+        {               Some( complete_ssh( word ) )
             }
         }
 
@@ -2632,12 +2643,13 @@ pub mod completers
             let mut res = Vec::new();
             let home = get::user_home();
             let ssh_config = home + "/.ssh/config";
-            if let Ok( f ) = File::open( &ssh_config ) {
+            if let Ok( f ) = File::open( &ssh_config )
+            {
                 let file = BufReader::new( &f );
                 let re = match Regex::new( r"^ *( ?i )host +( [^ ]+ )" ) {
                     Ok( x ) => x,
-                    Err( e ) => {
-                        println!( "Regex build error:{:?}", e );
+                    Err( e ) =>
+        {                       println!( "Regex build error:{:?}", e );
                         return res;
                     }
                 };
@@ -4806,9 +4818,8 @@ pub mod connect
                 /// function from libstd:
                 ///
                 /// [write_all_at]: https://doc.rust-lang.org/std/os/unix/fs/trait.FileExt.html#method.write_all_at
-                #[inline]
-                pub fn write_all_at(&mut self, buf: &[u8], write_start: usize) -> Result<()> {
-                    self.write_at(buf, write_start)
+                #[inline] pub fn write_all_at(&mut self, buf: &[u8], write_start: usize) -> Result<()>
+        {                   self.write_at(buf, write_start)
                 }
 
                 /// Read as much as possible from `offset` to `offset + buf.len()` out of
@@ -4826,9 +4837,8 @@ pub mod connect
                 /// position to read from, instead of using the internal position that can
                 /// be manipulated by the `std::io` traits. Consequently, it does not change
                 /// that value either.
-                #[inline]
-                pub fn read_at(&self, buf: &mut [u8], read_start: usize) -> Result<usize> {
-                    // Safety: this is safe because `raw_read_at` never stores uninitialized
+                #[inline] pub fn read_at(&self, buf: &mut [u8], read_start: usize) -> Result<usize>
+        {                   // Safety: this is safe because `raw_read_at` never stores uninitialized
                     // data into `as_uninit`.
                     let as_uninit: &mut [MaybeUninit<u8>] =
                         unsafe { from_raw_parts_mut(buf.as_mut_ptr().cast(), buf.len()) };
@@ -4849,13 +4859,12 @@ pub mod connect
                 /// position to read from, instead of using the internal position that can
                 /// be manipulated by the `std::io` traits. Consequently, it does not change
                 /// that value either.
-                #[inline]
-                pub fn raw_read_at<'a>(
+                #[inline] pub fn raw_read_at<'a>(
                     &self,
                     buf: &'a mut [MaybeUninit<u8>],
                     read_start: usize,
-                ) -> Result<&'a mut [u8]> {
-                    let len = self.len();
+                ) -> Result<&'a mut [u8]>
+        {                   let len = self.len();
 
                     let read_len = match len.checked_sub(read_start) {
                         None | Some(0) => 0,
@@ -4910,9 +4919,8 @@ pub mod connect
 
                 /// Equivalent to [`Blob::read_at`], but returns a `BlobSizeError` if `buf`
                 /// is not fully initialized.
-                #[inline]
-                pub fn read_at_exact(&self, buf: &mut [u8], read_start: usize) -> Result<()> {
-                    let n = self.read_at(buf, read_start)?;
+                #[inline] pub fn read_at_exact(&self, buf: &mut [u8], read_start: usize) -> Result<()>
+        {                   let n = self.read_at(buf, read_start)?;
                     if n != buf.len() {
                         Err(Error::BlobSizeError)
                     } else {
@@ -4922,13 +4930,12 @@ pub mod connect
 
                 /// Equivalent to [`Blob::raw_read_at`], but returns a `BlobSizeError` if
                 /// `buf` is not fully initialized.
-                #[inline]
-                pub fn raw_read_at_exact<'a>(
+                #[inline] pub fn raw_read_at_exact<'a>(
                     &self,
                     buf: &'a mut [MaybeUninit<u8>],
                     read_start: usize,
-                ) -> Result<&'a mut [u8]> {
-                    let buflen = buf.len();
+                ) -> Result<&'a mut [u8]>
+        {                   let buflen = buf.len();
                     let initted = self.raw_read_at(buf, read_start)?;
                     if initted.len() != buflen {
                         Err(Error::BlobSizeError)
@@ -5177,11 +5184,9 @@ pub mod connect
             /// Prepare a SQL statement for execution, returning a previously prepared
             /// (but not currently in-use) statement if one is available.
             #[inline] pub fn prepare_cached(&self, sql: &str) -> Result<CachedStatement<'_>> { self.cache.get(self, sql) }
-
             /// Set the maximum number of cached prepared statements this connection will hold.
             #[inline] pub fn set_prepared_statement_cache_capacity(&self, capacity: usize)
             { self.cache.set_capacity(capacity); }
-
             /// Remove/finalize all prepared statements currently in the cache.
             #[inline] pub fn flush_prepared_statement_cache(&self) { self.cache.flush(); }
         }
@@ -5228,7 +5233,6 @@ pub mod connect
                     cache,
                 }
             }
-
             /// Discard the statement, preventing it from returning to its `Connection`'s collection of cached statements.
             #[inline] pub fn discard(mut self) { self.stmt = None; }
         }
@@ -5240,7 +5244,6 @@ pub mod connect
             { StatementCache(RefCell::new(LruCache::new(capacity))) }
 
             #[inline] fn set_capacity(&self, capacity: usize) { self.0.borrow_mut().set_capacity(capacity); }
-
             /// Search the cache for a prepared-statement object that implements `sql`.
             fn get<'conn>( &'conn self, conn: &'conn Connection, sql: &str ) -> Result<CachedStatement<'conn>>
             {
@@ -5305,8 +5308,7 @@ pub mod connect
             /// Add or modify a collation.
             #[inline] pub fn create_collation<C>(&self, collation_name: &str, x_compare: C) -> Result<()> where
             C:Fn(&str, &str) -> Ordering + Send + 'static
-            {
-                self.db
+            { self.db
                 .borrow_mut()
                 .create_collation(collation_name, x_compare)
             }
@@ -5434,17 +5436,259 @@ pub mod connect
 
     pub mod column
     {
+        use ::
+        {
+            connect::{ Error, Result, Statement },
+            *,
+        };
+        /// Information about a column of a SQLite query.
+        #[derive(Debug)]
+        pub struct Column<'stmt>
+        {
+            name: &'stmt str,
+            decl_type: Option<&'stmt str>,
+        }
         
+        impl Column<'_>
+        {
+            /// Returns the name of the column.
+            #[inline] #[must_use] pub fn name(&self) -> &str { self.name }
+            /// Returns the type of the column (`None` for expression).
+            #[inline] #[must_use] pub fn decl_type(&self) -> Option<&str> { self.decl_type }
+        }
+
+        impl Statement<'_>
+        {
+            /// Get all the column names in the result set of the prepared statement.
+            pub fn column_names(&self) -> Vec<&str>
+            {
+                let n = self.column_count();
+                let mut cols = Vec::with_capacity(n);
+                for i in 0..n {
+                    let s = self.column_name_unwrap(i);
+                    cols.push(s);
+                }
+                cols
+            }
+            /// Return the number of columns in the result set returned by the prepared statement.
+            #[inline] pub fn column_count(&self) -> usize { self.stmt.column_count() }
+            /// Check that column name reference lifetime is limited.
+            #[inline] pub fn column_name_unwrap(&self, col: usize) -> &str 
+            { self.column_name(col).expect("Column out of bounds") }
+            /// Returns the name assigned to a particular column in the result set returned by the prepared statement.
+            #[inline] pub fn column_name(&self, col: usize) -> Result<&str>
+            { self.stmt
+                    .column_name(col)
+                    .ok_or(Error::InvalidColumnIndex(col))
+                    .map(|slice| {
+                        slice
+                            .to_str()
+                            .expect("Invalid UTF-8 sequence in column name")
+                    })
+            }
+            /// Returns the column index in the result set for a given column name.
+            #[inline] pub fn column_index(&self, name: &str) -> Result<usize>
+            {
+                let bytes = name.as_bytes();
+                let n = self.column_count();
+                for i in 0..n {
+                    if bytes.eq_ignore_ascii_case(self.stmt.column_name(i).unwrap().to_bytes()) {
+                        return Ok(i);
+                    }
+                }
+                Err(Error::InvalidColumnName(String::from(name)))
+            }
+            /// Returns a slice describing the columns of the result of the query.
+            pub fn columns(&self) -> Vec<Column>
+            {
+                let n = self.column_count();
+                let mut cols = Vec::with_capacity(n);
+                for i in 0..n {
+                    let name = self.column_name_unwrap(i);
+                    let slice = self.stmt.column_decltype(i);
+                    let decl_type = slice.map(|s| {
+                        s.to_str()
+                            .expect("Invalid UTF-8 sequence in column declaration")
+                    });
+                    cols.push(Column { name, decl_type });
+                }
+                cols
+            }
+        }   
     }
 
     pub mod config
     {
-        
+        //! Configure database connections
+        use ::
+        {
+            connect::
+            {
+                error::{ check },
+                ffi, Connection, Result 
+            },
+            os::raw::{ c_int },
+            *,
+        };
+        /// Database Connection Configuration Options.
+        #[repr(i32)] #[derive(Copy, Clone, Debug)] #[non_exhaustive]
+        pub enum DbConfig
+        {
+            /// Enable or disable the enforcement of foreign key constraints.
+            SQLITE_DBCONFIG_ENABLE_FKEY = ffi::SQLITE_DBCONFIG_ENABLE_FKEY,
+            /// Enable or disable triggers.
+            SQLITE_DBCONFIG_ENABLE_TRIGGER = ffi::SQLITE_DBCONFIG_ENABLE_TRIGGER,
+            /// Enable or disable the fts3_tokenizer() function which is part of the FTS3 full-text search engine extension.
+            SQLITE_DBCONFIG_ENABLE_FTS3_TOKENIZER = ffi::SQLITE_DBCONFIG_ENABLE_FTS3_TOKENIZER, // 3.12.0
+            /// In WAL mode, enable or disable the checkpoint operation before closing the connection.
+            SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE = 1006, // 3.16.2
+            /// Activates or deactivates the query planner stability guarantee (QPSG).
+            SQLITE_DBCONFIG_ENABLE_QPSG = 1007, // 3.20.0
+            /// Includes or excludes output for any operations performed from the output of EXPLAIN QUERY PLAN commands.
+            SQLITE_DBCONFIG_TRIGGER_EQP = 1008, // 3.22.0
+            /// Activates or deactivates the "reset" flag for a database connection.
+            SQLITE_DBCONFIG_RESET_DATABASE = 1009, // 3.24.0
+            /// Activates or deactivates the "defensive" flag for a database connection.
+            SQLITE_DBCONFIG_DEFENSIVE = 1010, // 3.26.0
+            /// Activates or deactivates the "writable_schema" flag.
+            SQLITE_DBCONFIG_WRITABLE_SCHEMA = 1011, // 3.28.0
+            /// Activates or deactivates the legacy behavior of the ALTER TABLE RENAME 
+            SQLITE_DBCONFIG_LEGACY_ALTER_TABLE = 1012, // 3.29
+            /// Activates or deactivates the legacy double-quoted string literal misfeature for DML statements only.
+            #[cfg(feature = "modern_sqlite")]
+            SQLITE_DBCONFIG_DQS_DML = 1013, // 3.29.0
+            /// Activates or deactivates the legacy double-quoted string literal misfeature for DDL statements.
+            #[cfg(feature = "modern_sqlite")]
+            SQLITE_DBCONFIG_DQS_DDL = 1014, // 3.29.0
+            /// Enable or disable views.
+            #[cfg(feature = "modern_sqlite")]
+            SQLITE_DBCONFIG_ENABLE_VIEW = 1015, // 3.30.0
+            /// Activates or deactivates the legacy file format flag.
+            #[cfg(feature = "modern_sqlite")]
+            SQLITE_DBCONFIG_LEGACY_FILE_FORMAT = 1016, // 3.31.0
+            /// Tells SQLite to assume that database schemas are untainted by malicious content.
+            #[cfg(feature = "modern_sqlite")]
+            SQLITE_DBCONFIG_TRUSTED_SCHEMA = 1017, // 3.31.0
+            /// Sets or clears a flag that enables collection of the sqlite3_stmt_scanstatus_v2() statistics
+            #[cfg(feature = "modern_sqlite")]
+            SQLITE_DBCONFIG_STMT_SCANSTATUS = 1018, // 3.42.0
+            /// Changes the default order in which tables and indexes are scanned
+            #[cfg(feature = "modern_sqlite")]
+            SQLITE_DBCONFIG_REVERSE_SCANORDER = 1019, // 3.42.0
+        }
+
+        impl Connection {
+            /// Returns the current value of a `config`.
+            #[inline] pub fn db_config(&self, config: DbConfig) -> Result<bool>
+            {
+                let c = self.db.borrow();
+                unsafe
+                {
+                    let mut val = 0;
+                    check(ffi::sqlite3_db_config
+                    (
+                        c.db(),
+                        config as c_int,
+                        -1,
+                        &mut val,
+                    ))?;
+                    Ok(val != 0)
+                }
+            }
+            /// Make configuration changes to a database connection.
+            #[inline] pub fn set_db_config(&self, config: DbConfig, new_val: bool) -> Result<bool>
+            {
+                let c = self.db.borrow_mut();
+                unsafe {
+                    let mut val = 0;
+                    check(ffi::sqlite3_db_config(
+                        c.db(),
+                        config as c_int,
+                        new_val as c_int,
+                        &mut val,
+                    ))?;
+                    Ok(val != 0)
+                }
+            }
+        }   
     }
 
     pub mod context
     {
-        
+        //! Code related to `sqlite3_context` common to `functions` and `vtab` modules.
+        use ::
+        {
+            connect::
+            {
+                ffi::{ self, sqlite3_context },
+                types::{ToSqlOutput, ValueRef},
+                vtab::array::{free_array, ARRAY_TYPE},
+                str_for_sqlite,
+            },
+            os::raw::{c_int, c_void},
+            rc::{ Rc },
+            *,
+        };
+
+        #[inline] pub unsafe fn set_result
+        ( ctx: *mut sqlite3_context, #[allow(unused_variables)] args: &[*mut sqlite3_value], result: &ToSqlOutput<'_> )
+        {
+            let value = match *result 
+            {
+                ToSqlOutput::Borrowed(v) => v,
+                ToSqlOutput::Owned(ref v) => ValueRef::from(v),
+                ToSqlOutput::ZeroBlob(len) =>
+        {                   // TODO sqlite3_result_zeroblob64 // 3.8.11
+                    return ffi::sqlite3_result_zeroblob(ctx, len);
+                }
+                ToSqlOutput::Arg(i) =>
+        {                   return ffi::sqlite3_result_value(ctx, args[i]);
+                }
+                ToSqlOutput::Array(ref a) =>
+        {                   return ffi::sqlite3_result_pointer(
+                        ctx,
+                        Rc::into_raw(a.clone()) as *mut c_void,
+                        ARRAY_TYPE,
+                        Some(free_array),
+                    );
+                }
+            };
+
+            match value 
+            {
+                ValueRef::Null => ffi::sqlite3_result_null(ctx),
+                ValueRef::Integer(i) => ffi::sqlite3_result_int64(ctx, i),
+                ValueRef::Real(r) => ffi::sqlite3_result_double(ctx, r),
+                ValueRef::Text(s) => 
+                {
+                    let length = s.len();
+                    if length > c_int::MAX as usize {
+                        ffi::sqlite3_result_error_toobig(ctx);
+                    } else {
+                        let (c_str, len, destructor) = match str_for_sqlite(s) {
+                            Ok(c_str) => c_str,
+                            Err(_) => return ffi::sqlite3_result_error_code(ctx, ffi::SQLITE_MISUSE),
+                        };
+                        ffi::sqlite3_result_text(ctx, c_str, len, destructor);
+                    }
+                }
+                ValueRef::Blob(b) =>
+        {                   let length = b.len();
+                    if length > c_int::MAX as usize {
+                        ffi::sqlite3_result_error_toobig(ctx);
+                    } else if length == 0 {
+                        ffi::sqlite3_result_zeroblob(ctx, 0);
+                    } else {
+                        ffi::sqlite3_result_blob(
+                            ctx,
+                            b.as_ptr().cast::<c_void>(),
+                            length as c_int,
+                            ffi::SQLITE_TRANSIENT(),
+                        );
+                    }
+                }
+            }
+        }
     }
     
     pub mod error
@@ -5784,82 +6028,5511 @@ pub mod connect
 
     pub mod functions
     {
+        //! Create or redefine SQL functions.
+        use ::
+        {
+            any::{ Any },
+            connect::
+            {
+                ffi,
+                ffi::sqlite3_context,
+                ffi::sqlite3_value,
+                context::set_result,
+                types::{FromSql, FromSqlError, ToSql, ToSqlOutput, ValueRef},
+                str_to_cstring, Connection, Error, InnerConnection, Result,
+            },
+            marker::{ PhantomData },
+            ops::{ Deref },
+            os::raw::{ c_uint, c_int, c_void },
+            panic::{ catch_unwind, RefUnwindSafe, UnwindSafe },
+            sync::{ Arc },
+            *,
+        };
         
+        unsafe fn report_error(ctx: *mut sqlite3_context, err: &Error)
+        {
+            if let Error::SqliteFailure(ref err, ref s) = *err {
+                ffi::sqlite3_result_error_code(ctx, err.extended_code);
+                if let Some(Ok(cstr)) = s.as_ref().map(|s| str_to_cstring(s)) {
+                    ffi::sqlite3_result_error(ctx, cstr.as_ptr(), -1);
+                }
+            } else {
+                ffi::sqlite3_result_error_code(ctx, ffi::SQLITE_CONSTRAINT_FUNCTION);
+                if let Ok(cstr) = str_to_cstring(&err.to_string()) {
+                    ffi::sqlite3_result_error(ctx, cstr.as_ptr(), -1);
+                }
+            }
+        }
+
+        unsafe extern "C" fn free_boxed_value<T>(p: *mut c_void) { drop(Box::from_raw(p.cast::<T>())); }
+        /// Context is a wrapper for the SQLite function evaluation context.
+        pub struct Context<'a>
+        {
+            ctx: *mut sqlite3_context,
+            args: &'a [*mut sqlite3_value],
+        }
+
+        impl Context<'_>
+        {
+            /// Returns the number of arguments to the function.
+            #[inline] #[must_use] pub fn len(&self) -> usize { self.args.len() }
+            /// Returns `true` when there is no argument.
+            #[inline] #[must_use] pub fn is_empty(&self) -> bool { self.args.is_empty() }
+            /// Returns the `idx`th argument as a `T`.
+            pub fn get<T: FromSql>(&self, idx: usize) -> Result<T>
+            {
+                let arg = self.args[idx];
+                let value = unsafe { ValueRef::from_value(arg) };
+                FromSql::column_result(value).map_err(|err| match err {
+                    FromSqlError::InvalidType =>
+        {                       Error::InvalidFunctionParameterType(idx, value.data_type())
+                    }
+                    FromSqlError::OutOfRange(i) => Error::IntegralValueOutOfRange(idx, i),
+                    FromSqlError::Other(err) =>
+        {                       Error::FromSqlConversionFailure(idx, value.data_type(), err)
+                    }
+                    FromSqlError::InvalidBlobSize { .. } =>
+        {                       Error::FromSqlConversionFailure(idx, value.data_type(), Box::new(err))
+                    }
+                })
+            }
+            /// Returns the `idx`th argument as a `ValueRef`.
+            #[inline] #[must_use] pub fn get_raw(&self, idx: usize) -> ValueRef<'_>
+            {
+                let arg = self.args[idx];
+                unsafe { ValueRef::from_value(arg) }
+            }
+            /// Returns the `idx`th argument as a `SqlFnArg`.
+            #[inline] #[must_use] pub fn get_arg(&self, idx: usize) -> SqlFnArg
+            {
+                assert!(idx < self.len());
+                SqlFnArg { idx }
+            }
+            /// Returns the subtype of `idx`th argument.
+            pub fn get_subtype(&self, idx: usize) -> c_uint
+            {
+                let arg = self.args[idx];
+                unsafe { ffi::sqlite3_value_subtype(arg) }
+            }
+            /// Fetch or insert the auxiliary data associated with a particular parameter.
+            pub fn get_or_create_aux<T, E, F>(&self, arg: c_int, func: F) -> Result<Arc<T>> where
+            T: Send + Sync + 'static,
+            E: Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
+            F: FnOnce(ValueRef<'_>) -> Result<T, E>
+            {
+                if let Some(v) = self.get_aux(arg)? {
+                    Ok(v)
+                } else {
+                    let vr = self.get_raw(arg as usize);
+                    self.set_aux(
+                        arg,
+                        func(vr).map_err(|e| Error::UserFunctionError(e.into()))?,
+                    )
+                }
+            }
+            /// Sets the auxiliary data associated with a particular parameter.
+            pub fn set_aux<T: Send + Sync + 'static>(&self, arg: c_int, value: T) -> Result<Arc<T>>
+            {
+                let orig: Arc<T> = Arc::new(value);
+                let inner: AuxInner = orig.clone();
+                let outer = Box::new(inner);
+                let raw: *mut AuxInner = Box::into_raw(outer);
+                unsafe {
+                    ffi::sqlite3_set_auxdata(
+                        self.ctx,
+                        arg,
+                        raw.cast(),
+                        Some(free_boxed_value::<AuxInner>),
+                    );
+                };
+                Ok(orig)
+            }
+            /// Gets the auxiliary data that was associated with a given parameter via [`set_aux`](Context::set_aux).
+            pub fn get_aux<T: Send + Sync + 'static>(&self, arg: c_int) -> Result<Option<Arc<T>>>
+            {
+                let p = unsafe { ffi::sqlite3_get_auxdata(self.ctx, arg) as *const AuxInner };
+                if p.is_null() { Ok(None) } 
+                else
+                {
+                    let v: AuxInner = AuxInner::clone(unsafe { &*p });
+                    v.downcast::<T>()
+                        .map(Some)
+                        .map_err(|_| Error::GetAuxWrongType)
+                }
+            }
+            /// Get the db connection handle via [sqlite3_context_db_handle].
+            pub unsafe fn get_connection(&self) -> Result<ConnectionRef<'_>>
+            {
+                let handle = ffi::sqlite3_context_db_handle(self.ctx);
+                Ok(ConnectionRef
+                {
+                    conn: Connection::from_handle(handle)?,
+                    phantom: PhantomData,
+                })
+            }
+        }
+        /// A reference to a connection handle with a lifetime bound to something.
+        pub struct ConnectionRef<'ctx>
+        {
+            conn: Connection,
+            phantom: PhantomData<&'ctx Context<'ctx>>,
+        }
+
+        impl Deref for ConnectionRef<'_>
+        {
+            type Target = Connection;
+            #[inline] fn deref(&self) -> &Connection { &self.conn }
+        }
+
+        type AuxInner = Arc<dyn Any + Send + Sync + 'static>;
+        /// Subtype of an SQL function
+        pub type SubType = Option<std::os::raw::c_uint>;
+        /// Result of an SQL function
+        pub trait SqlFnOutput 
+        {
+            /// Converts Rust value to SQLite value with an optional subtype
+            fn to_sql(&self) -> Result<(ToSqlOutput<'_>, SubType)>;
+        }
+
+        impl<T: ToSql> SqlFnOutput for T 
+        {
+            #[inline] fn to_sql(&self) -> Result<(ToSqlOutput<'_>, SubType)> { ToSql::to_sql(self).map(|o| (o, None)) }
+        }
+
+        impl<T: ToSql> SqlFnOutput for (T, SubType)
+        {
+            fn to_sql(&self) -> Result<(ToSqlOutput<'_>, SubType)> { ToSql::to_sql(&self.0).map(|o| (o, self.1)) }
+        }
+        /// n-th arg of an SQL scalar function
+        pub struct SqlFnArg 
+        {
+            idx: usize,
+        }
+
+        impl ToSql for SqlFnArg
+        {
+            fn to_sql(&self) -> Result<ToSqlOutput<'_>> { Ok(ToSqlOutput::Arg(self.idx)) }
+        }
+
+        unsafe fn sql_result<T: SqlFnOutput>( ctx: *mut sqlite3_context, args: &[*mut sqlite3_value], r: Result<T> )
+        {
+            let t = r.as_ref().map(SqlFnOutput::to_sql);
+
+            match t {
+                Ok(Ok((ref value, sub_type))) =>
+        {                   set_result(ctx, args, value);
+                    if let Some(sub_type) = sub_type {
+                        ffi::sqlite3_result_subtype(ctx, sub_type);
+                    }
+                }
+                Ok(Err(err)) => report_error(ctx, &err),
+                Err(err) => report_error(ctx, err),
+            };
+        }
+        /// Aggregate is the callback interface for user-defined aggregate function.
+        pub trait Aggregate<A, T> where
+        A: RefUnwindSafe + UnwindSafe,
+        T: SqlFnOutput
+        {
+            /// Initializes the aggregation context.
+            fn init(&self, ctx: &mut Context<'_>) -> Result<A>;
+            /// "step" function called once for each row in an aggregate group.
+            fn step(&self, ctx: &mut Context<'_>, acc: &mut A) -> Result<()>;
+            /// Computes and returns the final result. Will be called exactly once for each invocation of the function.
+            fn finalize(&self, ctx: &mut Context<'_>, acc: Option<A>) -> Result<T>;
+        }
+        /// `WindowAggregate` is the callback interface for user-defined aggregate window function.
+        pub trait WindowAggregate<A, T>: Aggregate<A, T> where
+        A: RefUnwindSafe + UnwindSafe,
+        T: SqlFnOutput
+        {
+            /// Returns the current value of the aggregate.
+            fn value(&self, acc: Option<&mut A>) -> Result<T>;
+            /// Removes a row from the current window.
+            fn inverse(&self, ctx: &mut Context<'_>, acc: &mut A) -> Result<()>;
+        }
+
+        bitflags::bitflags!
+        {
+            /// Function Flags.
+            #[repr(C)] #[derive(Clone, Copy, Debug)]            
+            pub struct FunctionFlags:c_int
+            {
+                /// Specifies UTF-8 as the text encoding this SQL function prefers for its parameters.
+                const SQLITE_UTF8     = ffi::SQLITE_UTF8;
+                /// Specifies UTF-16 using little-endian byte order as the text encoding this SQL function prefers for its parameters.
+                const SQLITE_UTF16LE  = ffi::SQLITE_UTF16LE;
+                /// Specifies UTF-16 using big-endian byte order as the text encoding this SQL function prefers for its parameters.
+                const SQLITE_UTF16BE  = ffi::SQLITE_UTF16BE;
+                /// Specifies UTF-16 using native byte order as the text encoding this SQL function prefers for its parameters.
+                const SQLITE_UTF16    = ffi::SQLITE_UTF16;
+                /// Means that the function always gives the same output when the input parameters are the same.
+                const SQLITE_DETERMINISTIC = ffi::SQLITE_DETERMINISTIC; // 3.8.3
+                /// Means that the function may only be invoked from top-level SQL.
+                const SQLITE_DIRECTONLY    = 0x0000_0008_0000; // 3.30.0
+                /// Indicates to SQLite that a function may call `sqlite3_value_subtype()` to inspect the subtypes of its arguments.
+                const SQLITE_SUBTYPE       = 0x0000_0010_0000; // 3.30.0
+                /// Means that the function is unlikely to cause problems even if misused.
+                const SQLITE_INNOCUOUS     = 0x0000_0020_0000; // 3.31.0
+                /// Indicates to SQLite that a function might call `sqlite3_result_subtype()` to cause a subtype to be associated with its result.
+                const SQLITE_RESULT_SUBTYPE     = 0x0000_0100_0000; // 3.45.0
+            }
+        }
+
+        impl Default for FunctionFlags
+        {
+            #[inline] fn default() -> FunctionFlags { FunctionFlags::SQLITE_UTF8 }
+        }
+
+        impl Connection
+        {
+            /// Attach a user-defined scalar function to this database connection.
+            #[inline] pub fn create_scalar_function<F, T>
+            ( &self, fn_name: &str, n_arg: c_int, flags: FunctionFlags, x_func: F ) -> Result<()> where
+            F: FnMut(&Context<'_>) -> Result<T> + Send + 'static,
+            T: SqlFnOutput
+            { self.db
+                .borrow_mut()
+                .create_scalar_function(fn_name, n_arg, flags, x_func)
+            }
+            /// Attach a user-defined aggregate function to this database connection.
+            #[inline] pub fn create_aggregate_function<A, D, T>
+            ( &self, fn_name: &str, n_arg: c_int, flags: FunctionFlags, aggr: D ) -> Result<()> where                A: RefUnwindSafe + UnwindSafe,
+            D: Aggregate<A, T> + 'static,
+            T: SqlFnOutput
+            { self.db
+                .borrow_mut()
+                .create_aggregate_function(fn_name, n_arg, flags, aggr)
+            }
+            /// Attach a user-defined aggregate window function to this database connection.
+            #[inline] pub fn create_window_function<A, W, T>
+            (
+                &self,
+                fn_name: &str,
+                n_arg: c_int,
+                flags: FunctionFlags,
+                aggr: W,
+            ) -> Result<()> where                
+            A: RefUnwindSafe + UnwindSafe,
+            W: WindowAggregate<A, T> + 'static,
+            T: SqlFnOutput,
+            { self.db
+                .borrow_mut()
+                .create_window_function(fn_name, n_arg, flags, aggr)
+            }
+            /// Removes a user-defined function from this database connection.
+            #[inline] pub fn remove_function(&self, fn_name: &str, n_arg: c_int) -> Result<()>
+            { self.db.borrow_mut().remove_function(fn_name, n_arg) }
+        }
+
+        impl InnerConnection 
+        {
+            fn create_scalar_function<F, T>
+            (
+                &mut self,
+                fn_name: &str,
+                n_arg: c_int,
+                flags: FunctionFlags,
+                x_func: F,
+            ) -> Result<()> where                
+            F: FnMut(&Context<'_>) -> Result<T> + Send + 'static,
+            T: SqlFnOutput,
+            {
+                unsafe extern "C" fn call_boxed_closure<F, T>(
+                    ctx: *mut sqlite3_context,
+                    argc: c_int,
+                    argv: *mut *mut sqlite3_value,
+                ) where
+                    F: FnMut(&Context<'_>) -> Result<T>,
+                    T: SqlFnOutput,
+                {
+                    let args = slice::from_raw_parts(argv, argc as usize);
+                    let r = catch_unwind(|| {
+                        let boxed_f: *mut F = ffi::sqlite3_user_data(ctx).cast::<F>();
+                        assert!(!boxed_f.is_null(), "Internal error - null function pointer");
+                        let ctx = Context { ctx, args };
+                        (*boxed_f)(&ctx)
+                    });
+                    let t = match r {
+                        Err(_) =>
+        {                           report_error(ctx, &Error::UnwindingPanic);
+                            return;
+                        }
+                        Ok(r) => r,
+                    };
+                    sql_result(ctx, args, t);
+                }
+
+                let boxed_f: *mut F = Box::into_raw(Box::new(x_func));
+                let c_name = str_to_cstring(fn_name)?;
+                let r = unsafe {
+                    ffi::sqlite3_create_function_v2(
+                        self.db(),
+                        c_name.as_ptr(),
+                        n_arg,
+                        flags.bits(),
+                        boxed_f.cast::<c_void>(),
+                        Some(call_boxed_closure::<F, T>),
+                        None,
+                        None,
+                        Some(free_boxed_value::<F>),
+                    )
+                };
+                self.decode_result(r)
+            }
+
+            fn create_aggregate_function<A, D, T>
+            (
+                &mut self,
+                fn_name: &str,
+                n_arg: c_int,
+                flags: FunctionFlags,
+                aggr: D,
+            ) -> Result<()> where                
+            A: RefUnwindSafe + UnwindSafe,
+            D: Aggregate<A, T> + 'static,
+            T: SqlFnOutput,
+            {
+                let boxed_aggr: *mut D = Box::into_raw(Box::new(aggr));
+                let c_name = str_to_cstring(fn_name)?;
+                let r = unsafe {
+                    ffi::sqlite3_create_function_v2(
+                        self.db(),
+                        c_name.as_ptr(),
+                        n_arg,
+                        flags.bits(),
+                        boxed_aggr.cast::<c_void>(),
+                        None,
+                        Some(call_boxed_step::<A, D, T>),
+                        Some(call_boxed_final::<A, D, T>),
+                        Some(free_boxed_value::<D>),
+                    )
+                };
+                self.decode_result(r)
+            }
+            
+            fn create_window_function<A, W, T>
+            (
+                &mut self,
+                fn_name: &str,
+                n_arg: c_int,
+                flags: FunctionFlags,
+                aggr: W,
+            ) -> Result<()> where                
+            A: RefUnwindSafe + UnwindSafe,
+            W: WindowAggregate<A, T> + 'static,
+            T: SqlFnOutput,
+            {
+                let boxed_aggr: *mut W = Box::into_raw(Box::new(aggr));
+                let c_name = str_to_cstring(fn_name)?;
+                let r = unsafe {
+                    ffi::sqlite3_create_window_function(
+                        self.db(),
+                        c_name.as_ptr(),
+                        n_arg,
+                        flags.bits(),
+                        boxed_aggr.cast::<c_void>(),
+                        Some(call_boxed_step::<A, W, T>),
+                        Some(call_boxed_final::<A, W, T>),
+                        Some(call_boxed_value::<A, W, T>),
+                        Some(call_boxed_inverse::<A, W, T>),
+                        Some(free_boxed_value::<W>),
+                    )
+                };
+                self.decode_result(r)
+            }
+
+            fn remove_function(&mut self, fn_name: &str, n_arg: c_int) -> Result<()>
+            {
+                let c_name = str_to_cstring(fn_name)?;
+                let r = unsafe {
+                    ffi::sqlite3_create_function_v2(
+                        self.db(),
+                        c_name.as_ptr(),
+                        n_arg,
+                        ffi::SQLITE_UTF8,
+                        ptr::null_mut(),
+                        None,
+                        None,
+                        None,
+                        None,
+                    )
+                };
+                self.decode_result(r)
+            }
+        }
+
+        unsafe fn aggregate_context<A>(ctx: *mut sqlite3_context, bytes: usize) -> Option<*mut *mut A>
+        {
+            let pac = ffi::sqlite3_aggregate_context(ctx, bytes as c_int) as *mut *mut A;
+            if pac.is_null() {
+                return None;
+            }
+            Some(pac)
+        }
+
+        unsafe extern "C" fn call_boxed_step<A, D, T>
+        (
+            ctx: *mut sqlite3_context,
+            argc: c_int,
+            argv: *mut *mut sqlite3_value,
+        ) where
+        A: RefUnwindSafe + UnwindSafe,
+        D: Aggregate<A, T>,
+        T: SqlFnOutput,
+        {
+            let pac = if let Some(pac) = aggregate_context(ctx, std::mem::size_of::<*mut A>()) {
+                pac
+            } else {
+                ffi::sqlite3_result_error_nomem(ctx);
+                return;
+            };
+
+            let r = catch_unwind(|| {
+                let boxed_aggr: *mut D = ffi::sqlite3_user_data(ctx).cast::<D>();
+                assert!(
+                    !boxed_aggr.is_null(),
+                    "Internal error - null aggregate pointer"
+                );
+                let mut ctx = Context {
+                    ctx,
+                    args: slice::from_raw_parts(argv, argc as usize),
+                };
+
+                #[allow(clippy::unnecessary_cast)]
+                if (*pac as *mut A).is_null() {
+                    *pac = Box::into_raw(Box::new((*boxed_aggr).init(&mut ctx)?));
+                }
+
+                (*boxed_aggr).step(&mut ctx, &mut **pac)
+            });
+            let r = match r {
+                Err(_) =>
+        {                   report_error(ctx, &Error::UnwindingPanic);
+                    return;
+                }
+                Ok(r) => r,
+            };
+            match r {
+                Ok(_) => {}
+                Err(err) => report_error(ctx, &err),
+            };
+        }
+        
+        unsafe extern "C" fn call_boxed_inverse<A, W, T>
+        (
+            ctx: *mut sqlite3_context,
+            argc: c_int,
+            argv: *mut *mut sqlite3_value,
+        ) where
+        A: RefUnwindSafe + UnwindSafe,
+        W: WindowAggregate<A, T>,
+        T: SqlFnOutput,
+        {
+            let pac = if let Some(pac) = aggregate_context(ctx, std::mem::size_of::<*mut A>()) {
+                pac
+            } else {
+                ffi::sqlite3_result_error_nomem(ctx);
+                return;
+            };
+
+            let r = catch_unwind(|| {
+                let boxed_aggr: *mut W = ffi::sqlite3_user_data(ctx).cast::<W>();
+                assert!(
+                    !boxed_aggr.is_null(),
+                    "Internal error - null aggregate pointer"
+                );
+                let mut ctx = Context {
+                    ctx,
+                    args: slice::from_raw_parts(argv, argc as usize),
+                };
+                (*boxed_aggr).inverse(&mut ctx, &mut **pac)
+            });
+            let r = match r {
+                Err(_) =>
+        {                   report_error(ctx, &Error::UnwindingPanic);
+                    return;
+                }
+                Ok(r) => r,
+            };
+            match r {
+                Ok(_) => {}
+                Err(err) => report_error(ctx, &err),
+            };
+        }
+
+        unsafe extern "C" fn call_boxed_final<A, D, T>(ctx: *mut sqlite3_context) where
+        A: RefUnwindSafe + UnwindSafe,
+        D: Aggregate<A, T>,
+        T: SqlFnOutput,
+        {
+            // Within the xFinal callback, it is customary to set N=0 in calls to
+            // sqlite3_aggregate_context(C,N) so that no pointless memory allocations occur.
+            let a: Option<A> = match aggregate_context(ctx, 0) {
+                Some(pac) =>
+                {
+                    #[allow(clippy::unnecessary_cast)]
+                    if (*pac as *mut A).is_null() {
+                        None
+                    } else {
+                        let a = Box::from_raw(*pac);
+                        Some(*a)
+                    }
+                }
+                None => None,
+            };
+
+            let r = catch_unwind(|| {
+                let boxed_aggr: *mut D = ffi::sqlite3_user_data(ctx).cast::<D>();
+                assert!(
+                    !boxed_aggr.is_null(),
+                    "Internal error - null aggregate pointer"
+                );
+                let mut ctx = Context { ctx, args: &mut [] };
+                (*boxed_aggr).finalize(&mut ctx, a)
+            });
+            let t = match r {
+                Err(_) =>
+        {                   report_error(ctx, &Error::UnwindingPanic);
+                    return;
+                }
+                Ok(r) => r,
+            };
+            sql_result(ctx, &[], t);
+        }
+        
+        unsafe extern "C" fn call_boxed_value<A, W, T>(ctx: *mut sqlite3_context) where
+        A: RefUnwindSafe + UnwindSafe,
+        W: WindowAggregate<A, T>,
+        T: SqlFnOutput,
+        {
+            let pac = aggregate_context(ctx, 0).filter(|&pac| {
+                #[allow(clippy::unnecessary_cast)]
+                !(*pac as *mut A).is_null()
+            });
+
+            let r = catch_unwind(|| {
+                let boxed_aggr: *mut W = ffi::sqlite3_user_data(ctx).cast::<W>();
+                assert!(
+                    !boxed_aggr.is_null(),
+                    "Internal error - null aggregate pointer"
+                );
+                (*boxed_aggr).value(pac.map(|pac| &mut **pac))
+            });
+            let t = match r {
+                Err(_) =>
+        {                   report_error(ctx, &Error::UnwindingPanic);
+                    return;
+                }
+                Ok(r) => r,
+            };
+            sql_result(ctx, &[], t);
+        }
     }
 
     pub mod guard
     {
+        use ::
+        {
+            connect::{ Connection, Result },
+            *,
+        };
+        /// RAII guard temporarily enabling SQLite extensions to be loaded.
+        pub struct LoadExtensionGuard<'conn>
+        {
+            conn: &'conn Connection,
+        }
+
+        impl LoadExtensionGuard<'_>
+        {
+            /// Attempt to enable loading extensions.
+            #[inline] pub unsafe fn new(conn: &Connection) -> Result<LoadExtensionGuard<'_>>
+            {
+                conn.load_extension_enable().map(|_| LoadExtensionGuard { conn })
+            }
+        }
         
+        impl Drop for LoadExtensionGuard<'_>
+        {
+            #[inline] fn drop(&mut self) { self.conn.load_extension_disable(); }
+        }
     }
 
     pub mod hooks
     {
+        //! Commit, Data Change and Rollback Notification Callbacks
+        use ::
+        {
+            connect::{ ffi, Connection, InnerConnection },
+            os::raw::{c_char, c_int, c_void},
+            panic::{ catch_unwind },
+            *,
+        };
         
+        mod preupdate_hook
+        {
+            use ::
+            {
+                connect::
+                {
+                    error::check,
+                    hooks::{ expect_utf8, free_boxed_hook, Action },                    
+                    inner_connection::InnerConnection,
+                    types::ValueRef,
+                    ffi, Connection, Result,
+                },
+                fmt::{ Debug },
+                os::raw::{c_char, c_int, c_void},
+                panic::{ catch_unwind },
+                *,
+            };
+            /// The possible cases for when a PreUpdateHook gets triggered.
+            #[derive(Debug)]
+            pub enum PreUpdateCase
+            {
+                /// Pre-update hook was triggered by an insert.
+                Insert(PreUpdateNewValueAccessor),
+                /// Pre-update hook was triggered by a delete.
+                Delete(PreUpdateOldValueAccessor),
+                /// Pre-update hook was triggered by an update.
+                Update 
+                {
+                    #[allow(missing_docs)]
+                    old_value_accessor: PreUpdateOldValueAccessor,
+                    #[allow(missing_docs)]
+                    new_value_accessor: PreUpdateNewValueAccessor,
+                },
+                Unknown,
+            }
+
+            impl From<PreUpdateCase> for Action 
+            {
+                fn from(puc: PreUpdateCase) -> Action 
+                {
+                    match puc 
+                    {
+                        PreUpdateCase::Insert(_) => Action::SQLITE_INSERT,
+                        PreUpdateCase::Delete(_) => Action::SQLITE_DELETE,
+                        PreUpdateCase::Update { .. } => Action::SQLITE_UPDATE,
+                        PreUpdateCase::Unknown => Action::UNKNOWN,
+                    }
+                }
+            }
+            /// An accessor to access the old values of the row being deleted/updated during the preupdate callback.
+            #[derive(Debug)]
+            pub struct PreUpdateOldValueAccessor 
+            {
+                db: *mut ffi::sqlite3,
+                old_row_id: i64,
+            }
+
+            impl PreUpdateOldValueAccessor 
+            {
+                /// Get the amount of columns in the row being deleted/updated.
+                pub fn get_column_count(&self) -> i32 {
+                    unsafe { ffi::sqlite3_preupdate_count(self.db) }
+                }
+                /// Get the depth of the query that triggered the preupdate hook.
+                pub fn get_query_depth(&self) -> i32 
+                {
+                    unsafe { ffi::sqlite3_preupdate_depth(self.db) }
+                }
+                /// Get the row id of the row being updated/deleted.
+                pub fn get_old_row_id(&self) -> i64 {
+                    self.old_row_id
+                }
+                /// Get the value of the row being updated/deleted at the specified index.
+                pub fn get_old_column_value(&self, i: i32) -> Result<ValueRef>
+        {                   let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
+                    unsafe {
+                        check(ffi::sqlite3_preupdate_old(self.db, i, &mut p_value))?;
+                        Ok(ValueRef::from_value(p_value))
+                    }
+                }
+            }
+            /// An accessor to access the new values of the row being inserted/updated during the preupdate callback.
+            #[derive(Debug)]
+            pub struct PreUpdateNewValueAccessor 
+            {
+                db: *mut ffi::sqlite3,
+                new_row_id: i64,
+            }
+
+            impl PreUpdateNewValueAccessor 
+            {
+                /// Get the amount of columns in the row being inserted/updated.
+                pub fn get_column_count(&self) -> i32 {
+                    unsafe { ffi::sqlite3_preupdate_count(self.db) }
+                }
+                /// Get the depth of the query that triggered the preupdate hook.
+                pub fn get_query_depth(&self) -> i32 {
+                    unsafe { ffi::sqlite3_preupdate_depth(self.db) }
+                }
+                /// Get the row id of the row being inserted/updated.
+                pub fn get_new_row_id(&self) -> i64 {
+                    self.new_row_id
+                }
+                /// Get the value of the row being updated/deleted at the specified index.
+                pub fn get_new_column_value(&self, i: i32) -> Result<ValueRef>
+        {                   let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
+                    unsafe {
+                        check(ffi::sqlite3_preupdate_new(self.db, i, &mut p_value))?;
+                        Ok(ValueRef::from_value(p_value))
+                    }
+                }
+            }
+
+            impl Connection 
+            {
+                /// Register a callback function to be invoked before a row is updated, inserted or deleted.
+                #[inline] pub fn preupdate_hook<F>(&self, hook: Option<F>) where
+                F: FnMut(Action, &str, &str, &PreUpdateCase) + Send + 'static,
+                {
+                    self.db.borrow_mut().preupdate_hook(hook);
+                }
+            }
+
+            impl InnerConnection 
+            {
+                #[inline] pub fn remove_preupdate_hook(&mut self) {
+                    self.preupdate_hook(None::<fn(Action, &str, &str, &PreUpdateCase)>);
+                }
+                
+                fn preupdate_hook<F>(&mut self, hook: Option<F>) where
+                    F: FnMut(Action, &str, &str, &PreUpdateCase) + Send + 'static,
+                {
+                    unsafe extern "C" fn call_boxed_closure<F>(
+                        p_arg: *mut c_void,
+                        sqlite: *mut ffi::sqlite3,
+                        action_code: c_int,
+                        db_name: *const c_char,
+                        tbl_name: *const c_char,
+                        old_row_id: i64,
+                        new_row_id: i64,
+                    ) where
+                        F: FnMut(Action, &str, &str, &PreUpdateCase),
+                    {
+                        let action = Action::from(action_code);
+
+                        let preupdate_case = match action {
+                            Action::SQLITE_INSERT => PreUpdateCase::Insert(PreUpdateNewValueAccessor {
+                                db: sqlite,
+                                new_row_id,
+                            }),
+                            Action::SQLITE_DELETE => PreUpdateCase::Delete(PreUpdateOldValueAccessor {
+                                db: sqlite,
+                                old_row_id,
+                            }),
+                            Action::SQLITE_UPDATE => PreUpdateCase::Update {
+                                old_value_accessor: PreUpdateOldValueAccessor {
+                                    db: sqlite,
+                                    old_row_id,
+                                },
+                                new_value_accessor: PreUpdateNewValueAccessor {
+                                    db: sqlite,
+                                    new_row_id,
+                                },
+                            },
+                            Action::UNKNOWN => PreUpdateCase::Unknown,
+                        };
+
+                        drop(catch_unwind(|| {
+                            let boxed_hook: *mut F = p_arg.cast::<F>();
+                            (*boxed_hook)(
+                                action,
+                                expect_utf8(db_name, "database name"),
+                                expect_utf8(tbl_name, "table name"),
+                                &preupdate_case,
+                            );
+                        }));
+                    }
+
+                    let free_preupdate_hook = if hook.is_some() {
+                        Some(free_boxed_hook::<F> as unsafe fn(*mut c_void))
+                    } else {
+                        None
+                    };
+
+                    let previous_hook = match hook {
+                        Some(hook) =>
+        {                           let boxed_hook: *mut F = Box::into_raw(Box::new(hook));
+                            unsafe {
+                                ffi::sqlite3_preupdate_hook(
+                                    self.db(),
+                                    Some(call_boxed_closure::<F>),
+                                    boxed_hook.cast(),
+                                )
+                            }
+                        }
+                        _ => unsafe { ffi::sqlite3_preupdate_hook(self.db(), None, ptr::null_mut()) },
+                    };
+                    if !previous_hook.is_null() {
+                        if let Some(free_boxed_hook) = self.free_preupdate_hook {
+                            unsafe { free_boxed_hook(previous_hook) };
+                        }
+                    }
+                    self.free_preupdate_hook = free_preupdate_hook;
+                }
+            }
+        }
+        pub use preupdate_hook::*;
+        /// Action Codes
+        #[repr(i32)] #[non_exhaustive] #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+        pub enum Action
+        {
+            /// Unsupported / unexpected action
+            UNKNOWN = -1,
+            /// DELETE command
+            SQLITE_DELETE = ffi::SQLITE_DELETE,
+            /// INSERT command
+            SQLITE_INSERT = ffi::SQLITE_INSERT,
+            /// UPDATE command
+            SQLITE_UPDATE = ffi::SQLITE_UPDATE,
+        }
+
+        impl From<i32> for Action 
+        {
+            #[inline] fn from(code: i32) -> Action
+            {
+                match code
+                {
+                    ffi::SQLITE_DELETE => Action::SQLITE_DELETE,
+                    ffi::SQLITE_INSERT => Action::SQLITE_INSERT,
+                    ffi::SQLITE_UPDATE => Action::SQLITE_UPDATE,
+                    _ => Action::UNKNOWN,
+                }
+            }
+        }
+        /// The context received by an authorizer hook.
+        #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+        pub struct AuthContext<'c>
+        {
+            /// The action to be authorized.
+            pub action: AuthAction<'c>,
+            /// The database name, if applicable.
+            pub database_name: Option<&'c str>,
+            /// The inner-most trigger or view responsible for the access attempt.
+            pub accessor: Option<&'c str>,
+        }
+
+        /// Actions and arguments found within a statement during preparation.
+        #[non_exhaustive] #[derive(Clone, Copy, Debug, Eq, PartialEq)]        
+        pub enum AuthAction<'c>
+        {
+            /// This variant is not normally produced by SQLite.
+            Unknown 
+            {
+                /// The unknown authorization action code.
+                code: i32,
+                /// The third arg to the authorizer callback.
+                arg1: Option<&'c str>,
+                /// The fourth arg to the authorizer callback.
+                arg2: Option<&'c str>,
+            },
+            CreateIndex {
+                index_name: &'c str,
+                table_name: &'c str,
+            },
+            CreateTable {
+                table_name: &'c str,
+            },
+            CreateTempIndex {
+                index_name: &'c str,
+                table_name: &'c str,
+            },
+            CreateTempTable {
+                table_name: &'c str,
+            },
+            CreateTempTrigger {
+                trigger_name: &'c str,
+                table_name: &'c str,
+            },
+            CreateTempView {
+                view_name: &'c str,
+            },
+            CreateTrigger {
+                trigger_name: &'c str,
+                table_name: &'c str,
+            },
+            CreateView {
+                view_name: &'c str,
+            },
+            Delete {
+                table_name: &'c str,
+            },
+            DropIndex {
+                index_name: &'c str,
+                table_name: &'c str,
+            },
+            DropTable {
+                table_name: &'c str,
+            },
+            DropTempIndex {
+                index_name: &'c str,
+                table_name: &'c str,
+            },
+            DropTempTable {
+                table_name: &'c str,
+            },
+            DropTempTrigger {
+                trigger_name: &'c str,
+                table_name: &'c str,
+            },
+            DropTempView {
+                view_name: &'c str,
+            },
+            DropTrigger {
+                trigger_name: &'c str,
+                table_name: &'c str,
+            },
+            DropView {
+                view_name: &'c str,
+            },
+            Insert {
+                table_name: &'c str,
+            },
+            Pragma {
+                pragma_name: &'c str,
+                /// The pragma value, if present (e.g., `PRAGMA name = value;`).
+                pragma_value: Option<&'c str>,
+            },
+            Read {
+                table_name: &'c str,
+                column_name: &'c str,
+            },
+            Select,
+            Transaction {
+                operation: TransactionOperation,
+            },
+            Update {
+                table_name: &'c str,
+                column_name: &'c str,
+            },
+            Attach {
+                filename: &'c str,
+            },
+            Detach {
+                database_name: &'c str,
+            },
+            AlterTable {
+                database_name: &'c str,
+                table_name: &'c str,
+            },
+            Reindex {
+                index_name: &'c str,
+            },
+            Analyze {
+                table_name: &'c str,
+            },
+            CreateVtable {
+                table_name: &'c str,
+                module_name: &'c str,
+            },
+            DropVtable {
+                table_name: &'c str,
+                module_name: &'c str,
+            },
+            Function {
+                function_name: &'c str,
+            },
+            Savepoint {
+                operation: TransactionOperation,
+                savepoint_name: &'c str,
+            },
+            Recursive,
+        }
+
+        impl<'c> AuthAction<'c> 
+        {
+            fn from_raw(code: i32, arg1: Option<&'c str>, arg2: Option<&'c str>) -> Self {
+                match (code, arg1, arg2) {
+                    (ffi::SQLITE_CREATE_INDEX, Some(index_name), Some(table_name)) => Self::CreateIndex {
+                        index_name,
+                        table_name,
+                    },
+                    (ffi::SQLITE_CREATE_TABLE, Some(table_name), _) => Self::CreateTable { table_name },
+                    (ffi::SQLITE_CREATE_TEMP_INDEX, Some(index_name), Some(table_name)) =>
+        {                       Self::CreateTempIndex {
+                            index_name,
+                            table_name,
+                        }
+                    }
+                    (ffi::SQLITE_CREATE_TEMP_TABLE, Some(table_name), _) =>
+        {                       Self::CreateTempTable { table_name }
+                    }
+                    (ffi::SQLITE_CREATE_TEMP_TRIGGER, Some(trigger_name), Some(table_name)) =>
+        {                       Self::CreateTempTrigger {
+                            trigger_name,
+                            table_name,
+                        }
+                    }
+                    (ffi::SQLITE_CREATE_TEMP_VIEW, Some(view_name), _) =>
+        {                       Self::CreateTempView { view_name }
+                    }
+                    (ffi::SQLITE_CREATE_TRIGGER, Some(trigger_name), Some(table_name)) =>
+        {                       Self::CreateTrigger {
+                            trigger_name,
+                            table_name,
+                        }
+                    }
+                    (ffi::SQLITE_CREATE_VIEW, Some(view_name), _) => Self::CreateView { view_name },
+                    (ffi::SQLITE_DELETE, Some(table_name), None) => Self::Delete { table_name },
+                    (ffi::SQLITE_DROP_INDEX, Some(index_name), Some(table_name)) => Self::DropIndex {
+                        index_name,
+                        table_name,
+                    },
+                    (ffi::SQLITE_DROP_TABLE, Some(table_name), _) => Self::DropTable { table_name },
+                    (ffi::SQLITE_DROP_TEMP_INDEX, Some(index_name), Some(table_name)) =>
+        {                       Self::DropTempIndex {
+                            index_name,
+                            table_name,
+                        }
+                    }
+                    (ffi::SQLITE_DROP_TEMP_TABLE, Some(table_name), _) =>
+        {                       Self::DropTempTable { table_name }
+                    }
+                    (ffi::SQLITE_DROP_TEMP_TRIGGER, Some(trigger_name), Some(table_name)) =>
+        {                       Self::DropTempTrigger {
+                            trigger_name,
+                            table_name,
+                        }
+                    }
+                    (ffi::SQLITE_DROP_TEMP_VIEW, Some(view_name), _) => Self::DropTempView { view_name },
+                    (ffi::SQLITE_DROP_TRIGGER, Some(trigger_name), Some(table_name)) => Self::DropTrigger {
+                        trigger_name,
+                        table_name,
+                    },
+                    (ffi::SQLITE_DROP_VIEW, Some(view_name), _) => Self::DropView { view_name },
+                    (ffi::SQLITE_INSERT, Some(table_name), _) => Self::Insert { table_name },
+                    (ffi::SQLITE_PRAGMA, Some(pragma_name), pragma_value) => Self::Pragma {
+                        pragma_name,
+                        pragma_value,
+                    },
+                    (ffi::SQLITE_READ, Some(table_name), Some(column_name)) => Self::Read {
+                        table_name,
+                        column_name,
+                    },
+                    (ffi::SQLITE_SELECT, ..) => Self::Select,
+                    (ffi::SQLITE_TRANSACTION, Some(operation_str), _) => Self::Transaction {
+                        operation: TransactionOperation::from_str(operation_str),
+                    },
+                    (ffi::SQLITE_UPDATE, Some(table_name), Some(column_name)) => Self::Update {
+                        table_name,
+                        column_name,
+                    },
+                    (ffi::SQLITE_ATTACH, Some(filename), _) => Self::Attach { filename },
+                    (ffi::SQLITE_DETACH, Some(database_name), _) => Self::Detach { database_name },
+                    (ffi::SQLITE_ALTER_TABLE, Some(database_name), Some(table_name)) => Self::AlterTable {
+                        database_name,
+                        table_name,
+                    },
+                    (ffi::SQLITE_REINDEX, Some(index_name), _) => Self::Reindex { index_name },
+                    (ffi::SQLITE_ANALYZE, Some(table_name), _) => Self::Analyze { table_name },
+                    (ffi::SQLITE_CREATE_VTABLE, Some(table_name), Some(module_name)) =>
+        {                       Self::CreateVtable {
+                            table_name,
+                            module_name,
+                        }
+                    }
+                    (ffi::SQLITE_DROP_VTABLE, Some(table_name), Some(module_name)) => Self::DropVtable {
+                        table_name,
+                        module_name,
+                    },
+                    (ffi::SQLITE_FUNCTION, _, Some(function_name)) => Self::Function { function_name },
+                    (ffi::SQLITE_SAVEPOINT, Some(operation_str), Some(savepoint_name)) => Self::Savepoint {
+                        operation: TransactionOperation::from_str(operation_str),
+                        savepoint_name,
+                    },
+                    (ffi::SQLITE_RECURSIVE, ..) => Self::Recursive,
+                    (code, arg1, arg2) => Self::Unknown { code, arg1, arg2 },
+                }
+            }
+        }
+
+        pub(crate) type BoxedAuthorizer = Box<dyn for<'c> FnMut(AuthContext<'c>) -> Authorization + Send + 'static>;
+        /// A transaction operation.
+        #[non_exhaustive] #[derive(Clone, Copy, Debug, Eq, PartialEq)]        
+        pub enum TransactionOperation
+        {
+            Unknown,
+            Begin,
+            Release,
+            Rollback,
+        }
+
+        impl TransactionOperation
+        {
+            fn from_str(op_str: &str) -> Self
+            {
+                match op_str {
+                    "BEGIN" => Self::Begin,
+                    "RELEASE" => Self::Release,
+                    "ROLLBACK" => Self::Rollback,
+                    _ => Self::Unknown,
+                }
+            }
+        }
+        /// [`authorizer`](Connection::authorizer) return code
+        #[non_exhaustive] #[derive(Clone, Copy, Debug, Eq, PartialEq)]        
+        pub enum Authorization
+        {
+            /// Authorize the action.
+            Allow,
+            /// Don't allow access, but don't trigger an error either.
+            Ignore,
+            /// Trigger an error.
+            Deny,
+        }
+
+        impl Authorization
+        {
+            fn into_raw(self) -> c_int
+            {
+                match self
+                {
+                    Self::Allow => ffi::SQLITE_OK,
+                    Self::Ignore => ffi::SQLITE_IGNORE,
+                    Self::Deny => ffi::SQLITE_DENY,
+                }
+            }
+        }
+
+        impl Connection
+        {
+            /// Register a callback function to be invoked whenever a transaction is committed.
+            #[inline] pub fn commit_hook<F>(&self, hook: Option<F>) where
+            F: FnMut() -> bool + Send + 'static
+            { self.db.borrow_mut().commit_hook(hook);
+            }
+            /// Register a callback function to be invoked whenever a transaction is committed.
+            #[inline] pub fn rollback_hook<F>(&self, hook: Option<F>) where
+            F: FnMut() + Send + 'static
+            { self.db.borrow_mut().rollback_hook(hook);
+            }
+            /// Register a callback function to be invoked whenever
+            /// a row is updated, inserted or deleted in a rowid table.
+            #[inline] pub fn update_hook<F>(&self, hook: Option<F>) where
+            F: FnMut(Action, &str, &str, i64) + Send + 'static,
+            { self.db.borrow_mut().update_hook(hook);
+            }
+            /// Register a query progress callback.
+            pub fn progress_handler<F>(&self, num_ops: c_int, handler: Option<F>) where
+            F: FnMut() -> bool + Send + 'static,
+            { self.db.borrow_mut().progress_handler(num_ops, handler);
+            }
+            /// Register an authorizer callback that's invoked as a statement is being prepared.
+            #[inline] pub fn authorizer<'c, F>(&self, hook: Option<F>) where
+            F: for<'r> FnMut(AuthContext<'r>) -> Authorization + Send + 'static,
+            { self.db.borrow_mut().authorizer(hook);
+            }
+        }
+
+        impl InnerConnection 
+        {
+            #[inline] pub fn remove_hooks(&mut self)
+            { self.update_hook(None::<fn(Action, &str, &str, i64)>);
+                self.commit_hook(None::<fn() -> bool>);
+                self.rollback_hook(None::<fn()>);
+                self.progress_handler(0, None::<fn() -> bool>);
+                self.authorizer(None::<fn(AuthContext<'_>) -> Authorization>);
+            }
+            
+            fn commit_hook<F>(&mut self, hook: Option<F>)  where
+                F: FnMut() -> bool + Send + 'static,
+            {
+                unsafe extern "C" fn call_boxed_closure<F>(p_arg: *mut c_void) -> c_int where
+                    F: FnMut() -> bool,
+                {
+                    let r = catch_unwind(|| {
+                        let boxed_hook: *mut F = p_arg.cast::<F>();
+                        (*boxed_hook)()
+                    });
+                    c_int::from(r.unwrap_or_default())
+                }
+                
+                let free_commit_hook = if hook.is_some() {
+                    Some(free_boxed_hook::<F> as unsafe fn(*mut c_void))
+                } else {
+                    None
+                };
+
+                let previous_hook = match hook {
+                    Some(hook) =>
+        {                       let boxed_hook: *mut F = Box::into_raw(Box::new(hook));
+                        unsafe {
+                            ffi::sqlite3_commit_hook(
+                                self.db(),
+                                Some(call_boxed_closure::<F>),
+                                boxed_hook.cast(),
+                            )
+                        }
+                    }
+                    _ => unsafe { ffi::sqlite3_commit_hook(self.db(), None, ptr::null_mut()) },
+                };
+                if !previous_hook.is_null() {
+                    if let Some(free_boxed_hook) = self.free_commit_hook {
+                        unsafe { free_boxed_hook(previous_hook) };
+                    }
+                }
+                self.free_commit_hook = free_commit_hook;
+            }
+            
+            fn rollback_hook<F>(&mut self, hook: Option<F>)  where
+                F: FnMut() + Send + 'static,
+            {
+                unsafe extern "C" fn call_boxed_closure<F>(p_arg: *mut c_void) where
+                    F: FnMut(),
+                {
+                    drop(catch_unwind(|| {
+                        let boxed_hook: *mut F = p_arg.cast::<F>();
+                        (*boxed_hook)();
+                    }));
+                }
+
+                let free_rollback_hook = if hook.is_some() {
+                    Some(free_boxed_hook::<F> as unsafe fn(*mut c_void))
+                } else {
+                    None
+                };
+
+                let previous_hook = match hook {
+                    Some(hook) =>
+        {                       let boxed_hook: *mut F = Box::into_raw(Box::new(hook));
+                        unsafe {
+                            ffi::sqlite3_rollback_hook(
+                                self.db(),
+                                Some(call_boxed_closure::<F>),
+                                boxed_hook.cast(),
+                            )
+                        }
+                    }
+                    _ => unsafe { ffi::sqlite3_rollback_hook(self.db(), None, ptr::null_mut()) },
+                };
+                if !previous_hook.is_null() {
+                    if let Some(free_boxed_hook) = self.free_rollback_hook {
+                        unsafe { free_boxed_hook(previous_hook) };
+                    }
+                }
+                self.free_rollback_hook = free_rollback_hook;
+            }
+            
+            fn update_hook<F>(&mut self, hook: Option<F>)  where
+                F: FnMut(Action, &str, &str, i64) + Send + 'static,
+            {
+                unsafe extern "C" fn call_boxed_closure<F>(
+                    p_arg: *mut c_void,
+                    action_code: c_int,
+                    p_db_name: *const c_char,
+                    p_table_name: *const c_char,
+                    row_id: i64,
+                ) where
+                    F: FnMut(Action, &str, &str, i64),
+                {
+                    let action = Action::from(action_code);
+                    drop(catch_unwind(|| {
+                        let boxed_hook: *mut F = p_arg.cast::<F>();
+                        (*boxed_hook)(
+                            action,
+                            expect_utf8(p_db_name, "database name"),
+                            expect_utf8(p_table_name, "table name"),
+                            row_id,
+                        );
+                    }));
+                }
+
+                let free_update_hook = if hook.is_some() {
+                    Some(free_boxed_hook::<F> as unsafe fn(*mut c_void))
+                } else {
+                    None
+                };
+
+                let previous_hook = match hook {
+                    Some(hook) =>
+        {                       let boxed_hook: *mut F = Box::into_raw(Box::new(hook));
+                        unsafe {
+                            ffi::sqlite3_update_hook(
+                                self.db(),
+                                Some(call_boxed_closure::<F>),
+                                boxed_hook.cast(),
+                            )
+                        }
+                    }
+                    _ => unsafe { ffi::sqlite3_update_hook(self.db(), None, ptr::null_mut()) },
+                };
+                if !previous_hook.is_null() {
+                    if let Some(free_boxed_hook) = self.free_update_hook {
+                        unsafe { free_boxed_hook(previous_hook) };
+                    }
+                }
+                self.free_update_hook = free_update_hook;
+            }
+            
+            fn progress_handler<F>(&mut self, num_ops: c_int, handler: Option<F>)  where
+                F: FnMut() -> bool + Send + 'static,
+            {
+                unsafe extern "C" fn call_boxed_closure<F>(p_arg: *mut c_void) -> c_int where
+                    F: FnMut() -> bool,
+                {
+                    let r = catch_unwind(|| {
+                        let boxed_handler: *mut F = p_arg.cast::<F>();
+                        (*boxed_handler)()
+                    });
+                    c_int::from(r.unwrap_or_default())
+                }
+
+                if let Some(handler) = handler {
+                    let boxed_handler = Box::new(handler);
+                    unsafe {
+                        ffi::sqlite3_progress_handler(
+                            self.db(),
+                            num_ops,
+                            Some(call_boxed_closure::<F>),
+                            &*boxed_handler as *const F as *mut _,
+                        );
+                    }
+                    self.progress_handler = Some(boxed_handler);
+                } else {
+                    unsafe { ffi::sqlite3_progress_handler(self.db(), num_ops, None, ptr::null_mut()) }
+                    self.progress_handler = None;
+                };
+            }
+            
+            fn authorizer<'c, F>(&'c mut self, authorizer: Option<F>)  where
+                F: for<'r> FnMut(AuthContext<'r>) -> Authorization + Send + 'static,
+            {
+                unsafe extern "C" fn call_boxed_closure<'c, F>(
+                    p_arg: *mut c_void,
+                    action_code: c_int,
+                    param1: *const c_char,
+                    param2: *const c_char,
+                    db_name: *const c_char,
+                    trigger_or_view_name: *const c_char,
+                ) -> c_int where
+                    F: FnMut(AuthContext<'c>) -> Authorization + Send + 'static,
+                {
+                    catch_unwind(|| {
+                        let action = AuthAction::from_raw(
+                            action_code,
+                            expect_optional_utf8(param1, "authorizer param 1"),
+                            expect_optional_utf8(param2, "authorizer param 2"),
+                        );
+                        let auth_ctx = AuthContext {
+                            action,
+                            database_name: expect_optional_utf8(db_name, "database name"),
+                            accessor: expect_optional_utf8(
+                                trigger_or_view_name,
+                                "accessor (inner-most trigger or view)",
+                            ),
+                        };
+                        let boxed_hook: *mut F = p_arg.cast::<F>();
+                        (*boxed_hook)(auth_ctx)
+                    })
+                    .map_or_else(|_| ffi::SQLITE_ERROR, Authorization::into_raw)
+                }
+
+                let callback_fn = authorizer
+                    .as_ref()
+                    .map(|_| call_boxed_closure::<'c, F> as unsafe extern "C" fn(_, _, _, _, _, _) -> _);
+                let boxed_authorizer = authorizer.map(Box::new);
+
+                match unsafe {
+                    ffi::sqlite3_set_authorizer(
+                        self.db(),
+                        callback_fn,
+                        boxed_authorizer
+                            .as_ref()
+                            .map_or_else(ptr::null_mut, |f| &**f as *const F as *mut _),
+                    )
+                } {
+                    ffi::SQLITE_OK =>
+        {                       self.authorizer = boxed_authorizer.map(|ba| ba as _);
+                    }
+                    err_code =>
+        {                       panic!("unexpectedly failed to set_authorizer: {}", unsafe {
+                            crate::error::error_from_handle(self.db(), err_code)
+                        });
+                    }
+                }
+            }
+        }
+
+        unsafe fn free_boxed_hook<F>(p: *mut c_void)
+        {
+            drop(Box::from_raw(p.cast::<F>()));
+        }
+
+        unsafe fn expect_utf8<'a>(p_str: *const c_char, description: &'static str) -> &'a str
+        {
+            expect_optional_utf8(p_str, description)
+                .unwrap_or_else(|| panic!("received empty {description}"))
+        }
+
+        unsafe fn expect_optional_utf8<'a>
+        (
+            p_str: *const c_char,
+            description: &'static str,
+        ) -> Option<&'a str>
+        {
+            if p_str.is_null() {
+                return None;
+            }
+            std::ffi::CStr::from_ptr(p_str)
+                .to_str()
+                .unwrap_or_else(|_| panic!("received non-utf8 string as {description}"))
+                .into()
+        }
     }
 
     pub mod inner
     {
+        use ::
+        {
+            connect::
+            {
+                error::{error_from_handle, error_from_sqlite_code, error_with_offset, Error},
+                ffi::{ self, CStr },
+                hooks::{ BoxedAuthorizer },
+                raw::RawStatement,
+                statement::Statement,
+                str_for_sqlite, Connection, InterruptHandle, OpenFlags, PrepFlags, Result, version_number,
+            },
+            os::raw::{c_char, c_int, c_void},
+            path::Path,
+            sync::{Arc, Mutex},
+            *,
+        };
         
+        pub struct InnerConnection
+        {
+            pub db: *mut ffi::sqlite3,
+            interrupt_lock: Arc<Mutex<*mut ffi::sqlite3>>,
+            pub free_commit_hook: Option<unsafe fn(*mut c_void)>,
+            pub free_rollback_hook: Option<unsafe fn(*mut c_void)>,
+            pub free_update_hook: Option<unsafe fn(*mut c_void)>,
+            pub progress_handler: Option<Box<dyn FnMut() -> bool + Send>>,
+            pub authorizer: Option<BoxedAuthorizer>,
+            pub free_preupdate_hook: Option<unsafe fn(*mut c_void)>,
+            owned: bool,
+        }
+
+        unsafe impl Send for InnerConnection {}
+
+        impl InnerConnection 
+        {
+            #[inline] pub unsafe fn new(db: *mut ffi::sqlite3, owned: bool) -> InnerConnection
+            {
+                InnerConnection {
+                    db,
+                    interrupt_lock: Arc::new(Mutex::new(db)),
+                    free_commit_hook: None,
+                    free_rollback_hook: None,
+                    free_update_hook: None,
+                    progress_handler: None,
+                    authorizer: None,
+                    free_preupdate_hook: None,
+                    owned,
+                }
+            }
+
+            pub fn open_with_flags(
+                c_path: &CStr,
+                mut flags: OpenFlags,
+                vfs: Option<&CStr>,
+            ) -> Result<InnerConnection>
+        {               ensure_safe_sqlite_threading_mode()?;
+
+                let z_vfs = match vfs {
+                    Some(c_vfs) => c_vfs.as_ptr(),
+                    None => ptr::null(),
+                };
+                
+                let exrescode = if version_number() >= 3_037_000 {
+                    flags |= OpenFlags::SQLITE_OPEN_EXRESCODE;
+                    true
+                } else {
+                    false
+                };
+
+                unsafe {
+                    let mut db: *mut ffi::sqlite3 = ptr::null_mut();
+                    let r = ffi::sqlite3_open_v2(c_path.as_ptr(), &mut db, flags.bits(), z_vfs);
+                    if r != ffi::SQLITE_OK {
+                        let e = if db.is_null() {
+                            error_from_sqlite_code(r, Some(c_path.to_string_lossy().to_string()))
+                        } else {
+                            let mut e = error_from_handle(db, r);
+                            if let Error::SqliteFailure(
+                                ffi::Error {
+                                    code: ffi::ErrorCode::CannotOpen,
+                                    ..
+                                },
+                                Some(msg),
+                            ) = e
+                            {
+                                e = Error::SqliteFailure(
+                                    ffi::Error::new(r),
+                                    Some(format!("{msg}: {}", c_path.to_string_lossy())),
+                                );
+                            }
+                            ffi::sqlite3_close(db);
+                            e
+                        };
+
+                        return Err(e);
+                    }
+                    
+                    if !exrescode {
+                        ffi::sqlite3_extended_result_codes(db, 1);
+                    }
+
+                    let r = ffi::sqlite3_busy_timeout(db, 5000);
+                    if r != ffi::SQLITE_OK {
+                        let e = error_from_handle(db, r);
+                        ffi::sqlite3_close(db);
+                        return Err(e);
+                    }
+
+                    Ok(InnerConnection::new(db, true))
+                }
+            }
+
+            #[inline] pub fn db(&self) -> *mut ffi::sqlite3 { self.db
+            }
+
+            #[inline] pub fn decode_result(&self, code: c_int) -> Result<()>
+        {               unsafe { InnerConnection::decode_result_raw(self.db(), code) }
+            }
+
+            #[inline]
+            unsafe fn decode_result_raw(db: *mut ffi::sqlite3, code: c_int) -> Result<()>
+        {               if code == ffi::SQLITE_OK {
+                    Ok(())
+                } else {
+                    Err(error_from_handle(db, code))
+                }
+            }
+
+            #[allow(clippy::mutex_atomic)]
+            pub fn close(&mut self) -> Result<()>
+        {               if self.db.is_null() {
+                    return Ok(());
+                }
+                self.remove_hooks();
+                self.remove_preupdate_hook();
+                let mut shared_handle = self.interrupt_lock.lock().unwrap();
+                assert!(
+                    !shared_handle.is_null(),
+                    "Bug: Somehow interrupt_lock was cleared before the DB was closed"
+                );
+                if !self.owned {
+                    self.db = ptr::null_mut();
+                    return Ok(());
+                }
+                unsafe {
+                    let r = ffi::sqlite3_close(self.db);
+                    // Need to use _raw because _guard has a reference out, and
+                    // decode_result takes &mut self.
+                    let r = InnerConnection::decode_result_raw(self.db, r);
+                    if r.is_ok() {
+                        *shared_handle = ptr::null_mut();
+                        self.db = ptr::null_mut();
+                    }
+                    r
+                }
+            }
+
+            #[inline] pub fn get_interrupt_handle(&self) -> InterruptHandle {
+                InterruptHandle {
+                    db_lock: Arc::clone(&self.interrupt_lock),
+                }
+            }
+
+            #[inline]
+            #[cfg(feature = "load_extension")]
+            pub unsafe fn enable_load_extension(&mut self, onoff: c_int) -> Result<()>
+            {
+                let r = ffi::sqlite3_enable_load_extension(self.db, onoff);
+                self.decode_result(r)
+            }
+
+            #[cfg(feature = "load_extension")]
+            pub unsafe fn load_extension(
+                &self,
+                dylib_path: &Path,
+                entry_point: Option<&str>,
+            ) -> Result<()>
+            {
+                let dylib_str = super::path_to_cstring(dylib_path)?;
+                let mut errmsg: *mut c_char = ptr::null_mut();
+                let r = if let Some(entry_point) = entry_point {
+                    let c_entry = crate::str_to_cstring(entry_point)?;
+                    ffi::sqlite3_load_extension(self.db, dylib_str.as_ptr(), c_entry.as_ptr(), &mut errmsg)
+                } else {
+                    ffi::sqlite3_load_extension(self.db, dylib_str.as_ptr(), ptr::null(), &mut errmsg)
+                };
+                if r == ffi::SQLITE_OK {
+                    Ok(())
+                } else {
+                    let message = super::errmsg_to_string(errmsg);
+                    ffi::sqlite3_free(errmsg.cast::<std::os::raw::c_void>());
+                    Err(error_from_sqlite_code(r, Some(message)))
+                }
+            }
+
+            #[inline] pub fn last_insert_rowid(&self) -> i64 {
+                unsafe { ffi::sqlite3_last_insert_rowid(self.db()) }
+            }
+
+            pub fn prepare<'a>(
+                &mut self,
+                conn: &'a Connection,
+                sql: &str,
+                flags: PrepFlags,
+            ) -> Result<Statement<'a>>
+            {
+                let mut c_stmt: *mut ffi::sqlite3_stmt = ptr::null_mut();
+                let (c_sql, len, _) = str_for_sqlite(sql.as_bytes())?;
+                let mut c_tail: *const c_char = ptr::null();
+                #[cfg(not(feature = "unlock_notify"))]
+                let r = unsafe { self.prepare_(c_sql, len, flags, &mut c_stmt, &mut c_tail) };
+                #[cfg(feature = "unlock_notify")]
+                let r = unsafe {
+                    use crate::unlock_notify;
+                    let mut rc;
+                    loop {
+                        rc = self.prepare_(c_sql, len, flags, &mut c_stmt, &mut c_tail);
+                        if !unlock_notify::is_locked(self.db, rc) {
+                            break;
+                        }
+                        rc = unlock_notify::wait_for_unlock_notify(self.db);
+                        if rc != ffi::SQLITE_OK {
+                            break;
+                        }
+                    }
+                    rc
+                };
+                // If there is an error, *ppStmt is set to NULL.
+                if r != ffi::SQLITE_OK {
+                    return Err(unsafe { error_with_offset(self.db, r, sql) });
+                }
+                // If the input text contains no SQL (if the input is an empty string or a
+                // comment) then *ppStmt is set to NULL.
+                let tail = if c_tail.is_null() {
+                    0
+                } else {
+                    let n = (c_tail as isize) - (c_sql as isize);
+                    if n <= 0 || n >= len as isize {
+                        0
+                    } else {
+                        n as usize
+                    }
+                };
+                Ok(Statement::new(conn, unsafe {
+                    RawStatement::new(c_stmt, tail)
+                }))
+            }
+
+            #[inline]
+            #[cfg(not(feature = "modern_sqlite"))]
+            unsafe fn prepare_(
+                &self,
+                z_sql: *const c_char,
+                n_byte: c_int,
+                _: PrepFlags,
+                pp_stmt: *mut *mut ffi::sqlite3_stmt,
+                pz_tail: *mut *const c_char,
+            ) -> c_int {
+                ffi::sqlite3_prepare_v2(self.db(), z_sql, n_byte, pp_stmt, pz_tail)
+            }
+
+            #[inline]
+            #[cfg(feature = "modern_sqlite")]
+            unsafe fn prepare_(
+                &self,
+                z_sql: *const c_char,
+                n_byte: c_int,
+                flags: PrepFlags,
+                pp_stmt: *mut *mut ffi::sqlite3_stmt,
+                pz_tail: *mut *const c_char,
+            ) -> c_int {
+                ffi::sqlite3_prepare_v3(self.db(), z_sql, n_byte, flags.bits(), pp_stmt, pz_tail)
+            }
+
+            #[inline] pub fn changes(&self) -> u64 {
+                #[cfg(not(feature = "modern_sqlite"))]
+                unsafe {
+                    ffi::sqlite3_changes(self.db()) as u64
+                }
+                #[cfg(feature = "modern_sqlite")] // 3.37.0
+                unsafe {
+                    ffi::sqlite3_changes64(self.db()) as u64
+                }
+            }
+
+            #[inline] pub fn total_changes(&self) -> u64 {
+                #[cfg(not(feature = "modern_sqlite"))]
+                unsafe {
+                    ffi::sqlite3_total_changes(self.db()) as u64
+                }
+                #[cfg(feature = "modern_sqlite")] // 3.37.0
+                unsafe {
+                    ffi::sqlite3_total_changes64(self.db()) as u64
+                }
+            }
+
+            #[inline] pub fn is_autocommit(&self) -> bool {
+                unsafe { ffi::sqlite3_get_autocommit(self.db()) != 0 }
+            }
+
+            pub fn is_busy(&self) -> bool {
+                let db = self.db();
+                unsafe {
+                    let mut stmt = ffi::sqlite3_next_stmt(db, ptr::null_mut());
+                    while !stmt.is_null() {
+                        if ffi::sqlite3_stmt_busy(stmt) != 0 {
+                            return true;
+                        }
+                        stmt = ffi::sqlite3_next_stmt(db, stmt);
+                    }
+                }
+                false
+            }
+
+            pub fn cache_flush(&mut self) -> Result<()>
+        {               crate::error::check(unsafe { ffi::sqlite3_db_cacheflush(self.db()) })
+            }
+
+            #[cfg(not(feature = "hooks"))]
+            #[inline] fn remove_hooks(&mut self) {}
+
+            #[cfg(not(feature = "preupdate_hook"))]
+            #[inline] fn remove_preupdate_hook(&mut self) {}
+
+            pub fn db_readonly(&self, db_name: super::DatabaseName<'_>) -> Result<bool>
+            {
+                let name = db_name.as_cstring()?;
+                let r = unsafe { ffi::sqlite3_db_readonly(self.db, name.as_ptr()) };
+                match r {
+                    0 => Ok(false),
+                    1 => Ok(true),
+                    -1 => Err(Error::SqliteFailure(
+                        ffi::Error::new(ffi::SQLITE_MISUSE),
+                        Some(format!("{db_name:?} is not the name of a database")),
+                    )),
+                    _ => Err(error_from_sqlite_code(
+                        r,
+                        Some("Unexpected result".to_owned()),
+                    )),
+                }
+            }
+
+            #[cfg(feature = "modern_sqlite")] // 3.37.0
+            pub fn txn_state(
+                &self,
+                db_name: Option<super::DatabaseName<'_>>,
+            ) -> Result<super::transaction::TransactionState>
+            {
+                let r = if let Some(ref name) = db_name {
+                    let name = name.as_cstring()?;
+                    unsafe { ffi::sqlite3_txn_state(self.db, name.as_ptr()) }
+                } else {
+                    unsafe { ffi::sqlite3_txn_state(self.db, ptr::null()) }
+                };
+                match r {
+                    0 => Ok(super::transaction::TransactionState::None),
+                    1 => Ok(super::transaction::TransactionState::Read),
+                    2 => Ok(super::transaction::TransactionState::Write),
+                    -1 => Err(Error::SqliteFailure(
+                        ffi::Error::new(ffi::SQLITE_MISUSE),
+                        Some(format!("{db_name:?} is not the name of a valid schema")),
+                    )),
+                    _ => Err(error_from_sqlite_code(
+                        r,
+                        Some("Unexpected result".to_owned()),
+                    )),
+                }
+            }
+
+            #[inline]
+            #[cfg(feature = "release_memory")]
+            pub fn release_memory(&self) -> Result<()>
+            { self.decode_result(unsafe { ffi::sqlite3_db_release_memory(self.db) })
+            }
+
+            #[cfg(feature = "modern_sqlite")] // 3.41.0
+            pub fn is_interrupted(&self) -> bool {
+                unsafe { ffi::sqlite3_is_interrupted(self.db) == 1 }
+            }
+        }
+
+        impl Drop for InnerConnection 
+        {
+            #[inline] fn drop(&mut self)
+            { self.close();
+            }
+        }
+        
+        fn ensure_safe_sqlite_threading_mode() -> Result<()>
+        {
+            if unsafe { ffi::sqlite3_threadsafe() == 0 } {
+                return Err(Error::SqliteSingleThreadedMode);
+            }
+            
+            const SQLITE_SINGLETHREADED_MUTEX_MAGIC: usize = 8;
+            let is_singlethreaded = unsafe {
+                let mutex_ptr = ffi::sqlite3_mutex_alloc(0);
+                let is_singlethreaded = mutex_ptr as usize == SQLITE_SINGLETHREADED_MUTEX_MAGIC;
+                ffi::sqlite3_mutex_free(mutex_ptr);
+                is_singlethreaded
+            };
+            if is_singlethreaded {
+                Err(Error::SqliteSingleThreadedMode)
+            } else {
+                Ok(())
+            }
+        }
     }
 
     pub mod limits
+    {
+        //! Run-Time Limits
+        use ::
+        {
+            connect::{ ffi, Connection },
+            os::raw::c_int,
+            *,
+        };
+        /// Run-Time limit categories, for use with [`Connection::limit`] and [`Connection::set_limit`].
+        #[repr(i32)] #[non_exhaustive] #[derive(Copy, Clone, Debug)]
+        pub enum Limit
+        {
+            /// The maximum size of any string or BLOB or table row, in bytes.
+            SQLITE_LIMIT_LENGTH = ffi::SQLITE_LIMIT_LENGTH,
+            /// The maximum length of an SQL statement, in bytes.
+            SQLITE_LIMIT_SQL_LENGTH = ffi::SQLITE_LIMIT_SQL_LENGTH,
+            /// The maximum number of columns in a table definition or in the result set of a SELECT 
+            /// or the maximum number of columns in an index 
+            /// or in an ORDER BY or GROUP BY clause.
+            SQLITE_LIMIT_COLUMN = ffi::SQLITE_LIMIT_COLUMN,
+            /// The maximum depth of the parse tree on any expression.
+            SQLITE_LIMIT_EXPR_DEPTH = ffi::SQLITE_LIMIT_EXPR_DEPTH,
+            /// The maximum number of terms in a compound SELECT statement.
+            SQLITE_LIMIT_COMPOUND_SELECT = ffi::SQLITE_LIMIT_COMPOUND_SELECT,
+            /// The maximum number of instructions in a virtual machine program used to implement an SQL statement.
+            SQLITE_LIMIT_VDBE_OP = ffi::SQLITE_LIMIT_VDBE_OP,
+            /// The maximum number of arguments on a function.
+            SQLITE_LIMIT_FUNCTION_ARG = ffi::SQLITE_LIMIT_FUNCTION_ARG,
+            /// The maximum number of attached databases.
+            SQLITE_LIMIT_ATTACHED = ffi::SQLITE_LIMIT_ATTACHED,
+            /// The maximum length of the pattern argument to the LIKE or GLOB operators.
+            SQLITE_LIMIT_LIKE_PATTERN_LENGTH = ffi::SQLITE_LIMIT_LIKE_PATTERN_LENGTH,
+            /// The maximum index number of any parameter in an SQL statement.
+            SQLITE_LIMIT_VARIABLE_NUMBER = ffi::SQLITE_LIMIT_VARIABLE_NUMBER,
+            /// The maximum depth of recursion for triggers.
+            SQLITE_LIMIT_TRIGGER_DEPTH = ffi::SQLITE_LIMIT_TRIGGER_DEPTH,
+            /// The maximum number of auxiliary worker threads that a single prepared statement may start.
+            SQLITE_LIMIT_WORKER_THREADS = ffi::SQLITE_LIMIT_WORKER_THREADS,
+        }
+
+        impl Connection
+        {
+            /// Returns the current value of a [`Limit`].
+            #[inline] pub fn limit(&self, limit: Limit) -> i32
+            {
+                let c = self.db.borrow();
+                unsafe { ffi::sqlite3_limit(c.db(), limit as c_int, -1) }
+            }
+            /// Changes the [`Limit`] to `new_val`, returning the prior value of the limit.
+            #[inline] pub fn set_limit(&self, limit: Limit, new_val: i32) -> i32
+            {
+                let c = self.db.borrow_mut();
+                unsafe { ffi::sqlite3_limit(c.db(), limit as c_int, new_val) }
+            }
+        }
+    }
+
+    pub mod notify
     {
         
     }
 
     pub mod params
     {
+        use ::
+        {
+            connect::{ Result, Statement, ToSql },
+            *,
+        };
         
+        mod sealed
+        {
+            /// This trait exists just to ensure that the only impls of `trait Params` that are allowed are ones in this crate.
+            pub trait Sealed {}
+        }
+        use self::sealed::Sealed;
+        /// Trait used for [sets of parameter][params] passed into SQL statements/queries.
+        pub trait Params: Sealed
+        {
+            fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()>;
+        }
+        
+        impl Sealed for [&(dyn ToSql + Send + Sync); 0] {}
+        impl Params for [&(dyn ToSql + Send + Sync); 0] {
+            #[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()>
+        {               stmt.ensure_parameter_count(0)
+            }
+        }
+
+        impl Sealed for &[&dyn ToSql] {}
+        impl Params for &[&dyn ToSql] {
+            #[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()>
+        {               stmt.bind_parameters(self)
+            }
+        }
+
+        impl Sealed for &[(&str, &dyn ToSql)] {}
+        impl Params for &[(&str, &dyn ToSql)] {
+            #[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()>
+        {               stmt.bind_parameters_named(self)
+            }
+        }
+        
+        impl Sealed for () {}
+        impl Params for () {
+            #[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()>
+        {               stmt.ensure_parameter_count(0)
+            }
+        }
+        
+        impl<T: ToSql> Sealed for (T,) {}
+        impl<T: ToSql> Params for (T,) {
+            #[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()>
+        {               stmt.ensure_parameter_count(1)?;
+                stmt.raw_bind_parameter(1, self.0)?;
+                Ok(())
+            }
+        }
+
+        macro_rules! single_tuple_impl {
+            ($count:literal : $(($field:tt $ftype:ident)),* $(,)?) =>
+        {               impl<$($ftype,)*> Sealed for ($($ftype,)*) where $($ftype: ToSql,)* {}
+                impl<$($ftype,)*> Params for ($($ftype,)*) where $($ftype: ToSql,)* {
+                    fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()>
+        {                       stmt.ensure_parameter_count($count)?;
+                        $({
+                            debug_assert!($field < $count);
+                            stmt.raw_bind_parameter($field + 1, self.$field)?;
+                        })+
+                        Ok(())
+                    }
+                }
+            }
+        }
+        
+        single_tuple_impl!(2: (0 A), (1 B));
+        single_tuple_impl!(3: (0 A), (1 B), (2 C));
+        single_tuple_impl!(4: (0 A), (1 B), (2 C), (3 D));
+        single_tuple_impl!(5: (0 A), (1 B), (2 C), (3 D), (4 E));
+        single_tuple_impl!(6: (0 A), (1 B), (2 C), (3 D), (4 E), (5 F));
+        single_tuple_impl!(7: (0 A), (1 B), (2 C), (3 D), (4 E), (5 F), (6 G));
+        single_tuple_impl!(8: (0 A), (1 B), (2 C), (3 D), (4 E), (5 F), (6 G), (7 H));
+        single_tuple_impl!(9: (0 A), (1 B), (2 C), (3 D), (4 E), (5 F), (6 G), (7 H), (8 I));
+        single_tuple_impl!(10: (0 A), (1 B), (2 C), (3 D), (4 E), (5 F), (6 G), (7 H), (8 I), (9 J));
+        single_tuple_impl!(11: (0 A), (1 B), (2 C), (3 D), (4 E), (5 F), (6 G), (7 H), (8 I), (9 J), (10 K));
+        single_tuple_impl!(12: (0 A), (1 B), (2 C), (3 D), (4 E), (5 F), (6 G), (7 H), (8 I), (9 J), (10 K), (11 L));
+        single_tuple_impl!(13: (0 A), (1 B), (2 C), (3 D), (4 E), (5 F), (6 G), (7 H), (8 I), (9 J), (10 K), (11 L), (12 M));
+        single_tuple_impl!(14: (0 A), (1 B), (2 C), (3 D), (4 E), (5 F), (6 G), (7 H), (8 I), (9 J), (10 K), (11 L), (12 M), (13 N));
+        single_tuple_impl!(15: (0 A), (1 B), (2 C), (3 D), (4 E), (5 F), (6 G), (7 H), (8 I), (9 J), (10 K), (11 L), (12 M), (13 N), (14 O));
+        single_tuple_impl!(16: (0 A), (1 B), (2 C), (3 D), (4 E), (5 F), (6 G), (7 H), (8 I), (9 J), (10 K), (11 L), (12 M), (13 N), (14 O), (15 P));
+
+        macro_rules! impl_for_array_ref
+        {
+            ($($N:literal)+) => {$(
+                
+                impl<T: ToSql + ?Sized> Sealed for &[&T; $N] {}
+                impl<T: ToSql + ?Sized> Params for &[&T; $N] {
+                    fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()>
+        {                       stmt.bind_parameters(self)
+                    }
+                }
+                impl<T: ToSql + ?Sized> Sealed for &[(&str, &T); $N] {}
+                impl<T: ToSql + ?Sized> Params for &[(&str, &T); $N] {
+                    fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()>
+        {                       stmt.bind_parameters_named(self)
+                    }
+                }
+                impl<T: ToSql> Sealed for [T; $N] {}
+                impl<T: ToSql> Params for [T; $N] {
+                    #[inline]
+                    fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()>
+        {                       stmt.bind_parameters(&self)
+                    }
+                }
+            )+};
+        }
+        
+        impl_for_array_ref!( 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 );
+        /// Adapter type which allows any iterator over [`ToSql`] values to implement [`Params`].
+        #[derive(Clone, Debug)]
+        pub struct ParamsFromIter<I>(I);
+        /// Constructor function for a [`ParamsFromIter`]. See its documentation for more.
+        #[inline] pub fn params_from_iter<I>(iter: I) -> ParamsFromIter<I> where
+        I: IntoIterator,
+        I::Item: ToSql
+        {
+            ParamsFromIter(iter)
+        }
+
+        impl<I> Sealed for ParamsFromIter<I> where
+        I: IntoIterator,
+        I::Item: ToSql
+        {}
+
+        impl<I> Params for ParamsFromIter<I> where
+        I: IntoIterator,
+        I::Item: ToSql
+        {
+            #[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> { stmt.bind_parameters(self.0) }
+        }
     }
 
     pub mod pragma
     {
-        
+        //! Pragma helpers
+        use ::
+        {
+            connect::
+            {
+                error::Error,
+                ffi,
+                types::{ToSql, ToSqlOutput, ValueRef},
+                Connection, DatabaseName, Result, Row,
+            },
+            ops::{  Deref },
+            str::{ from_utf8 },
+            *,
+        };
+
+        pub struct Sql
+        {
+            buf: String
+        }
+
+        impl Sql
+        {
+            pub fn new() -> Sql { Sql { buf: String::new() } }
+
+            pub fn push_pragma( &mut self, schema_name: Option<DatabaseName<'_>>, pragma_name: &str ) -> Result<()> 
+            { self.push_keyword("PRAGMA")?;
+                self.push_space();
+                
+                if let Some(schema_name) = schema_name
+                {
+                    self.push_schema_name(schema_name);
+                    self.push_dot();
+                }
+                
+                self.push_keyword(pragma_name)
+            }
+
+            pub fn push_keyword(&mut self, keyword: &str) -> Result<()>
+            {
+                if !keyword.is_empty() && is_identifier(keyword)
+                {
+                    self.buf.push_str(keyword);
+                    Ok(())
+                }
+                
+                else
+                {
+                    Err(Error::SqliteFailure
+                    (
+                        ffi::Error::new(ffi::SQLITE_MISUSE),
+                        Some(format!("Invalid keyword \"{keyword}\"")),
+                    ))
+                }
+            }
+
+            pub fn push_schema_name(&mut self, schema_name: DatabaseName<'_>)
+            {
+                match schema_name
+                {
+                    DatabaseName::Main => self.buf.push_str("main"),
+                    DatabaseName::Temp => self.buf.push_str("temp"),
+                    DatabaseName::Attached(s) => self.push_identifier(s),
+                };
+            }
+
+            pub fn push_identifier(&mut self, s: &str)
+            {
+                if is_identifier(s) { self.buf.push_str(s); }
+                else { self.wrap_and_escape(s, '"'); }
+            }
+
+            pub fn push_value(&mut self, value: &dyn ToSql) -> Result<()>
+            {
+                let value = value.to_sql()?;
+                let value = match value
+                {
+                    ToSqlOutput::Borrowed(v) => v,
+                    ToSqlOutput::Owned(ref v) => ValueRef::from(v),                    
+                    
+                    ToSqlOutput::ZeroBlob(_) =>
+                    {
+                        return Err(Error::SqliteFailure
+                        (
+                            ffi::Error::new(ffi::SQLITE_MISUSE),
+                            Some(format!("Unsupported value \"{value:?}\"")),
+                        ));
+                    }
+                    
+                    ToSqlOutput::Arg(_) =>
+                    {
+                        return Err(Error::SqliteFailure
+                        (
+                            ffi::Error::new(ffi::SQLITE_MISUSE),
+                            Some(format!("Unsupported value \"{value:?}\"")),
+                        ));
+                    }
+
+                    ToSqlOutput::Array(_) =>
+                    {
+                        return Err(Error::SqliteFailure
+                        (
+                            ffi::Error::new(ffi::SQLITE_MISUSE),
+                            Some(format!("Unsupported value \"{value:?}\"")),
+                        ));
+                    }
+                };
+                
+                match value
+                {
+                    ValueRef::Integer(i) => { self.push_int(i); }
+                    ValueRef::Real(r) => { self.push_real(r); }
+                    ValueRef::Text(s) =>
+                    {
+                        let s = from_utf8(s)?;
+                        self.push_string_literal(s);
+                    }
+                    _ => 
+                    {
+                        return Err(Error::SqliteFailure
+                        (
+                            ffi::Error::new(ffi::SQLITE_MISUSE),
+                            Some(format!("Unsupported value \"{value:?}\"")), 
+                        ));
+                    }
+                };
+
+                Ok(())
+            }
+
+            pub fn push_string_literal(&mut self, s: &str) { self.wrap_and_escape(s, '\''); }
+
+            pub fn push_int(&mut self, i: i64) { self.buf.push_str(&i.to_string()); }
+
+            pub fn push_real(&mut self, f: f64) { self.buf.push_str(&f.to_string()); }
+
+            pub fn push_space(&mut self) { self.buf.push(' '); }
+
+            pub fn push_dot(&mut self) {  self.buf.push('.'); }
+
+            pub fn push_equal_sign(&mut self) { self.buf.push('='); }
+
+            pub fn open_brace(&mut self) { self.buf.push('('); }
+
+            pub fn close_brace(&mut self) { self.buf.push(')'); }
+
+            pub fn as_str(&self) -> &str { &self.buf }
+
+            fn wrap_and_escape(&mut self, s: &str, quote: char)
+            { self.buf.push(quote);
+                let chars = s.chars();
+                for ch in chars 
+                {
+                    if ch == quote { self.buf.push(ch); }
+                    self.buf.push(ch);
+                }
+                self.buf.push(quote);
+            }
+        }
+
+        impl Deref for Sql
+        {
+            type Target = str;
+            fn deref(&self) -> &str { self.as_str() }
+        }
+
+        impl Connection
+        {
+            /// Query the current value of `pragma_name`.
+            pub fn pragma_query_value<T, F>( &self, name: Option<DatabaseName<'_>>, named: &str, f: F ) -> Result<T> where
+            F: FnOnce(&Row<'_>) -> Result<T>
+            {
+                let mut query = Sql::new();
+                query.push_pragma(name, named)?;
+                self.query_row(&query, [], f)
+            }
+            /// Query the current rows/values of `pragma_name`.
+            pub fn pragma_query<F>( schema_name: Option<DatabaseName<'_>>, pragma_name: &str, mut f: F ) -> Result<()> where
+            F: FnMut(&Row<'_>) -> Result<()>,
+            {
+                let mut query = Sql::new();
+                query.push_pragma(schema_name, pragma_name)?;
+                let mut stmt = self.prepare(&query)?;
+                let mut rows = stmt.query([])?;
+                
+                while let Some(result_row) = rows.next()?
+                {
+                    let row = result_row;
+                    f(row)?;
+                }
+
+                Ok(())
+            }
+            /// Query the current value(s) of `pragma_name` associated to `pragma_value`.
+            pub fn pragma<F, V>
+            (
+                &self,
+                schema_name: Option<DatabaseName<'_>>,
+                pragma_name: &str,
+                pragma_value: V,
+                mut f: F
+            ) -> Result<()> where
+            F: FnMut(&Row<'_>) -> Result<()>,
+            V: ToSql,
+            {
+                let mut sql = Sql::new();
+                sql.push_pragma(schema_name, pragma_name)?;
+                sql.open_brace();
+                sql.push_value(&pragma_value)?;
+                sql.close_brace();
+                let mut stmt = self.prepare(&sql)?;
+                let mut rows = stmt.query([])?;
+                
+                while let Some(result_row) = rows.next()?
+                {
+                    let row = result_row;
+                    f(row)?;
+                }
+                
+                Ok(())
+            }
+            /// Set a new value to `pragma_name`.
+            pub fn pragma_update<V>( &self, schema_name: Option<DatabaseName<'_>>, pragma_name: &str, pragma_value: V, ) ->
+            Result<()> where
+            V: ToSql
+            {
+                let mut sql = Sql::new();
+                sql.push_pragma(schema_name, pragma_name)?;
+                sql.push_equal_sign();
+                sql.push_value(&pragma_value)?;
+                self.execute_batch(&sql)
+            }
+            /// Set a new value to `pragma_name` and return the updated value.
+            pub fn pragma_update_and_check<F, T, V>
+            ( &self, schema_name: Option<DatabaseName<'_>>, pragma_name: &str, pragma_value: V, f: F ) -> Result<T> where
+            F: FnOnce(&Row<'_>) -> Result<T>,
+            V: ToSql
+            {
+                let mut sql = Sql::new();
+                sql.push_pragma(schema_name, pragma_name)?;
+                sql.push_equal_sign();
+                sql.push_value(&pragma_value)?;
+                self.query_row(&sql, [], f)
+            }
+        }
+
+        fn is_identifier(s: &str) -> bool
+        {
+            let chars = s.char_indices();
+
+            for (i, ch) in chars
+            {
+                if i == 0
+                {
+                    if !is_identifier_start(ch) { return false; }
+                }
+
+                else if !is_identifier_continue(ch) { return false; }
+            }
+
+            true
+        }
+
+        fn is_identifier_start(c: char) -> bool { c.is_ascii_uppercase() || c == '_' || c.is_ascii_lowercase() || c > '\x7F' }
+
+        fn is_identifier_continue(c: char) -> bool
+        {
+            c == '$'
+            || c.is_ascii_digit()
+            || c.is_ascii_uppercase()
+            || c == '_'
+            || c.is_ascii_lowercase()
+            || c > '\x7F'
+        }
     }
 
-    pub mod raw_statement
+    pub mod raw
     {
-        
+        use ::
+        {
+            connect::
+            {
+                util::{ ParamIndexCache, SqliteMallocString },
+                ffi, StatementStatus,                
+            },
+            ffi::CStr,
+            os::raw::c_int,
+            sync::Arc,
+            *,
+        };
+        /// Private newtype for raw sqlite3_stmts that finalize themselves when dropped.
+        #[derive(Debug)]
+        pub struct RawStatement
+        {
+            ptr: *mut ffi::sqlite3_stmt,
+            tail: usize,
+            cache: ParamIndexCache,
+            statement_cache_key: Option<Arc<str>>,
+        }
+
+        impl RawStatement
+        {
+            #[inline] pub unsafe fn new(stmt: *mut ffi::sqlite3_stmt, tail: usize) -> RawStatement
+            {
+                RawStatement
+                {
+                    ptr: stmt,
+                    tail,
+                    cache: ParamIndexCache::default(),
+                    statement_cache_key: None,
+                }
+            }
+
+            #[inline] pub fn is_null(&self) -> bool { self.ptr.is_null() }
+
+            #[inline] pub fn set_statement_cache_key(&mut self, p: impl Into<Arc<str>>) { self.statement_cache_key = Some(p.into()); }
+
+            #[inline] pub fn statement_cache_key(&self) -> Option<Arc<str>> { self.statement_cache_key.clone() }
+
+            #[inline] pub unsafe fn ptr(&self) -> *mut ffi::sqlite3_stmt { self.ptr }
+
+            #[inline] pub fn column_count(&self) -> usize { unsafe { ffi::sqlite3_column_count(self.ptr) as usize } }
+
+            #[inline] pub fn column_type(&self, idx: usize) -> c_int 
+            { unsafe { ffi::sqlite3_column_type(self.ptr, idx as c_int) } }
+
+            #[inline] pub fn column_decltype(&self, idx: usize) -> Option<&CStr>
+            {
+                unsafe
+                {
+                    let decltype = ffi::sqlite3_column_decltype(self.ptr, idx as c_int);
+                    if decltype.is_null() {
+                        None
+                    } else {
+                        Some(CStr::from_ptr(decltype))
+                    }
+                }
+            }
+
+            #[inline] pub fn column_name(&self, idx: usize) -> Option<&CStr>
+            {
+                let idx = idx as c_int;
+                if idx < 0 || idx >= self.column_count() as c_int { return None; }
+                unsafe
+                {
+                    let ptr = ffi::sqlite3_column_name(self.ptr, idx);
+
+                    assert!
+                    (
+                        !ptr.is_null(),
+                        "Null pointer from sqlite3_column_name: Out of memory?"
+                    );
+                    
+                    Some(CStr::from_ptr(ptr))
+                }
+            }
+
+            #[inline] pub fn step(&self) -> c_int { unsafe { ffi::sqlite3_step(self.ptr) } }
+            
+            pub fn step(&self) -> c_int
+            {
+                use ::connect::notify;
+                let mut db = ptr::null_mut::<ffi::sqlite3>();
+                loop
+                {
+                    unsafe
+                    {
+                        let mut rc = ffi::sqlite3_step(self.ptr);
+                        if (rc & 0xff) != ffi::SQLITE_LOCKED {
+                            break rc;
+                        }
+                        if db.is_null() {
+                            db = ffi::sqlite3_db_handle(self.ptr);
+                        }
+                        if !unlock_notify::is_locked(db, rc) {
+                            break rc;
+                        }
+                        rc = unlock_notify::wait_for_unlock_notify(db);
+                        if rc != ffi::SQLITE_OK {
+                            break rc;
+                        }
+                        self.reset();
+                    }
+                }
+            }
+
+            #[inline] pub fn reset(&self) -> c_int { unsafe { ffi::sqlite3_reset(self.ptr) } }
+
+            #[inline] pub fn bind_parameter_count(&self) -> usize 
+            { unsafe { ffi::sqlite3_bind_parameter_count(self.ptr) as usize } }
+
+            #[inline] pub fn bind_parameter_index(&self, name: &str) -> Option<usize>
+            { self.cache.get_or_insert_with(name, |param_cstr|
+                {
+                    let r = unsafe { ffi::sqlite3_bind_parameter_index(self.ptr, param_cstr.as_ptr()) };
+                    match r
+                    {
+                        0 => None,
+                        i => Some(i as usize),
+                    }
+                })
+            }
+
+            #[inline] pub fn bind_parameter_name(&self, index: i32) -> Option<&CStr>
+            {
+                unsafe
+                {
+                    let name = ffi::sqlite3_bind_parameter_name(self.ptr, index);
+                    if name.is_null() { None }
+                    else { Some(CStr::from_ptr(name)) }
+                }
+            }
+
+            #[inline] pub fn clear_bindings(&mut self) { unsafe { ffi::sqlite3_clear_bindings(self.ptr); } }
+
+            #[inline] pub fn sql(&self) -> Option<&CStr>
+            {
+                if self.ptr.is_null() { None } 
+                
+                else
+                {
+                    Some(unsafe { CStr::from_ptr(ffi::sqlite3_sql(self.ptr)) })
+                }
+            }
+
+            #[inline] pub fn finalize(mut self) -> c_int { self.finalize_() }
+
+            #[inline] fn finalize_(&mut self) -> c_int
+            {
+                let r = unsafe { ffi::sqlite3_finalize(self.ptr) };
+                self.ptr = ptr::null_mut();
+                r
+            }
+            
+            #[inline] pub fn readonly(&self) -> bool
+            {
+                unsafe { ffi::sqlite3_stmt_readonly(self.ptr) != 0 }
+            }
+
+            #[inline] pub fn expanded_sql(&self) -> Option<SqliteMallocString>
+            {
+                unsafe { SqliteMallocString::from_raw(ffi::sqlite3_expanded_sql(self.ptr)) }
+            }
+
+            #[inline] pub fn get_status(&self, status: StatementStatus, reset: bool) -> i32
+            {
+                assert!(!self.ptr.is_null());
+                unsafe { ffi::sqlite3_stmt_status(self.ptr, status as i32, reset as i32) }
+            }
+
+            #[inline] pub fn has_tail(&self) -> bool { self.tail != 0 }
+
+            #[inline] pub fn tail(&self) -> usize { self.tail }
+
+            #[inline] pub fn is_explain(&self) -> i32 { unsafe { ffi::sqlite3_stmt_isexplain(self.ptr) } }
+        }
+
+        impl Drop for RawStatement
+        {
+            fn drop(&mut self) { self.finalize_(); }
+        }
     }
 
     pub mod row
     {
-        
+        use ::
+        {
+            connect::
+            {
+                types::{FromSql, FromSqlError, ValueRef},
+                Error, Result, Statement,
+            },
+            iter::{ FallibleIterator, FallibleStreamingIterator },
+            *,
+        };
+        /// A handle for the resulting rows of a query.
+        #[must_use = "Rows is lazy and will do nothing unless consumed"]
+        pub struct Rows<'stmt> 
+        {
+            pub(crate) stmt: Option<&'stmt Statement<'stmt>>,
+            row: Option<Row<'stmt>>,
+        }
+
+        impl<'stmt> Rows<'stmt>
+        {
+            #[inline] fn reset(&mut self) -> Result<()>
+            {
+                if let Some(stmt) = self.stmt.take() {
+                    stmt.reset()
+                } else {
+                    Ok(())
+                }
+            }
+            /// Attempt to get the next row from the query.
+            #[inline] pub fn next(&mut self) -> Result<Option<&Row<'stmt>>>
+            { self.advance()?;
+                Ok((*self).get())
+            }
+            /// Map over this `Rows`, converting it to a [`Map`], which implements `FallibleIterator`.
+            #[inline] pub fn map<F, B>(self, f: F) -> Map<'stmt, F> where
+            F: FnMut(&Row<'_>) -> Result<B>,
+            {
+                Map { rows: self, f }
+            }
+            /// Map over this `Rows`, converting it to a [`MappedRows`], which implements `Iterator`.
+            #[inline] pub fn mapped<F, B>(self, f: F) -> MappedRows<'stmt, F> where
+            F: FnMut(&Row<'_>) -> Result<B>,
+            {
+                MappedRows { rows: self, map: f }
+            }
+            /// Map over this `Rows` with a fallible function, converting it to a AndThenRows which implements `Iterator`.
+            #[inline] pub fn and_then<F, T, E>(self, f: F) -> AndThenRows<'stmt, F> where
+            F: FnMut(&Row<'_>) -> Result<T, E>,
+            {
+                AndThenRows { rows: self, map: f }
+            }
+            /// Give access to the underlying statement
+            #[must_use]
+            pub fn as_ref(&self) -> Option<&Statement<'stmt>>
+            { self.stmt
+            }
+        }
+
+        impl<'stmt> Rows<'stmt>
+        {
+            #[inline] pub fn new(stmt: &'stmt Statement<'stmt>) -> Rows<'stmt>
+            {
+                Rows
+                {
+                    stmt: Some(stmt),
+                    row: None,
+                }
+            }
+
+            #[inline] pub fn get_expected_row(&mut self) -> Result<&Row<'stmt>>
+           
+            {
+                match self.next()?
+                {
+                    Some(row) => Ok(row),
+                    None => Err(Error::QueryReturnedNoRows),
+                }
+            }
+        }
+
+        impl Drop for Rows<'_> 
+        {
+            #[inline] fn drop(&mut self) { self.reset(); }
+        }
+        /// `F` is used to transform the _streaming_ iterator into a _fallible_iterator.
+        #[must_use = "iterators are lazy and do nothing unless consumed"]
+        pub struct Map<'stmt, F>
+        {
+            rows: Rows<'stmt>,
+            f: F,
+        }
+
+        impl<F, B> FallibleIterator for Map<'_, F> where
+        F: FnMut(&Row<'_>) -> Result<B>,
+        {
+            type Error = Error;
+            type Item = B;
+            #[inline] fn next(&mut self) -> Result<Option<B>>
+           
+            {
+                match self.rows.next()? {
+                    Some(v) => Ok(Some((self.f)(v)?)),
+                    None => Ok(None),
+                }
+            }
+        }
+        /// An iterator over the mapped resulting rows of a query.
+        #[must_use = "iterators are lazy and do nothing unless consumed"]
+        pub struct MappedRows<'stmt, F> 
+        {
+            rows: Rows<'stmt>,
+            map: F,
+        }
+
+        impl<T, F> Iterator for MappedRows<'_, F> where
+        F: FnMut(&Row<'_>) -> Result<T>,
+        {
+            type Item = Result<T>;
+            #[inline] fn next(&mut self) -> Option<Result<T>> 
+            {
+                let map = &mut self.map;
+                self.rows
+                    .next()
+                    .transpose()
+                    .map(|row_result| row_result.and_then(map))
+            }
+        }
+
+        /// An iterator over the mapped resulting rows of a query, with an Error type unifying with Error.
+        #[must_use = "iterators are lazy and do nothing unless consumed"]
+        pub struct AndThenRows<'stmt, F> 
+        {
+            rows: Rows<'stmt>,
+            map: F,
+        }
+
+        impl<T, E, F> Iterator for AndThenRows<'_, F> where
+        E: From<Error>,
+        F: FnMut(&Row<'_>) -> Result<T, E>,
+        {
+            type Item = Result<T, E>;
+            #[inline] fn next(&mut self) -> Option<Self::Item>
+            {
+                let map = &mut self.map;
+                self.rows
+                .next()
+                .transpose()
+                .map(|row_result| row_result.map_err(E::from).and_then(map))
+            }
+        }
+        /// `FallibleStreamingIterator` differs from the standard library's `Iterator` in two ways:
+        /// * each call to `next` (`sqlite3_step`) can fail.
+        /// * returned `Row` is valid until `next` is called again or `Statement` is
+        ///   reset or finalized.
+        impl<'stmt> FallibleStreamingIterator for Rows<'stmt> 
+        {
+            type Error = Error;
+            type Item = Row<'stmt>;
+
+            #[inline] fn advance(&mut self) -> Result<()> 
+            {
+                if let Some(stmt) = self.stmt {
+                    match stmt.step() {
+                        Ok(true) =>
+        {                           self.row = Some(Row { stmt });
+                            Ok(())
+                        }
+                        Ok(false) =>
+        {                           let r = self.reset();
+                            self.row = None;
+                            r
+                        }
+                        Err(e) =>
+        {                           let _ = self.reset(); // prevents infinite loop on error
+                            self.row = None;
+                            Err(e)
+                        }
+                    }
+                } else {
+                    self.row = None;
+                    Ok(())
+                }
+            }
+
+            #[inline] fn get(&self) -> Option<&Row<'stmt>>
+            { self.row.as_ref()
+            }
+        }
+        /// A single result row of a query.
+        pub struct Row<'stmt> 
+        {
+            pub(crate) stmt: &'stmt Statement<'stmt>,
+        }
+
+        impl<'stmt> Row<'stmt> 
+        {
+            /// Get the value of a particular column of the result row.
+            #[track_caller] pub fn get_unwrap<I: RowIndex, T: FromSql>(&self, idx: I) -> T
+            { self.get(idx).unwrap() }
+            /// Get the value of a particular column of the result row.
+            #[track_caller]
+            pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> 
+            {
+                let idx = idx.idx(self.stmt)?;
+                let value = self.stmt.value_ref(idx);
+                FromSql::column_result(value).map_err(|err| match err {
+                    FromSqlError::InvalidType => Error::InvalidColumnType(
+                        idx,
+                        self.stmt.column_name_unwrap(idx).into(),
+                        value.data_type(),
+                    ),
+                    FromSqlError::OutOfRange(i) => Error::IntegralValueOutOfRange(idx, i),
+                    FromSqlError::Other(err) =>
+        {                       Error::FromSqlConversionFailure(idx, value.data_type(), err)
+                    }
+                    FromSqlError::InvalidBlobSize { .. } =>
+        {                       Error::FromSqlConversionFailure(idx, value.data_type(), Box::new(err))
+                    }
+                })
+            }
+            /// Get the value of a particular column of the result row as a `ValueRef`, 
+            /// allowing data to be read out of a row without copying.
+            pub fn get_ref<I: RowIndex>(&self, idx: I) -> Result<ValueRef<'_>>
+            {
+                let idx = idx.idx(self.stmt)?;
+                let val_ref = self.stmt.value_ref(idx);
+                Ok(val_ref)
+            }
+            /// Get the value of a particular column of the result row as a `ValueRef`,
+            /// allowing data to be read out of a row without copying.
+            #[track_caller]
+            pub fn get_ref_unwrap<I: RowIndex>(&self, idx: I) -> ValueRef<'_>
+            { self.get_ref(idx).unwrap()
+            }
+        }
+
+        impl<'stmt> AsRef<Statement<'stmt>> for Row<'stmt> 
+        {
+            fn as_ref(&self) -> &Statement<'stmt>
+            { self.stmt
+            }
+        }
+        /// Debug `Row` like an ordered `Map<Result<&str>, Result<(Type, ValueRef)>>` with column name as key 
+        /// except that for `Type::Blob` only its size is printed (not its content).
+        impl<'stmt> ::fmt::Debug for Row<'stmt> 
+        {
+            fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result 
+            {
+                let mut dm = f.debug_map();
+                for c in 0..self.stmt.column_count() {
+                    let name = self.stmt.column_name(c).expect("valid column index");
+                    dm.key(&name);
+                    let value = self.get_ref(c);
+                    match value {
+                        Ok(value) =>
+        {                           let dt = value.data_type();
+                            match value {
+                                ValueRef::Null =>
+        {                                   dm.value(&(dt, ()));
+                                }
+                                ValueRef::Integer(i) =>
+        {                                   dm.value(&(dt, i));
+                                }
+                                ValueRef::Real(f) =>
+        {                                   dm.value(&(dt, f));
+                                }
+                                ValueRef::Text(s) =>
+        {                                   dm.value(&(dt, String::from_utf8_lossy(s)));
+                                }
+                                ValueRef::Blob(b) =>
+        {                                   dm.value(&(dt, b.len()));
+                                }
+                            }
+                        }
+                        Err(ref _err) =>
+        {                           dm.value(&value);
+                        }
+                    }
+                }
+                dm.finish()
+            }
+        }
+
+        mod sealed 
+        {
+            /// This trait exists just to ensure that the only impls of `trait Params`
+            /// that are allowed are ones in this crate.
+            pub trait Sealed {}
+            impl Sealed for usize {}
+            impl Sealed for &str {}
+        }
+
+        /// A trait implemented by types that can index into columns of a row.
+        pub trait RowIndex: sealed::Sealed 
+        {
+            /// Returns the index of the appropriate column, or `None` if no such column exists.
+            fn idx(&self, stmt: &Statement<'_>) -> Result<usize>;
+        }
+
+        impl RowIndex for usize 
+        {
+            #[inline] fn idx(&self, stmt: &Statement<'_>) -> Result<usize>
+        {               if *self >= stmt.column_count() {
+                    Err(Error::InvalidColumnIndex(*self))
+                } else {
+                    Ok(*self)
+                }
+            }
+        }
+
+        impl RowIndex for &'_ str 
+        {
+            #[inline] fn idx(&self, stmt: &Statement<'_>) -> Result<usize>
+        {               stmt.column_index(self)
+            }
+        }
+
+        macro_rules! tuple_try_from_row 
+        {
+            ($($field:ident),*) =>
+        {               impl<'a, $($field,)*> convert::TryFrom<&'a Row<'a>> for ($($field,)*) where $($field: FromSql,)* 
+                {
+                    type Error = ::connect::Error;
+                    #[allow(unused_assignments, unused_variables, unused_mut)]
+                    fn try_from(row: &'a Row<'a>) -> Result<Self>
+        {                       let mut index = 0;
+                        $(
+                            #[allow(non_snake_case)]
+                            let $field = row.get::<_, $field>(index)?;
+                            index += 1;
+                        )*
+                        Ok(($($field,)*))
+                    }
+                }
+            }
+        }
+
+        macro_rules! tuples_try_from_row 
+        {
+            () => 
+            {
+                tuple_try_from_row!();
+            };
+            ($first:ident $(, $remaining:ident)*) =>
+        {               tuple_try_from_row!($first $(, $remaining)*);
+                tuples_try_from_row!($($remaining),*);
+            };
+        }
+
+        tuples_try_from_row!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P);
     }
 
     pub mod serialize
     {
-        
+        //! Serialize a database.
+        use ::
+        {            
+            connect::
+            {
+                error::error_from_handle,
+                ffi, Connection, DatabaseName, Result, 
+            },
+            marker::{ PhantomData },
+            ops::{ Deref },
+            ptr::{ NonNull },
+        };
+        /// Shared (SQLITE_SERIALIZE_NOCOPY) serialized database
+        pub struct SharedData<'conn>
+        {
+            phantom: PhantomData<&'conn Connection>,
+            ptr: NonNull<u8>,
+            sz: usize,
+        }
+        /// Owned serialized database
+        pub struct OwnedData
+        {
+            ptr: NonNull<u8>,
+            sz: usize,
+        }
+
+        impl OwnedData 
+        {
+            pub unsafe fn from_raw_nonnull(ptr: NonNull<u8>, sz: usize) -> Self {
+                Self { ptr, sz }
+            }
+
+            fn into_raw(self) -> (*mut u8, usize)
+            {
+                let raw = (self.ptr.as_ptr(), self.sz);
+                std::mem::forget(self);
+                raw
+            }
+        }
+
+        impl Drop for OwnedData {
+            fn drop(&mut self)
+            {
+                unsafe {
+                    ffi::sqlite3_free(self.ptr.as_ptr().cast());
+                }
+            }
+        }
+
+        /// Serialized database
+        pub enum Data<'conn>
+        {
+            /// Shared (SQLITE_SERIALIZE_NOCOPY) serialized database
+            Shared(SharedData<'conn>),
+            /// Owned serialized database
+            Owned(OwnedData),
+        }
+
+        impl<'conn> Deref for Data<'conn>
+        {           type Target = [u8];
+
+            fn deref(&self) -> &[u8] {
+                let (ptr, sz) = match self {
+                    Data::Owned(OwnedData { ptr, sz }) => (ptr.as_ptr(), *sz),
+                    Data::Shared(SharedData { ptr, sz, .. }) => (ptr.as_ptr(), *sz),
+                };
+                unsafe { std::slice::from_raw_parts(ptr, sz) }
+            }
+        }
+
+        impl Connection {
+            /// Serialize a database.
+            pub fn serialize(&self, schema: DatabaseName) -> Result<Data>
+            {
+                let schema = schema.as_cstring()?;
+                let mut sz = 0;
+                let mut ptr: *mut u8 = unsafe {
+                    ffi::sqlite3_serialize(
+                        self.handle(),
+                        schema.as_ptr(),
+                        &mut sz,
+                        ffi::SQLITE_SERIALIZE_NOCOPY,
+                    )
+                };
+                Ok(if ptr.is_null() {
+                    ptr = unsafe { ffi::sqlite3_serialize(self.handle(), schema.as_ptr(), &mut sz, 0) };
+                    if ptr.is_null() {
+                        return Err(unsafe { error_from_handle(self.handle(), ffi::SQLITE_NOMEM) });
+                    }
+                    Data::Owned(OwnedData {
+                        ptr: NonNull::new(ptr).unwrap(),
+                        sz: sz.try_into().unwrap(),
+                    })
+                } else {
+                    // shared buffer
+                    Data::Shared(SharedData {
+                        ptr: NonNull::new(ptr).unwrap(),
+                        sz: sz.try_into().unwrap(),
+                        phantom: PhantomData,
+                    })
+                })
+            }
+            /// Deserialize a database.
+            pub fn deserialize(
+                &mut self,
+                schema: DatabaseName<'_>,
+                data: OwnedData,
+                read_only: bool,
+            ) -> Result<()>
+            {
+                let schema = schema.as_cstring()?;
+                let (data, sz) = data.into_raw();
+                let sz = sz.try_into().unwrap();
+                let flags = if read_only {
+                    ffi::SQLITE_DESERIALIZE_FREEONCLOSE | ffi::SQLITE_DESERIALIZE_READONLY
+                } else {
+                    ffi::SQLITE_DESERIALIZE_FREEONCLOSE | ffi::SQLITE_DESERIALIZE_RESIZEABLE
+                };
+                let rc = unsafe {
+                    ffi::sqlite3_deserialize(self.handle(), schema.as_ptr(), data, sz, sz, flags)
+                };
+                if rc != ffi::SQLITE_OK {
+                    return Err(unsafe { error_from_handle(self.handle(), rc) });
+                }
+                Ok(())
+            }
+        }   
     }
 
     pub mod session
     {
+        //! [Session Extension](https://sqlite.org/sessionintro.html)
+        use ::
+        {
+            connect::
+            {
+                error::{check, error_from_sqlite_code, Error},
+                hooks::Action,
+                types::ValueRef,
+                ffi, errmsg_to_string, str_to_cstring, Connection, DatabaseName, Result,
+            },
+            ffi::CStr,
+            io::{Read, Write},
+            iter::{ FallibleStreamingIterator },
+            marker::PhantomData,
+            os::raw::{c_char, c_int, c_uchar, c_void},
+            panic::catch_unwind,
+            slice::{from_raw_parts, from_raw_parts_mut},
+            *,
+        };
         
+        type Filter = Option<Box<dyn Fn(&str) -> bool>>;
+        /// An instance of this object is a session that can be used to record changes to a database.
+        pub struct Session<'conn>
+        {           phantom: PhantomData<&'conn Connection>,
+            s: *mut ffi::sqlite3_session,
+            filter: Filter,
+        }
+
+        impl Session<'_> 
+        {
+            /// Create a new session object
+            #[inline] pub fn new(db: &Connection) -> Result<Session<'_>>
+        {               Session::new_with_name(db, DatabaseName::Main)
+            }
+            /// Create a new session object
+            #[inline] pub fn new_with_name<'conn>(
+                db: &'conn Connection,
+                name: DatabaseName<'_>,
+            ) -> Result<Session<'conn>>
+            {
+                let name = name.as_cstring()?;
+
+                let db = db.db.borrow_mut().db;
+
+                let mut s: *mut ffi::sqlite3_session = ptr::null_mut();
+                check(unsafe { ffi::sqlite3session_create(db, name.as_ptr(), &mut s) })?;
+
+                Ok(Session {
+                    phantom: PhantomData,
+                    s,
+                    filter: None,
+                })
+            }
+            /// Set a table filter
+            pub fn table_filter<F>(&mut self, filter: Option<F>)  where
+                F: Fn(&str) -> bool + Send + 'static,
+            {
+                unsafe extern "C" fn call_boxed_closure<F>(
+                    p_arg: *mut c_void,
+                    tbl_str: *const c_char,
+                ) -> c_int where
+                    F: Fn(&str) -> bool,
+                {
+                    let tbl_name = CStr::from_ptr(tbl_str).to_str();
+                    c_int::from(
+                        catch_unwind(|| {
+                            let boxed_filter: *mut F = p_arg.cast::<F>();
+                            (*boxed_filter)(tbl_name.expect("non-utf8 table name"))
+                        })
+                        .unwrap_or_default(),
+                    )
+                }
+
+                match filter {
+                    Some(filter) =>
+        {                       let boxed_filter = Box::new(filter);
+                        unsafe {
+                            ffi::sqlite3session_table_filter(
+                                self.s,
+                                Some(call_boxed_closure::<F>),
+                                &*boxed_filter as *const F as *mut _,
+                            );
+                        }
+                        self.filter = Some(boxed_filter);
+                    }
+                    _ =>
+        {                       unsafe { ffi::sqlite3session_table_filter(self.s, None, ptr::null_mut()) }
+                        self.filter = None;
+                    }
+                };
+            }
+            /// Attach a table. `None` means all tables.
+            pub fn attach(&mut self, table: Option<&str>) -> Result<()>
+            {
+                let table = if let Some(table) = table {
+                    Some(str_to_cstring(table)?)
+                } else {
+                    None
+                };
+                let table = table.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
+                check(unsafe { ffi::sqlite3session_attach(self.s, table) })
+            }
+            /// Generate a Changeset
+            pub fn changeset(&mut self) -> Result<Changeset>
+            {
+                let mut n = 0;
+                let mut cs: *mut c_void = ptr::null_mut();
+                check(unsafe { ffi::sqlite3session_changeset(self.s, &mut n, &mut cs) })?;
+                Ok(Changeset { cs, n })
+            }
+            /// Write the set of changes represented by this session to `output`.
+            #[inline] pub fn changeset_strm(&mut self, output: &mut dyn Write) -> Result<()>
+            {
+                let output_ref = &output;
+                check(unsafe {
+                    ffi::sqlite3session_changeset_strm(
+                        self.s,
+                        Some(x_output),
+                        output_ref as *const &mut dyn Write as *mut c_void,
+                    )
+                })
+            }
+            /// Generate a Patchset
+            #[inline] pub fn patchset(&mut self) -> Result<Changeset>
+            {
+                let mut n = 0;
+                let mut ps: *mut c_void = ptr::null_mut();
+                check(unsafe { ffi::sqlite3session_patchset(self.s, &mut n, &mut ps) })?;
+                // TODO Validate: same struct
+                Ok(Changeset { cs: ps, n })
+            }
+            /// Write the set of patches represented by this session to `output`.
+            #[inline] pub fn patchset_strm(&mut self, output: &mut dyn Write) -> Result<()>
+            {
+                let output_ref = &output;
+                check(unsafe {
+                    ffi::sqlite3session_patchset_strm(
+                        self.s,
+                        Some(x_output),
+                        output_ref as *const &mut dyn Write as *mut c_void,
+                    )
+                })
+            }
+            /// Load the difference between tables.
+            pub fn diff(&mut self, from: DatabaseName<'_>, table: &str) -> Result<()>
+            {
+                let from = from.as_cstring()?;
+                let table = str_to_cstring(table)?;
+                let table = table.as_ptr();
+                unsafe {
+                    let mut errmsg = ptr::null_mut();
+                    let r =
+                        ffi::sqlite3session_diff(self.s, from.as_ptr(), table, &mut errmsg as *mut *mut _);
+                    if r != ffi::SQLITE_OK {
+                        let errmsg: *mut c_char = errmsg;
+                        let message = errmsg_to_string(&*errmsg);
+                        ffi::sqlite3_free(errmsg as *mut c_void);
+                        return Err(error_from_sqlite_code(r, Some(message)));
+                    }
+                }
+                Ok(())
+            }
+            /// Test if a changeset has recorded any changes
+            #[inline] pub fn is_empty(&self) -> bool {
+                unsafe { ffi::sqlite3session_isempty(self.s) != 0 }
+            }
+            /// Query the current state of the session
+            #[inline] pub fn is_enabled(&self) -> bool {
+                unsafe { ffi::sqlite3session_enable(self.s, -1) != 0 }
+            }
+            /// Enable or disable the recording of changes
+            #[inline] pub fn set_enabled(&mut self, enabled: bool)
+            {
+                unsafe {
+                    ffi::sqlite3session_enable(self.s, c_int::from(enabled));
+                }
+            }
+            /// Query the current state of the indirect flag
+            #[inline] pub fn is_indirect(&self) -> bool {
+                unsafe { ffi::sqlite3session_indirect(self.s, -1) != 0 }
+            }
+            /// Set or clear the indirect change flag
+            #[inline] pub fn set_indirect(&mut self, indirect: bool)
+            {
+                unsafe {
+                    ffi::sqlite3session_indirect(self.s, c_int::from(indirect));
+                }
+            }
+        }
+
+        impl Drop for Session<'_>
+        {
+            #[inline] fn drop(&mut self) {
+                if self.filter.is_some() {
+                    self.table_filter(None::<fn(&str) -> bool>);
+                }
+                unsafe { ffi::sqlite3session_delete(self.s) };
+            }
+        }
+        /// Invert a changeset
+        #[inline] pub fn invert_strm(input: &mut dyn Read, output: &mut dyn Write) -> Result<()>
+        {           let input_ref = &input;
+            let output_ref = &output;
+            check(unsafe {
+                ffi::sqlite3changeset_invert_strm(
+                    Some(x_input),
+                    input_ref as *const &mut dyn Read as *mut c_void,
+                    Some(x_output),
+                    output_ref as *const &mut dyn Write as *mut c_void,
+                )
+            })
+        }
+        /// Combine two changesets
+        #[inline] pub fn concat_strm(
+            input_a: &mut dyn Read,
+            input_b: &mut dyn Read,
+            output: &mut dyn Write,
+        ) -> Result<()>
+        {           let input_a_ref = &input_a;
+            let input_b_ref = &input_b;
+            let output_ref = &output;
+            check(unsafe {
+                ffi::sqlite3changeset_concat_strm(
+                    Some(x_input),
+                    input_a_ref as *const &mut dyn Read as *mut c_void,
+                    Some(x_input),
+                    input_b_ref as *const &mut dyn Read as *mut c_void,
+                    Some(x_output),
+                    output_ref as *const &mut dyn Write as *mut c_void,
+                )
+            })
+        }
+        /// Changeset or Patchset
+        pub struct Changeset {
+            cs: *mut c_void,
+            n: c_int,
+        }
+
+        impl Changeset {
+            /// Invert a changeset
+            #[inline] pub fn invert(&self) -> Result<Changeset>
+            {
+                let mut n = 0;
+                let mut cs = ptr::null_mut();
+                check(unsafe {
+                    ffi::sqlite3changeset_invert(self.n, self.cs, &mut n, &mut cs as *mut *mut _)
+                })?;
+                Ok(Changeset { cs, n })
+            }
+            /// Create an iterator to traverse a changeset
+            #[inline] pub fn iter(&self) -> Result<ChangesetIter<'_>>
+            {
+                let mut it = ptr::null_mut();
+                check(unsafe { ffi::sqlite3changeset_start(&mut it as *mut *mut _, self.n, self.cs) })?;
+                Ok(ChangesetIter {
+                    phantom: PhantomData,
+                    it,
+                    item: None,
+                })
+            }
+            /// Concatenate two changeset objects
+            #[inline] pub fn concat(a: &Changeset, b: &Changeset) -> Result<Changeset>
+            {
+                let mut n = 0;
+                let mut cs = ptr::null_mut();
+                check(unsafe {
+                    ffi::sqlite3changeset_concat(a.n, a.cs, b.n, b.cs, &mut n, &mut cs as *mut *mut _)
+                })?;
+                Ok(Changeset { cs, n })
+            }
+        }
+
+        impl Drop for Changeset {
+            #[inline] fn drop(&mut self)
+            {
+                unsafe {
+                    ffi::sqlite3_free(self.cs);
+                }
+            }
+        }
+        /// Cursor for iterating over the elements of a changeset or patchset.
+        pub struct ChangesetIter<'changeset>
+        {           phantom: PhantomData<&'changeset Changeset>,
+            it: *mut ffi::sqlite3_changeset_iter,
+            item: Option<ChangesetItem>,
+        }
+
+        impl ChangesetIter<'_>
+        {
+            /// Create an iterator on `input`
+            #[inline] pub fn start_strm<'input>(input: &&'input mut dyn Read) -> Result<ChangesetIter<'input>>
+            {
+                let mut it = ptr::null_mut();
+                check(unsafe {
+                    ffi::sqlite3changeset_start_strm(
+                        &mut it as *mut *mut _,
+                        Some(x_input),
+                        input as *const &mut dyn Read as *mut c_void,
+                    )
+                })?;
+                Ok(ChangesetIter {
+                    phantom: PhantomData,
+                    it,
+                    item: None,
+                })
+            }
+        }
+
+        impl FallibleStreamingIterator for ChangesetIter<'_>
+        {           type Error = crate::error::Error;
+            type Item = ChangesetItem;
+
+            #[inline] fn advance(&mut self) -> Result<()>
+            {
+                let rc = unsafe { ffi::sqlite3changeset_next(self.it) };
+                match rc {
+                    ffi::SQLITE_ROW =>
+        {                       self.item = Some(ChangesetItem { it: self.it });
+                        Ok(())
+                    }
+                    ffi::SQLITE_DONE =>
+        {                       self.item = None;
+                        Ok(())
+                    }
+                    code => Err(error_from_sqlite_code(code, None)),
+                }
+            }
+
+            #[inline] fn get(&self) -> Option<&ChangesetItem>
+        {               self.item.as_ref()
+            }
+        }
+        /// Operation
+        pub struct Operation<'item>
+        {           table_name: &'item str,
+            number_of_columns: i32,
+            code: Action,
+            indirect: bool,
+        }
+
+        impl Operation<'_>
+        {
+            /// Returns the table name.
+            #[inline] pub fn table_name(&self) -> &str { self.table_name
+            }
+            /// Returns the number of columns in table
+            #[inline] pub fn number_of_columns(&self) -> i32 { self.number_of_columns
+            }
+            /// Returns the action code.
+            #[inline] pub fn code(&self) -> Action { self.code
+            }
+            /// Returns `true` for an 'indirect' change.
+            #[inline] pub fn indirect(&self) -> bool { self.indirect
+            }
+        }
+
+        impl Drop for ChangesetIter<'_>
+        {
+            #[inline] fn drop(&mut self)
+            {
+                unsafe {
+                    ffi::sqlite3changeset_finalize(self.it);
+                }
+            }
+        }
+        /// An item passed to a conflict-handler by
+        /// [`Connection::apply`](Connection::apply), or an item generated by
+        /// [`ChangesetIter::next`](ChangesetIter::next).
+        pub struct ChangesetItem {
+            it: *mut ffi::sqlite3_changeset_iter,
+        }
+
+        impl ChangesetItem {
+            /// Obtain conflicting row values
+            #[inline] pub fn conflict(&self, col: usize) -> Result<ValueRef<'_>>
+        {               unsafe {
+                    let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
+                    check(ffi::sqlite3changeset_conflict(
+                        self.it,
+                        col as i32,
+                        &mut p_value,
+                    ))?;
+                    if p_value.is_null() {
+                        Err(Error::InvalidColumnIndex(col))
+                    } else {
+                        Ok(ValueRef::from_value(p_value))
+                    }
+                }
+            }
+            /// Determine the number of foreign key constraint violations
+            #[inline] pub fn fk_conflicts(&self) -> Result<i32>
+        {               unsafe {
+                    let mut p_out = 0;
+                    check(ffi::sqlite3changeset_fk_conflicts(self.it, &mut p_out))?;
+                    Ok(p_out)
+                }
+            }
+            /// Obtain new.* Values
+            #[inline] pub fn new_value(&self, col: usize) -> Result<ValueRef<'_>>
+        {               unsafe {
+                    let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
+                    check(ffi::sqlite3changeset_new(self.it, col as i32, &mut p_value))?;
+                    if p_value.is_null() {
+                        Err(Error::InvalidColumnIndex(col))
+                    } else {
+                        Ok(ValueRef::from_value(p_value))
+                    }
+                }
+            }
+            /// Obtain old.* Values
+            #[inline] pub fn old_value(&self, col: usize) -> Result<ValueRef<'_>>
+        {               unsafe {
+                    let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
+                    check(ffi::sqlite3changeset_old(self.it, col as i32, &mut p_value))?;
+                    if p_value.is_null() {
+                        Err(Error::InvalidColumnIndex(col))
+                    } else {
+                        Ok(ValueRef::from_value(p_value))
+                    }
+                }
+            }
+            /// Obtain the current operation
+            #[inline] pub fn op(&self) -> Result<Operation<'_>>
+            {
+                let mut number_of_columns = 0;
+                let mut code = 0;
+                let mut indirect = 0;
+                let tab = unsafe {
+                    let mut pz_tab: *const c_char = ptr::null();
+                    check(ffi::sqlite3changeset_op(
+                        self.it,
+                        &mut pz_tab,
+                        &mut number_of_columns,
+                        &mut code,
+                        &mut indirect,
+                    ))?;
+                    CStr::from_ptr(pz_tab)
+                };
+                let table_name = tab.to_str()?;
+                Ok(Operation {
+                    table_name,
+                    number_of_columns,
+                    code: Action::from(code),
+                    indirect: indirect != 0,
+                })
+            }
+            /// Obtain the primary key definition of a table
+            #[inline] pub fn pk(&self) -> Result<&[u8]>
+            {
+                let mut number_of_columns = 0;
+                unsafe {
+                    let mut pks: *mut c_uchar = ptr::null_mut();
+                    check(ffi::sqlite3changeset_pk(
+                        self.it,
+                        &mut pks,
+                        &mut number_of_columns,
+                    ))?;
+                    Ok(from_raw_parts(pks, number_of_columns as usize))
+                }
+            }
+        }
+        /// Used to combine two or more changesets or patchsets
+        pub struct Changegroup {
+            cg: *mut ffi::sqlite3_changegroup,
+        }
+
+        impl Changegroup {
+            /// Create a new change group.
+            #[inline] pub fn new() -> Result<Self>
+            {
+                let mut cg = ptr::null_mut();
+                check(unsafe { ffi::sqlite3changegroup_new(&mut cg) })?;
+                Ok(Changegroup { cg })
+            }
+            /// Add a changeset
+            #[inline] pub fn add(&mut self, cs: &Changeset) -> Result<()>
+        {               check(unsafe { ffi::sqlite3changegroup_add(self.cg, cs.n, cs.cs) })
+            }
+            /// Add a changeset read from `input` to this change group.
+            #[inline] pub fn add_stream(&mut self, input: &mut dyn Read) -> Result<()>
+            {
+                let input_ref = &input;
+                check(unsafe {
+                    ffi::sqlite3changegroup_add_strm(
+                        self.cg,
+                        Some(x_input),
+                        input_ref as *const &mut dyn Read as *mut c_void,
+                    )
+                })
+            }
+            /// Obtain a composite Changeset
+            #[inline] pub fn output(&mut self) -> Result<Changeset>
+            {
+                let mut n = 0;
+                let mut output: *mut c_void = ptr::null_mut();
+                check(unsafe { ffi::sqlite3changegroup_output(self.cg, &mut n, &mut output) })?;
+                Ok(Changeset { cs: output, n })
+            }
+            /// Write the combined set of changes to `output`.
+            #[inline] pub fn output_strm(&mut self, output: &mut dyn Write) -> Result<()>
+            {
+                let output_ref = &output;
+                check(unsafe {
+                    ffi::sqlite3changegroup_output_strm(
+                        self.cg,
+                        Some(x_output),
+                        output_ref as *const &mut dyn Write as *mut c_void,
+                    )
+                })
+            }
+        }
+
+        impl Drop for Changegroup {
+            #[inline] fn drop(&mut self)
+            {
+                unsafe {
+                    ffi::sqlite3changegroup_delete(self.cg);
+                }
+            }
+        }
+
+        impl Connection {
+            /// Apply a changeset to a database
+            pub fn apply<F, C>(&self, cs: &Changeset, filter: Option<F>, conflict: C) -> Result<()> where                F: Fn(&str) -> bool + Send + 'static,
+                C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static,
+            {
+                let db = self.db.borrow_mut().db;
+
+                let filtered = filter.is_some();
+                let tuple = &mut (filter, conflict);
+                check(unsafe {
+                    if filtered {
+                        ffi::sqlite3changeset_apply(
+                            db,
+                            cs.n,
+                            cs.cs,
+                            Some(call_filter::<F, C>),
+                            Some(call_conflict::<F, C>),
+                            tuple as *mut (Option<F>, C) as *mut c_void,
+                        )
+                    } else {
+                        ffi::sqlite3changeset_apply(
+                            db,
+                            cs.n,
+                            cs.cs,
+                            None,
+                            Some(call_conflict::<F, C>),
+                            tuple as *mut (Option<F>, C) as *mut c_void,
+                        )
+                    }
+                })
+            }
+            /// Apply a changeset to a database
+            pub fn apply_strm<F, C>(
+                &self,
+                input: &mut dyn Read,
+                filter: Option<F>,
+                conflict: C,
+            ) -> Result<()> where                F: Fn(&str) -> bool + Send + 'static,
+                C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static,
+            {
+                let input_ref = &input;
+                let db = self.db.borrow_mut().db;
+
+                let filtered = filter.is_some();
+                let tuple = &mut (filter, conflict);
+                check(unsafe {
+                    if filtered {
+                        ffi::sqlite3changeset_apply_strm(
+                            db,
+                            Some(x_input),
+                            input_ref as *const &mut dyn Read as *mut c_void,
+                            Some(call_filter::<F, C>),
+                            Some(call_conflict::<F, C>),
+                            tuple as *mut (Option<F>, C) as *mut c_void,
+                        )
+                    } else {
+                        ffi::sqlite3changeset_apply_strm(
+                            db,
+                            Some(x_input),
+                            input_ref as *const &mut dyn Read as *mut c_void,
+                            None,
+                            Some(call_conflict::<F, C>),
+                            tuple as *mut (Option<F>, C) as *mut c_void,
+                        )
+                    }
+                })
+            }
+        }
+        /// Constants passed to the conflict handler
+        #[repr(i32)]
+        #[derive(Debug, PartialEq, Eq)]
+        #[non_exhaustive]
+        pub enum ConflictType {
+            UNKNOWN = -1,
+            SQLITE_CHANGESET_DATA = ffi::SQLITE_CHANGESET_DATA,
+            SQLITE_CHANGESET_NOTFOUND = ffi::SQLITE_CHANGESET_NOTFOUND,
+            SQLITE_CHANGESET_CONFLICT = ffi::SQLITE_CHANGESET_CONFLICT,
+            SQLITE_CHANGESET_CONSTRAINT = ffi::SQLITE_CHANGESET_CONSTRAINT,
+            SQLITE_CHANGESET_FOREIGN_KEY = ffi::SQLITE_CHANGESET_FOREIGN_KEY,
+        }
+        impl From<i32> for ConflictType {
+            fn from(code: i32) -> ConflictType {
+                match code {
+                    ffi::SQLITE_CHANGESET_DATA => ConflictType::SQLITE_CHANGESET_DATA,
+                    ffi::SQLITE_CHANGESET_NOTFOUND => ConflictType::SQLITE_CHANGESET_NOTFOUND,
+                    ffi::SQLITE_CHANGESET_CONFLICT => ConflictType::SQLITE_CHANGESET_CONFLICT,
+                    ffi::SQLITE_CHANGESET_CONSTRAINT => ConflictType::SQLITE_CHANGESET_CONSTRAINT,
+                    ffi::SQLITE_CHANGESET_FOREIGN_KEY => ConflictType::SQLITE_CHANGESET_FOREIGN_KEY,
+                    _ => ConflictType::UNKNOWN,
+                }
+            }
+        }
+        /// Constants returned by the conflict handler.
+        #[repr(i32)]
+        #[derive(Debug, PartialEq, Eq)]
+        #[non_exhaustive]
+        pub enum ConflictAction {
+            SQLITE_CHANGESET_OMIT = ffi::SQLITE_CHANGESET_OMIT,
+            SQLITE_CHANGESET_REPLACE = ffi::SQLITE_CHANGESET_REPLACE,
+            SQLITE_CHANGESET_ABORT = ffi::SQLITE_CHANGESET_ABORT,
+        }
+
+        unsafe extern "C" fn call_filter<F, C>(p_ctx: *mut c_void, tbl_str: *const c_char) -> c_int where
+            F: Fn(&str) -> bool + Send + 'static,
+            C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static,
+        {
+            let tbl_name = CStr::from_ptr(tbl_str).to_str();
+            c_int::from(
+                catch_unwind(|| {
+                    let tuple: *mut (Option<F>, C) = p_ctx.cast::<(Option<F>, C)>();
+                    if let Some(ref filter) = (*tuple).0 {
+                        filter(tbl_name.expect("illegal table name"))
+                    } else {
+                        true
+                    }
+                })
+                .unwrap_or_default(),
+            )
+        }
+
+        unsafe extern "C" fn call_conflict<F, C>(
+            p_ctx: *mut c_void,
+            e_conflict: c_int,
+            p: *mut ffi::sqlite3_changeset_iter,
+        ) -> c_int where
+            F: Fn(&str) -> bool + Send + 'static,
+            C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static,
+        {
+            let conflict_type = ConflictType::from(e_conflict);
+            let item = ChangesetItem { it: p };
+            if let Ok(action) = catch_unwind(|| {
+                let tuple: *mut (Option<F>, C) = p_ctx.cast::<(Option<F>, C)>();
+                (*tuple).1(conflict_type, item)
+            }) {
+                action as c_int
+            } else {
+                ffi::SQLITE_CHANGESET_ABORT
+            }
+        }
+
+        unsafe extern "C" fn x_input(p_in: *mut c_void, data: *mut c_void, len: *mut c_int) -> c_int {
+            if p_in.is_null() {
+                return ffi::SQLITE_MISUSE;
+            }
+            let bytes: &mut [u8] = from_raw_parts_mut(data as *mut u8, *len as usize);
+            let input = p_in as *mut &mut dyn Read;
+            match (*input).read(bytes) {
+                Ok(n) =>
+        {                   *len = n as i32;
+                    ffi::SQLITE_OK
+                }
+                Err(_) => ffi::SQLITE_IOERR_READ,
+            }
+        }
+
+        unsafe extern "C" fn x_output(p_out: *mut c_void, data: *const c_void, len: c_int) -> c_int {
+            if p_out.is_null() {
+                return ffi::SQLITE_MISUSE;
+            }
+
+            let bytes: &[u8] = from_raw_parts(data as *const u8, len as usize);
+            let output = p_out as *mut &mut dyn Write;
+            match (*output).write_all(bytes) {
+                Ok(_) => ffi::SQLITE_OK,
+                Err(_) => ffi::SQLITE_IOERR_WRITE,
+            }
+        }   
     }
 
     pub mod statement
     {
-        
+        use ::
+        {
+            connect::
+            {
+                types::{ToSql, ToSqlOutput},
+                vtab::array::{free_array, ARRAY_TYPE},
+                ffi, len_as_c_int, str_for_sqlite, AndThenRows, Connection, Error, MappedRows, Params, RawStatement, Result,
+                Row, Rows, ValueRef,
+            },
+            os::raw::{ c_int, c_void },
+            rc::{ Rc },
+            slice::{ from_raw_parts },
+            *,
+        };
+        /// A prepared statement.
+        pub struct Statement<'conn> 
+        {
+            conn: &'conn Connection,
+            pub(crate) stmt: RawStatement,
+        }
+
+        impl Statement<'_>
+        {
+            /// Execute the prepared statement.
+            #[inline] pub fn execute<P: Params>(&mut self, params: P) -> Result<usize> 
+            {
+                params.__bind_in(self)?;
+                self.execute_with_bound_parameters()
+            }
+            /// Execute an INSERT and return the ROWID.
+            #[inline] pub fn insert<P: Params>(&mut self, params: P) -> Result<i64> 
+            {
+                let changes = self.execute(params)?;
+                match changes {
+                    1 => Ok(self.conn.last_insert_rowid()),
+                    _ => Err(Error::StatementChangedRows(changes)),
+                }
+            }
+            /// Execute the prepared statement, returning a handle to the resulting rows.
+            #[inline] pub fn query<P: Params>(&mut self, params: P) -> Result<Rows<'_>> 
+            {
+                params.__bind_in(self)?;
+                Ok(Rows::new(self))
+            }
+            /// Executes the prepared statement and maps a function over the resulting
+            /// rows, returning an iterator over the mapped function results.
+            pub fn query_map<T, P, F>(&mut self, params: P, f: F) -> Result<MappedRows<'_, F>> where 
+            P: Params,
+            F: FnMut(&Row<'_>) -> Result<T>
+            { self.query(params).map(|rows| rows.mapped(f)) }
+            /// Executes the prepared statement and maps a function over the resulting
+            /// rows, where the function returns a `Result` with `Error` type
+            /// implementing `std::convert::From<Error>` (so errors can be unified).
+            #[inline] pub fn query_and_then<T, E, P, F>(&mut self, params: P, f: F) -> Result<AndThenRows<'_, F>> where
+            P: Params,
+            E: From<Error>,
+            F: FnMut(&Row<'_>) -> Result<T, E>
+            { self.query(params).map(|rows| rows.and_then(f)) }
+            /// Return `true` if a query in the SQL statement it executes returns one
+            /// or more rows and `false` if the SQL returns an empty set.
+            #[inline] pub fn exists<P: Params>(&mut self, params: P) -> Result<bool>
+            {
+                let mut rows = self.query(params)?;
+                let exists = rows.next()?.is_some();
+                Ok(exists)
+            }
+            /// Convenience method to execute a query that is expected to return a single row.
+            pub fn query_row<T, P, F>(&mut self, params: P, f: F) -> Result<T> where
+            P: Params,
+            F: FnOnce(&Row<'_>) -> Result<T>
+            {
+                let mut rows = self.query(params)?;
+                rows.get_expected_row().and_then(f)
+            }
+            /// Consumes the statement.
+            #[inline] pub fn finalize(mut self) -> Result<()> { self.finalize_() }
+            /// Return the (one-based) index of an SQL parameter given its name.
+            #[inline] pub fn parameter_index(&self, name: &str) -> Result<Option<usize>> 
+            { Ok(self.stmt.bind_parameter_index(name)) }
+            /// Return the SQL parameter name given its (one-based) index (the inverse
+            /// of [`Statement::parameter_index`]).
+            #[inline] pub fn parameter_name(&self, index: usize) -> Option<&'_ str> 
+            { self.stmt.bind_parameter_name(index as i32).map(|name| {
+                    name.to_str()
+                        .expect("Invalid UTF-8 sequence in parameter name")
+                })
+            }
+
+            #[inline] pub fn bind_parameters<P>(&mut self, params: P) -> Result<()> where                P: IntoIterator,
+            P::Item: ToSql
+            {
+                let expected = self.stmt.bind_parameter_count();
+                let mut index = 0;
+                for p in params {
+                    index += 1;
+                    if index > expected {
+                        break;
+                    }
+                    self.bind_parameter(&p, index)?;
+                }
+                if index != expected {
+                    Err(Error::InvalidParameterCount(index, expected))
+                } else {
+                    Ok(())
+                }
+            }
+
+            #[inline] pub fn ensure_parameter_count(&self, n: usize) -> Result<()>
+            {
+                let count = self.parameter_count();
+                if count != n {
+                    Err(Error::InvalidParameterCount(n, count))
+                } else {
+                    Ok(())
+                }
+            }
+
+            #[inline] pub fn bind_parameters_named<T: ?Sized + ToSql>( &mut self, params: &[(&str, &T)] ) -> Result<()>
+            {
+                for &(name, value) in params
+                {
+                    if let Some(i) = self.parameter_index(name)? {
+                        let ts: &dyn ToSql = &value;
+                        self.bind_parameter(ts, i)?;
+                    } else {
+                        return Err(Error::InvalidParameterName(name.into()));
+                    }
+                }
+                Ok(())
+            }
+            /// Return the number of parameters that can be bound to this statement.
+            #[inline] pub fn parameter_count(&self) -> usize { self.stmt.bind_parameter_count() }
+            /// Low level API to directly bind a parameter to a given index.
+            #[inline] pub fn raw_bind_parameter<T: ToSql>( &mut self, one_based_col_index: usize, param: T ) -> Result<()>
+            { self.bind_parameter(&param, one_based_col_index) }
+            /// Low level API to execute a statement given that all parameters were
+            /// bound explicitly with the [`Statement::raw_bind_parameter`] API.
+            #[inline] pub fn raw_execute(&mut self) -> Result<usize> { self.execute_with_bound_parameters() }
+            /// Low level API to get `Rows` for this query given that all parameters
+            /// were bound explicitly with the [`Statement::raw_bind_parameter`] API.
+            #[inline] pub fn raw_query(&mut self) -> Rows<'_> { Rows::new(self) }
+            
+            fn bind_parameter<P: ?Sized + ToSql>(&self, param: &P, col: usize) -> Result<()>
+            {
+                let value = param.to_sql()?;
+                let ptr = unsafe { self.stmt.ptr() };
+                let value = match value 
+                {
+                    ToSqlOutput::Borrowed(v) => v,
+                    ToSqlOutput::Owned(ref v) => ValueRef::from(v),
+                    ToSqlOutput::ZeroBlob(len) => 
+                    {
+                        return self
+                            .conn
+                            .decode_result(unsafe { ffi::sqlite3_bind_zeroblob(ptr, col as c_int, len) });
+                    }
+                    ToSqlOutput::Arg(_) =>
+        {                       return Err(Error::SqliteFailure(
+                            ffi::Error::new(ffi::SQLITE_MISUSE),
+                            Some(format!("Unsupported value \"{value:?}\"")),
+                        ));
+                    }
+                    
+                    ToSqlOutput::Array(a) =>
+        {                       return self.conn.decode_result(unsafe {
+                            ffi::sqlite3_bind_pointer(
+                                ptr,
+                                col as c_int,
+                                Rc::into_raw(a) as *mut c_void,
+                                ARRAY_TYPE,
+                                Some(free_array),
+                            )
+                        });
+                    }
+                };
+
+                self.conn.decode_result(match value
+                {
+                    ValueRef::Null => unsafe { ffi::sqlite3_bind_null(ptr, col as c_int) },
+                    ValueRef::Integer(i) => unsafe { ffi::sqlite3_bind_int64(ptr, col as c_int, i) },
+                    ValueRef::Real(r) => unsafe { ffi::sqlite3_bind_double(ptr, col as c_int, r) },
+                    ValueRef::Text(s) => unsafe {
+                        let (c_str, len, destructor) = str_for_sqlite(s)?;
+                        ffi::sqlite3_bind_text(ptr, col as c_int, c_str, len, destructor)
+                    },
+                    ValueRef::Blob(b) => unsafe {
+                        let length = len_as_c_int(b.len())?;
+                        if length == 0 {
+                            ffi::sqlite3_bind_zeroblob(ptr, col as c_int, 0)
+                        } else {
+                            ffi::sqlite3_bind_blob(
+                                ptr,
+                                col as c_int,
+                                b.as_ptr().cast::<c_void>(),
+                                length,
+                                ffi::SQLITE_TRANSIENT(),
+                            )
+                        }
+                    },
+                })
+            }
+
+            #[inline] fn execute_with_bound_parameters(&mut self) -> Result<usize>
+            { self.check_update()?;
+                let r = self.stmt.step();
+                let rr = self.stmt.reset();
+                match r
+                {
+                    ffi::SQLITE_DONE => match rr
+                    {
+                        ffi::SQLITE_OK => Ok(self.conn.changes() as usize),
+                        _ => Err(self.conn.decode_result(rr).unwrap_err()),
+                    },
+
+                    ffi::SQLITE_ROW => Err(Error::ExecuteReturnedResults),
+                    _ => Err(self.conn.decode_result(r).unwrap_err()),
+                }
+            }
+
+            #[inline] fn finalize_(&mut self) -> Result<()>
+            {
+                let mut stmt = unsafe { RawStatement::new(ptr::null_mut(), 0) };
+                mem::swap(&mut stmt, &mut self.stmt);
+                self.conn.decode_result(stmt.finalize())
+            }
+
+            #[inline] fn check_update(&self) -> Result<()>
+            {
+                if self.column_count() > 0 && self.stmt.readonly() { return Err(Error::ExecuteReturnedResults); }
+                Ok(())
+            }
+            /// Returns a string containing the SQL text of prepared statement with bound parameters expanded.
+            pub fn expanded_sql(&self) -> Option<String>
+            { self.stmt
+                .expanded_sql()
+                .map(|s| s.to_string_lossy().to_string())
+            }
+            /// Get the value for one of the status counters for this statement.
+            #[inline] pub fn get_status(&self, status: StatementStatus) -> i32 { self.stmt.get_status(status, false) }
+            /// Reset the value of one of the status counters for this statement,
+            #[inline] pub fn reset_status(&self, status: StatementStatus) -> i32 { self.stmt.get_status(status, true) }
+            /// Returns 1 if the prepared statement is an EXPLAIN statement,
+            /// or 2 if the statement is an EXPLAIN QUERY PLAN,
+            /// or 0 if it is an ordinary statement or a NULL pointer.
+            #[inline] pub fn is_explain(&self) -> i32 { self.stmt.is_explain() }
+            /// Returns true if the statement is read only.
+            #[inline] pub fn readonly(&self) -> bool { self.stmt.readonly() }
+
+            #[inline] pub fn check_no_tail(&self) -> Result<()> 
+            {
+                if self.stmt.has_tail() {
+                    Err(Error::MultipleStatement)
+                } else {
+                    Ok(())
+                }
+            }            
+            
+            #[inline] pub unsafe fn into_raw(mut self) -> RawStatement 
+            {
+                let mut stmt = RawStatement::new(ptr::null_mut(), 0);
+                mem::swap(&mut stmt, &mut self.stmt);
+                stmt
+            }
+            /// Reset all bindings
+            pub fn clear_bindings(&mut self)
+            { self.stmt.clear_bindings();
+            }
+        }
+
+        impl fmt::Debug for Statement<'_> 
+        {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                let sql = if self.stmt.is_null() {
+                    Ok("")
+                } else {
+                    self.stmt.sql().unwrap().to_str()
+                };
+                f.debug_struct("Statement")
+                    .field("conn", self.conn)
+                    .field("stmt", &self.stmt)
+                    .field("sql", &sql)
+                    .finish()
+            }
+        }
+
+        impl Drop for Statement<'_>
+        {
+            #[inline] fn drop(&mut self)
+            { self.finalize_();
+            }
+        }
+
+        impl Statement<'_>
+        {
+            #[inline] pub fn new(conn: &Connection, stmt: RawStatement) -> Statement<'_>
+        {               Statement { conn, stmt }
+            }
+
+            pub(super) fn value_ref(&self, col: usize) -> ValueRef<'_>
+            {
+                let raw = unsafe { self.stmt.ptr() };
+
+                match self.stmt.column_type(col) {
+                    ffi::SQLITE_NULL => ValueRef::Null,
+                    ffi::SQLITE_INTEGER =>
+        {                       ValueRef::Integer(unsafe { ffi::sqlite3_column_int64(raw, col as c_int) })
+                    }
+                    ffi::SQLITE_FLOAT =>
+        {                       ValueRef::Real(unsafe { ffi::sqlite3_column_double(raw, col as c_int) })
+                    }
+                    ffi::SQLITE_TEXT =>
+        {                       let s = unsafe {
+                            let text = ffi::sqlite3_column_text(raw, col as c_int);
+                            let len = ffi::sqlite3_column_bytes(raw, col as c_int);
+                            assert!(
+                                !text.is_null(),
+                                "unexpected SQLITE_TEXT column type with NULL data"
+                            );
+                            from_raw_parts(text.cast::<u8>(), len as usize)
+                        };
+
+                        ValueRef::Text(s)
+                    }
+                    ffi::SQLITE_BLOB =>
+        {                       let (blob, len) = unsafe {
+                            (
+                                ffi::sqlite3_column_blob(raw, col as c_int),
+                                ffi::sqlite3_column_bytes(raw, col as c_int),
+                            )
+                        };
+
+                        assert!(
+                            len >= 0,
+                            "unexpected negative return from sqlite3_column_bytes"
+                        );
+                        if len > 0 {
+                            assert!(
+                                !blob.is_null(),
+                                "unexpected SQLITE_BLOB column type with NULL data"
+                            );
+                            ValueRef::Blob(unsafe { from_raw_parts(blob.cast::<u8>(), len as usize) })
+                        } else {
+                            ValueRef::Blob(&[])
+                        }
+                    }
+                    _ => unreachable!("sqlite3_column_type returned invalid value"),
+                }
+            }
+
+            #[inline] pub fn step(&self) -> Result<bool>
+            {
+                match self.stmt.step() {
+                    ffi::SQLITE_ROW => Ok(true),
+                    ffi::SQLITE_DONE => Ok(false),
+                    code => Err(self.conn.decode_result(code).unwrap_err()),
+                }
+            }
+
+            #[inline] pub fn reset(&self) -> Result<()>
+            {
+                match self.stmt.reset() {
+                    ffi::SQLITE_OK => Ok(()),
+                    code => Err(self.conn.decode_result(code).unwrap_err()),
+                }
+            }
+        }
+        /// Prepared statement status counters.
+        #[repr(i32)] #[non_exhaustive] #[derive(Clone, Copy, PartialEq, Eq)]
+        pub enum StatementStatus
+        {
+            /// Equivalent to SQLITE_STMTSTATUS_FULLSCAN_STEP
+            FullscanStep = 1,
+            /// Equivalent to SQLITE_STMTSTATUS_SORT
+            Sort = 2,
+            /// Equivalent to SQLITE_STMTSTATUS_AUTOINDEX
+            AutoIndex = 3,
+            /// Equivalent to SQLITE_STMTSTATUS_VM_STEP
+            VmStep = 4,
+            /// Equivalent to SQLITE_STMTSTATUS_REPREPARE (3.20.0)
+            RePrepare = 5,
+            /// Equivalent to SQLITE_STMTSTATUS_RUN (3.20.0)
+            Run = 6,
+            /// Equivalent to SQLITE_STMTSTATUS_FILTER_MISS
+            FilterMiss = 7,
+            /// Equivalent to SQLITE_STMTSTATUS_FILTER_HIT
+            FilterHit = 8,
+            /// Equivalent to SQLITE_STMTSTATUS_MEMUSED (3.20.0)
+            MemUsed = 99,
+        }
     }
 
     pub mod trace
     {
-        
+        //! Tracing and profiling functions. Error and warning log.
+        use ::
+        {
+            connect::{ ffi, Connection },
+            ffi::{ CStr, CString },
+            os::raw::{ c_char, c_int, c_void },
+            panic::{ catch_unwind },
+            time::{ Duration },
+            *,
+        };
+
+        /// Write a message into the error log established by `config_log`.
+        #[inline] pub fn log(err_code: c_int, msg: &str) {
+            let msg = CString::new(msg).expect("SQLite log messages cannot contain embedded zeroes");
+            unsafe {
+                ffi::sqlite3_log(err_code, b"%s\0" as *const _ as *const c_char, msg.as_ptr());
+            }
+        }
+
+        impl Connection 
+        {
+            /// Register or clear a callback function that can be
+            /// used for tracing the execution of SQL statements.
+            pub fn trace(&mut self, trace_fn: Option<fn(&str)>)
+            {
+                unsafe extern "C" fn trace_callback(p_arg: *mut c_void, z_sql: *const c_char) {
+                    let trace_fn: fn(&str) = mem::transmute(p_arg);
+                    let s = CStr::from_ptr(z_sql).to_string_lossy();
+                    drop(catch_unwind(|| trace_fn(&s)));
+                }
+
+                let c = self.db.borrow_mut();
+                match trace_fn {
+                    Some(f) => unsafe {
+                        ffi::sqlite3_trace(c.db(), Some(trace_callback), f as *mut c_void);
+                    },
+                    None => unsafe {
+                        ffi::sqlite3_trace(c.db(), None, ptr::null_mut());
+                    },
+                }
+            }
+            /// Register or clear a callback function that can be
+            /// used for profiling the execution of SQL statements.
+            pub fn profile(&mut self, profile_fn: Option<fn(&str, Duration)>)
+            {
+                unsafe extern "C" fn profile_callback(
+                    p_arg: *mut c_void,
+                    z_sql: *const c_char,
+                    nanoseconds: u64,
+                ) {
+                    let profile_fn: fn(&str, Duration) = mem::transmute(p_arg);
+                    let s = CStr::from_ptr(z_sql).to_string_lossy();
+                    const NANOS_PER_SEC: u64 = 1_000_000_000;
+
+                    let duration = Duration::new(
+                        nanoseconds / NANOS_PER_SEC,
+                        (nanoseconds % NANOS_PER_SEC) as u32,
+                    );
+                    drop(catch_unwind(|| profile_fn(&s, duration)));
+                }
+
+                let c = self.db.borrow_mut();
+                match profile_fn {
+                    Some(f) => unsafe {
+                        ffi::sqlite3_profile(c.db(), Some(profile_callback), f as *mut c_void)
+                    },
+                    None => unsafe { ffi::sqlite3_profile(c.db(), None, ptr::null_mut()) },
+                };
+            }
+        }
     }
 
     pub mod transaction
     {
-        
+        use ::
+        {
+            connect::{ Connection, Result },
+            ops::{ Deref },
+            *,
+        };
+        /// Options for transaction behavior.
+        #[non_exhaustive] #[derive(Copy, Clone)]        
+        pub enum TransactionBehavior 
+        {
+            /// DEFERRED means that the transaction does not actually start until the database is first accessed.
+            Deferred,
+            /// IMMEDIATE cause the database connection to start a new write immediately.
+            Immediate,
+            /// EXCLUSIVE prevents other database connections from reading the database while the transaction is underway.
+            Exclusive,
+        }
+        /// Options for how a Transaction or Savepoint should behave when it is dropped.
+        #[non_exhaustive] #[derive(Copy, Clone, Debug, PartialEq, Eq)]        
+        pub enum DropBehavior 
+        {
+            /// Roll back the changes. This is the default.
+            Rollback,
+            /// Commit the changes.
+            Commit,
+            /// Do not commit or roll back changes.
+            Ignore,
+            /// Panic. Used to enforce intentional behavior during development.
+            Panic,
+        }
+        /// Represents a transaction on a database connection.
+        #[derive(Debug)]
+        pub struct Transaction<'conn>
+        {
+            conn: &'conn Connection,
+            drop_behavior: DropBehavior,
+        }
+        /// Represents a savepoint on a database connection.
+        #[derive(Debug)]
+        pub struct Savepoint<'conn>
+        {           conn: &'conn Connection,
+            name: String,
+            drop_behavior: DropBehavior,
+            committed: bool,
+        }
+
+        impl Transaction<'_>
+        {           
+            /// Begin a new transaction. Cannot be nested; see `savepoint` for nested transactions.
+            #[inline] pub fn new(conn: &mut Connection, behavior: TransactionBehavior) -> Result<Transaction<'_>>
+            { Self::new_unchecked(conn, behavior) }
+            /// Begin a new transaction, failing if a transaction is open.
+            #[inline] pub fn new_unchecked( conn: &Connection, behavior: TransactionBehavior ) -> Result<Transaction<'_>>
+            {
+                let query = match behavior
+                {
+                    TransactionBehavior::Deferred => "BEGIN DEFERRED",
+                    TransactionBehavior::Immediate => "BEGIN IMMEDIATE",
+                    TransactionBehavior::Exclusive => "BEGIN EXCLUSIVE",
+                };
+                
+                conn.execute_batch(query).map(move |()| Transaction
+                {
+                    conn,
+                    drop_behavior: DropBehavior::Rollback,
+                })
+            }
+            /// Starts a new [savepoint](http://www.sqlite.org/lang_savepoint.html), allowing nested transactions.
+            #[inline] pub fn savepoint(&mut self) -> Result<Savepoint<'_>> { Savepoint::new_(self.conn) }
+            /// Create a new savepoint with a custom savepoint name. See `savepoint()`.
+            #[inline] pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint<'_>>
+            { Savepoint::with_name_(self.conn, name) }
+            /// Get the current setting for what happens to the transaction when it is dropped.
+            #[inline] #[must_use]
+            pub fn drop_behavior(&self) -> DropBehavior { self.drop_behavior }
+            /// Configure the transaction to perform the specified action when it is dropped.
+            #[inline] pub fn set_drop_behavior(&mut self, drop_behavior: DropBehavior)
+            { self.drop_behavior = drop_behavior;
+            }
+            /// A convenience method which consumes and commits a transaction.
+            #[inline] pub fn commit(mut self) -> Result<()> { self.commit_() }
+
+            #[inline] fn commit_(&mut self) -> Result<()>
+            { self.conn.execute_batch("COMMIT")?;
+                Ok(())
+            }
+            /// A convenience method which consumes and rolls back a transaction.
+            #[inline] pub fn rollback(mut self) -> Result<()> { self.rollback_() }
+
+            #[inline] fn rollback_(&mut self) -> Result<()>
+            { self.conn.execute_batch("ROLLBACK")?;
+                Ok(())
+            }
+            /// Consumes the transaction, committing or rolling back according to the current setting (see `drop_behavior`).
+            #[inline] pub fn finish(mut self) -> Result<()> { self.finish_() }
+
+            #[inline] fn finish_(&mut self) -> Result<()>
+            {
+                if self.conn.is_autocommit() { return Ok(()); }
+                
+                match self.drop_behavior()
+                {
+                    DropBehavior::Commit => self.commit_().or_else(|_| self.rollback_()),
+                    DropBehavior::Rollback => self.rollback_(),
+                    DropBehavior::Ignore => Ok(()),
+                    DropBehavior::Panic => panic!("Transaction dropped unexpectedly."),
+                }
+            }
+        }
+
+        impl Deref for Transaction<'_>
+        {
+            type Target = Connection;
+
+            #[inline] fn deref(&self) -> &Connection { self.conn
+            }
+        }
+
+        #[allow(unused_must_use)]
+        impl Drop for Transaction<'_>
+        {           #[inline] fn drop(&mut self) { self.finish_(); }
+        }
+
+        impl Savepoint<'_>
+        {
+            #[inline] fn with_name_<T: Into<String>>(conn: &Connection, name: T) -> Result<Savepoint<'_>>
+            {
+                let name = name.into();
+                conn.execute_batch(&format!("SAVEPOINT {name}"))
+                .map(|()| Savepoint {
+                    conn,
+                    name,
+                    drop_behavior: DropBehavior::Rollback,
+                    committed: false,
+                })
+            }
+
+            #[inline] fn new_(conn: &Connection) -> Result<Savepoint<'_>> { Savepoint::with_name_(conn, "_rusqlite_sp") }
+            /// Begin a new savepoint. Can be nested.
+            #[inline] pub fn new(conn: &mut Connection) -> Result<Savepoint<'_>> { Savepoint::new_(conn) }
+            /// Begin a new savepoint with a user-provided savepoint name.
+            #[inline] pub fn with_name<T: Into<String>>(conn: &mut Connection, name: T) -> Result<Savepoint<'_>>
+            { Savepoint::with_name_(conn, name) }
+            /// Begin a nested savepoint.
+            #[inline] pub fn savepoint(&mut self) -> Result<Savepoint<'_>>{ Savepoint::new_(self.conn) 
+            /// Begin a nested savepoint with a user-provided savepoint name.
+            #[inline] pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint<'_>>
+            { Savepoint::with_name_(self.conn, name) }
+            /// Get the current setting for what happens to the savepoint when it is dropped.
+            #[inline] #[must_use]
+            pub fn drop_behavior(&self) -> DropBehavior { self.drop_behavior }
+            /// Configure the savepoint to perform the specified action when it is dropped.
+            #[inline] pub fn set_drop_behavior(&mut self, drop_behavior: DropBehavior)
+            { self.drop_behavior = drop_behavior; }
+            /// A convenience method which consumes and commits a savepoint.
+            #[inline] pub fn commit(mut self) -> Result<()> { self.commit_() }
+
+            #[inline] fn commit_(&mut self) -> Result<()>
+            {
+                self.conn.execute_batch(&format!("RELEASE {}", self.name))?;
+                self.committed = true;
+                Ok(())
+            }
+            /// A convenience method which rolls back a savepoint.
+            #[inline] pub fn rollback(&mut self) -> Result<()> 
+            { self.conn.execute_batch(&format!("ROLLBACK TO {}", self.name)) }
+            /// Consumes the savepoint, committing or rolling back according to the current setting (see `drop_behavior`).
+            #[inline] pub fn finish(mut self) -> Result<()>{ self.finish_() }
+
+            #[inline] fn finish_(&mut self) -> Result<()>
+            {
+                if self.committed { return Ok(()); }
+                
+                match self.drop_behavior()
+                {
+                    DropBehavior::Commit => self
+                        .commit_()
+                        .or_else(|_| self.rollback().and_then(|()| self.commit_())),
+                    DropBehavior::Rollback => self.rollback().and_then(|()| self.commit_()),
+                    DropBehavior::Ignore => Ok(()),
+                    DropBehavior::Panic => panic!("Savepoint dropped unexpectedly."),
+                }
+            }
+        }
+
+        impl Deref for Savepoint<'_>
+        {           
+            type Target = Connection;
+            #[inline] fn deref(&self) -> &Connection { self.conn }
+        }
+
+        #[allow(unused_must_use)]
+        impl Drop for Savepoint<'_>
+        {           
+            #[inline] fn drop(&mut self) { self.finish_(); }
+        }
+        /// Transaction state of a database
+        #[non_exhaustive] #[derive(Clone, Copy, Debug, PartialEq, Eq)]        
+        pub enum TransactionState
+        {
+            /// Equivalent to SQLITE_TXN_NONE
+            None,
+            /// Equivalent to SQLITE_TXN_READ
+            Read,
+            /// Equivalent to SQLITE_TXN_WRITE
+            Write,
+        }
+
+        impl Connection
+        {
+            /// Begin a new transaction with the default behavior (DEFERRED).
+            #[inline] pub fn transaction(&mut self) -> Result<Transaction<'_>> 
+            { Transaction::new(self, self.transaction_behavior) }
+            /// Begin a new transaction with a specified behavior.
+            #[inline] pub fn transaction_with_behavior( &mut self, txb:TransactionBehavior ) -> Result<Transaction<'_>>
+            { Transaction::new( self, txb ) }
+            /// Begin a new transaction with the default behavior (DEFERRED).
+            pub fn unchecked_transaction(&self) -> Result<Transaction<'_>>
+            { Transaction::new_unchecked(self, self.transaction_behavior) }
+            /// Begin a new savepoint with the default behavior (DEFERRED).
+            #[inline] pub fn savepoint(&mut self) -> Result<Savepoint<'_>> { Savepoint::new(self) }
+            /// Begin a new savepoint with a specified name.
+            #[inline] pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint<'_>>
+            { Savepoint::with_name(self, name) }
+            /// Determine the transaction state of a database
+            pub fn transaction_state( &self, db_name: Option<crate::DatabaseName<'_>> ) -> Result<TransactionState>
+            { self.db.borrow().txn_state(db_name) }
+            /// Set the default transaction behavior for the connection.
+            pub fn set_transaction_behavior(&mut self, behavior: TransactionBehavior)
+            { self.transaction_behavior = behavior; }
+        }
     }
 
     pub mod types
     {
+        //! Traits dealing with SQLite data types.\
+        pub use self::from_sql::{FromSql, FromSqlError, FromSqlResult};
+        pub use self::to_sql::{ToSql, ToSqlOutput};
+        pub use self::value::Value;
+        pub use self::value_ref::ValueRef;
         
-    }
+        mod from_sql
+        {
+            use ::
+            {
+                connect::{ Value, ValueRef },
+                error::{ Error },
+                rc::{ Rc },
+                sync::{ Arc },
+                *,
+            };
+            /// Enum listing possible errors from [`FromSql`] trait.
+            #[derive(Debug)] #[non_exhaustive]
+            pub enum FromSqlError
+            {
+                /// Error when an SQLite value is requested, but the type of the result
+                /// cannot be converted to the requested Rust type.
+                InvalidType,
+                /// Error when the i64 value returned by SQLite cannot be stored into the requested type.
+                OutOfRange(i64),
+                /// Error when the blob result returned by SQLite cannot be stored into the
+                /// requested type due to a size mismatch.
+                InvalidBlobSize 
+                {
+                    /// The expected size of the blob.
+                    expected_size: usize,
+                    /// The actual size of the blob that was returned.
+                    blob_size: usize,
+                },
+                /// An error case available for implementors of the [`FromSql`] trait.
+                Other(Box<dyn Error + Send + Sync + 'static>),
+            }
 
-    pub mod unlock_notify
-    {
-        
+            impl PartialEq for FromSqlError
+            {
+                fn eq(&self, other: &FromSqlError) -> bool
+                {
+                    match (self, other)
+                    {
+                        (FromSqlError::InvalidType, FromSqlError::InvalidType) => true,
+                        (FromSqlError::OutOfRange(n1), FromSqlError::OutOfRange(n2)) => n1 == n2,
+                        (
+                            FromSqlError::InvalidBlobSize
+                            {
+                                expected_size: es1,
+                                blob_size: bs1,
+                            },
+                            FromSqlError::InvalidBlobSize
+                            {
+                                expected_size: es2,
+                                blob_size: bs2,
+                            },
+                        ) => es1 == es2 && bs1 == bs2,
+                        (..) => false,
+                    }
+                }
+            }
+
+            impl fmt::Display for FromSqlError
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    match *self
+                    {
+                        FromSqlError::InvalidType => write!(f, "Invalid type"),
+                        FromSqlError::OutOfRange(i) => write!(f, "Value {i} out of range"),
+                        FromSqlError::InvalidBlobSize
+                        {
+                            expected_size,
+                            blob_size,
+                        } => {
+                            write!(
+                                f,
+                                "Cannot read {expected_size} byte value out of {blob_size} byte blob"
+                            )
+                        }
+                        FromSqlError::Other(ref err) => err.fmt(f),
+                    }
+                }
+            }
+
+            impl Error for FromSqlError
+            {
+                fn source(&self) -> Option<&(dyn Error + 'static)>
+                {
+                    if let FromSqlError::Other(ref err) = self {
+                        Some(&**err)
+                    } else {
+                        None
+                    }
+                }
+            }
+            /// Result type for implementors of the [`FromSql`] trait.
+            pub type FromSqlResult<T> = Result<T, FromSqlError>;
+            /// A trait for types that can be created from a SQLite value.
+            pub trait FromSql: Sized
+            {
+                /// Converts SQLite value into Rust value.
+                fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self>;
+            }
+
+            macro_rules! from_sql_integral
+            (
+                ($t:ident) =>
+                (
+                    impl FromSql for $t
+                    {
+                        #[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self>
+                        {
+                            let i = i64::column_result(value)?;
+                            i.try_into().map_err(|_| FromSqlError::OutOfRange(i))
+                        }
+                    }
+                );
+
+                (non_zero $nz:ty, $z:ty) =>
+                (
+                    impl FromSql for $nz {
+                        #[inline]
+                        fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                            let i = <$z>::column_result(value)?;
+                            <$nz>::new(i).ok_or(FromSqlError::OutOfRange(0))
+                        }
+                    }
+                )
+            );
+
+            from_sql_integral!(i8);
+            from_sql_integral!(i16);
+            from_sql_integral!(i32);
+            from_sql_integral!(isize);
+            from_sql_integral!(u8);
+            from_sql_integral!(u16);
+            from_sql_integral!(u32);
+            from_sql_integral!(u64);
+            from_sql_integral!(usize);
+            from_sql_integral!(non_zero std::num::NonZeroIsize, isize);
+            from_sql_integral!(non_zero std::num::NonZeroI8, i8);
+            from_sql_integral!(non_zero std::num::NonZeroI16, i16);
+            from_sql_integral!(non_zero std::num::NonZeroI32, i32);
+            from_sql_integral!(non_zero std::num::NonZeroI64, i64);
+            from_sql_integral!(non_zero std::num::NonZeroI128, i128);
+            from_sql_integral!(non_zero std::num::NonZeroUsize, usize);
+            from_sql_integral!(non_zero std::num::NonZeroU8, u8);
+            from_sql_integral!(non_zero std::num::NonZeroU16, u16);
+            from_sql_integral!(non_zero std::num::NonZeroU32, u32);
+            from_sql_integral!(non_zero std::num::NonZeroU64, u64);
+
+            impl FromSql for i64
+            {
+                #[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> { value.as_i64() }
+            }
+
+            impl FromSql for f32
+            {
+                #[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self>
+                {
+                    match value
+                    {
+                        ValueRef::Integer(i) => Ok(i as f32),
+                        ValueRef::Real(f) => Ok(f as f32),
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+            }
+
+            impl FromSql for f64
+            {
+                #[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self>
+                {
+                    match value
+                    {
+                        ValueRef::Integer(i) => Ok(i as f64),
+                        ValueRef::Real(f) => Ok(f),
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+            }
+
+            impl FromSql for bool
+            {
+                #[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self>
+                {
+                    i64::column_result(value).map(|i| i != 0)
+                }
+            }
+
+            impl FromSql for String
+            {
+                #[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self>
+                { value.as_str().map(ToString::to_string) }
+            }
+
+            impl FromSql for Box<str>
+            {
+                #[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self>
+                { value.as_str().map(Into::into) }
+            }
+
+            impl FromSql for Rc<str>
+            {
+                #[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self>
+                { value.as_str().map(Into::into) }
+            }
+
+            impl FromSql for Arc<str>
+            {
+                #[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self>
+                { value.as_str().map(Into::into) }
+            }
+
+            impl FromSql for Vec<u8>
+            {
+                #[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self>
+                { value.as_blob().map(<[u8]>::to_vec) }
+            }
+
+            impl<const N: usize> FromSql for [u8; N] {
+                #[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    let slice = value.as_blob()?;
+                    slice.try_into().map_err(|_| FromSqlError::InvalidBlobSize {
+                        expected_size: N,
+                        blob_size: slice.len(),
+                    })
+                }
+            }
+            
+            impl FromSql for i128 {
+                #[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    let bytes = <[u8; 16]>::column_result(value)?;
+                    Ok(i128::from_be_bytes(bytes) ^ (1_i128 << 127))
+                }
+            }
+            
+            impl FromSql for uuid::Uuid {
+                #[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    let bytes = <[u8; 16]>::column_result(value)?;
+                    Ok(uuid::Uuid::from_u128(u128::from_be_bytes(bytes)))
+                }
+            }
+
+            impl<T: FromSql> FromSql for Option<T>
+            {
+                #[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self>
+                {
+                    match value {
+                        ValueRef::Null => Ok(None),
+                        _ => FromSql::column_result(value).map(Some),
+                    }
+                }
+            }
+
+            impl FromSql for Value {
+                #[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    Ok(value.into())
+                }
+            }
+        }
+
+        mod time
+        {
+            //! Convert formats 1-10 in [Time Values](https://sqlite.org/lang_datefunc.html#time_values) to time types.
+            use ::
+            {
+                connect::
+                {
+                    types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef},
+                    Error, Result,
+                },                
+                time::
+                {
+                    format_description::{ FormatItem },
+                    macros::{ format_description },
+                    Date, OffsetDateTime, PrimitiveDateTime, Time,
+                },
+                *,
+            };
+            const OFFSET_DATE_TIME_ENCODING: &[FormatItem<'_>] = format_description!(
+                version = 2,
+                "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond][offset_hour sign:mandatory]:[offset_minute]"
+            );
+            const PRIMITIVE_DATE_TIME_ENCODING: &[FormatItem<'_>] = format_description!(
+                version = 2,
+                "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond]"
+            );
+            const TIME_ENCODING: &[FormatItem<'_>] =
+                format_description!(version = 2, "[hour]:[minute]:[second].[subsecond]");
+
+            const DATE_FORMAT: &[FormatItem<'_>] = format_description!(version = 2, "[year]-[month]-[day]");
+            const TIME_FORMAT: &[FormatItem<'_>] = format_description!(
+                version = 2,
+                "[hour]:[minute][optional [:[second][optional [.[subsecond]]]]]"
+            );
+            const PRIMITIVE_DATE_TIME_FORMAT: &[FormatItem<'_>] = format_description!(
+                version = 2,
+                "[year]-[month]-[day][first [ ][T]][hour]:[minute][optional [:[second][optional [.[subsecond]]]]]"
+            );
+            const UTC_DATE_TIME_FORMAT: &[FormatItem<'_>] = format_description!(
+                version = 2,
+                "[year]-[month]-[day][first [ ][T]][hour]:[minute][optional [:[second][optional [.[subsecond]]]]][optional [Z]]"
+            );
+            const OFFSET_DATE_TIME_FORMAT: &[FormatItem<'_>] = format_description!(
+                version = 2,
+                "[year]-[month]-[day][first [ ][T]][hour]:[minute][optional [:[second][optional [.[subsecond]]]]][offset_hour sign:mandatory]:[offset_minute]"
+            );
+            const LEGACY_DATE_TIME_FORMAT: &[FormatItem<'_>] = format_description!(
+                version = 2,
+                "[year]-[month]-[day] [hour]:[minute]:[second]:[subsecond] [offset_hour sign:mandatory]:[offset_minute]"
+            );
+            /// OffsetDatetime => RFC3339 format ("YYYY-MM-DD HH:MM:SS.SSS[+-]HH:MM")
+            impl ToSql for OffsetDateTime 
+            {
+                #[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                    let time_string = self
+                        .format(&OFFSET_DATE_TIME_ENCODING)
+                        .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
+                    Ok(ToSqlOutput::from(time_string))
+                }
+            }
+            
+            impl FromSql for OffsetDateTime 
+            {
+                fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    value.as_str().and_then(|s| {
+                        if let Some(b' ') = s.as_bytes().get(23) {
+                            // legacy
+                            return OffsetDateTime::parse(s, &LEGACY_DATE_TIME_FORMAT)
+                                .map_err(|err| FromSqlError::Other(Box::new(err)));
+                        }
+                        if s[8..].contains('+') || s[8..].contains('-') {
+                            // Formats 2-7 with timezone
+                            return OffsetDateTime::parse(s, &OFFSET_DATE_TIME_FORMAT)
+                                .map_err(|err| FromSqlError::Other(Box::new(err)));
+                        }
+                        // Formats 2-7 without timezone
+                        PrimitiveDateTime::parse(s, &UTC_DATE_TIME_FORMAT)
+                            .map(|p| p.assume_utc())
+                            .map_err(|err| FromSqlError::Other(Box::new(err)))
+                    })
+                }
+            }
+            /// ISO 8601 calendar date without timezone => "YYYY-MM-DD"
+            impl ToSql for Date
+            {
+                #[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                    let date_str = self
+                        .format(&DATE_FORMAT)
+                        .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
+                    Ok(ToSqlOutput::from(date_str))
+                }
+            }
+            /// "YYYY-MM-DD" => ISO 8601 calendar date without timezone.
+            impl FromSql for Date
+            {
+                #[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    value.as_str().and_then(|s| {
+                        Date::parse(s, &DATE_FORMAT).map_err(|err| FromSqlError::Other(err.into()))
+                    })
+                }
+            }
+            /// ISO 8601 time without timezone => "HH:MM:SS.SSS"
+            impl ToSql for Time
+            {
+                #[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                    let time_str = self
+                        .format(&TIME_ENCODING)
+                        .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
+                    Ok(ToSqlOutput::from(time_str))
+                }
+            }
+            /// "HH:MM"/"HH:MM:SS"/"HH:MM:SS.SSS" => ISO 8601 time without timezone.
+            impl FromSql for Time
+            {
+                #[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    value.as_str().and_then(|s| {
+                        Time::parse(s, &TIME_FORMAT).map_err(|err| FromSqlError::Other(err.into()))
+                    })
+                }
+            }
+            /// ISO 8601 combined date and time without timezone => "YYYY-MM-DD HH:MM:SS.SSS"
+            impl ToSql for PrimitiveDateTime
+            {
+                #[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                    let date_time_str = self
+                        .format(&PRIMITIVE_DATE_TIME_ENCODING)
+                        .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
+                    Ok(ToSqlOutput::from(date_time_str))
+                }
+            }
+            /// ISO 8601 combined date and time with timezone
+            impl FromSql for PrimitiveDateTime
+            {
+                #[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    value.as_str().and_then(|s| {
+                        PrimitiveDateTime::parse(s, &PRIMITIVE_DATE_TIME_FORMAT)
+                            .map_err(|err| FromSqlError::Other(err.into()))
+                    })
+                }
+            }
+        }
+
+        mod to_sql
+        {
+            use ::
+            {
+                borrow::{ Cow },
+                boxed::{ Box },
+                connect::
+                {
+                    types::{ Null, Value, ValueRef },
+                    vtab::array::Array,
+                    Error, Result
+                },
+                rc::{ Rc },
+                sync::{ Arc },
+                *,
+            };
+            /// `ToSqlOutput` represents the possible output types for implementers of the [`ToSql`] trait.
+            #[derive(Clone, Debug, PartialEq)] #[non_exhaustive]
+            pub enum ToSqlOutput<'a>
+            {
+                /// A borrowed SQLite-representable value.
+                Borrowed(ValueRef<'a>),
+                /// An owned SQLite-representable value.
+                Owned(Value),
+                /// A BLOB of the given length that is filled with zeroes.
+                ZeroBlob(i32),
+                /// n-th arg of an SQL scalar function
+                Arg(usize),
+                /// `feature = "array"`
+                Array(Array),
+            }
+            
+            impl<'a, T: ?Sized> From<&'a T> for ToSqlOutput<'a> where
+            &'a T: Into<ValueRef<'a>>,
+            {
+                #[inline] fn from(t: &'a T) -> Self  { ToSqlOutput::Borrowed(t.into()) }
+            }
+            
+            macro_rules! from_value(
+                ($t:ty) => (
+                    impl From<$t> for ToSqlOutput<'_> {
+                        #[inline]
+                        fn from(t: $t) -> Self { ToSqlOutput::Owned(t.into())}
+                    }
+                );
+                (non_zero $t:ty) => (
+                    impl From<$t> for ToSqlOutput<'_> {
+                        #[inline]
+                        fn from(t: $t) -> Self { ToSqlOutput::Owned(t.get().into())}
+                    }
+                )
+            );
+            from_value!(String);
+            from_value!(Null);
+            from_value!(bool);
+            from_value!(i8);
+            from_value!(i16);
+            from_value!(i32);
+            from_value!(i64);
+            from_value!(isize);
+            from_value!(u8);
+            from_value!(u16);
+            from_value!(u32);
+            from_value!(f32);
+            from_value!(f64);
+            from_value!(Vec<u8>);
+
+            from_value!(non_zero std::num::NonZeroI8);
+            from_value!(non_zero std::num::NonZeroI16);
+            from_value!(non_zero std::num::NonZeroI32);
+            from_value!(non_zero std::num::NonZeroI64);
+            from_value!(non_zero std::num::NonZeroIsize);
+            from_value!(non_zero std::num::NonZeroU8);
+            from_value!(non_zero std::num::NonZeroU16);
+            from_value!(non_zero std::num::NonZeroU32);
+            from_value!(i128);
+            from_value!(non_zero std::num::NonZeroI128);
+            from_value!(uuid::Uuid);
+
+            impl ToSql for ToSqlOutput<'_>
+            {
+                #[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                    Ok(match *self 
+                    {
+                        ToSqlOutput::Borrowed(v) => ToSqlOutput::Borrowed(v),
+                        ToSqlOutput::Owned(ref v) => ToSqlOutput::Borrowed(ValueRef::from(v)),
+                        ToSqlOutput::ZeroBlob(i) => ToSqlOutput::ZeroBlob(i),
+                        ToSqlOutput::Arg(i) => ToSqlOutput::Arg(i),
+                        ToSqlOutput::Array(ref a) => ToSqlOutput::Array(a.clone()),
+                    })
+                }
+            }
+            /// A trait for types that can be converted into SQLite values.
+            pub trait ToSql 
+            {
+                /// Converts Rust value to SQLite value
+                fn to_sql(&self) -> Result<ToSqlOutput<'_>>;
+            }
+
+            impl<T: ToSql + ToOwned + ?Sized> ToSql for Cow<'_, T>
+            {
+                #[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> { self.as_ref().to_sql() }
+            }
+
+            impl<T: ToSql + ?Sized> ToSql for Box<T>
+            {
+                #[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> { self.as_ref().to_sql() }
+            }
+
+            impl<T: ToSql + ?Sized> ToSql for Rc<T>
+            {
+                #[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> { self.as_ref().to_sql() }
+            }
+
+            impl<T: ToSql + ?Sized> ToSql for Arc<T>
+            {
+                #[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> { self.as_ref().to_sql() }
+            }
+            
+            macro_rules! to_sql_self
+            (
+                ($t:ty) =>
+                (
+                    impl ToSql for $t {
+                        #[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                            Ok(ToSqlOutput::from(*self))
+                        }
+                    }
+                )
+            );
+
+            to_sql_self!(Null);
+            to_sql_self!(bool);
+            to_sql_self!(i8);
+            to_sql_self!(i16);
+            to_sql_self!(i32);
+            to_sql_self!(i64);
+            to_sql_self!(isize);
+            to_sql_self!(u8);
+            to_sql_self!(u16);
+            to_sql_self!(u32);
+            to_sql_self!(f32);
+            to_sql_self!(f64);
+
+            to_sql_self!(std::num::NonZeroI8);
+            to_sql_self!(std::num::NonZeroI16);
+            to_sql_self!(std::num::NonZeroI32);
+            to_sql_self!(std::num::NonZeroI64);
+            to_sql_self!(std::num::NonZeroIsize);
+            to_sql_self!(std::num::NonZeroU8);
+            to_sql_self!(std::num::NonZeroU16);
+            to_sql_self!(std::num::NonZeroU32);
+            
+            to_sql_self!(i128);
+            
+            to_sql_self!(std::num::NonZeroI128);
+            
+            to_sql_self!(uuid::Uuid);
+
+            macro_rules! to_sql_self_fallible
+            (
+                ($t:ty) => 
+                (
+                    impl ToSql for $t
+                    {
+                        #[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>>
+                        {
+                            Ok(ToSqlOutput::Owned(Value::Integer(
+                                i64::try_from(*self).map_err(
+                                    |err| Error::ToSqlConversionFailure(err.into())
+                                )?
+                            )))
+                        }
+                    }
+                );
+
+                (non_zero $t:ty) => 
+                (
+                    impl ToSql for $t
+                    {
+                        #[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>>
+                        {
+                            Ok(ToSqlOutput::Owned(Value::Integer(
+                                i64::try_from(self.get()).map_err(
+                                    |err| Error::ToSqlConversionFailure(err.into())
+                                )?
+                            )))
+                        }
+                    }
+                )
+            );
+            
+            to_sql_self_fallible!(u64);
+            to_sql_self_fallible!(usize);
+            to_sql_self_fallible!(non_zero std::num::NonZeroU64);
+            to_sql_self_fallible!(non_zero std::num::NonZeroUsize);
+
+            impl<T: ?Sized> ToSql for &'_ T where
+            T: ToSql,
+            {
+                #[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> { (*self).to_sql() }
+            }
+
+            impl ToSql for String 
+            {
+                #[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> { Ok(ToSqlOutput::from(self.as_str())) }
+            }
+
+            impl ToSql for str 
+            {
+                #[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> { Ok(ToSqlOutput::from(self)) }
+            }
+
+            impl ToSql for Vec<u8>
+            {
+                #[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> { Ok(ToSqlOutput::from(self.as_slice())) }
+            }
+
+            impl<const N: usize> ToSql for [u8; N]
+            {
+                #[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> { Ok(ToSqlOutput::from(&self[..])) }
+            }
+
+            impl ToSql for [u8]
+            {
+                #[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> { Ok(ToSqlOutput::from(self)) }
+            }
+
+            impl ToSql for Value
+            {
+                #[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> { Ok(ToSqlOutput::from(self)) }
+            }
+
+            impl<T: ToSql> ToSql for Option<T>
+            {
+                #[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> 
+                {
+                    match *self {
+                        None => Ok(ToSqlOutput::from(Null)),
+                        Some(ref t) => t.to_sql(),
+                    }
+                }
+            }
+        }
+
+        mod url
+        {
+            //! [`ToSql`] and [`FromSql`] implementation for [`url::Url`].
+            use ::
+            {
+                connect::
+                {
+                    types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef},
+                    Result,
+                },                
+                url::{ Url },
+                *,
+            };
+            /// Serialize `Url` to text.
+            impl ToSql for Url
+            {
+                #[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> { Ok(ToSqlOutput::from(self.as_str())) }
+            }
+            /// Deserialize text to `Url`.
+            impl FromSql for Url
+            {
+                #[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self>
+                {
+                    match value
+                    {
+                        ValueRef::Text(s) =>
+                        {
+                            let s = std::str::from_utf8(s).map_err(|e| FromSqlError::Other(Box::new(e)))?;
+                            Url::parse(s).map_err(|e| FromSqlError::Other(Box::new(e)))
+                        }
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+            }
+        }
+
+        mod value
+        {
+            use super::{Null, Type};
+
+            /// Owning [dynamic type value](http://sqlite.org/datatype3.html).
+            #[derive(Clone, Debug, PartialEq)]
+            pub enum Value
+            {
+                /// The value is a `NULL` value.
+                Null,
+                /// The value is a signed integer.
+                Integer(i64),
+                /// The value is a floating point number.
+                Real(f64),
+                /// The value is a text string.
+                Text(String),
+                /// The value is a blob of data
+                Blob(Vec<u8>),
+            }
+
+            impl From<Null> for Value
+            {
+                #[inline] fn from(_: Null) -> Value { Value::Null }
+            }
+
+            impl From<bool> for Value
+            {
+                #[inline] fn from(i: bool) -> Value { Value::Integer(i as i64) }
+            }
+
+            impl From<isize> for Value
+            {
+                #[inline] fn from(i: isize) -> Value { Value::Integer(i as i64) }
+            }
+            
+            impl From<i128> for Value
+            {
+                #[inline] fn from(i: i128) -> Value { Value::Blob(i128::to_be_bytes(i ^ (1_i128 << 127)).to_vec()) }
+            }
+            
+            impl From<uuid::Uuid> for Value
+            {
+                #[inline] fn from(id: uuid::Uuid) -> Value { Value::Blob(id.as_bytes().to_vec()) }
+            }
+
+            macro_rules! from_i64
+            (
+                ($t:ty) => 
+                (
+                    impl From<$t> for Value 
+                    {
+                        #[inline] fn from(i: $t) -> Value { Value::Integer(i64::from(i)) }
+                    }
+                )
+            );
+
+            from_i64!(i8);
+            from_i64!(i16);
+            from_i64!(i32);
+            from_i64!(u8);
+            from_i64!(u16);
+            from_i64!(u32);
+
+            impl From<i64> for Value
+            {
+                #[inline] fn from(i: i64) -> Value { Value::Integer(i) }
+            }
+
+            impl From<f32> for Value
+            {
+                #[inline] fn from(f: f32) -> Value { Value::Real(f.into()) }
+            }
+
+            impl From<f64> for Value 
+            { 
+                #[inline] fn from(f: f64) -> Value { Value::Real(f) }
+            }
+
+            impl From<String> for Value 
+            {
+                #[inline] fn from(s: String) -> Value { Value::Text(s) }
+            }
+
+            impl From<Vec<u8>> for Value
+            {
+                #[inline] fn from(v: Vec<u8>) -> Value { Value::Blob(v) }
+            }
+
+            impl<T> From<Option<T>> for Value where
+            T: Into<Value>
+            {
+                #[inline] fn from(v: Option<T>) -> Value
+                {
+                    match v
+                    {
+                        Some(x) => x.into(),
+                        None => Value::Null,
+                    }
+                }
+            }
+
+            impl Value
+            {
+                /// Returns SQLite fundamental datatype.
+                #[inline] #[must_use] pub fn data_type(&self) -> Type 
+                {
+                    match *self {
+                        Value::Null => Type::Null,
+                        Value::Integer(_) => Type::Integer,
+                        Value::Real(_) => Type::Real,
+                        Value::Text(_) => Type::Text,
+                        Value::Blob(_) => Type::Blob,
+                    }
+                }
+            }
+        }
+
+        mod value_ref
+        {
+            use super::{Type, Value};
+            use ::connect::types::{FromSqlError, FromSqlResult};
+
+            /// A non-owning [dynamic type value](http://sqlite.org/datatype3.html).
+            #[derive(Copy, Clone, Debug, PartialEq)]
+            pub enum ValueRef<'a> 
+            {
+                /// The value is a `NULL` value.
+                Null,
+                /// The value is a signed integer.
+                Integer(i64),
+                /// The value is a floating point number.
+                Real(f64),
+                /// The value is a text string.
+                Text(&'a [u8]),
+                /// The value is a blob of data
+                Blob(&'a [u8]),
+            }
+
+            impl ValueRef<'_> 
+            {
+                /// Returns SQLite fundamental datatype.
+                #[inline] #[must_use] pub fn data_type(&self) -> Type {
+                    match *self
+                    {
+                        ValueRef::Null => Type::Null,
+                        ValueRef::Integer(_) => Type::Integer,
+                        ValueRef::Real(_) => Type::Real,
+                        ValueRef::Text(_) => Type::Text,
+                        ValueRef::Blob(_) => Type::Blob,
+                    }
+                }
+            }
+
+            impl<'a> ValueRef<'a>
+            {
+                /// If `self` is case `Integer`, returns the integral value.
+                #[inline] pub fn as_i64(&self) -> FromSqlResult<i64>
+                {
+                    match *self {
+                        ValueRef::Integer(i) => Ok(i),
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+                /// If `self` is case `Null` returns None.
+                /// If `self` is case `Integer`, returns the integral value.
+                /// Otherwise, returns [`Err(Error::InvalidColumnType)`](crate::Error::InvalidColumnType).
+                #[inline] pub fn as_i64_or_null(&self) -> FromSqlResult<Option<i64>>
+                {
+                    match *self {
+                        ValueRef::Null => Ok(None),
+                        ValueRef::Integer(i) => Ok(Some(i)),
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+                /// If `self` is case `Real`, returns the floating point value. Otherwise,
+                /// returns [`Err(Error::InvalidColumnType)`](crate::Error::InvalidColumnType).
+                #[inline] pub fn as_f64(&self) -> FromSqlResult<f64>
+                {
+                    match *self {
+                        ValueRef::Real(f) => Ok(f),
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+                /// If `self` is case `Null` returns None.
+                /// If `self` is case `Real`, returns the floating point value.
+                /// Otherwise, returns [`Err(Error::InvalidColumnType)`](crate::Error::InvalidColumnType).
+                #[inline] pub fn as_f64_or_null(&self) -> FromSqlResult<Option<f64>>
+                {
+                    match *self {
+                        ValueRef::Null => Ok(None),
+                        ValueRef::Real(f) => Ok(Some(f)),
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+                /// If `self` is case `Text`, returns the string value. Otherwise, returns
+                /// [`Err(Error::InvalidColumnType)`](crate::Error::InvalidColumnType).
+                #[inline] pub fn as_str(&self) -> FromSqlResult<&'a str>
+                {
+                    match *self {
+                        ValueRef::Text(t) => {
+                            std::str::from_utf8(t).map_err(|e| FromSqlError::Other(Box::new(e)))
+                        }
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+                /// If `self` is case `Null` returns None.
+                /// If `self` is case `Text`, returns the string value.
+                /// Otherwise, returns [`Err(Error::InvalidColumnType)`](crate::Error::InvalidColumnType).
+                #[inline] pub fn as_str_or_null(&self) -> FromSqlResult<Option<&'a str>>
+                {
+                    match *self {
+                        ValueRef::Null => Ok(None),
+                        ValueRef::Text(t) => std::str::from_utf8(t)
+                            .map_err(|e| FromSqlError::Other(Box::new(e)))
+                            .map(Some),
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+                /// If `self` is case `Blob`, returns the byte slice. Otherwise, returns
+                /// [`Err(Error::InvalidColumnType)`](crate::Error::InvalidColumnType).
+                #[inline] pub fn as_blob(&self) -> FromSqlResult<&'a [u8]>
+                {
+                    match *self {
+                        ValueRef::Blob(b) => Ok(b),
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+                /// If `self` is case `Null` returns None.
+                /// If `self` is case `Blob`, returns the byte slice.
+                /// Otherwise, returns [`Err(Error::InvalidColumnType)`](crate::Error::InvalidColumnType).
+                #[inline] pub fn as_blob_or_null(&self) -> FromSqlResult<Option<&'a [u8]>>
+                {
+                    match *self {
+                        ValueRef::Null => Ok(None),
+                        ValueRef::Blob(b) => Ok(Some(b)),
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+                /// Returns the byte slice that makes up this `ValueRef` if it's either
+                /// [`ValueRef::Blob`] or [`ValueRef::Text`].
+                #[inline] pub fn as_bytes(&self) -> FromSqlResult<&'a [u8]>
+                {
+                    match self {
+                        ValueRef::Text(s) | ValueRef::Blob(s) => Ok(s),
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+                /// If `self` is case `Null` returns None.
+                /// If `self` is [`ValueRef::Blob`] or [`ValueRef::Text`] returns the byte
+                /// slice that makes up this value
+                #[inline] pub fn as_bytes_or_null(&self) -> FromSqlResult<Option<&'a [u8]>>
+                {
+                    match *self {
+                        ValueRef::Null => Ok(None),
+                        ValueRef::Text(s) | ValueRef::Blob(s) => Ok(Some(s)),
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+            }
+
+            impl From<ValueRef<'_>> for Value 
+            {
+                #[inline] #[track_caller] fn from(borrowed: ValueRef<'_>) -> Value
+                {
+                    match borrowed {
+                        ValueRef::Null => Value::Null,
+                        ValueRef::Integer(i) => Value::Integer(i),
+                        ValueRef::Real(r) => Value::Real(r),
+                        ValueRef::Text(s) => {
+                            let s = std::str::from_utf8(s).expect("invalid UTF-8");
+                            Value::Text(s.to_string())
+                        }
+                        ValueRef::Blob(b) => Value::Blob(b.to_vec()),
+                    }
+                }
+            }
+
+            impl<'a> From<&'a str> for ValueRef<'a> {
+                #[inline]
+                fn from(s: &str) -> ValueRef<'_> {
+                    ValueRef::Text(s.as_bytes())
+                }
+            }
+
+            impl<'a> From<&'a [u8]> for ValueRef<'a> {
+                #[inline]
+                fn from(s: &[u8]) -> ValueRef<'_> {
+                    ValueRef::Blob(s)
+                }
+            }
+
+            impl<'a> From<&'a Value> for ValueRef<'a> {
+                #[inline]
+                fn from(value: &'a Value) -> ValueRef<'a>
+                {
+                    match *value {
+                        Value::Null => ValueRef::Null,
+                        Value::Integer(i) => ValueRef::Integer(i),
+                        Value::Real(r) => ValueRef::Real(r),
+                        Value::Text(ref s) => ValueRef::Text(s.as_bytes()),
+                        Value::Blob(ref b) => ValueRef::Blob(b),
+                    }
+                }
+            }
+
+            impl<'a, T> From<Option<T>> for ValueRef<'a> where
+            T: Into<ValueRef<'a>>,
+            {
+                #[inline]
+                fn from(s: Option<T>) -> ValueRef<'a>
+                {
+                    match s {
+                        Some(x) => x.into(),
+                        None => ValueRef::Null,
+                    }
+                }
+            }
+            
+            impl<'a> ValueRef<'a> 
+            {
+                pub(crate) unsafe fn from_value(value: *mut crate::ffi::sqlite3_value) -> ValueRef<'a>
+                {
+                    use ::connect::ffi;
+                    use ::slice::from_raw_parts;
+
+                    match ffi::sqlite3_value_type(value) {
+                        ffi::SQLITE_NULL => ValueRef::Null,
+                        ffi::SQLITE_INTEGER => ValueRef::Integer(ffi::sqlite3_value_int64(value)),
+                        ffi::SQLITE_FLOAT => ValueRef::Real(ffi::sqlite3_value_double(value)),
+                        ffi::SQLITE_TEXT => {
+                            let text = ffi::sqlite3_value_text(value);
+                            let len = ffi::sqlite3_value_bytes(value);
+                            assert!(
+                                !text.is_null(),
+                                "unexpected SQLITE_TEXT value type with NULL data"
+                            );
+                            let s = from_raw_parts(text.cast::<u8>(), len as usize);
+                            ValueRef::Text(s)
+                        }
+                        ffi::SQLITE_BLOB => {
+                            let (blob, len) = (
+                                ffi::sqlite3_value_blob(value),
+                                ffi::sqlite3_value_bytes(value),
+                            );
+
+                            assert!(
+                                len >= 0,
+                                "unexpected negative return from sqlite3_value_bytes"
+                            );
+                            if len > 0 {
+                                assert!(
+                                    !blob.is_null(),
+                                    "unexpected SQLITE_BLOB value type with NULL data"
+                                );
+                                ValueRef::Blob(from_raw_parts(blob.cast::<u8>(), len as usize))
+                            } else {
+                                // The return value from sqlite3_value_blob() for a zero-length BLOB
+                                // is a NULL pointer.
+                                ValueRef::Blob(&[])
+                            }
+                        }
+                        _ => unreachable!("sqlite3_value_type returned invalid value"),
+                    }
+                }
+            }
+        }
+
+        use ::
+        {
+            *,
+        };
+        /// Empty struct that can be used to fill in a query parameter as `NULL`.
+        #[derive(Copy, Clone)]
+        pub struct Null;
+        /// SQLite data types.
+        #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+        pub enum Type
+        {
+            /// NULL
+            Null,
+            /// 64-bit signed integer
+            Integer,
+            /// 64-bit IEEE floating point number
+            Real,
+            /// String
+            Text,
+            /// BLOB
+            Blob,
+        }
+
+        impl fmt::Display for Type
+        {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+            {
+                match *self
+                {
+                    Type::Null => f.pad("Null"),
+                    Type::Integer => f.pad("Integer"),
+                    Type::Real => f.pad("Real"),
+                    Type::Text => f.pad("Text"),
+                    Type::Blob => f.pad("Blob"),
+                }
+            }
+        }
+   
     }
 
     pub mod version
@@ -5880,8 +11553,8 @@ pub mod connect
     /// A macro making it more convenient to longer lists of parameters as a `&[&dyn ToSql]`.
     #[macro_export] macro_rules! params
     {
-        () => {
-            &[] as &[&dyn ::connect::ToSql]
+        () =>
+        {           &[] as &[&dyn ::connect::ToSql]
         };
         ($($param:expr),+ $(,)?) => 
         {
@@ -6113,8 +11786,7 @@ pub mod connect
         }
         /// Convenience method to execute a query that is expected to return a single row, and execute a mapping via `f` 
         /// on that returned row with the possibility of failure.
-        #[inline] pub fn query_row_and_then<T, E, P, F>(&self, sql: &str, params: P, f: F) -> Result<T, E>
-        where
+        #[inline] pub fn query_row_and_then<T, E, P, F>(&self, sql: &str, params: P, f: F) -> Result<T, E> where
         P: Params,
         F: FnOnce(&Row<'_>) -> Result<T, E>,
         E: From<Error>
@@ -7070,39 +12742,39 @@ pub mod history
         if !path.exists() {
             let _parent = match path.parent() {
                 Some( x ) => x,
-                None => {
-                    println_stderr!( "pls:history init - no parent found" );
+                None =>
+        {                   println_stderr!( "pls:history init - no parent found" );
                     return;
                 }
             };
             let parent = match _parent.to_str() {
                 Some( x ) => x,
-                None => {
-                    println_stderr!( "pls:parent to_str is None" );
+                None =>
+        {                   println_stderr!( "pls:parent to_str is None" );
                     return;
                 }
             };
             match fs::create_dir_all( parent ) {
                 Ok( _ ) => {}
-                Err( e ) => {
-                    println_stderr!( "pls:histdir create error:{}", e );
+                Err( e ) =>
+        {                   println_stderr!( "pls:histdir create error:{}", e );
                     return;
                 }
             }
             match fs::File::create( hfile ) {
-                Ok( _ ) => {
-                    println!( "pls:created history file:{}", hfile );
+                Ok( _ ) =>
+        {                   println!( "pls:created history file:{}", hfile );
                 }
-                Err( e ) => {
-                    println_stderr!( "pls:history:file create failed:{}", e );
+                Err( e ) =>
+        {                   println_stderr!( "pls:history:file create failed:{}", e );
                 }
             }
         }
 
         let conn = match Conn::open( hfile ) {
             Ok( x ) => x,
-            Err( e ) => {
-                println_stderr!( "pls:history:open db error:{}", e );
+            Err( e ) =>
+        {               println_stderr!( "pls:history:open db error:{}", e );
                 return;
             }
         };
@@ -7155,24 +12827,24 @@ pub mod history
 
         let conn = match Conn::open( &hfile ) {
             Ok( x ) => x,
-            Err( e ) => {
-                println_stderr!( "pls:history:conn error:{}", e );
+            Err( e ) =>
+        {               println_stderr!( "pls:history:conn error:{}", e );
                 return;
             }
         };
         let sql = format!( "SELECT inp FROM {} ORDER BY tsb;", history_table );
         let mut stmt = match conn.prepare( &sql ) {
             Ok( x ) => x,
-            Err( e ) => {
-                println_stderr!( "pls:prepare select error:{}", e );
+            Err( e ) =>
+        {               println_stderr!( "pls:prepare select error:{}", e );
                 return;
             }
         };
 
         let rows = match stmt.query_map( [], |row| row.get( 0 ) ) {
             Ok( x ) => x,
-            Err( e ) => {
-                println_stderr!( "pls:query select error:{}", e );
+            Err( e ) =>
+        {               println_stderr!( "pls:query select error:{}", e );
                 return;
             }
         };
@@ -7194,8 +12866,8 @@ pub mod history
         let history_table = get::history_table();
         let conn = match Conn::open( &hfile ) {
             Ok( x ) => x,
-            Err( e ) => {
-                println_stderr!( "pls:history:conn error:{}", e );
+            Err( e ) =>
+        {               println_stderr!( "pls:history:conn error:{}", e );
                 return;
             }
         };
@@ -7207,8 +12879,8 @@ pub mod history
         match conn.execute( &sql, [] ) {
             Ok( _ ) => {}
             Err( e ) => match e {
-                SqliteFailure( ee, msg ) => {
-                    if ee.extended_code == 5 {
+                SqliteFailure( ee, msg ) =>
+        {                   if ee.extended_code == 5 {
                         /*log!( 
                             "failed to delete dup histories:{}",
                             msg.unwrap_or( "db is locked?".to_owned() ),
@@ -7221,8 +12893,8 @@ pub mod history
                         &msg
  );
                 }
-                _ => {
-                    println_stderr!( "pls:history:delete dup error:{}", e );
+                _ =>
+        {                   println_stderr!( "pls:history:delete dup error:{}", e );
                 }
             },
         }
@@ -7238,8 +12910,8 @@ pub mod history
 
         let conn = match Conn::open( &hfile ) {
             Ok( x ) => x,
-            Err( e ) => {
-                println_stderr!( "pls:history:conn error:{}", e );
+            Err( e ) =>
+        {               println_stderr!( "pls:history:conn error:{}", e );
                 return;
             }
         };
@@ -8237,8 +13909,7 @@ pub mod iter
         F: FnMut(&Self::Item) -> bool
         {
             loop
-            {
-                self.advance()?;
+            { self.advance()?;
                 match self.get()
                 {
                     Some(v) =>
@@ -8302,8 +13973,7 @@ pub mod iter
         #[inline] fn nth(&mut self, n: usize) -> Result<Option<&Self::Item>, Self::Error>
         {
             for _ in 0..n
-            {
-                self.advance()?;
+            { self.advance()?;
                 if let None = self.get() { return Ok(None); }
             }
 
@@ -8696,14 +14366,12 @@ pub mod mortal
             pub fn set_cursor(&mut self, pos: Cursor) { self.cursor = pos; }
 
             pub fn next_line(&mut self, column: usize)
-            {
-                self.cursor.line += 1;
+            { self.cursor.line += 1;
                 self.cursor.column = column;
             }
 
             pub fn clear_attributes(&mut self)
-            {
-                self.fg = None;
+            { self.fg = None;
                 self.bg = None;
                 self.style = Style::empty();
             }
@@ -8719,8 +14387,7 @@ pub mod mortal
             pub fn set_bg(&mut self, bg: Option<Color>) { self.bg = bg; }
 
             pub fn set_theme(&mut self, theme: Theme)
-            {
-                self.set_fg(theme.fg);
+            { self.set_fg(theme.fg);
                 self.set_bg(theme.bg);
                 self.set_style(theme.style);
             }
@@ -8861,16 +14528,14 @@ pub mod mortal
             }
 
             pub fn write_at(&mut self, pos: Cursor, text: &str) -> Result<(), OutOfBounds>
-            {
-                self.try_cursor_at(pos)?;
+            { self.try_cursor_at(pos)?;
                 self.cursor = pos;
                 self.write_str(text)
             }
 
             pub fn write_styled(&mut self, fg: Option<Color>, bg: Option<Color>, style: Style, text: &str) -> 
             Result<(), OutOfBounds>
-            {
-                self.fg = fg;
+            { self.fg = fg;
                 self.bg = bg;
                 self.style = style;
                 self.write_str(text)?;
@@ -8880,8 +14545,7 @@ pub mod mortal
 
             pub fn write_styled_at(&mut self, pos: Cursor, fg: Option<Color>, bg: Option<Color>, style: Style, text: &str)
             -> Result<(), OutOfBounds>
-            {
-                self.try_cursor_at(pos)?;
+            { self.try_cursor_at(pos)?;
                 self.cursor = pos;
                 self.write_styled(fg, bg, style, text)
             }
@@ -9427,25 +15091,25 @@ pub mod mortal
         /*
             #[cfg(windows)]
             impl crate::windows::TerminalExt for Screen {
-                fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    self.0.read_raw(buf, timeout)
+                fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>>
+        {                   self.0.read_raw(buf, timeout)
                 }
 
                 fn read_raw_event(&mut self, events: &mut [::winapi::um::wincon::INPUT_RECORD],
-                        timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    self.0.read_raw_event(events, timeout)
+                        timeout: Option<Duration>) -> io::Result<Option<Event>>
+        {                   self.0.read_raw_event(events, timeout)
                 }
             }
 
             #[cfg(windows)]
-            impl<'a> crate::windows::TerminalExt for ScreenReadGuard<'a> {
-                fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    self.0.read_raw(buf, timeout)
+            impl<'a> crate::windows::TerminalExt for ScreenReadGuard<'a>
+        {               fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>>
+        {                   self.0.read_raw(buf, timeout)
                 }
 
                 fn read_raw_event(&mut self, events: &mut [::winapi::um::wincon::INPUT_RECORD],
-                        timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    self.0.read_raw_event(events, timeout)
+                        timeout: Option<Duration>) -> io::Result<Option<Event>>
+        {                   self.0.read_raw_event(events, timeout)
                 }
             } 
         */  
@@ -9519,6 +15183,7 @@ pub mod mortal
             }
             /// Returns an `Entry` for the given key.
             pub fn entry(&mut self, key: K) -> Entry<K, V>
+           
             {
                 match self.search(key.as_ref())
                 {
@@ -9558,6 +15223,7 @@ pub mod mortal
             }
             /// Returns the corresponding value for the given sequence.
             pub fn get(&self, key: &str) -> Option<&V>
+           
             {
                 match self.search(key)
                 {
@@ -9567,6 +15233,7 @@ pub mod mortal
             }
             /// Returns a mutable reference to the corresponding value for the given sequence.
             pub fn get_mut(&mut self, key: &str) -> Option<&mut V>
+           
             {
                 match self.search(key)
                 {
@@ -9576,6 +15243,7 @@ pub mod mortal
             }
             /// Inserts a key-value pair into the map.
             pub fn insert(&mut self, key: K, value: V) -> Option<V>
+           
             {
                 match self.search(key.as_ref())
                 {
@@ -9589,6 +15257,7 @@ pub mod mortal
             }
             /// Removes a key-value pair from the map.
             pub fn remove(&mut self, key: &str) -> Option<(K, V)>
+           
             {
                 match self.search(key)
                 {
@@ -9722,8 +15391,7 @@ pub mod mortal
             /// Consumes the `VacantEntry` and inserts a value, 
             /// returning a mutable reference to its place in the `SequenceMap`.
             pub fn insert(self, value: V) -> &'a mut V
-            {
-                self.map.sequences.insert(self.index, (self.key, value));
+            { self.map.sequences.insert(self.index, (self.key, value));
                 &mut self.map.sequences[self.index].1
             }
         }
@@ -9807,11 +15475,7 @@ pub mod mortal
             Continue,
             /// Interrupt signal (`SIGINT` on Unix, `CTRL_C_EVENT` on Windows)
             Interrupt,
-            /// Terminal window resize (`SIGWINCH` on Unix,
-            /// `WINDOW_BUFFER_SIZE_EVENT` on Windows)
-            ///
-            /// When this signal is received, it will be translated into an
-            /// `Event::Resize(_)` value containing the new size of the terminal.
+            /// Terminal window resize
             Resize,
             /// Suspend signal (`SIGTSTP`); Unix only
             Suspend,
@@ -10042,21 +15706,18 @@ pub mod mortal
             /// Sets the foreground color on the given Theme and returns the new.
             pub fn fg<F>(mut self, fg: F) -> Theme where 
             F: Into<Option<Color>>
-            {
-                self.fg = fg.into();
+            { self.fg = fg.into();
                 self
             }
             /// Sets the background color on the given Theme and returns the new.
             pub fn bg<B>(mut self, bg: B) -> Theme where B: Into<Option<Color>>
-            {
-                self.bg = bg.into();
+            { self.bg = bg.into();
                 self
             }
             /// Sets the style on the given Theme and returns the new.
             pub fn style<S>(mut self, style: S) -> Theme where 
             S: Into<Option<Style>>
-            {
-                self.style = style.into().unwrap_or_default();
+            { self.style = style.into().unwrap_or_default();
                 self
             }
         }
@@ -10120,7 +15781,6 @@ pub mod mortal
             /// Returns whether the cursor is out of bounds of the given size.
             #[inline] pub fn is_out_of_bounds(&self, size: Size) -> bool 
             { self.line >= size.lines || self.column >= size.columns }
-
             /// Returns the index of the cursor position within a one-dimensional array of the given size.
             pub(crate) fn as_index(&self, size: Size) -> usize { self.line * size.columns + self.column }
         }
@@ -10337,7 +15997,6 @@ pub mod mortal
             /// Attempts to acquire an exclusive lock on terminal read operations.
             #[inline] pub fn lock_read(&self) -> LockResult<TerminalReadGuard> 
             { map_lock_result(self.0.lock_read(), TerminalReadGuard) }
-
             /// Attempts to acquire an exclusive lock on terminal write operations.
             #[inline] pub fn lock_write(&self) -> LockResult<TerminalWriteGuard>
             { map_lock_result(self.0.lock_write(), TerminalWriteGuard) }
@@ -10546,25 +16205,25 @@ pub mod mortal
         /*
             #[cfg(windows)]
             impl crate::windows::TerminalExt for Terminal {
-                fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    self.0.read_raw(buf, timeout)
+                fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>>
+        {                   self.0.read_raw(buf, timeout)
                 }
 
                 fn read_raw_event(&mut self, events: &mut [::winapi::um::wincon::INPUT_RECORD],
-                        timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    self.0.read_raw_event(events, timeout)
+                        timeout: Option<Duration>) -> io::Result<Option<Event>>
+        {                   self.0.read_raw_event(events, timeout)
                 }
             }
 
             #[cfg(windows)]
-            impl<'a> crate::windows::TerminalExt for TerminalReadGuard<'a> {
-                fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    self.0.read_raw(buf, timeout)
+            impl<'a> crate::windows::TerminalExt for TerminalReadGuard<'a>
+        {               fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>>
+        {                   self.0.read_raw(buf, timeout)
                 }
 
                 fn read_raw_event(&mut self, events: &mut [::winapi::um::wincon::INPUT_RECORD],
-                        timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    self.0.read_raw_event(events, timeout)
+                        timeout: Option<Duration>) -> io::Result<Option<Event>>
+        {                   self.0.read_raw_event(events, timeout)
                 }
         } */
     } 
@@ -11439,23 +17098,23 @@ pub mod mortal
 
             impl<'a> TerminalWriteGuard<'a> 
             {
-                fn new(term: &'a Terminal, writer: MutexGuard<'a, Writer>) -> TerminalWriteGuard<'a> {
-                    TerminalWriteGuard{term, writer}
+                fn new(term: &'a Terminal, writer: MutexGuard<'a, Writer>) -> TerminalWriteGuard<'a>
+        {                   TerminalWriteGuard{term, writer}
                 }
 
-                pub fn size(&self) -> io::Result<Size> {
-                    get_winsize(self.term.out_fd)
+                pub fn size(&self) -> io::Result<Size>
+        {                   get_winsize(self.term.out_fd)
                 }
 
-                fn disable_keypad(&mut self) -> io::Result<()> {
-                    if let Some(local) = self.term.info.get::<cap::KeypadLocal>() {
+                fn disable_keypad(&mut self) -> io::Result<()>
+        {                   if let Some(local) = self.term.info.get::<cap::KeypadLocal>() {
                         self.expand(local.expand())?;
                     }
                     Ok(())
                 }
 
-                fn enable_keypad(&mut self) -> io::Result<bool> {
-                    if let Some(xmit) = self.term.info.get::<cap::KeypadXmit>() {
+                fn enable_keypad(&mut self) -> io::Result<bool>
+        {                   if let Some(xmit) = self.term.info.get::<cap::KeypadXmit>() {
                         self.expand(xmit.expand())?;
                         Ok(true)
                     } else {
@@ -11463,13 +17122,13 @@ pub mod mortal
                     }
                 }
 
-                fn disable_mouse(&mut self) -> io::Result<()> {
-                    self.write_bytes(XTERM_DISABLE_MOUSE.as_bytes())?;
+                fn disable_mouse(&mut self) -> io::Result<()>
+        {                   self.write_bytes(XTERM_DISABLE_MOUSE.as_bytes())?;
                     self.write_bytes(XTERM_DISABLE_MOUSE_MOTION.as_bytes())
                 }
 
-                fn enable_mouse(&mut self, track_motion: bool) -> io::Result<bool> {
-                    if self.term.is_xterm() {
+                fn enable_mouse(&mut self, track_motion: bool) -> io::Result<bool>
+        {                   if self.term.is_xterm() {
                         self.write_bytes(XTERM_ENABLE_MOUSE.as_bytes())?;
                         if track_motion {
                             self.write_bytes(XTERM_ENABLE_MOUSE_MOTION.as_bytes())?;
@@ -11480,12 +17139,12 @@ pub mod mortal
                     }
                 }
 
-                fn enter_screen(&mut self) -> io::Result<()> {
-                    match (self.term.info.get::<cap::EnterCaMode>(),
+                fn enter_screen(&mut self) -> io::Result<()>
+        {                   match (self.term.info.get::<cap::EnterCaMode>(),
                             self.term.info.get::<cap::ChangeScrollRegion>(),
                             self.term.info.get::<cap::CursorHome>()) {
-                        (enter, Some(scroll), Some(home)) => {
-                            let size = self.size()?;
+                        (enter, Some(scroll), Some(home)) =>
+        {                           let size = self.size()?;
 
                             if let Some(enter) = enter {
                                 self.expand(enter.expand())?;
@@ -11505,8 +17164,8 @@ pub mod mortal
                     Ok(())
                 }
 
-                fn exit_screen(&mut self) -> io::Result<()> {
-                    if let Some(exit) = self.term.info.get::<cap::ExitCaMode>() {
+                fn exit_screen(&mut self) -> io::Result<()>
+        {                   if let Some(exit) = self.term.info.get::<cap::ExitCaMode>() {
                         self.expand(exit.expand())?;
                         self.flush()?;
                     }
@@ -11514,8 +17173,8 @@ pub mod mortal
                     Ok(())
                 }
 
-                pub fn clear_attributes(&mut self) -> io::Result<()> {
-                    if self.writer.fg.is_some() || self.writer.bg.is_some() ||
+                pub fn clear_attributes(&mut self) -> io::Result<()>
+        {                   if self.writer.fg.is_some() || self.writer.bg.is_some() ||
                             !self.writer.cur_style.is_empty() {
                         self.writer.fg = None;
                         self.writer.bg = None;
@@ -11526,8 +17185,8 @@ pub mod mortal
                     Ok(())
                 }
 
-                pub fn set_fg(&mut self, fg: Option<Color>) -> io::Result<()> {
-                    if self.writer.fg == fg {
+                pub fn set_fg(&mut self, fg: Option<Color>) -> io::Result<()>
+        {                   if self.writer.fg == fg {
                         Ok(())
                     } else {
                         if let Some(fg) = fg {
@@ -11541,8 +17200,8 @@ pub mod mortal
                     }
                 }
 
-                pub fn set_bg(&mut self, bg: Option<Color>) -> io::Result<()> {
-                    if self.writer.bg == bg {
+                pub fn set_bg(&mut self, bg: Option<Color>) -> io::Result<()>
+        {                   if self.writer.bg == bg {
                         Ok(())
                     } else {
                         if let Some(bg) = bg {
@@ -11556,8 +17215,8 @@ pub mod mortal
                     }
                 }
 
-                pub fn add_style(&mut self, style: Style) -> io::Result<()> {
-                    let add = style - self.writer.cur_style;
+                pub fn add_style(&mut self, style: Style) -> io::Result<()>
+        {                   let add = style - self.writer.cur_style;
 
                     if add.contains(Style::BOLD) {
                         expand_opt!(self, cap::EnterBoldMode)?;
@@ -11577,8 +17236,8 @@ pub mod mortal
                     Ok(())
                 }
 
-                pub fn remove_style(&mut self, style: Style) -> io::Result<()> {
-                    let remove = style & self.writer.cur_style;
+                pub fn remove_style(&mut self, style: Style) -> io::Result<()>
+        {                   let remove = style & self.writer.cur_style;
 
                     if remove.intersects(Style::BOLD | Style::REVERSE) {
                         let new_style = self.writer.cur_style - remove;
@@ -11602,8 +17261,8 @@ pub mod mortal
                     Ok(())
                 }
 
-                pub fn set_style(&mut self, style: Style) -> io::Result<()> {
-                    let add = style - self.writer.cur_style;
+                pub fn set_style(&mut self, style: Style) -> io::Result<()>
+        {                   let add = style - self.writer.cur_style;
                     let remove = self.writer.cur_style - style;
 
                     if remove.intersects(Style::BOLD | Style::REVERSE) {
@@ -11621,12 +17280,12 @@ pub mod mortal
                     Ok(())
                 }
 
-                pub fn set_theme(&mut self, theme: Theme) -> io::Result<()> {
-                    self.set_attrs(theme.fg, theme.bg, theme.style)
+                pub fn set_theme(&mut self, theme: Theme) -> io::Result<()>
+        {                   self.set_attrs(theme.fg, theme.bg, theme.style)
                 }
 
-                pub fn set_attrs(&mut self, fg: Option<Color>, bg: Option<Color>, style: Style) -> io::Result<()> {
-                    if (self.writer.fg.is_some() && fg.is_none()) ||
+                pub fn set_attrs(&mut self, fg: Option<Color>, bg: Option<Color>, style: Style) -> io::Result<()>
+        {                   if (self.writer.fg.is_some() && fg.is_none()) ||
                             (self.writer.bg.is_some() && bg.is_none()) {
                         self.clear_attributes()?;
                     }
@@ -11638,8 +17297,8 @@ pub mod mortal
                     Ok(())
                 }
 
-                fn clear_fg(&mut self) -> io::Result<()> {
-                    let bg = self.writer.bg;
+                fn clear_fg(&mut self) -> io::Result<()>
+        {                   let bg = self.writer.bg;
                     let style = self.writer.cur_style;
 
                     self.clear_attributes()?;
@@ -11647,8 +17306,8 @@ pub mod mortal
                     self.set_style(style)
                 }
 
-                fn clear_bg(&mut self) -> io::Result<()> {
-                    let fg = self.writer.fg;
+                fn clear_bg(&mut self) -> io::Result<()>
+        {                   let fg = self.writer.fg;
                     let style = self.writer.cur_style;
 
                     self.clear_attributes()?;
@@ -11656,30 +17315,30 @@ pub mod mortal
                     self.set_style(style)
                 }
 
-                fn set_fg_color(&mut self, fg: Color) -> io::Result<()> {
-                    expand_opt!(self, cap::SetAForeground,
+                fn set_fg_color(&mut self, fg: Color) -> io::Result<()>
+        {                   expand_opt!(self, cap::SetAForeground,
                         |ex| ex.parameters(color_code(fg)))
                 }
 
-                fn set_bg_color(&mut self, bg: Color) -> io::Result<()> {
-                    expand_opt!(self, cap::SetABackground,
+                fn set_bg_color(&mut self, bg: Color) -> io::Result<()>
+        {                   expand_opt!(self, cap::SetABackground,
                         |ex| ex.parameters(color_code(bg)))
                 }
 
-                pub fn clear_screen(&mut self) -> io::Result<()> {
-                    expand_req!(self, cap::ClearScreen, "clear_screen")
+                pub fn clear_screen(&mut self) -> io::Result<()>
+        {                   expand_req!(self, cap::ClearScreen, "clear_screen")
                 }
 
-                pub fn clear_to_line_end(&mut self) -> io::Result<()> {
-                    expand_req!(self, cap::ClrEol, "clr_eol")
+                pub fn clear_to_line_end(&mut self) -> io::Result<()>
+        {                   expand_req!(self, cap::ClrEol, "clr_eol")
                 }
 
-                pub fn clear_to_screen_end(&mut self) -> io::Result<()> {
-                    expand_req!(self, cap::ClrEos, "clr_eos")
+                pub fn clear_to_screen_end(&mut self) -> io::Result<()>
+        {                   expand_req!(self, cap::ClrEos, "clr_eos")
                 }
 
-                pub fn move_up(&mut self, n: usize) -> io::Result<()> {
-                    if n == 1 {
+                pub fn move_up(&mut self, n: usize) -> io::Result<()>
+        {                   if n == 1 {
                         expand_req!(self, cap::CursorUp, "cursor_up")?;
                     } else if n != 0 {
                         expand_req!(self, cap::ParmUpCursor, "parm_cursor_up",
@@ -11688,16 +17347,16 @@ pub mod mortal
                     Ok(())
                 }
 
-                pub fn move_down(&mut self, n: usize) -> io::Result<()> {
-                    if n != 0 {
+                pub fn move_down(&mut self, n: usize) -> io::Result<()>
+        {                   if n != 0 {
                         expand_req!(self, cap::ParmDownCursor, "parm_cursor_down",
                             |ex| ex.parameters(to_u32(n)))?;
                     }
                     Ok(())
                 }
 
-                pub fn move_left(&mut self, n: usize) -> io::Result<()> {
-                    if n == 1 {
+                pub fn move_left(&mut self, n: usize) -> io::Result<()>
+        {                   if n == 1 {
                         expand_req!(self, cap::CursorLeft, "cursor_left")?;
                     } else if n != 0 {
                         expand_req!(self, cap::ParmLeftCursor, "parm_cursor_left",
@@ -11706,8 +17365,8 @@ pub mod mortal
                     Ok(())
                 }
 
-                pub fn move_right(&mut self, n: usize) -> io::Result<()> {
-                    if n == 1 {
+                pub fn move_right(&mut self, n: usize) -> io::Result<()>
+        {                   if n == 1 {
                         expand_req!(self, cap::CursorRight, "cursor_right")?;
                     } else if n != 0 {
                         expand_req!(self, cap::ParmRightCursor, "parm_cursor_right",
@@ -11716,18 +17375,18 @@ pub mod mortal
                     Ok(())
                 }
 
-                pub fn move_to_first_column(&mut self) -> io::Result<()> {
-                    self.write_bytes(b"\r")
+                pub fn move_to_first_column(&mut self) -> io::Result<()>
+        {                   self.write_bytes(b"\r")
                 }
 
-                pub fn move_cursor(&mut self, pos: Cursor) -> io::Result<()> {
-                    match (self.term.info.get::<cap::CursorAddress>(),
+                pub fn move_cursor(&mut self, pos: Cursor) -> io::Result<()>
+        {                   match (self.term.info.get::<cap::CursorAddress>(),
                             self.term.info.get::<cap::CursorHome>()) {
-                        (_, Some( ref home)) if pos == Cursor::default() => {
-                            self.expand(home.expand())?;
+                        (_, Some( ref home)) if pos == Cursor::default() =>
+        {                           self.expand(home.expand())?;
                         }
-                        (Some(addr), _) => {
-                            self.expand(addr.expand()
+                        (Some(addr), _) =>
+        {                           self.expand(addr.expand()
                                 .parameters(to_u32(pos.line), to_u32(pos.column)))?;
                         }
                         (None, _) => return Err(not_supported("cursor_address"))
@@ -11736,38 +17395,38 @@ pub mod mortal
                     Ok(())
                 }
 
-                pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> {
-                    match mode {
-                        CursorMode::Normal | CursorMode::Overwrite => {
-                            expand_opt!(self, cap::CursorNormal)?;
+                pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()>
+        {                   match mode {
+                        CursorMode::Normal | CursorMode::Overwrite =>
+        {                           expand_opt!(self, cap::CursorNormal)?;
                         }
-                        CursorMode::Invisible => {
-                            expand_opt!(self, cap::CursorInvisible)?;
+                        CursorMode::Invisible =>
+        {                           expand_opt!(self, cap::CursorInvisible)?;
                         }
                     }
 
                     Ok(())
                 }
 
-                pub fn write_char(&mut self, ch: char) -> io::Result<()> {
-                    self.write_str(ch.encode_utf8(&mut [0; 4]))
+                pub fn write_char(&mut self, ch: char) -> io::Result<()>
+        {                   self.write_str(ch.encode_utf8(&mut [0; 4]))
                 }
 
-                pub fn write_str(&mut self, s: &str) -> io::Result<()> {
-                    self.write_bytes(s.as_bytes())
+                pub fn write_str(&mut self, s: &str) -> io::Result<()>
+        {                   self.write_bytes(s.as_bytes())
                 }
 
                 pub fn write_styled(&mut self,
                         fg: Option<Color>, bg: Option<Color>, style: Style, text: &str)
-                        -> io::Result<()> {
-                    self.set_attrs(fg, bg, style)?;
+                        -> io::Result<()>
+        {                   self.set_attrs(fg, bg, style)?;
 
                     self.write_str(text)?;
                     self.clear_attributes()
                 }
 
-                fn write_bytes(&mut self, buf: &[u8]) -> io::Result<()> {
-                    if buf.len() + self.writer.out_buffer.len() > self.writer.out_buffer.capacity() {
+                fn write_bytes(&mut self, buf: &[u8]) -> io::Result<()>
+        {                   if buf.len() + self.writer.out_buffer.len() > self.writer.out_buffer.capacity() {
                         self.flush()?;
                     }
 
@@ -11779,8 +17438,8 @@ pub mod mortal
                     }
                 }
 
-                pub fn flush(&mut self) -> io::Result<()> {
-                    let (n, res) = self.write_data(&self.writer.out_buffer);
+                pub fn flush(&mut self) -> io::Result<()>
+        {                   let (n, res) = self.write_data(&self.writer.out_buffer);
                     self.writer.out_buffer.drain(..n);
                     res
                 }
@@ -11804,8 +17463,8 @@ pub mod mortal
                     (offset, r)
                 }
 
-                fn expand<T: AsRef<[u8]>>(&mut self, exp: Expansion<T>) -> io::Result<()> {
-                    let writer = &mut *self.writer;
+                fn expand<T: AsRef<[u8]>>(&mut self, exp: Expansion<T>) -> io::Result<()>
+        {                   let writer = &mut *self.writer;
                     exp
                         .with(&mut writer.context)
                         .to(&mut writer.out_buffer)
@@ -13267,6 +18926,7 @@ pub mod nom
         {
             /// Returns the remaining input if parsing was successful, or the error if we encountered an error.
             pub fn finish(mut self) -> IResult<I, (), E> 
+           
             {
                 match self.state.take().unwrap()
                 {
@@ -13633,6 +19293,7 @@ pub mod nom
         impl<'a, I, O1, O2, E, F: Parser<I, O1, E>, G: Fn(O1) -> O2> Parser<I, O2, E> for Map<F, G, O1>
         {
             fn parse(&mut self, i: I) -> IResult<I, O2, E>
+           
             {
                 match self.f.parse(i)
                 {
@@ -13702,6 +19363,7 @@ pub mod nom
         Parser<I, O, E> for Or<F, G>
         {
             fn parse(&mut self, i: I) -> IResult<I, O, E>
+           
             {
                 match self.f.parse(i.clone())
                 {
@@ -13736,6 +19398,7 @@ pub mod nom
         > Parser<I, O2, E2> for Into<F, O1, O2, E1, E2>
         {
             fn parse(&mut self, i: I) -> IResult<I, O2, E2>
+           
             {
                 match self.f.parse(i)
                 {
@@ -14843,8 +20506,7 @@ pub mod nom
 
             /// Looks for the first element of the input type for which the condition returns true,
             /// and returns the input up to this position.
-            fn split_at_position_complete<P, E: ParseError<Self>>( &self, predicate: P, ) -> IResult<Self, Self, E>
-            where P: Fn(Self::Item) -> bool;
+            fn split_at_position_complete<P, E: ParseError<Self>>( &self, predicate: P, ) -> IResult<Self, Self, E> where P: Fn(Self::Item) -> bool;
 
             /// Looks for the first element of the input type for which the condition returns true
             /// and returns the input up to this position.
@@ -14859,6 +20521,7 @@ pub mod nom
 
             fn split_at_position<P, E: ParseError<Self>>(&self, predicate: P) -> IResult<Self, Self, E> where 
             P: Fn(Self::Item) -> bool
+           
             {
                 match self.position(predicate)
                 {
@@ -14869,6 +20532,7 @@ pub mod nom
 
             fn split_at_position1<P, E: ParseError<Self>>( &self, predicate: P, e: ErrorKind, ) -> IResult<Self, Self, E> 
             where P: Fn(Self::Item) -> bool
+           
             {
                 match self.position(predicate)
                 {
@@ -14880,6 +20544,7 @@ pub mod nom
 
             fn split_at_position_complete<P, E: ParseError<Self>>( &self, predicate: P, ) -> IResult<Self, Self, E> where 
             P: Fn(Self::Item) -> bool
+           
             {
                 match self.split_at_position(predicate)
                 {
@@ -14891,6 +20556,7 @@ pub mod nom
             fn split_at_position1_complete<P, E: ParseError<Self>>( &self, predicate: P, e: ErrorKind ) -> 
             IResult<Self, Self, E> where 
             P: Fn(Self::Item) -> bool
+           
             {
                 match self.split_at_position1(predicate, e)
                 {
@@ -14910,6 +20576,7 @@ pub mod nom
 
             fn split_at_position<P, E: ParseError<Self>>(&self, predicate: P) -> IResult<Self, Self, E> where
             P: Fn(Self::Item) -> bool,
+           
             {
                 match self.iter().position(|c| predicate(*c))
                 {
@@ -14920,6 +20587,7 @@ pub mod nom
 
             fn split_at_position1<P, E: ParseError<Self>>( &self, predicate: P, e: ErrorKind ) -> IResult<Self, Self, E> where
             P: Fn(Self::Item) -> bool,
+           
             {
                 match self.iter().position(|c| predicate(*c))
                 {
@@ -14931,6 +20599,7 @@ pub mod nom
 
             fn split_at_position_complete<P, E: ParseError<Self>>( &self, predicate: P ) -> IResult<Self, Self, E> where
             P: Fn(Self::Item) -> bool,
+           
             {
                 match self.iter().position(|c| predicate(*c))
                 {
@@ -14942,6 +20611,7 @@ pub mod nom
             fn split_at_position1_complete<P, E: ParseError<Self>>( &self, predicate: P, e: ErrorKind ) 
             -> IResult<Self, Self, E> where
             P: Fn(Self::Item) -> bool
+           
             {
                 match self.iter().position(|c| predicate(*c))
                 {
@@ -14961,6 +20631,7 @@ pub mod nom
             type Item = char;
             fn split_at_position<P, E: ParseError<Self>>(&self, predicate: P) -> IResult<Self, Self, E> where 
             P: Fn(Self::Item) -> bool,
+           
             {
                 match self.find(predicate)
                 {
@@ -14971,6 +20642,7 @@ pub mod nom
 
             fn split_at_position1<P, E: ParseError<Self>>( &self, predicate: P, e: ErrorKind ) -> IResult<Self, Self, E> 
             where P: Fn(Self::Item) -> bool
+           
             {
                 match self.find(predicate)
                 {
@@ -14982,6 +20654,7 @@ pub mod nom
 
             fn split_at_position_complete<P, E: ParseError<Self>>( &self, predicate: P ) -> IResult<Self, Self, E> where
             P: Fn(Self::Item) -> bool
+           
             {
                 match self.find(predicate)
                 {
@@ -15432,9 +21105,7 @@ pub mod nom
                 *,
             };
             /// Generates a parser taking `count` bits.
-            pub fn take<I, O, C, E: ParseError<(I, usize)>>( count:C ) -> impl Fn((I, usize)) -> IResult<(I, usize), O, E>
-            where
-            I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
+            pub fn take<I, O, C, E: ParseError<(I, usize)>>( count:C ) -> impl Fn((I, usize)) -> IResult<(I, usize), O, E> where            I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
             C: ToUsize,
             O: From<u8> + AddAssign + Shl<usize, Output = O> + Shr<usize, Output = O>
             {
@@ -16567,9 +22238,7 @@ pub mod nom
                 }
             }            
             /// Recognizes a string of any char except '\r\n' or '\n'.
-            pub fn not_line_ending<T, E: ParseError<T>>(input: T) -> IResult<T, T, E>
-            where
-            T: Slice<Range<usize>> + Slice<RangeFrom<usize>> + Slice<RangeTo<usize>>,
+            pub fn not_line_ending<T, E: ParseError<T>>(input: T) -> IResult<T, T, E> where            T: Slice<Range<usize>> + Slice<RangeFrom<usize>> + Slice<RangeTo<usize>>,
             T: InputIter + InputLength,
             T: Compare<&'static str>,
             <T as InputIter>::Item: AsChar,
@@ -17778,8 +23447,7 @@ pub mod nom
                 }
             }
             /// Recognizes an 8 byte floating point number
-            #[inline]
-            pub fn f64<I, E: ParseError<I>>( endian:Endianness ) -> fn(I) -> IResult<I, f64, E> where
+            #[inline] pub fn f64<I, E: ParseError<I>>( endian:Endianness ) -> fn(I) -> IResult<I, f64, E> where
             I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength
             {
                 match endian 
@@ -18420,8 +24088,7 @@ pub mod nom
                 }
             }
             /// Recognizes a signed 8 byte integer
-            #[inline]
-            pub fn i64<I, E: ParseError<I>>(endian:Endianness) -> fn(I) -> IResult<I, i64, E> where
+            #[inline] pub fn i64<I, E: ParseError<I>>(endian:Endianness) -> fn(I) -> IResult<I, i64, E> where
             I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength
             {
                 match endian
@@ -19021,8 +24688,7 @@ pub mod now
         pub fn args<S: AsRef<OsStr>>(&mut self, args: &[S]) -> &mut Command
         {
             for arg in args
-            {
-                self.arg(arg.as_ref());
+            { self.arg(arg.as_ref());
             }
             self
         }
@@ -19121,7 +24787,8 @@ pub mod parsers
                 }
                 result.push( ' ' );
             }
-            if result.ends_with( ' ' ) {
+            if result.ends_with( ' ' )
+            {
                 let len = result.len();
                 result.truncate( len - 1 );
             }
@@ -19178,8 +24845,8 @@ pub mod parsers
                         } else {
                             let c_next = match line.chars().nth( i + 1 ) {
                                 Some( x ) => x,
-                                None => {
-                                    println!( "chars nth error - should never happen" );
+                                None =>
+        {                                   println!( "chars nth error - should never happen" );
                                     continue;
                                 }
                             };
@@ -19503,7 +25170,8 @@ pub mod parsers
             }
 
             let mut is_line_complete = true;
-            if !result.is_empty() {
+            if !result.is_empty()
+            {
                 let token_last = result[result.len() - 1].clone();
                 if token_last.0.is_empty() && token_last.1 == "|" {
                     is_line_complete = false;
@@ -19644,8 +25312,8 @@ pub mod parsers
         struct Locust;
 
         pub fn parse_lines( lines:&str ) -> 
-        Result<Pairs<crate::parsers::locust::Rule>, Error<crate::parsers::locust::Rule>> {
-            Locust::parse( Rule::EXP, lines )
+        Result<Pairs<crate::parsers::locust::Rule>, Error<crate::parsers::locust::Rule>>
+        {           Locust::parse( Rule::EXP, lines )
         }
         */
         pub struct Pairs();
@@ -19748,7 +25416,6 @@ pub mod parsers
                 let r2 = r2 as u64;
                 u64_to_hi64_2( r0, r1 | r2 )
             }
-
             /// Get the high 64 bits from the vector.
             #[inline( always )] pub fn upper( x:&[Limb] ) -> ( u64, bool ) 
             {
@@ -19927,7 +25594,6 @@ pub mod parsers
                 /// Bitshift for the log2 multiplier.
                 pub log2_shift:i32,
             }
-
             /// Allow indexing of values without bounds checking
             impl BellerophonPowers
             {
@@ -20011,9 +25677,8 @@ pub mod parsers
                 }
 
                 /// Multiply and assign as if by exponentiation by a power.
-                #[inline]
-                pub fn pow( &mut self, base:u32, exp:u32 ) -> Option<()> {
-                    debug_assert!( base == 2 || base == 5 || base == 10 );
+                #[inline] pub fn pow( &mut self, base:u32, exp:u32 ) -> Option<()>
+        {                   debug_assert!( base == 2 || base == 5 || base == 10 );
                     if base % 5 == 0 {
                         pow( &mut self.data, exp )?;
                     }
@@ -20024,8 +25689,7 @@ pub mod parsers
                 }
 
                 /// Calculate the bit-length of the big-integer.
-                #[inline]
-                pub fn bit_length( &self ) -> u32 {
+                #[inline] pub fn bit_length( &self ) -> u32 {
                     bit_length( &self.data )
                 }
             }
@@ -20035,38 +25699,32 @@ pub mod parsers
                     self.data *= &rhs.data;
                 }
             }
-
             /// REVERSE VIEW
 
             /// Reverse, immutable view of a sequence.
-            pub struct ReverseView<'a, T:'a> {
-                inner:&'a [T],
+            pub struct ReverseView<'a, T:'a>
+        {               inner:&'a [T],
             }
 
-            impl<'a, T> ops::Index<usize> for ReverseView<'a, T> {
-                type Output = T;
+            impl<'a, T> ops::Index<usize> for ReverseView<'a, T>
+        {               type Output = T;
 
-                #[inline]
-                fn index( &self, index:usize ) -> &T {
+                #[inline] fn index( &self, index:usize ) -> &T {
                     let len = self.inner.len();
                     &( *self.inner )[len - index - 1]
                 }
             }
-
             /// Create a reverse view of the vector for indexing.
-            #[inline]
-            pub fn rview( x:&[Limb] ) -> ReverseView<Limb> {
-                ReverseView {
+            #[inline] pub fn rview( x:&[Limb] ) -> ReverseView<Limb>
+        {               ReverseView {
                     inner:x,
                 }
             }
-
             /// Compare `x` to `y`, in little-endian order.
-            #[inline]
-            pub fn compare( x:&[Limb], y:&[Limb] ) -> cmp::Ordering {
+            #[inline] pub fn compare( x:&[Limb], y:&[Limb] ) -> cmp::Ordering {
                 match x.len().cmp( &y.len() ) {
-                    cmp::Ordering::Equal => {
-                        let iter = x.iter().rev().zip( y.iter().rev() );
+                    cmp::Ordering::Equal =>
+        {                       let iter = x.iter().rev().zip( y.iter().rev() );
                         for ( &xi, yi ) in iter {
                             match xi.cmp( yi ) {
                                 cmp::Ordering::Equal => (),
@@ -20079,10 +25737,8 @@ pub mod parsers
                     ord => ord,
                 }
             }
-
             /// Normalize the integer, so any leading zero values are removed.
-            #[inline]
-            pub fn normalize( x:&mut VecType ) {
+            #[inline] pub fn normalize( x:&mut VecType ) {
                 while let Some( &value ) = x.get( x.len().wrapping_sub( 1 ) ) {
                     if value == 0 {
                         unsafe { x.set_len( x.len() - 1 ) };
@@ -20091,7 +25747,6 @@ pub mod parsers
                     }
                 }
             }
-
             /// Get if the big integer is normalized.
             #[inline]
             #[allow( clippy::match_like_matches_macro )]
@@ -20101,7 +25756,6 @@ pub mod parsers
                     _ => true,
                 }
             }
-
             /// Create StackVec from u64 value.
             #[inline( always )]
             #[allow( clippy::branches_sharing_code )]
@@ -20118,48 +25772,41 @@ pub mod parsers
                 vec
             }
             /// Check if any of the remaining bits are non-zero.
-            #[inline]
-            pub fn nonzero( x:&[Limb], rindex:usize ) -> bool {
+            #[inline] pub fn nonzero( x:&[Limb], rindex:usize ) -> bool {
                 debug_assert!( rindex <= x.len() );
 
                 let len = x.len();
                 let slc = &x[..len - rindex];
                 slc.iter().rev().any( |&x| x != 0 )
             }
-
             /// Shift 32-bit integer to high 64-bits.
-            #[inline]
-            pub fn u32_to_hi64_1( r0:u32 ) -> ( u64, bool ) {
+            #[inline] pub fn u32_to_hi64_1( r0:u32 ) -> ( u64, bool ) {
                 u64_to_hi64_1( r0 as u64 )
             }
-
             /// Shift 2 32-bit integers to high 64-bits.
-            #[inline]
-            pub fn u32_to_hi64_2( r0:u32, r1:u32 ) -> ( u64, bool ) {
+            #[inline] pub fn u32_to_hi64_2( r0:u32, r1:u32 ) -> ( u64, bool )
+            {
                 let r0 = ( r0 as u64 ) << 32;
                 let r1 = r1 as u64;
                 u64_to_hi64_1( r0 | r1 )
             }
-
             /// Shift 3 32-bit integers to high 64-bits.
-            #[inline]
-            pub fn u32_to_hi64_3( r0:u32, r1:u32, r2:u32 ) -> ( u64, bool ) {
+            #[inline] pub fn u32_to_hi64_3( r0:u32, r1:u32, r2:u32 ) -> ( u64, bool )
+            {
                 let r0 = r0 as u64;
                 let r1 = ( r1 as u64 ) << 32;
                 let r2 = r2 as u64;
                 u64_to_hi64_2( r0, r1 | r2 )
             }
-
             /// Shift 64-bit integer to high 64-bits.
-            #[inline]
-            pub fn u64_to_hi64_1( r0:u64 ) -> ( u64, bool ) {
+            #[inline] pub fn u64_to_hi64_1( r0:u64 ) -> ( u64, bool )
+            {
                 let ls = r0.leading_zeros();
                 ( r0 << ls, false )
             }
-
             /// Shift 2 64-bit integers to high 64-bits.
-            #[inline]
-            pub fn u64_to_hi64_2( r0:u64, r1:u64 ) -> ( u64, bool ) {
+            #[inline] pub fn u64_to_hi64_2( r0:u64, r1:u64 ) -> ( u64, bool )
+            {
                 let ls = r0.leading_zeros();
                 let rs = 64 - ls;
                 let v = match ls {
@@ -20169,7 +25816,6 @@ pub mod parsers
                 let n = r1 << ls != 0;
                 ( v, n )
             }
-
             /// Extract the hi bits from the buffer.
             macro_rules! hi {
                 ( @1 $self:ident, $rview:ident, $t:ident, $fn:ident ) => {{
@@ -20199,10 +25845,9 @@ pub mod parsers
                     ( v, n || nonzero( $self, 3 ) )
                 }};
             }
-
             /// Get the high 64 bits from the vector.
-            #[inline( always )]
-            pub fn hi64( x:&[Limb] ) -> ( u64, bool ) {
+            #[inline( always )] pub fn hi64( x:&[Limb] ) -> ( u64, bool )
+            {
                 let rslc = rview( x );
                 match x.len() {
                     0 => ( 0, false ),
@@ -20214,7 +25859,6 @@ pub mod parsers
                     _ => hi!( @nonzero2 x, rslc, u64, u64_to_hi64_2 ),
                 }
             }
-
             /// MulAssign by a power of 5.
             pub fn pow( x:&mut VecType, mut exp:u32 ) -> Option<()>
             {
@@ -20234,23 +25878,20 @@ pub mod parsers
                 }
                 Some( () )
             }
-
             /// Add two small integers and return the resulting value and if overflow happens.
-            #[inline( always )]
-            pub fn scalar_add( x:Limb, y:Limb ) -> ( Limb, bool ) {
+            #[inline( always )] pub fn scalar_add( x:Limb, y:Limb ) -> ( Limb, bool ) 
+            {
                 x.overflowing_add( y )
             }
-
             /// Multiply two small integers ( with carry ) ( and return the overflow contribution ).
-            #[inline( always )]
-            pub fn scalar_mul( x:Limb, y:Limb, carry:Limb ) -> ( Limb, Limb ) {
+            #[inline( always )] pub fn scalar_mul( x:Limb, y:Limb, carry:Limb ) -> ( Limb, Limb )
+            {
                 let z:Wide = ( x as Wide ) * ( y as Wide ) + ( carry as Wide );
                 ( z as Limb, ( z >> LIMB_BITS ) as Limb )
             }
-
             /// Add small integer to bigint starting from offset.
-            #[inline]
-            pub fn small_add_from( x:&mut VecType, y:Limb, start:usize ) -> Option<()> {
+            #[inline] pub fn small_add_from( x:&mut VecType, y:Limb, start:usize ) -> Option<()>
+            {
                 let mut index = start;
                 let mut carry = y;
                 while carry != 0 && index < x.len() {
@@ -20265,16 +25906,13 @@ pub mod parsers
                 }
                 Some( () )
             }
-
             /// Add small integer to bigint.
-            #[inline( always )]
-            pub fn small_add( x:&mut VecType, y:Limb ) -> Option<()> {
-                small_add_from( x, y, 0 )
+            #[inline( always )] pub fn small_add( x:&mut VecType, y:Limb ) -> Option<()>
+        {               small_add_from( x, y, 0 )
             }
-
             /// Multiply bigint by small integer.
-            #[inline]
-            pub fn small_mul( x:&mut VecType, y:Limb ) -> Option<()> {
+            #[inline] pub fn small_mul( x:&mut VecType, y:Limb ) -> Option<()>
+            {
                 let mut carry = 0;
                 for xi in x.iter_mut() {
                     let result = scalar_mul( *xi, y, carry );
@@ -20287,10 +25925,9 @@ pub mod parsers
                 }
                 Some( () )
             }
-
             /// Add bigint to bigint starting from offset.
-            pub fn large_add_from( x:&mut VecType, y:&[Limb], start:usize ) -> Option<()> {
-                if y.len() > x.len().saturating_sub( start ) {
+            pub fn large_add_from( x:&mut VecType, y:&[Limb], start:usize ) -> Option<()>
+        {               if y.len() > x.len().saturating_sub( start ) {
                     x.try_resize( y.len() + start, 0 )?;
                 }
                 
@@ -20313,13 +25950,10 @@ pub mod parsers
                 }
                 Some( () )
             }
-
             /// Add bigint to bigint.
-            #[inline( always )]
-            pub fn large_add( x:&mut VecType, y:&[Limb] ) -> Option<()> {
-                large_add_from( x, y, 0 )
+            #[inline( always )] pub fn large_add( x:&mut VecType, y:&[Limb] ) -> Option<()>
+        {               large_add_from( x, y, 0 )
             }
-
             /// Grade-school multiplication algorithm.
             /// In short, Karatsuba multiplication is never worthwhile for out use-case.
             pub fn long_mul( x:&[Limb], y:&[Limb] ) -> Option<VecType>
@@ -20341,11 +25975,9 @@ pub mod parsers
                 z.normalize();
                 Some( z )
             }
-
             /// Multiply bigint by bigint using grade-school multiplication algorithm.
-            #[inline( always )]
-            pub fn large_mul( x:&mut VecType, y:&[Limb] ) -> Option<()> {
-                if y.len() == 1 {
+            #[inline( always )] pub fn large_mul( x:&mut VecType, y:&[Limb] ) -> Option<()>
+        {               if y.len() == 1 {
                     small_mul( x, y[0] )?;
                 } else {
                     *x = long_mul( y, x )?;
@@ -20354,8 +25986,7 @@ pub mod parsers
             }
             
             /// Shift-left `n` bits inside a buffer.
-            #[inline]
-            pub fn shl_bits( x:&mut VecType, n:usize ) -> Option<()>
+            #[inline] pub fn shl_bits( x:&mut VecType, n:usize ) -> Option<()>
             {
                 debug_assert!( n != 0 );
                 debug_assert!( n < LIMB_BITS );
@@ -20377,11 +26008,9 @@ pub mod parsers
 
                 Some( () )
             }
-
             /// Shift-left `n` limbs inside a buffer.
-            #[inline]
-            pub fn shl_limbs( x:&mut VecType, n:usize ) -> Option<()> {
-                debug_assert!( n != 0 );
+            #[inline] pub fn shl_limbs( x:&mut VecType, n:usize ) -> Option<()>
+        {               debug_assert!( n != 0 );
                 if n + x.len() > x.capacity() {
                     None
                 } else if !x.is_empty() {
@@ -20398,10 +26027,9 @@ pub mod parsers
                     Some( () )
                 }
             }
-
             /// Shift-left buffer by n bits.
-            #[inline]
-            pub fn shl( x:&mut VecType, n:usize ) -> Option<()> {
+            #[inline] pub fn shl( x:&mut VecType, n:usize ) -> Option<()>
+            {
                 let rem = n % LIMB_BITS;
                 let div = n / LIMB_BITS;
                 if rem != 0 {
@@ -20412,10 +26040,8 @@ pub mod parsers
                 }
                 Some( () )
             }
-
             /// Get number of leading zero bits in the storage.
-            #[inline]
-            pub fn leading_zeros( x:&[Limb] ) -> u32 {
+            #[inline] pub fn leading_zeros( x:&[Limb] ) -> u32 {
                 let length = x.len();
                 if let Some( &value ) = x.get( length.wrapping_sub( 1 ) ) {
                     value.leading_zeros()
@@ -20423,14 +26049,11 @@ pub mod parsers
                     0
                 }
             }
-
             /// Calculate the bit-length of the big-integer.
-            #[inline]
-            pub fn bit_length( x:&[Limb] ) -> u32 {
+            #[inline] pub fn bit_length( x:&[Limb] ) -> u32 {
                 let nlz = leading_zeros( x );
                 LIMB_BITS as u32 * x.len() as u32 - nlz
             }
-
             ///  Type for a single limb of the big integer.
             #[cfg( all( target_pointer_width = "64", not( target_arch = "sparc" ) ) )]
             pub type Limb = u64;
@@ -20460,7 +26083,6 @@ pub mod parsers
                 /// Binary exponent for the extended-precision float.
                 pub exp:i32,
             }
-
             /// Converts an `ExtendedFloat` to the closest machine float type.
             #[inline( always )] pub fn extended_to_float<F:Float>( x:ExtendedFloat ) -> F
             {
@@ -20584,8 +26206,7 @@ pub mod parsers
                 #[inline] pub fn add_small( &mut self, y:Limb ) -> Option<()>
                 { small_add( self, y ) }
                 /// MulAssign small integer.
-                #[inline]
-                pub fn mul_small( &mut self, y:Limb ) -> Option<()>
+                #[inline] pub fn mul_small( &mut self, y:Limb ) -> Option<()>
                 { small_mul( self, y ) }
             }
 
@@ -20728,7 +26349,6 @@ pub mod parsers
             /// Add two small integers and return the resulting value and if overflow happens.
             #[inline( always )] pub fn scalar_add( x:Limb, y:Limb ) -> ( Limb, bool )
             { x.overflowing_add( y ) }
-
             /// Multiply two small integers ( with carry ) ( and return the overflow contribution ).
             #[inline( always )] pub fn scalar_mul( x:Limb, y:Limb, carry:Limb ) -> ( Limb, Limb )
             {
@@ -21321,7 +26941,6 @@ pub mod parsers
                 else { z = with_set_high_word( z, j as u32 ); }
                 s * z
             }
-
             /// Absolute value ( magnitude ) ( f64 )
             pub fn fabsd( x:f64 ) -> f64 
             { f64::from_bits( x.to_bits() & ( u64::MAX / 2 ) ) }
@@ -21426,7 +27045,6 @@ pub mod parsers
                     false => ( 1 << n ) - 1,
                 }
             }
-
             /// Calculate the halfway point for the lower `n` bits.
             #[inline] pub fn lower_n_halfway( n:u64 ) -> u64
             {
@@ -21437,7 +27055,6 @@ pub mod parsers
                     false => nth_bit( n - 1 ),
                 }
             }
-
             /// Calculate a scalar factor of 2 above the halfway point.
             #[inline] pub fn nth_bit( n:u64 ) -> u64
             {
@@ -21664,8 +27281,7 @@ pub mod parsers
             impl Number 
             {
                 /// Detect if the float can be accurately reconstructed from native floats.
-                #[inline]
-                pub fn is_fast_path<F:Float>( &self ) -> bool 
+                #[inline] pub fn is_fast_path<F:Float>( &self ) -> bool 
                 {
                     F::MIN_EXPONENT_FAST_PATH <= self.exponent
                     && self.exponent <= F::MAX_EXPONENT_DISGUISED_FAST_PATH
@@ -21885,7 +27501,6 @@ pub mod parsers
 
                 fp.mant &= F::MANTISSA_MASK;
             }
-
             /// Shift right N-bytes and round towards a direction.
             pub fn round_nearest_tie_even<Cb>( fp:&mut ExtendedFloat, shift:i32, cb:Cb ) where
             Cb:Fn( bool, bool, bool ) -> bool,
@@ -21942,7 +27557,6 @@ pub mod parsers
                     $count += 1;
                 }};
             }
-
             /// Add a temporary value to our mantissa.
             macro_rules! add_temporary
             {
@@ -21981,7 +27595,6 @@ pub mod parsers
                     $value = 0;
                 };
             }
-
             /// Round-up a truncated value.
             macro_rules! round_up_truncated
             {
@@ -21991,7 +27604,6 @@ pub mod parsers
                     $count += 1;
                 }};
             }
-
             /// Check and round-up the fraction if any non-zero digits exist.
             macro_rules! round_up_nonzero
             {
@@ -22007,7 +27619,6 @@ pub mod parsers
                     }
                 }};
             }
-
             /// Parse the significant digits and biased, binary exponent of a float.
             #[inline] pub fn slow<'a, F, Iter1, Iter2>
             ( 
@@ -22027,7 +27638,6 @@ pub mod parsers
                 if exponent >= 0 { positive_digit_comp::<F>( bigmant, exponent ) }
                 else { negative_digit_comp::<F>( bigmant, fp, exponent ) }
             }
-
             /// Generate the significant digits with a positive exponent relative to mantissa.
             pub fn positive_digit_comp<F:Float>( mut bigmant:Bigint, exponent:i32 ) -> ExtendedFloat
             {
@@ -22050,7 +27660,6 @@ pub mod parsers
                 } );
                 fp
             }
-
             /// Generate the significant digits with a negative exponent relative to mantissa.
             pub fn negative_digit_comp<F:Float>
             ( 
@@ -22093,7 +27702,6 @@ pub mod parsers
 
                 fp
             }
-
             /// Parse the full mantissa into a big integer.
             pub fn parse_mantissa<'a, Iter1, Iter2>
             ( 
@@ -22182,7 +27790,6 @@ pub mod parsers
                 }
                 exponent as i32
             }
-
             /// Calculate `b` from a a representation of `b` as a float.
             #[inline] pub fn b<F:Float>( float:F ) -> ExtendedFloat 
             {
@@ -22192,7 +27799,6 @@ pub mod parsers
                     exp:float.exponent(),
                 }
             }
-
             /// Calculate `b+h` from a a representation of `b` as a float.
             #[inline] pub fn bh<F:Float>( float:F ) -> ExtendedFloat
             {
@@ -22468,7 +28074,6 @@ pub mod path
                 let bytes = read_all( user_dir_file_path ).unwrap_or( Vec::new() );
                 parse_user_dirs( home_dir_path, None, &bytes )
             }
-
             /// Returns a single XDG user directory obtained from $( XDG_CONFIG_HOME )/user-dirs.dirs.
             pub fn single( home_dir_path:&Path, user_dir_file_path:&Path, user_dir_name:&str ) -> HashMap<String, PathBuf>
             {
@@ -22538,7 +28143,6 @@ pub mod path
                 }
                 user_dirs
             }
-
             /// Reads the entire contents of a file into a byte vector.
             fn read_all( path:&Path ) -> io::Result<Vec<u8>>
             {
@@ -22547,7 +28151,6 @@ pub mod path
                 file.read_to_end( &mut bytes )?;
                 Ok( bytes )
             }
-
             /// Returns bytes before and after first occurrence of separator.
             fn split_once( bytes:&[u8], separator:u8 ) -> Option<( &[u8], &[u8] )>
             {
@@ -22558,7 +28161,6 @@ pub mod path
                     ( &bytes[..i], &bytes[i+1..] )
                 } )
             }
-
             /// Returns a slice with leading and trailing <blank> characters removed.
             fn trim_blank( bytes:&[u8] ) -> &[u8]
             {
@@ -22567,7 +28169,6 @@ pub mod path
                 let i = bytes.iter().cloned().rev().take_while( |b| *b == b' ' || *b == b'\t' ).count();
                 &bytes[..bytes.len()-i]
             }
-
             /// Unescape bytes escaped with POSIX shell double-quotes rules ( as used by xdg-user-dirs-update ).
             fn shell_unescape( escaped:&[u8] ) -> Vec<u8>
             {
@@ -23428,7 +29029,6 @@ pub mod prompt
                 /// Unquotes a piece of user input before searching for completions.
                 fn unquote<'a>(&self, word: &'a str) -> Cow<'a, str> { Borrowed(word) }
             }
-
             /// `Completer` type that performs no completion
             pub struct DummyCompleter;
             impl<Term: Terminal> Completer<Term> for DummyCompleter
@@ -23437,7 +29037,6 @@ pub mod prompt
                 Option<Vec<Completion>>
                 { None }
             }
-
             /// Performs completion by searching for filenames matching the word prefix.
             pub struct PathCompleter;
             impl<Term: Terminal> Completer<Term> for PathCompleter
@@ -23452,7 +29051,6 @@ pub mod prompt
                 fn quote<'a>(&self, word: &'a str) -> Cow<'a, str> { escape(word) }
                 fn unquote<'a>(&self, word: &'a str) -> Cow<'a, str> { unescape(word) }
             }
-
             /// Returns a sorted list of paths whose prefix matches the given path.
             pub fn complete_path(path: &str) -> Vec<Completion>
             {
@@ -23886,19 +29484,19 @@ pub mod prompt
                                 else_group: else_group,
                             }
                         }
-                        Token::SpecialWord("else") => {
-                            self.error("$else without matching $if directive");
+                        Token::SpecialWord("else") =>
+        {                           self.error("$else without matching $if directive");
                             return None;
                         }
-                        Token::SpecialWord("endif") => {
-                            self.error("$endif without matching $if directive");
+                        Token::SpecialWord("endif") =>
+        {                           self.error("$endif without matching $if directive");
                             return None;
                         }
-                        Token::String(seq) => {
-                            match tokens.next() {
+                        Token::String(seq) =>
+        {                           match tokens.next() {
                                 Some(Token::Colon) => (),
-                                _ => {
-                                    self.invalid();
+                                _ =>
+        {                                   self.invalid();
                                     return None;
                                 }
                             }
@@ -23908,17 +29506,17 @@ pub mod prompt
                                     Directive::Bind(seq, Command::from_string(value)),
                                 Some(Token::String(out)) =>
                                     Directive::Bind(seq, Command::Macro(out.to_owned().into())),
-                                _ => {
-                                    self.invalid();
+                                _ =>
+        {                                   self.invalid();
                                     return None;
                                 }
                             }
                         }
-                        Token::Word("set") => {
-                            let name = match tokens.next() {
+                        Token::Word("set") =>
+        {                           let name = match tokens.next() {
                                 Some(Token::Word(w)) => w,
-                                _ => {
-                                    self.invalid();
+                                _ =>
+        {                                   self.invalid();
                                     return None;
                                 }
                             };
@@ -23928,27 +29526,27 @@ pub mod prompt
                             let value = match tokens.next() {
                                 Some(Token::String(s)) => s,
                                 Some(Token::Word(_)) => rest.to_owned(),
-                                _ => {
-                                    self.invalid();
+                                _ =>
+        {                                   self.invalid();
                                     return None;
                                 }
                             };
 
                             Directive::SetVariable(name.to_owned(), value)
                         }
-                        Token::Word(name) => {
-                            match tokens.next() {
+                        Token::Word(name) =>
+        {                           match tokens.next() {
                                 Some(Token::Colon) => (),
-                                _ => {
-                                    self.invalid();
+                                _ =>
+        {                                   self.invalid();
                                     return None;
                                 }
                             }
 
                             let seq = match parse_char_name(name) {
                                 Some(seq) => seq,
-                                None => {
-                                    self.invalid();
+                                None =>
+        {                                   self.invalid();
                                     return None;
                                 }
                             };
@@ -23958,14 +29556,14 @@ pub mod prompt
                                     Directive::Bind(seq, Command::from_string(value)),
                                 Some(Token::String(macro_seq)) =>
                                     Directive::Bind(seq, Command::Macro(macro_seq.to_owned().into())),
-                                _ => {
-                                    self.invalid();
+                                _ =>
+        {                                   self.invalid();
                                     return None;
                                 }
                             }
                         }
-                        _ => {
-                            self.invalid();
+                        _ =>
+        {                           self.invalid();
                             return None;
                         }
                     };
@@ -24746,7 +30344,6 @@ pub mod prompt
 
                 fn index(&self) -> usize { self.line * self.size.columns + self.col }
             }
-
             /// Iterator over lines in a `MemoryTerminal` buffer.
             pub struct Lines<'a>
             {
@@ -26435,7 +32032,6 @@ pub mod prompt
                 term: Box<dyn TerminalReader<Term> + 'a>,
                 data: MutexGuard<'a, Read<Term>>,
             }
-
             /// Returned from [`read_line`] to indicate user input.
             #[derive(Debug)] pub enum ReadResult
             {
@@ -27907,11 +33503,11 @@ pub mod prompt
                         }
                     }
 
-                    impl<'a> Iterator for VariableIter<'a> {
-                        type Item = (&'static str, Variable);
+                    impl<'a> Iterator for VariableIter<'a>
+        {                       type Item = (&'static str, Variable);
 
-                        fn next(&mut self) -> Option<Self::Item> {
-                            let res = match VARIABLE_NAMES.get(self.n).cloned() {
+                        fn next(&mut self) -> Option<Self::Item>
+        {                           let res = match VARIABLE_NAMES.get(self.n).cloned() {
                                 $( Some($name) => ($name, {
                                     let $gr = self.vars;
                                     Variable::from($getter)
@@ -28736,8 +34332,8 @@ pub mod prompt
                     }
                 }
 
-                pub fn next_history(&mut self, n: usize) -> io::Result<()> {
-                    if let Some(old) = self.history_index {
+                pub fn next_history(&mut self, n: usize) -> io::Result<()>
+        {                   if let Some(old) = self.history_index {
                         let new = old.saturating_add(n);
 
                         if new >= self.history.len() {
@@ -28750,8 +34346,8 @@ pub mod prompt
                     Ok(())
                 }
 
-                pub fn prev_history(&mut self, n: usize) -> io::Result<()> {
-                    if !self.history.is_empty() && self.history_index != Some(0) {
+                pub fn prev_history(&mut self, n: usize) -> io::Result<()>
+        {                   if !self.history.is_empty() && self.history_index != Some(0) {
                         let new = if let Some(old) = self.history_index {
                             old.saturating_sub(n)
                         } else {
@@ -28764,8 +34360,8 @@ pub mod prompt
                     Ok(())
                 }
 
-                pub fn select_history_entry(&mut self, new: Option<usize>) -> io::Result<()> {
-                    if new != self.history_index {
+                pub fn select_history_entry(&mut self, new: Option<usize>) -> io::Result<()>
+        {                   if new != self.history_index {
                         self.move_to(0)?;
                         self.set_history_entry(new);
                         self.new_buffer()?;
@@ -28806,26 +34402,26 @@ pub mod prompt
                     }
                 }
 
-                pub fn backward_char(&mut self, n: usize) -> io::Result<()> {
-                    let pos = backward_char(n, &self.buffer, self.cursor);
+                pub fn backward_char(&mut self, n: usize) -> io::Result<()>
+        {                   let pos = backward_char(n, &self.buffer, self.cursor);
                     self.move_to(pos)
                 }
 
-                pub fn forward_char(&mut self, n: usize) -> io::Result<()> {
-                    let pos = forward_char(n, &self.buffer, self.cursor);
+                pub fn forward_char(&mut self, n: usize) -> io::Result<()>
+        {                   let pos = forward_char(n, &self.buffer, self.cursor);
                     self.move_to(pos)
                 }
 
-                pub fn backward_search_char(&mut self, n: usize, ch: char) -> io::Result<()> {
-                    if let Some(pos) = backward_search_char(n, &self.buffer, self.cursor, ch) {
+                pub fn backward_search_char(&mut self, n: usize, ch: char) -> io::Result<()>
+        {                   if let Some(pos) = backward_search_char(n, &self.buffer, self.cursor, ch) {
                         self.move_to(pos)?;
                     }
 
                     Ok(())
                 }
 
-                pub fn forward_search_char(&mut self, n: usize, ch: char) -> io::Result<()> {
-                    if let Some(pos) = forward_search_char(n, &self.buffer, self.cursor, ch) {
+                pub fn forward_search_char(&mut self, n: usize, ch: char) -> io::Result<()>
+        {                   if let Some(pos) = forward_search_char(n, &self.buffer, self.cursor, ch) {
                         self.move_to(pos)?;
                     }
 
@@ -28834,8 +34430,8 @@ pub mod prompt
 
                 /// Deletes a range from the buffer; the cursor is moved to the end
                 /// of the given range.
-                pub fn delete_range<R: RangeArgument<usize>>(&mut self, range: R) -> io::Result<()> {
-                    let start = range.start().cloned().unwrap_or(0);
+                pub fn delete_range<R: RangeArgument<usize>>(&mut self, range: R) -> io::Result<()>
+        {                   let start = range.start().cloned().unwrap_or(0);
                     let end = range.end().cloned().unwrap_or_else(|| self.buffer.len());
 
                     self.move_to(start)?;
@@ -28850,8 +34446,8 @@ pub mod prompt
                     Ok(())
                 }
 
-                pub fn insert_str(&mut self, s: &str) -> io::Result<()> {
-                    // If the string insertion moves a combining character,
+                pub fn insert_str(&mut self, s: &str) -> io::Result<()>
+        {                   // If the string insertion moves a combining character,
                     // we must redraw starting from the character before the cursor.
                     let moves_combining = match self.buffer[self.cursor..].chars().next() {
                         Some(ch) if is_combining_mark(ch) => true,
@@ -28878,8 +34474,8 @@ pub mod prompt
                 }
 
                 pub fn transpose_range(&mut self, src: Range<usize>, dest: Range<usize>)
-                        -> io::Result<()> {
-                    // Ranges must not overlap
+                        -> io::Result<()>
+        {                   // Ranges must not overlap
                     assert!(src.end <= dest.start || src.start >= dest.end);
 
                     // Final cursor position
@@ -28918,12 +34514,12 @@ pub mod prompt
                 fn prompt_suffix_length(&self) -> usize {
                     match self.prompt_type {
                         PromptType::Normal => self.prompt_suffix_len,
-                        PromptType::Number => {
-                            let n = number_len(self.input_arg.to_i32());
+                        PromptType::Number =>
+        {                           let n = number_len(self.input_arg.to_i32());
                             PROMPT_NUM_PREFIX + PROMPT_NUM_SUFFIX + n
                         }
-                        PromptType::Search => {
-                            let mut prefix = PROMPT_SEARCH_PREFIX;
+                        PromptType::Search =>
+        {                           let mut prefix = PROMPT_SEARCH_PREFIX;
 
                             if self.reverse_search {
                                 prefix += PROMPT_SEARCH_REVERSE_PREFIX;
@@ -28945,8 +34541,8 @@ pub mod prompt
 
                     match self.prompt_type {
                         PromptType::CompleteIntro(_) |
-                        PromptType::CompleteMore => {
-                            let width = self.screen_size.columns;
+                        PromptType::CompleteMore =>
+        {                           let width = self.screen_size.columns;
                             (prompt_len / width, prompt_len % width)
                         }
                         _ => self.line_col_with(pos, &self.buffer, prompt_len)
@@ -28964,20 +34560,20 @@ pub mod prompt
                     (n / width, n % width)
                 }
 
-                pub fn clear_screen(&mut self) -> io::Result<()> {
-                    self.term.clear_screen()?;
+                pub fn clear_screen(&mut self) -> io::Result<()>
+        {                   self.term.clear_screen()?;
                     self.draw_prompt()?;
 
                     Ok(())
                 }
 
-                pub fn clear_to_screen_end(&mut self) -> io::Result<()> {
-                    self.term.clear_to_screen_end()
+                pub fn clear_to_screen_end(&mut self) -> io::Result<()>
+        {                   self.term.clear_to_screen_end()
                 }
 
                 /// Draws a new buffer on the screen. Cursor position is assumed to be `0`.
-                pub fn new_buffer(&mut self) -> io::Result<()> {
-                    self.draw_buffer(0)?;
+                pub fn new_buffer(&mut self) -> io::Result<()>
+        {                   self.draw_buffer(0)?;
                     self.cursor = self.buffer.len();
 
                     self.term.clear_to_screen_end()?;
@@ -28985,16 +34581,16 @@ pub mod prompt
                     Ok(())
                 }
 
-                pub fn clear_full_prompt(&mut self) -> io::Result<()> {
-                    let prefix_lines = self.prompt_prefix_len / self.screen_size.columns;
+                pub fn clear_full_prompt(&mut self) -> io::Result<()>
+        {                   let prefix_lines = self.prompt_prefix_len / self.screen_size.columns;
                     let (line, _) = self.line_col(self.cursor);
                     self.term.move_up(prefix_lines + line)?;
                     self.term.move_to_first_column()?;
                     self.term.clear_to_screen_end()
                 }
 
-                pub(crate) fn clear_prompt(&mut self) -> io::Result<()> {
-                    let (line, _) = self.line_col(self.cursor);
+                pub(crate) fn clear_prompt(&mut self) -> io::Result<()>
+        {                   let (line, _) = self.line_col(self.cursor);
 
                     self.term.move_up(line)?;
                     self.term.move_to_first_column()?;
@@ -29002,13 +34598,13 @@ pub mod prompt
                 }
 
                 /// Move back to true cursor position from some other position
-                pub fn move_from(&mut self, pos: usize) -> io::Result<()> {
-                    let (lines, cols) = self.move_delta(pos, self.cursor, &self.buffer);
+                pub fn move_from(&mut self, pos: usize) -> io::Result<()>
+        {                   let (lines, cols) = self.move_delta(pos, self.cursor, &self.buffer);
                     self.move_rel(lines, cols)
                 }
 
-                pub fn move_to(&mut self, pos: usize) -> io::Result<()> {
-                    if pos != self.cursor {
+                pub fn move_to(&mut self, pos: usize) -> io::Result<()>
+        {                   if pos != self.cursor {
                         let (lines, cols) = self.move_delta(self.cursor, pos, &self.buffer);
                         self.move_rel(lines, cols)?;
                         self.cursor = pos;
@@ -29017,13 +34613,13 @@ pub mod prompt
                     Ok(())
                 }
 
-                pub fn move_to_end(&mut self) -> io::Result<()> {
-                    let pos = self.buffer.len();
+                pub fn move_to_end(&mut self) -> io::Result<()>
+        {                   let pos = self.buffer.len();
                     self.move_to(pos)
                 }
 
-                pub fn move_right(&mut self, n: usize) -> io::Result<()> {
-                    self.term.move_right(n)
+                pub fn move_right(&mut self, n: usize) -> io::Result<()>
+        {                   self.term.move_right(n)
                 }
 
                 /// Moves from `old` to `new` cursor position, using the given buffer
@@ -29037,8 +34633,8 @@ pub mod prompt
                     new_col as isize - old_col as isize)
                 }
 
-                fn move_rel(&mut self, lines: isize, cols: isize) -> io::Result<()> {
-                    if lines > 0 {
+                fn move_rel(&mut self, lines: isize, cols: isize) -> io::Result<()>
+        {                   if lines > 0 {
                         self.term.move_down(lines as usize)?;
                     } else if lines < 0 {
                         self.term.move_up((-lines) as usize)?;
@@ -29277,8 +34873,8 @@ pub mod prompt
                     {
                         Digit::None => *self = Digit::Num(n),
                         Digit::NegNone => *self = Digit::NegNum(n),
-                        Digit::Num(ref mut m) | Digit::NegNum(ref mut m) => {
-                            *m *= 10;
+                        Digit::Num(ref mut m) | Digit::NegNum(ref mut m) =>
+        {                           *m *= 10;
                             *m += n;
                         }
                     }
@@ -30132,13 +35728,13 @@ pub mod regex
 
         match rex.captures( text )
         {
-            Some( caps ) => {
-                if let Some( x ) = caps.get( 1 ) {
+            Some( caps ) =>
+        {               if let Some( x ) = caps.get( 1 ) {
                     return Some( x.as_str().to_owned() );
                 }
             }
-            None => {
-                return None;
+            None =>
+        {               return None;
             }
         }
 
@@ -32327,6 +37923,7 @@ pub mod str
         #[inline] pub fn pop( &mut self ) -> Option<char>
         {
             unsafe
+           
             {
                 match self.chars().next_back()
                 {
@@ -32652,8 +38249,7 @@ pub mod str
             let ( lo, _ ) = iter.size_hint();
             self.reserve( lo );
             for ch in iter
-            {
-                self.push( ch );
+            { self.push( ch );
             }
         }
     }
@@ -32668,8 +38264,7 @@ pub mod str
         fn extend<I:IntoIterator<Item = Cow<'a, str>>>( &mut self, iter:I )
         {
             for s in iter
-            {
-                self.push_str( &s );
+            { self.push_str( &s );
             }
         }
     }
@@ -32679,8 +38274,7 @@ pub mod str
         fn extend<I:IntoIterator<Item = &'a str>>( &mut self, iter:I )
         {
             for s in iter
-            {
-                self.push_str( s );
+            { self.push_str( s );
             }
         }
     }
@@ -32690,8 +38284,7 @@ pub mod str
         fn extend<I:IntoIterator<Item = String>>( &mut self, iter:I )
         {
             for s in iter
-            {
-                self.push_str( &s );
+            { self.push_str( &s );
             }
         }
     }
@@ -34066,8 +39659,8 @@ pub mod terminal
                     {
                         b"," => (input, Item::True(name)),
 
-                        b"#" => {
-                            let (input, value) =
+                        b"#" =>
+        {                           let (input, value) =
                                 map(take_while(is_digit), |n| unsafe { str::from_utf8_unchecked(n) })(input)?;
 
                             let (input, _) = tag(",")(input)?;
@@ -34075,8 +39668,8 @@ pub mod terminal
                             (input, Item::Number(name, value.parse().unwrap()))
                         }
 
-                        b"=" => {
-                            let (input, value) = take_while(is_printable_no_comma)(input)?;
+                        b"=" =>
+        {                           let (input, value) = take_while(is_printable_no_comma)(input)?;
 
                             let (input, _) = tag(",")(input)?;
 
@@ -34145,7 +39738,6 @@ pub mod terminal
                 /// Convert the capability into its raw value.
                 fn into( self ) -> Option<Value>;
             }
-
             /// Possible value types for capabilities.
             #[derive( Eq, PartialEq, Clone, Debug )]
             pub enum Value 
@@ -35980,4 +41572,4 @@ fn main()
     }
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 35983
+// 41575
