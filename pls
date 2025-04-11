@@ -1663,6 +1663,7 @@ pub mod c
         }
 
         impl fmt::Display for DateTime
+       
         {
             fn fmt( &self, f:&mut fmt::Formatter<'_> ) -> fmt::Result
             {
@@ -1980,6 +1981,7 @@ pub mod completers
         pub struct DotsCompleter;
 
         impl<Term:Terminal> Completer<Term> for DotsCompleter
+       
         {
             fn complete
             ( 
@@ -2172,6 +2174,7 @@ pub mod completers
         }
 
         impl<Term:Terminal> Completer<Term> for EnvCompleter
+       
         {
             fn complete( 
                 &self,
@@ -2242,6 +2245,7 @@ pub mod completers
         pub struct MakeCompleter;
 
         impl<Term:Terminal> Completer<Term> for MakeCompleter
+       
         {
             fn complete( 
                 &self,
@@ -2353,6 +2357,7 @@ pub mod completers
         pub struct PathCompleter;
 
         impl<Term:Terminal> Completer<Term> for BinCompleter
+       
         {
             fn complete( 
                 &self,
@@ -2371,6 +2376,7 @@ pub mod completers
         }
 
         impl<Term:Terminal> Completer<Term> for PathCompleter
+       
         {
             fn complete( 
                 &self,
@@ -2384,6 +2390,7 @@ pub mod completers
         }
 
         impl<Term:Terminal> Completer<Term> for CdCompleter
+       
         {
             fn complete( 
                 &self,
@@ -2626,6 +2633,7 @@ pub mod completers
         pub struct SshCompleter;
 
         impl<Term:Terminal> Completer<Term> for SshCompleter
+       
         {
             fn complete( 
                 &self,
@@ -3537,6 +3545,7 @@ pub mod error
         pub struct Errno( pub i32 );
 
         impl fmt::Debug for Errno
+       
         {
             fn fmt( &self, fmt:&mut fmt::Formatter ) -> fmt::Result
             {
@@ -3551,6 +3560,7 @@ pub mod error
         }
 
         impl fmt::Display for Errno
+       
         {
             fn fmt( &self, fmt:&mut fmt::Formatter ) -> fmt::Result
             {
@@ -3570,6 +3580,7 @@ pub mod error
         }
 
         impl From<Errno> for i32
+       
         {
             fn from( e:Errno ) -> Self { e.0 }
         }
@@ -3580,6 +3591,7 @@ pub mod error
         }
         
         impl From<Errno> for io::Error
+       
         {
             fn from( errno:Errno ) -> Self
             { io::Error::from_raw_os_error( errno.0 ) }
@@ -3633,6 +3645,45 @@ pub mod connect
     };
     
     const STATEMENT_CACHE_DEFAULT_CAPACITY: usize = 16;
+    /// A macro making it more convenient to longer lists of parameters as a `&[&dyn ToSql]`.
+    #[macro_export] macro_rules! params
+    {
+        () => { &[] as &[&dyn ::connect::ToSql] };
+        ($($param:expr),+ $(,)?) => 
+        {
+            &[$(&$param as &dyn ::connect::ToSql),+] as &[&dyn ::connect::ToSql]
+        };
+    }
+    /// A macro making it more convenient to pass lists of named parameters as a `&[(&str, &dyn ToSql)]`.
+    #[macro_export] macro_rules! named_params 
+    {
+        () => { &[] as &[(&str, &dyn ::connect::ToSql)] };
+        
+        ($($param_name:literal: $param_val:expr),+ $(,)?) =>
+        {
+            &[$(($param_name, &$param_val as &dyn ::connect::ToSql)),+] as &[(&str, &dyn ::connect::ToSql)]
+        };
+    }
+    /// Captured identifiers in SQL.
+    #[macro_export] macro_rules! prepare_and_bind
+    {
+        ($conn:expr, $sql:literal) => 
+        {{
+            let mut stmt = $conn.prepare($sql)?;
+            ::connect::__bind!(stmt $sql);
+            stmt
+        }};
+    }
+    /// Captured identifiers in SQL.
+    #[macro_export] macro_rules! prepare_cached_and_bind
+    {
+        ($conn:expr, $sql:literal) => 
+        {{
+            let mut stmt = $conn.prepare_cached($sql)?;
+            ::connect::__bind!(stmt $sql);
+            stmt
+        }};
+    }
     
     pub mod ffi
     {
@@ -4547,6 +4598,7 @@ pub mod connect
         pub use bindings::*;
 
         impl Default for sqlite3_vtab
+       
         {
             fn default() -> Self { unsafe { mem::zeroed() } }
         }
@@ -4757,7 +4809,7 @@ pub mod connect
 
         impl Drop for Backup<'_, '_>
         {
-            #[inline] fn drop(&mut self) { unsafe { ffi::sqlite3_backup_finish(self.b) }; }
+            #[inline] fn drop( &mut self ) { unsafe { ffi::sqlite3_backup_finish(self.b) }; }
         }
     }
 
@@ -5007,7 +5059,7 @@ pub mod connect
             /// Close a BLOB handle.
             #[inline] pub fn close(mut self) -> Result<()> { self.close_() }
 
-            #[inline] fn close_(&mut self) -> Result<()>
+            #[inline] fn close_( &mut self ) -> Result<()>
             {
                 let rc = unsafe { ffi::sqlite3_blob_close(self.blob) };
                 self.blob = ptr::null_mut();
@@ -5057,7 +5109,7 @@ pub mod connect
                 .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
             }
 
-            #[inline] fn flush(&mut self) -> io::Result<()> { Ok(()) }
+            #[inline] fn flush( &mut self ) -> io::Result<()> { Ok(()) }
         }
 
         impl io::Seek for Blob<'_>
@@ -5089,7 +5141,7 @@ pub mod connect
         
         impl Drop for Blob<'_>
         {
-            #[inline] fn drop(&mut self){ self.close_(); }
+            #[inline] fn drop( &mut self ){ self.close_(); }
         }
         /// BLOB of length N that is filled with zeroes.
         #[derive(Copy, Clone)]
@@ -5212,12 +5264,12 @@ pub mod connect
 
         impl<'conn> DerefMut for CachedStatement<'conn>
         {
-            #[inline] fn deref_mut(&mut self) -> &mut Statement<'conn> { self.stmt.as_mut().unwrap() }
+            #[inline] fn deref_mut( &mut self ) -> &mut Statement<'conn> { self.stmt.as_mut().unwrap() }
         }
 
         impl Drop for CachedStatement<'_>
         {
-            #[inline] fn drop(&mut self)
+            #[inline] fn drop( &mut self )
             {
                 if let Some(stmt) = self.stmt.take() { self.cache.cache_stmt(unsafe { stmt.into_raw() }); }
             }
@@ -5321,6 +5373,7 @@ pub mod connect
         }
 
         impl InnerConnection
+       
         {
             fn create_collation<C>(&mut self, collation_name: &str, x_compare: C) -> Result<()> where
             C: Fn(&str, &str) -> Ordering + Send + 'static
@@ -5799,6 +5852,7 @@ pub mod connect
         }
 
         impl fmt::Display for Error 
+       
         {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
             {
@@ -5813,6 +5867,7 @@ pub mod connect
         }
 
         impl error::Error for Error
+       
         {
             fn description(&self) -> &str
             {
@@ -5961,6 +6016,7 @@ pub mod connect
         }
         
         impl ::fmt::Display for InitError
+       
         {
             fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
             {
@@ -6200,6 +6256,7 @@ pub mod connect
         }
 
         impl<T: ToSql> SqlFnOutput for (T, SubType)
+       
         {
             fn to_sql(&self) -> Result<(ToSqlOutput<'_>, SubType)> { ToSql::to_sql(&self.0).map(|o| (o, self.1)) }
         }
@@ -6210,6 +6267,7 @@ pub mod connect
         }
 
         impl ToSql for SqlFnArg
+       
         {
             fn to_sql(&self) -> Result<ToSqlOutput<'_>> { Ok(ToSqlOutput::Arg(self.idx)) }
         }
@@ -6326,6 +6384,7 @@ pub mod connect
         }
 
         impl InnerConnection 
+       
         {
             fn create_scalar_function<F, T>
             (
@@ -6654,7 +6713,7 @@ pub mod connect
         
         impl Drop for LoadExtensionGuard<'_>
         {
-            #[inline] fn drop(&mut self) { self.conn.load_extension_disable(); }
+            #[inline] fn drop( &mut self ) { self.conn.load_extension_disable(); }
         }
     }
 
@@ -6794,7 +6853,7 @@ pub mod connect
 
             impl InnerConnection 
             {
-                #[inline] pub fn remove_preupdate_hook(&mut self) {
+                #[inline] pub fn remove_preupdate_hook( &mut self ) {
                     self.preupdate_hook(None::<fn(Action, &str, &str, &PreUpdateCase)>);
                 }
                 
@@ -7043,6 +7102,7 @@ pub mod connect
         }
 
         impl<'c> AuthAction<'c> 
+       
         {
             fn from_raw(code: i32, arg1: Option<&'c str>, arg2: Option<&'c str>) -> Self {
                 match (code, arg1, arg2) {
@@ -7161,6 +7221,7 @@ pub mod connect
         }
 
         impl TransactionOperation
+       
         {
             fn from_str(op_str: &str) -> Self
             {
@@ -7185,6 +7246,7 @@ pub mod connect
         }
 
         impl Authorization
+       
         {
             fn into_raw(self) -> c_int
             {
@@ -7229,7 +7291,7 @@ pub mod connect
 
         impl InnerConnection 
         {
-            #[inline] pub fn remove_hooks(&mut self)
+            #[inline] pub fn remove_hooks( &mut self )
             { self.update_hook(None::<fn(Action, &str, &str, i64)>);
                 self.commit_hook(None::<fn() -> bool>);
                 self.rollback_hook(None::<fn()>);
@@ -7613,7 +7675,7 @@ pub mod connect
             }
 
             #[allow(clippy::mutex_atomic)]
-            pub fn close(&mut self) -> Result<()>
+            pub fn close( &mut self ) -> Result<()>
         {               if self.db.is_null() {
                     return Ok(());
                 }
@@ -7798,15 +7860,15 @@ pub mod connect
                 false
             }
 
-            pub fn cache_flush(&mut self) -> Result<()>
+            pub fn cache_flush( &mut self ) -> Result<()>
         {               crate::error::check(unsafe { ffi::sqlite3_db_cacheflush(self.db()) })
             }
 
             #[cfg(not(feature = "hooks"))]
-            #[inline] fn remove_hooks(&mut self) {}
+            #[inline] fn remove_hooks( &mut self ) {}
 
             #[cfg(not(feature = "preupdate_hook"))]
-            #[inline] fn remove_preupdate_hook(&mut self) {}
+            #[inline] fn remove_preupdate_hook( &mut self ) {}
 
             pub fn db_readonly(&self, db_name: super::DatabaseName<'_>) -> Result<bool>
             {
@@ -7867,7 +7929,7 @@ pub mod connect
 
         impl Drop for InnerConnection 
         {
-            #[inline] fn drop(&mut self)
+            #[inline] fn drop( &mut self )
             { self.close();
             }
         }
@@ -7953,7 +8015,85 @@ pub mod connect
 
     pub mod notify
     {
+        //! [Unlock Notification](http://sqlite.org/unlock_notify.html)
+        use ::
+        {
+            connect::{ ffi },
+            os::raw::{ c_int, c_void, },
+            panic::{ catch_unwin, AssertUnwindSafe },
+            slice::{ from_raw_parts },
+            sync::{ Condvar, Mutex, PoisonError },
+            *,
+        };
+
+        struct UnlockNotification
+        {
+            cond: Condvar,
+            mutex: Mutex<bool>,
+        }
         
+        impl UnlockNotification
+        {
+            fn new() -> UnlockNotification
+            {
+                UnlockNotification
+                {
+                    cond: Condvar::new(),
+                    mutex: Mutex::new(false),
+                }
+            }
+
+            fn fired(&self)
+            {
+                let mut flag = unpoison(self.mutex.lock());
+                *flag = true;
+                self.cond.notify_one();
+            }
+
+            fn wait(&self)
+            {
+                let mut fired = unpoison(self.mutex.lock());
+                while !*fired
+                {
+                    fired = unpoison(self.cond.wait(fired));
+                }
+            }
+        }
+
+        #[inline] fn unpoison<T>(r: Result<T, PoisonError<T>>) -> T { r.unwrap_or_else( PoisonError::into_inner ) }
+        /// This function is an unlock-notify callback
+        unsafe extern "C" fn unlock_notify_cb(ap_arg: *mut *mut c_void, n_arg: c_int)
+        {
+            let args = from_raw_parts(ap_arg as *const &UnlockNotification, n_arg as usize);
+            for un in args
+            {
+                drop(catch_unwind( AssertUnwindSafe(|| un.fired())));
+            }
+        }
+
+        pub unsafe fn is_locked(db: *mut ffi::sqlite3, rc: c_int) -> bool
+        {
+            rc == ffi::SQLITE_LOCKED_SHAREDCACHE 
+            || (rc & 0xFF) == ffi::SQLITE_LOCKED 
+            && ffi::sqlite3_extended_errcode(db) == ffi::SQLITE_LOCKED_SHAREDCACHE
+        }
+        /// This function assumes that either `sqlite3_prepare_v2()` or `sqlite3_step()` has just returned `SQLITE_LOCKED`.
+        pub unsafe fn wait_for_unlock_notify(db: *mut ffi::sqlite3) -> c_int
+        {
+            let un = UnlockNotification::new();
+            let rc = ffi::sqlite3_unlock_notify
+            (
+                db,
+                Some(unlock_notify_cb),
+                &un as *const UnlockNotification as *mut c_void,
+            );
+            
+            debug_assert!( rc == ffi::SQLITE_LOCKED || rc == ffi::SQLITE_LOCKED_SHAREDCACHE || rc == ffi::SQLITE_OK );
+
+            if rc == ffi::SQLITE_OK { un.wait(); }
+
+            rc
+        }
     }
 
     pub mod params
@@ -7971,54 +8111,57 @@ pub mod connect
         }
         use self::sealed::Sealed;
         /// Trait used for [sets of parameter][params] passed into SQL statements/queries.
-        pub trait Params: Sealed
+        pub trait Params: Sealed       
         {
             fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()>;
         }
         
         impl Sealed for [&(dyn ToSql + Send + Sync); 0] {}
-        impl Params for [&(dyn ToSql + Send + Sync); 0] {
-            #[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()>
-        {               stmt.ensure_parameter_count(0)
-            }
+        impl Params for [&(dyn ToSql + Send + Sync); 0]
+        {
+            #[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> { stmt.ensure_parameter_count(0) }
         }
 
         impl Sealed for &[&dyn ToSql] {}
-        impl Params for &[&dyn ToSql] {
-            #[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()>
-        {               stmt.bind_parameters(self)
-            }
+        impl Params for &[&dyn ToSql]
+        {
+            #[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> { stmt.bind_parameters(self) }
         }
 
         impl Sealed for &[(&str, &dyn ToSql)] {}
-        impl Params for &[(&str, &dyn ToSql)] {
-            #[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()>
-        {               stmt.bind_parameters_named(self)
-            }
+        impl Params for &[(&str, &dyn ToSql)]
+        {
+            #[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> { stmt.bind_parameters_named(self) }
         }
         
         impl Sealed for () {}
-        impl Params for () {
+        impl Params for ()
+        {
             #[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()>
-        {               stmt.ensure_parameter_count(0)
-            }
+            { stmt.ensure_parameter_count(0) }
         }
         
         impl<T: ToSql> Sealed for (T,) {}
-        impl<T: ToSql> Params for (T,) {
+        impl<T: ToSql> Params for (T,)
+        {
             #[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()>
-        {               stmt.ensure_parameter_count(1)?;
+            {
+                stmt.ensure_parameter_count(1)?;
                 stmt.raw_bind_parameter(1, self.0)?;
                 Ok(())
             }
         }
 
-        macro_rules! single_tuple_impl {
+        macro_rules! single_tuple_impl
+        {
             ($count:literal : $(($field:tt $ftype:ident)),* $(,)?) =>
-        {               impl<$($ftype,)*> Sealed for ($($ftype,)*) where $($ftype: ToSql,)* {}
-                impl<$($ftype,)*> Params for ($($ftype,)*) where $($ftype: ToSql,)* {
-                    fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()>
-        {                       stmt.ensure_parameter_count($count)?;
+            {
+                impl<$($ftype,)*> Sealed for ($($ftype,)*) where $($ftype: ToSql,)* {}
+                impl<$($ftype,)*> Params for ($($ftype,)*) where $($ftype: ToSql,)*
+                {
+                    fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> 
+                    {
+                        stmt.ensure_parameter_count($count)?;
                         $({
                             debug_assert!($field < $count);
                             stmt.raw_bind_parameter($field + 1, self.$field)?;
@@ -8047,26 +8190,25 @@ pub mod connect
 
         macro_rules! impl_for_array_ref
         {
-            ($($N:literal)+) => {$(
+            ($($N:literal)+) => 
+            {$(
                 
                 impl<T: ToSql + ?Sized> Sealed for &[&T; $N] {}
-                impl<T: ToSql + ?Sized> Params for &[&T; $N] {
-                    fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()>
-        {                       stmt.bind_parameters(self)
-                    }
+                impl<T: ToSql + ?Sized> Params for &[&T; $N]
+                {
+                    fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> { stmt.bind_parameters(self) }
                 }
+                
                 impl<T: ToSql + ?Sized> Sealed for &[(&str, &T); $N] {}
-                impl<T: ToSql + ?Sized> Params for &[(&str, &T); $N] {
-                    fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()>
-        {                       stmt.bind_parameters_named(self)
-                    }
+                impl<T: ToSql + ?Sized> Params for &[(&str, &T); $N]
+                {
+                    fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> { stmt.bind_parameters_named(self) }
                 }
+                
                 impl<T: ToSql> Sealed for [T; $N] {}
-                impl<T: ToSql> Params for [T; $N] {
-                    #[inline]
-                    fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()>
-        {                       stmt.bind_parameters(&self)
-                    }
+                impl<T: ToSql> Params for [T; $N] 
+                {
+                    #[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> { stmt.bind_parameters(&self) }
                 }
             )+};
         }
@@ -8233,15 +8375,15 @@ pub mod connect
 
             pub fn push_real(&mut self, f: f64) { self.buf.push_str(&f.to_string()); }
 
-            pub fn push_space(&mut self) { self.buf.push(' '); }
+            pub fn push_space( &mut self ) { self.buf.push(' '); }
 
-            pub fn push_dot(&mut self) {  self.buf.push('.'); }
+            pub fn push_dot( &mut self ) {  self.buf.push('.'); }
 
-            pub fn push_equal_sign(&mut self) { self.buf.push('='); }
+            pub fn push_equal_sign( &mut self ) { self.buf.push('='); }
 
-            pub fn open_brace(&mut self) { self.buf.push('('); }
+            pub fn open_brace( &mut self ) { self.buf.push('('); }
 
-            pub fn close_brace(&mut self) { self.buf.push(')'); }
+            pub fn close_brace( &mut self ) { self.buf.push(')'); }
 
             pub fn as_str(&self) -> &str { &self.buf }
 
@@ -8510,7 +8652,7 @@ pub mod connect
                 }
             }
 
-            #[inline] pub fn clear_bindings(&mut self) { unsafe { ffi::sqlite3_clear_bindings(self.ptr); } }
+            #[inline] pub fn clear_bindings( &mut self ) { unsafe { ffi::sqlite3_clear_bindings(self.ptr); } }
 
             #[inline] pub fn sql(&self) -> Option<&CStr>
             {
@@ -8524,7 +8666,7 @@ pub mod connect
 
             #[inline] pub fn finalize(mut self) -> c_int { self.finalize_() }
 
-            #[inline] fn finalize_(&mut self) -> c_int
+            #[inline] fn finalize_( &mut self ) -> c_int
             {
                 let r = unsafe { ffi::sqlite3_finalize(self.ptr) };
                 self.ptr = ptr::null_mut();
@@ -8555,8 +8697,9 @@ pub mod connect
         }
 
         impl Drop for RawStatement
+       
         {
-            fn drop(&mut self) { self.finalize_(); }
+            fn drop( &mut self ) { self.finalize_(); }
         }
     }
 
@@ -8582,7 +8725,7 @@ pub mod connect
 
         impl<'stmt> Rows<'stmt>
         {
-            #[inline] fn reset(&mut self) -> Result<()>
+            #[inline] fn reset( &mut self ) -> Result<()>
             {
                 if let Some(stmt) = self.stmt.take() {
                     stmt.reset()
@@ -8591,7 +8734,7 @@ pub mod connect
                 }
             }
             /// Attempt to get the next row from the query.
-            #[inline] pub fn next(&mut self) -> Result<Option<&Row<'stmt>>>
+            #[inline] pub fn next( &mut self ) -> Result<Option<&Row<'stmt>>>
             { self.advance()?;
                 Ok((*self).get())
             }
@@ -8631,7 +8774,7 @@ pub mod connect
                 }
             }
 
-            #[inline] pub fn get_expected_row(&mut self) -> Result<&Row<'stmt>>
+            #[inline] pub fn get_expected_row( &mut self ) -> Result<&Row<'stmt>>
            
             {
                 match self.next()?
@@ -8644,7 +8787,7 @@ pub mod connect
 
         impl Drop for Rows<'_> 
         {
-            #[inline] fn drop(&mut self) { self.reset(); }
+            #[inline] fn drop( &mut self ) { self.reset(); }
         }
         /// `F` is used to transform the _streaming_ iterator into a _fallible_iterator.
         #[must_use = "iterators are lazy and do nothing unless consumed"]
@@ -8659,7 +8802,7 @@ pub mod connect
         {
             type Error = Error;
             type Item = B;
-            #[inline] fn next(&mut self) -> Result<Option<B>>
+            #[inline] fn next( &mut self ) -> Result<Option<B>>
            
             {
                 match self.rows.next()? {
@@ -8680,7 +8823,7 @@ pub mod connect
         F: FnMut(&Row<'_>) -> Result<T>,
         {
             type Item = Result<T>;
-            #[inline] fn next(&mut self) -> Option<Result<T>> 
+            #[inline] fn next( &mut self ) -> Option<Result<T>> 
             {
                 let map = &mut self.map;
                 self.rows
@@ -8703,7 +8846,7 @@ pub mod connect
         F: FnMut(&Row<'_>) -> Result<T, E>,
         {
             type Item = Result<T, E>;
-            #[inline] fn next(&mut self) -> Option<Self::Item>
+            #[inline] fn next( &mut self ) -> Option<Self::Item>
             {
                 let map = &mut self.map;
                 self.rows
@@ -8721,7 +8864,7 @@ pub mod connect
             type Error = Error;
             type Item = Row<'stmt>;
 
-            #[inline] fn advance(&mut self) -> Result<()> 
+            #[inline] fn advance( &mut self ) -> Result<()> 
             {
                 if let Some(stmt) = self.stmt {
                     match stmt.step() {
@@ -8799,6 +8942,7 @@ pub mod connect
         }
 
         impl<'stmt> AsRef<Statement<'stmt>> for Row<'stmt> 
+       
         {
             fn as_ref(&self) -> &Statement<'stmt>
             { self.stmt
@@ -8807,6 +8951,7 @@ pub mod connect
         /// Debug `Row` like an ordered `Map<Result<&str>, Result<(Type, ValueRef)>>` with column name as key 
         /// except that for `Type::Blob` only its size is printed (not its content).
         impl<'stmt> ::fmt::Debug for Row<'stmt> 
+       
         {
             fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result 
             {
@@ -8956,8 +9101,9 @@ pub mod connect
             }
         }
 
-        impl Drop for OwnedData {
-            fn drop(&mut self)
+        impl Drop for OwnedData
+        {
+            fn drop( &mut self )
             {
                 unsafe {
                     ffi::sqlite3_free(self.ptr.as_ptr().cast());
@@ -9150,7 +9296,7 @@ pub mod connect
                 check(unsafe { ffi::sqlite3session_attach(self.s, table) })
             }
             /// Generate a Changeset
-            pub fn changeset(&mut self) -> Result<Changeset>
+            pub fn changeset( &mut self ) -> Result<Changeset>
             {
                 let mut n = 0;
                 let mut cs: *mut c_void = ptr::null_mut();
@@ -9170,7 +9316,7 @@ pub mod connect
                 })
             }
             /// Generate a Patchset
-            #[inline] pub fn patchset(&mut self) -> Result<Changeset>
+            #[inline] pub fn patchset( &mut self ) -> Result<Changeset>
             {
                 let mut n = 0;
                 let mut ps: *mut c_void = ptr::null_mut();
@@ -9239,7 +9385,7 @@ pub mod connect
 
         impl Drop for Session<'_>
         {
-            #[inline] fn drop(&mut self) {
+            #[inline] fn drop( &mut self ) {
                 if self.filter.is_some() {
                     self.table_filter(None::<fn(&str) -> bool>);
                 }
@@ -9320,7 +9466,7 @@ pub mod connect
         }
 
         impl Drop for Changeset {
-            #[inline] fn drop(&mut self)
+            #[inline] fn drop( &mut self )
             {
                 unsafe {
                     ffi::sqlite3_free(self.cs);
@@ -9359,7 +9505,7 @@ pub mod connect
         {           type Error = crate::error::Error;
             type Item = ChangesetItem;
 
-            #[inline] fn advance(&mut self) -> Result<()>
+            #[inline] fn advance( &mut self ) -> Result<()>
             {
                 let rc = unsafe { ffi::sqlite3changeset_next(self.it) };
                 match rc {
@@ -9405,7 +9551,7 @@ pub mod connect
 
         impl Drop for ChangesetIter<'_>
         {
-            #[inline] fn drop(&mut self)
+            #[inline] fn drop( &mut self )
             {
                 unsafe {
                     ffi::sqlite3changeset_finalize(self.it);
@@ -9538,7 +9684,7 @@ pub mod connect
                 })
             }
             /// Obtain a composite Changeset
-            #[inline] pub fn output(&mut self) -> Result<Changeset>
+            #[inline] pub fn output( &mut self ) -> Result<Changeset>
             {
                 let mut n = 0;
                 let mut output: *mut c_void = ptr::null_mut();
@@ -9560,7 +9706,7 @@ pub mod connect
         }
 
         impl Drop for Changegroup {
-            #[inline] fn drop(&mut self)
+            #[inline] fn drop( &mut self )
             {
                 unsafe {
                     ffi::sqlite3changegroup_delete(self.cg);
@@ -9648,7 +9794,8 @@ pub mod connect
             SQLITE_CHANGESET_CONSTRAINT = ffi::SQLITE_CHANGESET_CONSTRAINT,
             SQLITE_CHANGESET_FOREIGN_KEY = ffi::SQLITE_CHANGESET_FOREIGN_KEY,
         }
-        impl From<i32> for ConflictType {
+        impl From<i32> for ConflictType
+        {
             fn from(code: i32) -> ConflictType {
                 match code {
                     ffi::SQLITE_CHANGESET_DATA => ConflictType::SQLITE_CHANGESET_DATA,
@@ -9876,10 +10023,10 @@ pub mod connect
             { self.bind_parameter(&param, one_based_col_index) }
             /// Low level API to execute a statement given that all parameters were
             /// bound explicitly with the [`Statement::raw_bind_parameter`] API.
-            #[inline] pub fn raw_execute(&mut self) -> Result<usize> { self.execute_with_bound_parameters() }
+            #[inline] pub fn raw_execute( &mut self ) -> Result<usize> { self.execute_with_bound_parameters() }
             /// Low level API to get `Rows` for this query given that all parameters
             /// were bound explicitly with the [`Statement::raw_bind_parameter`] API.
-            #[inline] pub fn raw_query(&mut self) -> Rows<'_> { Rows::new(self) }
+            #[inline] pub fn raw_query( &mut self ) -> Rows<'_> { Rows::new(self) }
             
             fn bind_parameter<P: ?Sized + ToSql>(&self, param: &P, col: usize) -> Result<()>
             {
@@ -9941,7 +10088,7 @@ pub mod connect
                 })
             }
 
-            #[inline] fn execute_with_bound_parameters(&mut self) -> Result<usize>
+            #[inline] fn execute_with_bound_parameters( &mut self ) -> Result<usize>
             { self.check_update()?;
                 let r = self.stmt.step();
                 let rr = self.stmt.reset();
@@ -9958,7 +10105,7 @@ pub mod connect
                 }
             }
 
-            #[inline] fn finalize_(&mut self) -> Result<()>
+            #[inline] fn finalize_( &mut self ) -> Result<()>
             {
                 let mut stmt = unsafe { RawStatement::new(ptr::null_mut(), 0) };
                 mem::swap(&mut stmt, &mut self.stmt);
@@ -10003,12 +10150,13 @@ pub mod connect
                 stmt
             }
             /// Reset all bindings
-            pub fn clear_bindings(&mut self)
+            pub fn clear_bindings( &mut self )
             { self.stmt.clear_bindings();
             }
         }
 
         impl fmt::Debug for Statement<'_> 
+       
         {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 let sql = if self.stmt.is_null() {
@@ -10026,7 +10174,7 @@ pub mod connect
 
         impl Drop for Statement<'_>
         {
-            #[inline] fn drop(&mut self)
+            #[inline] fn drop( &mut self )
             { self.finalize_();
             }
         }
@@ -10274,7 +10422,7 @@ pub mod connect
                 })
             }
             /// Starts a new [savepoint](http://www.sqlite.org/lang_savepoint.html), allowing nested transactions.
-            #[inline] pub fn savepoint(&mut self) -> Result<Savepoint<'_>> { Savepoint::new_(self.conn) }
+            #[inline] pub fn savepoint( &mut self ) -> Result<Savepoint<'_>> { Savepoint::new_(self.conn) }
             /// Create a new savepoint with a custom savepoint name. See `savepoint()`.
             #[inline] pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint<'_>>
             { Savepoint::with_name_(self.conn, name) }
@@ -10288,21 +10436,23 @@ pub mod connect
             /// A convenience method which consumes and commits a transaction.
             #[inline] pub fn commit(mut self) -> Result<()> { self.commit_() }
 
-            #[inline] fn commit_(&mut self) -> Result<()>
-            { self.conn.execute_batch("COMMIT")?;
+            #[inline] fn commit_( &mut self ) -> Result<()>
+            { 
+                self.conn.execute_batch("COMMIT")?;
                 Ok(())
             }
             /// A convenience method which consumes and rolls back a transaction.
             #[inline] pub fn rollback(mut self) -> Result<()> { self.rollback_() }
 
-            #[inline] fn rollback_(&mut self) -> Result<()>
-            { self.conn.execute_batch("ROLLBACK")?;
+            #[inline] fn rollback_( &mut self ) -> Result<()>
+            { 
+                self.conn.execute_batch("ROLLBACK")?;
                 Ok(())
             }
             /// Consumes the transaction, committing or rolling back according to the current setting (see `drop_behavior`).
             #[inline] pub fn finish(mut self) -> Result<()> { self.finish_() }
 
-            #[inline] fn finish_(&mut self) -> Result<()>
+            #[inline] fn finish_( &mut self ) -> Result<()>
             {
                 if self.conn.is_autocommit() { return Ok(()); }
                 
@@ -10319,14 +10469,14 @@ pub mod connect
         impl Deref for Transaction<'_>
         {
             type Target = Connection;
-
             #[inline] fn deref(&self) -> &Connection { self.conn
             }
         }
 
         #[allow(unused_must_use)]
         impl Drop for Transaction<'_>
-        {           #[inline] fn drop(&mut self) { self.finish_(); }
+        {           
+            #[inline] fn drop( &mut self ) { self.finish_(); }
         }
 
         impl Savepoint<'_>
@@ -10335,7 +10485,8 @@ pub mod connect
             {
                 let name = name.into();
                 conn.execute_batch(&format!("SAVEPOINT {name}"))
-                .map(|()| Savepoint {
+                .map(|()| Savepoint
+                {
                     conn,
                     name,
                     drop_behavior: DropBehavior::Rollback,
@@ -10350,7 +10501,7 @@ pub mod connect
             #[inline] pub fn with_name<T: Into<String>>(conn: &mut Connection, name: T) -> Result<Savepoint<'_>>
             { Savepoint::with_name_(conn, name) }
             /// Begin a nested savepoint.
-            #[inline] pub fn savepoint(&mut self) -> Result<Savepoint<'_>>{ Savepoint::new_(self.conn) 
+            #[inline] pub fn savepoint( &mut self ) -> Result<Savepoint<'_>>{ Savepoint::new_(self.conn) 
             /// Begin a nested savepoint with a user-provided savepoint name.
             #[inline] pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint<'_>>
             { Savepoint::with_name_(self.conn, name) }
@@ -10363,27 +10514,27 @@ pub mod connect
             /// A convenience method which consumes and commits a savepoint.
             #[inline] pub fn commit(mut self) -> Result<()> { self.commit_() }
 
-            #[inline] fn commit_(&mut self) -> Result<()>
+            #[inline] fn commit_( &mut self ) -> Result<()>
             {
                 self.conn.execute_batch(&format!("RELEASE {}", self.name))?;
                 self.committed = true;
                 Ok(())
             }
             /// A convenience method which rolls back a savepoint.
-            #[inline] pub fn rollback(&mut self) -> Result<()> 
+            #[inline] pub fn rollback( &mut self ) -> Result<()> 
             { self.conn.execute_batch(&format!("ROLLBACK TO {}", self.name)) }
             /// Consumes the savepoint, committing or rolling back according to the current setting (see `drop_behavior`).
             #[inline] pub fn finish(mut self) -> Result<()>{ self.finish_() }
 
-            #[inline] fn finish_(&mut self) -> Result<()>
+            #[inline] fn finish_( &mut self ) -> Result<()>
             {
                 if self.committed { return Ok(()); }
                 
                 match self.drop_behavior()
                 {
                     DropBehavior::Commit => self
-                        .commit_()
-                        .or_else(|_| self.rollback().and_then(|()| self.commit_())),
+                    .commit_()
+                    .or_else(|_| self.rollback().and_then(|()| self.commit_())),
                     DropBehavior::Rollback => self.rollback().and_then(|()| self.commit_()),
                     DropBehavior::Ignore => Ok(()),
                     DropBehavior::Panic => panic!("Savepoint dropped unexpectedly."),
@@ -10400,7 +10551,7 @@ pub mod connect
         #[allow(unused_must_use)]
         impl Drop for Savepoint<'_>
         {           
-            #[inline] fn drop(&mut self) { self.finish_(); }
+            #[inline] fn drop( &mut self ) { self.finish_(); }
         }
         /// Transaction state of a database
         #[non_exhaustive] #[derive(Clone, Copy, Debug, PartialEq, Eq)]        
@@ -10417,7 +10568,7 @@ pub mod connect
         impl Connection
         {
             /// Begin a new transaction with the default behavior (DEFERRED).
-            #[inline] pub fn transaction(&mut self) -> Result<Transaction<'_>> 
+            #[inline] pub fn transaction( &mut self ) -> Result<Transaction<'_>> 
             { Transaction::new(self, self.transaction_behavior) }
             /// Begin a new transaction with a specified behavior.
             #[inline] pub fn transaction_with_behavior( &mut self, txb:TransactionBehavior ) -> Result<Transaction<'_>>
@@ -10426,7 +10577,7 @@ pub mod connect
             pub fn unchecked_transaction(&self) -> Result<Transaction<'_>>
             { Transaction::new_unchecked(self, self.transaction_behavior) }
             /// Begin a new savepoint with the default behavior (DEFERRED).
-            #[inline] pub fn savepoint(&mut self) -> Result<Savepoint<'_>> { Savepoint::new(self) }
+            #[inline] pub fn savepoint( &mut self ) -> Result<Savepoint<'_>> { Savepoint::new(self) }
             /// Begin a new savepoint with a specified name.
             #[inline] pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint<'_>>
             { Savepoint::with_name(self, name) }
@@ -11406,22 +11557,19 @@ pub mod connect
             }
 
             impl<'a> From<&'a str> for ValueRef<'a> {
-                #[inline]
-                fn from(s: &str) -> ValueRef<'_> {
+                #[inline] fn from(s: &str) -> ValueRef<'_> {
                     ValueRef::Text(s.as_bytes())
                 }
             }
 
             impl<'a> From<&'a [u8]> for ValueRef<'a> {
-                #[inline]
-                fn from(s: &[u8]) -> ValueRef<'_> {
+                #[inline] fn from(s: &[u8]) -> ValueRef<'_> {
                     ValueRef::Blob(s)
                 }
             }
 
             impl<'a> From<&'a Value> for ValueRef<'a> {
-                #[inline]
-                fn from(value: &'a Value) -> ValueRef<'a>
+                #[inline] fn from(value: &'a Value) -> ValueRef<'a>
                 {
                     match *value {
                         Value::Null => ValueRef::Null,
@@ -11436,8 +11584,7 @@ pub mod connect
             impl<'a, T> From<Option<T>> for ValueRef<'a> where
             T: Into<ValueRef<'a>>,
             {
-                #[inline]
-                fn from(s: Option<T>) -> ValueRef<'a>
+                #[inline] fn from(s: Option<T>) -> ValueRef<'a>
                 {
                     match s {
                         Some(x) => x.into(),
@@ -11519,6 +11666,7 @@ pub mod connect
         }
 
         impl fmt::Display for Type
+       
         {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
             {
@@ -11537,60 +11685,2304 @@ pub mod connect
 
     pub mod version
     {
-        
+        use ::
+        {
+            connect::{ ffi },
+            ffi::{ CStr },
+            *,
+        };
+        /// Returns the SQLite version as an integer.
+        #[inline] #[must_use] pub fn version_number() -> i32 { unsafe { ffi::sqlite3_libversion_number() } }
+        /// Returns the SQLite version as a string.
+        #[inline] #[must_use] pub fn version() -> &'static str 
+        {
+            let cstr = unsafe { CStr::from_ptr(ffi::sqlite3_libversion()) };
+            cstr.to_str().expect("SQLite version string is not valid UTF8 ?!")
+        }
     }
 
     pub mod vtab
     {
+        //! Create virtual tables.
+        use ::
+        {
+            borrow::Cow::{ self, Borrowed, Owned },
+            connect::
+            {
+                context::set_result,
+                error::{error_from_sqlite_code, to_sqlite_error},
+                ffi::{ self, sqlite3_vtab, sqlite3_vtab_cursor},
+                types::{FromSql, FromSqlError, ToSql, Value, ValueRef},
+                util::alloc,
+                ffi, str_to_cstring, Connection, Error, InnerConnection, Result,
+            },
+            ffi::{ CString },
+            iter::{ Iter, IterMut, Zip },
+            marker::{ PhantomData },
+            mem::{ size_of },
+            os::raw::{ c_char, c_int, c_void, CStr },
+            slice::{ from_raw_parts_mut, Iter, IterMut },
+            str::{ from_utf8, from_utf8_unchecked },
+            *,
+        };
+        /// Virtual table kind
+        pub enum VTabKind
+        {
+            /// Non-eponymous
+            Default,
+            /// [`create`](CreateVTab::create) == [`connect`](VTab::connect)
+            Eponymous,
+            /// No [`create`](CreateVTab::create) / [`destroy`](CreateVTab::destroy) or not used.
+            EponymousOnly,
+        }
+        /// Virtual table module
+        #[repr(transparent)]
+        pub struct Module<'vtab, T: VTab<'vtab>>
+        {
+            base: ffi::sqlite3_module,
+            phantom: PhantomData<&'vtab T>,
+        }
+
+        unsafe impl<'vtab, T: VTab<'vtab>> Send for Module<'vtab, T> {}
+        unsafe impl<'vtab, T: VTab<'vtab>> Sync for Module<'vtab, T> {}
+
+        union ModuleZeroHack
+        {
+            bytes: [u8; size_of::<ffi::sqlite3_module>()],
+            module: ffi::sqlite3_module,
+        }
         
+        const ZERO_MODULE: ffi::sqlite3_module = unsafe
+        {
+            ModuleZeroHack 
+            {
+                bytes: [0_u8; size_of::<ffi::sqlite3_module>()],
+            }
+            .module
+        };
+
+        macro_rules! module
+        {
+            ($lt:lifetime, $vt:ty, $ct:ty, $xc:expr, $xd:expr, $xu:expr) =>
+            {
+                &Module
+                {
+                    base: ffi::sqlite3_module
+                    {
+                        iVersion: 2,
+                        xCreate: $xc,
+                        xConnect: Some(rust_connect::<$vt>),
+                        xBestIndex: Some(rust_best_index::<$vt>),
+                        xDisconnect: Some(rust_disconnect::<$vt>),
+                        xDestroy: $xd,
+                        xOpen: Some(rust_open::<$vt>),
+                        xClose: Some(rust_close::<$ct>),
+                        xFilter: Some(rust_filter::<$ct>),
+                        xNext: Some(rust_next::<$ct>),
+                        xEof: Some(rust_eof::<$ct>),
+                        xColumn: Some(rust_column::<$ct>),
+                        xRowid: Some(rust_rowid::<$ct>),
+                        xUpdate: $xu,
+                        xBegin: None,
+                        xSync: None,
+                        xCommit: None,
+                        xRollback: None,
+                        xFindFunction: None,
+                        xRename: None,
+                        xSavepoint: None,
+                        xRelease: None,
+                        xRollbackTo: None,
+                        ..ZERO_MODULE
+                    },
+                    phantom: PhantomData::<&$lt $vt>,
+                }
+            };
+        }
+        /// Create a modifiable virtual table implementation.
+        #[must_use] pub fn update_module<'vtab, T: UpdateVTab<'vtab>>() -> &'static Module<'vtab, T>
+        {
+            match T::KIND
+            {
+                VTabKind::EponymousOnly => { module!('vtab, T, T::Cursor, None, None, Some(rust_update::<T>)) }
+                VTabKind::Eponymous => { module!('vtab, T, T::Cursor, Some(rust_connect::<T>), Some(rust_disconnect::<T>), Some(rust_update::<T>)) }
+                _ => { module!('vtab, T, T::Cursor, Some(rust_create::<T>), Some(rust_destroy::<T>), Some(rust_update::<T>)) }
+            }
+        }
+        /// Create a read-only virtual table implementation.
+        #[must_use] pub fn read_only_module<'vtab, T: CreateVTab<'vtab>>() -> &'static Module<'vtab, T>
+        {
+            match T::KIND
+            {
+                VTabKind::EponymousOnly => eponymous_only_module(),
+                VTabKind::Eponymous =>
+                {
+                    module!('vtab, T, T::Cursor, Some(rust_connect::<T>), Some(rust_disconnect::<T>), None)
+                }
+                _ =>
+                {
+                    module!('vtab, T, T::Cursor, Some(rust_create::<T>), Some(rust_destroy::<T>), None)
+                }
+            }
+        }
+        /// Create an eponymous only virtual table implementation.
+        #[must_use] pub fn eponymous_only_module<'vtab, T: VTab<'vtab>>() -> &'static Module<'vtab, T>
+        {
+            module!('vtab, T, T::Cursor, None, None, None)
+        }
+        /// Virtual table configuration options
+        #[repr(i32)] #[non_exhaustive] #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+        pub enum VTabConfig
+        {
+            /// Equivalent to SQLITE_VTAB_CONSTRAINT_SUPPORT
+            ConstraintSupport = 1,
+            /// Equivalent to SQLITE_VTAB_INNOCUOUS
+            Innocuous = 2,
+            /// Equivalent to SQLITE_VTAB_DIRECTONLY
+            DirectOnly = 3,
+            /// Equivalent to SQLITE_VTAB_USES_ALL_SCHEMAS
+            UsesAllSchemas = 4,
+        }
+        /// `feature = "vtab"`
+        pub struct VTabConnection(*mut ffi::sqlite3);
+
+        impl VTabConnection
+        {
+            /// Configure various facets of the virtual table interface
+            pub fn config(&mut self, config: VTabConfig) -> Result<()>
+            {
+                ::connect::error::check(unsafe { ffi::sqlite3_vtab_config(self.0, config as c_int) })
+            }
+            /// Get access to the underlying SQLite database connection handle.
+            pub unsafe fn handle(&mut self) -> *mut ffi::sqlite3 { self.0 }
+        }
+        /// Eponymous-only virtual table instance trait.
+        pub unsafe trait VTab<'vtab>: Sized
+        {
+            /// Client data passed to [`Connection::create_module`].
+            type Aux;
+            /// Specific cursor implementation
+            type Cursor: VTabCursor;
+            /// Establish a new connection to an existing virtual table.
+            fn connect( db: &mut VTabConnection, aux: Option<&Self::Aux>, args: &[&[u8]] ) -> Result<(String, Self)>;
+            /// Determine the best way to access the virtual table.
+            fn best_index(&self, info: &mut IndexInfo) -> Result<()>;
+            /// Create a new cursor used for accessing a virtual table.
+            fn open(&'vtab mut self) -> Result<Self::Cursor>;
+        }
+        /// Read-only virtual table instance trait.
+        pub trait CreateVTab<'vtab>: VTab<'vtab>
+        {
+            /// For [`EponymousOnly`], [`create`] and [`destroy`] are not called.
+            const KIND: VTabKind;
+            /// Create a new instance of a virtual table in response to a CREATE VIRTUAL TABLE statement.
+            fn create ( db: &mut VTabConnection, aux: Option<&Self::Aux>, args: &[&[u8]] ) -> Result<(String, Self)> 
+            { Self::connect(db, aux, args) }
+            /// Destroy the underlying table implementation.
+            fn destroy(&self) -> Result<()> { Ok(()) }
+        }
+        /// Writable virtual table instance trait.
+        pub trait UpdateVTab<'vtab>: CreateVTab<'vtab>
+        {
+            /// Delete rowid or PK
+            fn delete(&mut self, arg: ValueRef<'_>) -> Result<()>;
+            /// Insert: `args[0] == NULL: old rowid or PK, args[1]: new rowid or PK, args[2]: ...`
+            fn insert(&mut self, args: &Values<'_>) -> Result<i64>;
+            /// Update: `args[0] != NULL: old rowid or PK, args[1]: new row id or PK, args[2]: ...`
+            fn update(&mut self, args: &Values<'_>) -> Result<()>;
+        }
+        /// Index constraint operator.
+        #[derive(Debug, Eq, PartialEq)]
+        pub enum IndexConstraintOp
+        {
+            SQLITE_INDEX_CONSTRAINT_EQ,
+            SQLITE_INDEX_CONSTRAINT_GT,
+            SQLITE_INDEX_CONSTRAINT_LE,
+            SQLITE_INDEX_CONSTRAINT_LT,
+            SQLITE_INDEX_CONSTRAINT_GE,
+            SQLITE_INDEX_CONSTRAINT_MATCH,
+            SQLITE_INDEX_CONSTRAINT_LIKE,
+            SQLITE_INDEX_CONSTRAINT_GLOB,
+            SQLITE_INDEX_CONSTRAINT_REGEXP,
+            SQLITE_INDEX_CONSTRAINT_NE,
+            SQLITE_INDEX_CONSTRAINT_ISNOT,
+            SQLITE_INDEX_CONSTRAINT_ISNOTNULL,
+            SQLITE_INDEX_CONSTRAINT_ISNULL,
+            SQLITE_INDEX_CONSTRAINT_IS,
+            SQLITE_INDEX_CONSTRAINT_LIMIT,
+            SQLITE_INDEX_CONSTRAINT_OFFSET,
+            SQLITE_INDEX_CONSTRAINT_FUNCTION(u8),
+        }
+
+        impl From<u8> for IndexConstraintOp
+        {
+            fn from(code: u8) -> IndexConstraintOp
+            {
+                match code
+                {
+                    2 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_EQ,
+                    4 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_GT,
+                    8 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_LE,
+                    16 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_LT,
+                    32 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_GE,
+                    64 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_MATCH,
+                    65 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_LIKE,
+                    66 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_GLOB,
+                    67 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_REGEXP,
+                    68 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_NE,
+                    69 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_ISNOT,
+                    70 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_ISNOTNULL,
+                    71 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_ISNULL,
+                    72 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_IS,
+                    73 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_LIMIT,
+                    74 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_OFFSET,
+                    v => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_FUNCTION(v),
+                }
+            }
+        }
+
+        bitflags::bitflags!
+        {
+            /// Virtual table scan flags.
+            #[repr(C)] #[derive(Copy, Clone, Debug)]
+            pub struct IndexFlags:c_int
+            {
+                /// Default
+                const NONE     = 0;
+                /// Scan visits at most 1 row.
+                const SQLITE_INDEX_SCAN_UNIQUE  = ffi::SQLITE_INDEX_SCAN_UNIQUE;
+            }
+        }
+        /// Pass information into and receive the reply from the [`VTab::best_index`] method.
+        #[derive(Debug)]
+        pub struct IndexInfo( *mut ffi::sqlite3_index_info );
+
+        impl IndexInfo
+        {
+            /// Iterate on index constraint and its associated usage.
+            #[inline] pub fn constraints_and_usages(&mut self) -> IndexConstraintAndUsageIter<'_>
+            {
+                let constraints = unsafe { slice::from_raw_parts((*self.0).aConstraint, (*self.0).nConstraint as usize) };
+                let constraint_usages = unsafe { slice::from_raw_parts_mut((*self.0).aConstraintUsage, (*self.0).nConstraint as usize) };
+                IndexConstraintAndUsageIter { iter: constraints.iter().zip(constraint_usages.iter_mut()), }
+            }
+            /// Record WHERE clause constraints.
+            #[inline] #[must_use] pub fn constraints(&self) -> IndexConstraintIter<'_>
+            {
+                let constraints = unsafe { from_raw_parts((*self.0).aConstraint, (*self.0).nConstraint as usize) };
+                IndexConstraintIter
+                {
+                    iter: constraints.iter(),
+                }
+            }
+            /// Information about the ORDER BY clause.
+            #[inline] #[must_use] pub fn order_bys(&self) -> OrderByIter<'_>
+            {
+                let order_bys = unsafe { from_raw_parts((*self.0).aOrderBy, (*self.0).nOrderBy as usize) };
+                OrderByIter
+                {
+                    iter: order_bys.iter(),
+                }
+            }
+            /// Number of terms in the ORDER BY clause
+            #[inline] #[must_use] pub fn num_of_order_by(&self) -> usize { unsafe { (*self.0).nOrderBy as usize } }
+            /// Information about what parameters to pass to [`VTabCursor::filter`].
+            #[inline] pub fn constraint_usage(&mut self, constraint_idx: usize) -> IndexConstraintUsage<'_>
+            {
+                let constraint_usages = unsafe { from_raw_parts_mut((*self.0).aConstraintUsage, (*self.0).nConstraint as usize) };
+                IndexConstraintUsage(&mut constraint_usages[constraint_idx])
+            }
+            /// Number used to identify the index
+            #[inline] pub fn set_idx_num(&mut self, idx_num: c_int) { unsafe { (*self.0).idxNum = idx_num; } }
+            /// String used to identify the index
+            pub fn set_idx_str(&mut self, idx_str: &str)
+            {
+                unsafe
+                {
+                    (*self.0).idxStr = alloc(idx_str);
+                    (*self.0).needToFreeIdxStr = 1;
+                }
+            }
+            /// True if output is already ordered
+            #[inline] pub fn set_order_by_consumed(&mut self, order_by_consumed: bool)
+            { unsafe { (*self.0).orderByConsumed = order_by_consumed as c_int; } }
+            /// Estimated cost of using this index
+            #[inline] pub fn set_estimated_cost(&mut self, estimated_ost: f64) { unsafe { (*self.0).estimatedCost = estimated_ost; } }
+            /// Estimated number of rows returned.
+            #[inline] pub fn set_estimated_rows(&mut self, estimated_rows: i64) { unsafe { (*self.0).estimatedRows = estimated_rows; } }
+            /// Mask of SQLITE_INDEX_SCAN_* flags.
+            #[inline] pub fn set_idx_flags(&mut self, flags: IndexFlags) { unsafe { (*self.0).idxFlags = flags.bits() }; }
+            /// Mask of columns used by statement
+            #[inline] pub fn col_used(&self) -> u64 { unsafe { (*self.0).colUsed } }
+            /// Determine the collation for a virtual table constraint.
+            pub fn collation(&self, constraint_idx: usize) -> Result<&str>
+            {
+                let idx = constraint_idx as c_int;
+                let collation = unsafe { ffi::sqlite3_vtab_collation(self.0, idx) };
+                if collation.is_null()
+                {
+                    return Err(Error::SqliteFailure
+                    (
+                        ffi::Error::new(ffi::SQLITE_MISUSE),
+                        Some(format!("{constraint_idx} is out of range")),
+                    ));
+                }
+                Ok(unsafe { CStr::from_ptr(collation) }.to_str()?)
+            }
+        }
+        /// Iterate on index constraint and its associated usage.
+        pub struct IndexConstraintAndUsageIter<'a>
+        {
+            iter: Zip<Iter<'a, ffi::sqlite3_index_constraint>, IterMut<'a, ffi::sqlite3_index_constraint_usage>>,
+        }
+
+        impl<'a> Iterator for IndexConstraintAndUsageIter<'a> 
+        {
+            type Item = (IndexConstraint<'a>, IndexConstraintUsage<'a>);
+            #[inline] fn next(&mut self) -> Option<(IndexConstraint<'a>, IndexConstraintUsage<'a>)>
+            {
+                self.iter
+                .next()
+                .map(|raw| (IndexConstraint(raw.0), IndexConstraintUsage(raw.1)))
+            }
+            #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
+        }
+        /// `feature = "vtab"`
+        pub struct IndexConstraintIter<'a>
+        {
+            iter:Iter<'a, ffi::sqlite3_index_constraint>,
+        }
+
+        impl<'a> Iterator for IndexConstraintIter<'a> 
+        {
+            type Item = IndexConstraint<'a>;
+            #[inline] fn next(&mut self) -> Option<IndexConstraint<'a>> { self.iter.next().map(IndexConstraint) }
+            #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
+        }
+        /// WHERE clause constraint.
+        pub struct IndexConstraint<'a>(&'a ffi::sqlite3_index_constraint);
+
+        impl IndexConstraint<'_>
+        {
+            /// Column constrained.  -1 for ROWID
+            #[inline] #[must_use] pub fn column(&self) -> c_int { self.0.iColumn }
+            /// Constraint operator
+            #[inline] #[must_use] pub fn operator(&self) -> IndexConstraintOp { IndexConstraintOp::from(self.0.op) }
+            /// True if this constraint is usable
+            #[inline] #[must_use] pub fn is_usable(&self) -> bool { self.0.usable != 0 }
+        }
+        /// Information about what parameters to pass to [`VTabCursor::filter`].
+        pub struct IndexConstraintUsage<'a>(&'a mut ffi::sqlite3_index_constraint_usage);
+
+        impl IndexConstraintUsage<'_>
+        {
+            /// if `argv_index` > 0, constraint is part of argv to [`VTabCursor::filter`]
+            #[inline] pub fn set_argv_index(&mut self, argv_index: c_int) { self.0.argvIndex = argv_index; }
+            /// if `omit`, do not code a test for this constraint
+            #[inline] pub fn set_omit(&mut self, omit: bool) { self.0.omit = omit as std::os::raw::c_uchar; }
+        }
+        /// `feature = "vtab"`
+        pub struct OrderByIter<'a> 
+        {
+            iter: Iter<'a, ffi::sqlite3_index_orderby>
+        }
+
+        impl<'a> Iterator for OrderByIter<'a>
+        {
+            type Item = OrderBy<'a>;
+            #[inline] fn next(&mut self) -> Option<OrderBy<'a>> { self.iter.next().map(OrderBy) }
+            #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
+        }
+        /// A column of the ORDER BY clause.
+        pub struct OrderBy<'a>( &'a ffi::sqlite3_index_orderby );
+
+        impl OrderBy<'_>
+        {
+            /// Column number
+            #[inline] #[must_use] pub fn column(&self) -> c_int { self.0.iColumn }
+            /// True for DESC.  False for ASC.
+            #[inline] #[must_use] pub fn is_order_by_desc(&self) -> bool { self.0.desc != 0 }
+        }
+        /// Virtual table cursor trait.
+        pub unsafe trait VTabCursor: Sized
+        {
+            /// Begin a search of a virtual table.
+            fn filter(&mut self, idx_num: c_int, idx_str: Option<&str>, args: &Values<'_>) -> Result<()>;
+            /// Advance cursor to the next row of a result set initiated by [`filter`](VTabCursor::filter).
+            fn next(&mut self) -> Result<()>;
+            /// Must return `false` if the cursor currently points to a valid row of data, or `true` otherwise.
+            fn eof(&self) -> bool;
+            /// Find the value for the `i`-th column of the current row.
+            fn column(&self, ctx: &mut Context, i: c_int) -> Result<()>;
+            /// Return the rowid of row that the cursor is currently pointing at.
+            fn rowid(&self) -> Result<i64>;
+        }
+        /// Context is used by [`VTabCursor::column`] to specify the cell value.
+        pub struct Context(*mut ffi::sqlite3_context);
+
+        impl Context
+        {
+            /// Set current cell value
+            #[inline] pub fn set_result<T: ToSql>(&mut self, value: &T) -> Result<()>
+            {
+                let t = value.to_sql()?;
+                unsafe { set_result(self.0, &[], &t) };
+                Ok(())
+            }
+        }
+        /// Wrapper to [`VTabCursor::filter`] arguments, the values requested by [`VTab::best_index`].
+        pub struct Values<'a>
+        {
+            args: &'a [*mut ffi::sqlite3_value],
+        }
+
+        impl Values<'_>
+        {
+            /// Returns the number of values.
+            #[inline] #[must_use] pub fn len(&self) -> usize { self.args.len() }
+            /// Returns `true` if there is no value.
+            #[inline] #[must_use] pub fn is_empty(&self) -> bool { self.args.is_empty() }
+            /// Returns value at `idx`
+            pub fn get<T: FromSql>(&self, idx: usize) -> Result<T>
+            {
+                let arg = self.args[idx];
+                let value = unsafe { ValueRef::from_value(arg) };
+                FromSql::column_result(value).map_err(|err| match err
+                {
+                    FromSqlError::InvalidType => Error::InvalidFilterParameterType(idx, value.data_type()),
+                    FromSqlError::Other(err) => { Error::FromSqlConversionFailure(idx, value.data_type(), err) }
+                    FromSqlError::InvalidBlobSize { .. } => { Error::FromSqlConversionFailure(idx, value.data_type(), Box::new(err)) }
+                    FromSqlError::OutOfRange(i) => Error::IntegralValueOutOfRange(idx, i),
+                })
+            }
+            
+            fn get_array(&self, idx: usize) -> Option<array::Array>
+            {
+                let arg = self.args[idx];
+                let ptr = unsafe { ffi::sqlite3_value_pointer(arg, array::ARRAY_TYPE) };
+                if ptr.is_null() { None }
+                else
+                {
+                    Some(unsafe
+                    {
+                        let ptr = ptr as *const Vec<Value>;
+                        array::Array::increment_strong_count(ptr); // don't consume it
+                        array::Array::from_raw(ptr)
+                    })
+                }
+            }
+            /// Turns `Values` into an iterator.
+            #[inline] #[must_use] pub fn iter(&self) -> ValueIter<'_>
+            {
+                ValueIter
+                {
+                    iter: self.args.iter(),
+                }
+            }
+        }
+
+        impl<'a> IntoIterator for &'a Values<'a>
+        {
+            type IntoIter = ValueIter<'a>;
+            type Item = ValueRef<'a>;
+            #[inline] fn into_iter(self) -> ValueIter<'a> { self.iter() }
+        }
+        /// [`Values`] iterator.
+        pub struct ValueIter<'a>
+        {
+            iter: Iter<'a, *mut ffi::sqlite3_value>,
+        }
+
+        impl<'a> Iterator for ValueIter<'a>
+        {
+            type Item = ValueRef<'a>;
+
+            #[inline] fn next(&mut self) -> Option<ValueRef<'a>>
+            {
+                self.iter
+                .next()
+                .map(|&raw| unsafe { ValueRef::from_value(raw) })
+            }
+
+            #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
+        }
+
+        impl Connection
+        {
+            /// Register a virtual table implementation.
+            #[inline] pub fn create_module<'vtab, T: VTab<'vtab>>
+            ( &self, module_name: &str, module: &'static Module<'vtab, T>, aux: Option<T::Aux> ) -> Result<()> 
+            { self.db.borrow_mut().create_module(module_name, module, aux) }
+        }
+
+        impl InnerConnection
+        {
+            fn create_module<'vtab, T: VTab<'vtab>>( &mut self, module_name:&str, module: &'static Module<'vtab, T>, aux: Option<T::Aux> )
+            -> Result<()>
+            {
+                if ::version::version_number() < 3_009_000 && module.base.xCreate.is_none()
+                {
+                    return Err(Error::ModuleError(format!(
+                    "Eponymous-only virtual table not supported by SQLite version {}", ::version::version() )));
+                }
+
+                let c_name = str_to_cstring(module_name)?;
+                
+                let r = match aux
+                {
+                    Some(aux) =>
+                    {
+                        let boxed_aux: *mut T::Aux = Box::into_raw(Box::new(aux));
+                        unsafe 
+                        {
+                            ffi::sqlite3_create_module_v2( self.db(), c_name.as_ptr(), &module.base, boxed_aux.cast::<c_void>(), Some(free_boxed_value::<T::Aux>) )
+                        }
+                    }
+                    None => unsafe
+                    {
+                        ffi::sqlite3_create_module_v2( self.db(), c_name.as_ptr(), &module.base, ptr::null_mut(), None )
+                    },
+                };
+
+                self.decode_result(r)
+            }
+        }
+        /// Escape double-quote (`"`) character occurrences by doubling them (`""`).
+        #[must_use] pub fn escape_double_quote(identifier: &str) -> Cow<'_, str>
+        {
+            if identifier.contains('"') 
+            { Owned(identifier.replace('"', "\"\"")) }
+            
+            else { Borrowed(identifier) }
+        }
+        /// Dequote string
+        #[must_use] pub fn dequote(s: &str) -> &str
+        {
+            if s.len() < 2 { return s; }
+
+            match s.bytes().next()
+            {
+                Some(b) if b == b'"' || b == b'\'' => match s.bytes().next_back()
+                {
+                    Some(e) if e == b => &s[1..s.len() - 1],
+                    _ => s,
+                },
+                _ => s,
+            }
+        }
+        
+        #[must_use] pub fn parse_boolean(s: &str) -> Option<bool>
+        {
+            if s.eq_ignore_ascii_case("yes")
+            || s.eq_ignore_ascii_case("on")
+            || s.eq_ignore_ascii_case("true")
+            || s.eq("1")
+            { Some(true) }
+
+            else if s.eq_ignore_ascii_case("no")
+            || s.eq_ignore_ascii_case("off")
+            || s.eq_ignore_ascii_case("false")
+            || s.eq("0")
+            { Some(false) }
+
+            else { None }
+        }
+        /// `<param_name>=['"]?<param_value>['"]?` => `(<param_name>, <param_value>)`
+        pub fn parameter(c_slice: &[u8]) -> Result<(&str, &str)>
+        {
+            let arg = from_utf8(c_slice)?.trim();
+            let mut split = arg.split('=');
+            
+            if let Some(key) = split.next()
+            {
+                if let Some(value) = split.next()
+                {
+                    let param = key.trim();
+                    let value = dequote(value.trim());
+                    return Ok((param, value));
+                }
+            }
+            
+            Err(Error::ModuleError(format!("illegal argument: '{arg}'")))
+        }
+
+        unsafe extern "C" fn free_boxed_value<T>(p: *mut c_void) { drop(Box::from_raw(p.cast::<T>())); }
+
+        unsafe extern "C" fn rust_create<'vtab, T> 
+        ( 
+            db: *mut ffi::sqlite3, 
+            aux: *mut c_void, 
+            argc: c_int, 
+            argv: *const *const c_char, 
+            pp_vtab: *mut *mut ffi::sqlite3_vtab, 
+            err_msg: *mut *mut c_char 
+        ) -> c_int where
+        T: CreateVTab<'vtab>
+        {
+            let mut conn = VTabConnection(db);
+            let aux = aux.cast::<T::Aux>();
+            let args = from_raw_parts(argv, argc as usize);
+            let vec = args
+            .iter()
+            .map(|&cs| CStr::from_ptr(cs).to_bytes())
+            .collect::<Vec<_>>();
+
+            match T::create(&mut conn, aux.as_ref(), &vec[..])
+            {
+                Ok((sql, vtab)) => match CString::new(sql)
+                {
+                    Ok(c_sql) =>
+                    {
+                        let rc = ffi::sqlite3_declare_vtab(db, c_sql.as_ptr());
+                        if rc == ffi::SQLITE_OK
+                        {
+                            let boxed_vtab: *mut T = Box::into_raw(Box::new(vtab));
+                            *pp_vtab = boxed_vtab.cast::<ffi::sqlite3_vtab>();
+                            ffi::SQLITE_OK
+                        }
+                        
+                        else
+                        {
+                            let err = error_from_sqlite_code(rc, None);
+                            to_sqlite_error(&err, err_msg)
+                        }
+                    }
+
+                    Err(err) =>
+                    {
+                        *err_msg = alloc(&err.to_string());
+                        ffi::SQLITE_ERROR
+                    }
+                },
+                Err(err) => to_sqlite_error(&err, err_msg),
+            }
+        }
+
+        unsafe extern "C" fn rust_connect<'vtab, T>
+        (
+            db: *mut ffi::sqlite3,
+            aux: *mut c_void,
+            argc: c_int,
+            argv: *const *const c_char,
+            pp_vtab: *mut *mut ffi::sqlite3_vtab,
+            err_msg: *mut *mut c_char,
+        ) -> c_int where
+        T: VTab<'vtab>
+        {
+            let mut conn = VTabConnection(db);
+            let aux = aux.cast::<T::Aux>();
+            let args = from_raw_parts(argv, argc as usize);
+            let vec = args
+            .iter()
+            .map(|&cs| CStr::from_ptr(cs).to_bytes())
+            .collect::<Vec<_>>();
+
+            match T::connect(&mut conn, aux.as_ref(), &vec[..])
+            {
+                Ok((sql, vtab)) => match CString::new(sql)
+                {
+                    Ok(c_sql) =>
+                    {
+                        let rc = ffi::sqlite3_declare_vtab(db, c_sql.as_ptr());
+                        if rc == ffi::SQLITE_OK
+                        {
+                            let boxed_vtab: *mut T = Box::into_raw(Box::new(vtab));
+                            *pp_vtab = boxed_vtab.cast::<ffi::sqlite3_vtab>();
+                            ffi::SQLITE_OK
+                        }
+                        
+                        else
+                        {
+                            let err = error_from_sqlite_code(rc, None);
+                            to_sqlite_error(&err, err_msg)
+                        }
+                    }
+
+                    Err(err) =>
+                    {
+                        *err_msg = alloc(&err.to_string());
+                        ffi::SQLITE_ERROR
+                    }
+                },
+
+                Err(err) => to_sqlite_error(&err, err_msg),
+            }
+        }
+
+        unsafe extern "C" fn rust_best_index<'vtab, T>
+        (
+            vtab: *mut ffi::sqlite3_vtab,
+            info: *mut ffi::sqlite3_index_info,
+        ) -> c_int where
+        T: VTab<'vtab>
+        {
+            let vt = vtab.cast::<T>();
+            let mut idx_info = IndexInfo(info);
+            match (*vt).best_index(&mut idx_info)
+            {
+                Ok(_) => ffi::SQLITE_OK,
+                Err(Error::SqliteFailure(err, s)) =>
+                {
+                    if let Some(err_msg) = s { set_err_msg(vtab, &err_msg); }
+                    err.extended_code
+                }
+
+                Err(err) =>
+                {
+                    set_err_msg(vtab, &err.to_string());
+                    ffi::SQLITE_ERROR
+                }
+            }
+        }
+
+        unsafe extern "C" fn rust_disconnect<'vtab, T>(vtab: *mut ffi::sqlite3_vtab) -> c_int where
+        T: VTab<'vtab>
+        {
+            if vtab.is_null() { return ffi::SQLITE_OK; }
+            let vtab = vtab.cast::<T>();
+            drop(Box::from_raw(vtab));
+            ffi::SQLITE_OK
+        }
+
+        unsafe extern "C" fn rust_destroy<'vtab, T>(vtab: *mut ffi::sqlite3_vtab) -> c_int where
+        T: CreateVTab<'vtab>
+        {
+            if vtab.is_null() { return ffi::SQLITE_OK; }
+
+            let vt = vtab.cast::<T>();
+            match (*vt).destroy()
+            {
+                Ok(_) =>
+                {
+                    drop(Box::from_raw(vt));
+                    ffi::SQLITE_OK
+                }
+
+                Err(Error::SqliteFailure(err, s)) =>
+                {
+                    if let Some(err_msg) = s {
+                        set_err_msg(vtab, &err_msg);
+                    }
+                    err.extended_code
+                }
+
+                Err(err) =>
+                {
+                    set_err_msg(vtab, &err.to_string());
+                    ffi::SQLITE_ERROR
+                }
+            }
+        }
+
+        unsafe extern "C" fn rust_open<'vtab, T>
+        (
+            vtab: *mut ffi::sqlite3_vtab,
+            pp_cursor: *mut *mut ffi::sqlite3_vtab_cursor,
+        ) -> c_int where
+        T: VTab<'vtab> + 'vtab
+        {
+            let vt = vtab.cast::<T>();
+            match (*vt).open()
+            {
+                Ok(cursor) =>
+                {
+                    let boxed_cursor: *mut T::Cursor = Box::into_raw(Box::new(cursor));
+                    *pp_cursor = boxed_cursor.cast::<ffi::sqlite3_vtab_cursor>();
+                    ffi::SQLITE_OK
+                }
+
+                Err(Error::SqliteFailure(err, s)) =>
+                {
+                    if let Some(err_msg) = s { set_err_msg(vtab, &err_msg); }
+                    err.extended_code
+                }
+
+                Err(err) =>
+                {
+                    set_err_msg(vtab, &err.to_string());
+                    ffi::SQLITE_ERROR
+                }
+            }
+        }
+
+        unsafe extern "C" fn rust_close<C>(cursor: *mut ffi::sqlite3_vtab_cursor) -> c_int where
+        C: VTabCursor
+        {
+            let cr = cursor.cast::<C>();
+            drop(Box::from_raw(cr));
+            ffi::SQLITE_OK
+        }
+
+        unsafe extern "C" fn rust_filter<C>
+        (
+            cursor: *mut ffi::sqlite3_vtab_cursor,
+            idx_num: c_int,
+            idx_str: *const c_char,
+            argc: c_int,
+            argv: *mut *mut ffi::sqlite3_value,
+        ) -> c_int where
+        C: VTabCursor
+        {
+            let idx_name = if idx_str.is_null() { None }
+            else
+            {
+                let c_slice = CStr::from_ptr(idx_str).to_bytes();
+                Some( from_utf8_unchecked(c_slice) )
+            };
+            
+            let args = from_raw_parts_mut(argv, argc as usize);
+            let values = Values { args };
+            let cr = cursor as *mut C;
+            cursor_error(cursor, (*cr).filter(idx_num, idx_name, &values))
+        }
+
+        unsafe extern "C" fn rust_next<C>(cursor: *mut ffi::sqlite3_vtab_cursor) -> c_int where
+        C: VTabCursor
+        {
+            let cr = cursor as *mut C;
+            cursor_error(cursor, (*cr).next())
+        }
+
+        unsafe extern "C" fn rust_eof<C>(cursor: *mut ffi::sqlite3_vtab_cursor) -> c_int where
+        C: VTabCursor
+        {
+            let cr = cursor.cast::<C>();
+            (*cr).eof() as c_int
+        }
+
+        unsafe extern "C" fn rust_column<C>( cursor:*mut ffi::sqlite3_vtab_cursor, ctx:*mut ffi::sqlite3_context, i:c_int) -> c_int where
+        C: VTabCursor
+        {
+            let cr = cursor.cast::<C>();
+            let mut ctxt = Context(ctx);
+            result_error(ctx, (*cr).column(&mut ctxt, i))
+        }
+
+        unsafe extern "C" fn rust_rowid<C>( cursor: *mut ffi::sqlite3_vtab_cursor, p_rowid: *mut ffi::sqlite3_int64 ) -> c_int where
+        C: VTabCursor
+        {
+            let cr = cursor.cast::<C>();
+            match (*cr).rowid()
+            {
+                Ok(rowid) =>
+                {
+                    *p_rowid = rowid;
+                    ffi::SQLITE_OK
+                }
+                
+                err => cursor_error(cursor, err),
+            }
+        }
+
+        unsafe extern "C" fn rust_update<'vtab, T>
+        (
+            vtab: *mut ffi::sqlite3_vtab,
+            argc: c_int,
+            argv: *mut *mut ffi::sqlite3_value,
+            p_rowid: *mut ffi::sqlite3_int64,
+        ) -> c_int where
+        T: UpdateVTab<'vtab> + 'vtab
+        {
+            assert!(argc >= 1);
+            let args = from_raw_parts_mut(argv, argc as usize);
+            let vt = vtab.cast::<T>();
+            let r = if args.len() == 1
+            {
+                (*vt).delete(ValueRef::from_value(args[0]))
+            }
+
+            else if ffi::sqlite3_value_type(args[0]) == ffi::SQLITE_NULL
+            {
+                let values = Values { args };
+                
+                match (*vt).insert(&values)
+                {
+                    Ok(rowid) =>
+                    {
+                        *p_rowid = rowid;
+                        Ok(())
+                    }
+                    
+                    Err(e) => Err(e),
+                }
+            }
+            
+            else
+            {
+                let values = Values { args };
+                (*vt).update(&values)
+            };
+
+            match r
+            {
+                Ok(_) => ffi::SQLITE_OK,
+
+                Err(Error::SqliteFailure(err, s)) =>
+                {
+                    if let Some(err_msg) = s { set_err_msg(vtab, &err_msg); }
+
+                    err.extended_code
+                }
+
+                Err(err) =>
+                {
+                    set_err_msg(vtab, &err.to_string());
+                    ffi::SQLITE_ERROR
+                }
+            }
+        }
+        /// Virtual table cursors can set an error message by assigning a string to `zErrMsg`.
+        #[cold] unsafe fn cursor_error<T>(cursor: *mut ffi::sqlite3_vtab_cursor, result: Result<T>) -> c_int
+        {
+            match result
+            {
+                Ok(_) => ffi::SQLITE_OK,
+                
+                Err(Error::SqliteFailure(err, s)) =>
+                {
+                    if let Some(err_msg) = s { set_err_msg((*cursor).pVtab, &err_msg); }
+
+                    err.extended_code
+                }
+
+                Err(err) =>
+                {
+                    set_err_msg((*cursor).pVtab, &err.to_string());
+                    ffi::SQLITE_ERROR
+                }
+            }
+        }
+        /// Virtual tables methods can set an error message by assigning a string to `zErrMsg`.
+        #[cold] unsafe fn set_err_msg(vtab: *mut ffi::sqlite3_vtab, err_msg: &str)
+        {
+            if !(*vtab).zErrMsg.is_null() { ffi::sqlite3_free((*vtab).zErrMsg.cast::<c_void>()); }
+
+            (*vtab).zErrMsg = alloc(err_msg);
+        }
+        /// To raise an error, the `column` method should use this method to set the error message and return the error code.
+        #[cold] unsafe fn result_error<T>(ctx: *mut ffi::sqlite3_context, result: Result<T>) -> c_int
+        {
+            match result
+            {
+                Ok(_) => ffi::SQLITE_OK,
+                
+                Err(Error::SqliteFailure(err, s)) =>
+                {
+                    match err.extended_code
+                    {
+                        ffi::SQLITE_TOOBIG => { ffi::sqlite3_result_error_toobig(ctx); }
+                        ffi::SQLITE_NOMEM => { ffi::sqlite3_result_error_nomem(ctx); }
+                        code =>
+                        {
+                            ffi::sqlite3_result_error_code(ctx, code);
+                            if let Some(Ok(cstr)) = s.map(|s| str_to_cstring(&s)) { ffi::sqlite3_result_error(ctx, cstr.as_ptr(), -1); }
+                        }
+                    };
+                    err.extended_code
+                }
+
+                Err(err) =>
+                {
+                    ffi::sqlite3_result_error_code(ctx, ffi::SQLITE_ERROR);
+                    
+                    if let Ok(cstr) = str_to_cstring(&err.to_string()) { ffi::sqlite3_result_error(ctx, cstr.as_ptr(), -1); }
+
+                    ffi::SQLITE_ERROR
+                }
+            }
+        }
+        
+        pub mod array
+        {
+            //! Array Virtual Table.
+            use ::
+            {
+                connect::
+                {
+                    ffi::{ self },
+                    types::{ToSql, ToSqlOutput, Value},
+                    vtab::{ eponymous_only_module, Context, IndexConstraintOp, IndexInfo, VTab, VTabConnection, VTabCursor, Values },
+                    Connection, Result,
+                },
+                marker::{ PhantomData },
+                os::raw::{c_char, c_int, c_void},
+                rc::{ Rc },
+                *,
+            };
+            
+            const CARRAY_COLUMN_POINTER: c_int = 1;
+
+            pub(crate) const ARRAY_TYPE: *const c_char = c"rarray".as_ptr();
+
+            pub(crate) unsafe extern "C" fn free_array(p: *mut c_void) { drop(Rc::from_raw(p as *const Vec<Value>)); }
+            /// Array parameter / pointer
+            pub type Array = Rc<Vec<Value>>;
+
+            impl ToSql for Array
+            {
+                #[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> { Ok(ToSqlOutput::Array(self.clone())) }
+            }
+            /// Register the "rarray" module.
+            pub fn load_module(conn: &Connection) -> Result<()>
+            {
+                let aux: Option<()> = None;
+                conn.create_module("rarray", eponymous_only_module::<ArrayTab>(), aux)
+            }
+            /// An instance of the Array virtual table
+            #[repr(C)] struct ArrayTab
+            {
+                /// Base class. Must be first
+                base: ffi::sqlite3_vtab,
+            }
+
+            unsafe impl<'vtab> VTab<'vtab> for ArrayTab
+            {
+                type Aux = ();
+                type Cursor = ArrayTabCursor<'vtab>;
+
+                fn connect(
+                    _: &mut VTabConnection,
+                    _aux: Option<&()>,
+                    _args: &[&[u8]],
+                ) -> Result<(String, ArrayTab)> {
+                    let vtab = ArrayTab {
+                        base: ffi::sqlite3_vtab::default(),
+                    };
+                    Ok(("CREATE TABLE x(value,pointer hidden)".to_owned(), vtab))
+                }
+
+                fn best_index(&self, info: &mut IndexInfo) -> Result<()> {
+                    // Index of the pointer= constraint
+                    let mut ptr_idx = false;
+                    for (constraint, mut constraint_usage) in info.constraints_and_usages() {
+                        if !constraint.is_usable() {
+                            continue;
+                        }
+                        if constraint.operator() != IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_EQ {
+                            continue;
+                        }
+                        if let CARRAY_COLUMN_POINTER = constraint.column() {
+                            ptr_idx = true;
+                            constraint_usage.set_argv_index(1);
+                            constraint_usage.set_omit(true);
+                        }
+                    }
+                    if ptr_idx {
+                        info.set_estimated_cost(1_f64);
+                        info.set_estimated_rows(100);
+                        info.set_idx_num(1);
+                    } else {
+                        info.set_estimated_cost(2_147_483_647_f64);
+                        info.set_estimated_rows(2_147_483_647);
+                        info.set_idx_num(0);
+                    }
+                    Ok(())
+                }
+
+                fn open(&mut self) -> Result<ArrayTabCursor<'_>> {
+                    Ok(ArrayTabCursor::new())
+                }
+            }
+            /// A cursor for the Array virtual table
+            #[repr(C)]
+            struct ArrayTabCursor<'vtab> 
+            {
+                /// Base class. Must be first
+                base: ffi::sqlite3_vtab_cursor,
+                /// The rowid
+                row_id: i64,
+                /// Pointer to the array of values ("pointer")
+                ptr: Option<Array>,
+                phantom: PhantomData<&'vtab ArrayTab>,
+            }
+
+            impl ArrayTabCursor<'_> 
+            {
+                fn new<'vtab>() -> ArrayTabCursor<'vtab> {
+                    ArrayTabCursor {
+                        base: ffi::sqlite3_vtab_cursor::default(),
+                        row_id: 0,
+                        ptr: None,
+                        phantom: PhantomData,
+                    }
+                }
+
+                fn len(&self) -> i64 {
+                    match self.ptr {
+                        Some(ref a) => a.len() as i64,
+                        _ => 0,
+                    }
+                }
+            }
+
+            unsafe impl VTabCursor for ArrayTabCursor<'_> 
+            {
+                fn filter(&mut self, idx_num: c_int, _idx_str: Option<&str>, args: &Values<'_>) -> Result<()> {
+                    if idx_num > 0 {
+                        self.ptr = args.get_array(0);
+                    } else {
+                        self.ptr = None;
+                    }
+                    self.row_id = 1;
+                    Ok(())
+                }
+
+                fn next(&mut self) -> Result<()> {
+                    self.row_id += 1;
+                    Ok(())
+                }
+
+                fn eof(&self) -> bool {
+                    self.row_id > self.len()
+                }
+
+                fn column(&self, ctx: &mut Context, i: c_int) -> Result<()> {
+                    match i {
+                        CARRAY_COLUMN_POINTER => Ok(()),
+                        _ => {
+                            if let Some(ref array) = self.ptr {
+                                let value = &array[(self.row_id - 1) as usize];
+                                ctx.set_result(&value)
+                            } else {
+                                Ok(())
+                            }
+                        }
+                    }
+                }
+
+                fn rowid(&self) -> Result<i64> {
+                    Ok(self.row_id)
+                }
+            } 
+        }
+        
+        pub mod csvtab
+        {
+            //! CSV Virtual Table.
+            use ::
+            {
+                connect::
+                {
+                    types::Null,
+                    vtab::
+                    { 
+                        escape_double_quote, parse_boolean, read_only_module, Context, CreateVTab, IndexInfo, VTab, VTabConfig, VTabConnection, 
+                        VTabCursor, VTabKind, Values 
+                    };
+                    Connection, Error, ffi, Result,
+                },
+                fs::File,
+                marker::PhantomData,
+                os::raw::c_int,
+                path::Path,
+                *,
+            };
+            /// Register the "csv" module.
+            pub fn load_module(conn: &Connection) -> Result<()>
+            {
+                let aux: Option<()> = None;
+                conn.create_module("csv", read_only_module::<CsvTab>(), aux)
+            }
+
+            /// An instance of the CSV virtual table
+            #[repr(C)]
+            struct CsvTab {
+                /// Base class. Must be first
+                base: ffi::sqlite3_vtab,
+                /// Name of the CSV file
+                filename: String,
+                has_headers: bool,
+                delimiter: u8,
+                quote: u8,
+                /// Offset to start of data
+                offset_first_row: csv::Position,
+            }
+
+            impl CsvTab {
+                fn reader(&self) -> Result<csv::Reader<File>, csv::Error> {
+                    csv::ReaderBuilder::new()
+                        .has_headers(self.has_headers)
+                        .delimiter(self.delimiter)
+                        .quote(self.quote)
+                        .from_path(&self.filename)
+                }
+
+                fn parse_byte(arg: &str) -> Option<u8> {
+                    if arg.len() == 1 {
+                        arg.bytes().next()
+                    } else {
+                        None
+                    }
+                }
+            }
+
+            unsafe impl<'vtab> VTab<'vtab> for CsvTab
+            {
+                type Aux = ();
+                type Cursor = CsvTabCursor<'vtab>;
+
+                fn connect( db: &mut VTabConnection, _aux: Option<&()>, args: &[&[u8]] ) -> Result<(String, CsvTab)>
+                {
+                    if args.len() < 4 { return Err(Error::ModuleError("no CSV file specified".to_owned())); }
+
+                    let mut vtab = CsvTab
+                    {
+                        base: ffi::sqlite3_vtab::default(),
+                        filename: "".to_owned(),
+                        has_headers: false,
+                        delimiter: b',',
+                        quote: b'"',
+                        offset_first_row: csv::Position::new(),
+                    };
+
+                    let mut schema = None;
+                    let mut n_col = None;
+
+                    let args = &args[3..];
+                    for c_slice in args
+                    {
+                        let (param, value) = super::parameter(c_slice)?;
+                        match param
+                        {
+                            "filename" =>
+                            {
+                                if !Path::new(value).exists() { return Err(Error::ModuleError(format!("file '{value}' does not exist"))); }
+                                value.clone_into(&mut vtab.filename);
+                            }
+                            
+                            "schema" =>
+                            {
+                                schema = Some(value.to_owned());
+                            }
+                            
+                            "columns" =>
+                            {
+                                if let Ok(n) = value.parse::<u16>()
+                                {
+                                    if n_col.is_some() {
+                                        return Err(Error::ModuleError(
+                                            "more than one 'columns' parameter".to_owned(),
+                                        ));
+                                    } else if n == 0 {
+                                        return Err(Error::ModuleError(
+                                            "must have at least one column".to_owned(),
+                                        ));
+                                    }
+                                    n_col = Some(n);
+                                }
+                                
+                                else
+                                {
+                                    return Err(Error::ModuleError(format!(
+                                        "unrecognized argument to 'columns': {value}"
+                                    )));
+                                }
+                            }
+
+                            "header" =>
+                            {
+                                if let Some(b) = parse_boolean(value) {
+                                    vtab.has_headers = b;
+                                } else {
+                                    return Err(Error::ModuleError(format!(
+                                        "unrecognized argument to 'header': {value}"
+                                    )));
+                                }
+                            }
+
+                            "delimiter" => {
+                                if let Some(b) = CsvTab::parse_byte(value) {
+                                    vtab.delimiter = b;
+                                } else {
+                                    return Err(Error::ModuleError(format!(
+                                        "unrecognized argument to 'delimiter': {value}"
+                                    )));
+                                }
+                            }
+
+                            "quote" =>
+                            {
+                                if let Some(b) = CsvTab::parse_byte(value)
+                                {
+                                    if b == b'0' { vtab.quote = 0; }
+                                    else { vtab.quote = b; }
+                                }
+                                
+                                else
+                                {
+                                    return Err(Error::ModuleError(format!( "unrecognized argument to 'quote': {value}" )));
+                                }
+                            }
+
+                            _ => { return Err(Error::ModuleError(format!( "unrecognized parameter '{param}'" ))); }
+                        }
+                    }
+
+                    if vtab.filename.is_empty() {
+                        return Err(Error::ModuleError("no CSV file specified".to_owned()));
+                    }
+
+                    let mut cols: Vec<String> = Vec::new();
+                    if vtab.has_headers || (n_col.is_none() && schema.is_none())
+                    {
+                        let mut reader = vtab.reader()?;
+                        if vtab.has_headers {
+                            {
+                                let headers = reader.headers()?;
+                                if n_col.is_none() && schema.is_none() {
+                                    cols = headers
+                                        .into_iter()
+                                        .map(|header| escape_double_quote(header).into_owned())
+                                        .collect();
+                                }
+                            }
+                            vtab.offset_first_row = reader.position().clone();
+                        } else {
+                            let mut record = csv::ByteRecord::new();
+                            if reader.read_byte_record(&mut record)? {
+                                for (i, _) in record.iter().enumerate() {
+                                    cols.push(format!("c{i}"));
+                                }
+                            }
+                        }
+                    }
+
+                    else if let Some(n_col) = n_col
+                    {
+                        for i in 0..n_col
+                        {
+                            cols.push(format!("c{i}"));
+                        }
+                    }
+
+                    if cols.is_empty() && schema.is_none() { return Err(Error::ModuleError("no column specified".to_owned())); }
+
+                    if schema.is_none()
+                    {
+                        let mut sql = String::from("CREATE TABLE x(");
+                        for (i, col) in cols.iter().enumerate()
+                        {
+                            sql.push('"');
+                            sql.push_str(col);
+                            sql.push_str( r#"\" TEXT"#);
+
+                            if i == cols.len() - 1 { sql.push_str(");"); }
+                            else { sql.push_str(", "); }
+                        }
+                        schema = Some(sql);
+                    }
+
+                    db.config(VTabConfig::DirectOnly)?;
+                    Ok((schema.unwrap(), vtab))
+                }
+                
+                fn best_index(&self, info: &mut IndexInfo) -> Result<()>
+                {
+                    info.set_estimated_cost(1_000_000.);
+                    Ok(())
+                }
+
+                fn open(&mut self) -> Result<CsvTabCursor<'_>> { Ok(CsvTabCursor::new(self.reader()?)) }
+            }
+
+            impl CreateVTab<'_> for CsvTab
+            {
+                const KIND: VTabKind = VTabKind::Default;
+            }
+            /// A cursor for the CSV virtual table
+            #[repr(C)] struct CsvTabCursor<'vtab>
+            {
+                /// Base class. Must be first
+                base: ffi::sqlite3_vtab_cursor,
+                /// The CSV reader object
+                reader: csv::Reader<File>,
+                /// Current cursor position used as rowid
+                row_number: usize,
+                /// Values of the current row
+                cols: csv::StringRecord,
+                eof: bool,
+                phantom: PhantomData<&'vtab CsvTab>,
+            }
+
+            impl CsvTabCursor<'_>
+            {
+                fn new<'vtab>(reader: csv::Reader<File>) -> CsvTabCursor<'vtab> 
+                {
+                    CsvTabCursor
+                    {
+                        base: ffi::sqlite3_vtab_cursor::default(),
+                        reader,
+                        row_number: 0,
+                        cols: csv::StringRecord::new(),
+                        eof: false,
+                        phantom: PhantomData,
+                    }
+                }
+                /// Accessor to the associated virtual table.
+                fn vtab(&self) -> &CsvTab { unsafe { &*(self.base.pVtab as *const CsvTab) } }
+            }
+
+            unsafe impl VTabCursor for CsvTabCursor<'_>
+            {
+                fn filter( &mut self, _idx_num: c_int, _idx_str: Option<&str>, _args: &Values<'_> ) -> Result<()>
+                {
+                    {
+                        let offset_first_row = self.vtab().offset_first_row.clone();
+                        self.reader.seek(offset_first_row)?;
+                    }
+                    self.row_number = 0;
+                    self.next()
+                }
+
+                fn next(&mut self) -> Result<()>
+                {
+                    {
+                        self.eof = self.reader.is_done();
+
+                        if self.eof { return Ok(()); }
+
+                        self.eof = !self.reader.read_record(&mut self.cols)?;
+                    }
+
+                    self.row_number += 1;
+                    Ok(())
+                }
+
+                fn eof(&self) -> bool { self.eof }
+
+                fn column(&self, ctx: &mut Context, col: c_int) -> Result<()>
+                {
+                    if col < 0 || col as usize >= self.cols.len()
+                    {
+                        return Err(Error::ModuleError(format!( "column index out of bounds: {col}" )));
+                    }
+
+                    if self.cols.is_empty() { return ctx.set_result(&Null); }
+                    
+                    ctx.set_result(&self.cols[col as usize].to_owned())
+                }
+
+                fn rowid(&self) -> Result<i64> { Ok(self.row_number as i64) }
+            }
+
+            impl From<csv::Error> for Error
+            {
+                #[cold] fn from(err: csv::Error) -> Error { Error::ModuleError(err.to_string()) }
+            }
+        }
+        
+        pub mod series
+        {
+            //! Generate series virtual table.
+            use ::
+            {
+                connect::
+                {
+                    types::Type;
+                    vtab::{ eponymous_only_module, Context, IndexConstraintOp, IndexInfo, VTab, VTabConfig, VTabConnection, VTabCursor, Values, };
+                    Connection, Error, ffi, Result,
+                },
+                marker::{ PhantomData },
+                os::raw::{ c_int },
+                *,
+            };
+            
+            const SERIES_COLUMN_START: c_int = 1;
+            const SERIES_COLUMN_STOP: c_int = 2;
+            const SERIES_COLUMN_STEP: c_int = 3;
+            /// Register the "generate_series" module.
+            pub fn load_module(conn: &Connection) -> Result<()> 
+            {
+                let aux: Option<()> = None;
+                conn.create_module("generate_series", eponymous_only_module::<SeriesTab>(), aux)
+            }
+            
+            bitflags::bitflags!
+            {
+                #[repr(C)] #[derive(Clone, Copy)]
+                struct QueryPlanFlags: c_int 
+                {
+                    const START = 1;
+                    const STOP  = 2;
+                    const STEP  = 4;
+                    const DESC  = 8;
+                    const ASC  = 16;
+                    const BOTH  = QueryPlanFlags::START.bits() | QueryPlanFlags::STOP.bits();
+                }
+            }
+            /// An instance of the Series virtual table
+            #[repr(C)] struct SeriesTab 
+            {
+                /// Base class. Must be first
+                base: ffi::sqlite3_vtab,
+            }
+
+            unsafe impl<'vtab> VTab<'vtab> for SeriesTab
+            {
+                type Aux = ();
+                type Cursor = SeriesTabCursor<'vtab>;
+                fn connect( db: &mut VTabConnection, _aux: Option<&()>, _args: &[&[u8]] ) -> Result<(String, SeriesTab)>
+                {
+                    let vtab = SeriesTab
+                    {
+                        base: ffi::sqlite3_vtab::default(),
+                    };
+                    
+                    db.config(VTabConfig::Innocuous)?;
+                    
+                    Ok((
+                        "CREATE TABLE x(value,start hidden,stop hidden,step hidden)".to_owned(),
+                        vtab,
+                    ))
+                }
+                fn best_index(&self, info: &mut IndexInfo) -> Result<()>
+                {
+                    let mut idx_num: QueryPlanFlags = QueryPlanFlags::empty();
+                    let mut unusable_mask: QueryPlanFlags = QueryPlanFlags::empty();
+                    let mut a_idx: [Option<usize>; 3] = [None, None, None];
+                    for (i, constraint) in info.constraints().enumerate() {
+                        if constraint.column() < SERIES_COLUMN_START {
+                            continue;
+                        }
+                        let (i_col, i_mask) = match constraint.column() {
+                            SERIES_COLUMN_START => (0, QueryPlanFlags::START),
+                            SERIES_COLUMN_STOP => (1, QueryPlanFlags::STOP),
+                            SERIES_COLUMN_STEP => (2, QueryPlanFlags::STEP),
+                            _ => {
+                                unreachable!()
+                            }
+                        };
+                        if !constraint.is_usable() {
+                            unusable_mask |= i_mask;
+                        } else if constraint.operator() == IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_EQ {
+                            idx_num |= i_mask;
+                            a_idx[i_col] = Some(i);
+                        }
+                    }
+                    
+                    let mut n_arg = 0;
+                    for j in a_idx.iter().flatten() {
+                        n_arg += 1;
+                        let mut constraint_usage = info.constraint_usage(*j);
+                        constraint_usage.set_argv_index(n_arg);
+                        constraint_usage.set_omit(true);
+                        #[cfg(all(test, feature = "modern_sqlite"))]
+                        debug_assert_eq!(Ok("BINARY"), info.collation(*j));
+                    }
+                    if !(unusable_mask & !idx_num).is_empty() {
+                        return Err(Error::SqliteFailure(
+                            ffi::Error::new(ffi::SQLITE_CONSTRAINT),
+                            None,
+                        ));
+                    }
+                    if idx_num.contains(QueryPlanFlags::BOTH) {
+                        // Both start= and stop= boundaries are available.
+                        #[allow(clippy::bool_to_int_with_if)]
+                        info.set_estimated_cost(f64::from(
+                            2 - if idx_num.contains(QueryPlanFlags::STEP) {
+                                1
+                            } else {
+                                0
+                            },
+                        ));
+                        info.set_estimated_rows(1000);
+                        let order_by_consumed = {
+                            let mut order_bys = info.order_bys();
+                            if let Some(order_by) = order_bys.next() {
+                                if order_by.column() == 0 {
+                                    if order_by.is_order_by_desc() {
+                                        idx_num |= QueryPlanFlags::DESC;
+                                    } else {
+                                        idx_num |= QueryPlanFlags::ASC;
+                                    }
+                                    true
+                                } else {
+                                    false
+                                }
+                            } else {
+                                false
+                            }
+                        };
+                        if order_by_consumed {
+                            info.set_order_by_consumed(true);
+                        }
+                    } else {
+                        // If either boundary is missing, we have to generate a huge span
+                        // of numbers.  Make this case very expensive so that the query
+                        // planner will work hard to avoid it.
+                        info.set_estimated_rows(2_147_483_647);
+                    }
+                    info.set_idx_num(idx_num.bits());
+                    Ok(())
+                }
+
+                fn open(&mut self) -> Result<SeriesTabCursor<'_>> { Ok(SeriesTabCursor::new()) }
+            }
+            /// A cursor for the Series virtual table
+            #[repr(C)] struct SeriesTabCursor<'vtab>
+            {
+                /// Base class. Must be first
+                base: ffi::sqlite3_vtab_cursor,
+                /// True to count down rather than up
+                is_desc: bool,
+                /// The rowid
+                row_id: i64,
+                /// Current value ("value")
+                value: i64,
+                /// Minimum value ("start")
+                min_value: i64,
+                /// Maximum value ("stop")
+                max_value: i64,
+                /// Increment ("step")
+                step: i64,
+                phantom: PhantomData<&'vtab SeriesTab>,
+            }
+
+            impl SeriesTabCursor<'_>
+            {
+                fn new<'vtab>() -> SeriesTabCursor<'vtab>
+                {
+                    SeriesTabCursor {
+                        base: ffi::sqlite3_vtab_cursor::default(),
+                        is_desc: false,
+                        row_id: 0,
+                        value: 0,
+                        min_value: 0,
+                        max_value: 0,
+                        step: 0,
+                        phantom: PhantomData,
+                    }
+                }
+            }
+            
+            unsafe impl VTabCursor for SeriesTabCursor<'_>
+            {
+                fn filter(&mut self, idx_num: c_int, _idx_str: Option<&str>, args: &Values<'_>) -> Result<()> {
+                    let mut idx_num = QueryPlanFlags::from_bits_truncate(idx_num);
+                    let mut i = 0;
+                    if idx_num.contains(QueryPlanFlags::START) {
+                        self.min_value = args.get::<Option<_>>(i)?.unwrap_or_default();
+                        i += 1;
+                    } else {
+                        self.min_value = 0;
+                    }
+                    if idx_num.contains(QueryPlanFlags::STOP) {
+                        self.max_value = args.get::<Option<_>>(i)?.unwrap_or_default();
+                        i += 1;
+                    } else {
+                        self.max_value = 0xffff_ffff;
+                    }
+                    if idx_num.contains(QueryPlanFlags::STEP) {
+                        self.step = args.get::<Option<_>>(i)?.unwrap_or_default();
+                        if self.step == 0 {
+                            self.step = 1;
+                        } else if self.step < 0 {
+                            self.step = -self.step;
+                            if !idx_num.contains(QueryPlanFlags::ASC) {
+                                idx_num |= QueryPlanFlags::DESC;
+                            }
+                        }
+                    } else {
+                        self.step = 1;
+                    };
+                    for arg in args.iter() {
+                        if arg.data_type() == Type::Null 
+                        {
+                            self.min_value = 1;
+                            self.max_value = 0;
+                            break;
+                        }
+                    }
+                    self.is_desc = idx_num.contains(QueryPlanFlags::DESC);
+                    if self.is_desc {
+                        self.value = self.max_value;
+                        if self.step > 0 {
+                            self.value -= (self.max_value - self.min_value) % self.step;
+                        }
+                    } else {
+                        self.value = self.min_value;
+                    }
+                    self.row_id = 1;
+                    Ok(())
+                }
+
+                fn next(&mut self) -> Result<()> {
+                    if self.is_desc {
+                        self.value -= self.step;
+                    } else {
+                        self.value += self.step;
+                    }
+                    self.row_id += 1;
+                    Ok(())
+                }
+
+                fn eof(&self) -> bool {
+                    if self.is_desc {
+                        self.value < self.min_value
+                    } else {
+                        self.value > self.max_value
+                    }
+                }
+
+                fn column(&self, ctx: &mut Context, i: c_int) -> Result<()> {
+                    let x = match i {
+                        SERIES_COLUMN_START => self.min_value,
+                        SERIES_COLUMN_STOP => self.max_value,
+                        SERIES_COLUMN_STEP => self.step,
+                        _ => self.value,
+                    };
+                    ctx.set_result(&x)
+                }
+
+                fn rowid(&self) -> Result<i64> {
+                    Ok(self.row_id)
+                }
+            }
+        }
+        
+        mod vtablog
+        {
+            //! Port of C [vtablog](http://www.sqlite.org/cgi/src/finfo?name=ext/misc/vtablog.c)
+            use ::
+            {
+                connect::
+                {
+                    vtab::{ update_module, Context, CreateVTab, IndexInfo, UpdateVTab, VTab, VTabConnection, VTabCursor, VTabKind, Values },
+                    Connection, Error, ffi, Result, ValueRef,
+                },
+                marker::PhantomData,
+                os::raw::c_int,
+                str::FromStr,
+                sync::atomic::{AtomicUsize, Ordering},
+                *,    
+            };
+            /// Register the "vtablog" module.
+            pub fn load_module(conn: &Connection) -> Result<()>
+            {
+                let aux: Option<()> = None;
+                conn.create_module("vtablog", update_module::<VTabLog>(), aux)
+            }
+            /// An instance of the vtablog virtual table
+            #[repr(C)] struct VTabLog
+            {
+                /// Base class. Must be first
+                base: ffi::sqlite3_vtab,
+                /// Number of rows in the table
+                n_row: i64,
+                /// Instance number for this vtablog table
+                i_inst: usize,
+                /// Number of cursors created
+                n_cursor: usize,
+            }
+
+            impl VTabLog 
+            {
+                fn connect_create(
+                    _: &mut VTabConnection,
+                    _: Option<&()>,
+                    args: &[&[u8]],
+                    is_create: bool,
+                ) -> Result<(String, VTabLog)> {
+                    static N_INST: AtomicUsize = AtomicUsize::new(1);
+                    let i_inst = N_INST.fetch_add(1, Ordering::SeqCst);
+                    println!(
+                        "VTabLog::{}(tab={}, args={:?}):",
+                        if is_create { "create" } else { "connect" },
+                        i_inst,
+                        args,
+                    );
+                    let mut schema = None;
+                    let mut n_row = None;
+
+                    let args = &args[3..];
+                    for c_slice in args {
+                        let (param, value) = super::parameter(c_slice)?;
+                        match param {
+                            "schema" => {
+                                if schema.is_some() {
+                                    return Err(Error::ModuleError(format!(
+                                        "more than one '{param}' parameter"
+                                    )));
+                                }
+                                schema = Some(value.to_owned())
+                            }
+                            "rows" => {
+                                if n_row.is_some() {
+                                    return Err(Error::ModuleError(format!(
+                                        "more than one '{param}' parameter"
+                                    )));
+                                }
+                                if let Ok(n) = i64::from_str(value) {
+                                    n_row = Some(n)
+                                }
+                            }
+                            _ => {
+                                return Err(Error::ModuleError(format!(
+                                    "unrecognized parameter '{param}'"
+                                )));
+                            }
+                        }
+                    }
+                    if schema.is_none() {
+                        return Err(Error::ModuleError("no schema defined".to_owned()));
+                    }
+                    let vtab = VTabLog {
+                        base: ffi::sqlite3_vtab::default(),
+                        n_row: n_row.unwrap_or(10),
+                        i_inst,
+                        n_cursor: 0,
+                    };
+                    Ok((schema.unwrap(), vtab))
+                }
+            }
+
+            impl Drop for VTabLog {
+                fn drop(&mut self) {
+                    println!("VTabLog::drop({})", self.i_inst);
+                }
+            }
+
+            unsafe impl<'vtab> VTab<'vtab> for VTabLog {
+                type Aux = ();
+                type Cursor = VTabLogCursor<'vtab>;
+
+                fn connect(
+                    db: &mut VTabConnection,
+                    aux: Option<&Self::Aux>,
+                    args: &[&[u8]],
+                ) -> Result<(String, Self)> {
+                    VTabLog::connect_create(db, aux, args, false)
+                }
+
+                fn best_index(&self, info: &mut IndexInfo) -> Result<()> {
+                    println!("VTabLog::best_index({})", self.i_inst);
+                    info.set_estimated_cost(500.);
+                    info.set_estimated_rows(500);
+                    Ok(())
+                }
+
+                fn open(&'vtab mut self) -> Result<Self::Cursor> {
+                    self.n_cursor += 1;
+                    println!(
+                        "VTabLog::open(tab={}, cursor={})",
+                        self.i_inst, self.n_cursor
+                    );
+                    Ok(VTabLogCursor {
+                        base: ffi::sqlite3_vtab_cursor::default(),
+                        i_cursor: self.n_cursor,
+                        row_id: 0,
+                        phantom: PhantomData,
+                    })
+                }
+            }
+
+            impl<'vtab> CreateVTab<'vtab> for VTabLog {
+                const KIND: VTabKind = VTabKind::Default;
+
+                fn create(
+                    db: &mut VTabConnection,
+                    aux: Option<&Self::Aux>,
+                    args: &[&[u8]],
+                ) -> Result<(String, Self)> {
+                    VTabLog::connect_create(db, aux, args, true)
+                }
+
+                fn destroy(&self) -> Result<()> {
+                    println!("VTabLog::destroy({})", self.i_inst);
+                    Ok(())
+                }
+            }
+
+            impl<'vtab> UpdateVTab<'vtab> for VTabLog {
+                fn delete(&mut self, arg: ValueRef<'_>) -> Result<()> {
+                    println!("VTabLog::delete({}, {arg:?})", self.i_inst);
+                    Ok(())
+                }
+
+                fn insert(&mut self, args: &Values<'_>) -> Result<i64> {
+                    println!(
+                        "VTabLog::insert({}, {:?})",
+                        self.i_inst,
+                        args.iter().collect::<Vec<ValueRef<'_>>>()
+                    );
+                    Ok(self.n_row)
+                }
+
+                fn update(&mut self, args: &Values<'_>) -> Result<()> {
+                    println!(
+                        "VTabLog::update({}, {:?})",
+                        self.i_inst,
+                        args.iter().collect::<Vec<ValueRef<'_>>>()
+                    );
+                    Ok(())
+                }
+            }
+            /// A cursor for the Series virtual table
+            #[repr(C)]
+            struct VTabLogCursor<'vtab> 
+            {
+                /// Base class. Must be first
+                base: ffi::sqlite3_vtab_cursor,
+                /// Cursor number
+                i_cursor: usize,
+                /// The rowid
+                row_id: i64,
+                phantom: PhantomData<&'vtab VTabLog>,
+            }
+
+            impl VTabLogCursor<'_> {
+                fn vtab(&self) -> &VTabLog {
+                    unsafe { &*(self.base.pVtab as *const VTabLog) }
+                }
+            }
+
+            impl Drop for VTabLogCursor<'_> {
+                fn drop(&mut self) {
+                    println!(
+                        "VTabLogCursor::drop(tab={}, cursor={})",
+                        self.vtab().i_inst,
+                        self.i_cursor
+                    );
+                }
+            }
+
+            unsafe impl VTabCursor for VTabLogCursor<'_> {
+                fn filter(&mut self, _: c_int, _: Option<&str>, _: &Values<'_>) -> Result<()> {
+                    println!(
+                        "VTabLogCursor::filter(tab={}, cursor={})",
+                        self.vtab().i_inst,
+                        self.i_cursor
+                    );
+                    self.row_id = 0;
+                    Ok(())
+                }
+
+                fn next(&mut self) -> Result<()> {
+                    println!(
+                        "VTabLogCursor::next(tab={}, cursor={}): rowid {} -> {}",
+                        self.vtab().i_inst,
+                        self.i_cursor,
+                        self.row_id,
+                        self.row_id + 1
+                    );
+                    self.row_id += 1;
+                    Ok(())
+                }
+
+                fn eof(&self) -> bool {
+                    let eof = self.row_id >= self.vtab().n_row;
+                    println!(
+                        "VTabLogCursor::eof(tab={}, cursor={}): {}",
+                        self.vtab().i_inst,
+                        self.i_cursor,
+                        eof,
+                    );
+                    eof
+                }
+
+                fn column(&self, ctx: &mut Context, i: c_int) -> Result<()> {
+                    let value = if i < 26 {
+                        format!(
+                            "{}{}",
+                            "abcdefghijklmnopqrstuvwyz".chars().nth(i as usize).unwrap(),
+                            self.row_id
+                        )
+                    } else {
+                        format!("{i}{}", self.row_id)
+                    };
+                    println!(
+                        "VTabLogCursor::column(tab={}, cursor={}, i={}): {}",
+                        self.vtab().i_inst,
+                        self.i_cursor,
+                        i,
+                        value,
+                    );
+                    ctx.set_result(&value)
+                }
+
+                fn rowid(&self) -> Result<i64> {
+                    println!(
+                        "VTabLogCursor::rowid(tab={}, cursor={}): {}",
+                        self.vtab().i_inst,
+                        self.i_cursor,
+                        self.row_id,
+                    );
+                    Ok(self.row_id)
+                }
+            }
+        }
     }
 
     pub mod util
     {
+        pub mod param_cache
+        {
+            use ::
+            {
+                connect::util::{ SmallCString },
+                cell::RefCell,
+                collections::BTreeMap,
+                ffi::{ CStr },
+                *,
+            };
+            /// Maps parameter names to parameter indices.
+            #[derive(Default, Clone, Debug)]
+            pub(crate) struct ParamIndexCache(RefCell<BTreeMap<SmallCString, usize>>);
+
+            impl ParamIndexCache
+            {
+                pub fn get_or_insert_with<F>(&self, s: &str, func: F) -> Option<usize> where
+                F: FnOnce( &CStr ) -> Option<usize>
+                {
+                    let mut cache = self.0.borrow_mut();
+                    if let Some(v) = cache.get(s) { return Some(*v); }                    
+                    let name = SmallCString::new(s).ok()?;
+                    let val = func(&name)?;
+                    cache.insert(name, val);
+                    Some(val)
+                }
+            }
+        }
+
+        pub mod small_cstr
+        {
+            use ::
+            {
+                smallvec::{ smallvec, SmallVec },
+                ffi::{ CStr, CString, NulError },
+                str::{ from_utf8, from_utf8_unchecked },
+                *,
+            };
+            /// Similar to `std::ffi::CString`, but avoids heap allocating if the string is small enough.
+            #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+            pub(crate) struct SmallCString(SmallVec<[u8; 16]>);
+
+            impl SmallCString
+            {
+                #[inline] pub fn new(s: &str) -> Result<Self, NulError>
+                {
+                    if s.as_bytes().contains(&0_u8) { return Err(Self::fabricate_nul_error(s)); }
+                    let mut buf = SmallVec::with_capacity(s.len() + 1);
+                    buf.extend_from_slice(s.as_bytes());
+                    buf.push(0);
+                    let res = Self(buf);
+                    res.debug_checks();
+                    Ok(res)
+                }
+
+                #[inline] pub fn as_str(&self) -> &str
+                {
+                    self.debug_checks();
+                    
+                    unsafe { from_utf8_unchecked(self.as_bytes_without_nul()) }
+                }
+                /// Get the bytes not including the NUL terminator. E.g. the bytes which make up our `str`:
+                /// - `SmallCString::new("foo").as_bytes_without_nul() == b"foo"`
+                /// - `SmallCString::new("foo").as_bytes_with_nul() == b"foo\0"`
+                #[inline] pub fn as_bytes_without_nul(&self) -> &[u8]
+                {
+                    self.debug_checks();
+                    &self.0[..self.len()]
+                }
+                /// Get the bytes behind this str *including* the NUL terminator.
+                #[inline] pub fn as_bytes_with_nul(&self) -> &[u8]
+                {
+                    self.debug_checks();
+                    &self.0
+                }
+
+                #[inline] fn debug_checks(&self)
+                {
+                    debug_assert_ne!(self.0.len(), 0);
+                    debug_assert_eq!(self.0[self.0.len() - 1], 0);
+                    let strbytes = &self.0[..(self.0.len() - 1)];
+                    debug_assert!(!strbytes.contains(&0));
+                    debug_assert!( from_utf8(strbytes).is_ok() );
+                }
+
+                #[inline] pub fn len(&self) -> usize
+                {
+                    debug_assert_ne!(self.0.len(), 0);
+                    self.0.len() - 1
+                }
+
+                #[inline] pub fn is_empty(&self) -> bool { self.len() == 0 }
+
+                #[inline] pub fn as_cstr(&self) -> &CStr
+                {
+                    let bytes = self.as_bytes_with_nul();
+                    debug_assert!(CStr::from_bytes_with_nul(bytes).is_ok());
+                    unsafe { CStr::from_bytes_with_nul_unchecked(bytes) }
+                }
+
+                #[cold] fn fabricate_nul_error(b: &str) -> NulError { CString::new(b).unwrap_err() }
+            }
+
+            impl Default for SmallCString
+            {
+                #[inline] fn default() -> Self { Self(smallvec![0]) }
+            }
+
+            impl ::fmt::Debug for SmallCString
+            {
+                fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result
+                {
+                    f.debug_tuple("SmallCString").field(&self.as_str()).finish()
+                }
+            }
+
+            impl ::ops::Deref for SmallCString
+            {
+                type Target = CStr;
+                #[inline] fn deref(&self) -> &CStr { self.as_cstr() }
+            }
+
+            impl PartialEq<SmallCString> for str
+            {
+                #[inline] fn eq(&self, s: &SmallCString) -> bool { s.as_bytes_without_nul() == self.as_bytes() }
+            }
+
+            impl PartialEq<str> for SmallCString
+            {
+                #[inline] fn eq(&self, s: &str) -> bool { self.as_bytes_without_nul() == s.as_bytes() }
+            }
+
+            impl ::borrow::Borrow<str> for SmallCString
+            {
+                #[inline] fn borrow(&self) -> &str { self.as_str() }
+            }
+        }
         
+        pub mod sqlite_string
+        {
+            use ::
+            {
+                connect::{ ffi },
+                marker::PhantomData,
+                os::raw::{c_char, c_int},
+                ptr::NonNull,
+                *,
+            };
+            
+            pub(crate) fn alloc(s: &str) -> *mut c_char { SqliteMallocString::from_str(s).into_raw() }
+            /// A string we own that's allocated on the SQLite heap.
+            #[repr(transparent)] pub(crate) struct SqliteMallocString 
+            {
+                ptr: NonNull<c_char>,
+                _boo: PhantomData<Box<[c_char]>>,
+            }
+
+            // unsafe impl Send for SqliteMallocString {}
+            // unsafe impl Sync for SqliteMallocString {}
+
+            impl SqliteMallocString 
+            {
+                #[inline] pub(crate) unsafe fn from_raw_nonnull(ptr: NonNull<c_char>) -> Self {
+                    Self {
+                        ptr,
+                        _boo: PhantomData,
+                    }
+                }
+                
+                #[inline]
+                pub(crate) unsafe fn from_raw(ptr: *mut c_char) -> Option<Self> {
+                    NonNull::new(ptr).map(|p| Self::from_raw_nonnull(p))
+                }
+                /// Get the pointer behind `self`. After this is called, we no longer manage
+                /// it.
+                #[inline]
+                pub(crate) fn into_inner(self) -> NonNull<c_char> {
+                    let p = self.ptr;
+                    std::mem::forget(self);
+                    p
+                }
+                /// Get the pointer behind `self`. After this is called, we no longer manage
+                /// it.
+                #[inline]
+                pub(crate) fn into_raw(self) -> *mut c_char {
+                    self.into_inner().as_ptr()
+                }
+                /// Borrow the pointer behind `self`. We still manage it when this function
+                /// returns. If you want to relinquish ownership, use `into_raw`.
+                #[inline]
+                pub(crate) fn as_ptr(&self) -> *const c_char {
+                    self.ptr.as_ptr()
+                }
+
+                #[inline]
+                pub(crate) fn as_cstr(&self) -> &std::ffi::CStr {
+                    unsafe { std::ffi::CStr::from_ptr(self.as_ptr()) }
+                }
+
+                #[inline]
+                pub(crate) fn to_string_lossy(&self) -> std::borrow::Cow<'_, str> {
+                    self.as_cstr().to_string_lossy()
+                }
+
+                /// Convert `s` into a SQLite string.
+                pub(crate) fn from_str(s: &str) -> Self {
+                    let s = if s.as_bytes().contains(&0) {
+                        std::borrow::Cow::Owned(make_nonnull(s))
+                    } else {
+                        std::borrow::Cow::Borrowed(s)
+                    };
+                    debug_assert!(!s.as_bytes().contains(&0));
+                    let bytes: &[u8] = s.as_ref().as_bytes();
+                    let src_ptr: *const c_char = bytes.as_ptr().cast();
+                    let src_len = bytes.len();
+                    let maybe_len_plus_1 = s.len().checked_add(1).and_then(|v| c_int::try_from(v).ok());
+                    unsafe {
+                        let res_ptr = maybe_len_plus_1
+                            .and_then(|len_to_alloc| {
+                                debug_assert!(len_to_alloc > 0);
+                                debug_assert_eq!((len_to_alloc - 1) as usize, src_len);
+                                NonNull::new(ffi::sqlite3_malloc(len_to_alloc).cast::<c_char>())
+                            })
+                            .unwrap_or_else(|| {
+                                use std::alloc::{handle_alloc_error, Layout};
+                                let len = s.len().saturating_add(1).min(isize::MAX as usize);
+                                let layout = Layout::from_size_align_unchecked(len, 1);
+                                handle_alloc_error(layout);
+                            });
+                        let buf: *mut c_char = res_ptr.as_ptr().cast::<c_char>();
+                        src_ptr.copy_to_nonoverlapping(buf, src_len);
+                        buf.add(src_len).write(0);
+                        debug_assert_eq!(std::ffi::CStr::from_ptr(res_ptr.as_ptr()).to_bytes(), bytes);
+                        Self::from_raw_nonnull(res_ptr)
+                    }
+                }
+            }
+
+            const NUL_REPLACE: &str = "␀";
+
+            #[cold]
+            fn make_nonnull(v: &str) -> String {
+                v.replace('\0', NUL_REPLACE)
+            }
+
+            impl Drop for SqliteMallocString {
+                #[inline]
+                fn drop(&mut self) {
+                    unsafe { ffi::sqlite3_free(self.ptr.as_ptr().cast()) };
+                }
+            }
+
+            impl std::fmt::Debug for SqliteMallocString {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    self.to_string_lossy().fmt(f)
+                }
+            }
+
+            impl std::fmt::Display for SqliteMallocString {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    self.to_string_lossy().fmt(f)
+                }
+            }
+        }
+        pub use param_cache::ParamIndexCache;
+        pub use small_cstr::SmallCString;
+        pub use sqlite_string::{alloc, SqliteMallocString};
     }
     pub use self::util::SmallCString;
-    /// A macro making it more convenient to longer lists of parameters as a `&[&dyn ToSql]`.
-    #[macro_export] macro_rules! params
-    {
-        () =>
-        {           &[] as &[&dyn ::connect::ToSql]
-        };
-        ($($param:expr),+ $(,)?) => 
-        {
-            &[$(&$param as &dyn ::connect::ToSql),+] as &[&dyn ::connect::ToSql]
-        };
-    }
-    /// A macro making it more convenient to pass lists of named parameters as a `&[(&str, &dyn ToSql)]`.
-    #[macro_export] macro_rules! named_params 
-    {
-        () => { &[] as &[(&str, &dyn ::connect::ToSql)] };
-        
-        ($($param_name:literal: $param_val:expr),+ $(,)?) =>
-        {
-            &[$(($param_name, &$param_val as &dyn ::connect::ToSql)),+] as &[(&str, &dyn ::connect::ToSql)]
-        };
-    }
-    /// Captured identifiers in SQL.
-    #[macro_export] macro_rules! prepare_and_bind
-    {
-        ($conn:expr, $sql:literal) => 
-        {{
-            let mut stmt = $conn.prepare($sql)?;
-            ::connect::__bind!(stmt $sql);
-            stmt
-        }};
-    }
-    /// Captured identifiers in SQL.
-    #[macro_export] macro_rules! prepare_cached_and_bind
-    {
-        ($conn:expr, $sql:literal) => 
-        {{
-            let mut stmt = $conn.prepare_cached($sql)?;
-            ::connect::__bind!(stmt $sql);
-            stmt
-        }};
-    }
     /// A typedef of the result returned by many methods.
     pub type Result<T, E = Error> = result::Result<T, E>;
     
@@ -11684,7 +14076,7 @@ pub mod connect
 
     impl Drop for Connection
     {
-        #[inline] fn drop(&mut self) { self.flush_prepared_statement_cache(); }
+        #[inline] fn drop( &mut self ) { self.flush_prepared_statement_cache(); }
     }
 
     impl Connection 
@@ -11931,7 +14323,7 @@ pub mod connect
         /// Constructor
         pub fn new(conn: &'conn Connection, sql: &'sql str) -> Batch<'conn, 'sql> { Batch { conn, sql, tail: 0 } }
         /// Iterates on each batch statements.
-        pub fn next(&mut self) -> Result<Option<Statement<'conn>>>
+        pub fn next( &mut self ) -> Result<Option<Statement<'conn>>>
         {
             while self.tail < self.sql.len()
             {
@@ -11956,7 +14348,7 @@ pub mod connect
     impl<'conn> Iterator for Batch<'conn, '_> 
     {
         type Item = Result<Statement<'conn>>;
-        fn next(&mut self) -> Option<Result<Statement<'conn>>> { self.next().transpose() }
+        fn next( &mut self ) -> Option<Result<Statement<'conn>>> { self.next().transpose() }
     }
 
     bitflags::bitflags!
@@ -13204,7 +15596,7 @@ pub mod iter
         /// The error type.
         type Error;
         /// Advances the iterator and returns the next value.
-        fn next(&mut self) -> Result<Option<Self::Item>, Self::Error>;
+        fn next( &mut self ) -> Result<Option<Self::Item>, Self::Error>;
         /// Returns bounds on the remaining length of the iterator.
         #[inline] fn size_hint(&self) -> (usize, Option<usize>) { (0, None) }
         /// Consumes the iterator, returning the number of remaining items.
@@ -13378,7 +15770,7 @@ pub mod iter
         F: FnMut(&Self::Item) -> Result<(), Self::Error>
         { Inspect { it: self, f } }
         /// Borrow an iterator rather than consuming it.
-        #[inline] fn by_ref(&mut self) -> &mut Self where
+        #[inline] fn by_ref( &mut self ) -> &mut Self where
         Self: Sized
         { self }
         /// Transforms the iterator into a collection.
@@ -13591,8 +15983,7 @@ pub mod iter
             Ok((from_a, from_b))
         }
         /// Returns an iterator which clones all of its elements.
-        #[inline]
-        fn cloned<'a, T>(self) -> Cloned<Self> where
+        #[inline] fn cloned<'a, T>(self) -> Cloned<Self> where
         Self: Sized + FallibleIterator<Item = &'a T>,
         T: 'a + Clone
         { Cloned(self) }
@@ -13673,8 +16064,7 @@ pub mod iter
             }
         }
         /// Determines if the elements of this iterator are not equal to those of another.
-        #[inline]
-        fn ne<I>(mut self, other: I) -> Result<bool, Self::Error> where
+        #[inline] fn ne<I>(mut self, other: I) -> Result<bool, Self::Error> where
         Self: Sized,
         I: IntoFallibleIterator<Error = Self::Error>,
         Self::Item: PartialEq<I::Item>
@@ -13695,8 +16085,7 @@ pub mod iter
             }
         }
         /// Determines if the elements of this iterator are lexicographically less than those of another.
-        #[inline]
-        fn lt<I>(mut self, other: I) -> Result<bool, Self::Error> where
+        #[inline] fn lt<I>(mut self, other: I) -> Result<bool, Self::Error> where
         Self: Sized,
         I: IntoFallibleIterator<Error = Self::Error>,
         Self::Item: PartialOrd<I::Item>
@@ -13815,14 +16204,14 @@ pub mod iter
     {
         type Item = I::Item;
         type Error = I::Error;
-        #[inline] fn next(&mut self) -> Result<Option<I::Item>, I::Error> { (**self).next() }
+        #[inline] fn next( &mut self ) -> Result<Option<I::Item>, I::Error> { (**self).next() }
         #[inline] fn size_hint(&self) -> (usize, Option<usize>) { (**self).size_hint() }
         #[inline] fn nth(&mut self, n: usize) -> Result<Option<I::Item>, I::Error> { (**self).nth(n) }
     }
 
     impl<I: DoubleEndedFallibleIterator + ?Sized> DoubleEndedFallibleIterator for &mut I
     {
-        #[inline] fn next_back(&mut self) -> Result<Option<I::Item>, I::Error> { (**self).next_back() }
+        #[inline] fn next_back( &mut self ) -> Result<Option<I::Item>, I::Error> { (**self).next_back() }
     }
 
     /// Conversion into a `FallibleIterator`.
@@ -13854,11 +16243,11 @@ pub mod iter
         /// The error type of iteration.
         type Error;
         /// Advances the iterator to the next position.
-        fn advance(&mut self) -> Result<(), Self::Error>;
+        fn advance( &mut self ) -> Result<(), Self::Error>;
         /// Returns the current element.
         fn get(&self) -> Option<&Self::Item>;
         /// Advances the iterator, returning the next element.
-        #[inline] fn next(&mut self) -> Result<Option<&Self::Item>, Self::Error>
+        #[inline] fn next( &mut self ) -> Result<Option<&Self::Item>, Self::Error>
         {
             self.advance()?;
             Ok((*self).get())
@@ -13883,7 +16272,7 @@ pub mod iter
         F: FnMut(&Self::Item) -> bool
         { self.all(|e| !f(e)).map(|r| !r) }
         /// Borrows an iterator, rather than consuming it.
-        #[inline] fn by_ref(&mut self) -> &mut Self where
+        #[inline] fn by_ref( &mut self ) -> &mut Self where
         Self: Sized
         { self }
         /// Returns the number of remaining elements in the iterator.
@@ -14225,13 +16614,13 @@ pub mod mortal
                     $field.next_line(column);
                 }
 
-                pub fn clear_screen(&mut self)
+                pub fn clear_screen( &mut self )
                 {
                     let $slf = self;
                     $field.clear_screen();
                 }
 
-                pub fn clear_attributes(&mut self)
+                pub fn clear_attributes( &mut self )
                 {
                     let $slf = self;
                     $field.clear_attributes();
@@ -14370,7 +16759,7 @@ pub mod mortal
                 self.cursor.column = column;
             }
 
-            pub fn clear_attributes(&mut self)
+            pub fn clear_attributes( &mut self )
             { self.fg = None;
                 self.bg = None;
                 self.style = Style::empty();
@@ -14392,7 +16781,7 @@ pub mod mortal
                 self.set_style(theme.style);
             }
 
-            pub fn clear_screen(&mut self)
+            pub fn clear_screen( &mut self )
             {
                 for cell in &mut self.buffer
                 {
@@ -14572,6 +16961,7 @@ pub mod mortal
         }
 
         impl Cell
+       
         {
             fn new(fg: Option<Color>, bg: Option<Color>, style: Style, chr: char) -> Cell
             {
@@ -14605,6 +16995,7 @@ pub mod mortal
         }
 
         impl Default for Cell
+       
         {
             fn default() -> Cell { Cell::new(None, None, Style::empty(), ' ') }
         }
@@ -14781,18 +17172,21 @@ pub mod mortal
         }
         /// Facilitates chaining calls from either a `Terminal` or `Screen` lock.
         pub trait Chain: Sized
+       
         {
             fn chain<F: FnOnce() -> Self>(self, f: F) -> Self;
             fn init() -> Self;
         }
 
         impl Chain for ()
+       
         {
             fn chain<F: FnOnce() -> Self>(self, f: F) -> Self { f() }
             fn init() -> Self { }
         }
 
         impl Chain for io::Result<()>
+       
         {
             fn chain<F: FnOnce() -> Self>(self, f: F) -> Self { self.and_then(|_| f()) }
             fn init() -> Self { Ok(()) }
@@ -15019,7 +17413,7 @@ pub mod mortal
             /// Set the current cursor mode.
             pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> { self.0.set_cursor_mode(mode) }
             /// Adds a set of `Style` flags to the current style setting.
-            pub fn clear_screen(&mut self) { self.0.clear_screen(); }
+            pub fn clear_screen( &mut self ) { self.0.clear_screen(); }
             /// Removes a set of `Style` flags to the current style setting,
             /// then adds a set of `Style` flags to the current style setting.
             #[inline] pub fn add_style(&mut self, style: Style) { self.0.add_style(style) }
@@ -15035,17 +17429,17 @@ pub mod mortal
             /// Sets all attributes for the screen.
             #[inline] pub fn set_theme(&mut self, theme: Theme) { self.0.set_theme(theme) }
             /// Adds bold to the current style setting.
-            #[inline] pub fn clear_attributes(&mut self) { self.0.clear_attributes() }
+            #[inline] pub fn clear_attributes( &mut self ) { self.0.clear_attributes() }
             /// Adds bold to the current style setting.
-            #[inline] pub fn bold(&mut self) { self.add_style(Style::BOLD) }
+            #[inline] pub fn bold( &mut self ) { self.add_style(Style::BOLD) }
             /// Adds italic to the current style setting.
-            #[inline] pub fn italic(&mut self) { self.add_style(Style::ITALIC); }
+            #[inline] pub fn italic( &mut self ) { self.add_style(Style::ITALIC); }
             /// Adds underline to the current style setting.
-            #[inline] pub fn underline(&mut self) { self.add_style(Style::UNDERLINE) }
+            #[inline] pub fn underline( &mut self ) { self.add_style(Style::UNDERLINE) }
             /// Adds reverse to the current style setting.
-            pub fn reverse(&mut self) { self.add_style(Style::REVERSE) }
+            pub fn reverse( &mut self ) { self.add_style(Style::REVERSE) }
             /// Renders the internal buffer to the terminal screen.
-            pub fn refresh(&mut self) -> io::Result<()> { self.0.refresh() }
+            pub fn refresh( &mut self ) -> io::Result<()> { self.0.refresh() }
             /// Writes text at the given position within the screen buffer.
             pub fn write_at<C>(&mut self, position: C, text: &str) where
             C: Into<Cursor>
@@ -15074,16 +17468,18 @@ pub mod mortal
                 self.write_str(&s)
             }
             
-            pub fn borrow_term_write_guard(&mut self) -> &mut Self { self }
+            pub fn borrow_term_write_guard( &mut self ) -> &mut Self { self }
         }
         
         impl ::mortal::unix::TerminalExt for Screen
+       
         {
             fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>>
             { self.0.read_raw(buf, timeout) }
         }
         
         impl<'a> ::mortal::unix::TerminalExt for ScreenReadGuard<'a>
+       
         {
             fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>>
             { self.0.read_raw(buf, timeout) }
@@ -15177,7 +17573,7 @@ pub mod mortal
             /// Returns a slice of all contained sequences, sorted by key.
             pub fn sequences(&self) -> &[(K, V)] { &self.sequences }
             /// Returns a mutable slice of all contained sequences, sorted by key.
-            pub fn sequences_mut(&mut self) -> &mut [(K, V)]
+            pub fn sequences_mut( &mut self ) -> &mut [(K, V)]
             {
                 &mut self.sequences
             }
@@ -15371,7 +17767,7 @@ pub mod mortal
             /// Returns a borrowed reference to the entry value.
             pub fn get(&self) -> &V { &self.map.sequences[self.index].1 }
             /// Returns a mutable reference to the entry value.
-            pub fn get_mut(&mut self) -> &mut V { &mut self.map.sequences[self.index].1 }
+            pub fn get_mut( &mut self ) -> &mut V { &mut self.map.sequences[self.index].1 }
             /// Converts the `OccupiedEntry` into a mutable reference whose lifetime is bound to the `SequenceMap`.
             pub fn into_mut(self) -> &'a mut V { &mut self.map.sequences[self.index].1 }
             /// Replaces the entry value with the given value, returning the previous value.
@@ -15397,6 +17793,7 @@ pub mod mortal
         }
 
         impl<'a, K: fmt::Debug, V: fmt::Debug> fmt::Debug for Entry<'a, K, V>
+       
         {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
             {
@@ -15409,12 +17806,14 @@ pub mod mortal
         }
 
         impl<'a, K: fmt::Debug, V: fmt::Debug> fmt::Debug for OccupiedEntry<'a, K, V>
+       
         {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result 
             { f.debug_struct("OccupiedEntry").field("key", self.key()).field("value", self.get()).finish() }
         }
 
         impl<'a, K: fmt::Debug, V> fmt::Debug for VacantEntry<'a, K, V>
+       
         {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { f.debug_tuple("VacantEntry").field(self.key()).finish() }
         }
@@ -15484,6 +17883,7 @@ pub mod mortal
         }
         
         impl Signal
+       
         {
             fn as_bit(&self) -> u8 { 1 << (*self as u8) }
             fn all_bits() -> u8 { (1 << NUM_SIGNALS) - 1 }
@@ -15547,6 +17947,7 @@ pub mod mortal
         }
 
         impl fmt::Debug for SignalSet
+       
         {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
             {
@@ -15578,6 +17979,7 @@ pub mod mortal
         }
 
         impl From<Signal> for SignalSet 
+       
         {
             fn from(sig: Signal) -> SignalSet
             {
@@ -15588,6 +17990,7 @@ pub mod mortal
         }
 
         impl Extend<Signal> for SignalSet
+       
         {
             fn extend<I: IntoIterator<Item=Signal>>(&mut self, iter: I)
             {
@@ -15599,6 +18002,7 @@ pub mod mortal
         }
 
         impl FromIterator<Signal> for SignalSet
+       
         {
             fn from_iter<I: IntoIterator<Item=Signal>>(iter: I) -> SignalSet
             {
@@ -15859,6 +18263,7 @@ pub mod mortal
         }
 
         impl From<char> for Key 
+       
         {
             fn from(ch: char) -> Key {
                 use ::mortal::util::{is_ctrl, unctrl_lower};
@@ -15945,6 +18350,7 @@ pub mod mortal
         }
 
         impl Default for PrepareConfig 
+       
         {
             fn default() -> PrepareConfig
             {
@@ -16121,15 +18527,15 @@ pub mod mortal
         impl<'a> TerminalWriteGuard<'a>
         {
             /// Flush all output to the terminal device.
-            pub fn flush(&mut self) -> io::Result<()> { self.0.flush() }
+            pub fn flush( &mut self ) -> io::Result<()> { self.0.flush() }
             /// Returns the size of the terminal.
             #[inline] pub fn size(&self) -> io::Result<Size> { self.0.size() }
             /// Clears the terminal screen, placing the cursor at the first line and column.
-            pub fn clear_screen(&mut self) -> io::Result<()> { self.0.clear_screen() }
+            pub fn clear_screen( &mut self ) -> io::Result<()> { self.0.clear_screen() }
             /// Clears the current line, starting at cursor position.
-            pub fn clear_to_line_end(&mut self) -> io::Result<()> { self.0.clear_to_line_end() }
+            pub fn clear_to_line_end( &mut self ) -> io::Result<()> { self.0.clear_to_line_end() }
             /// Clears the screen, starting at cursor position.
-            pub fn clear_to_screen_end(&mut self) -> io::Result<()> { self.0.clear_to_screen_end() }
+            pub fn clear_to_screen_end( &mut self ) -> io::Result<()> { self.0.clear_to_screen_end() }
             /// Moves the cursor up `n` lines.
             pub fn move_up(&mut self, n: usize) -> io::Result<()> { self.0.move_up(n) }
             /// Moves the cursor down `n` lines.
@@ -16139,7 +18545,7 @@ pub mod mortal
             /// Moves the cursor right `n` columns.
             pub fn move_right(&mut self, n: usize) -> io::Result<()> { self.0.move_right(n) }
             /// Moves the cursor to the first column of the current line
-            pub fn move_to_first_column(&mut self) -> io::Result<()> { self.0.move_to_first_column() }
+            pub fn move_to_first_column( &mut self ) -> io::Result<()> { self.0.move_to_first_column() }
             /// Set the current cursor mode.
             pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> { self.0.set_cursor_mode(mode) }
             /// Adds a set of `Style` flags to the current style setting.
@@ -16157,15 +18563,15 @@ pub mod mortal
             /// Removes color and style attributes.
             pub fn set_bg<C: Into<Option<Color>>>(&mut self, bg: C) -> io::Result<()> { self.0.set_bg(bg.into()) }
             /// Adds bold to the current style setting.
-            pub fn clear_attributes(&mut self) -> io::Result<()> { self.0.clear_attributes() }
+            pub fn clear_attributes( &mut self ) -> io::Result<()> { self.0.clear_attributes() }
             /// Adds bold to the current style setting.
-            pub fn bold(&mut self) -> io::Result<()> { self.add_style(Style::BOLD) }
+            pub fn bold( &mut self ) -> io::Result<()> { self.add_style(Style::BOLD) }
             /// Adds italic to the current style setting.
-            pub fn italic(&mut self) -> io::Result<()> { self.add_style(Style::ITALIC) }
+            pub fn italic( &mut self ) -> io::Result<()> { self.add_style(Style::ITALIC) }
             /// Adds underline to the current style setting.
-            pub fn underline(&mut self) -> io::Result<()> { self.add_style(Style::UNDERLINE) }
+            pub fn underline( &mut self ) -> io::Result<()> { self.add_style(Style::UNDERLINE) }
             /// Adds reverse to the current style setting.
-            pub fn reverse(&mut self) -> io::Result<()> { self.add_style(Style::REVERSE) }
+            pub fn reverse( &mut self ) -> io::Result<()> { self.add_style(Style::REVERSE) }
             /// Writes output to the terminal with the given color and style added.
             pub fn write_styled<F, B, S>(&mut self, fg: F, bg: B, style: S, s: &str) -> io::Result<()> where
             F: Into<Option<Color>>,
@@ -16183,21 +18589,24 @@ pub mod mortal
                 self.write_str(&s)
             }
 
-            pub fn borrow_term_write_guard(&mut self) -> &mut Self { self }
+            pub fn borrow_term_write_guard( &mut self ) -> &mut Self { self }
         }
         
         impl ::mortal::unix::OpenTerminalExt for Terminal
+       
         {
             fn from_path<P: AsRef<Path>>(path: P) -> io::Result<Self> { sys::Terminal::open(path).map(Terminal) }
         }
         
         impl ::mortal::unix::TerminalExt for Terminal
+       
         {
             fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> 
             { self.0.read_raw(buf, timeout) }
         }
         
         impl<'a> ::mortal::unix::TerminalExt for TerminalReadGuard<'a>
+       
         {
             fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> 
             { self.0.read_raw(buf, timeout) }
@@ -16284,7 +18693,7 @@ pub mod mortal
         impl<'a> Iterator for Prefixes<'a>
         {
             type Item = &'a str;
-            fn next(&mut self) -> Option<&'a str> { self.iter.next().map(|(idx, ch)| &self.s[..idx + ch.len_utf8()]) }
+            fn next( &mut self ) -> Option<&'a str> { self.iter.next().map(|(idx, ch)| &self.s[..idx + ch.len_utf8()]) }
         }
     }
 
@@ -16416,7 +18825,7 @@ pub mod mortal
 
             impl Drop for Screen
             {
-                fn drop(&mut self) 
+                fn drop( &mut self ) 
                 {
                     let res = if let Some(state) = self.state.take() 
                     { self.term.restore(state) } 
@@ -16471,7 +18880,7 @@ pub mod mortal
 
                 pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> { self.writer.set_cursor_mode(mode) }
 
-                pub fn refresh(&mut self) -> io::Result<()>
+                pub fn refresh( &mut self ) -> io::Result<()>
                 {
                     if self.data.clear_screen
                     {
@@ -16517,7 +18926,7 @@ pub mod mortal
 
             impl<'a> Drop for ScreenWriteGuard<'a> 
             {
-                fn drop(&mut self) 
+                fn drop( &mut self ) 
                 {
                     if let Err(e) = self.refresh() { eprintln!("failed to refresh screen: {}", e); }
                 }
@@ -16790,7 +19199,7 @@ pub mod mortal
 
             impl Drop for Terminal
             {
-                fn drop(&mut self)
+                fn drop( &mut self )
                 {
                     if let Err(e) = self.set_cursor_mode(CursorMode::Normal) 
                     { eprintln!("failed to restore terminal: {}", e); }
@@ -17043,7 +19452,7 @@ pub mod mortal
                     }
                 }
 
-                fn try_read(&mut self) -> io::Result<Option<Event>>
+                fn try_read( &mut self ) -> io::Result<Option<Event>>
                 {
                     let in_buffer = &mut self.reader.in_buffer;
                     
@@ -17082,7 +19491,7 @@ pub mod mortal
                     else { Ok(None) }
                 }
 
-                fn resume(&mut self) -> io::Result<()>
+                fn resume( &mut self ) -> io::Result<()>
                 {
                     if let Some(resume) = self.reader.resume { let _ = self.prepare(resume.config)?; }
 
@@ -17106,14 +19515,14 @@ pub mod mortal
         {                   get_winsize(self.term.out_fd)
                 }
 
-                fn disable_keypad(&mut self) -> io::Result<()>
+                fn disable_keypad( &mut self ) -> io::Result<()>
         {                   if let Some(local) = self.term.info.get::<cap::KeypadLocal>() {
                         self.expand(local.expand())?;
                     }
                     Ok(())
                 }
 
-                fn enable_keypad(&mut self) -> io::Result<bool>
+                fn enable_keypad( &mut self ) -> io::Result<bool>
         {                   if let Some(xmit) = self.term.info.get::<cap::KeypadXmit>() {
                         self.expand(xmit.expand())?;
                         Ok(true)
@@ -17122,7 +19531,7 @@ pub mod mortal
                     }
                 }
 
-                fn disable_mouse(&mut self) -> io::Result<()>
+                fn disable_mouse( &mut self ) -> io::Result<()>
         {                   self.write_bytes(XTERM_DISABLE_MOUSE.as_bytes())?;
                     self.write_bytes(XTERM_DISABLE_MOUSE_MOTION.as_bytes())
                 }
@@ -17139,7 +19548,7 @@ pub mod mortal
                     }
                 }
 
-                fn enter_screen(&mut self) -> io::Result<()>
+                fn enter_screen( &mut self ) -> io::Result<()>
         {                   match (self.term.info.get::<cap::EnterCaMode>(),
                             self.term.info.get::<cap::ChangeScrollRegion>(),
                             self.term.info.get::<cap::CursorHome>()) {
@@ -17164,7 +19573,7 @@ pub mod mortal
                     Ok(())
                 }
 
-                fn exit_screen(&mut self) -> io::Result<()>
+                fn exit_screen( &mut self ) -> io::Result<()>
         {                   if let Some(exit) = self.term.info.get::<cap::ExitCaMode>() {
                         self.expand(exit.expand())?;
                         self.flush()?;
@@ -17173,7 +19582,7 @@ pub mod mortal
                     Ok(())
                 }
 
-                pub fn clear_attributes(&mut self) -> io::Result<()>
+                pub fn clear_attributes( &mut self ) -> io::Result<()>
         {                   if self.writer.fg.is_some() || self.writer.bg.is_some() ||
                             !self.writer.cur_style.is_empty() {
                         self.writer.fg = None;
@@ -17297,7 +19706,7 @@ pub mod mortal
                     Ok(())
                 }
 
-                fn clear_fg(&mut self) -> io::Result<()>
+                fn clear_fg( &mut self ) -> io::Result<()>
         {                   let bg = self.writer.bg;
                     let style = self.writer.cur_style;
 
@@ -17306,7 +19715,7 @@ pub mod mortal
                     self.set_style(style)
                 }
 
-                fn clear_bg(&mut self) -> io::Result<()>
+                fn clear_bg( &mut self ) -> io::Result<()>
         {                   let fg = self.writer.fg;
                     let style = self.writer.cur_style;
 
@@ -17325,15 +19734,15 @@ pub mod mortal
                         |ex| ex.parameters(color_code(bg)))
                 }
 
-                pub fn clear_screen(&mut self) -> io::Result<()>
+                pub fn clear_screen( &mut self ) -> io::Result<()>
         {                   expand_req!(self, cap::ClearScreen, "clear_screen")
                 }
 
-                pub fn clear_to_line_end(&mut self) -> io::Result<()>
+                pub fn clear_to_line_end( &mut self ) -> io::Result<()>
         {                   expand_req!(self, cap::ClrEol, "clr_eol")
                 }
 
-                pub fn clear_to_screen_end(&mut self) -> io::Result<()>
+                pub fn clear_to_screen_end( &mut self ) -> io::Result<()>
         {                   expand_req!(self, cap::ClrEos, "clr_eos")
                 }
 
@@ -17375,7 +19784,7 @@ pub mod mortal
                     Ok(())
                 }
 
-                pub fn move_to_first_column(&mut self) -> io::Result<()>
+                pub fn move_to_first_column( &mut self ) -> io::Result<()>
         {                   self.write_bytes(b"\r")
                 }
 
@@ -17438,7 +19847,7 @@ pub mod mortal
                     }
                 }
 
-                pub fn flush(&mut self) -> io::Result<()>
+                pub fn flush( &mut self ) -> io::Result<()>
         {                   let (n, res) = self.write_data(&self.writer.out_buffer);
                     self.writer.out_buffer.drain(..n);
                     res
@@ -17474,7 +19883,7 @@ pub mod mortal
 
             impl<'a> Drop for TerminalWriteGuard<'a> 
             {
-                fn drop(&mut self) {
+                fn drop( &mut self ) {
                     if let Err(e) = self.flush() {
                         eprintln!("failed to flush terminal: {}", e);
                     }
@@ -17970,6 +20379,7 @@ pub mod nom
         }
 
         impl<I> ParseError<I> for Error<I>
+       
         {
             fn from_error_kind( input:I, kind:ErrorKind ) -> Self { Error { input, code:kind } }
             fn append( _:I, _:ErrorKind, other:Self ) -> Self { other }
@@ -17985,6 +20395,7 @@ pub mod nom
         /// The Display implementation allows the std::error::Error implementation
         impl<I:Debug + Display> StdError for Error<I> {}
         impl<I:Display> Display for Error<I>
+       
         {
             fn fmt( &self, f:&mut fmt::Formatter<'_> ) -> fmt::Result { write!(f, "error {:?} @:{}", self.code, self.input) }
         }
@@ -18112,6 +20523,7 @@ pub mod nom
         }
         
         impl<I> ParseError<I> for ( I, ErrorKind )
+       
         {
             fn from_error_kind( input:I, kind:ErrorKind ) -> Self { ( input, kind ) }
             fn append( _:I, _:ErrorKind, other:Self ) -> Self { other }
@@ -18119,11 +20531,13 @@ pub mod nom
 
         impl<I> ContextError<I> for ( I, ErrorKind ) {}
         impl<I, E> FromExternalError<I, E> for ( I, ErrorKind )
+       
         {
             fn from_external_error( input:I, kind:ErrorKind, _e:E ) -> Self { ( input, kind ) }
         }
 
         impl<I> ParseError<I> for ()
+       
         {
             fn from_error_kind( _:I, _:ErrorKind ) -> Self {}
             fn append( _:I, _:ErrorKind, _:Self ) -> Self {}
@@ -18132,6 +20546,7 @@ pub mod nom
         impl<I> ContextError<I> for () {}
 
         impl<I, E> FromExternalError<I, E> for ()
+       
         {
             fn from_external_error( _input:I, _kind:ErrorKind, _e:E ) -> Self {}
         }
@@ -18162,6 +20577,7 @@ pub mod nom
         }
         
         impl<I> ParseError<I> for VerboseError<I>
+       
         {
             fn from_error_kind( input:I, kind:ErrorKind ) -> Self
             {
@@ -18181,6 +20597,7 @@ pub mod nom
         }
         
         impl<I> ContextError<I> for VerboseError<I>
+       
         {
             fn add_context( input:I, ctx:&'static str, mut other:Self ) -> Self
             {
@@ -18196,6 +20613,7 @@ pub mod nom
         }
         
         impl<I:Display> Display for VerboseError<I>
+       
         {
             fn fmt( &self, f:&mut fmt::Formatter<'_> ) -> fmt::Result
             {
@@ -18579,6 +20997,7 @@ pub mod nom
         
         impl<Input, Output, Error: ParseError<Input>, A: Parser<Input, Output, Error>>
         Alt<Input, Output, Error> for (A,)
+       
         {
             fn choice(&mut self, input: Input) -> IResult<Input, Output, Error> { self.0.parse(input) }
         }
@@ -18942,7 +21361,7 @@ pub mod nom
         Input: Clone
         {
             type Item = Output;
-            fn next(&mut self) -> Option<Self::Item>
+            fn next( &mut self ) -> Option<Self::Item>
             {
                 if let State::Running = self.state.take().unwrap()
                 {
@@ -19031,6 +21450,7 @@ pub mod nom
         }
 
         impl<I, O, E> Finish<I, O, E> for IResult<I, O, E>
+       
         {
             fn finish( self ) -> Result<(I, O), E> 
             {
@@ -19182,6 +21602,7 @@ pub mod nom
 
         impl<E> fmt::Display for Err<E> where
         E: fmt::Debug
+       
         {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
             {
@@ -19197,6 +21618,7 @@ pub mod nom
         
         impl<E> Error for Err<E> where
         E: fmt::Debug
+       
         {
             fn source(&self) -> Option<&(dyn Error + 'static)> { None }
         }
@@ -19274,11 +21696,13 @@ pub mod nom
 
         impl<'a, I, O, E, F> Parser<I, O, E> for F where
         F: FnMut(I) -> IResult<I, O, E> + 'a
+       
         {
             fn parse(&mut self, i: I) -> IResult<I, O, E> { self(i) }
         }
 
         impl<'a, I, O, E> Parser<I, O, E> for Box<dyn Parser<I, O, E> + 'a>
+       
         {
             fn parse(&mut self, input: I) -> IResult<I, O, E> { (**self).parse(input) }
         }
@@ -19291,6 +21715,7 @@ pub mod nom
         }
 
         impl<'a, I, O1, O2, E, F: Parser<I, O1, E>, G: Fn(O1) -> O2> Parser<I, O2, E> for Map<F, G, O1>
+       
         {
             fn parse(&mut self, i: I) -> IResult<I, O2, E>
            
@@ -19312,6 +21737,7 @@ pub mod nom
 
         impl<'a, I, O1, O2, E, F: Parser<I, O1, E>, G: Fn(O1) -> H, H: Parser<I, O2, E>> Parser<I, O2, E> 
         for FlatMap<F, G, O1>
+       
         {
             fn parse(&mut self, i: I) -> IResult<I, O2, E>
             {
@@ -19328,6 +21754,7 @@ pub mod nom
         }
 
         impl<'a, I, O1, O2, E, F: Parser<I, O1, E>, G: Parser<O1, O2, E>> Parser<I, O2, E> for AndThen<F, G, O1>
+       
         {
             fn parse(&mut self, i: I) -> IResult<I, O2, E>
             {
@@ -19344,6 +21771,7 @@ pub mod nom
         }
 
         impl<'a, I, O1, O2, E, F: Parser<I, O1, E>, G: Parser<I, O2, E>> Parser<I, (O1, O2), E> for And<F, G>
+       
         {
             fn parse(&mut self, i: I) -> IResult<I, (O1, O2), E>
             {
@@ -19361,6 +21789,7 @@ pub mod nom
 
         impl<'a, I: Clone, O, E: ParseError<I>, F: Parser<I, O, E>, G: Parser<I, O, E>>
         Parser<I, O, E> for Or<F, G>
+       
         {
             fn parse(&mut self, i: I) -> IResult<I, O, E>
            
@@ -19396,6 +21825,7 @@ pub mod nom
             E2: ParseError<I> + From<E1>,
             F: Parser<I, O1, E1>
         > Parser<I, O2, E2> for Into<F, O1, O2, E1, E2>
+       
         {
             fn parse(&mut self, i: I) -> IResult<I, O2, E2>
            
@@ -20134,6 +22564,7 @@ pub mod nom
 
         impl<Input, Output, Error: ParseError<Input>, F: Parser<Input, Output, Error>>
         Tuple<Input, (Output,), Error> for (F,)
+       
         {
             fn parse(&mut self, input: Input) -> IResult<Input, (Output,), Error> { self.0.parse(input).map(|(i, o)| (i, (o,))) }
         }
@@ -20143,6 +22574,7 @@ pub mod nom
 
         // Special case: implement `Tuple` for `()`, the unit type.
         impl<I, E: ParseError<I>> Tuple<I, (), E> for ()
+       
         {
             fn parse(&mut self, input: I) -> IResult<I, (), E>
             { Ok((input, ())) }
@@ -20276,6 +22708,7 @@ pub mod nom
         }
 
         impl Offset for [u8]
+       
         {
             fn offset(&self, second: &Self) -> usize
             {
@@ -20286,6 +22719,7 @@ pub mod nom
         }
 
         impl<'a> Offset for &'a [u8]
+       
         {
             fn offset(&self, second: &Self) -> usize
             {
@@ -20296,6 +22730,7 @@ pub mod nom
         }
 
         impl Offset for str
+       
         {
             fn offset(&self, second: &Self) -> usize
             {
@@ -20306,6 +22741,7 @@ pub mod nom
         }
 
         impl<'a> Offset for &'a str
+       
         {
             fn offset(&self, second: &Self) -> usize
             {
@@ -20822,6 +23258,7 @@ pub mod nom
         }
 
         impl<'a, 'b> FindSubstring<&'b [u8]> for &'a [u8]
+       
         {
             fn find_substring(&self, substr: &'b [u8]) -> Option<usize>
             {
@@ -20958,6 +23395,7 @@ pub mod nom
         }
         
         impl<I> ErrorConvert<error::Error<I>> for error::Error<(I, usize)>
+       
         {
             fn convert( self ) -> error::Error<I>
             {
@@ -20970,6 +23408,7 @@ pub mod nom
         }
 
         impl<I> ErrorConvert<error::Error<(I, usize)>> for error::Error<I>
+       
         {
             fn convert( self ) -> error::Error<(I, usize)>
             {
@@ -20982,6 +23421,7 @@ pub mod nom
         }
         
         impl<I> ErrorConvert<error::VerboseError<I>> for error::VerboseError<(I, usize)>
+       
         {
             fn convert( self ) -> error::VerboseError<I>
             {
@@ -20993,6 +23433,7 @@ pub mod nom
         }
         
         impl<I> ErrorConvert<error::VerboseError<(I, usize)>> for error::VerboseError<I>
+       
         {
             fn convert( self ) -> error::VerboseError<(I, usize)>
             {
@@ -21014,6 +23455,7 @@ pub mod nom
         }
         
         impl HexDisplay for [u8]
+       
         {
             fn to_hex(&self, chunk_size: usize) -> String { self.to_hex_from(chunk_size, 0) }
             fn to_hex_from(&self, chunk_size: usize, from: usize) -> String
@@ -21060,6 +23502,7 @@ pub mod nom
         }
         
         impl HexDisplay for str
+       
         {
             fn to_hex(&self, chunk_size: usize) -> String { self.to_hex_from(chunk_size, 0) }
             fn to_hex_from(&self, chunk_size: usize, from: usize) -> String { self.as_bytes().to_hex_from(chunk_size, from) }
@@ -24693,7 +27136,7 @@ pub mod now
             self
         }
         /// Execute the command we built.  If this function succeeds, it will never return.
-        pub fn exec(&mut self) -> Error { execvp(&self.argv[0], &self.argv) }
+        pub fn exec( &mut self ) -> Error { execvp(&self.argv[0], &self.argv) }
     }
 }
 pub mod num { pub use std::num::{ * }; }
@@ -24709,6 +27152,7 @@ pub mod option
         use super::OptionExt;
 
         impl<T> OptionExt<T> for Option<T>
+       
         {
             fn contains<U>( &self, x:&U ) -> bool where
             U:PartialEq<T> 
@@ -29347,7 +31791,7 @@ pub mod prompt
                     }
                 }
 
-                fn next_line(&mut self) -> Option<&'a str>
+                fn next_line( &mut self ) -> Option<&'a str>
                 {
                     self.lines.next().map(|line|
                     {
@@ -29356,7 +31800,7 @@ pub mod prompt
                     })
                 }
 
-                fn parse(&mut self) -> Vec<Directive>
+                fn parse( &mut self ) -> Vec<Directive>
                 {
                     let mut dirs = Vec::new();
 
@@ -29380,7 +31824,7 @@ pub mod prompt
                     dirs
                 }
 
-                fn parse_conditional(&mut self) -> (Vec<Directive>, Vec<Directive>)
+                fn parse_conditional( &mut self ) -> (Vec<Directive>, Vec<Directive>)
                 {
                     let mut then_group = Vec::new();
                     let mut else_group = Vec::new();
@@ -29602,7 +32046,7 @@ pub mod prompt
             {
                 type Item = Token<'a>;
 
-                fn next(&mut self) -> Option<Token<'a>>
+                fn next( &mut self ) -> Option<Token<'a>>
                 {
                     let ch = self.line.chars().next()?;
                     let tok = match ch
@@ -30203,9 +32647,9 @@ pub mod prompt
                     }
                 }
 
-                fn has_input(&mut self) -> bool { self.resize.is_some() || !self.input.is_empty() }
+                fn has_input( &mut self ) -> bool { self.resize.is_some() || !self.input.is_empty() }
 
-                fn clear_input(&mut self) { self.input.clear(); }
+                fn clear_input( &mut self ) { self.input.clear(); }
 
                 fn push_input(&mut self, bytes: &[u8]) { self.input.extend(bytes); }
 
@@ -30238,7 +32682,7 @@ pub mod prompt
                     }
                 }
 
-                fn clear_all(&mut self) 
+                fn clear_all( &mut self ) 
                 {
                     for ch in &mut self.memory
                     {
@@ -30248,7 +32692,7 @@ pub mod prompt
                     self.line = 0;
                 }
 
-                fn clear_to_end(&mut self)
+                fn clear_to_end( &mut self )
                 {
                     let idx = self.index();
                     for ch in &mut self.memory[idx..]
@@ -30265,7 +32709,7 @@ pub mod prompt
 
                 fn move_right(&mut self, n: usize) { self.col = min(self.size.columns - 1, self.col + n); }
 
-                fn move_to_first_column(&mut self) { self.col = 0; }
+                fn move_to_first_column( &mut self ) { self.col = 0; }
 
                 fn resize(&mut self, new_size: Size)
                 {
@@ -30326,7 +32770,7 @@ pub mod prompt
                     }
                 }
 
-                fn advance_line(&mut self)
+                fn advance_line( &mut self )
                 {
                     self.line += 1;
                     self.col = 0;
@@ -30354,7 +32798,7 @@ pub mod prompt
             impl<'a> Lines<'a>
             {
                 /// Returns the next line in the buffer.
-                pub fn next(&mut self) -> Option<&[char]>
+                pub fn next( &mut self ) -> Option<&[char]>
                 {
                     if self.line >= self.writer.size.lines { None } 
                     else
@@ -30428,13 +32872,13 @@ pub mod prompt
             {
                 fn size(&self) -> io::Result<Size> { Ok(self.0.size) }
 
-                fn clear_screen(&mut self) -> io::Result<()>
+                fn clear_screen( &mut self ) -> io::Result<()>
                 {
                     self.0.clear_all();
                     Ok(())
                 }
 
-                fn clear_to_screen_end(&mut self) -> io::Result<()>
+                fn clear_to_screen_end( &mut self ) -> io::Result<()>
                 {
                     self.0.clear_to_end();
                     Ok(())
@@ -30464,7 +32908,7 @@ pub mod prompt
                     Ok(())
                 }
 
-                fn move_to_first_column(&mut self) -> io::Result<()>
+                fn move_to_first_column( &mut self ) -> io::Result<()>
                 {
                     self.0.move_to_first_column();
                     Ok(())
@@ -30482,7 +32926,7 @@ pub mod prompt
                     Ok(())
                 }
 
-                fn flush(&mut self) -> io::Result<()> { Ok(()) }
+                fn flush( &mut self ) -> io::Result<()> { Ok(()) }
             }
  
         }
@@ -30543,13 +32987,13 @@ pub mod prompt
                     Writer::with_ref(&mut self.write, true)
                 }
                 /// Resets input state at the start of `read_line`
-                fn reset_input(&mut self)
+                fn reset_input( &mut self )
                 {
                     self.read.reset_data();
                     self.write.reset_data();
                 }
 
-                pub(crate) fn start_read_line(&mut self) -> io::Result<()> 
+                pub(crate) fn start_read_line( &mut self ) -> io::Result<()> 
                 {
                     self.read.state = InputState::NewSequence;
                     self.write.is_prompt_drawn = true;
@@ -30557,7 +33001,7 @@ pub mod prompt
                     self.write.draw_prompt()
                 }
 
-                pub(crate) fn end_read_line(&mut self) -> io::Result<()>
+                pub(crate) fn end_read_line( &mut self ) -> io::Result<()>
                 {
                     self.write.expire_blink()?;
                     if self.read.overwrite_mode { self.write.set_cursor_mode(CursorMode::Normal)?; }                
@@ -30777,7 +33221,7 @@ pub mod prompt
                 pub fn set_completions(&mut self, completions: Option<Vec<Completion>>)
                 { self.read.completions = completions; }
                 /// Attempts to execute the current sequence.
-                fn execute_sequence(&mut self) -> io::Result<()>
+                fn execute_sequence( &mut self ) -> io::Result<()>
                 {
                     match self.find_binding(&self.read.sequence)
                     {
@@ -30812,7 +33256,7 @@ pub mod prompt
                     Ok(())
                 }
 
-                fn force_execute_sequence(&mut self) -> io::Result<()>
+                fn force_execute_sequence( &mut self ) -> io::Result<()>
                 {
                     self.read.state = InputState::NewSequence;
                     match self.find_binding(&self.read.sequence)
@@ -30832,7 +33276,7 @@ pub mod prompt
                     Ok(())
                 }
                 /// Execute the command `SelfInsert` on the first character in the input sequence, if it is printable.
-                fn insert_first_char(&mut self) -> io::Result<()>
+                fn insert_first_char( &mut self ) -> io::Result<()>
                 {
                     let (first, rest) =
                     {
@@ -31337,7 +33781,7 @@ pub mod prompt
                     Ok(())
                 }
                 /// Accepts the current input buffer as user input.
-                pub fn accept_input(&mut self) -> io::Result<()>
+                pub fn accept_input( &mut self ) -> io::Result<()>
                 {
                     self.write.move_to_end()?;
                     self.write.write_str("\n")?;
@@ -31374,7 +33818,7 @@ pub mod prompt
                     Ok(())
                 }
 
-                fn keyseq_expiry(&mut self) -> Option<Instant>
+                fn keyseq_expiry( &mut self ) -> Option<Instant>
                 {
                     if let Some(t) = self.read.keyseq_timeout
                     {
@@ -31384,20 +33828,20 @@ pub mod prompt
                     else { None }
                 }
 
-                pub(crate) fn check_expire_timeout(&mut self) -> io::Result<()>
+                pub(crate) fn check_expire_timeout( &mut self ) -> io::Result<()>
                 {
                     let now = Instant::now();
                     self.check_expire_blink(now)?;
                     self.check_expire_sequence(now)
                 }
 
-                fn expire_blink(&mut self) -> io::Result<()>
+                fn expire_blink( &mut self ) -> io::Result<()>
                 {
                     self.read.max_wait_duration = None;
                     self.write.expire_blink()
                 }
 
-                fn build_completions(&mut self)
+                fn build_completions( &mut self )
                 {
                     let compl = self.read.completer.clone();
                     let end = self.write.cursor;
@@ -31418,7 +33862,7 @@ pub mod prompt
                     self.read.completion_prefix = end;
                 }
 
-                fn complete_word(&mut self) -> io::Result<()>
+                fn complete_word( &mut self ) -> io::Result<()>
                 {
                     if let Some(completions) = self.read.completions.take()
                     {
@@ -31519,7 +33963,7 @@ pub mod prompt
                     self.write.redraw_prompt(PromptType::CompleteIntro(n_completions))
                 }
 
-                fn end_page_completions(&mut self) -> io::Result<()>
+                fn end_page_completions( &mut self ) -> io::Result<()>
                 {
                     self.read.state = InputState::NewSequence;
                     self.write.prompt_type = PromptType::Normal;
@@ -31692,14 +34136,14 @@ pub mod prompt
                     Ok(())
                 }
 
-                fn abort_search_history(&mut self) -> io::Result<()>
+                fn abort_search_history( &mut self ) -> io::Result<()>
                 {
                     self.read.state = InputState::NewSequence;
                     self.read.last_cmd = Category::Other;
                     self.write.abort_search_history()
                 }
 
-                fn end_search_history(&mut self) -> io::Result<()>
+                fn end_search_history( &mut self ) -> io::Result<()>
                 {
                     self.read.state = InputState::NewSequence;
                     self.write.end_search_history()
@@ -31783,7 +34227,7 @@ pub mod prompt
                     self.read.kill_ring.push_front(s);
                 }
 
-                fn rotate_kill_ring(&mut self)
+                fn rotate_kill_ring( &mut self )
                 {
                     if let Some(kill) = self.read.kill_ring.pop_front() { self.read.kill_ring.push_back(kill); }
                 }
@@ -31811,7 +34255,7 @@ pub mod prompt
                 pub fn transpose_range(&mut self, src: Range<usize>, dest: Range<usize>) -> io::Result<()>
                 { self.write.transpose_range(src, dest) }
                 /// Insert text from the front of the kill ring at the current cursor position.
-                pub fn yank(&mut self) -> io::Result<()>
+                pub fn yank( &mut self ) -> io::Result<()>
                 {
                     if let Some(kill) = self.read.kill_ring.front().cloned()
                     {
@@ -31823,7 +34267,7 @@ pub mod prompt
                     Ok(())
                 }
                 /// Rotates the kill ring and replaces yanked text with the new front.
-                pub fn yank_pop(&mut self) -> io::Result<()>
+                pub fn yank_pop( &mut self ) -> io::Result<()>
                 {
                     if let Some((start, end)) = self.read.last_yank
                     {
@@ -32071,7 +34515,7 @@ pub mod prompt
                     Reader{iface, lock}
                 }
                 /// Interactively reads a line from the terminal device.
-                pub fn read_line(&mut self) -> io::Result<ReadResult>
+                pub fn read_line( &mut self ) -> io::Result<ReadResult>
                 {
                     loop
                     {
@@ -32088,9 +34532,9 @@ pub mod prompt
                     res
                 }
                 /// Cancels an in-progress `read_line` operation.
-                pub fn cancel_read_line(&mut self) -> io::Result<()> { self.end_read_line() }
+                pub fn cancel_read_line( &mut self ) -> io::Result<()> { self.end_read_line() }
 
-                fn initialize_read_line(&mut self) -> io::Result<()>
+                fn initialize_read_line( &mut self ) -> io::Result<()>
                 {
                     if !self.lock.is_active() { self.prompter().start_read_line()?; }
                     Ok(())
@@ -32146,13 +34590,13 @@ pub mod prompt
                     Ok(None)
                 }
 
-                fn end_read_line(&mut self) -> io::Result<()>
+                fn end_read_line( &mut self ) -> io::Result<()>
                 {
                     if self.lock.is_active() { self.prompter().end_read_line()?; }
                     Ok(())
                 }
 
-                fn prepare_term(&mut self) -> io::Result<Term::PrepareState>
+                fn prepare_term( &mut self ) -> io::Result<Term::PrepareState>
                 {
                     if self.read_next_raw() { self.lock.term.prepare(true, SignalSet::new()) }
                     
@@ -32366,14 +34810,14 @@ pub mod prompt
                 -> ReadLock<'a, Term>
                 { ReadLock{term, data} }
                 /// Reads the next character of input.
-                pub fn read_char(&mut self) -> io::Result<Option<char>>
+                pub fn read_char( &mut self ) -> io::Result<Option<char>>
                 {
                     if let Some(ch) = self.macro_pop() { Ok(Some(ch)) }
                      else if let Some(ch) = self.decode_input()? { Ok(Some(ch)) } 
                     else { Ok(None) }
                 }
 
-                fn read_input(&mut self) -> io::Result<()>
+                fn read_input( &mut self ) -> io::Result<()>
                  {
                     match self.term.read(&mut self.data.input_buffer)?
                     {
@@ -32394,13 +34838,13 @@ pub mod prompt
                     }
                 }
 
-                fn macro_pop(&mut self) -> Option<char>
+                fn macro_pop( &mut self ) -> Option<char>
                 {
                     if self.data.macro_buffer.is_empty() { None }
                     else { Some(self.data.macro_buffer.remove(0)) }
                 }
 
-                fn decode_input(&mut self) -> io::Result<Option<char>>
+                fn decode_input( &mut self ) -> io::Result<Option<char>>
                 {
                     let res = self.peek_input();
                 
@@ -32415,7 +34859,7 @@ pub mod prompt
                     else { first_char(&self.data.input_buffer) }
                 }
 
-                pub fn reset_data(&mut self) { self.data.reset_data(); }
+                pub fn reset_data( &mut self ) { self.data.reset_data(); }
             }
 
             impl<'a, Term: 'a + Terminal> Deref for ReadLock<'a, Term>
@@ -32427,7 +34871,7 @@ pub mod prompt
 
             impl<'a, Term: 'a + Terminal> DerefMut for ReadLock<'a, Term>
             {
-                fn deref_mut(&mut self) -> &mut Read<Term>
+                fn deref_mut( &mut self ) -> &mut Read<Term>
                 { &mut self.data }
             }
 
@@ -32439,7 +34883,7 @@ pub mod prompt
 
             impl<Term: Terminal> DerefMut for Read<Term>
             {
-                fn deref_mut(&mut self) -> &mut Variables { &mut self.variables }
+                fn deref_mut( &mut self ) -> &mut Variables { &mut self.variables }
             }
 
             impl<Term: Terminal> Read<Term>
@@ -32487,9 +34931,9 @@ pub mod prompt
 
                 pub fn variables(&self) -> VariableIter { self.variables.iter() }
 
-                fn take_resize(&mut self) -> Option<Size> { self.last_resize.take() }
+                fn take_resize( &mut self ) -> Option<Size> { self.last_resize.take() }
 
-                fn take_signal(&mut self) -> Option<Signal> { self.last_signal.take() }
+                fn take_signal( &mut self ) -> Option<Signal> { self.last_signal.take() }
 
                 pub fn queue_input(&mut self, seq: &str) { self.macro_buffer.insert_str(0, seq); }
 
@@ -32502,7 +34946,7 @@ pub mod prompt
                     }
                 }
 
-                pub fn reset_data(&mut self)
+                pub fn reset_data( &mut self )
                 {
                     self.state = InputState::NewSequence;
                     self.input_accepted = false;
@@ -32621,14 +35065,14 @@ pub mod prompt
             impl<'a> Iterator for BindingIter<'a>
             {
                 type Item = (&'a str, &'a Command);
-                #[inline] fn next(&mut self) -> Option<Self::Item> { self.0.next().map(|&(ref s, ref cmd)| (&s[..], cmd)) }
+                #[inline] fn next( &mut self ) -> Option<Self::Item> { self.0.next().map(|&(ref s, ref cmd)| (&s[..], cmd)) }
                 #[inline] fn nth(&mut self, n: usize) -> Option<Self::Item> { self.0.nth(n).map(|&(ref s, ref cmd)| (&s[..], cmd)) }
                 #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.0.size_hint() }
             }
 
             impl<'a> DoubleEndedIterator for BindingIter<'a>
             {
-                #[inline] fn next_back(&mut self) -> Option<Self::Item>
+                #[inline] fn next_back( &mut self ) -> Option<Self::Item>
                 { self.0.next_back().map(|&(ref s, ref cmd)| (&s[..], cmd)) }
             }
 
@@ -32759,7 +35203,7 @@ pub mod prompt
             impl<'a, S: 'a + AsRef<str>> Iterator for Table<'a, S>
             {
                 type Item = Line<'a, S>;
-                fn next(&mut self) -> Option<Line<'a, S>>
+                fn next( &mut self ) -> Option<Line<'a, S>>
                 {
                     if self.offset == self.rows { return None; }
 
@@ -32800,7 +35244,7 @@ pub mod prompt
             impl<'a, S: 'a + AsRef<str>> Iterator for Line<'a, S>
             {
                 type Item = (usize, &'a str);
-                fn next(&mut self) -> Option<(usize, &'a str)>
+                fn next( &mut self ) -> Option<(usize, &'a str)>
                 {
                     let s = self.strings.get(self.offset * self.stride)?.as_ref();
                     let width = self.sizes.and_then(|sz| sz.get(self.offset).cloned()).unwrap_or_else(|| s.chars().count());
@@ -32942,10 +35386,10 @@ pub mod prompt
                 /// Returns the size of the terminal window
                 fn size(&self) -> io::Result<Size>;
                 /// Presents a clear terminal screen, with cursor at first row, first column.
-                fn clear_screen(&mut self) -> io::Result<()>;
+                fn clear_screen( &mut self ) -> io::Result<()>;
                 /// Clears characters on the line occupied by the cursor, beginning with the
                 /// cursor and ending at the end of the line.
-                fn clear_to_screen_end(&mut self) -> io::Result<()>;
+                fn clear_to_screen_end( &mut self ) -> io::Result<()>;
                 /// Moves the cursor up `n` cells; `n` may be zero.
                 fn move_up(&mut self, n: usize) -> io::Result<()>;
                 /// Moves the cursor down `n` cells; `n` may be zero.
@@ -32955,13 +35399,13 @@ pub mod prompt
                 /// Moves the cursor right `n` cells; `n` may be zero.
                 fn move_right(&mut self, n: usize) -> io::Result<()>;
                 /// Moves the cursor to the first column of the current line
-                fn move_to_first_column(&mut self) -> io::Result<()>;
+                fn move_to_first_column( &mut self ) -> io::Result<()>;
                 /// Set the current cursor mode
                 fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()>;
                 /// Writes output to the terminal.
                 fn write(&mut self, s: &str) -> io::Result<()>;
                 /// Flushes any currently buffered output data.
-                fn flush(&mut self) -> io::Result<()>;
+                fn flush( &mut self ) -> io::Result<()>;
             }
 
             impl DefaultTerminal 
@@ -33039,16 +35483,16 @@ pub mod prompt
             impl<'a> TerminalWriter<DefaultTerminal> for TerminalWriteGuard<'a>
             {
                 fn size(&self) -> io::Result<Size> { self.size() }
-                fn clear_screen(&mut self) -> io::Result<()> { self.clear_screen() }
-                fn clear_to_screen_end(&mut self) -> io::Result<()> { self.clear_to_screen_end() }
+                fn clear_screen( &mut self ) -> io::Result<()> { self.clear_screen() }
+                fn clear_to_screen_end( &mut self ) -> io::Result<()> { self.clear_to_screen_end() }
                 fn move_up(&mut self, n: usize) -> io::Result<()> { self.move_up(n) }
                 fn move_down(&mut self, n: usize) -> io::Result<()> { self.move_down(n) }
                 fn move_left(&mut self, n: usize) -> io::Result<()> { self.move_left(n) }
                 fn move_right(&mut self, n: usize) -> io::Result<()> { self.move_right(n) }
-                fn move_to_first_column(&mut self) -> io::Result<()> { self.move_to_first_column() }
+                fn move_to_first_column( &mut self ) -> io::Result<()> { self.move_to_first_column() }
                 fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> { self.set_cursor_mode(mode) }
                 fn write(&mut self, s: &str) -> io::Result<()> { self.write_str(s) }
-                fn flush(&mut self) -> io::Result<()> { self.flush() }
+                fn flush( &mut self ) -> io::Result<()> { self.flush() }
             }
         }
         pub use self::terminal::{DefaultTerminal, Signal, Terminal, Size};
@@ -33506,7 +35950,7 @@ pub mod prompt
                     impl<'a> Iterator for VariableIter<'a>
         {                       type Item = (&'static str, Variable);
 
-                        fn next(&mut self) -> Option<Self::Item>
+                        fn next( &mut self ) -> Option<Self::Item>
         {                           let res = match VARIABLE_NAMES.get(self.n).cloned() {
                                 $( Some($name) => ($name, {
                                     let $gr = self.vars;
@@ -33810,9 +36254,9 @@ pub mod prompt
 
                 pub fn size(&self) -> io::Result<Size> { self.term.size() }
 
-                pub fn flush(&mut self) -> io::Result<()> { self.term.flush() }
+                pub fn flush( &mut self ) -> io::Result<()> { self.term.flush() }
 
-                pub fn update_size(&mut self) -> io::Result<()>
+                pub fn update_size( &mut self ) -> io::Result<()>
                 {
                     let size = self.size()?;
                     self.screen_size = size;
@@ -33845,7 +36289,7 @@ pub mod prompt
                     Ok(self.blink.is_none())
                 }
 
-                pub fn expire_blink(&mut self) -> io::Result<()>
+                pub fn expire_blink( &mut self ) -> io::Result<()>
                 {
                     if let Some(blink) = self.data.blink.take() { self.move_from(blink.pos)?; }
 
@@ -33866,13 +36310,13 @@ pub mod prompt
                     Ok(())
                 }
                 /// Draws the prompt and current input, assuming the cursor is at column 0
-                pub fn draw_prompt(&mut self) -> io::Result<()>
+                pub fn draw_prompt( &mut self ) -> io::Result<()>
                 {
                     self.draw_prompt_prefix()?;
                     self.draw_prompt_suffix()
                 }
 
-                pub fn draw_prompt_prefix(&mut self) -> io::Result<()>
+                pub fn draw_prompt_prefix( &mut self ) -> io::Result<()>
                 {
                     match self.prompt_type
                     {
@@ -33885,7 +36329,7 @@ pub mod prompt
                     }
                 }
 
-                pub fn draw_prompt_suffix(&mut self) -> io::Result<()>
+                pub fn draw_prompt_suffix( &mut self ) -> io::Result<()>
                 {
                     match self.prompt_type
                     {
@@ -34156,10 +36600,10 @@ pub mod prompt
                     self.search_history_step()
                 }
 
-                pub fn end_search_history(&mut self) -> io::Result<()>
+                pub fn end_search_history( &mut self ) -> io::Result<()>
                 { self.redraw_prompt(PromptType::Normal) }
 
-                pub fn abort_search_history(&mut self) -> io::Result<()>
+                pub fn abort_search_history( &mut self ) -> io::Result<()>
                 {
                     self.clear_prompt()?;
                     let ent = self.prev_history;
@@ -34184,7 +36628,7 @@ pub mod prompt
                     self.draw_prompt_suffix()
                 }
 
-                pub fn search_history_update(&mut self) -> io::Result<()> 
+                pub fn search_history_update( &mut self ) -> io::Result<()> 
                 {
                     let next_match = if self.reverse_search
                     { self.search_history_backward(&self.search_buffer, true) }
@@ -34192,7 +36636,7 @@ pub mod prompt
                     self.show_search_match(next_match)
                 }
 
-                fn search_history_step(&mut self) -> io::Result<()>
+                fn search_history_step( &mut self ) -> io::Result<()>
                 {
                     if self.search_buffer.is_empty() { return self.redraw_prompt(PromptType::Search); }
                     
@@ -34304,7 +36748,7 @@ pub mod prompt
                     if !is_duplicate { self.add_history(line); }
                 }
 
-                pub fn clear_history(&mut self)
+                pub fn clear_history( &mut self )
                 {
                     self.truncate_history(0);
                     self.history_new_entries = 0;
@@ -34560,19 +37004,19 @@ pub mod prompt
                     (n / width, n % width)
                 }
 
-                pub fn clear_screen(&mut self) -> io::Result<()>
+                pub fn clear_screen( &mut self ) -> io::Result<()>
         {                   self.term.clear_screen()?;
                     self.draw_prompt()?;
 
                     Ok(())
                 }
 
-                pub fn clear_to_screen_end(&mut self) -> io::Result<()>
+                pub fn clear_to_screen_end( &mut self ) -> io::Result<()>
         {                   self.term.clear_to_screen_end()
                 }
 
                 /// Draws a new buffer on the screen. Cursor position is assumed to be `0`.
-                pub fn new_buffer(&mut self) -> io::Result<()>
+                pub fn new_buffer( &mut self ) -> io::Result<()>
         {                   self.draw_buffer(0)?;
                     self.cursor = self.buffer.len();
 
@@ -34581,7 +37025,7 @@ pub mod prompt
                     Ok(())
                 }
 
-                pub fn clear_full_prompt(&mut self) -> io::Result<()>
+                pub fn clear_full_prompt( &mut self ) -> io::Result<()>
         {                   let prefix_lines = self.prompt_prefix_len / self.screen_size.columns;
                     let (line, _) = self.line_col(self.cursor);
                     self.term.move_up(prefix_lines + line)?;
@@ -34589,7 +37033,7 @@ pub mod prompt
                     self.term.clear_to_screen_end()
                 }
 
-                pub(crate) fn clear_prompt(&mut self) -> io::Result<()>
+                pub(crate) fn clear_prompt( &mut self ) -> io::Result<()>
         {                   let (line, _) = self.line_col(self.cursor);
 
                     self.term.move_up(line)?;
@@ -34613,7 +37057,7 @@ pub mod prompt
                     Ok(())
                 }
 
-                pub fn move_to_end(&mut self) -> io::Result<()>
+                pub fn move_to_end( &mut self ) -> io::Result<()>
         {                   let pos = self.buffer.len();
                     self.move_to(pos)
                 }
@@ -34649,7 +37093,7 @@ pub mod prompt
                     Ok(())
                 }
 
-                pub fn reset_data(&mut self) {
+                pub fn reset_data( &mut self ) {
                     self.data.reset_data();
                 }
 
@@ -34718,7 +37162,7 @@ pub mod prompt
 
             impl<'a, 'b: 'a, Term: 'b + Terminal> Drop for Writer<'a, 'b, Term>
             {
-                fn drop(&mut self)
+                fn drop( &mut self )
                 {
                     if self.write.is_prompt_drawn { let _ = self.write.draw_prompt(); }
                 }
@@ -34732,7 +37176,7 @@ pub mod prompt
 
             impl<'a, Term: 'a + Terminal> DerefMut for WriteLock<'a, Term>
             {
-                fn deref_mut(&mut self) -> &mut Write { &mut self.data }
+                fn deref_mut( &mut self ) -> &mut Write { &mut self.data }
             }
 
             impl Write
@@ -34777,7 +37221,7 @@ pub mod prompt
 
                 pub fn new_history_entries(&self) -> usize { self.history_new_entries }
 
-                pub fn reset_data(&mut self)
+                pub fn reset_data( &mut self )
                 {
                     self.buffer.clear();
                     self.backup_buffer.clear();
@@ -34788,7 +37232,7 @@ pub mod prompt
                     self.explicit_arg = false;
                 }
 
-                pub fn reset_new_history(&mut self) { self.history_new_entries = 0; }
+                pub fn reset_new_history( &mut self ) { self.history_new_entries = 0; }
 
                 pub fn set_buffer(&mut self, buf: &str)
                 {
@@ -34941,7 +37385,7 @@ pub mod prompt
             
             impl<'a, 'b: 'a, Term: 'b + Terminal> DerefMut for WriterImpl<'a, 'b, Term>
             {
-                fn deref_mut(&mut self) -> &mut WriteLock<'b, Term>
+                fn deref_mut( &mut self ) -> &mut WriteLock<'b, Term>
                 {
                     match *self
                     {
@@ -34959,7 +37403,7 @@ pub mod prompt
             {
                 type Item = &'a str;
 
-                #[inline] fn next(&mut self) -> Option<&'a str> { self.0.next().map(|s| &s[..]) }
+                #[inline] fn next( &mut self ) -> Option<&'a str> { self.0.next().map(|s| &s[..]) }
 
                 #[inline] fn nth(&mut self, n: usize) -> Option<&'a str> { self.0.nth(n).map(|s| &s[..]) }
 
@@ -34968,7 +37412,7 @@ pub mod prompt
             
             impl<'a> DoubleEndedIterator for HistoryIter<'a>
             {
-                #[inline] fn next_back(&mut self) -> Option<&'a str> { self.0.next_back().map(|s| &s[..]) }
+                #[inline] fn next_back( &mut self ) -> Option<&'a str> { self.0.next_back().map(|s| &s[..]) }
             }
 
             #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -34983,7 +37427,7 @@ pub mod prompt
             impl Iterator for DisplaySequence
             {
                 type Item = char;
-                fn next(&mut self) -> Option<char>
+                fn next( &mut self ) -> Option<char>
                 {
                     let (res, next) = match *self
                     {
@@ -35595,6 +38039,7 @@ pub mod prompt
         pub struct EnterFunction;
 
         impl<T:Terminal> Function<T> for EnterFunction
+       
         {
             fn execute( &self, prompter:&mut Prompter<T>, count:i32, _ch:char ) -> io::Result<()>
             {
@@ -41572,4 +44017,4 @@ fn main()
     }
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 41575
+// 44020 :: 1116
