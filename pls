@@ -743,38 +743,72 @@ pub mod builtins
         use ::
         {
             c::{ time },
+            connect::{ Connection },
             path::{ Path },
-            print::{ print_stderr_with_capture, print_stdout_with_capture, },            
+            print::{ print_stderr_with_capture, print_stdout_with_capture, },
             shell::{ Shell },
             types::{ CommandResult, CommandLine, Command },
             *
         };
 
-        #[derive( Debug )]
-        pub struct OptMain
-        {
-            pub session:bool,
-            pub asc:bool,
-            pub pwd:bool,
-            pub only_id:bool,
-            pub no_id:bool,
-            pub show_date:bool,
-            pub limit:i32,
-            pub pattern:String,
-            pub cmd:Option<SubCommand>
+
+        /*
+        #[derive( Debug, StructOpt )]
+        #[structopt( name = "history", about = "History in pls shell" )]
+        struct OptMain {
+            #[structopt( short, long, help = "For current session only" )]
+            session:bool,
+
+            #[structopt( short, long, help = "Search old items first" )]
+            asc:bool,
+
+            #[structopt( short, long, help = "For current directory only" )]
+            pwd:bool,
+
+            #[structopt( short, long, help = "Only show ROWID" )]
+            only_id:bool,
+
+            #[structopt( short, long, help = "Do not show ROWID" )]
+            no_id:bool,
+
+            #[structopt( short="d", long, help = "Show date" )]
+            show_date:bool,
+
+            #[structopt( short, long, default_value = "20" )]
+            limit:i32,
+
+            #[structopt( name = "PATTERN", default_value = "", help = "You can use % to match anything" )]
+            pattern:String,
+
+            #[structopt( subcommand )]
+            cmd:Option<SubCommand>
         }
-        
+        */
         #[derive( Debug )]
-        enum SubCommand
-        {
+        pub struct OptMain();
+        /*
+        #[derive( StructOpt, Debug )]
+        enum SubCommand {
+            #[structopt( about="Add new item into history" )]
             Add {
+                #[structopt( short="t", long, help = "Specify a timestamp for the new item" )]
                 timestamp:Option<f64>,
+
+                #[structopt( name="INPUT", help = "input to be added into history" )]
                 input:String,
             },
-            
+            #[structopt( about="Delete item from history" )]
             Delete {
+                #[structopt( name="ROWID", help = "Row IDs of item to delete" )]
                 rowid:Vec<usize>,
             }
+        }
+        */
+        #[derive( Debug )]
+        pub enum SubCommand
+        {
+            Add,
+            Delete,
         }
 
         pub fn run( sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture:bool ) -> CommandResult
@@ -788,7 +822,7 @@ pub mod builtins
                 print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
                 return cr;
             }
-            let conn = match Conn::open( &hfile )
+            let connection = match Connection::open( &hfile )
             {
                 Ok( x ) => x,
                 Err( e ) =>
@@ -810,7 +844,7 @@ pub mod builtins
                         Some( SubCommand::Delete {rowid:rowids} ) =>
         {                           let mut _count = 0;
                             for rowid in rowids {
-                                let _deleted = delete_history_item( &conn, rowid );
+                                let _deleted = delete_history_item( &connection, rowid );
                                 if _deleted {
                                     _count += 1;
                                 }
@@ -827,7 +861,7 @@ pub mod builtins
                             cr
                         }
                         None =>
-        {                           let ( str_out, str_err ) = list_current_history( sh, &conn, &opt );
+        {                           let ( str_out, str_err ) = list_current_history( sh, &connection, &opt );
                             if !str_out.is_empty() {
                                 print_stdout_with_capture( &str_out, &mut cr, cl, cmd, capture );
                             }
@@ -858,7 +892,7 @@ pub mod builtins
             history::add_raw( sh, input, 0, tsb, tse );
         }
 
-        pub fn list_current_history( sh:&Shell, conn:&Conn, opt:&OptMain ) -> ( String, String )
+        pub fn list_current_history( sh:&Shell, connection:&Connection, opt:&OptMain ) -> ( String, String )
         {
             let mut result_stderr = String::new();
             let result_stdout = String::new();
@@ -883,7 +917,7 @@ pub mod builtins
             };
             sql = format!( "{} limit {} ", sql, opt.limit );
 
-            let mut stmt = match conn.prepare( &sql )
+            let mut stmt = match connection.prepare( &sql )
             {
                 Ok( x ) => x,
                 Err( e ) =>
@@ -960,11 +994,11 @@ pub mod builtins
             ( buffer, result_stderr )
         }
 
-        fn delete_history_item( conn:&Conn, rowid:usize ) -> bool
+        fn delete_history_item( connection:&Connection, rowid:usize ) -> bool
         {
             let history_table = get::history_table();
             let sql = format!( "DELETE from {} where rowid = {}", history_table, rowid );
-            match conn.execute( &sql, [] )
+            match connection.execute( &sql, [] )
             {
                 Ok( _ ) => true,
                 Err( e ) =>
@@ -1408,7 +1442,7 @@ pub mod builtins
             for_hard:bool,
             all_stdout:&mut String,
             all_stderr:&mut String
-        ) -> bool
+ ) -> bool
         {
             match limit_option
             {
@@ -1421,8 +1455,7 @@ pub mod builtins
                     true
                 }
                 Some( Some( value ) ) =>
-                {
-                    let err = set_limit( limit_name, value, for_hard );
+        {                   let err = set_limit( limit_name, value, for_hard );
                     if !err.is_empty() {
                         all_stderr.push_str( &err );
                     }
@@ -1445,25 +1478,21 @@ pub mod builtins
         pub fn run( _sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture:bool ) -> CommandResult
         {
             let mut cr = CommandResult::new();
-            let fd = nix::fcntl::open
-            (
+
+            let fd = nix::fcntl::open( 
                 "/dev/null",
                 nix::fcntl::OFlag::empty(),
                 nix::sys::stat::Mode::empty()
-            );
-
+ );
             match fd
             {
                 Ok( fd ) =>
-                {
-                    let info = format!( "{}", fd );
+        {                   let info = format!( "{}", fd );
                     print_stdout_with_capture( &info, &mut cr, cl, cmd, capture );
                     unsafe { libc::close( fd ); }
                 }
-
                 Err( e ) =>
-                {
-                    println_stderr!( "pls:minfd:error:{}", e );
+        {                   println_stderr!( "pls:minfd:error:{}", e );
                 }
             }
 
@@ -1593,8 +1622,8 @@ pub mod c
     {
         use ::
         {
-                timing::{ OffsetDateTime },
-                *,
+            timing::{ OffsetDateTime },
+            *,
         };
 
         #[derive( Debug, PartialEq, Eq )]
@@ -1628,15 +1657,12 @@ pub mod c
                 DateTime { odt }
             }
 
-            pub fn unix_timestamp( &self ) -> f64
-            { self.odt.unix_timestamp_nanos() as f64 / 1000000000.0
-            }
+            pub fn unix_timestamp( &self ) -> f64 { self.odt.unix_timestamp_nanos() as f64 / 1000000000.0 }
         }
 
-        impl fmt::Display for DateTime
-       
+        impl ::fmt::Display for DateTime
         {
-            fn fmt( &self, f:&mut fmt::Formatter<'_> ) -> fmt::Result
+            fn fmt( &self, f:&mut ::fmt::Formatter<'_> ) -> ::fmt::Result
             {
                 write!
                 ( 
@@ -1648,8 +1674,8 @@ pub mod c
                     self.odt.hour(),
                     self.odt.minute(),
                     self.odt.second(),
-                    self.odt.millisecond(),
- )
+                    self.odt.millisecond()
+                )
             }
         }
     }
@@ -1692,12 +1718,11 @@ pub mod c
         pub fn mark_job_as_stopped( sh:&mut shell::Shell, gid:i32, report:bool )
         {
             sh.mark_job_as_stopped( gid );
-            if !report {
-                return;
-            }
-
-            // add an extra line to separate output of fg commands if any.
-            if let Some( job ) = sh.get_job_by_gid( gid ) {
+            
+            if !report { return; }
+            
+            if let Some( job ) = sh.get_job_by_gid( gid )
+            {
                 println_stderr!( "" );
                 print_job( job );
             }
@@ -1705,16 +1730,12 @@ pub mod c
 
         pub fn mark_job_member_stopped( sh:&mut shell::Shell, pid:i32, gid:i32, report:bool )
         {
-            let _gid = if gid == 0 {
-                unsafe { libc::getpgid( pid ) }
-            } else {
-                gid
-            };
+            let _gid = if gid == 0 { unsafe { libc::getpgid( pid ) } } 
+            else { gid };
 
-            if let Some( job ) = sh.mark_job_member_stopped( pid, gid ) {
-                if job.all_members_stopped() {
-                    mark_job_as_stopped( sh, gid, report );
-                }
+            if let Some( job ) = sh.mark_job_member_stopped( pid, gid )
+            {
+                if job.all_members_stopped() { mark_job_as_stopped( sh, gid, report ); }
             }
         }
 
@@ -1916,7 +1937,7 @@ pub mod completers
         path::{ Path },
         prompt::lines::
         {
-            complete::{Completer, Completion},
+            complete::{ Completer, Completion },
             prompter::Prompter,
             terminal::Terminal,
         },
@@ -1925,7 +1946,6 @@ pub mod completers
         sync::{ Arc },
         *,
     };
-
     pub mod dots
     {
         /*
@@ -1941,11 +1961,7 @@ pub mod completers
             path::{ Path },
             prompt::lines::
             {
-                complete::escape,
-                complete::escaped_word_start,
-                complete::unescape,
-                complete::Suffix,
-                complete::{Completer, Completion},
+                complete::{ Completer, Completion, escape, escaped_word_start, Suffix, unescape },
                 prompter::Prompter,
                 terminal::Terminal,
             },
@@ -1962,7 +1978,7 @@ pub mod completers
                 word:&str,
                 reader:&Prompter<Term>,
                 _start:usize,
-                _end:usize,
+                _end:usize
             ) -> Option<Vec<Completion>>
             {
                 let line = reader.buffer();
@@ -2062,12 +2078,10 @@ pub mod completers
             }
 
             let mut f;
-            match File::open( &dot_file )
-            {
+            match File::open( &dot_file ) {
                 Ok( x ) => f = x,
                 Err( e ) =>
-                {
-                    println_stderr!( "\ncicada:open dot_file error:{:?}", e );
+        {                   println_stderr!( "\ncicada:open dot_file error:{:?}", e );
                     return res;
                 }
             }
@@ -2116,13 +2130,14 @@ pub mod completers
                                     }
                                 }
                                 _ =>
-                                {
-                                    println_stderr!( "\nThis yaml file is in bad format:{}", dot_file );
+        {                                   println_stderr!( "\nThis yaml file is in bad format:{}", dot_file );
                                 }
                             }
                         }
                     }
-                    _ => { println_stderr!( "\nThis yaml file is in bad format:{}", dot_file ); }
+                    _ =>
+        {                       println_stderr!( "\nThis yaml file is in bad format:{}", dot_file );
+                    }
                 }
             }
             res
@@ -2131,13 +2146,14 @@ pub mod completers
 
     pub mod environment
     {
-        /*
-        use linefeed::complete::{Completer, Completion, Suffix};
-        use linefeed::prompter::Prompter;
-        use linefeed::terminal::Terminal;
-        */
         use ::
         {
+            prompt::lines::
+            {
+                complete::{Completer, Completion, Suffix},
+                prompter::Prompter,
+                terminal::Terminal,
+            },
             sync::{ Arc },
             *,
         };
@@ -2149,16 +2165,11 @@ pub mod completers
 
         impl<Term:Terminal> Completer<Term> for EnvCompleter
         {
-            fn complete( 
-                &self,
-                word:&str,
-                _reader:&Prompter<Term>,
-                _start:usize,
-                _end:usize,
-            ) -> Option<Vec<Completion>>
+            fn complete( &self, word:&str, _reader:&Prompter<Term>, _start:usize, _end:usize ) -> Option<Vec<Completion>>
             {
                 let sh = Arc::try_unwrap( self.sh.clone() );
-                match sh {
+                match sh 
+                {
                     Ok( x ) => Some( complete_env( &x, word ) ),
                     Err( x ) => Some( complete_env( &x, word ) ),
                 }
@@ -2203,14 +2214,16 @@ pub mod completers
 
     pub mod make
     {
-        /*
-        use linefeed::complete::{Completer, Completion, Suffix};
-        use linefeed::prompter::Prompter;
-        use linefeed::terminal::Terminal; */
         use ::
         {
             fs::{ File },
             io::{ BufRead, BufReader, Write },
+            prompt::lines::
+            {
+                complete::{Completer, Completion, Suffix},
+                prompter::Prompter,
+                terminal::Terminal,
+            },
             regex::{ Regex },
             *
         };
@@ -2218,17 +2231,16 @@ pub mod completers
         pub struct MakeCompleter;
 
         impl<Term:Terminal> Completer<Term> for MakeCompleter
-       
         {
-            fn complete( 
+            fn complete
+            ( 
                 &self,
                 word:&str,
                 _reader:&Prompter<Term>,
                 _start:usize,
-                _end:usize,
- ) -> Option<Vec<Completion>>
-        {               Some( complete_make( word ) )
-            }
+                _end:usize
+            ) -> Option<Vec<Completion>>
+            { Some( complete_make( word ) ) }
         }
 
         fn handle_file( ci:&mut Vec<Completion>, path:&str, file_path:&str, current_dir:&str )
@@ -2334,7 +2346,7 @@ pub mod completers
         impl<Term:Terminal> Completer<Term> for BinCompleter
         {
             fn complete
-            ( 
+            (
                 &self,
                 word:&str,
                 _reader:&Prompter<Term>,
@@ -2352,30 +2364,28 @@ pub mod completers
 
         impl<Term:Terminal> Completer<Term> for PathCompleter
         {
-            fn complete
-            (
+            fn complete( 
                 &self,
                 word:&str,
                 _reader:&Prompter<Term>,
                 _start:usize,
                 _end:usize,
             ) -> Option<Vec<Completion>>
-            {
-                Some( complete_path( word, false ) )
+            {               Some( complete_path( word, false ) )
             }
         }
 
         impl<Term:Terminal> Completer<Term> for CdCompleter
         {
-            fn complete
-            (
+            fn complete( 
                 &self,
                 word:&str,
                 _reader:&Prompter<Term>,
                 _start:usize,
                 _end:usize,
-            ) -> Option<Vec<Completion>>
-            { Some( complete_path( word, true ) ) }
+        ) -> Option<Vec<Completion>>
+        {               Some( complete_path( word, true ) )
+            }
         }
 
         fn needs_expand_home( line:&str ) -> bool
@@ -2429,7 +2439,7 @@ pub mod completers
                                 ( 
                                     format!( "{}{}{}", dir_orig, MAIN_SEPARATOR, _path ),
                                     Some( _path ),
- )
+                                )
                             } else {
                                 ( _path, None )
                             };
@@ -2477,7 +2487,7 @@ pub mod completers
                     prefix.to_string(),
                     path[..=pos].to_string(),
                     path[pos + 1..].to_string(),
- ),
+        ),
                 None => ( prefix.to_string(), String::new(), path.to_string() ),
             }
         }
@@ -2592,15 +2602,16 @@ pub mod completers
 
     pub mod ssh
     {
-        /*
-        use linefeed::complete::{Completer, Completion, Suffix};
-        use linefeed::terminal::Terminal;
-        use linefeed::Prompter;
-        */
         use ::
         {
             fs::{ File },
             io::{ BufRead, BufReader },
+            prompt::lines::
+            {
+                complete::{Completer, Completion, Suffix},
+                terminal::Terminal,
+                Prompter,
+            },
             regex::{ Regex },
             *,
         };
@@ -2608,7 +2619,6 @@ pub mod completers
         pub struct SshCompleter;
 
         impl<Term:Terminal> Completer<Term> for SshCompleter
-       
         {
             fn complete( 
                 &self,
@@ -2616,7 +2626,7 @@ pub mod completers
                 _reader:&Prompter<Term>,
                 _start:usize,
                 _end:usize,
- ) -> Option<Vec<Completion>>
+        ) -> Option<Vec<Completion>>
         {               Some( complete_ssh( word ) )
             }
         }
@@ -2670,7 +2680,7 @@ pub mod completers
             reader:&Prompter<Term>,
             start:usize,
             _end:usize,
- ) -> Option<Vec<Completion>>
+        ) -> Option<Vec<Completion>>
         {
             let line = reader.buffer();
             let completions:Option<Vec<Completion>>;
@@ -2814,6 +2824,54 @@ pub mod completers
         
         if found_space { start_position = line.len(); }
         start_position
+    }
+}
+/**/
+pub mod connect
+{
+    use ::
+    {
+        path::{ Path },
+        *,
+    };
+    /// A connection to a SQLite database.
+    pub struct Connection
+    {
+        
+    }
+
+    impl Connection
+    {
+        pub const fn new() -> Self
+        {
+            Self
+            {
+
+            }
+        }
+
+        #[inline] pub fn open<P: AsRef<Path>>(path: P) -> Result<Self>
+        {
+            Ok( Self 
+            {
+
+            })
+        }
+
+        pub fn flush( &mut self )
+        {
+
+        }
+    }
+
+    unsafe impl Send for Connection {}
+
+    impl Drop for Connection
+    {
+        #[inline] fn drop(&mut self)
+        {
+            self.flush();
+        }
     }
 }
 pub mod convert { pub use std::convert::{ * }; }
@@ -3426,14 +3484,54 @@ pub mod error
                 *,
             };
 
-            pub fn __errno_location() -> *mut c_int
-            {
-                ptr::null_mut() as *mut c_int
-            }
-
             use super::Errno;            
             
             pub const STRERROR_NAME:&str = "strerror_r";            
+
+            extern "C"
+            {
+                #[cfg_attr( 
+                    any( 
+                        target_os = "macos",
+                        target_os = "ios",
+                        target_os = "tvos",
+                        target_os = "watchos",
+                        target_os = "visionos",
+                        target_os = "freebsd"
+ ),
+                    link_name = "__error"
+ )]
+                #[cfg_attr( 
+                    any( 
+                        target_os = "openbsd",
+                        target_os = "netbsd",
+                        target_os = "android",
+                        target_os = "espidf",
+                        target_os = "vxworks",
+                        target_os = "cygwin",
+                        target_env = "newlib"
+ ),
+                    link_name = "__errno"
+ )]
+                #[cfg_attr( 
+                    any( target_os = "solaris", target_os = "illumos" ),
+                    link_name = "___errno"
+ )]
+                #[cfg_attr( target_os = "haiku", link_name = "_errnop" )]
+                #[cfg_attr( 
+                    any( 
+                        target_os = "linux",
+                        target_os = "hurd",
+                        target_os = "redox",
+                        target_os = "dragonfly",
+                        target_os = "emscripten",
+ ),
+                    link_name = "__errno_location"
+ )]
+                #[cfg_attr( target_os = "aix", link_name = "_Errno" )]
+                #[cfg_attr( target_os = "nto", link_name = "__get_errno_ptr" )]
+                fn errno_location() -> *mut c_int;
+            }
 
             fn from_utf8_lossy( input:&[u8] ) -> &str
             {
@@ -3480,9 +3578,8 @@ pub mod error
         pub struct Errno( pub i32 );
 
         impl fmt::Debug for Errno
-       
         {
-            fn fmt( &self, fmt:&mut fmt::Formatter ) -> fmt::Result
+            fn fmt( &self, fmt:&mut ::fmt::Formatter ) -> ::fmt::Result
             {
                 sys::with_description( *self, |desc|
                 {
@@ -3494,9 +3591,9 @@ pub mod error
             }
         }
 
-        impl fmt::Display for Errno
+        impl ::fmt::Display for Errno
         {
-            fn fmt( &self, fmt:&mut fmt::Formatter ) -> fmt::Result
+            fn fmt( &self, fmt:&mut ::fmt::Formatter ) -> ::fmt::Result
             {
                 sys::with_description( *self, |desc| match desc
                 {
@@ -3508,13 +3605,12 @@ pub mod error
                         self.0,
                         sys::STRERROR_NAME,
                         fm_err.0
-                    ),
-                })
+ ),
+                } )
             }
         }
 
         impl From<Errno> for i32
-       
         {
             fn from( e:Errno ) -> Self { e.0 }
         }
@@ -3525,7 +3621,6 @@ pub mod error
         }
         
         impl From<Errno> for io::Error
-       
         {
             fn from( errno:Errno ) -> Self
             { io::Error::from_raw_os_error( errno.0 ) }
@@ -3585,6 +3680,8 @@ pub mod get
     {
         error::{ no },
         libc::{ c_int, c_ulong, STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO,  winsize },
+        io::{ Error },
+        iter::{ Pair },
         os::
         {
             fd::{ RawFd },
@@ -3608,8 +3705,8 @@ pub mod get
             target_os = "freebsd",
             target_os = "netbsd",
             target_os = "openbsd"
- )
- )]
+        )
+    )]
     static TIOCGWINSZ:c_ulong = 0x40087468;
 
     #[cfg( target_os = "solaris" )]
@@ -4098,7 +4195,7 @@ pub mod get
     pub fn prompt_string() -> String
     {
         if let Ok( x ) = env::var( "PROMPT" ) { return x; }
-        DEFAULT_PROMPT.to_string()
+        unsafe { ::prompt::main::DEFAULT_PROMPT.to_string() }
     }
     /*
     get_for_result_from_init( ... ) -> Vec<String> */
@@ -4107,7 +4204,7 @@ pub mod get
         sh:&mut shell::Shell,
         pair_init:Pair<parsers::locust::Rule>,
         args:&[String]
- ) -> Vec<String>
+    ) -> Vec<String>
     {
         let mut result:Vec<String> = Vec::new();
         /*
@@ -4140,7 +4237,7 @@ pub mod get
         sh:&mut shell::Shell,
         pair_head:Pair<parsers::locust::Rule>,
         args:&[String]
- ) -> Vec<String>
+    ) -> Vec<String>
     {
         /*
         let pairs = pair_head.into_inner();
@@ -4216,16 +4313,719 @@ pub mod get
     }
 }
 /*
-glob v0.0.0*/
+glob v0.3.0*/
 pub mod glob
 {
+    //! Support for matching file paths against Unix shell style patterns.
+    use ::
+    {
+        error::Error,
+        glob::
+        {
+            CharSpecifier::{CharRange, SingleChar},
+            MatchResult::{EntirePatternDoesntMatch, Match, SubPatternDoesntMatch},
+            PatternToken::AnyExcept,
+            PatternToken::{AnyChar, AnyRecursiveSequence, AnySequence, AnyWithin, Char},
+        },
+        path::{self, Component, Path, PathBuf},
+        str::FromStr,
+        *,
+    };
+    /// An iterator that yields `Path`s from the filesystem that match a particular pattern.
+    pub struct Paths
+    {
+        dir_patterns: Vec<Pattern>,
+        require_dir: bool,
+        options: MatchOptions,
+        todo: Vec<Result<(PathBuf, usize), GlobError>>,
+        scope: Option<PathBuf>,
+    }
 
+    /// Return an iterator that produces all the `Path`s that match the given pattern using default match options, 
+    /// which may be absolute or relative to the current working directory.
+    pub fn glob(pattern: &str) -> Result<Paths, PatternError> { glob_with(pattern, MatchOptions::new()) }
+    /// Return an iterator that produces all the `Path`s that match the given
+    /// pattern using the specified match options, which may be absolute or relative
+    /// to the current working directory.
+    pub fn glob_with(pattern: &str, options: MatchOptions) -> Result<Paths, PatternError> 
+    {
+        fn check_windows_verbatim(_: &Path) -> bool {
+            false
+        }
+        
+        fn to_scope(p: &Path) -> PathBuf {
+            p.to_path_buf()
+        }
+        
+        if let Err(err) = Pattern::new(pattern) {
+            return Err(err);
+        }
+
+        let mut components = Path::new(pattern).components().peekable();
+        loop {
+            match components.peek() {
+                Some(&Component::Prefix(..)) | Some(&Component::RootDir) => {
+                    components.next();
+                }
+                _ => break,
+            }
+        }
+        let rest = components.map(|s| s.as_os_str()).collect::<PathBuf>();
+        let normalized_pattern = Path::new(pattern).iter().collect::<PathBuf>();
+        let root_len = normalized_pattern.to_str().unwrap().len() - rest.to_str().unwrap().len();
+        let root = if root_len > 0 {
+            Some(Path::new(&pattern[..root_len]))
+        } else {
+            None
+        };
+
+        if root_len > 0 && check_windows_verbatim(root.unwrap()) {
+            return Ok(Paths {
+                dir_patterns: Vec::new(),
+                require_dir: false,
+                options,
+                todo: Vec::new(),
+                scope: None,
+            });
+        }
+
+        let scope = root.map_or_else(|| PathBuf::from("."), to_scope);
+
+        let mut dir_patterns = Vec::new();
+        let components =
+            pattern[cmp::min(root_len, pattern.len())..].split_terminator(path::is_separator);
+
+        for component in components {
+            dir_patterns.push(Pattern::new(component)?);
+        }
+
+        if root_len == pattern.len() {
+            dir_patterns.push(Pattern {
+                original: "".to_string(),
+                tokens: Vec::new(),
+                is_recursive: false,
+            });
+        }
+
+        let last_is_separator = pattern.chars().next_back().map(path::is_separator);
+        let require_dir = last_is_separator == Some(true);
+        let todo = Vec::new();
+
+        Ok(Paths {
+            dir_patterns,
+            require_dir,
+            options,
+            todo,
+            scope: Some(scope),
+        })
+    }
+
+    /// A glob iteration error.
+    #[derive(Debug)]
+    pub struct GlobError 
+    {
+        path: PathBuf,
+        error: io::Error,
+    }
+
+    impl GlobError 
+    {
+        /// The Path that the error corresponds to.
+        pub fn path(&self) -> &Path { &self.path }
+        /// The error in question.
+        pub fn error(&self) -> &io::Error { &self.error }
+        /// Consumes self, returning the _raw_ underlying `io::Error`
+        pub fn into_error(self) -> io::Error { self.error }
+    }
+
+    impl Error for GlobError
+    {
+        fn description(&self) -> &str { self.error.description() }
+        fn cause(&self) -> Option<&Error> { Some(&self.error) }
+    }
+
+    impl ::fmt::Display for GlobError 
+    {
+        fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
+        {
+            write!
+            (
+                f, "attempting to read `{}` resulted in an error: {}", self.path.display(), self.error
+            )
+        }
+    }
+
+    fn is_dir(p: &Path) -> bool { fs::metadata(p).map(|m| m.is_dir()).unwrap_or(false) }
+    /// An alias for a glob iteration result.
+    pub type GlobResult = Result<PathBuf, GlobError>;
+
+    impl Iterator for Paths 
+    {
+        type Item = GlobResult;
+
+        fn next(&mut self) -> Option<GlobResult> {
+            if let Some(scope) = self.scope.take() {
+                if !self.dir_patterns.is_empty() {
+                    assert!(self.dir_patterns.len() < !0 as usize);
+                    fill_todo(&mut self.todo, &self.dir_patterns, 0, &scope, self.options);
+                }
+            }
+
+            loop {
+                if self.dir_patterns.is_empty() || self.todo.is_empty() {
+                    return None;
+                }
+
+                let (path, mut idx) = match self.todo.pop().unwrap() {
+                    Ok(pair) => pair,
+                    Err(e) => return Some(Err(e)),
+                };
+                
+                if idx == !0 as usize {
+                    if self.require_dir && !is_dir(&path) {
+                        continue;
+                    }
+                    return Some(Ok(path));
+                }
+
+                if self.dir_patterns[idx].is_recursive {
+                    let mut next = idx;
+                    
+                    while (next + 1) < self.dir_patterns.len() && self.dir_patterns[next + 1].is_recursive
+                    {
+                        next += 1;
+                    }
+
+                    if is_dir(&path) {
+                        fill_todo(
+                            &mut self.todo,
+                            &self.dir_patterns,
+                            next,
+                            &path,
+                            self.options,
+                        );
+
+                        if next == self.dir_patterns.len() - 1 {
+                            return Some(Ok(path));
+                        } else {
+                            idx = next + 1;
+                        }
+                    } else if next == self.dir_patterns.len() - 1 {
+                        continue;
+                    } else {
+                        idx = next + 1;
+                    }
+                }
+                
+                if self.dir_patterns[idx].matches_with(
+                    {
+                        match path.file_name().and_then(|s| s.to_str()) {
+                            None => continue,
+                            Some(x) => x,
+                        }
+                    },
+                    self.options,
+                ) {
+                    if idx == self.dir_patterns.len() - 1 {
+                        if !self.require_dir || is_dir(&path) {
+                            return Some(Ok(path));
+                        }
+                    } else {
+                        fill_todo(
+                            &mut self.todo,
+                            &self.dir_patterns,
+                            idx + 1,
+                            &path,
+                            self.options,
+                        );
+                    }
+                }
+            }
+        }
+    }
+    /// A pattern parsing error.
+    #[derive(Debug)]
+    #[allow(missing_copy_implementations)]
+    pub struct PatternError 
+    {
+        /// The approximate character index of where the error occurred.
+        pub pos: usize,
+        /// A message describing the error.
+        pub msg: &'static str,
+    }
+
+    impl Error for PatternError 
+    {
+        fn description(&self) -> &str { self.msg }
+    }
+
+    impl ::fmt::Display for PatternError 
+    {
+        fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result 
+        {
+            write!(
+                f,
+                "Pattern syntax error near position {}: {}",
+                self.pos, self.msg
+            )
+        }
+    }
+    /// A compiled Unix shell style pattern.
+    #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Debug)]
+    pub struct Pattern
+    {
+        original: String,
+        tokens: Vec<PatternToken>,
+        is_recursive: bool,
+    }
+    /// Show the original glob pattern.
+    impl ::fmt::Display for Pattern
+    {
+        fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result { self.original.fmt(f) }
+    }
+
+    impl FromStr for Pattern
+    {
+        type Err = PatternError;
+        fn from_str(s: &str) -> Result<Self, PatternError> { Self::new(s) }
+    }
+
+    #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+    enum PatternToken
+    {
+        Char(char),
+        AnyChar,
+        AnySequence,
+        AnyRecursiveSequence,
+        AnyWithin(Vec<CharSpecifier>),
+        AnyExcept(Vec<CharSpecifier>),
+    }
+
+    #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+    enum CharSpecifier 
+    {
+        SingleChar(char),
+        CharRange(char, char),
+    }
+
+    #[derive(Copy, Clone, PartialEq)]
+    enum MatchResult 
+    {
+        Match,
+        SubPatternDoesntMatch,
+        EntirePatternDoesntMatch,
+    }
+
+    const ERROR_WILDCARDS: &str = "wildcards are either regular `*` or recursive `**`";
+    const ERROR_RECURSIVE_WILDCARDS: &str = "recursive wildcards must form a single path component";
+    const ERROR_INVALID_RANGE: &str = "invalid range pattern";
+
+    impl Pattern
+    {
+        /// This function compiles Unix shell style patterns.
+        pub fn new(pattern: &str) -> Result<Self, PatternError>
+        {
+            let chars = pattern.chars().collect::<Vec<_>>();
+            let mut tokens = Vec::new();
+            let mut is_recursive = false;
+            let mut i = 0;
+
+            while i < chars.len() {
+                match chars[i] {
+                    '?' => {
+                        tokens.push(AnyChar);
+                        i += 1;
+                    }
+                    '*' => {
+                        let old = i;
+
+                        while i < chars.len() && chars[i] == '*' {
+                            i += 1;
+                        }
+
+                        let count = i - old;
+
+                        if count > 2 {
+                            return Err(PatternError {
+                                pos: old + 2,
+                                msg: ERROR_WILDCARDS,
+                            });
+                        } else if count == 2 {
+                            let is_valid = if i == 2 || path::is_separator(chars[i - count - 1]) {
+                                if i < chars.len() && path::is_separator(chars[i]) {
+                                    i += 1;
+                                    true
+                                } else if i == chars.len() {
+                                    true
+                                } else {
+                                    return Err(PatternError {
+                                        pos: i,
+                                        msg: ERROR_RECURSIVE_WILDCARDS,
+                                    });
+                                }
+                            } else {
+                                return Err(PatternError {
+                                    pos: old - 1,
+                                    msg: ERROR_RECURSIVE_WILDCARDS,
+                                });
+                            };
+
+                            let tokens_len = tokens.len();
+
+                            if is_valid {
+                                if !(tokens_len > 1 && tokens[tokens_len - 1] == AnyRecursiveSequence) {
+                                    is_recursive = true;
+                                    tokens.push(AnyRecursiveSequence);
+                                }
+                            }
+                        } else {
+                            tokens.push(AnySequence);
+                        }
+                    }
+                    '[' => {
+                        if i + 4 <= chars.len() && chars[i + 1] == '!' {
+                            match chars[i + 3..].iter().position(|x| *x == ']') {
+                                None => (),
+                                Some(j) => {
+                                    let chars = &chars[i + 2..i + 3 + j];
+                                    let cs = parse_char_specifiers(chars);
+                                    tokens.push(AnyExcept(cs));
+                                    i += j + 4;
+                                    continue;
+                                }
+                            }
+                        } else if i + 3 <= chars.len() && chars[i + 1] != '!' {
+                            match chars[i + 2..].iter().position(|x| *x == ']') {
+                                None => (),
+                                Some(j) => {
+                                    let cs = parse_char_specifiers(&chars[i + 1..i + 2 + j]);
+                                    tokens.push(AnyWithin(cs));
+                                    i += j + 3;
+                                    continue;
+                                }
+                            }
+                        }
+
+                        return Err(PatternError {
+                            pos: i,
+                            msg: ERROR_INVALID_RANGE,
+                        });
+                    }
+                    c => {
+                        tokens.push(Char(c));
+                        i += 1;
+                    }
+                }
+            }
+
+            Ok(Self {
+                tokens,
+                original: pattern.to_string(),
+                is_recursive,
+            })
+        }
+        /// Escape metacharacters within the given string by surrounding them in brackets. 
+        pub fn escape(s: &str) -> String {
+            let mut escaped = String::new();
+            for c in s.chars() {
+                match c {
+                    '?' | '*' | '[' | ']' => {
+                        escaped.push('[');
+                        escaped.push(c);
+                        escaped.push(']');
+                    }
+                    c => {
+                        escaped.push(c);
+                    }
+                }
+            }
+            escaped
+        }
+
+        /// Return if the given `str` matches this `Pattern` using the default match options (i.e. `MatchOptions::new()`).
+        pub fn matches(&self, str: &str) -> bool {
+            self.matches_with(str, MatchOptions::new())
+        }
+
+        /// Return if the given `Path`, when converted to a `str`, 
+        /// matches this `Pattern` using the default match options (i.e. `MatchOptions::new()`).
+        pub fn matches_path(&self, path: &Path) -> bool {
+            path.to_str().map_or(false, |s| self.matches(s))
+        }
+        /// Return if the given `str` matches this `Pattern` using the specified match options.
+        pub fn matches_with(&self, str: &str, options: MatchOptions) -> bool {
+            self.matches_from(true, str.chars(), 0, options) == Match
+        }
+        /// Return if the given `Path`, when converted to a `str`, 
+        /// matches this `Pattern` using the specified match options.
+        pub fn matches_path_with(&self, path: &Path, options: MatchOptions) -> bool {
+            path.to_str()
+                .map_or(false, |s| self.matches_with(s, options))
+        }
+        /// Access the original glob pattern.
+        pub fn as_str(&self) -> &str {
+            &self.original
+        }
+
+        fn matches_from(
+            &self,
+            mut follows_separator: bool,
+            mut file: std::str::Chars,
+            i: usize,
+            options: MatchOptions,
+        ) -> MatchResult {
+            for (ti, token) in self.tokens[i..].iter().enumerate() {
+                match *token {
+                    AnySequence | AnyRecursiveSequence => {
+                        debug_assert!(match *token {
+                            AnyRecursiveSequence => follows_separator,
+                            _ => true,
+                        });
+
+                        match self.matches_from(follows_separator, file.clone(), i + ti + 1, options) {
+                            SubPatternDoesntMatch => (),
+                            m => return m,
+                        };
+
+                        while let Some(c) = file.next() {
+                            if follows_separator && options.require_literal_leading_dot && c == '.' {
+                                return SubPatternDoesntMatch;
+                            }
+                            follows_separator = path::is_separator(c);
+                            match *token {
+                                AnyRecursiveSequence if !follows_separator => continue,
+                                AnySequence
+                                    if options.require_literal_separator && follows_separator =>
+                                {
+                                    return SubPatternDoesntMatch
+                                }
+                                _ => (),
+                            }
+                            match self.matches_from(
+                                follows_separator,
+                                file.clone(),
+                                i + ti + 1,
+                                options,
+                            ) {
+                                SubPatternDoesntMatch => (),
+                                m => return m,
+                            }
+                        }
+                    }
+                    _ => {
+                        let c = match file.next() {
+                            Some(c) => c,
+                            None => return EntirePatternDoesntMatch,
+                        };
+
+                        let is_sep = path::is_separator(c);
+
+                        if !match *token {
+                            AnyChar | AnyWithin(..) | AnyExcept(..)
+                                if (options.require_literal_separator && is_sep)
+                                    || (follows_separator
+                                        && options.require_literal_leading_dot
+                                        && c == '.') =>
+                            {
+                                false
+                            }
+                            AnyChar => true,
+                            AnyWithin(ref specifiers) => in_char_specifiers(&specifiers, c, options),
+                            AnyExcept(ref specifiers) => !in_char_specifiers(&specifiers, c, options),
+                            Char(c2) => chars_eq(c, c2, options.case_sensitive),
+                            AnySequence | AnyRecursiveSequence => unreachable!(),
+                        } {
+                            return SubPatternDoesntMatch;
+                        }
+                        follows_separator = is_sep;
+                    }
+                }
+            }
+            
+            if file.next().is_none() {
+                Match
+            } else {
+                SubPatternDoesntMatch
+            }
+        }
+    }
+
+    fn fill_todo(
+        todo: &mut Vec<Result<(PathBuf, usize), GlobError>>,
+        patterns: &[Pattern],
+        idx: usize,
+        path: &Path,
+        options: MatchOptions,
+    ) {
+        fn pattern_as_str(pattern: &Pattern) -> Option<String> {
+            let mut s = String::new();
+            for token in &pattern.tokens {
+                match *token {
+                    Char(c) => s.push(c),
+                    _ => return None,
+                }
+            }
+
+            Some(s)
+        }
+
+        let add = |todo: &mut Vec<_>, next_path: PathBuf| {
+            if idx + 1 == patterns.len() {
+                todo.push(Ok((next_path, !0 as usize)));
+            } else {
+                fill_todo(todo, patterns, idx + 1, &next_path, options);
+            }
+        };
+
+        let pattern = &patterns[idx];
+        let is_dir = is_dir(path);
+        let curdir = path == Path::new(".");
+        match pattern_as_str(pattern) {
+            Some(s) => {
+                let special = "." == s || ".." == s;
+                let next_path = if curdir {
+                    PathBuf::from(s)
+                } else {
+                    path.join(&s)
+                };
+                if (special && is_dir) || (!special && fs::metadata(&next_path).is_ok()) {
+                    add(todo, next_path);
+                }
+            }
+            None if is_dir => {
+                let dirs = fs::read_dir(path).and_then(|d| {
+                    d.map(|e| {
+                        e.map(|e| {
+                            if curdir {
+                                PathBuf::from(e.path().file_name().unwrap())
+                            } else {
+                                e.path()
+                            }
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+                });
+                match dirs {
+                    Ok(mut children) => {
+                        children.sort_by(|p1, p2| p2.file_name().cmp(&p1.file_name()));
+                        todo.extend(children.into_iter().map(|x| Ok((x, idx))));
+                        
+                        if !pattern.tokens.is_empty() && pattern.tokens[0] == Char('.') {
+                            for &special in &[".", ".."] {
+                                if pattern.matches_with(special, options) {
+                                    add(todo, path.join(special));
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        todo.push(Err(GlobError {
+                            path: path.to_path_buf(),
+                            error: e,
+                        }));
+                    }
+                }
+            }
+            None => {
+            }
+        }
+    }
+
+    fn parse_char_specifiers(s: &[char]) -> Vec<CharSpecifier> {
+        let mut cs = Vec::new();
+        let mut i = 0;
+        while i < s.len() {
+            if i + 3 <= s.len() && s[i + 1] == '-' {
+                cs.push(CharRange(s[i], s[i + 2]));
+                i += 3;
+            } else {
+                cs.push(SingleChar(s[i]));
+                i += 1;
+            }
+        }
+        cs
+    }
+
+    fn in_char_specifiers(specifiers: &[CharSpecifier], c: char, options: MatchOptions) -> bool {
+        for &specifier in specifiers.iter() {
+            match specifier {
+                SingleChar(sc) => {
+                    if chars_eq(c, sc, options.case_sensitive) {
+                        return true;
+                    }
+                }
+                CharRange(start, end) => {
+                    if !options.case_sensitive && c.is_ascii() && start.is_ascii() && end.is_ascii() {
+                        let start = start.to_ascii_lowercase();
+                        let end = end.to_ascii_lowercase();
+
+                        let start_up = start.to_uppercase().next().unwrap();
+                        let end_up = end.to_uppercase().next().unwrap();
+                        if start != start_up && end != end_up {
+                            let c = c.to_ascii_lowercase();
+                            if c >= start && c <= end {
+                                return true;
+                            }
+                        }
+                    }
+
+                    if c >= start && c <= end {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        false
+    }
+    /// A helper function to determine if two chars are (possibly case-insensitively) equal.
+    fn chars_eq(a: char, b: char, case_sensitive: bool) -> bool {
+        if cfg!(windows) && path::is_separator(a) && path::is_separator(b) {
+            true
+        } else if !case_sensitive && a.is_ascii() && b.is_ascii() {
+            a.to_ascii_lowercase() == b.to_ascii_lowercase()
+        } else {
+            a == b
+        }
+    }
+    /// Configuration options to modify the behaviour of `Pattern::matches_with(..)`.
+    #[allow(missing_copy_implementations)]
+    #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+    pub struct MatchOptions 
+    {
+        /// Whether or not patterns should be matched in a case-sensitive manner.
+        pub case_sensitive: bool,
+        /// Whether or not path-component separator characters (e.g. `/` on
+        /// Posix) must be matched by a literal `/`, rather than by `*` or `?` or
+        /// `[...]`.
+        pub require_literal_separator: bool,
+
+        /// Whether or not paths that contain components that start with a `.`
+        /// will require that `.` appears literally in the pattern; `*`, `?`, `**`,
+        /// or `[...]` will not match.
+        pub require_literal_leading_dot: bool,
+    }
+
+    impl MatchOptions 
+    {
+        /// Constructs a new `MatchOptions` with default field values.
+        pub fn new() -> Self 
+        {
+            Self 
+            {
+                case_sensitive: true,
+                require_literal_separator: false,
+                require_literal_leading_dot: false,
+            }
+        }
+    }
 }
 pub mod hint { pub use std::hint::{ * }; }
 pub mod history
 {
     use ::
-    {
+    {   
+        connect::{ Connection },
         collections::{ HashMap },
         io::{ Write },
         path::{ Path },
@@ -4237,227 +5037,17 @@ pub mod history
         *,
     };
 
-    pub fn init_db( hfile:&str, htable:&str )
-    {
-        let path = Path::new( hfile );
-        if !path.exists() 
-        {
-            let _parent = match path.parent()
-            {
-                Some( x ) => x,
-                None =>
-                {
-                    println_stderr!( "pls:history init - no parent found" );
-                    return;
-                }
-            };
-            let parent = match _parent.to_str()
-            {
-                Some( x ) => x,
-                None =>
-                {
-                    println_stderr!( "pls:parent to_str is None" );
-                    return;
-                }
-            };
+    pub fn init_db( hfile:&str, htable:&str ) { /* implement OVER database*/ }
 
-            match fs::create_dir_all( parent )
-            {
-                Ok( _ ) => {}
-                Err( e ) =>
-                {
-                    println_stderr!( "pls:histdir create error:{}", e );
-                    return;
-                }
-            }
+    pub fn init( rl:&mut Interface<DefaultTerminal> ) { /* implement OVER database*/ }
 
-            match fs::File::create( hfile ) 
-            {
-                Ok( _ ) =>
-                {
-                    println!( "pls:created history file:{}", hfile );
-                }
-
-                Err( e ) =>
-                {
-                    println_stderr!( "pls:history:file create failed:{}", e );
-                }
-            }
-        }
-
-        let conn = match Conn::open( hfile ) 
-        {
-            Ok( x ) => x,
-            Err( e ) =>
-            {
-                println_stderr!( "pls:history:open db error:{}", e );
-                return;
-            }
-        };
-
-        let sql = format!
-        ( 
-            "
-            CREATE TABLE IF NOT EXISTS {}
-                ( inp TEXT,
-                 rtn INTEGER,
-                 tsb REAL,
-                 tse REAL,
-                 sessionid TEXT,
-                 out TEXT,
-                 info TEXT
- );
-        ",
-        htable
-        );
-
-        match conn.execute( &sql, [] )
-        {
-            Ok( _ ) => {}
-            Err( e ) => println_stderr!( "pls:history:query error:{}", e ),
-        }
-    }
-
-    pub fn init( rl:&mut Interface<DefaultTerminal> )
-    {
-        let mut hist_size:usize = 99999;
-        if let Ok( x ) = env::var( "HISTORY_SIZE" ) {
-            if let Ok( y ) = x.parse::<usize>() {
-                hist_size = y;
-            }
-        }
-        rl.set_history_size( hist_size );
-
-        let history_table = get::history_table();
-        let hfile = get::history_file();
-
-        if !Path::new( &hfile ).exists() {
-            init_db( &hfile, &history_table );
-        }
-
-        let mut delete_dups = true;
-        if let Ok( x ) = env::var( "HISTORY_DELETE_DUPS" ) {
-            if x == "0" {
-                delete_dups = false;
-            }
-        }
-        if delete_dups {
-            delete_duplicated_histories();
-        }
-
-        let conn = match Conn::open( &hfile ) {
-            Ok( x ) => x,
-            Err( e ) =>
-        {               println_stderr!( "pls:history:conn error:{}", e );
-                return;
-            }
-        };
-        let sql = format!( "SELECT inp FROM {} ORDER BY tsb;", history_table );
-        let mut stmt = match conn.prepare( &sql ) {
-            Ok( x ) => x,
-            Err( e ) =>
-        {               println_stderr!( "pls:prepare select error:{}", e );
-                return;
-            }
-        };
-
-        let rows = match stmt.query_map( [], |row| row.get( 0 ) ) {
-            Ok( x ) => x,
-            Err( e ) =>
-        {               println_stderr!( "pls:query select error:{}", e );
-                return;
-            }
-        };
-
-        let mut dict_helper:HashMap<String, bool> = HashMap::new();
-        for x in rows.flatten() {
-            let inp:String = x;
-            if dict_helper.contains_key( &inp ) {
-                continue;
-            }
-            dict_helper.insert( inp.clone(), true );
-            rl.add_history( inp.trim().to_string() );
-        }
-    }
-
-    pub fn delete_duplicated_histories()
-    {
-        let hfile = get::history_file();
-        let history_table = get::history_table();
-        let conn = match Conn::open( &hfile ) {
-            Ok( x ) => x,
-            Err( e ) =>
-        {               println_stderr!( "pls:history:conn error:{}", e );
-                return;
-            }
-        };
-        let sql = format!( 
-            "DELETE FROM {} WHERE rowid NOT IN ( 
-            SELECT MAX( rowid ) FROM {} GROUP BY inp )",
-            history_table, history_table
- );
-        match conn.execute( &sql, [] ) {
-            Ok( _ ) => {}
-            Err( e ) => match e {
-                SqliteFailure( ee, msg ) =>
-        {                   if ee.extended_code == 5 {
-                        /*log!( 
-                            "failed to delete dup histories:{}",
-                            msg.unwrap_or( "db is locked?".to_owned() ),
- );*/
-                        return;
-                    }
-                    println_stderr!( 
-                        "pls:history:delete dups error:{}:{:?}",
-                        &ee,
-                        &msg
- );
-                }
-                _ =>
-        {                   println_stderr!( "pls:history:delete dup error:{}", e );
-                }
-            },
-        }
-    }
+    pub fn delete_duplicated_histories() { /* implement OVER database*/ }
 
     pub fn add_raw( sh:&shell::Shell, line:&str, status:i32, tsb:f64, tse:f64 )
-    {
-        let hfile = get::history_file();
-        let history_table = get::history_table();
-        if !Path::new( &hfile ).exists() {
-            init_db( &hfile, &history_table );
-        }
-
-        let conn = match Conn::open( &hfile ) {
-            Ok( x ) => x,
-            Err( e ) =>
-        {               println_stderr!( "pls:history:conn error:{}", e );
-                return;
-            }
-        };
-        let sql = format!( 
-            "INSERT INTO \
-             {} ( inp, rtn, tsb, tse, sessionid, info ) \
-             VALUES( '{}', {}, {}, {}, '{}', 'dir:{}|' );",
-            history_table,
-            str::replace( line.trim(), "'", "''" ),
-            status,
-            tsb,
-            tse,
-            sh.session_id,
-            sh.current_dir,
- );
-        match conn.execute( &sql, [] ) {
-            Ok( _ ) => {}
-            Err( e ) => println_stderr!( "pls:history:save error:{}", e ),
-        }
-    }
+    { /* implement OVER database*/ }
 
     pub fn add( sh:&shell::Shell, rl:&mut Interface<DefaultTerminal>, line:&str, status:i32, tsb:f64, tse:f64 )
-    {
-        add_raw( sh, line, status, tsb, tse );
-        rl.add_history( line.to_string() );
-    }
+    { /* implement OVER database*/ }
 }
 pub mod io { pub use std::io::{ * }; }
 pub mod hash { pub use std::hash::{ * }; }
@@ -4643,36 +5233,31 @@ pub mod is
     /// Tests if byte is ASCII digit: 0-9.
     
     /*
-    is_digit( ... ) -> bool */
+    is::digit( ... ) -> bool */
     #[inline] pub fn digit(chr: u8) -> bool  { chr >= 0x30 && chr <= 0x39 }
 
     /// Tests if byte is ASCII hex digit: 0-9, A-F, a-f.
-    #[inline]
-    pub fn is_hex_digit(chr: u8) -> bool {
+    #[inline] pub fn is_hex_digit(chr: u8) -> bool {
     (chr >= 0x30 && chr <= 0x39) || (chr >= 0x41 && chr <= 0x46) || (chr >= 0x61 && chr <= 0x66)
     }
 
     /// Tests if byte is ASCII octal digit: 0-7.
-    #[inline]
-    pub fn is_oct_digit(chr: u8) -> bool {
+    #[inline] pub fn is_oct_digit(chr: u8) -> bool {
     chr >= 0x30 && chr <= 0x37
     }
 
     /// Tests if byte is ASCII alphanumeric: A-Z, a-z, 0-9.
-    #[inline]
-    pub fn is_alphanumeric(chr: u8) -> bool {
+    #[inline] pub fn is_alphanumeric(chr: u8) -> bool {
     is::alphabetic(chr) || is::digit(chr)
     }
 
     /// Tests if byte is ASCII space or tab.
-    #[inline]
-    pub fn is_space(chr: u8) -> bool {
+    #[inline] pub fn is_space(chr: u8) -> bool {
     chr == b' ' || chr == b'\t'
     }
 
     /// Tests if byte is ASCII newline: \n.
-    #[inline]
-    pub fn is_newline(chr: u8) -> bool {
+    #[inline] pub fn is_newline(chr: u8) -> bool {
     chr == b'\n'
     }
 }
@@ -4685,424 +5270,622 @@ pub mod iter
         cmp::{ self, Ordering },
         convert::{ Infallible },
         marker::{ PhantomData },
+        rc::{ Rc },
         *,
     };
     
-    enum FoldStop<T, E>
-    {
+    enum FoldStop<T, E> {
         Break(T),
         Err(E),
     }
 
-    impl<T, E> From<E> for FoldStop<T, E>
-    {
-        #[inline] fn from(e: E) -> FoldStop<T, E> { FoldStop::Err(e) }
+    impl<T, E> From<E> for FoldStop<T, E> {
+        #[inline]
+        fn from(e: E) -> FoldStop<T, E> {
+            FoldStop::Err(e)
+        }
     }
 
-    trait ResultExt<T, E>
-    {
+    trait ResultExt<T, E> {
         fn unpack_fold(self) -> Result<T, E>;
     }
 
-    impl<T, E> ResultExt<T, E> for Result<T, FoldStop<T, E>>
-    {
-        #[inline] fn unpack_fold(self) -> Result<T, E>
-        {
-            match self
-            {
+    impl<T, E> ResultExt<T, E> for Result<T, FoldStop<T, E>> {
+        #[inline]
+        fn unpack_fold(self) -> Result<T, E> {
+            match self {
                 Ok(v) => Ok(v),
                 Err(FoldStop::Break(v)) => Ok(v),
                 Err(FoldStop::Err(e)) => Err(e),
             }
         }
     }
+
     /// An `Iterator`-like trait that allows for calculation of items to fail.
-    pub trait FallibleIterator
-    {
+    pub trait FallibleIterator {
         /// The type being iterated over.
         type Item;
+
         /// The error type.
         type Error;
+
         /// Advances the iterator and returns the next value.
-        fn next( &mut self ) -> Result<Option<Self::Item>, Self::Error>;
+        ///
+        /// Returns `Ok(None)` when iteration is finished.
+        ///
+        /// The behavior of calling this method after a previous call has returned
+        /// `Ok(None)` or `Err` is implementation defined.
+        fn next(&mut self) -> Result<Option<Self::Item>, Self::Error>;
+
         /// Returns bounds on the remaining length of the iterator.
-        #[inline] fn size_hint(&self) -> (usize, Option<usize>) { (0, None) }
+        ///
+        /// Specifically, the first half of the returned tuple is a lower bound and
+        /// the second half is an upper bound.
+        ///
+        /// For the upper bound, `None` indicates that the upper bound is either
+        /// unknown or larger than can be represented as a `usize`.
+        ///
+        /// Both bounds assume that all remaining calls to `next` succeed. That is,
+        /// `next` could return an `Err` in fewer calls than specified by the lower
+        /// bound.
+        ///
+        /// The default implementation returns `(0, None)`, which is correct for
+        /// any iterator.
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            (0, None)
+        }
+
         /// Consumes the iterator, returning the number of remaining items.
-        #[inline] fn count(self) -> Result<usize, Self::Error> where
-        Self: Sized
-        { self.fold(0, |n, _| Ok(n + 1)) }
-        /// Returns the last element of the iterator.
-        #[inline] fn last(self) -> Result<Option<Self::Item>, Self::Error> where
-        Self: Sized
-        { self.fold(None, |_, v| Ok(Some(v))) }
-        /// Returns the `n`th element of the iterator.
-        #[inline] fn nth(&mut self, mut n: usize) -> Result<Option<Self::Item>, Self::Error>
+        #[inline]
+        fn count(self) -> Result<usize, Self::Error>
+        where
+            Self: Sized,
         {
-            while let Some(e) = self.next()?
-            {
-                if n == 0 { return Ok(Some(e)); }
+            self.fold(0, |n, _| Ok(n + 1))
+        }
+
+        /// Returns the last element of the iterator.
+        #[inline]
+        fn last(self) -> Result<Option<Self::Item>, Self::Error>
+        where
+            Self: Sized,
+        {
+            self.fold(None, |_, v| Ok(Some(v)))
+        }
+
+        /// Returns the `n`th element of the iterator.
+        #[inline]
+        fn nth(&mut self, mut n: usize) -> Result<Option<Self::Item>, Self::Error> {
+            while let Some(e) = self.next()? {
+                if n == 0 {
+                    return Ok(Some(e));
+                }
                 n -= 1;
             }
-
             Ok(None)
         }
+
         /// Returns an iterator starting at the same point, but stepping by the given amount at each iteration.
-        #[inline] fn step_by(self, step: usize) -> StepBy<Self> where
-        Self: Sized
+        ///
+        /// # Panics
+        ///
+        /// Panics if `step` is 0.
+        #[inline]
+        fn step_by(self, step: usize) -> StepBy<Self>
+        where
+            Self: Sized,
         {
             assert!(step != 0);
-            StepBy
-            {
+            StepBy {
                 it: self,
                 step: step - 1,
                 first_take: true,
             }
         }
-        /// Returns an iterator which yields the elements of this iterator followed by another.
-        #[inline] fn chain<I>(self, it: I) -> Chain<Self, I> where
-        I: IntoFallibleIterator<Item = Self::Item, Error = Self::Error>,
-        Self: Sized
+
+        /// Returns an iterator which yields the elements of this iterator followed
+        /// by another.
+        #[inline]
+        fn chain<I>(self, it: I) -> Chain<Self, I>
+        where
+            I: IntoFallibleIterator<Item = Self::Item, Error = Self::Error>,
+            Self: Sized,
         {
-            Chain
-            {
+            Chain {
                 front: self,
                 back: it,
                 state: ChainState::Both,
             }
         }
-        /// Returns an iterator that yields pairs of this iterator's and another iterator's values.
-        #[inline] fn zip<I>(self, o: I) -> Zip<Self, I::IntoFallibleIter> where
-        Self: Sized,
-        I: IntoFallibleIterator<Error = Self::Error>
-        { Zip(self, o.into_fallible_iter()) }
-        /// Returns an iterator which applies a fallible transform to the elements of the underlying iterator.
-        #[inline] fn map<F, B>(self, f: F) -> Map<Self, F> where
-        Self: Sized,
-        F: FnMut(Self::Item) -> Result<B, Self::Error>
-        { Map { it: self, f } }
-        /// Calls a fallible closure on each element of an iterator.
-        #[inline] fn for_each<F>(self, mut f: F) -> Result<(), Self::Error> where
-        Self: Sized,
-        F: FnMut(Self::Item) -> Result<(), Self::Error>
-        { self.fold((), move |(), item| f(item)) }
-        /// Returns an iterator which uses a predicate to determine which values should be yielded.
-        #[inline] fn filter<F>(self, f: F) -> Filter<Self, F> where
-        Self: Sized,
-        F: FnMut(&Self::Item) -> Result<bool, Self::Error>
-        { Filter { it: self, f } }
-        /// Returns an iterator which both filters and maps.
-        #[inline] fn filter_map<B, F>(self, f: F) -> FilterMap<Self, F> where
-        Self: Sized,
-        F: FnMut(Self::Item) -> Result<Option<B>, Self::Error> 
-        { FilterMap { it: self, f } }
-        /// Returns an iterator which yields the current iteration count as well as the value.
-        #[inline] fn enumerate(self) -> Enumerate<Self> where
-        Self: Sized
-        { Enumerate { it: self, n: 0 } }
-        /// Returns an iterator that can peek at the next element without consuming it.
-        #[inline] fn peekable(self) -> Peekable<Self> where
-        Self: Sized,
+
+        /// Returns an iterator that yields pairs of this iterator's and another
+        /// iterator's values.
+        #[inline]
+        fn zip<I>(self, o: I) -> Zip<Self, I::IntoFallibleIter>
+        where
+            Self: Sized,
+            I: IntoFallibleIterator<Error = Self::Error>,
         {
-            Peekable
-            {
+            Zip(self, o.into_fallible_iter())
+        }
+
+        /// Returns an iterator which applies a fallible transform to the elements
+        /// of the underlying iterator.
+        #[inline]
+        fn map<F, B>(self, f: F) -> Map<Self, F>
+        where
+            Self: Sized,
+            F: FnMut(Self::Item) -> Result<B, Self::Error>,
+        {
+            Map { it: self, f }
+        }
+
+        /// Calls a fallible closure on each element of an iterator.
+        #[inline]
+        fn for_each<F>(self, mut f: F) -> Result<(), Self::Error>
+        where
+            Self: Sized,
+            F: FnMut(Self::Item) -> Result<(), Self::Error>,
+        {
+            self.fold((), move |(), item| f(item))
+        }
+
+        /// Returns an iterator which uses a predicate to determine which values
+        /// should be yielded. The predicate may fail; such failures are passed to
+        /// the caller.
+        #[inline]
+        fn filter<F>(self, f: F) -> Filter<Self, F>
+        where
+            Self: Sized,
+            F: FnMut(&Self::Item) -> Result<bool, Self::Error>,
+        {
+            Filter { it: self, f }
+        }
+
+        /// Returns an iterator which both filters and maps. The closure may fail;
+        /// such failures are passed along to the consumer.
+        #[inline]
+        fn filter_map<B, F>(self, f: F) -> FilterMap<Self, F>
+        where
+            Self: Sized,
+            F: FnMut(Self::Item) -> Result<Option<B>, Self::Error>,
+        {
+            FilterMap { it: self, f }
+        }
+
+        /// Returns an iterator which yields the current iteration count as well
+        /// as the value.
+        #[inline]
+        fn enumerate(self) -> Enumerate<Self>
+        where
+            Self: Sized,
+        {
+            Enumerate { it: self, n: 0 }
+        }
+
+        /// Returns an iterator that can peek at the next element without consuming
+        /// it.
+        #[inline]
+        fn peekable(self) -> Peekable<Self>
+        where
+            Self: Sized,
+        {
+            Peekable {
                 it: self,
                 next: None,
             }
         }
-        /// Returns an iterator that skips elements based on a predicate.
-        #[inline] fn skip_while<P>(self, predicate: P) -> SkipWhile<Self, P> where
-        Self: Sized,
-        P: FnMut(&Self::Item) -> Result<bool, Self::Error>
-        {
-            SkipWhile
-            {
-                it: self,
-                flag: false,
-                predicate,
-            }
-        }
-        /// Returns an iterator that yields elements based on a predicate.
-        #[inline] fn take_while<P>(self, predicate: P) -> TakeWhile<Self, P> where
-        Self: Sized,
-        P: FnMut(&Self::Item) -> Result<bool, Self::Error>
-        {
-            TakeWhile
-            {
-                it: self,
-                flag: false,
-                predicate,
-            }
-        }
-        /// Returns an iterator which skips the first `n` values of this iterator.
-        #[inline] fn skip(self, n: usize) -> Skip<Self> where
-        Self: Sized
-        { Skip { it: self, n } }
 
-        /// Returns an iterator that yields only the first `n` values of this iterator.
-        #[inline] fn take(self, n: usize) -> Take<Self> where
-        Self: Sized
+        /// Returns an iterator that skips elements based on a predicate.
+        #[inline]
+        fn skip_while<P>(self, predicate: P) -> SkipWhile<Self, P>
+        where
+            Self: Sized,
+            P: FnMut(&Self::Item) -> Result<bool, Self::Error>,
         {
-            Take
-            {
+            SkipWhile {
+                it: self,
+                flag: false,
+                predicate,
+            }
+        }
+
+        /// Returns an iterator that yields elements based on a predicate.
+        #[inline]
+        fn take_while<P>(self, predicate: P) -> TakeWhile<Self, P>
+        where
+            Self: Sized,
+            P: FnMut(&Self::Item) -> Result<bool, Self::Error>,
+        {
+            TakeWhile {
+                it: self,
+                flag: false,
+                predicate,
+            }
+        }
+
+        /// Returns an iterator which skips the first `n` values of this iterator.
+        #[inline]
+        fn skip(self, n: usize) -> Skip<Self>
+        where
+            Self: Sized,
+        {
+            Skip { it: self, n }
+        }
+
+        /// Returns an iterator that yields only the first `n` values of this
+        /// iterator.
+        #[inline]
+        fn take(self, n: usize) -> Take<Self>
+        where
+            Self: Sized,
+        {
+            Take {
                 it: self,
                 remaining: n,
             }
         }
-        /// Returns an iterator which applies a stateful map to values of this iterator.
-        #[inline] fn scan<St, B, F>(self, initial_state: St, f: F) -> Scan<Self, St, F> where
-        Self: Sized,
-        F: FnMut(&mut St, Self::Item) -> Result<Option<B>, Self::Error>
+
+        /// Returns an iterator which applies a stateful map to values of this
+        /// iterator.
+        #[inline]
+        fn scan<St, B, F>(self, initial_state: St, f: F) -> Scan<Self, St, F>
+        where
+            Self: Sized,
+            F: FnMut(&mut St, Self::Item) -> Result<Option<B>, Self::Error>,
         {
-            Scan
-            {
+            Scan {
                 it: self,
                 f,
                 state: initial_state,
             }
         }
+
         /// Returns an iterator which maps this iterator's elements to iterators, yielding those iterators' values.
-        #[inline] fn flat_map<U, F>(self, f: F) -> FlatMap<Self, U, F> where
-        Self: Sized,
-        U: IntoFallibleIterator<Error = Self::Error>,
-        F: FnMut(Self::Item) -> Result<U, Self::Error>
+        #[inline]
+        fn flat_map<U, F>(self, f: F) -> FlatMap<Self, U, F>
+        where
+            Self: Sized,
+            U: IntoFallibleIterator<Error = Self::Error>,
+            F: FnMut(Self::Item) -> Result<U, Self::Error>,
         {
-            FlatMap
-            {
+            FlatMap {
                 it: self.map(f),
                 cur: None,
             }
         }
+
         /// Returns an iterator which flattens an iterator of iterators, yielding those iterators' values.
-        #[inline] fn flatten(self) -> Flatten<Self> where
-        Self: Sized,
-        Self::Item: IntoFallibleIterator<Error = Self::Error>
+        #[inline]
+        fn flatten(self) -> Flatten<Self>
+        where
+            Self: Sized,
+            Self::Item: IntoFallibleIterator<Error = Self::Error>,
         {
             Flatten {
                 it: self,
                 cur: None,
             }
         }
-        /// Returns an iterator which yields this iterator's elements and ends after the first `Ok(None)`.
-        #[inline] fn fuse(self) -> Fuse<Self> where
-        Self: Sized
+
+        /// Returns an iterator which yields this iterator's elements and ends after
+        /// the first `Ok(None)`.
+        ///
+        /// The behavior of calling `next` after it has previously returned
+        /// `Ok(None)` is normally unspecified. The iterator returned by this method
+        /// guarantees that `Ok(None)` will always be returned.
+        #[inline]
+        fn fuse(self) -> Fuse<Self>
+        where
+            Self: Sized,
         {
-            Fuse
-            {
+            Fuse {
                 it: self,
                 done: false,
             }
         }
+
         /// Returns an iterator which passes each element to a closure before returning it.
-        #[inline] fn inspect<F>(self, f: F) -> Inspect<Self, F> where
-        Self: Sized,
-        F: FnMut(&Self::Item) -> Result<(), Self::Error>
-        { Inspect { it: self, f } }
+        #[inline]
+        fn inspect<F>(self, f: F) -> Inspect<Self, F>
+        where
+            Self: Sized,
+            F: FnMut(&Self::Item) -> Result<(), Self::Error>,
+        {
+            Inspect { it: self, f }
+        }
+
         /// Borrow an iterator rather than consuming it.
-        #[inline] fn by_ref( &mut self ) -> &mut Self where
-        Self: Sized
-        { self }
+        ///
+        /// This is useful to allow the use of iterator adaptors that would
+        /// otherwise consume the value.
+        #[inline]
+        fn by_ref(&mut self) -> &mut Self
+        where
+            Self: Sized,
+        {
+            self
+        }
+
         /// Transforms the iterator into a collection.
-        #[inline] fn collect<T>(self) -> Result<T, Self::Error> where
-        T: iter::FromIterator<Self::Item>,
-        Self: Sized
-        { self.iterator().collect() }
+        ///
+        /// An `Err` will be returned if any invocation of `next` returns `Err`.
+        #[inline]
+        fn collect<T>(self) -> Result<T, Self::Error>
+        where
+            T: iter::FromIterator<Self::Item>,
+            Self: Sized,
+        {
+            self.iterator().collect()
+        }
+
         /// Transforms the iterator into two collections, partitioning elements by a closure.
-        #[inline] fn partition<B, F>(self, mut f: F) -> Result<(B, B), Self::Error> where
-        Self: Sized,
-        B: Default + Extend<Self::Item>,
-        F: FnMut(&Self::Item) -> Result<bool, Self::Error>
+        #[inline]
+        fn partition<B, F>(self, mut f: F) -> Result<(B, B), Self::Error>
+        where
+            Self: Sized,
+            B: Default + Extend<Self::Item>,
+            F: FnMut(&Self::Item) -> Result<bool, Self::Error>,
         {
             let mut a = B::default();
             let mut b = B::default();
 
-            self.for_each(|i|
-            {
-                if f(&i)? { a.extend(Some(i)); }
-                else { b.extend(Some(i)); }
-
+            self.for_each(|i| {
+                if f(&i)? {
+                    a.extend(Some(i));
+                } else {
+                    b.extend(Some(i));
+                }
                 Ok(())
             })?;
 
             Ok((a, b))
         }
-        /// Applies a function over the elements of the iterator, producing a single final value.
-        #[inline] fn fold<B, F>(mut self, init: B, f: F) -> Result<B, Self::Error> where
-        Self: Sized,
-        F: FnMut(B, Self::Item) -> Result<B, Self::Error>
-        { self.try_fold(init, f) }
-        /// Applies a function over the elements of the iterator, producing a single final value.
-        #[inline] fn try_fold<B, E, F>(&mut self, mut init: B, mut f: F) -> Result<B, E> where
-        Self: Sized,
-        E: From<Self::Error>,
-        F: FnMut(B, Self::Item) -> Result<B, E>
+
+        /// Applies a function over the elements of the iterator, producing a single
+        /// final value.
+        #[inline]
+        fn fold<B, F>(mut self, init: B, f: F) -> Result<B, Self::Error>
+        where
+            Self: Sized,
+            F: FnMut(B, Self::Item) -> Result<B, Self::Error>,
         {
-            while let Some(v) = self.next()?
-            {
+            self.try_fold(init, f)
+        }
+
+        /// Applies a function over the elements of the iterator, producing a single final value.
+        ///
+        /// This is used as the "base" of many methods on `FallibleIterator`.
+        #[inline]
+        fn try_fold<B, E, F>(&mut self, mut init: B, mut f: F) -> Result<B, E>
+        where
+            Self: Sized,
+            E: From<Self::Error>,
+            F: FnMut(B, Self::Item) -> Result<B, E>,
+        {
+            while let Some(v) = self.next()? {
                 init = f(init, v)?;
             }
-
             Ok(init)
         }
+
         /// Determines if all elements of this iterator match a predicate.
-        #[inline] fn all<F>(&mut self, mut f: F) -> Result<bool, Self::Error> where
-        Self: Sized,
-        F: FnMut(Self::Item) -> Result<bool, Self::Error>
+        #[inline]
+        fn all<F>(&mut self, mut f: F) -> Result<bool, Self::Error>
+        where
+            Self: Sized,
+            F: FnMut(Self::Item) -> Result<bool, Self::Error>,
         {
-            self.try_fold((), |(), v| 
-            {
-                if !f(v)? { return Err(FoldStop::Break(false)); }
+            self.try_fold((), |(), v| {
+                if !f(v)? {
+                    return Err(FoldStop::Break(false));
+                }
                 Ok(())
             })
             .map(|()| true)
             .unpack_fold()
         }
+
         /// Determines if any element of this iterator matches a predicate.
-        #[inline] fn any<F>(&mut self, mut f: F) -> Result<bool, Self::Error> where
-        Self: Sized,
-        F: FnMut(Self::Item) -> Result<bool, Self::Error>
+        #[inline]
+        fn any<F>(&mut self, mut f: F) -> Result<bool, Self::Error>
+        where
+            Self: Sized,
+            F: FnMut(Self::Item) -> Result<bool, Self::Error>,
         {
             self.try_fold((), |(), v| {
-                if f(v)? { return Err(FoldStop::Break(true)); }
+                if f(v)? {
+                    return Err(FoldStop::Break(true));
+                }
                 Ok(())
             })
             .map(|()| false)
             .unpack_fold()
         }
+
         /// Returns the first element of the iterator that matches a predicate.
-        #[inline] fn find<F>(&mut self, mut f: F) -> Result<Option<Self::Item>, Self::Error> where
-        Self: Sized,
-        F: FnMut(&Self::Item) -> Result<bool, Self::Error>
+        #[inline]
+        fn find<F>(&mut self, mut f: F) -> Result<Option<Self::Item>, Self::Error>
+        where
+            Self: Sized,
+            F: FnMut(&Self::Item) -> Result<bool, Self::Error>,
         {
-            self.try_fold((), |(), v|
-            {
-                if f(&v)? { return Err(FoldStop::Break(Some(v))); }
+            self.try_fold((), |(), v| {
+                if f(&v)? {
+                    return Err(FoldStop::Break(Some(v)));
+                }
                 Ok(())
             })
             .map(|()| None)
             .unpack_fold()
         }
+
         /// Applies a function to the elements of the iterator, returning the first non-`None` result.
-        #[inline] fn find_map<B, F>(&mut self, f: F) -> Result<Option<B>, Self::Error> where
-        Self: Sized,
-        F: FnMut(Self::Item) -> Result<Option<B>, Self::Error>
+        #[inline]
+        fn find_map<B, F>(&mut self, f: F) -> Result<Option<B>, Self::Error>
+        where
+            Self: Sized,
+            F: FnMut(Self::Item) -> Result<Option<B>, Self::Error>,
         {
             self.filter_map(f).next()
         }
-        /// Returns the position of the first element of this iterator that matches a predicate.
-        #[inline] fn position<F>(&mut self, mut f: F) -> Result<Option<usize>, Self::Error> where
-        Self: Sized,
-        F: FnMut(Self::Item) -> Result<bool, Self::Error>
+
+        /// Returns the position of the first element of this iterator that matches
+        /// a predicate. The predicate may fail; such failures are returned to the
+        /// caller.
+        #[inline]
+        fn position<F>(&mut self, mut f: F) -> Result<Option<usize>, Self::Error>
+        where
+            Self: Sized,
+            F: FnMut(Self::Item) -> Result<bool, Self::Error>,
         {
-            self.try_fold(0, |n, v|
-            {
-                if f(v)? { return Err(FoldStop::Break(Some(n))); }
+            self.try_fold(0, |n, v| {
+                if f(v)? {
+                    return Err(FoldStop::Break(Some(n)));
+                }
                 Ok(n + 1)
             })
             .map(|_| None)
             .unpack_fold()
         }
+
         /// Returns the maximal element of the iterator.
-        #[inline] fn max(self) -> Result<Option<Self::Item>, Self::Error> where
-        Self: Sized,
-        Self::Item: Ord
-        { self.max_by(|a, b| Ok(a.cmp(b))) }
-        /// Returns the element of the iterator which gives the maximum value from the function.
-        #[inline] fn max_by_key<B, F>(mut self, mut f: F) -> Result<Option<Self::Item>, Self::Error> where
-        Self: Sized,
-        B: Ord,
-        F: FnMut(&Self::Item) -> Result<B, Self::Error>
+        #[inline]
+        fn max(self) -> Result<Option<Self::Item>, Self::Error>
+        where
+            Self: Sized,
+            Self::Item: Ord,
         {
-            let max = match self.next()?
-            {
+            self.max_by(|a, b| Ok(a.cmp(b)))
+        }
+
+        /// Returns the element of the iterator which gives the maximum value from
+        /// the function.
+        #[inline]
+        fn max_by_key<B, F>(mut self, mut f: F) -> Result<Option<Self::Item>, Self::Error>
+        where
+            Self: Sized,
+            B: Ord,
+            F: FnMut(&Self::Item) -> Result<B, Self::Error>,
+        {
+            let max = match self.next()? {
                 Some(v) => (f(&v)?, v),
                 None => return Ok(None),
             };
 
-            self.fold(max, |(key, max), v|
-            {
+            self.fold(max, |(key, max), v| {
                 let new_key = f(&v)?;
-                if key > new_key { Ok((key, max)) }
-                else { Ok((new_key, v)) }
+                if key > new_key {
+                    Ok((key, max))
+                } else {
+                    Ok((new_key, v))
+                }
             })
             .map(|v| Some(v.1))
         }
+
         /// Returns the element that gives the maximum value with respect to the function.
-        #[inline] fn max_by<F>(mut self, mut f: F) -> Result<Option<Self::Item>, Self::Error> where
-        Self: Sized,
-        F: FnMut(&Self::Item, &Self::Item) -> Result<Ordering, Self::Error>
+        #[inline]
+        fn max_by<F>(mut self, mut f: F) -> Result<Option<Self::Item>, Self::Error>
+        where
+            Self: Sized,
+            F: FnMut(&Self::Item, &Self::Item) -> Result<Ordering, Self::Error>,
         {
-            let max = match self.next()?
-            {
+            let max = match self.next()? {
                 Some(v) => v,
                 None => return Ok(None),
             };
 
-            self.fold(max, |max, v|
-            {
-                if f(&max, &v)? == Ordering::Greater { Ok(max) } 
-                else { Ok(v) }
+            self.fold(max, |max, v| {
+                if f(&max, &v)? == Ordering::Greater {
+                    Ok(max)
+                } else {
+                    Ok(v)
+                }
             })
             .map(Some)
         }
+
         /// Returns the minimal element of the iterator.
-        #[inline] fn min(self) -> Result<Option<Self::Item>, Self::Error> where
-        Self: Sized,
-        Self::Item: Ord
+        #[inline]
+        fn min(self) -> Result<Option<Self::Item>, Self::Error>
+        where
+            Self: Sized,
+            Self::Item: Ord,
         {
             self.min_by(|a, b| Ok(a.cmp(b)))
         }
-        /// Returns the element of the iterator which gives the minimum value from the function.
-        #[inline] fn min_by_key<B, F>(mut self, mut f: F) -> Result<Option<Self::Item>, Self::Error> where
-        Self: Sized,
-        B: Ord,
-        F: FnMut(&Self::Item) -> Result<B, Self::Error>
+
+        /// Returns the element of the iterator which gives the minimum value from
+        /// the function.
+        #[inline]
+        fn min_by_key<B, F>(mut self, mut f: F) -> Result<Option<Self::Item>, Self::Error>
+        where
+            Self: Sized,
+            B: Ord,
+            F: FnMut(&Self::Item) -> Result<B, Self::Error>,
         {
-            let min = match self.next()?
-            {
+            let min = match self.next()? {
                 Some(v) => (f(&v)?, v),
                 None => return Ok(None),
             };
 
-            self.fold(min, |(key, min), v|
-            {
+            self.fold(min, |(key, min), v| {
                 let new_key = f(&v)?;
-                if key < new_key { Ok((key, min)) } 
-                else { Ok((new_key, v)) }
+                if key < new_key {
+                    Ok((key, min))
+                } else {
+                    Ok((new_key, v))
+                }
             })
             .map(|v| Some(v.1))
         }
+
         /// Returns the element that gives the minimum value with respect to the function.
-        #[inline] fn min_by<F>(mut self, mut f: F) -> Result<Option<Self::Item>, Self::Error> where
-        Self: Sized,
-        F: FnMut(&Self::Item, &Self::Item) -> Result<Ordering, Self::Error>
+        #[inline]
+        fn min_by<F>(mut self, mut f: F) -> Result<Option<Self::Item>, Self::Error>
+        where
+            Self: Sized,
+            F: FnMut(&Self::Item, &Self::Item) -> Result<Ordering, Self::Error>,
         {
-            let min = match self.next()?
-            {
+            let min = match self.next()? {
                 Some(v) => v,
                 None => return Ok(None),
             };
 
-            self.fold(min, |min, v|
-            {
-                if f(&min, &v)? == Ordering::Less { Ok(min) } 
-                else { Ok(v) }
+            self.fold(min, |min, v| {
+                if f(&min, &v)? == Ordering::Less {
+                    Ok(min)
+                } else {
+                    Ok(v)
+                }
             })
             .map(Some)
         }
-        /// Returns an iterator that yields this iterator's items in the opposite order.
-        #[inline] fn rev(self) -> Rev<Self> where
-        Self: Sized + DoubleEndedFallibleIterator { Rev(self) }
+
+        /// Returns an iterator that yields this iterator's items in the opposite
+        /// order.
+        #[inline]
+        fn rev(self) -> Rev<Self>
+        where
+            Self: Sized + DoubleEndedFallibleIterator,
+        {
+            Rev(self)
+        }
+
         /// Converts an iterator of pairs into a pair of containers.
-        #[inline] fn unzip<A, B, FromA, FromB>(self) -> Result<(FromA, FromB), Self::Error> where
-        Self: Sized + FallibleIterator<Item = (A, B)>,
-        FromA: Default + Extend<A>,
-        FromB: Default + Extend<B>
+        #[inline]
+        fn unzip<A, B, FromA, FromB>(self) -> Result<(FromA, FromB), Self::Error>
+        where
+            Self: Sized + FallibleIterator<Item = (A, B)>,
+            FromA: Default + Extend<A>,
+            FromB: Default + Extend<B>,
         {
             let mut from_a = FromA::default();
             let mut from_b = FromB::default();
 
-            self.for_each(|(a, b)|
-            {
+            self.for_each(|(a, b)| {
                 from_a.extend(Some(a));
                 from_b.extend(Some(b));
                 Ok(())
@@ -5110,125 +5893,142 @@ pub mod iter
 
             Ok((from_a, from_b))
         }
+
         /// Returns an iterator which clones all of its elements.
-        #[inline] fn cloned<'a, T>(self) -> Cloned<Self> where
-        Self: Sized + FallibleIterator<Item = &'a T>,
-        T: 'a + Clone
-        { Cloned(self) }
-        /// Returns an iterator which repeats this iterator endlessly.
-        #[inline] fn cycle(self) -> Cycle<Self> where
-        Self: Sized + Clone
+        #[inline]
+        fn cloned<'a, T>(self) -> Cloned<Self>
+        where
+            Self: Sized + FallibleIterator<Item = &'a T>,
+            T: 'a + Clone,
         {
-            Cycle
-            {
+            Cloned(self)
+        }
+
+        /// Returns an iterator which repeats this iterator endlessly.
+        #[inline]
+        fn cycle(self) -> Cycle<Self>
+        where
+            Self: Sized + Clone,
+        {
+            Cycle {
                 it: self.clone(),
                 cur: self,
             }
         }
-        /// Lexicographically compares the elements of this iterator to that of another.
-        #[inline] fn cmp<I>(mut self, other: I) -> Result<Ordering, Self::Error> where
-        Self: Sized,
-        I: IntoFallibleIterator<Item = Self::Item, Error = Self::Error>,
-        Self::Item: Ord
+
+        /// Lexicographically compares the elements of this iterator to that of
+        /// another.
+        #[inline]
+        fn cmp<I>(mut self, other: I) -> Result<Ordering, Self::Error>
+        where
+            Self: Sized,
+            I: IntoFallibleIterator<Item = Self::Item, Error = Self::Error>,
+            Self::Item: Ord,
         {
             let mut other = other.into_fallible_iter();
-            loop
-            {
-                match (self.next()?, other.next()?)
-                {
+
+            loop {
+                match (self.next()?, other.next()?) {
                     (None, None) => return Ok(Ordering::Equal),
                     (None, _) => return Ok(Ordering::Less),
                     (_, None) => return Ok(Ordering::Greater),
-                    (Some(x), Some(y)) => match x.cmp(&y)
-                    {
+                    (Some(x), Some(y)) => match x.cmp(&y) {
                         Ordering::Equal => {}
                         o => return Ok(o),
                     },
                 }
             }
         }
-        /// Lexicographically compares the elements of this iterator to that of another.
-        #[inline] fn partial_cmp<I>(mut self, other: I) -> Result<Option<Ordering>, Self::Error> where
-        Self: Sized,
-        I: IntoFallibleIterator<Error = Self::Error>,
-        Self::Item: PartialOrd<I::Item>
+
+        /// Lexicographically compares the elements of this iterator to that of
+        /// another.
+        #[inline]
+        fn partial_cmp<I>(mut self, other: I) -> Result<Option<Ordering>, Self::Error>
+        where
+            Self: Sized,
+            I: IntoFallibleIterator<Error = Self::Error>,
+            Self::Item: PartialOrd<I::Item>,
         {
             let mut other = other.into_fallible_iter();
 
-            loop
-            {
-                match (self.next()?, other.next()?)
-                {
+            loop {
+                match (self.next()?, other.next()?) {
                     (None, None) => return Ok(Some(Ordering::Equal)),
                     (None, _) => return Ok(Some(Ordering::Less)),
                     (_, None) => return Ok(Some(Ordering::Greater)),
-                    (Some(x), Some(y)) => match x.partial_cmp(&y)
-                    {
+                    (Some(x), Some(y)) => match x.partial_cmp(&y) {
                         Some(Ordering::Equal) => {}
                         o => return Ok(o),
                     },
                 }
             }
         }
-        /// Determines if the elements of this iterator are equal to those of another.
-        #[inline] fn eq<I>(mut self, other: I) -> Result<bool, Self::Error> where
-        Self: Sized,
-        I: IntoFallibleIterator<Error = Self::Error>,
-        Self::Item: PartialEq<I::Item>
+
+        /// Determines if the elements of this iterator are equal to those of
+        /// another.
+        #[inline]
+        fn eq<I>(mut self, other: I) -> Result<bool, Self::Error>
+        where
+            Self: Sized,
+            I: IntoFallibleIterator<Error = Self::Error>,
+            Self::Item: PartialEq<I::Item>,
         {
             let mut other = other.into_fallible_iter();
 
-            loop
-            {
-                match (self.next()?, other.next()?)
-                {
+            loop {
+                match (self.next()?, other.next()?) {
                     (None, None) => return Ok(true),
                     (None, _) | (_, None) => return Ok(false),
-                    (Some(x), Some(y)) =>
-                    {
-                        if x != y { return Ok(false); }
+                    (Some(x), Some(y)) => {
+                        if x != y {
+                            return Ok(false);
+                        }
                     }
                 }
             }
         }
-        /// Determines if the elements of this iterator are not equal to those of another.
-        #[inline] fn ne<I>(mut self, other: I) -> Result<bool, Self::Error> where
-        Self: Sized,
-        I: IntoFallibleIterator<Error = Self::Error>,
-        Self::Item: PartialEq<I::Item>
+
+        /// Determines if the elements of this iterator are not equal to those of
+        /// another.
+        #[inline]
+        fn ne<I>(mut self, other: I) -> Result<bool, Self::Error>
+        where
+            Self: Sized,
+            I: IntoFallibleIterator<Error = Self::Error>,
+            Self::Item: PartialEq<I::Item>,
         {
             let mut other = other.into_fallible_iter();
 
-            loop
-            {
-                match (self.next()?, other.next()?)
-                {
+            loop {
+                match (self.next()?, other.next()?) {
                     (None, None) => return Ok(false),
                     (None, _) | (_, None) => return Ok(true),
-                    (Some(x), Some(y)) =>
-                    {
-                        if x != y { return Ok(true); }
+                    (Some(x), Some(y)) => {
+                        if x != y {
+                            return Ok(true);
+                        }
                     }
                 }
             }
         }
-        /// Determines if the elements of this iterator are lexicographically less than those of another.
-        #[inline] fn lt<I>(mut self, other: I) -> Result<bool, Self::Error> where
-        Self: Sized,
-        I: IntoFallibleIterator<Error = Self::Error>,
-        Self::Item: PartialOrd<I::Item>
+
+        /// Determines if the elements of this iterator are lexicographically less
+        /// than those of another.
+        #[inline]
+        fn lt<I>(mut self, other: I) -> Result<bool, Self::Error>
+        where
+            Self: Sized,
+            I: IntoFallibleIterator<Error = Self::Error>,
+            Self::Item: PartialOrd<I::Item>,
         {
             let mut other = other.into_fallible_iter();
 
-            loop
-            {
-                match (self.next()?, other.next()?)
-                {
+            loop {
+                match (self.next()?, other.next()?) {
                     (None, None) => return Ok(false),
                     (None, _) => return Ok(true),
                     (_, None) => return Ok(false),
-                    (Some(x), Some(y)) => match x.partial_cmp(&y)
-                    {
+                    (Some(x), Some(y)) => match x.partial_cmp(&y) {
                         Some(Ordering::Less) => return Ok(true),
                         Some(Ordering::Equal) => {}
                         Some(Ordering::Greater) => return Ok(false),
@@ -5237,23 +6037,24 @@ pub mod iter
                 }
             }
         }
-        /// Determines if the elements of this iterator are lexicographically less than or equal to those of another.
-        #[inline] fn le<I>(mut self, other: I) -> Result<bool, Self::Error> where
-        Self: Sized,
-        I: IntoFallibleIterator<Error = Self::Error>,
-        Self::Item: PartialOrd<I::Item>
+
+        /// Determines if the elements of this iterator are lexicographically less
+        /// than or equal to those of another.
+        #[inline]
+        fn le<I>(mut self, other: I) -> Result<bool, Self::Error>
+        where
+            Self: Sized,
+            I: IntoFallibleIterator<Error = Self::Error>,
+            Self::Item: PartialOrd<I::Item>,
         {
             let mut other = other.into_fallible_iter();
 
-            loop
-            {
-                match (self.next()?, other.next()?)
-                {
+            loop {
+                match (self.next()?, other.next()?) {
                     (None, None) => return Ok(true),
                     (None, _) => return Ok(true),
                     (_, None) => return Ok(false),
-                    (Some(x), Some(y)) => match x.partial_cmp(&y)
-                    {
+                    (Some(x), Some(y)) => match x.partial_cmp(&y) {
                         Some(Ordering::Less) => return Ok(true),
                         Some(Ordering::Equal) => {}
                         Some(Ordering::Greater) => return Ok(false),
@@ -5262,23 +6063,24 @@ pub mod iter
                 }
             }
         }
-        /// Determines if the elements of this iterator are lexicographically greater than those of another.
-        #[inline] fn gt<I>(mut self, other: I) -> Result<bool, Self::Error> where
-        Self: Sized,
-        I: IntoFallibleIterator<Error = Self::Error>,
-        Self::Item: PartialOrd<I::Item>
+
+        /// Determines if the elements of this iterator are lexicographically
+        /// greater than those of another.
+        #[inline]
+        fn gt<I>(mut self, other: I) -> Result<bool, Self::Error>
+        where
+            Self: Sized,
+            I: IntoFallibleIterator<Error = Self::Error>,
+            Self::Item: PartialOrd<I::Item>,
         {
             let mut other = other.into_fallible_iter();
 
-            loop
-            {
-                match (self.next()?, other.next()?)
-                {
+            loop {
+                match (self.next()?, other.next()?) {
                     (None, None) => return Ok(false),
                     (None, _) => return Ok(false),
                     (_, None) => return Ok(true),
-                    (Some(x), Some(y)) => match x.partial_cmp(&y)
-                    {
+                    (Some(x), Some(y)) => match x.partial_cmp(&y) {
                         Some(Ordering::Less) => return Ok(false),
                         Some(Ordering::Equal) => {}
                         Some(Ordering::Greater) => return Ok(true),
@@ -5287,23 +6089,24 @@ pub mod iter
                 }
             }
         }
-        /// Determines if the elements of this iterator are lexicographically greater than or equal to those of another.
-        #[inline] fn ge<I>(mut self, other: I) -> Result<bool, Self::Error> where
-        Self: Sized,
-        I: IntoFallibleIterator<Error = Self::Error>,
-        Self::Item: PartialOrd<I::Item>
+
+        /// Determines if the elements of this iterator are lexicographically
+        /// greater than or equal to those of another.
+        #[inline]
+        fn ge<I>(mut self, other: I) -> Result<bool, Self::Error>
+        where
+            Self: Sized,
+            I: IntoFallibleIterator<Error = Self::Error>,
+            Self::Item: PartialOrd<I::Item>,
         {
             let mut other = other.into_fallible_iter();
 
-            loop
-            {
-                match (self.next()?, other.next()?)
-                {
+            loop {
+                match (self.next()?, other.next()?) {
                     (None, None) => return Ok(true),
                     (None, _) => return Ok(false),
                     (_, None) => return Ok(true),
-                    (Some(x), Some(y)) => match x.partial_cmp(&y)
-                    {
+                    (Some(x), Some(y)) => match x.partial_cmp(&y) {
                         Some(Ordering::Less) => return Ok(false),
                         Some(Ordering::Equal) => {}
                         Some(Ordering::Greater) => return Ok(true),
@@ -5312,245 +6115,1953 @@ pub mod iter
                 }
             }
         }
+
         /// Returns a normal (non-fallible) iterator over `Result<Item, Error>`.
-        #[inline] fn iterator(self) -> Iterator<Self> where
-        Self: Sized
-        { Iterator(self) }
-        /// Returns an iterator which applies a transform to the errors of the underlying iterator.
-        #[inline] fn map_err<B, F>(self, f: F) -> MapErr<Self, F> where
-        F: FnMut(Self::Error) -> B,
-        Self: Sized
-        { MapErr { it: self, f } }
+        #[inline]
+        fn iterator(self) -> Iterator<Self>
+        where
+            Self: Sized,
+        {
+            Iterator(self)
+        }
+
+        /// Returns an iterator which applies a transform to the errors of the
+        /// underlying iterator.
+        #[inline]
+        fn map_err<B, F>(self, f: F) -> MapErr<Self, F>
+        where
+            F: FnMut(Self::Error) -> B,
+            Self: Sized,
+        {
+            MapErr { it: self, f }
+        }
+
         /// Returns an iterator which unwraps all of its elements.
-        #[inline] fn unwrap<T>(self) -> Unwrap<Self> where
-        Self: Sized + FallibleIterator<Item = T>,
-        Self::Error: core::fmt::Debug
-        { Unwrap(self) }
+        #[inline]
+        fn unwrap<T>(self) -> Unwrap<Self>
+        where
+            Self: Sized + FallibleIterator<Item = T>,
+            Self::Error: core::fmt::Debug,
+        {
+            Unwrap(self)
+        }
     }
 
-    impl<I: FallibleIterator + ?Sized> FallibleIterator for &mut I
-    {
+    impl<I: FallibleIterator + ?Sized> FallibleIterator for &mut I {
         type Item = I::Item;
         type Error = I::Error;
-        #[inline] fn next( &mut self ) -> Result<Option<I::Item>, I::Error> { (**self).next() }
-        #[inline] fn size_hint(&self) -> (usize, Option<usize>) { (**self).size_hint() }
-        #[inline] fn nth(&mut self, n: usize) -> Result<Option<I::Item>, I::Error> { (**self).nth(n) }
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<I::Item>, I::Error> {
+            (**self).next()
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            (**self).size_hint()
+        }
+
+        #[inline]
+        fn nth(&mut self, n: usize) -> Result<Option<I::Item>, I::Error> {
+            (**self).nth(n)
+        }
     }
 
-    impl<I: DoubleEndedFallibleIterator + ?Sized> DoubleEndedFallibleIterator for &mut I
-    {
-        #[inline] fn next_back( &mut self ) -> Result<Option<I::Item>, I::Error> { (**self).next_back() }
+    impl<I: DoubleEndedFallibleIterator + ?Sized> DoubleEndedFallibleIterator for &mut I {
+        #[inline]
+        fn next_back(&mut self) -> Result<Option<I::Item>, I::Error> {
+            (**self).next_back()
+        }
+    }
+
+    #[cfg(feature = "alloc")]
+    impl<I: FallibleIterator + ?Sized> FallibleIterator for Box<I> {
+        type Item = I::Item;
+        type Error = I::Error;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<I::Item>, I::Error> {
+            (**self).next()
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            (**self).size_hint()
+        }
+
+        #[inline]
+        fn nth(&mut self, n: usize) -> Result<Option<I::Item>, I::Error> {
+            (**self).nth(n)
+        }
+    }
+
+    #[cfg(feature = "alloc")]
+    impl<I: DoubleEndedFallibleIterator + ?Sized> DoubleEndedFallibleIterator for Box<I> {
+        #[inline]
+        fn next_back(&mut self) -> Result<Option<I::Item>, I::Error> {
+            (**self).next_back()
+        }
+    }
+
+    /// A fallible iterator able to yield elements from both ends.
+    pub trait DoubleEndedFallibleIterator: FallibleIterator {
+        /// Advances the end of the iterator, returning the last value.
+        fn next_back(&mut self) -> Result<Option<Self::Item>, Self::Error>;
+
+        /// Applies a function over the elements of the iterator in reverse order, producing a single final value.
+        #[inline]
+        fn rfold<B, F>(mut self, init: B, f: F) -> Result<B, Self::Error>
+        where
+            Self: Sized,
+            F: FnMut(B, Self::Item) -> Result<B, Self::Error>,
+        {
+            self.try_rfold(init, f)
+        }
+
+        /// Applies a function over the elements of the iterator in reverse, producing a single final value.
+        ///
+        /// This is used as the "base" of many methods on `DoubleEndedFallibleIterator`.
+        #[inline]
+        fn try_rfold<B, E, F>(&mut self, mut init: B, mut f: F) -> Result<B, E>
+        where
+            Self: Sized,
+            E: From<Self::Error>,
+            F: FnMut(B, Self::Item) -> Result<B, E>,
+        {
+            while let Some(v) = self.next_back()? {
+                init = f(init, v)?;
+            }
+            Ok(init)
+        }
     }
 
     /// Conversion into a `FallibleIterator`.
-    pub trait IntoFallibleIterator 
-    {
+    pub trait IntoFallibleIterator {
         /// The elements of the iterator.
         type Item;
+
         /// The error value of the iterator.
         type Error;
+
         /// The iterator.
         type IntoFallibleIter: FallibleIterator<Item = Self::Item, Error = Self::Error>;
+
         /// Creates a fallible iterator from a value.
         fn into_fallible_iter(self) -> Self::IntoFallibleIter;
     }
 
-    impl<I> IntoFallibleIterator for I where
-    I: FallibleIterator
+    impl<I> IntoFallibleIterator for I
+    where
+        I: FallibleIterator,
     {
         type Item = I::Item;
         type Error = I::Error;
         type IntoFallibleIter = I;
-        #[inline] fn into_fallible_iter(self) -> I { self }
-    }
-    /// A fallible, streaming iterator.
-    pub trait FallibleStreamingIterator
-    {
-        /// The type being iterated over.
-        type Item: ?Sized;
-        /// The error type of iteration.
-        type Error;
-        /// Advances the iterator to the next position.
-        fn advance( &mut self ) -> Result<(), Self::Error>;
-        /// Returns the current element.
-        fn get(&self) -> Option<&Self::Item>;
-        /// Advances the iterator, returning the next element.
-        #[inline] fn next( &mut self ) -> Result<Option<&Self::Item>, Self::Error>
-        {
-            self.advance()?;
-            Ok((*self).get())
-        }
-        /// Returns bounds on the number of remaining elements in the iterator.
-        #[inline] fn size_hint(&self) -> (usize, Option<usize>) { (0, None) }
-        /// Determines if all elements of the iterator satisfy a predicate.
-        #[inline] fn all<F>(&mut self, mut f: F) -> Result<bool, Self::Error> where
-        Self: Sized,
-        F: FnMut(&Self::Item) -> bool
-        {
-            while let Some(e) = self.next()?
-            {
-                if !f(e) { return Ok(false); }
-            }
 
-            Ok(true)
+        #[inline]
+        fn into_fallible_iter(self) -> I {
+            self
         }
-        /// Determines if any elements of the iterator satisfy a predicate.
-        #[inline] fn any<F>(&mut self, mut f: F) -> Result<bool, Self::Error> where
-        Self: Sized,
-        F: FnMut(&Self::Item) -> bool
-        { self.all(|e| !f(e)).map(|r| !r) }
-        /// Borrows an iterator, rather than consuming it.
-        #[inline] fn by_ref( &mut self ) -> &mut Self where
-        Self: Sized
-        { self }
-        /// Returns the number of remaining elements in the iterator.
-        #[inline] fn count(mut self) -> Result<usize, Self::Error> where
-        Self: Sized
-        {
-            let mut count = 0;
-            while let Some(_) = self.next()?
-            {
-                count += 1;
+    }
+
+    /// An iterator which applies a fallible transform to the elements of the
+    /// underlying iterator.
+    #[derive(Clone)]
+    pub struct Map<T, F> {
+        it: T,
+        f: F,
+    }
+
+    impl<I: core::fmt::Debug, F> core::fmt::Debug for Map<I, F> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            f.debug_struct("Map").field("iter", &self.it).finish()
+        }
+    }
+
+    impl<T, F, B> FallibleIterator for Map<T, F>
+    where
+        T: FallibleIterator,
+        F: FnMut(T::Item) -> Result<B, T::Error>,
+    {
+        type Item = B;
+        type Error = T::Error;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<B>, T::Error> {
+            match self.it.next() {
+                Ok(Some(v)) => Ok(Some((self.f)(v)?)),
+                Ok(None) => Ok(None),
+                Err(e) => Err(e),
             }
-            
-            Ok(count)
         }
-        /// Returns an iterator which filters elements by a predicate.
-        #[inline] fn filter<F>(self, f: F) -> Filter<Self, F> where
-        Self: Sized,
-        F: FnMut(&Self::Item) -> bool
-        { Filter { it: self, f: f } }
-        /// Returns the first element of the iterator which satisfies a predicate.
-        #[inline] fn find<F>(&mut self, mut f: F) -> Result<Option<&Self::Item>, Self::Error> where
-        Self: Sized,
-        F: FnMut(&Self::Item) -> bool
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            self.it.size_hint()
+        }
+
+        #[inline]
+        fn try_fold<C, E, G>(&mut self, init: C, mut f: G) -> Result<C, E>
+        where
+            E: From<T::Error>,
+            G: FnMut(C, B) -> Result<C, E>,
         {
-            loop
-            { self.advance()?;
-                match self.get()
-                {
-                    Some(v) =>
-                    {
-                        if f(v) { break; }
+            let map = &mut self.f;
+            self.it.try_fold(init, |b, v| f(b, map(v)?))
+        }
+    }
+
+    impl<B, F, I> DoubleEndedFallibleIterator for Map<I, F>
+    where
+        I: DoubleEndedFallibleIterator,
+        F: FnMut(I::Item) -> Result<B, I::Error>,
+    {
+        #[inline]
+        fn next_back(&mut self) -> Result<Option<B>, I::Error> {
+            match self.it.next_back() {
+                Ok(Some(v)) => Ok(Some((self.f)(v)?)),
+                Ok(None) => Ok(None),
+                Err(e) => Err(e),
+            }
+        }
+
+        #[inline]
+        fn try_rfold<C, E, G>(&mut self, init: C, mut f: G) -> Result<C, E>
+        where
+            E: From<I::Error>,
+            G: FnMut(C, B) -> Result<C, E>,
+        {
+            let map = &mut self.f;
+            self.it.try_rfold(init, |acc, v| f(acc, map(v)?))
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    enum ChainState {
+        Both,
+        Front,
+        Back,
+    }
+
+    /// An iterator which yields the elements of one iterator followed by another.
+    #[derive(Clone, Debug)]
+    pub struct Chain<T, U> {
+        front: T,
+        back: U,
+        state: ChainState,
+    }
+
+    impl<T, U> FallibleIterator for Chain<T, U>
+    where
+        T: FallibleIterator,
+        U: FallibleIterator<Item = T::Item, Error = T::Error>,
+    {
+        type Item = T::Item;
+        type Error = T::Error;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<T::Item>, T::Error> {
+            match self.state {
+                ChainState::Both => match self.front.next()? {
+                    Some(e) => Ok(Some(e)),
+                    None => {
+                        self.state = ChainState::Back;
+                        self.back.next()
                     }
-                    None => break,
+                },
+                ChainState::Front => self.front.next(),
+                ChainState::Back => self.back.next(),
+            }
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            let front_hint = self.front.size_hint();
+            let back_hint = self.back.size_hint();
+
+            let low = front_hint.0.saturating_add(back_hint.0);
+            let high = match (front_hint.1, back_hint.1) {
+                (Some(f), Some(b)) => f.checked_add(b),
+                _ => None,
+            };
+
+            (low, high)
+        }
+
+        #[inline]
+        fn count(self) -> Result<usize, T::Error> {
+            match self.state {
+                ChainState::Both => Ok(self.front.count()? + self.back.count()?),
+                ChainState::Front => self.front.count(),
+                ChainState::Back => self.back.count(),
+            }
+        }
+
+        #[inline]
+        fn try_fold<B, E, F>(&mut self, init: B, mut f: F) -> Result<B, E>
+        where
+            E: From<T::Error>,
+            F: FnMut(B, T::Item) -> Result<B, E>,
+        {
+            match self.state {
+                ChainState::Both => {
+                    let init = self.front.try_fold(init, &mut f)?;
+                    self.state = ChainState::Back;
+                    self.back.try_fold(init, f)
+                }
+                ChainState::Front => self.front.try_fold(init, f),
+                ChainState::Back => self.back.try_fold(init, f),
+            }
+        }
+
+        #[inline]
+        fn find<F>(&mut self, mut f: F) -> Result<Option<T::Item>, T::Error>
+        where
+            F: FnMut(&T::Item) -> Result<bool, T::Error>,
+        {
+            match self.state {
+                ChainState::Both => match self.front.find(&mut f)? {
+                    Some(v) => Ok(Some(v)),
+                    None => {
+                        self.state = ChainState::Back;
+                        self.back.find(f)
+                    }
+                },
+                ChainState::Front => self.front.find(f),
+                ChainState::Back => self.back.find(f),
+            }
+        }
+
+        #[inline]
+        fn last(self) -> Result<Option<T::Item>, T::Error> {
+            match self.state {
+                ChainState::Both => {
+                    self.front.last()?;
+                    self.back.last()
+                }
+                ChainState::Front => self.front.last(),
+                ChainState::Back => self.back.last(),
+            }
+        }
+    }
+
+    impl<T, U> DoubleEndedFallibleIterator for Chain<T, U>
+    where
+        T: DoubleEndedFallibleIterator,
+        U: DoubleEndedFallibleIterator<Item = T::Item, Error = T::Error>,
+    {
+        #[inline]
+        fn next_back(&mut self) -> Result<Option<T::Item>, T::Error> {
+            match self.state {
+                ChainState::Both => match self.back.next_back()? {
+                    Some(e) => Ok(Some(e)),
+                    None => {
+                        self.state = ChainState::Front;
+                        self.front.next_back()
+                    }
+                },
+                ChainState::Front => self.front.next_back(),
+                ChainState::Back => self.back.next_back(),
+            }
+        }
+
+        #[inline]
+        fn try_rfold<B, E, F>(&mut self, init: B, mut f: F) -> Result<B, E>
+        where
+            E: From<T::Error>,
+            F: FnMut(B, T::Item) -> Result<B, E>,
+        {
+            match self.state {
+                ChainState::Both => {
+                    let init = self.back.try_rfold(init, &mut f)?;
+                    self.state = ChainState::Front;
+                    self.front.try_rfold(init, f)
+                }
+                ChainState::Front => self.front.try_rfold(init, f),
+                ChainState::Back => self.back.try_rfold(init, f),
+            }
+        }
+    }
+
+    /// An iterator which clones the elements of the underlying iterator.
+    #[derive(Clone, Debug)]
+    pub struct Cloned<I>(I);
+
+    impl<'a, T, I> FallibleIterator for Cloned<I>
+    where
+        I: FallibleIterator<Item = &'a T>,
+        T: 'a + Clone,
+    {
+        type Item = T;
+        type Error = I::Error;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<T>, I::Error> {
+            self.0.next().map(|o| o.cloned())
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            self.0.size_hint()
+        }
+
+        #[inline]
+        fn try_fold<B, E, F>(&mut self, init: B, mut f: F) -> Result<B, E>
+        where
+            E: From<I::Error>,
+            F: FnMut(B, T) -> Result<B, E>,
+        {
+            self.0.try_fold(init, |acc, v| f(acc, v.clone()))
+        }
+    }
+
+    impl<'a, T, I> DoubleEndedFallibleIterator for Cloned<I>
+    where
+        I: DoubleEndedFallibleIterator<Item = &'a T>,
+        T: 'a + Clone,
+    {
+        #[inline]
+        fn next_back(&mut self) -> Result<Option<T>, I::Error> {
+            self.0.next_back().map(|o| o.cloned())
+        }
+
+        #[inline]
+        fn try_rfold<B, E, F>(&mut self, init: B, mut f: F) -> Result<B, E>
+        where
+            E: From<I::Error>,
+            F: FnMut(B, T) -> Result<B, E>,
+        {
+            self.0.try_rfold(init, |acc, v| f(acc, v.clone()))
+        }
+    }
+
+    /// Converts an `Iterator<Item = Result<T, E>>` into a `FallibleIterator<Item = T, Error = E>`.
+    #[inline]
+    pub fn convert<T, E, I>(it: I) -> Convert<I>
+    where
+        I: rust::Iterator<Item = Result<T, E>>,
+    {
+        Convert(it)
+    }
+
+    /// A fallible iterator that wraps a normal iterator over `Result`s.
+    #[derive(Clone, Debug)]
+    pub struct Convert<I>(I);
+
+    impl<T, E, I> FallibleIterator for Convert<I>
+    where
+        I: rust::Iterator<Item = Result<T, E>>,
+    {
+        type Item = T;
+        type Error = E;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<T>, E> {
+            match self.0.next() {
+                Some(Ok(i)) => Ok(Some(i)),
+                Some(Err(e)) => Err(e),
+                None => Ok(None),
+            }
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            self.0.size_hint()
+        }
+
+        #[inline]
+        fn try_fold<B, E2, F>(&mut self, init: B, mut f: F) -> Result<B, E2>
+        where
+            E2: From<E>,
+            F: FnMut(B, T) -> Result<B, E2>,
+        {
+            self.0.try_fold(init, |acc, v| f(acc, v?))
+        }
+    }
+
+    impl<T, E, I> DoubleEndedFallibleIterator for Convert<I>
+    where
+        I: DoubleEndedIterator<Item = Result<T, E>>,
+    {
+        #[inline]
+        fn next_back(&mut self) -> Result<Option<T>, E> {
+            match self.0.next_back() {
+                Some(Ok(i)) => Ok(Some(i)),
+                Some(Err(e)) => Err(e),
+                None => Ok(None),
+            }
+        }
+
+        #[inline]
+        fn try_rfold<B, E2, F>(&mut self, init: B, mut f: F) -> Result<B, E2>
+        where
+            E2: From<E>,
+            F: FnMut(B, T) -> Result<B, E2>,
+        {
+            self.0.try_rfold(init, |acc, v| f(acc, v?))
+        }
+    }
+
+    /// A fallible iterator that wraps a normal iterator over `Result`s.
+    #[derive(Clone, Debug)]
+    pub struct IntoFallible<I>(I);
+
+    impl<T, I> FallibleIterator for IntoFallible<I>
+    where
+        I: rust::Iterator<Item = T>,
+    {
+        type Item = T;
+        type Error = Infallible;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<T>, Self::Error> {
+            Ok(self.0.next())
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            self.0.size_hint()
+        }
+
+        #[inline]
+        fn try_fold<B, E2, F>(&mut self, init: B, f: F) -> Result<B, E2>
+        where
+            E2: From<Infallible>,
+            F: FnMut(B, T) -> Result<B, E2>,
+        {
+            self.0.try_fold(init, f)
+        }
+    }
+
+    impl<T, I: rust::Iterator<Item = T>> From<I> for IntoFallible<I> {
+        fn from(value: I) -> Self {
+            Self(value)
+        }
+    }
+
+    impl<T, I> DoubleEndedFallibleIterator for IntoFallible<I>
+    where
+        I: DoubleEndedIterator<Item = T>,
+    {
+        #[inline]
+        fn next_back(&mut self) -> Result<Option<T>, Infallible> {
+            Ok(self.0.next_back())
+        }
+
+        #[inline]
+        fn try_rfold<B, E2, F>(&mut self, init: B, f: F) -> Result<B, E2>
+        where
+            E2: From<Infallible>,
+            F: FnMut(B, T) -> Result<B, E2>,
+        {
+            self.0.try_rfold(init, f)
+        }
+    }
+
+    /// An iterator that yields the iteration count as well as the values of the
+    /// underlying iterator.
+    #[derive(Clone, Debug)]
+    pub struct Enumerate<I> {
+        it: I,
+        n: usize,
+    }
+
+    impl<I> FallibleIterator for Enumerate<I>
+    where
+        I: FallibleIterator,
+    {
+        type Item = (usize, I::Item);
+        type Error = I::Error;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<(usize, I::Item)>, I::Error> {
+            self.it.next().map(|o| {
+                o.map(|e| {
+                    let i = self.n;
+                    self.n += 1;
+                    (i, e)
+                })
+            })
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            self.it.size_hint()
+        }
+
+        #[inline]
+        fn count(self) -> Result<usize, I::Error> {
+            self.it.count()
+        }
+
+        #[inline]
+        fn nth(&mut self, n: usize) -> Result<Option<(usize, I::Item)>, I::Error> {
+            match self.it.nth(n)? {
+                Some(v) => {
+                    let i = self.n + n;
+                    self.n = i + 1;
+                    Ok(Some((i, v)))
+                }
+                None => Ok(None),
+            }
+        }
+
+        #[inline]
+        fn try_fold<B, E, F>(&mut self, init: B, mut f: F) -> Result<B, E>
+        where
+            E: From<I::Error>,
+            F: FnMut(B, (usize, I::Item)) -> Result<B, E>,
+        {
+            let n = &mut self.n;
+            self.it.try_fold(init, |acc, v| {
+                let i = *n;
+                *n += 1;
+                f(acc, (i, v))
+            })
+        }
+    }
+
+    /// An iterator which uses a fallible predicate to determine which values of the
+    /// underlying iterator should be yielded.
+    #[derive(Clone, Debug)]
+    pub struct Filter<I, F> {
+        it: I,
+        f: F,
+    }
+
+    impl<I, F> FallibleIterator for Filter<I, F>
+    where
+        I: FallibleIterator,
+        F: FnMut(&I::Item) -> Result<bool, I::Error>,
+    {
+        type Item = I::Item;
+        type Error = I::Error;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<I::Item>, I::Error> {
+            let filter = &mut self.f;
+            self.it
+                .try_fold((), |(), v| {
+                    if filter(&v)? {
+                        return Err(FoldStop::Break(Some(v)));
+                    }
+                    Ok(())
+                })
+                .map(|()| None)
+                .unpack_fold()
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            (0, self.it.size_hint().1)
+        }
+
+        #[inline]
+        fn try_fold<B, E, G>(&mut self, init: B, mut f: G) -> Result<B, E>
+        where
+            E: From<I::Error>,
+            G: FnMut(B, I::Item) -> Result<B, E>,
+        {
+            let predicate = &mut self.f;
+            self.it.try_fold(
+                init,
+                |acc, v| {
+                    if predicate(&v)? {
+                        f(acc, v)
+                    } else {
+                        Ok(acc)
+                    }
+                },
+            )
+        }
+    }
+
+    impl<I, F> DoubleEndedFallibleIterator for Filter<I, F>
+    where
+        I: DoubleEndedFallibleIterator,
+        F: FnMut(&I::Item) -> Result<bool, I::Error>,
+    {
+        #[inline]
+        fn next_back(&mut self) -> Result<Option<I::Item>, I::Error> {
+            let filter = &mut self.f;
+            self.it
+                .try_rfold((), |(), v| {
+                    if filter(&v)? {
+                        return Err(FoldStop::Break(Some(v)));
+                    }
+                    Ok(())
+                })
+                .map(|()| None)
+                .unpack_fold()
+        }
+
+        #[inline]
+        fn try_rfold<B, E, G>(&mut self, init: B, mut f: G) -> Result<B, E>
+        where
+            E: From<I::Error>,
+            G: FnMut(B, I::Item) -> Result<B, E>,
+        {
+            let predicate = &mut self.f;
+            self.it.try_rfold(
+                init,
+                |acc, v| {
+                    if predicate(&v)? {
+                        f(acc, v)
+                    } else {
+                        Ok(acc)
+                    }
+                },
+            )
+        }
+    }
+
+    /// An iterator which both filters and maps the values of the underlying
+    /// iterator.
+    #[derive(Clone, Debug)]
+    pub struct FilterMap<I, F> {
+        it: I,
+        f: F,
+    }
+
+    impl<B, I, F> FallibleIterator for FilterMap<I, F>
+    where
+        I: FallibleIterator,
+        F: FnMut(I::Item) -> Result<Option<B>, I::Error>,
+    {
+        type Item = B;
+        type Error = I::Error;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<B>, I::Error> {
+            let map = &mut self.f;
+            self.it
+                .try_fold((), |(), v| match map(v)? {
+                    Some(v) => Err(FoldStop::Break(Some(v))),
+                    None => Ok(()),
+                })
+                .map(|()| None)
+                .unpack_fold()
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            (0, self.it.size_hint().1)
+        }
+
+        #[inline]
+        fn try_fold<C, E, G>(&mut self, init: C, mut f: G) -> Result<C, E>
+        where
+            E: From<I::Error>,
+            G: FnMut(C, B) -> Result<C, E>,
+        {
+            let map = &mut self.f;
+            self.it.try_fold(init, |acc, v| match map(v)? {
+                Some(v) => f(acc, v),
+                None => Ok(acc),
+            })
+        }
+    }
+
+    impl<B, I, F> DoubleEndedFallibleIterator for FilterMap<I, F>
+    where
+        I: DoubleEndedFallibleIterator,
+        F: FnMut(I::Item) -> Result<Option<B>, I::Error>,
+    {
+        #[inline]
+        fn next_back(&mut self) -> Result<Option<B>, I::Error> {
+            let map = &mut self.f;
+            self.it
+                .try_rfold((), |(), v| match map(v)? {
+                    Some(v) => Err(FoldStop::Break(Some(v))),
+                    None => Ok(()),
+                })
+                .map(|()| None)
+                .unpack_fold()
+        }
+
+        #[inline]
+        fn try_rfold<C, E, G>(&mut self, init: C, mut f: G) -> Result<C, E>
+        where
+            E: From<I::Error>,
+            G: FnMut(C, B) -> Result<C, E>,
+        {
+            let map = &mut self.f;
+            self.it.try_rfold(init, |acc, v| match map(v)? {
+                Some(v) => f(acc, v),
+                None => Ok(acc),
+            })
+        }
+    }
+
+    /// An iterator which maps each element to another iterator, yielding those iterator's elements.
+    #[derive(Clone, Debug)]
+    pub struct FlatMap<I, U, F>
+    where
+        U: IntoFallibleIterator,
+    {
+        it: Map<I, F>,
+        cur: Option<U::IntoFallibleIter>,
+    }
+
+    impl<I, U, F> FallibleIterator for FlatMap<I, U, F>
+    where
+        I: FallibleIterator,
+        U: IntoFallibleIterator<Error = I::Error>,
+        F: FnMut(I::Item) -> Result<U, I::Error>,
+    {
+        type Item = U::Item;
+        type Error = U::Error;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<U::Item>, U::Error> {
+            loop {
+                if let Some(it) = &mut self.cur {
+                    if let Some(v) = it.next()? {
+                        return Ok(Some(v));
+                    }
+                }
+                match self.it.next()? {
+                    Some(it) => self.cur = Some(it.into_fallible_iter()),
+                    None => return Ok(None),
                 }
             }
-            Ok((*self).get())
         }
-        /// Calls a closure on each element of an iterator.
-        #[inline] fn for_each<F>(mut self, mut f: F) -> Result<(), Self::Error> where
-        Self: Sized,
-        F: FnMut(&Self::Item)
+
+        #[inline]
+        fn try_fold<B, E, G>(&mut self, init: B, mut f: G) -> Result<B, E>
+        where
+            E: From<U::Error>,
+            G: FnMut(B, U::Item) -> Result<B, E>,
         {
-            while let Some(value) = self.next()?
-            {
-                f(value);
+            let mut acc = init;
+            if let Some(cur) = &mut self.cur {
+                acc = cur.try_fold(acc, &mut f)?;
+                self.cur = None;
             }
 
-            Ok(())
+            let cur = &mut self.cur;
+            self.it.try_fold(acc, |acc, v| {
+                let mut it = v.into_fallible_iter();
+                match it.try_fold(acc, &mut f) {
+                    Ok(acc) => Ok(acc),
+                    Err(e) => {
+                        *cur = Some(it);
+                        Err(e)
+                    }
+                }
+            })
         }
-        /// Returns an iterator which is well-behaved at the beginning and end of iteration.
-        #[inline] fn fuse(self) -> Fuse<Self> where
-        Self: Sized
-        {
-            Fuse
-            {
-                it: self,
-                state: FuseState::Start,
+    }
+
+    /// An iterator which flattens an iterator of iterators, yielding those iterators' elements.
+    pub struct Flatten<I>
+    where
+        I: FallibleIterator,
+        I::Item: IntoFallibleIterator,
+    {
+        it: I,
+        cur: Option<<I::Item as IntoFallibleIterator>::IntoFallibleIter>,
+    }
+
+    impl<I> Clone for Flatten<I>
+    where
+        I: FallibleIterator + Clone,
+        I::Item: IntoFallibleIterator,
+        <I::Item as IntoFallibleIterator>::IntoFallibleIter: Clone,
+    {
+        #[inline]
+        fn clone(&self) -> Flatten<I> {
+            Flatten {
+                it: self.it.clone(),
+                cur: self.cur.clone(),
             }
         }
-        /// Returns an iterator which applies a transform to elements.
-        #[inline] fn map<F, B>(self, f: F) -> Map<Self, F, B> where
-        Self: Sized,
-        F: FnMut(&Self::Item) -> B
-        {
-            Map
-            {
-                it: self,
-                f: f,
-                value: None,
+    }
+
+    impl<I> FallibleIterator for Flatten<I>
+    where
+        I: FallibleIterator,
+        I::Item: IntoFallibleIterator<Error = I::Error>,
+    {
+        type Item = <I::Item as IntoFallibleIterator>::Item;
+        type Error = <I::Item as IntoFallibleIterator>::Error;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+            loop {
+                if let Some(it) = &mut self.cur {
+                    if let Some(v) = it.next()? {
+                        return Ok(Some(v));
+                    }
+                }
+                match self.it.next()? {
+                    Some(it) => self.cur = Some(it.into_fallible_iter()),
+                    None => return Ok(None),
+                }
             }
         }
-        /// Returns an iterator which applies a transform to elements.
-        #[inline] fn map_ref<F, B: ?Sized>(self, f: F) -> MapRef<Self, F> where
-        Self: Sized,
-        F: Fn(&Self::Item) -> &B
+
+        #[inline]
+        fn try_fold<B, E, G>(&mut self, init: B, mut f: G) -> Result<B, E>
+        where
+            E: From<Self::Error>,
+            G: FnMut(B, Self::Item) -> Result<B, E>,
         {
-            MapRef { it: self, f: f }
-        }
-        /// Returns an iterator that applies a transform to errors.
-        #[inline] fn map_err<F, B>(self, f: F) -> MapErr<Self, F> where
-        Self: Sized,
-        F: Fn(Self::Error) -> B
-        {
-            MapErr { it: self, f: f }
-        }
-        /// Returns the `nth` element of the iterator.
-        #[inline] fn nth(&mut self, n: usize) -> Result<Option<&Self::Item>, Self::Error>
-        {
-            for _ in 0..n
-            { self.advance()?;
-                if let None = self.get() { return Ok(None); }
+            let mut acc = init;
+            if let Some(cur) = &mut self.cur {
+                acc = cur.try_fold(acc, &mut f)?;
+                self.cur = None;
             }
 
-            self.next()
+            let cur = &mut self.cur;
+            self.it.try_fold(acc, |acc, v| {
+                let mut it = v.into_fallible_iter();
+                match it.try_fold(acc, &mut f) {
+                    Ok(acc) => Ok(acc),
+                    Err(e) => {
+                        *cur = Some(it);
+                        Err(e)
+                    }
+                }
+            })
         }
-        /// Returns the position of the first element matching a predicate.
-        #[inline] fn position<F>(&mut self, mut f: F) -> Result<Option<usize>, Self::Error> where
-        Self: Sized,
-        F: FnMut(&Self::Item) -> bool
-        {
-            let mut pos = 0;
-            while let Some(v) = self.next()?
-            {
-                if f(v) { return Ok(Some(pos)); }
-                pos += 1;
+    }
+
+    /// Creates an iterator from a fallible function generating values.
+    ///
+    /// ```
+    /// # use fallible_iterator::{from_fn, FallibleIterator};
+    /// let mut count = 0;
+    /// let counter = from_fn(move || {
+    ///     // Increment our count. This is why we started at zero.
+    ///     count += 1;
+    ///
+    ///     // Check to see if we've finished counting or not.
+    ///     if count < 6 {
+    ///         Ok(Some(count))
+    ///     } else if count < 7 {
+    ///         Ok(None)
+    ///     } else {
+    ///         Err(())
+    ///     }
+    /// });
+    /// assert_eq!(&counter.collect::<Vec<_>>().unwrap(), &[1, 2, 3, 4, 5]);
+    /// ```
+    #[inline]
+    pub fn from_fn<I, E, F>(fun: F) -> FromFn<F>
+    where
+        F: FnMut() -> Result<Option<I>, E>,
+    {
+        FromFn { fun }
+    }
+
+    /// An iterator using a function to generate new values.
+    #[derive(Clone, Debug)]
+    pub struct FromFn<F> {
+        fun: F,
+    }
+
+    impl<I, E, F> FallibleIterator for FromFn<F>
+    where
+        F: FnMut() -> Result<Option<I>, E>,
+    {
+        type Item = I;
+        type Error = E;
+
+        fn next(&mut self) -> Result<Option<I>, E> {
+            (self.fun)()
+        }
+    }
+
+    /// An iterator that yields `Ok(None)` forever after the underlying iterator
+    /// yields `Ok(None)` once.
+    #[derive(Clone, Debug)]
+    pub struct Fuse<I> {
+        it: I,
+        done: bool,
+    }
+
+    impl<I> FallibleIterator for Fuse<I>
+    where
+        I: FallibleIterator,
+    {
+        type Item = I::Item;
+        type Error = I::Error;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<I::Item>, I::Error> {
+            if self.done {
+                return Ok(None);
             }
 
+            match self.it.next()? {
+                Some(i) => Ok(Some(i)),
+                None => {
+                    self.done = true;
+                    Ok(None)
+                }
+            }
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            if self.done {
+                (0, Some(0))
+            } else {
+                self.it.size_hint()
+            }
+        }
+
+        #[inline]
+        fn count(self) -> Result<usize, I::Error> {
+            if self.done {
+                Ok(0)
+            } else {
+                self.it.count()
+            }
+        }
+
+        #[inline]
+        fn last(self) -> Result<Option<I::Item>, I::Error> {
+            if self.done {
+                Ok(None)
+            } else {
+                self.it.last()
+            }
+        }
+
+        #[inline]
+        fn nth(&mut self, n: usize) -> Result<Option<I::Item>, I::Error> {
+            if self.done {
+                Ok(None)
+            } else {
+                let v = self.it.nth(n)?;
+                if v.is_none() {
+                    self.done = true;
+                }
+                Ok(v)
+            }
+        }
+
+        #[inline]
+        fn try_fold<B, E, F>(&mut self, init: B, f: F) -> Result<B, E>
+        where
+            E: From<I::Error>,
+            F: FnMut(B, I::Item) -> Result<B, E>,
+        {
+            if self.done {
+                Ok(init)
+            } else {
+                self.it.try_fold(init, f)
+            }
+        }
+    }
+
+    /// An iterator which passes each element to a closure before returning it.
+    #[derive(Clone, Debug)]
+    pub struct Inspect<I, F> {
+        it: I,
+        f: F,
+    }
+
+    impl<I, F> FallibleIterator for Inspect<I, F>
+    where
+        I: FallibleIterator,
+        F: FnMut(&I::Item) -> Result<(), I::Error>,
+    {
+        type Item = I::Item;
+        type Error = I::Error;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<I::Item>, I::Error> {
+            match self.it.next()? {
+                Some(i) => {
+                    (self.f)(&i)?;
+                    Ok(Some(i))
+                }
+                None => Ok(None),
+            }
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            self.it.size_hint()
+        }
+
+        #[inline]
+        fn try_fold<B, E, G>(&mut self, init: B, mut f: G) -> Result<B, E>
+        where
+            E: From<I::Error>,
+            G: FnMut(B, I::Item) -> Result<B, E>,
+        {
+            let inspect = &mut self.f;
+            self.it.try_fold(init, |acc, v| {
+                inspect(&v)?;
+                f(acc, v)
+            })
+        }
+    }
+
+    impl<I, F> DoubleEndedFallibleIterator for Inspect<I, F>
+    where
+        I: DoubleEndedFallibleIterator,
+        F: FnMut(&I::Item) -> Result<(), I::Error>,
+    {
+        #[inline]
+        fn next_back(&mut self) -> Result<Option<I::Item>, I::Error> {
+            match self.it.next_back()? {
+                Some(i) => {
+                    (self.f)(&i)?;
+                    Ok(Some(i))
+                }
+                None => Ok(None),
+            }
+        }
+
+        #[inline]
+        fn try_rfold<B, E, G>(&mut self, init: B, mut f: G) -> Result<B, E>
+        where
+            E: From<I::Error>,
+            G: FnMut(B, I::Item) -> Result<B, E>,
+        {
+            let inspect = &mut self.f;
+            self.it.try_rfold(init, |acc, v| {
+                inspect(&v)?;
+                f(acc, v)
+            })
+        }
+    }
+
+    /// A normal (non-fallible) iterator which wraps a fallible iterator.
+    #[derive(Clone, Debug)]
+    pub struct Iteration<I>(I);
+
+    impl<I> rust::Iterator for Iteration<I>
+    where
+        I: FallibleIterator,
+    {
+        type Item = Result<I::Item, I::Error>;
+
+        #[inline]
+        fn next(&mut self) -> Option<Result<I::Item, I::Error>> {
+            match self.0.next() {
+                Ok(Some(v)) => Some(Ok(v)),
+                Ok(None) => None,
+                Err(e) => Some(Err(e)),
+            }
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            self.0.size_hint()
+        }
+    }
+
+    impl<I> DoubleEndedIterator for Iteration<I>
+    where
+        I: DoubleEndedFallibleIterator,
+    {
+        #[inline]
+        fn next_back(&mut self) -> Option<Result<I::Item, I::Error>> {
+            match self.0.next_back() {
+                Ok(Some(v)) => Some(Ok(v)),
+                Ok(None) => None,
+                Err(e) => Some(Err(e)),
+            }
+        }
+    }
+
+    /// An iterator which applies a transform to the errors of the underlying
+    /// iterator.
+    #[derive(Clone, Debug)]
+    pub struct MapErr<I, F> {
+        it: I,
+        f: F,
+    }
+
+    impl<B, F, I> FallibleIterator for MapErr<I, F>
+    where
+        I: FallibleIterator,
+        F: FnMut(I::Error) -> B,
+    {
+        type Item = I::Item;
+        type Error = B;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<I::Item>, B> {
+            self.it.next().map_err(&mut self.f)
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            self.it.size_hint()
+        }
+
+        #[inline]
+        fn count(mut self) -> Result<usize, B> {
+            self.it.count().map_err(&mut self.f)
+        }
+
+        #[inline]
+        fn last(mut self) -> Result<Option<I::Item>, B> {
+            self.it.last().map_err(&mut self.f)
+        }
+
+        #[inline]
+        fn nth(&mut self, n: usize) -> Result<Option<I::Item>, B> {
+            self.it.nth(n).map_err(&mut self.f)
+        }
+
+        #[inline]
+        fn try_fold<C, E, G>(&mut self, init: C, mut f: G) -> Result<C, E>
+        where
+            E: From<B>,
+            G: FnMut(C, I::Item) -> Result<C, E>,
+        {
+            self.it
+                .try_fold(init, |acc, v| f(acc, v).map_err(MappedErr::Fold))
+                .map_err(|e| match e {
+                    MappedErr::It(e) => (self.f)(e).into(),
+                    MappedErr::Fold(e) => e,
+                })
+        }
+    }
+
+    impl<B, F, I> DoubleEndedFallibleIterator for MapErr<I, F>
+    where
+        I: DoubleEndedFallibleIterator,
+        F: FnMut(I::Error) -> B,
+    {
+        #[inline]
+        fn next_back(&mut self) -> Result<Option<I::Item>, B> {
+            self.it.next_back().map_err(&mut self.f)
+        }
+
+        #[inline]
+        fn try_rfold<C, E, G>(&mut self, init: C, mut f: G) -> Result<C, E>
+        where
+            E: From<B>,
+            G: FnMut(C, I::Item) -> Result<C, E>,
+        {
+            self.it
+                .try_rfold(init, |acc, v| f(acc, v).map_err(MappedErr::Fold))
+                .map_err(|e| match e {
+                    MappedErr::It(e) => (self.f)(e).into(),
+                    MappedErr::Fold(e) => e,
+                })
+        }
+    }
+
+    enum MappedErr<T, U> {
+        It(T),
+        Fold(U),
+    }
+
+    impl<T, U> From<T> for MappedErr<T, U> {
+        #[inline]
+        fn from(t: T) -> MappedErr<T, U> {
+            MappedErr::It(t)
+        }
+    }
+
+    /// An iterator which can look at the next element without consuming it.
+    #[derive(Clone, Debug)]
+    pub struct Peekable<I: FallibleIterator> {
+        it: I,
+        next: Option<I::Item>,
+    }
+
+    impl<I> Peekable<I>
+    where
+        I: FallibleIterator,
+    {
+        /// Returns a reference to the next value without advancing the iterator.
+        #[inline]
+        pub fn peek(&mut self) -> Result<Option<&I::Item>, I::Error> {
+            if self.next.is_none() {
+                self.next = self.it.next()?;
+            }
+
+            Ok(self.next.as_ref())
+        }
+
+        /// Consume and return the next value of this iterator if a condition is true.
+        ///
+        /// If func returns true for the next value of this iterator, consume and return it. Otherwise, return None.
+        #[inline]
+        pub fn next_if(&mut self, f: impl Fn(&I::Item) -> bool) -> Result<Option<I::Item>, I::Error> {
+            match self.peek()? {
+                Some(item) if f(item) => self.next(),
+                _ => Ok(None),
+            }
+        }
+
+        /// Consume and return the next item if it is equal to `expected`.
+        #[inline]
+        pub fn next_if_eq<T>(&mut self, expected: &T) -> Result<Option<I::Item>, I::Error>
+        where
+            T: ?Sized,
+            I::Item: PartialEq<T>,
+        {
+            self.next_if(|found| found == expected)
+        }
+    }
+
+    impl<I> FallibleIterator for Peekable<I>
+    where
+        I: FallibleIterator,
+    {
+        type Item = I::Item;
+        type Error = I::Error;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<I::Item>, I::Error> {
+            if let Some(next) = self.next.take() {
+                return Ok(Some(next));
+            }
+
+            self.it.next()
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            let mut hint = self.it.size_hint();
+            if self.next.is_some() {
+                hint.0 = hint.0.saturating_add(1);
+                hint.1 = hint.1.and_then(|h| h.checked_add(1));
+            }
+            hint
+        }
+
+        #[inline]
+        fn try_fold<B, E, F>(&mut self, init: B, mut f: F) -> Result<B, E>
+        where
+            E: From<I::Error>,
+            F: FnMut(B, I::Item) -> Result<B, E>,
+        {
+            let mut acc = init;
+            if let Some(v) = self.next.take() {
+                acc = f(acc, v)?;
+            }
+            self.it.try_fold(acc, f)
+        }
+    }
+
+    /// An iterator which yields elements of the underlying iterator in reverse
+    /// order.
+    #[derive(Clone, Debug)]
+    pub struct Rev<I>(I);
+
+    impl<I> FallibleIterator for Rev<I>
+    where
+        I: DoubleEndedFallibleIterator,
+    {
+        type Item = I::Item;
+        type Error = I::Error;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<I::Item>, I::Error> {
+            self.0.next_back()
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            self.0.size_hint()
+        }
+
+        #[inline]
+        fn count(self) -> Result<usize, I::Error> {
+            self.0.count()
+        }
+
+        #[inline]
+        fn try_fold<B, E, F>(&mut self, init: B, f: F) -> Result<B, E>
+        where
+            E: From<I::Error>,
+            F: FnMut(B, I::Item) -> Result<B, E>,
+        {
+            self.0.try_rfold(init, f)
+        }
+    }
+
+    impl<I> DoubleEndedFallibleIterator for Rev<I>
+    where
+        I: DoubleEndedFallibleIterator,
+    {
+        #[inline]
+        fn next_back(&mut self) -> Result<Option<I::Item>, I::Error> {
+            self.0.next()
+        }
+
+        #[inline]
+        fn try_rfold<B, E, F>(&mut self, init: B, f: F) -> Result<B, E>
+        where
+            E: From<I::Error>,
+            F: FnMut(B, I::Item) -> Result<B, E>,
+        {
+            self.0.try_fold(init, f)
+        }
+    }
+
+    /// An iterator which applies a stateful closure.
+    #[derive(Clone, Debug)]
+    pub struct Scan<I, St, F> {
+        it: I,
+        f: F,
+        state: St,
+    }
+
+    impl<B, I, St, F> FallibleIterator for Scan<I, St, F>
+    where
+        I: FallibleIterator,
+        F: FnMut(&mut St, I::Item) -> Result<Option<B>, I::Error>,
+    {
+        type Item = B;
+        type Error = I::Error;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<B>, I::Error> {
+            match self.it.next()? {
+                Some(v) => (self.f)(&mut self.state, v),
+                None => Ok(None),
+            }
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            let hint = self.it.size_hint();
+            (0, hint.1)
+        }
+    }
+
+    /// An iterator which skips initial elements.
+    #[derive(Clone, Debug)]
+    pub struct Skip<I> {
+        it: I,
+        n: usize,
+    }
+
+    impl<I> FallibleIterator for Skip<I>
+    where
+        I: FallibleIterator,
+    {
+        type Item = I::Item;
+        type Error = I::Error;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<I::Item>, I::Error> {
+            if self.n == 0 {
+                self.it.next()
+            } else {
+                let n = self.n;
+                self.n = 0;
+                self.it.nth(n)
+            }
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            let hint = self.it.size_hint();
+
+            (
+                hint.0.saturating_sub(self.n),
+                hint.1.map(|x| x.saturating_sub(self.n)),
+            )
+        }
+    }
+
+    /// An iterator which skips initial elements based on a predicate.
+    #[derive(Clone, Debug)]
+    pub struct SkipWhile<I, P> {
+        it: I,
+        flag: bool,
+        predicate: P,
+    }
+
+    impl<I, P> FallibleIterator for SkipWhile<I, P>
+    where
+        I: FallibleIterator,
+        P: FnMut(&I::Item) -> Result<bool, I::Error>,
+    {
+        type Item = I::Item;
+        type Error = I::Error;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<I::Item>, I::Error> {
+            let flag = &mut self.flag;
+            let pred = &mut self.predicate;
+            self.it.find(move |x| {
+                if *flag || !pred(x)? {
+                    *flag = true;
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            })
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            let hint = self.it.size_hint();
+            if self.flag {
+                hint
+            } else {
+                (0, hint.1)
+            }
+        }
+    }
+
+    /// An iterator which steps through the elements of the underlying iterator by a certain amount.
+    #[derive(Clone, Debug)]
+    pub struct StepBy<I> {
+        it: I,
+        step: usize,
+        first_take: bool,
+    }
+
+    impl<I> FallibleIterator for StepBy<I>
+    where
+        I: FallibleIterator,
+    {
+        type Item = I::Item;
+        type Error = I::Error;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<I::Item>, I::Error> {
+            if self.first_take {
+                self.first_take = false;
+                self.it.next()
+            } else {
+                self.it.nth(self.step)
+            }
+        }
+
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            let inner_hint = self.it.size_hint();
+
+            if self.first_take {
+                let f = |n| {
+                    if n == 0 {
+                        0
+                    } else {
+                        1 + (n - 1) / (self.step + 1)
+                    }
+                };
+                (f(inner_hint.0), inner_hint.1.map(f))
+            } else {
+                let f = |n| n / (self.step + 1);
+                (f(inner_hint.0), inner_hint.1.map(f))
+            }
+        }
+    }
+
+    /// An iterator which yields a limited number of elements from the underlying
+    /// iterator.
+    #[derive(Clone, Debug)]
+    pub struct Take<I> {
+        it: I,
+        remaining: usize,
+    }
+
+    impl<I> FallibleIterator for Take<I>
+    where
+        I: FallibleIterator,
+    {
+        type Item = I::Item;
+        type Error = I::Error;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<I::Item>, I::Error> {
+            if self.remaining == 0 {
+                return Ok(None);
+            }
+
+            let next = self.it.next();
+            if let Ok(Some(_)) = next {
+                self.remaining -= 1;
+            }
+            next
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            let hint = self.it.size_hint();
+            (
+                cmp::min(hint.0, self.remaining),
+                hint.1.map(|n| cmp::min(n, self.remaining)),
+            )
+        }
+    }
+
+    /// An iterator which yields elements based on a predicate.
+    #[derive(Clone, Debug)]
+    pub struct TakeWhile<I, P> {
+        it: I,
+        flag: bool,
+        predicate: P,
+    }
+
+    impl<I, P> FallibleIterator for TakeWhile<I, P>
+    where
+        I: FallibleIterator,
+        P: FnMut(&I::Item) -> Result<bool, I::Error>,
+    {
+        type Item = I::Item;
+        type Error = I::Error;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<I::Item>, I::Error> {
+            if self.flag {
+                Ok(None)
+            } else {
+                match self.it.next()? {
+                    Some(item) => {
+                        if (self.predicate)(&item)? {
+                            Ok(Some(item))
+                        } else {
+                            self.flag = true;
+                            Ok(None)
+                        }
+                    }
+                    None => Ok(None),
+                }
+            }
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            if self.flag {
+                (0, Some(0))
+            } else {
+                let hint = self.it.size_hint();
+                (0, hint.1)
+            }
+        }
+    }
+
+    /// An iterator which cycles another endlessly.
+    #[derive(Clone, Debug)]
+    pub struct Cycle<I> {
+        it: I,
+        cur: I,
+    }
+
+    impl<I> FallibleIterator for Cycle<I>
+    where
+        I: FallibleIterator + Clone,
+    {
+        type Item = I::Item;
+        type Error = I::Error;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<I::Item>, I::Error> {
+            match self.cur.next()? {
+                None => {
+                    self.cur = self.it.clone();
+                    self.cur.next()
+                }
+                Some(v) => Ok(Some(v)),
+            }
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            (usize::max_value(), None)
+        }
+    }
+
+    /// An iterator that yields pairs of this iterator's and another iterator's
+    /// values.
+    #[derive(Clone, Debug)]
+    pub struct Zip<T, U>(T, U);
+
+    impl<T, U> FallibleIterator for Zip<T, U>
+    where
+        T: FallibleIterator,
+        U: FallibleIterator<Error = T::Error>,
+    {
+        type Item = (T::Item, U::Item);
+        type Error = T::Error;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<(T::Item, U::Item)>, T::Error> {
+            match (self.0.next()?, self.1.next()?) {
+                (Some(a), Some(b)) => Ok(Some((a, b))),
+                _ => Ok(None),
+            }
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            let a = self.0.size_hint();
+            let b = self.1.size_hint();
+
+            let low = cmp::min(a.0, b.0);
+
+            let high = match (a.1, b.1) {
+                (Some(a), Some(b)) => Some(cmp::min(a, b)),
+                (Some(a), None) => Some(a),
+                (None, Some(b)) => Some(b),
+                (None, None) => None,
+            };
+
+            (low, high)
+        }
+    }
+
+    /// An iterator that unwraps every element yielded by the underlying
+    /// FallibleIterator
+    #[derive(Clone, Debug)]
+    pub struct Unwrap<T>(T);
+
+    impl<T> rust::Iterator for Unwrap<T>
+    where
+        T: FallibleIterator,
+        T::Error: core::fmt::Debug,
+    {
+        type Item = T::Item;
+
+        #[inline]
+        fn next(&mut self) -> Option<T::Item> {
+            self.0.next().unwrap()
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            let (_, max) = self.0.size_hint();
+            (0, max)
+        }
+    }
+
+    fn _is_object_safe(_: &dyn DoubleEndedFallibleIterator<Item = (), Error = ()>) {}
+
+    /// An extnsion-trait with set of useful methods to convert [`core::iter::Iterator`]
+    /// into [`FallibleIterator`]
+    pub trait IteratorExt {
+        /// Convert an iterator of `Result`s into `FallibleIterator` by transposition
+        fn transpose_into_fallible<T, E>(self) -> Convert<Self>
+        where
+            Self: rust::Iterator<Item = Result<T, E>> + Sized;
+
+        /// Convert an iterator of anything into `FallibleIterator` by wrapping
+        /// into `Result<T, Infallible>` where `Infallible` is an error that can never actually
+        /// happen.
+        fn into_fallible<T>(self) -> IntoFallible<Self>
+        where
+            Self: rust::Iterator<Item = T> + Sized;
+    }
+
+    impl<I> IteratorExt for I
+    where
+        I: rust::Iterator,
+    {
+        /// Convert an iterator of `Result`s into `FallibleIterator` by transposition
+        fn transpose_into_fallible<T, E>(self) -> Convert<Self>
+        where
+            Self: rust::Iterator<Item = Result<T, E>> + Sized,
+        {
+            Convert(self)
+        }
+
+        /// Convert an iterator of anything into `FallibleIterator` by wrapping
+        /// into `Result<T, Infallible>` where `Infallible` is an error that can never actually
+        /// happen.
+        fn into_fallible<T>(self) -> IntoFallible<Self>
+        where
+            Self: rust::Iterator<Item = T> + Sized,
+        {
+            IntoFallible(self)
+        }
+    }
+
+    /// An iterator that yields nothing.
+    #[derive(Clone, Debug)]
+    pub struct Empty<T, E>(PhantomData<T>, PhantomData<E>);
+
+    impl<T, E> FallibleIterator for Empty<T, E> {
+        type Item = T;
+        type Error = E;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<T>, E> {
             Ok(None)
         }
-        /// Returns an iterator which skips the first `n` elements.
-        #[inline] fn skip(self, n: usize) -> Skip<Self> where
-        Self: Sized
-        {
-            Skip { it: self, n: n }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            (0, Some(0))
         }
-        /// Returns an iterator which skips the first sequence of elements matching a predicate.
-        #[inline] fn skip_while<F>(self, f: F) -> SkipWhile<Self, F> where
-        Self: Sized,
-        F: FnMut(&Self::Item) -> bool
-        {
-            SkipWhile
-            {
-                it: self,
-                f: f,
-                done: false,
+    }
+
+    /// Creates an iterator that yields nothing.
+    pub fn empty<T, E>() -> Empty<T, E> {
+        Empty(PhantomData, PhantomData)
+    }
+
+    /// An iterator that yields something exactly once.
+    #[derive(Clone, Debug)]
+    pub struct Once<T, E>(Option<T>, PhantomData<E>);
+
+    /// Creates an iterator that yields an element exactly once.
+    pub fn once<T, E>(value: T) -> Once<T, E> {
+        Once(Some(value), PhantomData)
+    }
+
+    impl<T, E> FallibleIterator for Once<T, E> {
+        type Item = T;
+        type Error = E;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+            Ok(self.0.take())
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            match self.0 {
+                Some(_) => (1, Some(1)),
+                None => (0, Some(0)),
             }
         }
-        /// Returns an iterator which only returns the first `n` elements.
-        #[inline] fn take(self, n: usize) -> Take<Self> where
-        Self: Sized
-        {
-            Take
-            {
-                it: self,
-                n: n,
-                done: false,
+    }
+
+    /// An iterator that fails with a predetermined error exactly once.
+    #[derive(Clone, Debug)]
+    pub struct OnceErr<T, E>(PhantomData<T>, Option<E>);
+
+    /// Creates an iterator that fails with a predetermined error exactly once.
+    pub fn once_err<T, E>(value: E) -> OnceErr<T, E> {
+        OnceErr(PhantomData, Some(value))
+    }
+
+    impl<T, E> FallibleIterator for OnceErr<T, E> {
+        type Item = T;
+        type Error = E;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+            match self.1.take() {
+                Some(value) => Err(value),
+                None => Ok(None),
             }
         }
-        /// Returns an iterator which only returns the first sequence of elements matching a predicate.
-        #[inline] fn take_while<F>(self, f: F) -> TakeWhile<Self, F> where
-        Self: Sized,
-        F: FnMut(&Self::Item) -> bool
-        {
-            TakeWhile
-            {
-                it: self,
-                f: f,
-                done: false,
-            }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            (0, Some(0))
         }
+    }
+
+    /// An iterator that endlessly repeats a single element.
+    #[derive(Clone, Debug)]
+    pub struct Repeat<T: Clone, E>(T, PhantomData<E>);
+
+    /// Creates an iterator that endlessly repeats a single element.
+    pub fn repeat<T: Clone, E>(value: T) -> Repeat<T, E> {
+        Repeat(value, PhantomData)
+    }
+
+    impl<T: Clone, E> FallibleIterator for Repeat<T, E> {
+        type Item = T;
+        type Error = E;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+            Ok(Some(self.0.clone()))
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            (usize::max_value(), None)
+        }
+    }
+
+    /// An iterator that endlessly repeats a single error.
+    #[derive(Clone, Debug)]
+    pub struct RepeatErr<T, E: Clone>(PhantomData<T>, E);
+
+    /// Creates an iterator that endlessly repeats a single error.
+    pub fn repeat_err<T, E: Clone>(value: E) -> RepeatErr<T, E> {
+        RepeatErr(PhantomData, value)
+    }
+
+    impl<T, E: Clone> FallibleIterator for RepeatErr<T, E> {
+        type Item = T;
+        type Error = E;
+
+        #[inline]
+        fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+            Err(self.1.clone())
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            (0, Some(0))
+        }
+    }
+
+    #[derive(Debug)]
+    pub enum QueueableToken<'i, R> 
+    {
+        Start 
+        {
+            /// Queue (as a vec) contains both `Start` token and `End` for the same rule.
+            end_token_index: usize,
+            /// Position from which rule was tried to parse (or successfully parsed).
+            input_pos: usize,
+        },
+        End 
+        {
+            /// Queue (as a vec) contains both `Start` token and `End` for the same rule.
+            start_token_index: usize,
+            rule: R,
+            tag: Option<&'i str>,
+            /// Position at which successfully parsed rule finished (ended).
+            input_pos: usize,
+        },
+    }
+    #[derive(Clone)]
+    pub struct LineIndex 
+    {
+        /// Offset (bytes) the the beginning of each line, zero-based
+        line_offsets: Vec<usize>,
+    }
+
+    impl LineIndex 
+    {
+        pub fn new(text: &str) -> LineIndex 
+        {
+            let mut line_offsets: Vec<usize> = vec![0];
+            let mut offset = 0;
+
+            for c in text.chars()
+            {
+                offset += c.len_utf8();
+                if c == '\n' {
+                    line_offsets.push(offset);
+                }
+            }
+
+            LineIndex { line_offsets }
+        }
+        /// Returns (line, col) of pos.
+        pub fn line_col(&self, input: &str, pos: usize) -> (usize, usize) 
+        {
+            let line = self.line_offsets.partition_point(|&it| it <= pos) - 1;
+            let first_offset = self.line_offsets[line];
+            let line_str = &input[first_offset..pos];
+            let col = line_str.chars().count();
+            (line + 1, col + 1)
+        }
+    }
+    /// A matching pair of [`Token`]s and everything between them.
+    #[derive(Clone)]
+    pub struct Pair<'i, R>
+    {
+        queue: Rc<Vec<QueueableToken<'i, R>>>,
+        input: &'i str,
+        start: usize,
+        line_index: Rc<LineIndex>,
     }
 }
 pub mod marker { pub use std::marker::{ * }; }
@@ -5742,13 +8253,13 @@ pub mod mortal
                     $field.next_line(column);
                 }
 
-                pub fn clear_screen( &mut self )
+                pub fn clear_screen(&mut self)
                 {
                     let $slf = self;
                     $field.clear_screen();
                 }
 
-                pub fn clear_attributes( &mut self )
+                pub fn clear_attributes(&mut self)
                 {
                     let $slf = self;
                     $field.clear_attributes();
@@ -5883,14 +8394,12 @@ pub mod mortal
             pub fn set_cursor(&mut self, pos: Cursor) { self.cursor = pos; }
 
             pub fn next_line(&mut self, column: usize)
-            { 
-                self.cursor.line += 1;
+            { self.cursor.line += 1;
                 self.cursor.column = column;
             }
 
-            pub fn clear_attributes( &mut self )
-            { 
-                self.fg = None;
+            pub fn clear_attributes(&mut self)
+            { self.fg = None;
                 self.bg = None;
                 self.style = Style::empty();
             }
@@ -5906,13 +8415,12 @@ pub mod mortal
             pub fn set_bg(&mut self, bg: Option<Color>) { self.bg = bg; }
 
             pub fn set_theme(&mut self, theme: Theme)
-            { 
-                self.set_fg(theme.fg);
+            { self.set_fg(theme.fg);
                 self.set_bg(theme.bg);
                 self.set_style(theme.style);
             }
 
-            pub fn clear_screen( &mut self )
+            pub fn clear_screen(&mut self)
             {
                 for cell in &mut self.buffer
                 {
@@ -6092,7 +8600,6 @@ pub mod mortal
         }
 
         impl Cell
-       
         {
             fn new(fg: Option<Color>, bg: Option<Color>, style: Style, chr: char) -> Cell
             {
@@ -6126,7 +8633,6 @@ pub mod mortal
         }
 
         impl Default for Cell
-       
         {
             fn default() -> Cell { Cell::new(None, None, Style::empty(), ' ') }
         }
@@ -6303,21 +8809,18 @@ pub mod mortal
         }
         /// Facilitates chaining calls from either a `Terminal` or `Screen` lock.
         pub trait Chain: Sized
-       
         {
             fn chain<F: FnOnce() -> Self>(self, f: F) -> Self;
             fn init() -> Self;
         }
 
         impl Chain for ()
-       
         {
             fn chain<F: FnOnce() -> Self>(self, f: F) -> Self { f() }
             fn init() -> Self { }
         }
 
         impl Chain for io::Result<()>
-       
         {
             fn chain<F: FnOnce() -> Self>(self, f: F) -> Self { self.and_then(|_| f()) }
             fn init() -> Self { Ok(()) }
@@ -6544,7 +9047,7 @@ pub mod mortal
             /// Set the current cursor mode.
             pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> { self.0.set_cursor_mode(mode) }
             /// Adds a set of `Style` flags to the current style setting.
-            pub fn clear_screen( &mut self ) { self.0.clear_screen(); }
+            pub fn clear_screen(&mut self) { self.0.clear_screen(); }
             /// Removes a set of `Style` flags to the current style setting,
             /// then adds a set of `Style` flags to the current style setting.
             #[inline] pub fn add_style(&mut self, style: Style) { self.0.add_style(style) }
@@ -6560,17 +9063,17 @@ pub mod mortal
             /// Sets all attributes for the screen.
             #[inline] pub fn set_theme(&mut self, theme: Theme) { self.0.set_theme(theme) }
             /// Adds bold to the current style setting.
-            #[inline] pub fn clear_attributes( &mut self ) { self.0.clear_attributes() }
+            #[inline] pub fn clear_attributes(&mut self) { self.0.clear_attributes() }
             /// Adds bold to the current style setting.
-            #[inline] pub fn bold( &mut self ) { self.add_style(Style::BOLD) }
+            #[inline] pub fn bold(&mut self) { self.add_style(Style::BOLD) }
             /// Adds italic to the current style setting.
-            #[inline] pub fn italic( &mut self ) { self.add_style(Style::ITALIC); }
+            #[inline] pub fn italic(&mut self) { self.add_style(Style::ITALIC); }
             /// Adds underline to the current style setting.
-            #[inline] pub fn underline( &mut self ) { self.add_style(Style::UNDERLINE) }
+            #[inline] pub fn underline(&mut self) { self.add_style(Style::UNDERLINE) }
             /// Adds reverse to the current style setting.
-            pub fn reverse( &mut self ) { self.add_style(Style::REVERSE) }
+            pub fn reverse(&mut self) { self.add_style(Style::REVERSE) }
             /// Renders the internal buffer to the terminal screen.
-            pub fn refresh( &mut self ) -> io::Result<()> { self.0.refresh() }
+            pub fn refresh(&mut self) -> io::Result<()> { self.0.refresh() }
             /// Writes text at the given position within the screen buffer.
             pub fn write_at<C>(&mut self, position: C, text: &str) where
             C: Into<Cursor>
@@ -6599,18 +9102,16 @@ pub mod mortal
                 self.write_str(&s)
             }
             
-            pub fn borrow_term_write_guard( &mut self ) -> &mut Self { self }
+            pub fn borrow_term_write_guard(&mut self) -> &mut Self { self }
         }
         
         impl ::mortal::unix::TerminalExt for Screen
-       
         {
             fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>>
             { self.0.read_raw(buf, timeout) }
         }
         
         impl<'a> ::mortal::unix::TerminalExt for ScreenReadGuard<'a>
-       
         {
             fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>>
             { self.0.read_raw(buf, timeout) }
@@ -6704,7 +9205,7 @@ pub mod mortal
             /// Returns a slice of all contained sequences, sorted by key.
             pub fn sequences(&self) -> &[(K, V)] { &self.sequences }
             /// Returns a mutable slice of all contained sequences, sorted by key.
-            pub fn sequences_mut( &mut self ) -> &mut [(K, V)]
+            pub fn sequences_mut(&mut self) -> &mut [(K, V)]
             {
                 &mut self.sequences
             }
@@ -6898,7 +9399,7 @@ pub mod mortal
             /// Returns a borrowed reference to the entry value.
             pub fn get(&self) -> &V { &self.map.sequences[self.index].1 }
             /// Returns a mutable reference to the entry value.
-            pub fn get_mut( &mut self ) -> &mut V { &mut self.map.sequences[self.index].1 }
+            pub fn get_mut(&mut self) -> &mut V { &mut self.map.sequences[self.index].1 }
             /// Converts the `OccupiedEntry` into a mutable reference whose lifetime is bound to the `SequenceMap`.
             pub fn into_mut(self) -> &'a mut V { &mut self.map.sequences[self.index].1 }
             /// Replaces the entry value with the given value, returning the previous value.
@@ -6924,9 +9425,8 @@ pub mod mortal
         }
 
         impl<'a, K: fmt::Debug, V: fmt::Debug> fmt::Debug for Entry<'a, K, V>
-       
         {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+            fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
             {
                 match *self
                 {
@@ -6937,16 +9437,14 @@ pub mod mortal
         }
 
         impl<'a, K: fmt::Debug, V: fmt::Debug> fmt::Debug for OccupiedEntry<'a, K, V>
-       
         {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result 
+            fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result 
             { f.debug_struct("OccupiedEntry").field("key", self.key()).field("value", self.get()).finish() }
         }
 
         impl<'a, K: fmt::Debug, V> fmt::Debug for VacantEntry<'a, K, V>
-       
         {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { f.debug_tuple("VacantEntry").field(self.key()).finish() }
+            fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result { f.debug_tuple("VacantEntry").field(self.key()).finish() }
         }
     }
 
@@ -7014,7 +9512,6 @@ pub mod mortal
         }
         
         impl Signal
-       
         {
             fn as_bit(&self) -> u8 { 1 << (*self as u8) }
             fn all_bits() -> u8 { (1 << NUM_SIGNALS) - 1 }
@@ -7078,9 +9575,8 @@ pub mod mortal
         }
 
         impl fmt::Debug for SignalSet
-       
         {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+            fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
             {
                 const SIGNALS: &[Signal] = &
                 [
@@ -7110,7 +9606,6 @@ pub mod mortal
         }
 
         impl From<Signal> for SignalSet 
-       
         {
             fn from(sig: Signal) -> SignalSet
             {
@@ -7121,7 +9616,6 @@ pub mod mortal
         }
 
         impl Extend<Signal> for SignalSet
-       
         {
             fn extend<I: IntoIterator<Item=Signal>>(&mut self, iter: I)
             {
@@ -7133,7 +9627,6 @@ pub mod mortal
         }
 
         impl FromIterator<Signal> for SignalSet
-       
         {
             fn from_iter<I: IntoIterator<Item=Signal>>(iter: I) -> SignalSet
             {
@@ -7394,7 +9887,6 @@ pub mod mortal
         }
 
         impl From<char> for Key 
-       
         {
             fn from(ch: char) -> Key {
                 use ::mortal::util::{is_ctrl, unctrl_lower};
@@ -7481,7 +9973,6 @@ pub mod mortal
         }
 
         impl Default for PrepareConfig 
-       
         {
             fn default() -> PrepareConfig
             {
@@ -7517,7 +10008,7 @@ pub mod mortal
             #[inline] pub fn checked_area(&self) -> Option<usize> { self.lines.checked_mul(self.columns) }
         }
         /// Provides concurrent read and write access to a terminal device.
-        pub struct Terminal(pub(crate) sys::Terminal);
+        pub struct Terminal(pub sys::Terminal);
         /// Holds an exclusive lock for read operations on a `Terminal`.
         pub struct TerminalReadGuard<'a>(sys::TerminalReadGuard<'a>);
         /// Holds an exclusive lock for write operations on a `Terminal`.
@@ -7658,15 +10149,15 @@ pub mod mortal
         impl<'a> TerminalWriteGuard<'a>
         {
             /// Flush all output to the terminal device.
-            pub fn flush( &mut self ) -> io::Result<()> { self.0.flush() }
+            pub fn flush(&mut self) -> io::Result<()> { self.0.flush() }
             /// Returns the size of the terminal.
             #[inline] pub fn size(&self) -> io::Result<Size> { self.0.size() }
             /// Clears the terminal screen, placing the cursor at the first line and column.
-            pub fn clear_screen( &mut self ) -> io::Result<()> { self.0.clear_screen() }
+            pub fn clear_screen(&mut self) -> io::Result<()> { self.0.clear_screen() }
             /// Clears the current line, starting at cursor position.
-            pub fn clear_to_line_end( &mut self ) -> io::Result<()> { self.0.clear_to_line_end() }
+            pub fn clear_to_line_end(&mut self) -> io::Result<()> { self.0.clear_to_line_end() }
             /// Clears the screen, starting at cursor position.
-            pub fn clear_to_screen_end( &mut self ) -> io::Result<()> { self.0.clear_to_screen_end() }
+            pub fn clear_to_screen_end(&mut self) -> io::Result<()> { self.0.clear_to_screen_end() }
             /// Moves the cursor up `n` lines.
             pub fn move_up(&mut self, n: usize) -> io::Result<()> { self.0.move_up(n) }
             /// Moves the cursor down `n` lines.
@@ -7676,7 +10167,7 @@ pub mod mortal
             /// Moves the cursor right `n` columns.
             pub fn move_right(&mut self, n: usize) -> io::Result<()> { self.0.move_right(n) }
             /// Moves the cursor to the first column of the current line
-            pub fn move_to_first_column( &mut self ) -> io::Result<()> { self.0.move_to_first_column() }
+            pub fn move_to_first_column(&mut self) -> io::Result<()> { self.0.move_to_first_column() }
             /// Set the current cursor mode.
             pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> { self.0.set_cursor_mode(mode) }
             /// Adds a set of `Style` flags to the current style setting.
@@ -7694,15 +10185,15 @@ pub mod mortal
             /// Removes color and style attributes.
             pub fn set_bg<C: Into<Option<Color>>>(&mut self, bg: C) -> io::Result<()> { self.0.set_bg(bg.into()) }
             /// Adds bold to the current style setting.
-            pub fn clear_attributes( &mut self ) -> io::Result<()> { self.0.clear_attributes() }
+            pub fn clear_attributes(&mut self) -> io::Result<()> { self.0.clear_attributes() }
             /// Adds bold to the current style setting.
-            pub fn bold( &mut self ) -> io::Result<()> { self.add_style(Style::BOLD) }
+            pub fn bold(&mut self) -> io::Result<()> { self.add_style(Style::BOLD) }
             /// Adds italic to the current style setting.
-            pub fn italic( &mut self ) -> io::Result<()> { self.add_style(Style::ITALIC) }
+            pub fn italic(&mut self) -> io::Result<()> { self.add_style(Style::ITALIC) }
             /// Adds underline to the current style setting.
-            pub fn underline( &mut self ) -> io::Result<()> { self.add_style(Style::UNDERLINE) }
+            pub fn underline(&mut self) -> io::Result<()> { self.add_style(Style::UNDERLINE) }
             /// Adds reverse to the current style setting.
-            pub fn reverse( &mut self ) -> io::Result<()> { self.add_style(Style::REVERSE) }
+            pub fn reverse(&mut self) -> io::Result<()> { self.add_style(Style::REVERSE) }
             /// Writes output to the terminal with the given color and style added.
             pub fn write_styled<F, B, S>(&mut self, fg: F, bg: B, style: S, s: &str) -> io::Result<()> where
             F: Into<Option<Color>>,
@@ -7720,24 +10211,21 @@ pub mod mortal
                 self.write_str(&s)
             }
 
-            pub fn borrow_term_write_guard( &mut self ) -> &mut Self { self }
+            pub fn borrow_term_write_guard(&mut self) -> &mut Self { self }
         }
         
         impl ::mortal::unix::OpenTerminalExt for Terminal
-       
         {
             fn from_path<P: AsRef<Path>>(path: P) -> io::Result<Self> { sys::Terminal::open(path).map(Terminal) }
         }
         
         impl ::mortal::unix::TerminalExt for Terminal
-       
         {
             fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> 
             { self.0.read_raw(buf, timeout) }
         }
         
         impl<'a> ::mortal::unix::TerminalExt for TerminalReadGuard<'a>
-       
         {
             fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> 
             { self.0.read_raw(buf, timeout) }
@@ -7824,7 +10312,7 @@ pub mod mortal
         impl<'a> Iterator for Prefixes<'a>
         {
             type Item = &'a str;
-            fn next( &mut self ) -> Option<&'a str> { self.iter.next().map(|(idx, ch)| &self.s[..idx + ch.len_utf8()]) }
+            fn next(&mut self) -> Option<&'a str> { self.iter.next().map(|(idx, ch)| &self.s[..idx + ch.len_utf8()]) }
         }
     }
 
@@ -7956,7 +10444,7 @@ pub mod mortal
 
             impl Drop for Screen
             {
-                fn drop( &mut self ) 
+                fn drop(&mut self) 
                 {
                     let res = if let Some(state) = self.state.take() 
                     { self.term.restore(state) } 
@@ -8011,7 +10499,7 @@ pub mod mortal
 
                 pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> { self.writer.set_cursor_mode(mode) }
 
-                pub fn refresh( &mut self ) -> io::Result<()>
+                pub fn refresh(&mut self) -> io::Result<()>
                 {
                     if self.data.clear_screen
                     {
@@ -8057,7 +10545,7 @@ pub mod mortal
 
             impl<'a> Drop for ScreenWriteGuard<'a> 
             {
-                fn drop( &mut self ) 
+                fn drop(&mut self) 
                 {
                     if let Err(e) = self.refresh() { eprintln!("failed to refresh screen: {}", e); }
                 }
@@ -8330,7 +10818,7 @@ pub mod mortal
 
             impl Drop for Terminal
             {
-                fn drop( &mut self )
+                fn drop(&mut self)
                 {
                     if let Err(e) = self.set_cursor_mode(CursorMode::Normal) 
                     { eprintln!("failed to restore terminal: {}", e); }
@@ -8583,7 +11071,7 @@ pub mod mortal
                     }
                 }
 
-                fn try_read( &mut self ) -> io::Result<Option<Event>>
+                fn try_read(&mut self) -> io::Result<Option<Event>>
                 {
                     let in_buffer = &mut self.reader.in_buffer;
                     
@@ -8622,7 +11110,7 @@ pub mod mortal
                     else { Ok(None) }
                 }
 
-                fn resume( &mut self ) -> io::Result<()>
+                fn resume(&mut self) -> io::Result<()>
                 {
                     if let Some(resume) = self.reader.resume { let _ = self.prepare(resume.config)?; }
 
@@ -8646,14 +11134,14 @@ pub mod mortal
         {                   get_winsize(self.term.out_fd)
                 }
 
-                fn disable_keypad( &mut self ) -> io::Result<()>
+                fn disable_keypad(&mut self) -> io::Result<()>
         {                   if let Some(local) = self.term.info.get::<cap::KeypadLocal>() {
                         self.expand(local.expand())?;
                     }
                     Ok(())
                 }
 
-                fn enable_keypad( &mut self ) -> io::Result<bool>
+                fn enable_keypad(&mut self) -> io::Result<bool>
         {                   if let Some(xmit) = self.term.info.get::<cap::KeypadXmit>() {
                         self.expand(xmit.expand())?;
                         Ok(true)
@@ -8662,7 +11150,7 @@ pub mod mortal
                     }
                 }
 
-                fn disable_mouse( &mut self ) -> io::Result<()>
+                fn disable_mouse(&mut self) -> io::Result<()>
         {                   self.write_bytes(XTERM_DISABLE_MOUSE.as_bytes())?;
                     self.write_bytes(XTERM_DISABLE_MOUSE_MOTION.as_bytes())
                 }
@@ -8679,7 +11167,7 @@ pub mod mortal
                     }
                 }
 
-                fn enter_screen( &mut self ) -> io::Result<()>
+                fn enter_screen(&mut self) -> io::Result<()>
         {                   match (self.term.info.get::<cap::EnterCaMode>(),
                             self.term.info.get::<cap::ChangeScrollRegion>(),
                             self.term.info.get::<cap::CursorHome>()) {
@@ -8704,7 +11192,7 @@ pub mod mortal
                     Ok(())
                 }
 
-                fn exit_screen( &mut self ) -> io::Result<()>
+                fn exit_screen(&mut self) -> io::Result<()>
         {                   if let Some(exit) = self.term.info.get::<cap::ExitCaMode>() {
                         self.expand(exit.expand())?;
                         self.flush()?;
@@ -8713,7 +11201,7 @@ pub mod mortal
                     Ok(())
                 }
 
-                pub fn clear_attributes( &mut self ) -> io::Result<()>
+                pub fn clear_attributes(&mut self) -> io::Result<()>
         {                   if self.writer.fg.is_some() || self.writer.bg.is_some() ||
                             !self.writer.cur_style.is_empty() {
                         self.writer.fg = None;
@@ -8837,7 +11325,7 @@ pub mod mortal
                     Ok(())
                 }
 
-                fn clear_fg( &mut self ) -> io::Result<()>
+                fn clear_fg(&mut self) -> io::Result<()>
         {                   let bg = self.writer.bg;
                     let style = self.writer.cur_style;
 
@@ -8846,7 +11334,7 @@ pub mod mortal
                     self.set_style(style)
                 }
 
-                fn clear_bg( &mut self ) -> io::Result<()>
+                fn clear_bg(&mut self) -> io::Result<()>
         {                   let fg = self.writer.fg;
                     let style = self.writer.cur_style;
 
@@ -8865,15 +11353,15 @@ pub mod mortal
                         |ex| ex.parameters(color_code(bg)))
                 }
 
-                pub fn clear_screen( &mut self ) -> io::Result<()>
+                pub fn clear_screen(&mut self) -> io::Result<()>
         {                   expand_req!(self, cap::ClearScreen, "clear_screen")
                 }
 
-                pub fn clear_to_line_end( &mut self ) -> io::Result<()>
+                pub fn clear_to_line_end(&mut self) -> io::Result<()>
         {                   expand_req!(self, cap::ClrEol, "clr_eol")
                 }
 
-                pub fn clear_to_screen_end( &mut self ) -> io::Result<()>
+                pub fn clear_to_screen_end(&mut self) -> io::Result<()>
         {                   expand_req!(self, cap::ClrEos, "clr_eos")
                 }
 
@@ -8915,7 +11403,7 @@ pub mod mortal
                     Ok(())
                 }
 
-                pub fn move_to_first_column( &mut self ) -> io::Result<()>
+                pub fn move_to_first_column(&mut self) -> io::Result<()>
         {                   self.write_bytes(b"\r")
                 }
 
@@ -8978,7 +11466,7 @@ pub mod mortal
                     }
                 }
 
-                pub fn flush( &mut self ) -> io::Result<()>
+                pub fn flush(&mut self) -> io::Result<()>
         {                   let (n, res) = self.write_data(&self.writer.out_buffer);
                     self.writer.out_buffer.drain(..n);
                     res
@@ -9014,7 +11502,7 @@ pub mod mortal
 
             impl<'a> Drop for TerminalWriteGuard<'a> 
             {
-                fn drop( &mut self ) {
+                fn drop(&mut self) {
                     if let Err(e) = self.flush() {
                         eprintln!("failed to flush terminal: {}", e);
                     }
@@ -9510,7 +11998,6 @@ pub mod nom
         }
 
         impl<I> ParseError<I> for Error<I>
-       
         {
             fn from_error_kind( input:I, kind:ErrorKind ) -> Self { Error { input, code:kind } }
             fn append( _:I, _:ErrorKind, other:Self ) -> Self { other }
@@ -9526,9 +12013,8 @@ pub mod nom
         /// The Display implementation allows the std::error::Error implementation
         impl<I:Debug + Display> StdError for Error<I> {}
         impl<I:Display> Display for Error<I>
-       
         {
-            fn fmt( &self, f:&mut fmt::Formatter<'_> ) -> fmt::Result { write!(f, "error {:?} @:{}", self.code, self.input) }
+            fn fmt( &self, f:&mut ::fmt::Formatter<'_> ) -> ::fmt::Result { write!(f, "error {:?} @:{}", self.code, self.input) }
         }
         /// Indicates which parser returned an error
         #[derive( Clone, Copy, Debug, Eq, Hash, PartialEq )]
@@ -9654,7 +12140,6 @@ pub mod nom
         }
         
         impl<I> ParseError<I> for ( I, ErrorKind )
-       
         {
             fn from_error_kind( input:I, kind:ErrorKind ) -> Self { ( input, kind ) }
             fn append( _:I, _:ErrorKind, other:Self ) -> Self { other }
@@ -9662,13 +12147,11 @@ pub mod nom
 
         impl<I> ContextError<I> for ( I, ErrorKind ) {}
         impl<I, E> FromExternalError<I, E> for ( I, ErrorKind )
-       
         {
             fn from_external_error( input:I, kind:ErrorKind, _e:E ) -> Self { ( input, kind ) }
         }
 
         impl<I> ParseError<I> for ()
-       
         {
             fn from_error_kind( _:I, _:ErrorKind ) -> Self {}
             fn append( _:I, _:ErrorKind, _:Self ) -> Self {}
@@ -9677,7 +12160,6 @@ pub mod nom
         impl<I> ContextError<I> for () {}
 
         impl<I, E> FromExternalError<I, E> for ()
-       
         {
             fn from_external_error( _input:I, _kind:ErrorKind, _e:E ) -> Self {}
         }
@@ -9708,7 +12190,6 @@ pub mod nom
         }
         
         impl<I> ParseError<I> for VerboseError<I>
-       
         {
             fn from_error_kind( input:I, kind:ErrorKind ) -> Self
             {
@@ -9728,7 +12209,6 @@ pub mod nom
         }
         
         impl<I> ContextError<I> for VerboseError<I>
-       
         {
             fn add_context( input:I, ctx:&'static str, mut other:Self ) -> Self
             {
@@ -9744,9 +12224,8 @@ pub mod nom
         }
         
         impl<I:Display> Display for VerboseError<I>
-       
         {
-            fn fmt( &self, f:&mut fmt::Formatter<'_> ) -> fmt::Result
+            fn fmt( &self, f:&mut ::fmt::Formatter<'_> ) -> ::fmt::Result
             {
                 writeln!( f, "Parse error:" )?;
                 for ( input, error ) in &self.errors
@@ -10128,7 +12607,6 @@ pub mod nom
         
         impl<Input, Output, Error: ParseError<Input>, A: Parser<Input, Output, Error>>
         Alt<Input, Output, Error> for (A,)
-       
         {
             fn choice(&mut self, input: Input) -> IResult<Input, Output, Error> { self.0.parse(input) }
         }
@@ -10492,7 +12970,7 @@ pub mod nom
         Input: Clone
         {
             type Item = Output;
-            fn next( &mut self ) -> Option<Self::Item>
+            fn next(&mut self) -> Option<Self::Item>
             {
                 if let State::Running = self.state.take().unwrap()
                 {
@@ -10581,7 +13059,6 @@ pub mod nom
         }
 
         impl<I, O, E> Finish<I, O, E> for IResult<I, O, E>
-       
         {
             fn finish( self ) -> Result<(I, O), E> 
             {
@@ -10733,9 +13210,8 @@ pub mod nom
 
         impl<E> fmt::Display for Err<E> where
         E: fmt::Debug
-       
         {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+            fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result
             {
                 match self
                 {
@@ -10749,7 +13225,6 @@ pub mod nom
         
         impl<E> Error for Err<E> where
         E: fmt::Debug
-       
         {
             fn source(&self) -> Option<&(dyn Error + 'static)> { None }
         }
@@ -10827,13 +13302,11 @@ pub mod nom
 
         impl<'a, I, O, E, F> Parser<I, O, E> for F where
         F: FnMut(I) -> IResult<I, O, E> + 'a
-       
         {
             fn parse(&mut self, i: I) -> IResult<I, O, E> { self(i) }
         }
 
         impl<'a, I, O, E> Parser<I, O, E> for Box<dyn Parser<I, O, E> + 'a>
-       
         {
             fn parse(&mut self, input: I) -> IResult<I, O, E> { (**self).parse(input) }
         }
@@ -10846,7 +13319,6 @@ pub mod nom
         }
 
         impl<'a, I, O1, O2, E, F: Parser<I, O1, E>, G: Fn(O1) -> O2> Parser<I, O2, E> for Map<F, G, O1>
-       
         {
             fn parse(&mut self, i: I) -> IResult<I, O2, E>
            
@@ -10868,7 +13340,6 @@ pub mod nom
 
         impl<'a, I, O1, O2, E, F: Parser<I, O1, E>, G: Fn(O1) -> H, H: Parser<I, O2, E>> Parser<I, O2, E> 
         for FlatMap<F, G, O1>
-       
         {
             fn parse(&mut self, i: I) -> IResult<I, O2, E>
             {
@@ -10885,7 +13356,6 @@ pub mod nom
         }
 
         impl<'a, I, O1, O2, E, F: Parser<I, O1, E>, G: Parser<O1, O2, E>> Parser<I, O2, E> for AndThen<F, G, O1>
-       
         {
             fn parse(&mut self, i: I) -> IResult<I, O2, E>
             {
@@ -10902,7 +13372,6 @@ pub mod nom
         }
 
         impl<'a, I, O1, O2, E, F: Parser<I, O1, E>, G: Parser<I, O2, E>> Parser<I, (O1, O2), E> for And<F, G>
-       
         {
             fn parse(&mut self, i: I) -> IResult<I, (O1, O2), E>
             {
@@ -10920,7 +13389,6 @@ pub mod nom
 
         impl<'a, I: Clone, O, E: ParseError<I>, F: Parser<I, O, E>, G: Parser<I, O, E>>
         Parser<I, O, E> for Or<F, G>
-       
         {
             fn parse(&mut self, i: I) -> IResult<I, O, E>
            
@@ -10956,7 +13424,6 @@ pub mod nom
             E2: ParseError<I> + From<E1>,
             F: Parser<I, O1, E1>
         > Parser<I, O2, E2> for Into<F, O1, O2, E1, E2>
-       
         {
             fn parse(&mut self, i: I) -> IResult<I, O2, E2>
            
@@ -11695,7 +14162,6 @@ pub mod nom
 
         impl<Input, Output, Error: ParseError<Input>, F: Parser<Input, Output, Error>>
         Tuple<Input, (Output,), Error> for (F,)
-       
         {
             fn parse(&mut self, input: Input) -> IResult<Input, (Output,), Error> { self.0.parse(input).map(|(i, o)| (i, (o,))) }
         }
@@ -11705,7 +14171,6 @@ pub mod nom
 
         // Special case: implement `Tuple` for `()`, the unit type.
         impl<I, E: ParseError<I>> Tuple<I, (), E> for ()
-       
         {
             fn parse(&mut self, input: I) -> IResult<I, (), E>
             { Ok((input, ())) }
@@ -11839,7 +14304,6 @@ pub mod nom
         }
 
         impl Offset for [u8]
-       
         {
             fn offset(&self, second: &Self) -> usize
             {
@@ -11850,7 +14314,6 @@ pub mod nom
         }
 
         impl<'a> Offset for &'a [u8]
-       
         {
             fn offset(&self, second: &Self) -> usize
             {
@@ -11861,7 +14324,6 @@ pub mod nom
         }
 
         impl Offset for str
-       
         {
             fn offset(&self, second: &Self) -> usize
             {
@@ -11872,7 +14334,6 @@ pub mod nom
         }
 
         impl<'a> Offset for &'a str
-       
         {
             fn offset(&self, second: &Self) -> usize
             {
@@ -12389,7 +14850,6 @@ pub mod nom
         }
 
         impl<'a, 'b> FindSubstring<&'b [u8]> for &'a [u8]
-       
         {
             fn find_substring(&self, substr: &'b [u8]) -> Option<usize>
             {
@@ -12526,7 +14986,6 @@ pub mod nom
         }
         
         impl<I> ErrorConvert<error::Error<I>> for error::Error<(I, usize)>
-       
         {
             fn convert( self ) -> error::Error<I>
             {
@@ -12539,7 +14998,6 @@ pub mod nom
         }
 
         impl<I> ErrorConvert<error::Error<(I, usize)>> for error::Error<I>
-       
         {
             fn convert( self ) -> error::Error<(I, usize)>
             {
@@ -12552,7 +15010,6 @@ pub mod nom
         }
         
         impl<I> ErrorConvert<error::VerboseError<I>> for error::VerboseError<(I, usize)>
-       
         {
             fn convert( self ) -> error::VerboseError<I>
             {
@@ -12564,7 +15021,6 @@ pub mod nom
         }
         
         impl<I> ErrorConvert<error::VerboseError<(I, usize)>> for error::VerboseError<I>
-       
         {
             fn convert( self ) -> error::VerboseError<(I, usize)>
             {
@@ -12586,7 +15042,6 @@ pub mod nom
         }
         
         impl HexDisplay for [u8]
-       
         {
             fn to_hex(&self, chunk_size: usize) -> String { self.to_hex_from(chunk_size, 0) }
             fn to_hex_from(&self, chunk_size: usize, from: usize) -> String
@@ -12633,7 +15088,6 @@ pub mod nom
         }
         
         impl HexDisplay for str
-       
         {
             fn to_hex(&self, chunk_size: usize) -> String { self.to_hex_from(chunk_size, 0) }
             fn to_hex_from(&self, chunk_size: usize, from: usize) -> String { self.as_bytes().to_hex_from(chunk_size, from) }
@@ -16188,9 +18642,9 @@ pub mod now
         }
     }
 
-    impl fmt::Display for Error
+    impl ::fmt::Display for Error
     {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+        fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
         {
             match self
             {
@@ -16267,7 +18721,7 @@ pub mod now
             self
         }
         /// Execute the command we built.  If this function succeeds, it will never return.
-        pub fn exec( &mut self ) -> Error { execvp(&self.argv[0], &self.argv) }
+        pub fn exec(&mut self) -> Error { execvp(&self.argv[0], &self.argv) }
     }
 }
 pub mod num { pub use std::num::{ * }; }
@@ -16283,7 +18737,6 @@ pub mod option
         use super::OptionExt;
 
         impl<T> OptionExt<T> for Option<T>
-       
         {
             fn contains<U>( &self, x:&U ) -> bool where
             U:PartialEq<T> 
@@ -16891,24 +19344,29 @@ pub mod parsers
         {           Locust::parse( Rule::EXP, lines )
         }
         */
-        pub struct Pairs();
-        /**/
-        pub fn parse_lines( lines:&str ) -> Result<Pairs<crate::parsers::locust::Rule>, Error<crate::parsers::locust::Rule>>
+        #[derive(Clone, Debug, Eq, Hash, PartialEq)]
+        pub struct Error<R> 
         {
-            //Locust::parse( Rule::EXP, lines )
-            Ok( Pairs() )
+            /// Variant of the error
+            pub variant: Option<R>,
         }
 
-
+        pub struct Pairs<T>( pub Option<T> );
         #[derive( Debug )]
         pub enum Rule
         {
             If,
             IfElse,
         }
+        /**/
+        pub fn parse_lines( lines:&str ) -> Result<Pairs<Rule>, Error<Rule>>
+        {
+            //Locust::parse( Rule::EXP, lines )
+            Ok( Pairs( None ) )
+        }
     }
     /*
-    Fast, minimal float-parsing algorithm.*/
+    Fast, minimal float-parsing algorithm. */
     pub mod float
     {
 
@@ -20136,20 +22594,20 @@ pub mod process
     use ::
     {
         libc::{ c_int },
+        mem::{ MaybeUninit },
         nix::
         {
             unistd::{ fork as nix_fork, ForkResult },
             Error, Result
         },
         os::fd::{RawFd},
-        *,
     };
     
     pub fn fork() -> Result<ForkResult> { unsafe{ nix_fork() } }
     
     pub fn pipe() -> ::result::Result<( RawFd, RawFd ), Error>
     {
-        let mut fds = mem::MaybeUninit::<[c_int; 2]>::uninit();
+        let mut fds = MaybeUninit::<[c_int; 2]>::uninit();
         let res = unsafe { libc::pipe( fds.as_mut_ptr() as *mut c_int ) };
         Error::result( res )?;
         unsafe { Ok( ( fds.assume_init()[0], fds.assume_init()[1] ) ) }
@@ -20295,9 +22753,9 @@ pub mod prompt
                     /// List of all command names
                     pub static COMMANDS: &[&str] = &[ $( $str ),+ ];
 
-                    impl fmt::Display for Command
+                    impl ::fmt::Display for Command
                     {
-                        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+                        fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
                         {
                             match *self
                             {
@@ -20475,7 +22933,7 @@ pub mod prompt
                 *,
             };
             /// Represents a single possible completion
-            #[derive(Clone, Debug)]
+            #[derive( Clone, Debug )]
             pub struct Completion
             {
                 /// Whole completion text
@@ -20835,7 +23293,7 @@ pub mod prompt
                 *,
             };
             /// Parsed configuration directive
-            #[derive(Clone, Debug)]
+            #[derive( Clone, Debug )]
             pub enum Directive
             {
                 /// Bind construct; `"input-sequence": command-or-macro`
@@ -20922,7 +23380,7 @@ pub mod prompt
                     }
                 }
 
-                fn next_line( &mut self ) -> Option<&'a str>
+                fn next_line(&mut self) -> Option<&'a str>
                 {
                     self.lines.next().map(|line|
                     {
@@ -20931,7 +23389,7 @@ pub mod prompt
                     })
                 }
 
-                fn parse( &mut self ) -> Vec<Directive>
+                fn parse(&mut self) -> Vec<Directive>
                 {
                     let mut dirs = Vec::new();
 
@@ -20955,7 +23413,7 @@ pub mod prompt
                     dirs
                 }
 
-                fn parse_conditional( &mut self ) -> (Vec<Directive>, Vec<Directive>)
+                fn parse_conditional(&mut self) -> (Vec<Directive>, Vec<Directive>)
                 {
                     let mut then_group = Vec::new();
                     let mut else_group = Vec::new();
@@ -21177,7 +23635,7 @@ pub mod prompt
             {
                 type Item = Token<'a>;
 
-                fn next( &mut self ) -> Option<Token<'a>>
+                fn next(&mut self) -> Option<Token<'a>>
                 {
                     let ch = self.line.chars().next()?;
                     let tok = match ch
@@ -21377,6 +23835,7 @@ pub mod prompt
                 borrow::{ Cow },
                 fs::{ File, OpenOptions },
                 io::{ self, BufRead, BufReader, BufWriter, Read as _, Seek, SeekFrom, Write as _, },
+                mortal::{ Signal },
                 path::{ Path },
                 prompt::lines::
                 {
@@ -21385,7 +23844,7 @@ pub mod prompt
                     function::Function,
                     inputrc::Directive,
                     reader::{Read, Reader, ReadLock, ReadResult},
-                    terminal::{DefaultTerminal, Signal, Terminal},
+                    terminal::{ DefaultTerminal, Terminal },
                     variables::Variable,
                     writer::{Write, Writer, WriteLock},
                 },
@@ -21649,7 +24108,8 @@ pub mod prompt
             {
                 cmp::{ min },
                 iter::{ repeat },
-                prompt::lines::terminal::{ CursorMode, RawRead, SignalSet, Size, Terminal, TerminalReader, TerminalWriter },
+                mortal::{ CursorMode, SignalSet, Size, },
+                prompt::lines::terminal::{ RawRead, Terminal, TerminalReader, TerminalWriter },
                 sync::{ Arc, Mutex, MutexGuard },
                 time::{ Duration },
                 *,
@@ -21661,7 +24121,7 @@ pub mod prompt
                 lines: 24,
             };
             /// Implements an in-memory `Terminal` interface.
-            #[derive(Clone, Debug)]
+            #[derive( Clone, Debug )]
             pub struct MemoryTerminal
             {
                 write: Arc<Mutex<Writer>>,
@@ -21778,9 +24238,9 @@ pub mod prompt
                     }
                 }
 
-                fn has_input( &mut self ) -> bool { self.resize.is_some() || !self.input.is_empty() }
+                fn has_input(&mut self) -> bool { self.resize.is_some() || !self.input.is_empty() }
 
-                fn clear_input( &mut self ) { self.input.clear(); }
+                fn clear_input(&mut self) { self.input.clear(); }
 
                 fn push_input(&mut self, bytes: &[u8]) { self.input.extend(bytes); }
 
@@ -21813,7 +24273,7 @@ pub mod prompt
                     }
                 }
 
-                fn clear_all( &mut self ) 
+                fn clear_all(&mut self) 
                 {
                     for ch in &mut self.memory
                     {
@@ -21823,7 +24283,7 @@ pub mod prompt
                     self.line = 0;
                 }
 
-                fn clear_to_end( &mut self )
+                fn clear_to_end(&mut self)
                 {
                     let idx = self.index();
                     for ch in &mut self.memory[idx..]
@@ -21840,7 +24300,7 @@ pub mod prompt
 
                 fn move_right(&mut self, n: usize) { self.col = min(self.size.columns - 1, self.col + n); }
 
-                fn move_to_first_column( &mut self ) { self.col = 0; }
+                fn move_to_first_column(&mut self) { self.col = 0; }
 
                 fn resize(&mut self, new_size: Size)
                 {
@@ -21901,7 +24361,7 @@ pub mod prompt
                     }
                 }
 
-                fn advance_line( &mut self )
+                fn advance_line(&mut self)
                 {
                     self.line += 1;
                     self.col = 0;
@@ -21929,7 +24389,7 @@ pub mod prompt
             impl<'a> Lines<'a>
             {
                 /// Returns the next line in the buffer.
-                pub fn next( &mut self ) -> Option<&[char]>
+                pub fn next(&mut self) -> Option<&[char]>
                 {
                     if self.line >= self.writer.size.lines { None } 
                     else
@@ -22003,13 +24463,13 @@ pub mod prompt
             {
                 fn size(&self) -> io::Result<Size> { Ok(self.0.size) }
 
-                fn clear_screen( &mut self ) -> io::Result<()>
+                fn clear_screen(&mut self) -> io::Result<()>
                 {
                     self.0.clear_all();
                     Ok(())
                 }
 
-                fn clear_to_screen_end( &mut self ) -> io::Result<()>
+                fn clear_to_screen_end(&mut self) -> io::Result<()>
                 {
                     self.0.clear_to_end();
                     Ok(())
@@ -22039,7 +24499,7 @@ pub mod prompt
                     Ok(())
                 }
 
-                fn move_to_first_column( &mut self ) -> io::Result<()>
+                fn move_to_first_column(&mut self) -> io::Result<()>
                 {
                     self.0.move_to_first_column();
                     Ok(())
@@ -22057,7 +24517,7 @@ pub mod prompt
                     Ok(())
                 }
 
-                fn flush( &mut self ) -> io::Result<()> { Ok(()) }
+                fn flush(&mut self) -> io::Result<()> { Ok(()) }
             }
  
         }
@@ -22067,20 +24527,17 @@ pub mod prompt
             use ::
             {
                 mem::{ replace },
-                mortal::
-                {
-                    FindResult,
-                },
+                mortal::{ CursorMode, FindResult, Signal, Size },
                 ops::{ Range },
                 prompt::lines::
                 {
-                    chars::{is_ctrl, is_printable, DELETE, EOF},
-                    command::{Category, Command},
+                    chars::{ is_ctrl, is_printable, DELETE, EOF },
+                    command::{ Category, Command::{ self, * } },
                     complete::{ Completion },
                     function::{ Function },
-                    reader::{BindingIter, InputState, ReadLock, ReadResult},
-                    table::{format_columns, Line, Table},
-                    terminal::{CursorMode, Signal, Size, Terminal},
+                    reader::{ BindingIter, InputState, ReadLock, ReadResult },
+                    table::{ format_columns, Line, Table },
+                    terminal::{ * },
                     util::
                     { 
                         get_open_paren, find_matching_paren, first_word, longest_common_prefix, repeat_char, back_n_words, 
@@ -22118,13 +24575,13 @@ pub mod prompt
                     Writer::with_ref(&mut self.write, true)
                 }
                 /// Resets input state at the start of `read_line`
-                fn reset_input( &mut self )
+                fn reset_input(&mut self)
                 {
                     self.read.reset_data();
                     self.write.reset_data();
                 }
 
-                pub fn start_read_line( &mut self ) -> io::Result<()> 
+                pub fn start_read_line(&mut self) -> io::Result<()> 
                 {
                     self.read.state = InputState::NewSequence;
                     self.write.is_prompt_drawn = true;
@@ -22132,7 +24589,7 @@ pub mod prompt
                     self.write.draw_prompt()
                 }
 
-                pub fn end_read_line( &mut self ) -> io::Result<()>
+                pub fn end_read_line(&mut self) -> io::Result<()>
                 {
                     self.write.expire_blink()?;
                     if self.read.overwrite_mode { self.write.set_cursor_mode(CursorMode::Normal)?; }                
@@ -22304,7 +24761,6 @@ pub mod prompt
 
                     Ok(None)
                 }
-
                 /// Returns the current buffer.
                 pub fn buffer(&self) -> &str { &self.write.buffer }
                 /// Returns the "backup" buffer.
@@ -22337,11 +24793,8 @@ pub mod prompt
                 pub fn history_index(&self) -> Option<usize> { self.write.history_index }
                 /// Returns the current number of history entries.
                 pub fn history_len(&self) -> usize { self.write.history.len() }
-
-                fn next_history(&mut self, n: usize) -> io::Result<()> { self.write.next_history(n) }
-                
+                fn next_history(&mut self, n: usize) -> io::Result<()> { self.write.next_history(n) }                
                 fn prev_history(&mut self, n: usize) -> io::Result<()> { self.write.prev_history(n) }
-
                 /// Selects the history entry currently being edited by the user.
                 pub fn select_history_entry(&mut self, new: Option<usize>) -> io::Result<()>
                 { self.write.select_history_entry(new) }
@@ -22352,7 +24805,7 @@ pub mod prompt
                 pub fn set_completions(&mut self, completions: Option<Vec<Completion>>)
                 { self.read.completions = completions; }
                 /// Attempts to execute the current sequence.
-                fn execute_sequence( &mut self ) -> io::Result<()>
+                fn execute_sequence(&mut self) -> io::Result<()>
                 {
                     match self.find_binding(&self.read.sequence)
                     {
@@ -22387,7 +24840,7 @@ pub mod prompt
                     Ok(())
                 }
 
-                fn force_execute_sequence( &mut self ) -> io::Result<()>
+                fn force_execute_sequence(&mut self) -> io::Result<()>
                 {
                     self.read.state = InputState::NewSequence;
                     match self.find_binding(&self.read.sequence)
@@ -22407,7 +24860,7 @@ pub mod prompt
                     Ok(())
                 }
                 /// Execute the command `SelfInsert` on the first character in the input sequence, if it is printable.
-                fn insert_first_char( &mut self ) -> io::Result<()>
+                fn insert_first_char(&mut self) -> io::Result<()>
                 {
                     let (first, rest) =
                     {
@@ -22912,7 +25365,7 @@ pub mod prompt
                     Ok(())
                 }
                 /// Accepts the current input buffer as user input.
-                pub fn accept_input( &mut self ) -> io::Result<()>
+                pub fn accept_input(&mut self) -> io::Result<()>
                 {
                     self.write.move_to_end()?;
                     self.write.write_str("\n")?;
@@ -22949,7 +25402,7 @@ pub mod prompt
                     Ok(())
                 }
 
-                fn keyseq_expiry( &mut self ) -> Option<Instant>
+                fn keyseq_expiry(&mut self) -> Option<Instant>
                 {
                     if let Some(t) = self.read.keyseq_timeout
                     {
@@ -22959,20 +25412,20 @@ pub mod prompt
                     else { None }
                 }
 
-                pub fn check_expire_timeout( &mut self ) -> io::Result<()>
+                pub fn check_expire_timeout(&mut self) -> io::Result<()>
                 {
                     let now = Instant::now();
                     self.check_expire_blink(now)?;
                     self.check_expire_sequence(now)
                 }
 
-                fn expire_blink( &mut self ) -> io::Result<()>
+                fn expire_blink(&mut self) -> io::Result<()>
                 {
                     self.read.max_wait_duration = None;
                     self.write.expire_blink()
                 }
 
-                fn build_completions( &mut self )
+                fn build_completions(&mut self)
                 {
                     let compl = self.read.completer.clone();
                     let end = self.write.cursor;
@@ -22993,7 +25446,7 @@ pub mod prompt
                     self.read.completion_prefix = end;
                 }
 
-                fn complete_word( &mut self ) -> io::Result<()>
+                fn complete_word(&mut self) -> io::Result<()>
                 {
                     if let Some(completions) = self.read.completions.take()
                     {
@@ -23094,7 +25547,7 @@ pub mod prompt
                     self.write.redraw_prompt(PromptType::CompleteIntro(n_completions))
                 }
 
-                fn end_page_completions( &mut self ) -> io::Result<()>
+                fn end_page_completions(&mut self) -> io::Result<()>
                 {
                     self.read.state = InputState::NewSequence;
                     self.write.prompt_type = PromptType::Normal;
@@ -23267,14 +25720,14 @@ pub mod prompt
                     Ok(())
                 }
 
-                fn abort_search_history( &mut self ) -> io::Result<()>
+                fn abort_search_history(&mut self) -> io::Result<()>
                 {
                     self.read.state = InputState::NewSequence;
                     self.read.last_cmd = Category::Other;
                     self.write.abort_search_history()
                 }
 
-                fn end_search_history( &mut self ) -> io::Result<()>
+                fn end_search_history(&mut self) -> io::Result<()>
                 {
                     self.read.state = InputState::NewSequence;
                     self.write.end_search_history()
@@ -23358,7 +25811,7 @@ pub mod prompt
                     self.read.kill_ring.push_front(s);
                 }
 
-                fn rotate_kill_ring( &mut self )
+                fn rotate_kill_ring(&mut self)
                 {
                     if let Some(kill) = self.read.kill_ring.pop_front() { self.read.kill_ring.push_back(kill); }
                 }
@@ -23386,7 +25839,7 @@ pub mod prompt
                 pub fn transpose_range(&mut self, src: Range<usize>, dest: Range<usize>) -> io::Result<()>
                 { self.write.transpose_range(src, dest) }
                 /// Insert text from the front of the kill ring at the current cursor position.
-                pub fn yank( &mut self ) -> io::Result<()>
+                pub fn yank(&mut self) -> io::Result<()>
                 {
                     if let Some(kill) = self.read.kill_ring.front().cloned()
                     {
@@ -23398,7 +25851,7 @@ pub mod prompt
                     Ok(())
                 }
                 /// Rotates the kill ring and replaces yanked text with the new front.
-                pub fn yank_pop( &mut self ) -> io::Result<()>
+                pub fn yank_pop(&mut self) -> io::Result<()>
                 {
                     if let Some((start, end)) = self.read.last_yank
                     {
@@ -23487,7 +25940,12 @@ pub mod prompt
                     self.write.move_from(len)
                 }
                 /// Replaces a range in the buffer and redraws.
-                fn replace_str_impl<R: RangeArgument<usize>>( &mut self,  range:R,  s:&str ) -> io::Result<()>
+                fn replace_str_impl<R: RangeArgument<usize>>
+                (
+                    &mut self, 
+                    range:R, 
+                    s:&str
+                ) -> io::Result<()>
                 {
                     let start = range.start().cloned().unwrap_or(0);
                     let end = range.end().cloned().unwrap_or_else(|| self.write.buffer.len());
@@ -23512,7 +25970,7 @@ pub mod prompt
                 mortal::
                 { 
                     sequence::{ Entry },
-                    SequenceMap 
+                    SequenceMap, Signal, SignalSet, Size,
                 },
                 ops::{ Deref, DerefMut },
                 path::{ Path, PathBuf },
@@ -23525,7 +25983,7 @@ pub mod prompt
                     interface::{ Interface },
                     prompter::{ Prompter },
                     sys::path::{ env_init_file, system_init_file, user_init_file },
-                    terminal::{ RawRead, Terminal, TerminalReader, }, //  Signal, SignalSet, Size, 
+                    terminal::{ RawRead, Terminal, TerminalReader, },
                     util::{ first_char, match_name },
                     variables::{ Variable, Variables, VariableIter },
                 },
@@ -23641,7 +26099,7 @@ pub mod prompt
                     Reader{iface, lock}
                 }
                 /// Interactively reads a line from the terminal device.
-                pub fn read_line( &mut self ) -> io::Result<ReadResult>
+                pub fn read_line(&mut self) -> io::Result<ReadResult>
                 {
                     loop
                     {
@@ -23658,9 +26116,9 @@ pub mod prompt
                     res
                 }
                 /// Cancels an in-progress `read_line` operation.
-                pub fn cancel_read_line( &mut self ) -> io::Result<()> { self.end_read_line() }
+                pub fn cancel_read_line(&mut self) -> io::Result<()> { self.end_read_line() }
 
-                fn initialize_read_line( &mut self ) -> io::Result<()>
+                fn initialize_read_line(&mut self) -> io::Result<()>
                 {
                     if !self.lock.is_active() { self.prompter().start_read_line()?; }
                     Ok(())
@@ -23716,13 +26174,13 @@ pub mod prompt
                     Ok(None)
                 }
 
-                fn end_read_line( &mut self ) -> io::Result<()>
+                fn end_read_line(&mut self) -> io::Result<()>
                 {
                     if self.lock.is_active() { self.prompter().end_read_line()?; }
                     Ok(())
                 }
 
-                fn prepare_term( &mut self ) -> io::Result<Term::PrepareState>
+                fn prepare_term(&mut self) -> io::Result<Term::PrepareState>
                 {
                     if self.read_next_raw() { self.lock.term.prepare(true, SignalSet::new()) }
                     
@@ -23936,14 +26394,14 @@ pub mod prompt
                 -> ReadLock<'a, Term>
                 { ReadLock{term, data} }
                 /// Reads the next character of input.
-                pub fn read_char( &mut self ) -> io::Result<Option<char>>
+                pub fn read_char(&mut self) -> io::Result<Option<char>>
                 {
                     if let Some(ch) = self.macro_pop() { Ok(Some(ch)) }
                      else if let Some(ch) = self.decode_input()? { Ok(Some(ch)) } 
                     else { Ok(None) }
                 }
 
-                fn read_input( &mut self ) -> io::Result<()>
+                fn read_input(&mut self) -> io::Result<()>
                  {
                     match self.term.read(&mut self.data.input_buffer)?
                     {
@@ -23964,13 +26422,13 @@ pub mod prompt
                     }
                 }
 
-                fn macro_pop( &mut self ) -> Option<char>
+                fn macro_pop(&mut self) -> Option<char>
                 {
                     if self.data.macro_buffer.is_empty() { None }
                     else { Some(self.data.macro_buffer.remove(0)) }
                 }
 
-                fn decode_input( &mut self ) -> io::Result<Option<char>>
+                fn decode_input(&mut self) -> io::Result<Option<char>>
                 {
                     let res = self.peek_input();
                 
@@ -23985,7 +26443,7 @@ pub mod prompt
                     else { first_char(&self.data.input_buffer) }
                 }
 
-                pub fn reset_data( &mut self ) { self.data.reset_data(); }
+                pub fn reset_data(&mut self) { self.data.reset_data(); }
             }
 
             impl<'a, Term: 'a + Terminal> Deref for ReadLock<'a, Term>
@@ -23997,7 +26455,7 @@ pub mod prompt
 
             impl<'a, Term: 'a + Terminal> DerefMut for ReadLock<'a, Term>
             {
-                fn deref_mut( &mut self ) -> &mut Read<Term>
+                fn deref_mut(&mut self) -> &mut Read<Term>
                 { &mut self.data }
             }
 
@@ -24009,7 +26467,7 @@ pub mod prompt
 
             impl<Term: Terminal> DerefMut for Read<Term>
             {
-                fn deref_mut( &mut self ) -> &mut Variables { &mut self.variables }
+                fn deref_mut(&mut self) -> &mut Variables { &mut self.variables }
             }
 
             impl<Term: Terminal> Read<Term>
@@ -24057,9 +26515,9 @@ pub mod prompt
 
                 pub fn variables(&self) -> VariableIter { self.variables.iter() }
 
-                fn take_resize( &mut self ) -> Option<Size> { self.last_resize.take() }
+                fn take_resize(&mut self) -> Option<Size> { self.last_resize.take() }
 
-                fn take_signal( &mut self ) -> Option<Signal> { self.last_signal.take() }
+                fn take_signal(&mut self) -> Option<Signal> { self.last_signal.take() }
 
                 pub fn queue_input(&mut self, seq: &str) { self.macro_buffer.insert_str(0, seq); }
 
@@ -24072,7 +26530,7 @@ pub mod prompt
                     }
                 }
 
-                pub fn reset_data( &mut self )
+                pub fn reset_data(&mut self)
                 {
                     self.state = InputState::NewSequence;
                     self.input_accepted = false;
@@ -24191,14 +26649,14 @@ pub mod prompt
             impl<'a> Iterator for BindingIter<'a>
             {
                 type Item = (&'a str, &'a Command);
-                #[inline] fn next( &mut self ) -> Option<Self::Item> { self.0.next().map(|&(ref s, ref cmd)| (&s[..], cmd)) }
+                #[inline] fn next(&mut self) -> Option<Self::Item> { self.0.next().map(|&(ref s, ref cmd)| (&s[..], cmd)) }
                 #[inline] fn nth(&mut self, n: usize) -> Option<Self::Item> { self.0.nth(n).map(|&(ref s, ref cmd)| (&s[..], cmd)) }
                 #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.0.size_hint() }
             }
 
             impl<'a> DoubleEndedIterator for BindingIter<'a>
             {
-                #[inline] fn next_back( &mut self ) -> Option<Self::Item>
+                #[inline] fn next_back(&mut self) -> Option<Self::Item>
                 { self.0.next_back().map(|&(ref s, ref cmd)| (&s[..], cmd)) }
             }
 
@@ -24329,7 +26787,7 @@ pub mod prompt
             impl<'a, S: 'a + AsRef<str>> Iterator for Table<'a, S>
             {
                 type Item = Line<'a, S>;
-                fn next( &mut self ) -> Option<Line<'a, S>>
+                fn next(&mut self) -> Option<Line<'a, S>>
                 {
                     if self.offset == self.rows { return None; }
 
@@ -24370,7 +26828,7 @@ pub mod prompt
             impl<'a, S: 'a + AsRef<str>> Iterator for Line<'a, S>
             {
                 type Item = (usize, &'a str);
-                fn next( &mut self ) -> Option<(usize, &'a str)>
+                fn next(&mut self) -> Option<(usize, &'a str)>
                 {
                     let s = self.strings.get(self.offset * self.stride)?.as_ref();
                     let width = self.sizes.and_then(|sz| sz.get(self.offset).cloned()).unwrap_or_else(|| s.chars().count());
@@ -24512,10 +26970,10 @@ pub mod prompt
                 /// Returns the size of the terminal window
                 fn size(&self) -> io::Result<Size>;
                 /// Presents a clear terminal screen, with cursor at first row, first column.
-                fn clear_screen( &mut self ) -> io::Result<()>;
+                fn clear_screen(&mut self) -> io::Result<()>;
                 /// Clears characters on the line occupied by the cursor, beginning with the
                 /// cursor and ending at the end of the line.
-                fn clear_to_screen_end( &mut self ) -> io::Result<()>;
+                fn clear_to_screen_end(&mut self) -> io::Result<()>;
                 /// Moves the cursor up `n` cells; `n` may be zero.
                 fn move_up(&mut self, n: usize) -> io::Result<()>;
                 /// Moves the cursor down `n` cells; `n` may be zero.
@@ -24525,13 +26983,13 @@ pub mod prompt
                 /// Moves the cursor right `n` cells; `n` may be zero.
                 fn move_right(&mut self, n: usize) -> io::Result<()>;
                 /// Moves the cursor to the first column of the current line
-                fn move_to_first_column( &mut self ) -> io::Result<()>;
+                fn move_to_first_column(&mut self) -> io::Result<()>;
                 /// Set the current cursor mode
                 fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()>;
                 /// Writes output to the terminal.
                 fn write(&mut self, s: &str) -> io::Result<()>;
                 /// Flushes any currently buffered output data.
-                fn flush( &mut self ) -> io::Result<()>;
+                fn flush(&mut self) -> io::Result<()>;
             }
 
             impl DefaultTerminal 
@@ -24609,19 +27067,19 @@ pub mod prompt
             impl<'a> TerminalWriter<DefaultTerminal> for TerminalWriteGuard<'a>
             {
                 fn size(&self) -> io::Result<Size> { self.size() }
-                fn clear_screen( &mut self ) -> io::Result<()> { self.clear_screen() }
-                fn clear_to_screen_end( &mut self ) -> io::Result<()> { self.clear_to_screen_end() }
+                fn clear_screen(&mut self) -> io::Result<()> { self.clear_screen() }
+                fn clear_to_screen_end(&mut self) -> io::Result<()> { self.clear_to_screen_end() }
                 fn move_up(&mut self, n: usize) -> io::Result<()> { self.move_up(n) }
                 fn move_down(&mut self, n: usize) -> io::Result<()> { self.move_down(n) }
                 fn move_left(&mut self, n: usize) -> io::Result<()> { self.move_left(n) }
                 fn move_right(&mut self, n: usize) -> io::Result<()> { self.move_right(n) }
-                fn move_to_first_column( &mut self ) -> io::Result<()> { self.move_to_first_column() }
+                fn move_to_first_column(&mut self) -> io::Result<()> { self.move_to_first_column() }
                 fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> { self.set_cursor_mode(mode) }
                 fn write(&mut self, s: &str) -> io::Result<()> { self.write_str(s) }
-                fn flush( &mut self ) -> io::Result<()> { self.flush() }
+                fn flush(&mut self) -> io::Result<()> { self.flush() }
             }
         }
-        pub use self::terminal::{DefaultTerminal, Signal, Terminal, Size};
+        pub use self::terminal::{ * };
         pub mod util
         {
             //! Provides miscellaneous utilities
@@ -25019,13 +27477,12 @@ pub mod prompt
 
             macro_rules! define_variables
             {
-                ( $(
+                ($(
                     $field:ident : $ty:ty => 
                     (
                         $name:expr , $conv:ident , |$gr:ident| $getter:expr , |$sr:ident, $v:ident| $setter:expr
                     ) , 
-                    )+ 
-                ) =>
+                )+) =>
                 {
                     static VARIABLE_NAMES: &[&str] = &[ $( $name ),+ ];
 
@@ -25076,12 +27533,10 @@ pub mod prompt
                     impl<'a> Iterator for VariableIter<'a>
                     {
                         type Item = (&'static str, Variable);
-                        fn next( &mut self ) -> Option<Self::Item>
-                        {
-                            let res = match VARIABLE_NAMES.get(self.n).cloned()
-                            {
-                                $( Some($name) => ($name,
-                                {
+                        fn next(&mut self) -> Option<Self::Item>
+                        {                           
+                            let res = match VARIABLE_NAMES.get(self.n).cloned() {
+                                $( Some($name) => ($name, {
                                     let $gr = self.vars;
                                     Variable::from($getter)
                                 }) , )+
@@ -25102,7 +27557,7 @@ pub mod prompt
                 n: usize,
             }
             /// Represents a `Reader` variable of a given type
-            #[derive(Clone, Debug)]
+            #[derive( Clone, Debug )]
             pub enum Variable
             {
                 /// Boolean variable
@@ -25268,12 +27723,13 @@ pub mod prompt
                 collections::{ vec_deque, VecDeque }, 
                 iter::{ repeat, Skip },
                 mem::{ swap },
+                mortal::{ CursorMode, Size, },
                 ops::{ Deref, DerefMut, Range },
                 prompt::lines::
                 {
                     reader::{ START_INVISIBLE, END_INVISIBLE },
                     chars::{ is_ctrl, unctrl, ESCAPE, RUBOUT },
-                    terminal::{ CursorMode, Size, Terminal, TerminalWriter },
+                    terminal::{ Terminal, TerminalWriter },
                     util::
                     { 
                         backward_char, forward_char, backward_search_char, forward_search_char, filter_visible, 
@@ -25283,8 +27739,7 @@ pub mod prompt
                 sync::{ MutexGuard },
                 time::{ Duration, Instant },
                 *,
-            };
-            
+            };            
             /// Maximum value of digit input
             const NUMBER_MAX: i32 = 1_000_000;            
             /// Duration to wait for input when "blinking"
@@ -25383,9 +27838,9 @@ pub mod prompt
 
                 pub fn size(&self) -> io::Result<Size> { self.term.size() }
 
-                pub fn flush( &mut self ) -> io::Result<()> { self.term.flush() }
+                pub fn flush(&mut self) -> io::Result<()> { self.term.flush() }
 
-                pub fn update_size( &mut self ) -> io::Result<()>
+                pub fn update_size(&mut self) -> io::Result<()>
                 {
                     let size = self.size()?;
                     self.screen_size = size;
@@ -25418,7 +27873,7 @@ pub mod prompt
                     Ok(self.blink.is_none())
                 }
 
-                pub fn expire_blink( &mut self ) -> io::Result<()>
+                pub fn expire_blink(&mut self) -> io::Result<()>
                 {
                     if let Some(blink) = self.data.blink.take() { self.move_from(blink.pos)?; }
 
@@ -25439,13 +27894,13 @@ pub mod prompt
                     Ok(())
                 }
                 /// Draws the prompt and current input, assuming the cursor is at column 0
-                pub fn draw_prompt( &mut self ) -> io::Result<()>
+                pub fn draw_prompt(&mut self) -> io::Result<()>
                 {
                     self.draw_prompt_prefix()?;
                     self.draw_prompt_suffix()
                 }
 
-                pub fn draw_prompt_prefix( &mut self ) -> io::Result<()>
+                pub fn draw_prompt_prefix(&mut self) -> io::Result<()>
                 {
                     match self.prompt_type
                     {
@@ -25458,7 +27913,7 @@ pub mod prompt
                     }
                 }
 
-                pub fn draw_prompt_suffix( &mut self ) -> io::Result<()>
+                pub fn draw_prompt_suffix(&mut self) -> io::Result<()>
                 {
                     match self.prompt_type
                     {
@@ -25729,10 +28184,9 @@ pub mod prompt
                     self.search_history_step()
                 }
 
-                pub fn end_search_history( &mut self ) -> io::Result<()>
-                { self.redraw_prompt(PromptType::Normal) }
+                pub fn end_search_history(&mut self) -> io::Result<()> { self.redraw_prompt(PromptType::Normal) }
 
-                pub fn abort_search_history( &mut self ) -> io::Result<()>
+                pub fn abort_search_history(&mut self) -> io::Result<()>
                 {
                     self.clear_prompt()?;
                     let ent = self.prev_history;
@@ -25757,7 +28211,7 @@ pub mod prompt
                     self.draw_prompt_suffix()
                 }
 
-                pub fn search_history_update( &mut self ) -> io::Result<()> 
+                pub fn search_history_update(&mut self) -> io::Result<()> 
                 {
                     let next_match = if self.reverse_search
                     { self.search_history_backward(&self.search_buffer, true) }
@@ -25765,7 +28219,7 @@ pub mod prompt
                     self.show_search_match(next_match)
                 }
 
-                fn search_history_step( &mut self ) -> io::Result<()>
+                fn search_history_step(&mut self) -> io::Result<()>
                 {
                     if self.search_buffer.is_empty() { return self.redraw_prompt(PromptType::Search); }
                     
@@ -25877,7 +28331,7 @@ pub mod prompt
                     if !is_duplicate { self.add_history(line); }
                 }
 
-                pub fn clear_history( &mut self )
+                pub fn clear_history(&mut self)
                 {
                     self.truncate_history(0);
                     self.history_new_entries = 0;
@@ -25906,21 +28360,22 @@ pub mod prompt
                 }
 
                 pub fn next_history(&mut self, n: usize) -> io::Result<()>
-        {                   if let Some(old) = self.history_index {
+                {
+                    if let Some(old) = self.history_index
+                    {
                         let new = old.saturating_add(n);
 
-                        if new >= self.history.len() {
-                            self.select_history_entry(None)?;
-                        } else {
-                            self.select_history_entry(Some(new))?;
-                        }
+                        if new >= self.history.len() { self.select_history_entry(None)?; }
+                        else { self.select_history_entry(Some(new))?; }
                     }
 
                     Ok(())
                 }
 
                 pub fn prev_history(&mut self, n: usize) -> io::Result<()>
-        {                   if !self.history.is_empty() && self.history_index != Some(0) {
+                {
+                    if !self.history.is_empty() && self.history_index != Some(0)
+                    {
                         let new = if let Some(old) = self.history_index {
                             old.saturating_sub(n)
                         } else {
@@ -25934,7 +28389,8 @@ pub mod prompt
                 }
 
                 pub fn select_history_entry(&mut self, new: Option<usize>) -> io::Result<()>
-        {                   if new != self.history_index {
+                {
+                    if new != self.history_index {
                         self.move_to(0)?;
                         self.set_history_entry(new);
                         self.new_buffer()?;
@@ -25943,7 +28399,8 @@ pub mod prompt
                     Ok(())
                 }
 
-                pub fn set_history_entry(&mut self, new: Option<usize>) {
+                pub fn set_history_entry(&mut self, new: Option<usize>)
+                {
                     let old = self.history_index;
 
                     if old != new {
@@ -25965,7 +28422,8 @@ pub mod prompt
                     }
                 }
 
-                fn get_history(&self, n: Option<usize>) -> &str {
+                fn get_history(&self, n: Option<usize>) -> &str
+                {
                     if self.history_index == n {
                         &self.buffer
                     } else if let Some(n) = n {
@@ -25976,53 +28434,48 @@ pub mod prompt
                 }
 
                 pub fn backward_char(&mut self, n: usize) -> io::Result<()>
-        {                   let pos = backward_char(n, &self.buffer, self.cursor);
+                {
+                    let pos = backward_char(n, &self.buffer, self.cursor);
                     self.move_to(pos)
                 }
 
                 pub fn forward_char(&mut self, n: usize) -> io::Result<()>
-        {                   let pos = forward_char(n, &self.buffer, self.cursor);
+                {
+                    let pos = forward_char(n, &self.buffer, self.cursor);
                     self.move_to(pos)
                 }
 
                 pub fn backward_search_char(&mut self, n: usize, ch: char) -> io::Result<()>
-        {                   if let Some(pos) = backward_search_char(n, &self.buffer, self.cursor, ch) {
-                        self.move_to(pos)?;
-                    }
+                {
+                    if let Some(pos) = backward_search_char(n, &self.buffer, self.cursor, ch) { self.move_to(pos)?; }
 
                     Ok(())
                 }
 
                 pub fn forward_search_char(&mut self, n: usize, ch: char) -> io::Result<()>
-        {                   if let Some(pos) = forward_search_char(n, &self.buffer, self.cursor, ch) {
-                        self.move_to(pos)?;
-                    }
+                {
+                    if let Some(pos) = forward_search_char(n, &self.buffer, self.cursor, ch) { self.move_to(pos)?; }
 
                     Ok(())
                 }
-
-                /// Deletes a range from the buffer; the cursor is moved to the end
-                /// of the given range.
+                /// Deletes a range from the buffer; the cursor is moved to the end of the given range.
                 pub fn delete_range<R: RangeArgument<usize>>(&mut self, range: R) -> io::Result<()>
-        {                   let start = range.start().cloned().unwrap_or(0);
+                {
+                    let start = range.start().cloned().unwrap_or(0);
                     let end = range.end().cloned().unwrap_or_else(|| self.buffer.len());
-
                     self.move_to(start)?;
-
                     let _ = self.buffer.drain(start..end);
-
                     self.draw_buffer(start)?;
                     self.term.clear_to_screen_end()?;
                     let len = self.buffer.len();
                     self.move_from(len)?;
-
                     Ok(())
                 }
 
                 pub fn insert_str(&mut self, s: &str) -> io::Result<()>
-        {                   // If the string insertion moves a combining character,
-                    // we must redraw starting from the character before the cursor.
-                    let moves_combining = match self.buffer[self.cursor..].chars().next() {
+                {
+                    let moves_combining = match self.buffer[self.cursor..].chars().next()
+                    {
                         Some(ch) if is_combining_mark(ch) => true,
                         _ => false
                     };
@@ -26030,15 +28483,15 @@ pub mod prompt
                     let cursor = self.cursor;
                     self.buffer.insert_str(cursor, s);
 
-                    if moves_combining && cursor != 0 {
+                    if moves_combining && cursor != 0
+                    {
                         let pos = backward_char(1, &self.buffer, self.cursor);
-                        // Move without updating the cursor
                         let (lines, cols) = self.move_delta(cursor, pos, &self.buffer);
                         self.move_rel(lines, cols)?;
                         self.draw_buffer(pos)?;
-                    } else {
-                        self.draw_buffer(cursor)?;
                     }
+                    
+                    else { self.draw_buffer(cursor)?; }
 
                     self.cursor += s.len();
 
@@ -26046,60 +28499,44 @@ pub mod prompt
                     self.move_from(len)
                 }
 
-                pub fn transpose_range(&mut self, src: Range<usize>, dest: Range<usize>)
-                        -> io::Result<()>
-        {                   // Ranges must not overlap
+                pub fn transpose_range(&mut self, src: Range<usize>, dest: Range<usize>) -> io::Result<()>
+                {
                     assert!(src.end <= dest.start || src.start >= dest.end);
-
-                    // Final cursor position
-                    let final_cur = if src.start < dest.start {
-                        dest.end
-                    } else {
-                        dest.start + (src.end - src.start)
-                    };
-
-                    let (left, right) = if src.start < dest.start {
-                        (src, dest)
-                    } else {
-                        (dest, src)
-                    };
-
+                    let final_cur = if src.start < dest.start  { dest.end }
+                    else { dest.start + (src.end - src.start) };
+                    let (left, right) = if src.start < dest.start { (src, dest) } else { (dest, src) };
                     self.move_to(left.start)?;
-
                     let a = self.buffer[left.clone()].to_owned();
                     let b = self.buffer[right.clone()].to_owned();
-
                     let _ = self.buffer.drain(right.clone());
                     self.buffer.insert_str(right.start, &a);
-
                     let _ = self.buffer.drain(left.clone());
                     self.buffer.insert_str(left.start, &b);
-
                     let cursor = self.cursor;
                     self.draw_buffer(cursor)?;
                     self.term.clear_to_screen_end()?;
-
                     self.cursor = final_cur;
                     let len = self.buffer.len();
                     self.move_from(len)
                 }
 
-                fn prompt_suffix_length(&self) -> usize {
-                    match self.prompt_type {
+                fn prompt_suffix_length(&self) -> usize
+                {
+                    match self.prompt_type
+                    {
                         PromptType::Normal => self.prompt_suffix_len,
                         PromptType::Number =>
-        {                           let n = number_len(self.input_arg.to_i32());
+                        {
+                            let n = number_len(self.input_arg.to_i32());
                             PROMPT_NUM_PREFIX + PROMPT_NUM_SUFFIX + n
                         }
                         PromptType::Search =>
-        {                           let mut prefix = PROMPT_SEARCH_PREFIX;
+                        {
+                            let mut prefix = PROMPT_SEARCH_PREFIX;
 
-                            if self.reverse_search {
-                                prefix += PROMPT_SEARCH_REVERSE_PREFIX;
-                            }
-                            if self.search_failed {
-                                prefix += PROMPT_SEARCH_FAILED_PREFIX;
-                            }
+                            if self.reverse_search { prefix += PROMPT_SEARCH_REVERSE_PREFIX; }
+
+                            if self.search_failed { prefix += PROMPT_SEARCH_FAILED_PREFIX; }
 
                             let n = self.display_size(&self.search_buffer, prefix);
                             prefix + n + PROMPT_SEARCH_SUFFIX
@@ -26109,44 +28546,44 @@ pub mod prompt
                     }
                 }
 
-                fn line_col(&self, pos: usize) -> (usize, usize) {
+                fn line_col(&self, pos: usize) -> (usize, usize)
+                {
                     let prompt_len = self.prompt_suffix_length();
 
-                    match self.prompt_type {
+                    match self.prompt_type
+                    {
                         PromptType::CompleteIntro(_) |
                         PromptType::CompleteMore =>
-        {                           let width = self.screen_size.columns;
+                        {
+                            let width = self.screen_size.columns;
                             (prompt_len / width, prompt_len % width)
                         }
                         _ => self.line_col_with(pos, &self.buffer, prompt_len)
                     }
                 }
 
-                fn line_col_with(&self, pos: usize, buf: &str, start_col: usize) -> (usize, usize) {
+                fn line_col_with(&self, pos: usize, buf: &str, start_col: usize) -> (usize, usize)
+                {
                     let width = self.screen_size.columns;
-                    if width == 0 {
-                        return (0, 0);
-                    }
+                    if width == 0 { return (0, 0); }
 
                     let n = start_col + self.display_size(&buf[..pos], start_col);
 
                     (n / width, n % width)
                 }
 
-                pub fn clear_screen( &mut self ) -> io::Result<()>
-        {                   self.term.clear_screen()?;
+                pub fn clear_screen(&mut self) -> io::Result<()>
+                {
+                    self.term.clear_screen()?;
                     self.draw_prompt()?;
-
                     Ok(())
                 }
 
-                pub fn clear_to_screen_end( &mut self ) -> io::Result<()>
-        {                   self.term.clear_to_screen_end()
-                }
-
+                pub fn clear_to_screen_end(&mut self) -> io::Result<()> { self.term.clear_to_screen_end() }
                 /// Draws a new buffer on the screen. Cursor position is assumed to be `0`.
-                pub fn new_buffer( &mut self ) -> io::Result<()>
-        {                   self.draw_buffer(0)?;
+                pub fn new_buffer(&mut self) -> io::Result<()>
+                {
+                    self.draw_buffer(0)?;
                     self.cursor = self.buffer.len();
 
                     self.term.clear_to_screen_end()?;
@@ -26154,30 +28591,33 @@ pub mod prompt
                     Ok(())
                 }
 
-                pub fn clear_full_prompt( &mut self ) -> io::Result<()>
-        {                   let prefix_lines = self.prompt_prefix_len / self.screen_size.columns;
+                pub fn clear_full_prompt(&mut self) -> io::Result<()>
+                {
+                    let prefix_lines = self.prompt_prefix_len / self.screen_size.columns;
                     let (line, _) = self.line_col(self.cursor);
                     self.term.move_up(prefix_lines + line)?;
                     self.term.move_to_first_column()?;
                     self.term.clear_to_screen_end()
                 }
 
-                pub fn clear_prompt( &mut self ) -> io::Result<()>
-        {                   let (line, _) = self.line_col(self.cursor);
-
+                pub fn clear_prompt(&mut self) -> io::Result<()>
+                {
+                    let (line, _) = self.line_col(self.cursor);
                     self.term.move_up(line)?;
                     self.term.move_to_first_column()?;
                     self.term.clear_to_screen_end()
                 }
-
                 /// Move back to true cursor position from some other position
                 pub fn move_from(&mut self, pos: usize) -> io::Result<()>
-        {                   let (lines, cols) = self.move_delta(pos, self.cursor, &self.buffer);
+                {
+                    let (lines, cols) = self.move_delta(pos, self.cursor, &self.buffer);
                     self.move_rel(lines, cols)
                 }
 
                 pub fn move_to(&mut self, pos: usize) -> io::Result<()>
-        {                   if pos != self.cursor {
+                {
+                    if pos != self.cursor
+                    {
                         let (lines, cols) = self.move_delta(self.cursor, pos, &self.buffer);
                         self.move_rel(lines, cols)?;
                         self.cursor = pos;
@@ -26186,18 +28626,16 @@ pub mod prompt
                     Ok(())
                 }
 
-                pub fn move_to_end( &mut self ) -> io::Result<()>
-        {                   let pos = self.buffer.len();
+                pub fn move_to_end(&mut self) -> io::Result<()>
+                {
+                    let pos = self.buffer.len();
                     self.move_to(pos)
                 }
 
-                pub fn move_right(&mut self, n: usize) -> io::Result<()>
-        {                   self.term.move_right(n)
-                }
-
-                /// Moves from `old` to `new` cursor position, using the given buffer
-                /// as current input.
-                fn move_delta(&self, old: usize, new: usize, buf: &str) -> (isize, isize) {
+                pub fn move_right(&mut self, n: usize) -> io::Result<()> { self.term.move_right(n) }
+                /// Moves from `old` to `new` cursor position, using the given buffer as current input.
+                fn move_delta(&self, old: usize, new: usize, buf: &str) -> (isize, isize)
+                {
                     let prompt_len = self.prompt_suffix_length();
                     let (old_line, old_col) = self.line_col_with(old, buf, prompt_len);
                     let (new_line, new_col) = self.line_col_with(new, buf, prompt_len);
@@ -26207,7 +28645,8 @@ pub mod prompt
                 }
 
                 fn move_rel(&mut self, lines: isize, cols: isize) -> io::Result<()>
-        {                   if lines > 0 {
+                {
+                    if lines > 0 {
                         self.term.move_down(lines as usize)?;
                     } else if lines < 0 {
                         self.term.move_up((-lines) as usize)?;
@@ -26222,7 +28661,7 @@ pub mod prompt
                     Ok(())
                 }
 
-                pub fn reset_data( &mut self ) {
+                pub fn reset_data(&mut self) {
                     self.data.reset_data();
                 }
 
@@ -26291,7 +28730,7 @@ pub mod prompt
 
             impl<'a, 'b: 'a, Term: 'b + Terminal> Drop for Writer<'a, 'b, Term>
             {
-                fn drop( &mut self )
+                fn drop(&mut self)
                 {
                     if self.write.is_prompt_drawn { let _ = self.write.draw_prompt(); }
                 }
@@ -26305,7 +28744,7 @@ pub mod prompt
 
             impl<'a, Term: 'a + Terminal> DerefMut for WriteLock<'a, Term>
             {
-                fn deref_mut( &mut self ) -> &mut Write { &mut self.data }
+                fn deref_mut(&mut self) -> &mut Write { &mut self.data }
             }
 
             impl Write
@@ -26350,7 +28789,7 @@ pub mod prompt
 
                 pub fn new_history_entries(&self) -> usize { self.history_new_entries }
 
-                pub fn reset_data( &mut self )
+                pub fn reset_data(&mut self)
                 {
                     self.buffer.clear();
                     self.backup_buffer.clear();
@@ -26361,7 +28800,7 @@ pub mod prompt
                     self.explicit_arg = false;
                 }
 
-                pub fn reset_new_history( &mut self ) { self.history_new_entries = 0; }
+                pub fn reset_new_history(&mut self) { self.history_new_entries = 0; }
 
                 pub fn set_buffer(&mut self, buf: &str)
                 {
@@ -26514,7 +28953,7 @@ pub mod prompt
             
             impl<'a, 'b: 'a, Term: 'b + Terminal> DerefMut for WriterImpl<'a, 'b, Term>
             {
-                fn deref_mut( &mut self ) -> &mut WriteLock<'b, Term>
+                fn deref_mut(&mut self) -> &mut WriteLock<'b, Term>
                 {
                     match *self
                     {
@@ -26532,7 +28971,7 @@ pub mod prompt
             {
                 type Item = &'a str;
 
-                #[inline] fn next( &mut self ) -> Option<&'a str> { self.0.next().map(|s| &s[..]) }
+                #[inline] fn next(&mut self) -> Option<&'a str> { self.0.next().map(|s| &s[..]) }
 
                 #[inline] fn nth(&mut self, n: usize) -> Option<&'a str> { self.0.nth(n).map(|s| &s[..]) }
 
@@ -26541,7 +28980,7 @@ pub mod prompt
             
             impl<'a> DoubleEndedIterator for HistoryIter<'a>
             {
-                #[inline] fn next_back( &mut self ) -> Option<&'a str> { self.0.next_back().map(|s| &s[..]) }
+                #[inline] fn next_back(&mut self) -> Option<&'a str> { self.0.next_back().map(|s| &s[..]) }
             }
 
             #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -26556,7 +28995,7 @@ pub mod prompt
             impl Iterator for DisplaySequence
             {
                 type Item = char;
-                fn next( &mut self ) -> Option<char>
+                fn next(&mut self) -> Option<char>
                 {
                     let (res, next) = match *self
                     {
@@ -26640,7 +29079,6 @@ pub mod prompt
         mod sys
         {
             //! Unix platform support
-
             pub use self::terminal::terminal_read;
 
             pub mod path
@@ -26658,6 +29096,7 @@ pub mod prompt
 
                 pub fn user_init_file() -> Option<PathBuf> { home_dir().map(|p| p.join(".inputrc")) }
             }
+
             pub mod terminal
             {
                 use ::
@@ -26687,18 +29126,13 @@ pub mod prompt
                 }
             }
         }
-        /*
-            #[cfg(windows)]
-            #[path = "windows/mod.rs"]
-            mod sys;
-        */
     }
 
     pub mod main
     {
         use ::{ * };
 
-        const DEFAULT_PROMPT:&str =  "${COLOR_STATUS}$USER${RESET}@${COLOR_STATUS}$HOSTNAME${RESET}:${COLOR_STATUS}$CWD${RESET}$ ";
+        pub const DEFAULT_PROMPT:&str =  "${COLOR_STATUS}$USER${RESET}@${COLOR_STATUS}$HOSTNAME${RESET}:${COLOR_STATUS}$CWD${RESET}$ ";
         use super::preset::apply_preset_item;
         use super::preset::apply_pyenv;
 
@@ -26812,11 +29246,8 @@ pub mod prompt
 
             if met_dollar { prompt.push( '$' ); }
 
-            if prompt.trim().is_empty()
-            {
-                /*return format!( "pls-{} >> ", env!( "CARGO_PKG_VERSION" ) );*/
-                return format!( "pls-{} >> ", ::env::var( "CARGO_PKG_VERSION" ) );
-            }
+            if prompt.trim().is_empty() { return format!( "pls-{} >> ", ::env::var( "CARGO_PKG_VERSION" ) ); }
+
             prompt
         }
 
@@ -26827,6 +29258,7 @@ pub mod prompt
                 result.push_str( &x );
                 return;
             }
+
             apply_preset_item( sh, result, token );
         }
 
@@ -27168,7 +29600,6 @@ pub mod prompt
         pub struct EnterFunction;
 
         impl<T:Terminal> Function<T> for EnterFunction
-       
         {
             fn execute( &self, prompter:&mut Prompter<T>, count:i32, _ch:char ) -> io::Result<()>
             {
@@ -27346,6 +29777,7 @@ pub mod scripts
     {
         fs::{ File },
         io::{ Read, Write, ErrorKind },
+        iter::{ Pair },
         path::{ Path },
         regex::{ Regex, RegexBuilder },
         types::{ self, CommandResult },
@@ -29715,13 +32147,13 @@ pub mod str
 
     impl<A:Array<Item = u8>> fmt::Write for SmallString<A>
     {
-        #[inline] fn write_str( &mut self, s:&str ) -> fmt::Result
+        #[inline] fn write_str( &mut self, s:&str ) -> ::fmt::Result
         {
             self.push_str( s );
             Ok( () )
         }
 
-        #[inline] fn write_char( &mut self, ch:char ) -> fmt::Result
+        #[inline] fn write_char( &mut self, ch:char ) -> ::fmt::Result
         {
             self.push( ch );
             Ok( () )
@@ -29865,12 +32297,12 @@ pub mod str
 
     impl<A:Array<Item = u8>> fmt::Debug for SmallString<A>
     {
-        #[inline] fn fmt( &self, f:&mut fmt::Formatter ) -> fmt::Result { fmt::Debug::fmt( &**self, f ) }
+        #[inline] fn fmt( &self, f:&mut ::fmt::Formatter ) -> ::fmt::Result { fmt::Debug::fmt( &**self, f ) }
     }
 
     impl<A:Array<Item = u8>> fmt::Display for SmallString<A>
     {
-        #[inline] fn fmt( &self, f:&mut fmt::Formatter ) -> fmt::Result { fmt::Display::fmt( &**self, f ) }
+        #[inline] fn fmt( &self, f:&mut ::fmt::Formatter ) -> ::fmt::Result { fmt::Display::fmt( &**self, f ) }
     }
 
     eq_str!( str );
@@ -29969,7 +32401,7 @@ pub mod str
 
     impl<A:Array<Item = u8>> fmt::Display for FromUtf8Error<A>
     {
-        #[inline] fn fmt( &self, f:&mut fmt::Formatter ) -> fmt::Result { fmt::Display::fmt( &self.error, f ) }
+        #[inline] fn fmt( &self, f:&mut ::fmt::Formatter ) -> ::fmt::Result { fmt::Display::fmt( &self.error, f ) }
     }
 }
 pub mod string { pub use std::string::{ * }; }
@@ -30465,9 +32897,9 @@ pub mod terminal
                 fn from(value: Expand) -> Self { Error::Expand(value) }
             }
 
-            impl fmt::Display for Error
+            impl ::fmt::Display for Error
             {
-                fn fmt(&self, f: &mut fmt::Formatter) -> ::result::Result<(), fmt::Error>
+                fn fmt(&self, f: &mut ::fmt::Formatter) -> ::result::Result<(), fmt::Error>
                 {
                     match *self
                     {
@@ -30782,7 +33214,7 @@ pub mod terminal
 
                 pub fn parse( input:&[u8] ) -> IResult<&[u8], Database>
                 {
-                    let ( this, magic) = alt((tag([0x1A, 0x01]), tag([0x1E, 0x02])))( this )?;
+                    let ( input, magic) = alt((tag([0x1A, 0x01]), tag([0x1E, 0x02])))( input )?;
                     let (input, name_size) = size(input)?;
                     let (input, bool_count) = size(input)?;
                     let (input, num_count) = size(input)?;
@@ -31013,7 +33445,7 @@ pub mod terminal
                 fn constant_integer(input: &[u8]) -> IResult<&[u8], Item> 
                 {
                     let (input, _) = tag("{")(input)?;
-                    let (input, digit) = take_while(is_digit)(input)?;
+                    let (input, digit) = take_while(is::digit)(input)?;
                     let (input, _) = tag("}")(input)?;
                     Ok((input, Item::Constant(Constant::Integer(number(digit)))))
                 }
@@ -31089,11 +33521,11 @@ pub mod terminal
                 {
                     let (input, _) = opt(tag(":"))(input)?;
                     let (input, flags) = take_while(is_flag)(input)?;
-                    let (input, width) = opt(take_while(is_digit))(input)?;
+                    let (input, width) = opt(take_while(is::digit))(input)?;
                     let (input, precision) = opt(|input|
                     {
                         let (input, _) = tag(".")(input)?;
-                        let (input, amount) = take_while(is_digit)(input)?;
+                        let (input, amount) = take_while(is::digit)(input)?;
                         Ok((input, amount))
                     })(input)?;
 
@@ -31171,8 +33603,7 @@ pub mod terminal
                     Disable(&'a str),
                 }
 
-                pub fn parse(input: &[u8]) -> IResult<&[u8], Item> 
-                { alt((comment, definition, disable, entry))(input) }
+                pub fn parse(input: &[u8]) -> IResult<&[u8], Item> { alt((comment, definition, disable, entry))(input) }
 
                 fn comment(input: &[u8]) -> IResult<&[u8], Item>
                 {
@@ -31234,8 +33665,9 @@ pub mod terminal
                         b"," => (input, Item::True(name)),
 
                         b"#" =>
-        {                           let (input, value) =
-                                map(take_while(is_digit), |n| unsafe { str::from_utf8_unchecked(n) })(input)?;
+                        {
+                            let (input, value) =
+                            map(take_while(is::digit), |n| unsafe { str::from_utf8_unchecked(n) })(input)?;
 
                             let (input, _) = tag(",")(input)?;
 
@@ -31243,7 +33675,8 @@ pub mod terminal
                         }
 
                         b"=" =>
-        {                           let (input, value) = take_while(is_printable_no_comma)(input)?;
+                        {
+                            let (input, value) = take_while(is_printable_no_comma)(input)?;
 
                             let (input, _) = tag(",")(input)?;
 
@@ -31489,7 +33922,7 @@ pub mod terminal
                             let mut index = 0;
                             $({
                                 self.params[index]  = $name.into();
-                                index              += 1;
+                                index += 1;
                             })*;
 
                             self
@@ -32172,10 +34605,11 @@ pub mod terminal
                 /// Set a raw capability.
                 pub fn raw<S: AsRef<str>, V: Into<Value>>(&mut self, name: S, value: V) -> &mut Self
                 {
+                    /*
                     let name = name.as_ref();
                     let name = names::ALIASES.get(name).copied().unwrap_or(name);
-
                     if !self.inner.contains_key(name) { self.inner.insert(name.into(), value.into()); }
+                    */
 
                     self
                 }
@@ -32274,7 +34708,15 @@ pub mod terminal
                 /// Get a capability.
                 pub fn get<'a, C: Capability<'a>>(&'a self) -> Option<C> { C::from(self.inner.get(C::name())) }
                 /// Get a capability by name.
-                pub fn raw<S: AsRef<str>>(&self, name: S) -> Option<&Value> { None }
+                pub fn raw<S: AsRef<str>>(&self, name: S) -> Option<&Value>
+                {
+                    /*
+                    let name = name.as_ref();
+                    let name = names::ALIASES.get(name).copied().unwrap_or(name);
+                    self.inner.get(name)
+                    */
+                    None
+                }
             }
         }
         pub use self::database::{ Database };
@@ -32676,7 +35118,7 @@ mod types
 
     impl fmt::Debug for WaitStatus
     {
-        fn fmt( &self, f:&mut fmt::Formatter<'_> ) -> fmt::Result
+        fn fmt( &self, f:&mut ::fmt::Formatter<'_> ) -> ::fmt::Result
         {
             let mut formatter = f.debug_struct( "WaitStatus" );
             formatter.field( "pid", &self.0 );
@@ -33141,4 +35583,4 @@ fn main()
     }
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 33164
+// 35586
