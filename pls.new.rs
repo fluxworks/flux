@@ -1,51 +1,4 @@
 //! Cicada is a bash-like Unix shell written in Rust.
-//!
-//! If you would like to use cicada as a regular shell,
-//! please see details in [its repository](https://github.com/mitnk/cicada)
-//!
-//! Here is how to use cicada as a library:
-//!
-//! **Add cicada into Cargo.toml**
-//!
-//! ```ignore
-//! [dependencies]
-//! cicada = "1.0"
-//! ```
-//!
-//! **Use cicada functions**
-//!
-//! ```no_run
-//! extern crate cicada;
-//!
-//! fn main() {
-//!     let info = cicada::parse_line("echo 'hi yoo' | `which wc`");
-//!     assert!(info.is_complete);
-//!
-//!     let tokens = info.tokens;
-//!     assert_eq!(tokens.len(), 4);
-//!
-//!     assert_eq!(tokens[0].0, "");
-//!     assert_eq!(tokens[0].1, "echo");
-//!
-//!     assert_eq!(tokens[1].0, "'");
-//!     assert_eq!(tokens[1].1, "hi yoo");
-//!
-//!     assert_eq!(tokens[2].0, "");
-//!     assert_eq!(tokens[2].1, "|");
-//!
-//!     assert_eq!(tokens[3].0, "`");
-//!     assert_eq!(tokens[3].1, "which wc");
-//!
-//!     let out1 = cicada::run("ls Cargo.toml foo");
-//!     assert_eq!(out1.status, 1);
-//!     assert_eq!(out1.stdout, "Cargo.toml\n");
-//!     assert_eq!(out1.stderr, "ls: foo: No such file or directory\n");
-//!
-//!     let out2 = cicada::run("ls | wc");
-//!     assert_eq!(out2.status, 0);
-//!     assert_eq!(out2.stdout, "       4       4      33\n");
-//! }
-//! ```
 #![feature
 (
     tool_lints,
@@ -64,36 +17,38 @@ pub use std::{ * };
 /**/
 #[macro_use] extern crate lazy_static;
 /**/
+extern crate clap;
 extern crate getrandom;
 extern crate libc;
 extern crate nix;
 extern crate regex;
+extern crate time;
 /*
-#![allow(unknown_lints)]
-// #![feature(tool_lints)]
-extern crate errno;
-extern crate exec;
-extern crate glob;
-extern crate libc;
-extern crate lineread;
-extern crate nix;
-extern crate regex;
-extern crate rusqlite;
-extern crate yaml_rust;
+    #![allow(unknown_lints)]
+    // #![feature(tool_lints)]
+    extern crate errno;
+    extern crate exec;
+    extern crate glob;
+    extern crate libc;
+    extern crate lineread;
+    extern crate nix;
+    extern crate regex;
+    extern crate rusqlite;
+    extern crate yaml_rust;
 
-extern crate clap;
+    extern crate clap;
 
-#[macro_use]
-extern crate lazy_static;
-extern crate pest;
-#[macro_use]
-extern crate pest_derive;
+    #[macro_use]
+    extern crate lazy_static;
+    extern crate pest;
+    #[macro_use]
+    extern crate pest_derive;
 
-use std::env;
-use std::io::Write;
-use std::sync::Arc;
+    use std::env;
+    use std::io::Write;
+    use std::sync::Arc;
 
-use lineread::{Command, Interface, ReadResult};
+    use lineread::{Command, Interface, ReadResult};
 
     extern crate errno;
     extern crate exec;
@@ -518,63 +473,5177 @@ use lineread::{Command, Interface, ReadResult};
 /**/
 pub mod ctime
 {
+    use ::
+    {
+        time::OffsetDateTime,
+        *,
+    };
+    #[derive(Debug, PartialEq, Eq)]
+    pub struct DateTime {
+        odt: OffsetDateTime,
+    }
 
+    impl DateTime {
+        pub fn now() -> Self {
+            let odt: OffsetDateTime = match OffsetDateTime::now_local() {
+                Ok(dt) => dt,
+                Err(_) => OffsetDateTime::now_utc(),
+            };
+            DateTime { odt }
+        }
+
+        pub fn from_timestamp(ts: f64) -> Self {
+            let dummy_now = Self::now();
+            let offset_seconds = dummy_now.odt.offset().whole_minutes() * 60;
+            let ts_nano = (ts + offset_seconds as f64) * 1000000000.0;
+            let odt: OffsetDateTime = match OffsetDateTime::from_unix_timestamp_nanos(ts_nano as i128) {
+                Ok(x) => x,
+                Err(_) => OffsetDateTime::now_utc(),
+            };
+            DateTime { odt }
+        }
+
+        pub fn unix_timestamp(&self) -> f64 {
+            self.odt.unix_timestamp_nanos() as f64 / 1000000000.0
+        }
+    }
+
+    impl fmt::Display for DateTime {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:03}",
+                self.odt.year(),
+                self.odt.month() as u8,
+                self.odt.day(),
+                self.odt.hour(),
+                self.odt.minute(),
+                self.odt.second(),
+                self.odt.millisecond(),
+            )
+        }
+    }
 }
 /**/
 pub mod builtins
 {
+    pub mod alias
+    {
+        use ::
+        {
+            regex::{ Regex },
+            types::{ Command, CommandLine, CommandResult },
+            *,
+        };
+        
+        pub fn run( sh:&mut shell::Shell, cl:&CommandLine, cmd:&Command, capture:bool ) -> CommandResult
+        {
+            let mut cr = CommandResult::new();
+            let tokens = cmd.tokens.clone();
 
+            if tokens.len() == 1
+            { return show_alias_list( sh, cmd, cl, capture ); }
+
+            if tokens.len() > 2
+            {
+                let info = "alias syntax error:usage:alias foo='echo foo'";
+                print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
+                return cr;
+            }
+
+            let input = &tokens[1].1;
+            let re_single_read = Regex::new( r"^[a-zA-Z0-9_\.-]+$" ).unwrap();
+            if re_single_read.is_match( input ) { return show_single_alias( sh, input, cmd, cl, capture ); }
+
+            let re_to_add = Regex::new( r"^( [a-zA-Z0-9_\.-]+ )=( .* )$" ).unwrap();
+            for cap in re_to_add.captures_iter( input )
+            {
+                let name = str::unquote( &cap[1] );
+                let value = if cap[2].starts_with( '"' ) || cap[2].starts_with( '\'' )
+                { str::unquote( &cap[2] ) }
+
+                else
+                { cap[2].to_string() };
+
+                sh.add_alias( name.as_str(), value.as_str() );
+            }
+
+            CommandResult::new()
+        }
+        
+        pub fn show_alias_list( sh:&shell::Shell, cmd:&Command, cl:&CommandLine, capture:bool ) -> CommandResult
+        {
+            let mut lines = Vec::new();
+            for ( name, value ) in sh.get_alias_list()
+            {
+                let line = format!( "alias {}='{}'", name, value );
+                lines.push( line );
+            }
+
+            let buffer = lines.join( "\n" );
+            let mut cr = CommandResult::new();
+            print_stdout_with_capture( &buffer, &mut cr, cl, cmd, capture );
+            cr
+        }
+        
+        pub fn show_single_alias( sh:&shell::Shell, named:&str, cmd:&Command, cl:&CommandLine, capture:bool ) -> CommandResult
+        {
+            let mut cr = CommandResult::new();
+            if let Some( content ) = sh.get_alias_content( named )
+            {
+                let info = format!( "alias {}='{}'", named, content );
+                print_stdout_with_capture( &info, &mut cr, cl, cmd, capture );
+            }
+            else
+            {
+                let info = format!( "pls:alias:{}:not found", named );
+                print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
+            }
+            cr
+        }
+    }
+    
+    pub mod bg
+    {
+        use ::
+        {
+            c::{ job },
+            shell::{ Shell },
+            types::{ CommandResult, CommandLine, Command },
+            *
+        };
+
+        pub fn run( sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture:bool ) -> CommandResult
+        {
+            let tokens = cmd.tokens.clone();
+            let mut cr = CommandResult::new();
+
+            if sh.jobs.is_empty()
+            {
+                let info = "pls:bg:no job found";
+                print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
+                return cr;
+            }
+
+            let mut job_id = -1;
+            if tokens.len() == 1
+            {
+                if let Some( ( gid, _ ) ) = sh.jobs.iter().next()
+                { job_id = *gid; }
+            }
+
+            if tokens.len() >= 2
+            {
+                let mut job_str = tokens[1].1.clone();
+                if job_str.starts_with( "%" )
+                {
+                    job_str = job_str.trim_start_matches( '%' ).to_string();
+                }
+
+                match job_str.parse::<i32>()
+                {
+                    Ok( n ) => job_id = n,
+                    Err( _ ) =>
+                    {
+                        let info = "pls:bg:invalid job id";
+                        print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
+                        return cr;
+                    }
+                }
+            }
+            
+            if job_id == -1
+            {
+                let info = "pls:bg:not such job";
+                print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
+                return cr;
+            }
+
+            let gid:i32;
+
+            {
+                let mut result = sh.get_job_by_id( job_id );
+                if result.is_none() {
+                    result = sh.get_job_by_gid( job_id );
+                }
+
+                match result
+                {
+                    Some( job ) =>
+                    unsafe 
+                    {
+                        libc::killpg( job.gid, libc::SIGCONT );
+                        gid = job.gid;
+                        if job.status == "Running"
+                        {
+                            let info = format!( "pls:bg:job {} already in background", job.id );
+                            print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
+                            return cr;
+                        }
+
+                        let info_cmd = format!( "[{}]  {} &", job.id, job.cmd );
+                        print_stderr_with_capture( &info_cmd, &mut cr, cl, cmd, capture );
+                        cr.status = 0;
+                    }
+                    
+                    None =>
+                    {
+                        let info = "pls:bg:not such job";
+                        print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
+                        return cr;
+                    }
+                }
+            }
+
+            c::job::mark_job_as_running( sh, gid, true );
+            cr
+        }
+    }
+    
+    pub mod cd
+    {
+        use ::
+        {
+            path::{ Path },
+            types::{Command, CommandLine, CommandResult},
+            *,
+        };
+
+        pub fn run( sh:&mut shell::Shell, cl:&CommandLine, cmd:&Command, capture:bool ) -> CommandResult
+        {
+            let tokens = cmd.tokens.clone();
+            let mut cr = CommandResult::new();
+            let args = parsers::line::tokens_to_args( &tokens );
+
+            if args.len() > 2 {
+                let info = "pls:cd:too many argument";
+                print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
+                return cr;
+            }
+
+            let str_current_dir = get::current_directory();
+
+            let mut dir_to = if args.len() == 1 {
+                let home = get::user_home();
+                home.to_string()
+            } else {
+                args[1..].join( "" )
+            };
+
+            if dir_to == "-" {
+                if sh.previous_dir.is_empty() {
+                    let info = "no previous dir";
+                    print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
+                    return cr;
+                }
+                dir_to = sh.previous_dir.clone();
+            } else if !dir_to.starts_with( '/' ) {
+                dir_to = format!( "{}/{}", str_current_dir, dir_to );
+            }
+
+            if !Path::new( &dir_to ).exists()
+            {
+                let info = format!( "pls:cd:{}:No such file or directory", &args[1] );
+                print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
+                return cr;
+            }
+
+            match Path::new( &dir_to ).canonicalize()
+            {
+                Ok( p ) =>
+        {                   dir_to = p.as_path().to_string_lossy().to_string();
+                }
+                Err( e ) =>
+        {                   let info = format!( "pls:cd:error:{}", e );
+                    print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
+                    return cr;
+                }
+            }
+
+            match env::set_current_dir( &dir_to )
+            {
+                Ok( _ ) =>
+        {                   sh.current_dir = dir_to.clone();
+                    if str_current_dir != dir_to {
+                        sh.previous_dir = str_current_dir.clone();
+                        env::set_var( "PWD", &sh.current_dir );
+                    };
+                    cr.status = 0;
+                    cr
+                }
+                Err( e ) =>
+        {                   let info = format!( "pls:cd:{}", e );
+                    print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
+                    cr
+                }
+            }
+        }
+    }
+    
+    pub mod cinfo
+    {
+        use ::
+        {
+            shell::{ Shell },
+            types::{ Command, CommandLine, CommandResult }, 
+            *,
+        };
+
+        pub fn run( _sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture:bool ) -> CommandResult
+        {
+            let mut info = vec![];
+            const VERSION:&str = "0.0.0"; //env!( "CARGO_PKG_VERSION" );
+            info.push( ( "version", VERSION ) );
+
+            let os_name = get::os_name();
+            info.push( ( "os-name", &os_name ) );
+
+            let hfile = get::history_file();
+            info.push( ( "history-file", &hfile ) );
+
+            let rcf = rc::file::get_rc_file();
+            info.push( ( "rc-file", &rcf ) );
+
+            let git_hash = std::env::var( "GIT_HASH" ); // env!( "GIT_HASH" );
+            if !git_hash.is_empty()
+            {
+                //info.push( ( "git-commit", env!( "GIT_HASH" ) ) );
+                info.push( ( "git-commit", env::var( "GIT_HASH" ) ) );
+            }
+
+            let git_branch = env::var( "GIT_BRANCH" ); //env!( "GIT_BRANCH" );
+            let mut branch = String::new();
+            if !git_branch.is_empty()
+            {
+                branch.push_str( git_branch );
+                let git_status = env::var( "GIT_STATUS" ); //env!( "GIT_STATUS" );
+                if git_status != "0" { branch.push_str( " ( dirty )" ); }
+                info.push( ( "git-branch", &branch ) );
+            }
+
+            //info.push( ( "built-with", env!( "BUILD_RUSTC_VERSION" ) ) );
+            info.push( ( "built-with", env::var( "BUILD_RUSTC_VERSION" ) ) );
+            //info.push( ( "built-at", env!( "BUILD_DATE" ) ) );
+            info.push( ( "built-with", env::var( "BUILD_DATE" ) ) );
+
+            let mut lines = Vec::new();
+            for ( k, v ) in &info {
+                // longest key above is 12-char length
+                lines.push( format!( "{:>12}:{}", k, v ) );
+            }
+            let buffer = lines.join( "\n" );
+            let mut cr = CommandResult::new();
+            print_stdout_with_capture( &buffer, &mut cr, cl, cmd, capture );
+            cr
+        }
+    }
+    
+    pub mod exec
+    {
+        use ::
+        {
+            shell::{ Shell },
+            types::{ CommandResult, CommandLine, Command },
+            *,
+        };
+        /**/
+        pub fn run( _sh:&Shell, cl:&CommandLine, cmd:&Command, capture:bool ) -> CommandResult
+        {
+            let mut cr = CommandResult::new();
+            let tokens = cmd.tokens.clone();
+            let args = parsers::line::tokens_to_args( &tokens );
+            let len = args.len();
+            if len == 1
+            {
+                print_stderr_with_capture( "invalid usage", &mut cr, cl, cmd, capture );
+                return cr;
+            }
+
+            let mut _cmd = execute::Command::new( &args[1] );
+            let err = _cmd.args( &args[2..len] ).exec();
+            let info = format!( "pls:exec:{}", err );
+            print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
+            cr
+        }
+    }
+    
+    pub mod exit
+    {
+        use ::
+        {
+            shell::{ Shell },
+            types::{ CommandResult, CommandLine, Command },
+            *
+        };
+        /**/
+        pub fn run( sh:&Shell, cl:&CommandLine, cmd:&Command, capture:bool ) -> CommandResult
+        {
+            let mut cr = CommandResult::new();
+            let tokens = cmd.tokens.clone();
+            if tokens.len() > 2 {
+                let info = "pls:exit:too many arguments";
+                print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
+                return cr;
+            }
+
+            if tokens.len() == 2 {
+                let _code = &tokens[1].1;
+                match _code.parse::<i32>() {
+                    Ok( x ) =>
+        {                       process::exit( x );
+                    }
+                    Err( _ ) =>
+        {                       let info = format!( "pls:exit:{}:numeric argument required", _code );
+                        print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
+                        process::exit( 255 );
+                    }
+                }
+            }
+
+            for ( _i, job ) in sh.jobs.iter() {
+                if !job.cmd.starts_with( "nohup " ) {
+                    let mut info = String::new();
+                    info.push_str( "There are background jobs." );
+                    info.push_str( "Run `jobs` to see details; `exit 1` to force quit." );
+                    print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
+                    return cr;
+                }
+            }
+
+            process::exit( 0 );
+            cr
+        }
+    }
+    
+    pub mod export
+    {
+        use ::
+        {
+            regex::{ Regex },
+            shell::{ Shell },
+            types::{ CommandResult, CommandLine, Command },
+            *,
+        };
+
+        pub fn run( _sh:&Shell, cl:&CommandLine, cmd:&Command, capture:bool ) -> CommandResult
+        {
+            let mut cr = CommandResult::new();
+            let tokens = cmd.tokens.clone();
+
+            let re_name_ptn = Regex::new( r"^( [a-zA-Z_][a-zA-Z0-9_]* )=( .* )$" ).unwrap();
+            for ( _, text ) in tokens.iter() {
+                if text == "export" {
+                    continue;
+                }
+
+                if !is::environment( text ) {
+                    let mut info = String::new();
+                    info.push_str( "export:invalid command\n" );
+                    info.push_str( "usage:export XXX=YYY" );
+                    print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
+                    return cr;
+                }
+
+                if !re_name_ptn.is_match( text ) {
+                    let mut info = String::new();
+                    info.push_str( "export:invalid command\n" );
+                    info.push_str( "usage:export XXX=YYY ZZ=123" );
+                    print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
+                    return cr;
+                }
+
+                for cap in re_name_ptn.captures_iter( text ) {
+                    let name = cap[1].to_string();
+                    let token = parsers::line::unquote( &cap[2] );
+                    let value = expand::home( &token );
+                    env::set_var( name, &value );
+                }
+            }
+            cr
+        }
+    }
+    
+    pub mod fg
+    {
+        use ::
+        {
+            c::{ job },
+            shell::{ self, Shell },
+            types::{ CommandResult, CommandLine, Command },
+            *
+        };
+
+        pub fn run( sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture:bool ) -> CommandResult
+        {
+            let tokens = cmd.tokens.clone();
+            let mut cr = CommandResult::new();
+
+            if sh.jobs.is_empty()
+            {
+                let info = "pls:fg:no job found";
+                print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
+                return cr;
+            }
+
+            let mut job_id = -1;
+            if tokens.len() == 1 {
+                if let Some( ( gid, _ ) ) = sh.jobs.iter().next() {
+                    job_id = *gid;
+                }
+            }
+
+            if tokens.len() >= 2 {
+                let mut job_str = tokens[1].1.clone();
+                if job_str.starts_with( "%" ) {
+                    job_str = job_str.trim_start_matches( '%' ).to_string();
+                }
+
+                match job_str.parse::<i32>() {
+                    Ok( n ) => job_id = n,
+                    Err( _ ) =>
+        {                       let info = "pls:fg:invalid job id";
+                        print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
+                        return cr;
+                    }
+                }
+            }
+
+            if job_id == -1 {
+                let info = "pls:not job id found";
+                print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
+                return cr;
+            }
+
+            let gid:i32;
+            let pid_list:Vec<i32>;
+
+            {
+                let mut result = sh.get_job_by_id( job_id );
+                // fall back to find job by using prcess group id
+                if result.is_none() {
+                    result = sh.get_job_by_gid( job_id );
+                }
+
+                match result {
+                    Some( job ) =>
+        {                       print_stderr_with_capture( &job.cmd, &mut cr, cl, cmd, capture );
+                        cr.status = 0;
+
+                        unsafe {
+                            if !shell::give_terminal_to( job.gid ) {
+                                return CommandResult::error();
+                            }
+
+                            libc::killpg( job.gid, libc::SIGCONT );
+                            pid_list = job.pids.clone();
+                            gid = job.gid;
+                        }
+                    }
+                    None =>
+        {                       let info = "pls:fg:no such job";
+                        print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
+                        return cr;
+                    }
+                }
+            }
+
+            unsafe {
+                c::job::mark_job_as_running( sh, gid, false );
+
+                let cr = c::job::wait_fg_job( sh, gid, &pid_list );
+
+                let gid_shell = libc::getpgid( 0 );
+                if !shell::give_terminal_to( gid_shell ) {
+                    //log!( "failed to give term to back to shell :{}", gid_shell );
+                }
+
+                cr
+            }
+        }
+    }
+    
+    pub mod history
+    {
+        use ::
+        {
+            c::{ time }, 
+            path::{ Path },
+            shell::{ Shell },
+            types::{ CommandResult, CommandLine, Command },
+            *
+        };
+
+
+        /*
+        #[derive( Debug, StructOpt )]
+        #[structopt( name = "history", about = "History in pls shell" )]
+        struct OptMain {
+            #[structopt( short, long, help = "For current session only" )]
+            session:bool,
+
+            #[structopt( short, long, help = "Search old items first" )]
+            asc:bool,
+
+            #[structopt( short, long, help = "For current directory only" )]
+            pwd:bool,
+
+            #[structopt( short, long, help = "Only show ROWID" )]
+            only_id:bool,
+
+            #[structopt( short, long, help = "Do not show ROWID" )]
+            no_id:bool,
+
+            #[structopt( short="d", long, help = "Show date" )]
+            show_date:bool,
+
+            #[structopt( short, long, default_value = "20" )]
+            limit:i32,
+
+            #[structopt( name = "PATTERN", default_value = "", help = "You can use % to match anything" )]
+            pattern:String,
+
+            #[structopt( subcommand )]
+            cmd:Option<SubCommand>
+        }
+        */
+        #[derive( Debug )]
+        pub struct OptMain();
+        /*
+        #[derive( StructOpt, Debug )]
+        enum SubCommand {
+            #[structopt( about="Add new item into history" )]
+            Add {
+                #[structopt( short="t", long, help = "Specify a timestamp for the new item" )]
+                timestamp:Option<f64>,
+
+                #[structopt( name="INPUT", help = "input to be added into history" )]
+                input:String,
+            },
+            #[structopt( about="Delete item from history" )]
+            Delete {
+                #[structopt( name="ROWID", help = "Row IDs of item to delete" )]
+                rowid:Vec<usize>,
+            }
+        }
+        */
+        #[derive( Debug )]
+        pub enum SubCommand
+        {
+            Add,
+            Delete,
+        }
+
+        pub fn run( sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture:bool ) -> CommandResult
+        {
+            let mut cr = CommandResult::new();
+            let hfile = get::history_file();
+            let path = Path::new( hfile.as_str() );
+            if !path.exists()
+            {
+                let info = "no history file";
+                print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
+                return cr;
+            }
+            let connection = match Connection::open( &hfile )
+            {
+                Ok( x ) => x,
+                Err( e ) =>
+        {                   let info = format!( "history:sqlite error:{:?}", e );
+                    print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
+                    return cr;
+                }
+            };
+
+            let tokens = cmd.tokens.clone();
+            let args = parsers::line::tokens_to_args( &tokens );
+
+            let show_usage = args.len() > 1 && ( args[1] == "-h" || args[1] == "--help" );
+            let opt = OptMain::from_iter_safe( args );
+            match opt
+            {
+                Ok( opt ) =>
+        {                   match opt.cmd {
+                        Some( SubCommand::Delete {rowid:rowids} ) =>
+        {                           let mut _count = 0;
+                            for rowid in rowids {
+                                let _deleted = delete_history_item( &connection, rowid );
+                                if _deleted {
+                                    _count += 1;
+                                }
+                            }
+                            if _count > 0 {
+                                let info = format!( "deleted {} items", _count );
+                                print_stdout_with_capture( &info, &mut cr, cl, cmd, capture );
+                            }
+                            cr
+                        }
+                        Some( SubCommand::Add {timestamp:ts, input} ) =>
+        {                           let ts = ts.unwrap_or( 0 as f64 );
+                            add_history( sh, ts, &input );
+                            cr
+                        }
+                        None =>
+        {                           let ( str_out, str_err ) = list_current_history( sh, &connection, &opt );
+                            if !str_out.is_empty() {
+                                print_stdout_with_capture( &str_out, &mut cr, cl, cmd, capture );
+                            }
+                            if !str_err.is_empty() {
+                                print_stderr_with_capture( &str_err, &mut cr, cl, cmd, capture );
+                            }
+                            cr
+                        }
+                    }
+                }
+                Err( e ) =>
+        {                   let info = format!( "{}", e );
+                    if show_usage {
+                        print_stdout_with_capture( &info, &mut cr, cl, cmd, capture );
+                        cr.status = 0;
+                    } else {
+                        print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
+                        cr.status = 1;
+                    }
+                    cr
+                }
+            }
+        }
+
+        pub fn add_history( sh:&Shell, ts:f64, input:&str )
+        {
+            let ( tsb, tse ) = ( ts, ts + 1.0 );
+            history::add_raw( sh, input, 0, tsb, tse );
+        }
+
+        pub fn list_current_history( sh:&Shell, connection:&Connection, opt:&OptMain ) -> ( String, String )
+        {
+            let mut result_stderr = String::new();
+            let result_stdout = String::new();
+
+            let history_table = get::history_table();
+            let mut sql = format!( "SELECT ROWID, inp, tsb FROM {} WHERE ROWID > 0",
+                                  history_table );
+            if !opt.pattern.is_empty() {
+                sql = format!( "{} AND inp LIKE '%{}%'", sql, opt.pattern )
+            }
+            if opt.session {
+                sql = format!( "{} AND sessionid = '{}'", sql, sh.session_id )
+            }
+            if opt.pwd {
+                sql = format!( "{} AND info like '%dir:{}|%'", sql, sh.current_dir )
+            }
+
+            if opt.asc {
+                sql = format!( "{} ORDER BY tsb", sql );
+            } else {
+                sql = format!( "{} order by tsb desc", sql );
+            };
+            sql = format!( "{} limit {} ", sql, opt.limit );
+
+            let mut stmt = match connection.prepare( &sql )
+            {
+                Ok( x ) => x,
+                Err( e ) =>
+        {                   let info = format!( "history:prepare select error:{:?}", e );
+                    result_stderr.push_str( &info );
+                    return ( result_stdout, result_stderr );
+                }
+            };
+
+            let mut rows = match stmt.query( [] )
+            {
+                Ok( x ) => x,
+                Err( e ) =>
+        {                   let info = format!( "history:query error:{:?}", e );
+                    result_stderr.push_str( &info );
+                    return ( result_stdout, result_stderr );
+                }
+            };
+
+            let mut lines = Vec::new();
+            loop {
+                match rows.next() {
+                    Ok( _rows ) =>
+        {                       if let Some( row ) = _rows {
+                            let row_id:i32 = match row.get( 0 ) {
+                                Ok( x ) => x,
+                                Err( e ) =>
+        {                                   let info = format!( "history:error:{:?}", e );
+                                    result_stderr.push_str( &info );
+                                    return ( result_stdout, result_stderr );
+                                }
+                            };
+                            let inp:String = match row.get( 1 ) {
+                                Ok( x ) => x,
+                                Err( e ) =>
+        {                                   let info = format!( "history:error:{:?}", e );
+                                    result_stderr.push_str( &info );
+                                    return ( result_stdout, result_stderr );
+                                }
+                            };
+
+                            if opt.no_id {
+                                lines.push( inp.to_string() );
+                            } else if opt.only_id {
+                                lines.push( row_id.to_string() );
+                            } else if opt.show_date {
+                                let tsb:f64 = match row.get( 2 ) {
+                                    Ok( x ) => x,
+                                    Err( e ) =>
+        {                                       let info = format!( "history:error:{:?}", e );
+                                        result_stderr.push_str( &info );
+                                        return ( result_stdout, result_stderr );
+                                    }
+                                };
+                                let dt = c::time::DateTime::from_timestamp( tsb );
+                                lines.push( format!( "{}:{}:{}", row_id, dt, inp ) );
+                            } else {
+                                lines.push( format!( "{}:{}", row_id, inp ) );
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                    Err( e ) =>
+        {                       let info = format!( "history:rows next error:{:?}", e );
+                        result_stderr.push_str( &info );
+                        return ( result_stdout, result_stderr );
+                    }
+                }
+            }
+
+            let buffer = lines.join( "\n" );
+
+            ( buffer, result_stderr )
+        }
+
+        fn delete_history_item( connection:&Connection, rowid:usize ) -> bool
+        {
+            let history_table = get::history_table();
+            let sql = format!( "DELETE from {} where rowid = {}", history_table, rowid );
+            match connection.execute( &sql, [] )
+            {
+                Ok( _ ) => true,
+                Err( e ) =>
+                {
+                    //log!( "history:error when delete:{:?}", e );
+                    false
+                }
+            }
+        }
+    }
+    
+    pub mod jobs
+    {
+        use ::
+        {
+            c::{ job },
+            shell::{ Shell },
+            types::{ CommandResult, CommandLine, Command },
+            *
+        };
+
+        pub fn run( sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture:bool ) -> CommandResult
+        {
+            let mut cr = CommandResult::new();
+            if sh.jobs.is_empty() {
+                return cr;
+            }
+
+            // update status of jobs if any
+            c::job::try_wait_bg_jobs( sh, false, false );
+
+            let mut lines = Vec::new();
+            let jobs = sh.jobs.clone();
+            let no_trim = cmd.tokens.len() >= 2 && cmd.tokens[1].1 == "-f";
+            for ( _i, job ) in jobs.iter()
+            {
+                let line = get::job_line( job, !no_trim );
+                lines.push( line );
+            }
+            let buffer = lines.join( "\n" );
+
+            print_stdout_with_capture( &buffer, &mut cr, cl, cmd, capture );
+            cr
+        }
+
+    }
+    /**/
+    pub mod read
+    {
+        use ::
+        {
+            libs::re::re_contains,
+            shell::{ Shell }, 
+            types::{ CommandResult, CommandLine, Command },
+            *,
+        };
+
+        fn _find_invalid_identifier( name_list:&Vec<String> ) -> Option<String>
+        {
+            for id_ in name_list
+            {
+                if !re_contains( id_, r"^[a-zA-Z_][a-zA-Z0-9_]*$" ) {
+                    return Some( id_.to_string() );
+                }
+            }
+            None
+        }
+
+        pub fn run( sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture:bool ) -> CommandResult
+        {
+            let mut cr = CommandResult::new();
+            let tokens = cmd.tokens.clone();
+
+            let name_list:Vec<String>;
+            if tokens.len() <= 1 {
+                name_list = vec!["REPLY".to_string( )];
+            } else {
+                name_list = tokens[1..].iter().map( |x| x.1.clone() ).collect();
+                if let Some( id_ ) = _find_invalid_identifier( &name_list ) {
+                    let info = format!( "pls:read:`{}':not a valid identifier", id_ );
+                    print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
+                    return cr;
+                }
+            }
+
+            let mut buffer = String::new();
+
+            if cmd.has_here_string() {
+                if let Some( redirect_from ) = &cmd.redirect_from {
+                    buffer.push_str( &redirect_from.1 );
+                    buffer.push( '\n' );
+                }
+            } else {
+                match io::stdin().read_line( &mut buffer ) {
+                    Ok( _ ) => {}
+                    Err( e ) =>
+        {                       let info = format!( "pls:read:error in reading stdin:{:?}", e );
+                        print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
+                        return cr;
+                    }
+                }
+            }
+
+            let envs = cl.envs.clone();
+            let value_list = str::split_into_fields( sh, buffer.trim(), &envs );
+
+            let idx_2rd_last = name_list.len() - 1;
+            for i in 0..idx_2rd_last {
+                let name = name_list.get( i );
+                if name.is_none() {
+                    let info = "pls:read:name index error";
+                    print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
+                    return cr;
+                }
+                let name = name.unwrap();
+
+                let value = value_list.get( i ).unwrap_or( &String::new() ).clone();
+                sh.set_env( name, &value );
+            }
+
+            let name_last = &name_list[idx_2rd_last];
+            let value_left:String = if value_list.len() > idx_2rd_last {
+                value_list[idx_2rd_last..].join( " " )
+            } else {
+                String::new()
+            };
+            sh.set_env( name_last, &value_left );
+            cr
+        }
+    }
+    /**/
+    pub mod source
+    {
+        use ::
+        {
+            shell::{ Shell },
+            types::{ CommandResult, CommandLine, Command },
+            *,
+        };
+
+        pub fn run( sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture:bool ) -> CommandResult
+        {
+            let mut cr = CommandResult::new();
+            let tokens = &cmd.tokens;
+            let args = parsers::line::tokens_to_args( tokens );
+
+            if args.len() < 2 {
+                let info = "pls:source:no file specified";
+                print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
+                return cr;
+            }
+
+            let status = scripts::run_script( sh, &args );
+            cr.status = status;
+            cr
+        }
+    }
+    /**/
+    pub mod unalias
+    {
+        use ::
+        {
+            shell::{ Shell },
+            types::{ CommandResult, CommandLine, Command },
+            *
+        };
+
+        pub fn run( sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture:bool ) -> CommandResult
+        {
+            let tokens = cmd.tokens.clone();
+            let mut cr = CommandResult::new();
+
+            if tokens.len() != 2 {
+                let info = "pls:unalias:syntax error";
+                print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
+                return cr;
+            }
+
+            let input = &tokens[1].1;
+            if !sh.remove_alias( input )
+            {
+                let info = format!( "pls:unalias:{}:not found", input );
+                print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
+                return cr;
+            }
+            cr
+        }
+    }
+    /**/
+    pub mod vox
+    {
+        use ::
+        {
+            path::{ Path },
+            shell::{ self, Shell },
+            types::{ self, CommandResult, CommandLine, Command },
+            *
+        };
+
+        fn in_env() -> bool
+        {
+            env::var( "VIRTUAL_ENV" ).map_or( false, |x| !x.is_empty() )
+        }
+
+        fn enter_env( sh:&Shell, path:&str ) -> String
+        {
+            if in_env() {
+                return "vox:already in env".to_string();
+            }
+
+            let home_envs = get::virtual_environments_home();
+            let full_path = format!( "{}/{}/bin/activate", home_envs, path );
+            if !Path::new( full_path.as_str() ).exists() {
+                return format!( "no such env:{}", full_path );
+            }
+
+            let path_env = format!( "{}/{}", home_envs, path );
+            env::set_var( "VIRTUAL_ENV", &path_env );
+            let path_new = String::from( "${VIRTUAL_ENV}/bin:$PATH" );
+            let mut tokens:types::Tokens = Vec::new();
+            tokens.push( ( String::new(), path_new ) );
+            expand::environment( sh, &mut tokens );
+            env::set_var( "PATH", &tokens[0].1 );
+            String::new()
+        }
+
+        fn exit_env( sh:&Shell ) -> String
+        {
+            if !in_env() {
+                return String::from( "vox:not in an env" );
+            }
+
+            let env_path = match env::var( "PATH" )
+            {
+                Ok( x ) => x,
+                Err( _ ) =>
+        {                   return String::from( "vox:cannot read PATH env" );
+                }
+            };
+
+            let mut _tokens:Vec<&str> = env_path.split( ':' ).collect();
+            let mut path_virtual_env = String::from( "${VIRTUAL_ENV}/bin" );
+            // shell::extend_env( sh, &mut path_virtual_env );
+            let mut tokens:types::Tokens = Vec::new();
+            tokens.push( ( String::new(), path_virtual_env ) );
+            expand::environment( sh, &mut tokens );
+            path_virtual_env = tokens[0].1.clone();
+            _tokens
+                .iter()
+                .position( |&n| n == path_virtual_env )
+                .map( |e| _tokens.remove( e ) );
+            let env_path_new = _tokens.join( ":" );
+            env::set_var( "PATH", &env_path_new );
+            env::set_var( "VIRTUAL_ENV", "" );
+
+            String::new()
+        }
+
+        pub fn run( sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture:bool ) -> CommandResult
+        {
+            let mut cr = CommandResult::new();
+            let tokens = cmd.tokens.clone();
+            let args = parsers::line::tokens_to_args( &tokens );
+            let len = args.len();
+            let subcmd = if len > 1 { &args[1] } else { "" };
+
+            if len == 1 || ( len == 2 && subcmd == "ls" ) {
+                match get::virtual_environments() {
+                    Ok( venvs ) =>
+        {                       let info = venvs.join( "\n" );
+                        print_stdout_with_capture( &info, &mut cr, cl, cmd, capture );
+                        return cr;
+                    }
+                    Err( reason ) =>
+        {                       print_stderr_with_capture( &reason, &mut cr, cl, cmd, capture );
+                        return cr;
+                    }
+                }
+            }
+
+            if len == 3 && subcmd == "create" {
+                let pybin = match env::var( "VIRTUALENV_PYBIN" ) {
+                    Ok( x ) => x,
+                    Err( _ ) => "python3".to_string(),
+                };
+                let dir_venv = get::virtual_environments_home();
+                let venv_name = args[2].to_string();
+                let line = format!( "{} -m venv \"{}/{}\"", pybin, dir_venv, venv_name );
+                print_stderr_with_capture( &line, &mut cr, cl, cmd, capture );
+                let cr_list = execute::run_command_line( sh, &line, false, false );
+                return cr_list[0].clone();
+            }
+
+            if len == 3 && subcmd == "enter" {
+                let _err = enter_env( sh, args[2].as_str() );
+                if !_err.is_empty() {
+                    print_stderr_with_capture( &_err, &mut cr, cl, cmd, capture );
+                }
+                cr
+            } else if len == 2 && subcmd == "exit" {
+                let _err = exit_env( sh );
+                if !_err.is_empty() {
+                    print_stderr_with_capture( &_err, &mut cr, cl, cmd, capture );
+                }
+                cr
+            } else {
+                let info = "pls:vox:invalid option";
+                print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
+                cr
+            }
+        }
+    }
+    /**/
+    pub mod ulimit
+    {
+        use ::
+        {
+            clap::{Parser, CommandFactory},
+            io::{ Error },
+            shell::{ Shell },
+            types::{ CommandResult, CommandLine, Command },
+            *,
+        };
+
+        #[derive( Parser )]
+        #[command( name = "ulimit", about = "show / modify shell resource limits" )]
+        #[allow( non_snake_case )]
+        struct App
+        {
+            #[arg( short, help = "All current limits are reported." )]
+            a:bool,
+            #[arg( short, value_name = "NEW VALUE", help = "The maximum number of open file descriptors." )]
+            n:Option<Option<u64>>,
+            #[arg( short, value_name = "NEW VALUE", help = "The maximum size of core files created." )]
+            c:Option<Option<u64>>,
+            #[arg( short = 'S', help = "Set a soft limit for the given resource. ( default )" )]
+            S:bool,
+            #[arg( short = 'H', help = "Set a hard limit for the given resource." )]
+            H:bool,
+        }
+
+        pub fn run( _sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture:bool ) -> CommandResult
+        {
+            let mut cr = CommandResult::new();
+            let tokens = &cmd.tokens;
+            let args = parsers::line::tokens_to_args( tokens );
+
+            if args.contains( &"--help".to_string() ) || args.contains( &"-h".to_string() ) {
+                App::command().print_help().unwrap();
+                println!();
+                return cr;
+            }
+
+            let app = App::parse_from( args );
+
+            if app.H && app.S {
+                println!( "pls:ulimit:Cannot both hard and soft." );
+                cr.status = 1;
+                return cr;
+            }
+
+            let mut all_stdout = String::new();
+            let mut all_stderr = String::new();
+
+            if app.a {
+                report_all( &app, &mut all_stdout, &mut all_stderr );
+            } else if handle_limit( app.n, "open_files", app.H, &mut all_stdout, &mut all_stderr )
+                || handle_limit( app.c, "core_file_size", app.H, &mut all_stdout, &mut all_stderr ) {
+            } else {
+                report_all( &app, &mut all_stdout, &mut all_stderr );
+            }
+
+            if !all_stdout.is_empty() {
+                print_stdout_with_capture( &all_stdout, &mut cr, cl, cmd, capture );
+            }
+            if !all_stderr.is_empty() {
+                print_stderr_with_capture( &all_stderr, &mut cr, cl, cmd, capture );
+            }
+
+            cr
+        }
+
+        fn set_limit( limit_name:&str, value:u64, for_hard:bool ) -> String
+        {
+            let limit_id = match limit_name {
+                "open_files" => libc::RLIMIT_NOFILE,
+                "core_file_size" => libc::RLIMIT_CORE,
+                _ => return String::from( "invalid limit name" ),
+            };
+
+            let mut rlp = libc::rlimit { rlim_cur:0, rlim_max:0 };
+
+            unsafe {
+                if libc::getrlimit( limit_id, &mut rlp ) != 0 {
+                    return format!( "pls:ulimit:error getting limit:{}", Error::last_os_error() );
+                }
+            }
+
+            // to support armv7-linux-gnueabihf & 32-bit musl systems
+            if for_hard {
+                #[cfg( all( target_pointer_width = "32", target_env = "gnu" ) )]
+                { rlp.rlim_max = value as u32; }
+                #[cfg( not( all( target_pointer_width = "32", target_env = "gnu" ) ) )]
+                { rlp.rlim_max = value; }
+            } else {
+                #[cfg( all( target_pointer_width = "32", target_env = "gnu" ) )]
+                { rlp.rlim_cur = value as u32; }
+                #[cfg( not( all( target_pointer_width = "32", target_env = "gnu" ) ) )]
+                { rlp.rlim_cur = value; }
+            }
+
+            unsafe {
+                if libc::setrlimit( limit_id, &rlp ) != 0 {
+                    return format!( "pls:ulimit:error setting limit:{}", Error::last_os_error() );
+                }
+            }
+
+            String::new()
+        }
+
+        fn report_all( app:&App, all_stdout:&mut String, all_stderr:&mut String )
+        {
+            for limit_name in &["open_files", "core_file_size"]
+            {
+                let ( out, err ) = get::limit( limit_name, false, app.H );
+                all_stdout.push_str( &out );
+                all_stderr.push_str( &err );
+            }
+        }
+
+        fn handle_limit
+        ( 
+            limit_option:Option<Option<u64>>,
+            limit_name:&str,
+            for_hard:bool,
+            all_stdout:&mut String,
+            all_stderr:&mut String
+        ) -> bool
+        {
+            match limit_option
+            {
+                None => false,
+                Some( None ) =>
+                {
+                    let ( out, err ) = get::limit( limit_name, true, for_hard );
+                    all_stdout.push_str( &out );
+                    all_stderr.push_str( &err );
+                    true
+                }
+                Some( Some( value ) ) =>
+                {
+                    let err = set_limit( limit_name, value, for_hard );
+                    if !err.is_empty() {
+                        all_stderr.push_str( &err );
+                    }
+                    true
+                }
+            }
+        }
+    }
+    /**/
+    pub mod minfd
+    {
+        use::
+        {
+            io::{ Write },
+            shell::{ Shell },
+            types::{CommandResult, CommandLine, Command},
+            *
+        };
+
+        pub fn run( _sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture:bool ) -> CommandResult
+        {
+            let mut cr = CommandResult::new();
+
+            let fd = nix::fcntl::open( 
+                "/dev/null",
+                nix::fcntl::OFlag::empty(),
+                nix::sys::stat::Mode::empty()
+            );
+            match fd
+            {
+                Ok( fd ) =>
+                {
+                    let info = format!( "{}", fd );
+                    print_stdout_with_capture( &info, &mut cr, cl, cmd, capture );
+                    unsafe { libc::close( fd ); }
+                }
+                Err( e ) =>
+                {
+                    println_stderr!( "pls:minfd:error:{}", e );
+                }
+            }
+
+            cr
+        }
+
+    }
+    /**/
+    pub mod set
+    {
+        use ::
+        {
+            shell::{ Shell },
+            types::{ CommandResult, CommandLine, Command },
+            *,
+        };
+
+        /*
+        #[derive( Debug, StructOpt )]
+        #[structopt( name = "set", about = "Set shell options ( BETA )" )]
+        struct OptMain {
+            #[structopt( short, help = "exit on error status" )]
+            exit_on_error:bool,
+        }
+        */
+        #[derive( Debug )]
+        struct OptMain();
+
+
+        pub fn run( sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture:bool ) -> CommandResult
+        {
+            let mut cr = CommandResult::new();
+            let tokens = &cmd.tokens;
+            let args = parsers::line::tokens_to_args( tokens );
+            let show_usage = args.len() > 1 && ( args[1] == "-h" || args[1] == "--help" );
+
+            let opt = OptMain::from_iter_safe( args );
+            match opt {
+                Ok( opt ) =>
+        {                   if opt.exit_on_error {
+                        sh.exit_on_error = true;
+                        cr
+                    } else {
+                        let info = "pls:set:option not implemented";
+                        print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
+                        cr
+                    }
+                }
+                Err( e ) =>
+        {                   let info = format!( "{}", e );
+                    if show_usage {
+                        print_stdout_with_capture( &info, &mut cr, cl, cmd, capture );
+                        cr.status = 0;
+                    } else {
+                        print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
+                        cr.status = 1;
+                    }
+                    cr
+                }
+            }
+        }
+    }
+    /**/
+    pub mod unpath
+    {
+        use ::
+        {
+            shell::{ Shell },
+            types::{ CommandResult, CommandLine, Command },
+            *
+        };
+
+        pub fn run( sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture:bool ) -> CommandResult
+        {
+            let tokens = cmd.tokens.clone();
+            let mut cr = CommandResult::new();
+
+            if tokens.len() != 2 {
+                let info = "pls:unpath:syntax error";
+                print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
+                return cr;
+            }
+
+            let input = &tokens[1].1;
+            sh.remove_path( input );
+            cr
+        }
+    }
+    /**/
+    pub mod unset
+    {
+        use ::
+        {
+            shell::{ Shell },
+            types::{ CommandResult, CommandLine, Command },
+            *
+        };
+
+        pub fn run( sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture:bool ) -> CommandResult
+        {
+            let tokens = cmd.tokens.clone();
+            let mut cr = CommandResult::new();
+
+            if tokens.len() != 2 {
+                let info = "pls:unset:syntax error";
+                print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
+                return cr;
+            }
+
+            let input = &tokens[1].1;
+            if !sh.remove_env( input )
+            {
+                let info = format!( "pls:unset:invalid varname:{:?}", input );
+                print_stderr_with_capture( &info, &mut cr, cl, cmd, capture );
+                return cr;
+            }
+            cr
+        }
+    }
 }
-/**/
-pub mod calculator
+pub mod c
 {
+    pub mod time
+    {
+        use ::
+        {
+            time::{ OffsetDateTime },
+            *,
+        };
 
+        #[derive( Debug, PartialEq, Eq )]
+        pub struct DateTime 
+        {
+            odt:OffsetDateTime,
+        }
+
+        impl DateTime
+        {
+            pub fn now() -> Self
+            {
+                let odt:OffsetDateTime = match OffsetDateTime::now_local()
+                {
+                    Ok( dt ) => dt,
+                    Err( _ ) => OffsetDateTime::now_utc(),
+                };
+                DateTime { odt }
+            }
+
+            pub fn from_timestamp( ts:f64 ) -> Self
+            {
+                let dummy_now = Self::now();
+                let offset_seconds = dummy_now.odt.offset().whole_minutes() * 60;
+                let ts_nano = ( ts + offset_seconds as f64 ) * 1000000000.0;
+                let odt:OffsetDateTime = match OffsetDateTime::from_unix_timestamp_nanos( ts_nano as i128 )
+                {
+                    Ok( x ) => x,
+                    Err( _ ) => OffsetDateTime::now_utc(),
+                };
+                DateTime { odt }
+            }
+
+            pub fn unix_timestamp( &self ) -> f64 { self.odt.unix_timestamp_nanos() as f64 / 1000000000.0 }
+        }
+
+        impl ::fmt::Display for DateTime
+        {
+            fn fmt( &self, f:&mut ::fmt::Formatter<'_> ) -> ::fmt::Result
+            {
+                write!
+                ( 
+                    f, 
+                    "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:03}",
+                    self.odt.year(),
+                    self.odt.month() as u8,
+                    self.odt.day(),
+                    self.odt.hour(),
+                    self.odt.minute(),
+                    self.odt.second(),
+                    self.odt.millisecond()
+                )
+            }
+        }
+    }
+    /**/
+    pub mod job
+    {
+        use ::
+        {
+            io::{ Write },
+            nix::
+            {
+                sys::
+                {
+                    signal::{ Signal },
+                    wait::{ waitpid, WaitPidFlag as WF, WaitStatus as WS },
+                },
+                unistd::{ Pid },
+            },
+            types::{ self, CommandResult },
+            *,
+        };
+
+        pub fn print_job( job:&types::Job )
+        {
+            let line = get::job_line( job, true );
+            println_stderr!( "{}", line );
+        }
+
+        pub fn mark_job_as_done( sh:&mut shell::Shell, gid:i32, pid:i32, reason:&str )
+        {
+            if let Some( mut job ) = sh.remove_pid_from_job( gid, pid ) {
+                job.status = reason.to_string();
+                if job.is_bg {
+                    println_stderr!( "" );
+                    print_job( &job );
+                }
+            }
+        }
+
+        pub fn mark_job_as_stopped( sh:&mut shell::Shell, gid:i32, report:bool )
+        {
+            sh.mark_job_as_stopped( gid );
+            
+            if !report { return; }
+            
+            if let Some( job ) = sh.get_job_by_gid( gid )
+            {
+                println_stderr!( "" );
+                print_job( job );
+            }
+        }
+
+        pub fn mark_job_member_stopped( sh:&mut shell::Shell, pid:i32, gid:i32, report:bool )
+        {
+            let _gid = if gid == 0 { unsafe { libc::getpgid( pid ) } } 
+            else { gid };
+
+            if let Some( job ) = sh.mark_job_member_stopped( pid, gid )
+            {
+                if job.all_members_stopped() { mark_job_as_stopped( sh, gid, report ); }
+            }
+        }
+
+        pub fn mark_job_member_continued( sh:&mut shell::Shell, pid:i32, gid:i32 )
+        {
+            let _gid = if gid == 0 {
+                unsafe { libc::getpgid( pid ) }
+            } else {
+                gid
+            };
+
+            if let Some( job ) = sh.mark_job_member_continued( pid, gid ) {
+                if job.all_members_running() {
+                    mark_job_as_running( sh, gid, true );
+                }
+            }
+        }
+
+        pub fn mark_job_as_running( sh:&mut shell::Shell, gid:i32, bg:bool )
+        {
+            sh.mark_job_as_running( gid, bg );
+        }
+
+        pub fn waitpidx( wpid:i32, block:bool ) -> types::WaitStatus
+        {
+            let options = if block {
+                Some( WF::WUNTRACED | WF::WCONTINUED )
+            } else {
+                Some( WF::WUNTRACED | WF::WCONTINUED | WF::WNOHANG )
+            };
+            match waitpid( Pid::from_raw( wpid ), options ) {
+                Ok( WS::Exited( pid, status ) ) =>
+        {                   let pid = i32::from( pid );
+                    types::WaitStatus::from_exited( pid, status )
+                }
+                Ok( WS::Stopped( pid, sig ) ) =>
+        {                   let pid = i32::from( pid );
+                    types::WaitStatus::from_stopped( pid, sig as i32 )
+                }
+                Ok( WS::Continued( pid ) ) =>
+        {                   let pid = i32::from( pid );
+                    types::WaitStatus::from_continuted( pid )
+                }
+                Ok( WS::Signaled( pid, sig, _core_dumped ) ) =>
+        {                   let pid = i32::from( pid );
+                    types::WaitStatus::from_signaled( pid, sig as i32 )
+                }
+                Ok( WS::StillAlive ) =>
+        {                   types::WaitStatus::empty()
+                }
+                Ok( _others ) =>
+        {                   // this is for PtraceEvent and PtraceSyscall on Linux,
+                    // unreachable on other platforms.
+                    types::WaitStatus::from_others()
+                }
+                Err( e ) =>
+        {                   types::WaitStatus::from_error( e as i32 )
+                }
+            }
+        }
+
+        pub fn wait_fg_job( sh:&mut shell::Shell, gid:i32, pids:&[i32] ) -> CommandResult
+        {
+            let mut cmd_result = CommandResult::new();
+            let mut count_waited = 0;
+            let count_child = pids.len();
+            if count_child == 0 {
+                return cmd_result;
+            }
+            let pid_last = pids.last().unwrap();
+
+            loop {
+                let ws = waitpidx( -1, true );
+                // here when we calling waitpidx(), all signals should have
+                // been masked. There should no errors ( ECHILD/EINTR etc ) happen.
+                if ws.is_error() {
+                    let err = ws.get_errno();
+                    if err == nix::Error::ECHILD {
+                        break;
+                    }
+
+                    //log!( "jobc unexpected waitpid error:{}", err );
+                    cmd_result = CommandResult::from_status( gid, err as i32 );
+                    break;
+                }
+
+                let pid = ws.get_pid();
+                let is_a_fg_child = pids.contains( &pid );
+                if is_a_fg_child && !ws.is_continued() {
+                    count_waited += 1;
+                }
+
+                if ws.is_exited() {
+                    if is_a_fg_child {
+                        mark_job_as_done( sh, gid, pid, "Done" );
+                    } else {
+                        let status = ws.get_status();
+                        signals::insert_reap_map( pid, status );
+                    }
+                } else if ws.is_stopped() {
+                    if is_a_fg_child {
+                        // for stop signal of fg job ( current job )
+                        // i.e. Ctrl-Z is pressed on the fg job
+                        mark_job_member_stopped( sh, pid, gid, true );
+                    } else {
+                        // for stop signal of bg jobs
+                        signals::insert_stopped_map( pid );
+                        mark_job_member_stopped( sh, pid, 0, false );
+                    }
+                } else if ws.is_continued() {
+                    if !is_a_fg_child {
+                        signals::insert_cont_map( pid );
+                    }
+                    continue;
+                } else if ws.is_signaled() {
+                    if is_a_fg_child {
+                        mark_job_as_done( sh, gid, pid, "Killed" );
+                    } else {
+                        signals::killed_map_insert( pid, ws.get_signal() );
+                    }
+                }
+
+                if is_a_fg_child && pid == *pid_last {
+                    let status = ws.get_status();
+                    cmd_result.status = status;
+                }
+
+                if count_waited >= count_child {
+                    break;
+                }
+            }
+            cmd_result
+        }
+
+        pub fn try_wait_bg_jobs( sh:&mut shell::Shell, report:bool, sig_handler_enabled:bool )
+        {
+            if sh.jobs.is_empty() {
+                return;
+            }
+
+            if !sig_handler_enabled {
+                // we need to wait pids in case CICADA_ENABLE_SIG_HANDLER=0
+                signals::handle_sigchld( Signal::SIGCHLD as i32 );
+            }
+
+            let jobs = sh.jobs.clone();
+            for ( _i, job ) in jobs.iter() {
+                for pid in job.pids.iter() {
+                    if let Some( _status ) = signals::pop_reap_map( *pid ) {
+                        mark_job_as_done( sh, job.gid, *pid, "Done" );
+                        continue;
+                    }
+
+                    if let Some( sig ) = signals::killed_map_pop( *pid ) {
+                        let reason = if sig == Signal::SIGQUIT as i32 {
+                            format!( "Quit:{}", sig )
+                        } else if sig == Signal::SIGINT as i32 {
+                            format!( "Interrupt:{}", sig )
+                        } else if sig == Signal::SIGKILL as i32 {
+                            format!( "Killed:{}", sig )
+                        } else if sig == Signal::SIGTERM as i32 {
+                            format!( "Terminated:{}", sig )
+                        } else {
+                            format!( "Killed:{}", sig )
+                        };
+                        mark_job_as_done( sh, job.gid, *pid, &reason );
+                        continue;
+                    }
+
+                    if signals::pop_stopped_map( *pid ) {
+                        mark_job_member_stopped( sh, *pid, job.gid, report );
+                    } else if signals::pop_cont_map( *pid ) {
+                        mark_job_member_continued( sh, *pid, job.gid );
+                    }
+                }
+            }
+        }
+    }
 }
 /**/
 pub mod completers
 {
+    use ::
+    {
+        completers::{ utils },
+        path::{ Path },
+        prompt::lines::
+        {
+            complete::{Completer, Completion,},
+            prompter::Prompter,
+            terminal::Terminal,
+        },
+        sync::{ Arc },
+        *,
+    };
 
+    pub mod dots
+    {
+        use ::
+        {
+            borrow::Cow,
+            fs::File,
+            io::{Read, Write},
+            path::Path,
+            prompt::lines::
+            {
+                complete::{ Completer, Completion, escape, escaped_word_start, unescape, Suffix },
+                prompter::Prompter,
+                terminal::Terminal,
+            },
+            *,
+        };        
+        /// Performs completion by searching dotfiles
+        pub struct DotsCompleter;
+
+        impl<Term: Terminal> Completer<Term> for DotsCompleter
+        {
+            fn complete( &self, word: &str, reader: &Prompter<Term>, _start: usize, _end: usize ) -> 
+            Option<Vec<Completion>>
+            {
+                let line = reader.buffer();
+                Some(complete_dots(line, word))
+            }
+
+            fn word_start(&self, line: &str, end: usize, _reader: &Prompter<Term>) -> usize
+            { escaped_word_start(&line[..end]) }
+
+            fn quote<'a>(&self, word: &'a str) -> Cow<'a, str> { escape(word) }
+
+            fn unquote<'a>(&self, word: &'a str) -> Cow<'a, str> { unescape(word) }
+        }
+
+        fn get_dot_file(line: &str) -> (String, String)
+        {
+            let args = parsers::parser_line::line_to_plain_tokens(line);
+            let dir = tools::get_user_completer_dir();
+            let dot_file = format!("{}/{}.yaml", dir, args[0]);
+
+            if !Path::new(&dot_file).exists() { return (String::new(), String::new()); }
+
+            let sub_cmd = if 
+            (
+                args.len() >= 3 
+                && !args[1].starts_with('-')
+            ) 
+            ||
+            (
+                args.len() >= 2 
+                && !args[1].starts_with('-') 
+                && line.ends_with(' ')
+            )
+            { args[1].as_str() }
+            
+            else { "" };
+
+            (dot_file, sub_cmd.to_string())
+        }
+
+        fn handle_lv1_string(res: &mut Vec<Completion>, value: &str, word: &str)
+        {
+            if !value.starts_with(word) && !value.starts_with('`') { return; }
+
+            let linfo = parsers::parser_line::parse_line(value);
+            let tokens = linfo.tokens;
+            
+            if tokens.len() == 1 && tokens[0].0 == "`"
+            {
+                log!("run subcmd: {:?}", &tokens[0].1);
+                let cr = execute::run(&tokens[0].1);
+                let v: Vec<&str> = cr.stdout.split(|c| c == '\n' || c == ' ').collect();
+                
+                for s in v
+                {
+                    if s.trim().is_empty() {
+                        continue;
+                    }
+                    handle_lv1_string(res, s, word);
+                }
+
+                return;
+            }
+
+            let display = None;
+            let suffix = Suffix::Default;
+            res.push(Completion
+            {
+                completion: value.to_string(),
+                display,
+                suffix,
+            });
+        }
+
+        fn handle_lv1_hash(res: &mut Vec<Completion>, h: &Hash, word: &str)
+        {
+            for v in h.values()
+            {
+                if let Yaml::Array(ref arr) = v
+                {
+                    for s in arr
+                    {
+                        if let Yaml::String(value) = s
+                        {
+                            if !value.starts_with(word) && !value.starts_with('`') { continue; }
+                            handle_lv1_string(res, value, word);
+                        }
+                    }
+                }
+            }
+        }
+
+        fn complete_dots(line: &str, word: &str) -> Vec<Completion>
+        {
+            let mut res = Vec::new();
+            if line.trim().is_empty() {
+                return res;
+            }
+            let (dot_file, sub_cmd) = get_dot_file(line);
+            if dot_file.is_empty() {
+                return res;
+            }
+
+            let mut f;
+            match File::open(&dot_file) {
+                Ok(x) => f = x,
+                Err(e) => {
+                    println_stderr!("\ncicada: open dot_file error: {:?}", e);
+                    return res;
+                }
+            }
+
+            let mut s = String::new();
+            match f.read_to_string(&mut s) {
+                Ok(_) => {}
+                Err(e) => {
+                    println_stderr!("\ncicada: read_to_string error: {:?}", e);
+                    return res;
+                }
+            }
+
+            let docs = match YamlLoader::load_from_str(&s) {
+                Ok(x) => x,
+                Err(e) => {
+                    println_stderr!("\ncicada: Bad Yaml file: {}: {:?}", dot_file, e);
+                    return res;
+                }
+            };
+
+            for doc in docs.iter() {
+                match *doc {
+                    Yaml::Array(ref v) => {
+                        for x in v {
+                            match *x {
+                                Yaml::String(ref name) => {
+                                    if !sub_cmd.is_empty() {
+                                        continue;
+                                    }
+                                    handle_lv1_string(&mut res, name, word);
+                                }
+                                Yaml::Hash(ref h) => {
+                                    if sub_cmd.is_empty() {
+                                        for k in h.keys() {
+                                            if let Yaml::String(value) = k {
+                                                handle_lv1_string(&mut res, value, word);
+                                            }
+                                        }
+                                    } else {
+                                        let key = Yaml::from_str(&sub_cmd);
+                                        if !h.contains_key(&key) {
+                                            continue;
+                                        }
+                                        handle_lv1_hash(&mut res, h, word);
+                                    }
+                                }
+                                _ => {
+                                    println_stderr!("\nThis yaml file is in bad format: {}", dot_file);
+                                }
+                            }
+                        }
+                    }
+                    _ => {
+                        println_stderr!("\nThis yaml file is in bad format: {}", dot_file);
+                    }
+                }
+            }
+            res
+        }
+    }
+
+    pub mod env
+    {
+        use ::
+        {
+            prompt::lines::
+            {
+                complete::{Completer, Completion, Suffix},
+                prompter::{ Prompter },
+                terminal::{ Terminal },
+            },
+            sync::{ Arc },
+            *,
+        };
+
+        pub struct EnvCompleter
+        {
+            pub sh: Arc<shell::Shell>,
+        }
+
+        impl<Term: Terminal> Completer<Term> for EnvCompleter
+        {
+            fn complete(
+                &self,
+                word: &str,
+                _reader: &Prompter<Term>,
+                _start: usize,
+                _end: usize,
+            ) -> Option<Vec<Completion>> {
+                let sh = Arc::try_unwrap(self.sh.clone());
+                match sh {
+                    Ok(x) => Some(complete_env(&x, word)),
+                    Err(x) => Some(complete_env(&x, word)),
+                }
+            }
+        }
+
+        fn complete_env(sh: &shell::Shell, path: &str) -> Vec<Completion>
+        {
+            let mut res = Vec::new();
+            if path.trim().is_empty() {
+                return res;
+            }
+            let mut prefix = path.to_string();
+            prefix.remove(0);
+
+            for (key, _) in env::vars_os() {
+                let env_name = key.to_string_lossy().to_string();
+                if env_name.starts_with(&prefix) {
+                    res.push(Completion {
+                        completion: format!("${}", env_name),
+                        display: None,
+                        suffix: Suffix::Default,
+                    });
+                }
+            }
+            
+            for key in sh.envs.keys() {
+                if key.starts_with(&prefix) {
+                    res.push(Completion {
+                        completion: format!("${}", key),
+                        display: None,
+                        suffix: Suffix::Default,
+                    });
+                }
+            }
+
+            res
+        }
+    }
+
+    pub mod make
+    {
+        use ::
+        {
+            fs::{ File },
+            io::{BufRead, BufReader, Write},
+            prompt::lines::
+            {
+                complete::{Completer, Completion, Suffix},
+                prompter::{ Prompter },
+                terminal::{ Terminal },
+            },
+            regex::{ Regex },
+            *,
+        };
+        
+        pub struct MakeCompleter;
+
+        impl<Term: Terminal> Completer<Term> for MakeCompleter 
+        {
+            fn complete(
+                &self,
+                word: &str,
+                _reader: &Prompter<Term>,
+                _start: usize,
+                _end: usize,
+            ) -> Option<Vec<Completion>> {
+                Some(complete_make(word))
+            }
+        }
+
+        fn handle_file(ci: &mut Vec<Completion>, path: &str, file_path: &str, current_dir: &str) 
+        {
+            if let Ok(f) = File::open(file_path) {
+                let file = BufReader::new(&f);
+                let re_cmd = match Regex::new(r"^ *([^ ]+):") {
+                    Ok(x) => x,
+                    Err(e) => {
+                        println_stderr!("cicada: regex build error: {:?}", e);
+                        return;
+                    }
+                };
+
+                let re_include = match Regex::new(r"^ *include  *([^ ]+) *$") {
+                    Ok(x) => x,
+                    Err(e) => {
+                        println_stderr!("cicada: regex build error: {:?}", e);
+                        return;
+                    }
+                };
+
+                for line in file.lines().map_while(Result::ok) {
+                    if re_cmd.is_match(&line) {
+                        for cap in re_cmd.captures_iter(&line) {
+                            if !cap[1].starts_with(path) {
+                                continue;
+                            }
+                            ci.push(Completion {
+                                completion: cap[1].to_string(),
+                                display: None,
+                                suffix: Suffix::Default,
+                            });
+                        }
+                    }
+                    if re_include.is_match(&line) {
+                        for cap in re_include.captures_iter(&line) {
+                            let _file = &cap[1];
+                            if _file.contains('/') {
+                                handle_file(ci, path, _file, current_dir);
+                            } else {
+                                let make_file = current_dir.to_owned() + "/" + _file;
+                                handle_file(ci, path, &make_file, current_dir);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        fn complete_make(path: &str) -> Vec<Completion> 
+        {
+            let mut res = Vec::new();
+            let current_dir = match env::current_dir() {
+                Ok(dir) => match dir.to_str() {
+                    Some(s) => s.to_string(),
+                    None => {
+                        println!("cicada: to_str error");
+                        return res;
+                    }
+                },
+                Err(e) => {
+                    println!("cicada: get current_dir error: {:?}", e);
+                    return res;
+                }
+            };
+
+            let make_file = format!("{}/Makefile", current_dir);
+            handle_file(&mut res, path, &make_file, &current_dir);
+            res
+        }
+    }
+
+    pub mod path
+    {
+        use ::
+        {
+            collections::{ HashSet },
+            completers::{ utils },
+            fs::{ read_dir },
+            io::{ Write },
+            iter::{ FromIterator },
+            path::{ MAIN_SEPARATOR },
+            prompt::lines::
+            {
+                complete::{Completer, Completion, Suffix},
+                prompter::{ Prompter },
+                terminal::{ Terminal },
+            },
+            os::unix::fs::{ PermissionsExt },
+            sync::{ Arc },
+            *,
+        };
+
+        pub struct BinCompleter
+        {
+            pub sh: Arc<shell::Shell>,
+        }
+        pub struct CdCompleter;
+        pub struct PathCompleter;
+
+        fn is_env_prefix(line: &str) -> bool {
+            libs::re::re_contains(line, r" *\$[a-zA-Z_][A-Za-z0-9_]*")
+        }
+
+        fn is_pipelined(path: &str) -> bool {
+            if !path.contains('|') {
+                return false;
+            }
+            !path.starts_with('"') && !path.starts_with('\'')
+        }
+
+        impl<Term: Terminal> Completer<Term> for BinCompleter {
+            fn complete(
+                &self,
+                word: &str,
+                _reader: &Prompter<Term>,
+                _start: usize,
+                _end: usize,
+            ) -> Option<Vec<Completion>> {
+                let sh = Arc::try_unwrap(self.sh.clone());
+                match sh {
+                    Ok(x) => Some(complete_bin(&x, word)),
+                    Err(x) => Some(complete_bin(&x, word)),
+                }
+            }
+        }
+
+        impl<Term: Terminal> Completer<Term> for PathCompleter {
+            fn complete(
+                &self,
+                word: &str,
+                _reader: &Prompter<Term>,
+                _start: usize,
+                _end: usize,
+            ) -> Option<Vec<Completion>> {
+                Some(complete_path(word, false))
+            }
+        }
+
+        impl<Term: Terminal> Completer<Term> for CdCompleter {
+            fn complete(
+                &self,
+                word: &str,
+                _reader: &Prompter<Term>,
+                _start: usize,
+                _end: usize,
+            ) -> Option<Vec<Completion>> {
+                Some(complete_path(word, true))
+            }
+        }
+
+        fn needs_expand_home(line: &str) -> bool {
+            libs::re::re_contains(line, r"( +~ +)|( +~/)|(^ *~/)|( +~ *$)")
+        }
+        /// Returns a sorted list of paths whose prefix matches the given path.
+        pub fn complete_path(word: &str, for_dir: bool) -> Vec<Completion> {
+            let is_env = is_env_prefix(word);
+            let mut res = Vec::new();
+            let linfo = parsers::parser_line::parse_line(word);
+            let tokens = linfo.tokens;
+            let (path, path_sep) = if tokens.is_empty() {
+                (String::new(), String::new())
+            } else {
+                let (ref _path_sep, ref _path) = tokens[tokens.len() - 1];
+                (_path.clone(), _path_sep.clone())
+            };
+
+            let (_, _dir_orig, _f) = split_pathname(&path, "");
+            let dir_orig = if _dir_orig.is_empty() {
+                String::new()
+            } else {
+                _dir_orig.clone()
+            };
+            let mut path_extended = path.clone();
+            if needs_expand_home(&path_extended) {
+                utils::expand_home_string(&mut path_extended)
+            }
+            utils::expand_env_string(&mut path_extended);
+
+            let (_, _dir_lookup, file_name) = split_pathname(&path_extended, "");
+            let dir_lookup = if _dir_lookup.is_empty() {
+                ".".to_string()
+            } else {
+                _dir_lookup.clone()
+            };
+            // let dir_lookup = _dir_lookup.unwrap_or(".");
+            if let Ok(entries) = read_dir(dir_lookup) {
+                for entry in entries.flatten() {
+                    let pathbuf = entry.path();
+                    let is_dir = pathbuf.is_dir();
+                    if for_dir && !is_dir {
+                        continue;
+                    }
+
+                    let entry_name = entry.file_name();
+                    // TODO: Deal with non-UTF8 paths in some way
+                    if let Ok(_path) = entry_name.into_string() {
+                        if _path.starts_with(&file_name) {
+                            let (name, display) = if !dir_orig.is_empty() {
+                                (
+                                    format!("{}{}{}", dir_orig, MAIN_SEPARATOR, _path),
+                                    Some(_path),
+                                )
+                            } else {
+                                (_path, None)
+                            };
+                            let mut name = str::replace(name.as_str(), "//", "/");
+                            if path_sep.is_empty() && !is_env {
+                                name = tools::escape_path(&name);
+                            }
+                            let mut quoted = false;
+                            if !path_sep.is_empty() {
+                                name = tools::wrap_sep_string(&path_sep, &name);
+                                quoted = true;
+                            }
+                            let suffix = if is_dir {
+                                if quoted {
+                                    name.pop();
+                                }
+                                Suffix::Some(MAIN_SEPARATOR)
+                            } else {
+                                Suffix::Default
+                            };
+                            res.push(Completion {
+                                completion: name,
+                                display,
+                                suffix,
+                            });
+                        }
+                    }
+                }
+            }
+            res.sort_by(|a, b| a.completion.cmp(&b.completion));
+            res
+        }
+
+        fn split_pathname(path: &str, prefix: &str) -> (String, String, String) {
+            if is_pipelined(path) {
+                let tokens: Vec<&str> = path.rsplitn(2, '|').collect();
+                let prefix = format!("{}|", tokens[1]);
+                return split_pathname(tokens[0], &prefix);
+            }
+            match path.rfind('/') {
+                Some(pos) => (
+                    prefix.to_string(),
+                    path[..=pos].to_string(),
+                    path[pos + 1..].to_string(),
+                ),
+                None => (prefix.to_string(), String::new(), path.to_string()),
+            }
+        }
+        /// Returns a sorted list of paths whose prefix matches the given path.
+        fn complete_bin(sh: &shell::Shell, path: &str) -> Vec<Completion> 
+        {
+            let mut res = Vec::new();
+            let (prefix, _, fname) = split_pathname(path, "");
+            let env_path = match env::var("PATH") {
+                Ok(x) => x,
+                Err(e) => {
+                    println_stderr!("cicada: env error when complete_bin: {:?}", e);
+                    return res;
+                }
+            };
+
+            let mut checker: HashSet<String> = HashSet::new();
+
+            // handle alias, builtins, and functions
+            for func in sh.funcs.keys() {
+                if !func.starts_with(&fname) {
+                    continue;
+                }
+                if checker.contains(func) {
+                    continue;
+                }
+                checker.insert(func.clone());
+                res.push(Completion {
+                    completion: func.to_owned(),
+                    display: None,
+                    suffix: Suffix::Default,
+                });
+            }
+            for alias in sh.aliases.keys() {
+                if !alias.starts_with(&fname) {
+                    continue;
+                }
+                if checker.contains(alias) {
+                    continue;
+                }
+                checker.insert(alias.clone());
+                res.push(Completion {
+                    completion: alias.to_owned(),
+                    display: None,
+                    suffix: Suffix::Default,
+                });
+            }
+
+            let builtins = vec![
+                "alias", "bg", "cd", "cinfo", "exec", "exit", "export", "fg",
+                "history", "jobs", "read", "source", "ulimit", "unalias", "vox",
+                "minfd", "set", "unset", "unpath",
+            ];
+            for item in &builtins {
+                if !item.starts_with(&fname) {
+                    continue;
+                }
+                if checker.contains(*item) {
+                    continue;
+                }
+                checker.insert(item.to_string());
+                res.push(Completion {
+                    completion: item.to_string(),
+                    display: None,
+                    suffix: Suffix::Default,
+                });
+            }
+
+            let vec_path: Vec<&str> = env_path.split(':').collect();
+            let path_list: HashSet<&str> = HashSet::from_iter(vec_path.iter().cloned());
+
+            for p in &path_list {
+                if let Ok(list) = read_dir(p) {
+                    for entry in list.flatten() {
+                        if let Ok(name) = entry.file_name().into_string() {
+                            if name.starts_with(&fname) {
+                                let _mode = match entry.metadata() {
+                                    Ok(x) => x,
+                                    Err(e) => {
+                                        println_stderr!("cicada: metadata error: {:?}", e);
+                                        continue;
+                                    }
+                                };
+                                let mode = _mode.permissions().mode();
+                                if mode & 0o111 == 0 {
+                                    // not binary
+                                    continue;
+                                }
+                                if checker.contains(&name) {
+                                    continue;
+                                }
+
+                                let display = None;
+                                let suffix = Suffix::Default;
+                                checker.insert(name.clone());
+                                // TODO: need to handle quoted: `$ "foo#bar"`
+                                let name_e = tools::escape_path(&name);
+                                let name_e = format!("{}{}", prefix, name_e);
+                                res.push(Completion {
+                                    completion: name_e,
+                                    display,
+                                    suffix,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            res
+        }
+    }
+
+    pub mod ssh
+    {
+        use ::
+        {
+            fs::{ File },
+            io::{BufRead, BufReader},
+            prompt::lines::
+            {
+                complete::{Completer, Completion, Suffix},
+                prompter::{ Prompter },
+                terminal::{ Terminal },
+            },
+            regex::{ Regex },
+            *,
+        };
+
+        pub struct SshCompleter;
+
+        impl<Term: Terminal> Completer<Term> for SshCompleter 
+        {
+            fn complete(
+                &self,
+                word: &str,
+                _reader: &Prompter<Term>,
+                _start: usize,
+                _end: usize,
+            ) -> Option<Vec<Completion>> {
+                Some(complete_ssh(word))
+            }
+        }
+
+        fn complete_ssh(path: &str) -> Vec<Completion> 
+        {
+            let mut res = Vec::new();
+            let home = tools::get_user_home();
+            let ssh_config = home + "/.ssh/config";
+            if let Ok(f) = File::open(&ssh_config) {
+                let file = BufReader::new(&f);
+                let re = match Regex::new(r"^ *(?i)host +([^ ]+)") {
+                    Ok(x) => x,
+                    Err(e) => {
+                        println!("Regex build error: {:?}", e);
+                        return res;
+                    }
+                };
+                for line in file.lines().map_while(Result::ok) {
+                    if !re.is_match(&line) {
+                        continue;
+                    }
+                    for cap in re.captures_iter(&line) {
+                        if !cap[1].starts_with(path) {
+                            continue;
+                        }
+                        res.push(Completion {
+                            completion: cap[1].to_string(),
+                            display: None,
+                            suffix: Suffix::Default,
+                        });
+                    }
+                }
+            }
+            res
+        }
+    }
+
+    pub mod utils
+    {
+        use ::
+        {
+            regex::{ Regex },
+            *,
+        };
+
+        pub fn expand_home_string(text: &mut String)
+        {
+            let v = vec![
+                r"(?P<head> +)~(?P<tail> +)",
+                r"(?P<head> +)~(?P<tail>/)",
+                r"^(?P<head> *)~(?P<tail>/)",
+                r"(?P<head> +)~(?P<tail> *$)",
+            ];
+            for item in &v {
+                let re;
+                if let Ok(x) = Regex::new(item) {
+                    re = x;
+                } else {
+                    return;
+                }
+                let home = tools::get_user_home();
+                let ss = text.clone();
+                let to = format!("$head{}$tail", home);
+                let result = re.replace_all(ss.as_str(), to.as_str());
+                *text = result.to_string();
+            }
+        }
+
+        pub fn expand_env_string(text: &mut String)
+        {
+            if !text.starts_with('$') {
+                return;
+            }
+            let ptn = r"^\$([A-Za-z_][A-Za-z0-9_]*)";
+            let mut env_value = String::new();
+            match libs::re::find_first_group(ptn, text) {
+                Some(x) => {
+                    if let Ok(val) = env::var(&x) {
+                        env_value = val;
+                    }
+                }
+                None => {
+                    return;
+                }
+            }
+
+            if env_value.is_empty() {
+                return;
+            }
+            let t = text.clone();
+            *text = libs::re::replace_all(&t, ptn, &env_value);
+        }
+    }
+    
+    pub struct CicadaCompleter
+    {
+        pub sh: Arc<shell::Shell>,
+    }
+
+    fn for_make(line: &str) -> bool { libs::re::re_contains(line, r"^ *make ") }
+
+    fn for_env(line: &str) -> bool { libs::re::re_contains(line, r" *\$[_a-zA-Z0-9]*$") }
+
+    fn for_ssh(line: &str) -> bool { libs::re::re_contains(line, r"^ *(ssh|scp).* +[^ \./]+ *$") }
+
+    fn for_cd(line: &str) -> bool { libs::re::re_contains(line, r"^ *cd +") }
+
+    fn for_bin(line: &str) -> bool
+    {
+        let ptn = r"(^ *(sudo|which|nohup)? *[a-zA-Z0-9_\.-]+$)|(^.+\| *(sudo|which|nohup)? *[a-zA-Z0-9_\.-]+$)";
+        libs::re::re_contains(line, ptn)
+    }
+
+    fn for_dots(line: &str) -> bool
+    {
+        let args = parsers::parser_line::line_to_plain_tokens(line);
+        let len = args.len();
+
+        if len == 0 { return false; }
+
+        let dir = tools::get_user_completer_dir();
+        let dot_file = format!("{}/{}.yaml", dir, args[0]);
+        Path::new(dot_file.as_str()).exists()
+    }
+
+    impl<Term: Terminal> Completer<Term> for CicadaCompleter
+    {
+        fn complete( &self, word:&str, reader:&Prompter<Term>, start:usize, _end:usize ) -> Option<Vec<Completion>>
+        {
+            let line = reader.buffer();
+            let completions: Option<Vec<Completion>>;
+
+            if for_dots(line)
+            {
+                let cpl = Arc::new(dots::DotsCompleter);
+                completions = cpl.complete(word, reader, start, _end);
+            }
+            
+            else if for_ssh(line)
+            {
+                let cpl = Arc::new(ssh::SshCompleter);
+                completions = cpl.complete(word, reader, start, _end);
+            }
+            
+            else if for_make(line)
+            {
+                let cpl = Arc::new(make::MakeCompleter);
+                completions = cpl.complete(word, reader, start, _end);
+            }
+            
+            else if for_bin(line)
+            {
+                let cpl = Arc::new(path::BinCompleter
+                {
+                    sh: self.sh.clone(),
+                });
+
+                completions = cpl.complete(word, reader, start, _end);
+            }
+            
+            else if for_env(line)
+            {
+                let cpl = Arc::new(env::EnvCompleter
+                {
+                    sh: self.sh.clone(),
+                });
+
+                completions = cpl.complete(word, reader, start, _end);
+            }
+
+            else if for_cd(line)
+            {
+                let cpl = Arc::new(path::CdCompleter);
+                return cpl.complete(word, reader, start, _end);
+            }
+
+            else { completions = None; }
+
+            if let Some(x) = completions
+            {
+                if !x.is_empty() { return Some(x); }
+            }
+            
+            let cpl = Arc::new(path::PathCompleter);
+            cpl.complete(word, reader, start, _end)
+        }
+
+        fn word_start(&self, line: &str, end: usize, _reader: &Prompter<Term>) -> usize {
+            escaped_word_start(&line[..end])
+        }
+    }
+
+    pub fn escaped_word_start(line: &str) -> usize
+    {
+        let mut start_position: usize = 0;
+        let mut found_bs = false;
+        let mut found_space = false;
+        let mut with_quote = false;
+        let mut ch_quote = '\0';
+        let mut extra_bytes = 0;
+
+        for (i, c) in line.chars().enumerate()
+        {
+            if found_space
+            {
+                found_space = false;
+                start_position = i + extra_bytes;
+            }
+
+            if c == '\\'
+            {
+                found_bs = true;
+                continue;
+            }
+
+            if c == ' ' && !found_bs && !with_quote
+            {
+                found_space = true;
+                continue;
+            }
+
+            if !with_quote && !found_bs && (c == '"' || c == '\'')
+            {
+                with_quote = true;
+                ch_quote = c;
+            }
+
+            else if with_quote && !found_bs && ch_quote == c { with_quote = false; }
+
+            let bytes_c = c.len_utf8();
+
+            if bytes_c > 1 { extra_bytes += bytes_c - 1; }
+
+            found_bs = false;
+        }
+
+        if found_space { start_position = line.len(); }
+        
+        start_position
+    }
 }
 /**/
 pub mod execute
 {
+    use ::
+    {
+        collections::{ HashMap },
+        io::{self, Read, Write},
+        regex::{ Regex },
+        shell::{self, Shell},
+        types::{CommandLine, CommandResult, Tokens},
+        *,
+    };
+    /// Entry point for non-ttys (e.g. Cmd-N on MacVim)
+    pub fn run_procs_for_non_tty(sh: &mut Shell)
+    {
+        let mut buffer = String::new();
+        let stdin = io::stdin();
+        let mut handle = stdin.lock();
+        match handle.read_to_string(&mut buffer)
+        {
+            Ok(_) =>
+            {
+                log!("run non tty command: {}", &buffer);
+                run_command_line(sh, &buffer, false, false);
+            }
 
+            Err(e) => { println!("cicada: stdin.read_to_string() failed: {:?}", e); }
+        }
+    }
+
+    pub fn run_command_line(sh: &mut Shell, line: &str, tty: bool, capture: bool) -> Vec<CommandResult>
+    {
+        let mut cr_list = Vec::new();
+        let mut status = 0;
+        let mut sep = String::new();
+
+        for token in parsers::parser_line::line_to_cmds(line)
+        {
+            if token == ";" || token == "&&" || token == "||"
+            {
+                sep = token.clone();
+                continue;
+            }
+
+            if sep == "&&" && status != 0 { break; }
+
+            if sep == "||" && status == 0 { break; }
+
+            let cmd = token.clone();
+            let cr = run_proc(sh, &cmd, tty, capture);
+            status = cr.status;
+            sh.previous_status = status;
+            cr_list.push(cr);
+        }
+
+        cr_list
+    }
+
+    fn drain_env_tokens(tokens: &mut Tokens) -> HashMap<String, String>
+    {
+        let mut envs: HashMap<String, String> = HashMap::new();
+        let mut n = 0;
+        let ptn_env_exp = r"^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$";
+        let re = Regex::new(ptn_env_exp).unwrap();
+
+        for (sep, text) in tokens.iter()
+        {
+            if !sep.is_empty() || !libs::re::re_contains(text, ptn_env_exp) { break; }
+
+            for cap in re.captures_iter(text)
+            {
+                let name = cap[1].to_string();
+                let value = parsers::parser_line::unquote(&cap[2]);
+                envs.insert(name, value);
+            }
+
+            n += 1;
+        }
+
+        if n > 0 { tokens.drain(0..n); }
+
+        envs
+    }
+
+    fn line_to_tokens(sh: &mut Shell, line: &str) -> (Tokens, HashMap<String, String>)
+    {
+        let linfo = parsers::parser_line::parse_line(line);
+        let mut tokens = linfo.tokens;
+        shell::do_expansion(sh, &mut tokens);
+        let envs = drain_env_tokens(&mut tokens);
+
+        (tokens, envs)
+    }
+
+    fn set_shell_vars(sh: &mut Shell, envs: &HashMap<String, String>)
+    {
+        for (name, value) in envs.iter()
+        {
+            sh.set_env(name, value);
+        }
+    }
+    
+    fn run_proc(sh: &mut Shell, line: &str, tty: bool, capture: bool) -> CommandResult
+    {
+        let log_cmd = !sh.cmd.starts_with(' ');
+        match CommandLine::from_line(line, sh)
+        {
+            Ok(cl) =>
+            {
+                if cl.is_empty()
+                {
+                    if !cl.envs.is_empty() { set_shell_vars(sh, &cl.envs); }
+                    return CommandResult::new();
+                }
+
+                let (term_given, cr) = core::run_pipeline(sh, &cl, tty, capture, log_cmd);
+                if term_given
+                {
+                    unsafe
+                    {
+                        let gid = libc::getpgid(0);
+                        shell::give_terminal_to(gid);
+                    }
+                }
+
+                cr
+            }
+
+            Err(e) =>
+            {
+                println_stderr!("cicada: {}", e);
+                CommandResult::from_status(0, 1)
+            }
+        }
+    }
+
+    fn run_with_shell(sh: &mut Shell, line: &str) -> CommandResult
+    {
+        let (tokens, envs) = line_to_tokens(sh, line);
+        
+        if tokens.is_empty()
+        {
+            set_shell_vars(sh, &envs);
+            return CommandResult::new();
+        }
+
+        match CommandLine::from_line(line, sh)
+        {
+            Ok(c) =>
+            {
+                let (term_given, cr) = core::run_pipeline(sh, &c, false, true, false);
+                if term_given
+                {
+                    unsafe
+                    {
+                        let gid = libc::getpgid(0);
+                        shell::give_terminal_to(gid);
+                    }
+                }
+
+                cr
+            }
+
+            Err(e) =>
+            {
+                println_stderr!("cicada: {}", e);
+                CommandResult::from_status(0, 1)
+            }
+        }
+    }
+
+    pub fn run(line: &str) -> CommandResult
+    {
+        let mut sh = Shell::new();
+        run_with_shell(&mut sh, line)
+    }
 }
 /**/
 pub mod highlight
 {
+    use ::
+    {
+        ops::Range,
+        sync::Arc,
+        collections::HashSet,
+        path::Path,
+        parsers::parser_line,
+        prompt::lines::highlighting::{Highlighter, Style},
+        sync::Mutex,
+        os::unix::fs::PermissionsExt,
+        *,
+    };
 
+    #[derive(Clone)]
+    pub struct CicadaHighlighter;
+
+    // ANSI color codes wrapped with \x01 and \x02 for lineread
+    const GREEN: &str = "\x01\x1b[0;32m\x02";
+
+    lazy_static! 
+    {
+        static ref AVAILABLE_COMMANDS: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
+        static ref ALIASES: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
+    }
+    /// Initialize the available commands cache by scanning PATH directories
+    pub fn init_command_cache() 
+    {
+        let commands = scan_available_commands();
+        if let Ok(mut cache) = AVAILABLE_COMMANDS.lock() { *cache = commands; }
+    }
+    /// Update aliases in the highlighter's cache
+    pub fn update_aliases(sh: &shell::Shell)
+    {
+        if let Ok(mut aliases) = ALIASES.lock()
+        {
+            aliases.clear();
+            for alias_name in sh.aliases.keys()
+            {
+                aliases.insert(alias_name.clone());
+            }
+        }
+    }
+
+    fn scan_available_commands() -> HashSet<String>
+    {
+        let mut commands = HashSet::new();
+
+        if let Ok(path_var) = env::var("PATH")
+        {
+            for path in path_var.split(':')
+            {
+                if path.is_empty() { continue; }
+
+                let dir_path = Path::new(path);
+
+                if !dir_path.is_dir() { continue; }
+
+                if let Ok(entries) = fs::read_dir(dir_path)
+                {
+                    for entry in entries.filter_map(Result::ok)
+                    {
+                        if let Ok(file_type) = entry.file_type()
+                        {
+                            if file_type.is_file() || file_type.is_symlink()
+                            {
+                                if let Ok(metadata) = entry.metadata()
+                                {
+                                    if metadata.permissions().mode() & 0o111 != 0
+                                    {
+                                        if let Some( name ) = entry.file_name().to_str()
+                                        { commands.insert(name.to_string()); }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        commands
+    }
+
+    fn is_command(word: &str) -> bool
+    {
+        if tools::is_builtin(word) { return true; }
+
+        if let Ok(aliases) = ALIASES.lock()
+        {
+            if aliases.contains(word) { return true; }
+        }
+
+        if let Ok(commands) = AVAILABLE_COMMANDS.lock()
+        {
+            if commands.contains(word) { return true; }
+        }
+
+        false
+    }
+
+    fn find_token_range_heuristic(line: &str, start_byte: usize, token: &(String, String)) -> Option<Range<usize>>
+    {
+        let (sep, word) = token;        
+        let mut search_area = &line[start_byte..];
+        let token_start_byte = if let Some(non_ws_offset) = search_area.find(|c: char| !c.is_whitespace())
+        { start_byte + search_area.char_indices().nth(non_ws_offset).map_or(0, |(idx, _)| idx) }
+        else { return None; };
+
+        search_area = &line[token_start_byte..];
+        let mut estimated_len = 0;
+        let mut current_search_offset = 0;
+        
+        if !sep.is_empty() && search_area.starts_with(sep)
+        {
+            estimated_len += sep.len();
+            current_search_offset += sep.len();
+        }
+        
+        if search_area[current_search_offset..].starts_with(word)
+        {
+            estimated_len += word.len();
+            current_search_offset += word.len();
+            if !sep.is_empty() && search_area[current_search_offset..].starts_with(sep)
+            { estimated_len += sep.len(); }
+
+            Some(token_start_byte..(token_start_byte + estimated_len))
+        }
+        
+        else if word.is_empty() 
+        && !sep.is_empty() 
+        && search_area.starts_with(sep) 
+        && search_area[sep.len()..].starts_with(sep)
+        {
+            estimated_len += sep.len() * 2;
+            Some(token_start_byte..(token_start_byte + estimated_len))
+        }
+
+        else
+        {
+            if search_area.starts_with(word) { Some(token_start_byte..(token_start_byte + word.len())) }            
+            else { None }
+        }
+    }
+
+    impl Highlighter for CicadaHighlighter
+    {
+        fn highlight(&self, line: &str) -> Vec<(Range<usize>, Style)>
+        {
+            let mut styles = Vec::new();
+
+            if line.is_empty() { return styles; }
+
+            let line_info = parser_line::parse_line(line);
+            
+            if line_info.tokens.is_empty()
+            {
+                styles.push((0..line.len(), Style::Default));
+                return styles;
+            }
+
+            let mut current_byte_idx = 0;
+            let mut is_start_of_segment = true;
+
+            for token in &line_info.tokens
+            {
+                match find_token_range_heuristic(line, current_byte_idx, token)
+                {
+                    Some(token_range) =>
+                    {
+                        if token_range.start > current_byte_idx
+                        { styles.push((current_byte_idx..token_range.start, Style::Default)); }
+
+                        let (_sep, word) = token;
+                        let mut current_token_style = Style::Default;
+
+                        if is_start_of_segment && !word.is_empty()
+                        {
+                            if is_command(word) { current_token_style = Style::AnsiColor(GREEN.to_string()); }
+                            
+                            is_start_of_segment = false;
+                        }
+
+                        styles.push((token_range.clone(), current_token_style));
+                        
+                        if ["|", "&&", "||", ";"].contains(&word.as_str()) { is_start_of_segment = true; }
+
+                        current_byte_idx = token_range.end;
+                    }
+
+                    None =>
+                    {
+                        if current_byte_idx < line.len()
+                        { styles.push((current_byte_idx..line.len(), Style::Default)); }
+
+                        current_byte_idx = line.len();
+                        break;
+                    }
+                }
+            }
+            
+            if current_byte_idx < line.len() { styles.push((current_byte_idx..line.len(), Style::Default)); }
+
+            styles
+        }
+    }
+
+    pub fn create_highlighter() -> Arc<CicadaHighlighter>
+    {
+        Arc::new(CicadaHighlighter)
+    }
 }
 /**/
 pub mod history
 {
+    use ::
+    {
+        collections::{ HashMap },
+        io::{ Write },
+        path::{ Path },
+        *,
+    };
+    /*
+    use std::collections::HashMap;
+    use std::env;
+    use std::fs;
+    use std::io::Write;
+    use std::path::Path;
+    use lineread::terminal::DefaultTerminal;
+    use lineread::Interface;
+    use rusqlite::Connection as Conn;
+    use rusqlite::Error::SqliteFailure;
+    use crate::shell;
+    use crate::tools;
+    */
+    pub fn init_db(hfile: &str, htable: &str)
+    {
+        
+    }
 
+    //pub fn init(rl: &mut Interface<DefaultTerminal>)
+    pub fn init()
+    {
+
+    }
+
+    pub fn get_history_file() -> String
+    {
+        if let Ok(hfile) = env::var("HISTORY_FILE")
+        {
+            hfile
+        }
+        
+        else if let Ok(d) = env::var("XDG_DATA_HOME")
+        {
+            format!("{}/{}", d, "cicada/history.sqlite")
+        }
+        
+        else
+        {
+            let home = tools::get_user_home();
+            format!("{}/{}", home, ".local/share/cicada/history.sqlite")
+        }
+    }
+
+    pub fn get_history_table() -> String
+    {
+        if let Ok(hfile) = env::var("HISTORY_TABLE"){ hfile }
+
+        else { String::from("cicada_history") }
+    }
+
+    fn delete_duplicated_histories()
+    {
+        let hfile = get_history_file();
+        let history_table = get_history_table();
+        let conn = match Conn::open(&hfile)
+        {
+            Ok(x) => x,
+            Err(e) =>
+            {
+                println_stderr!("cicada: history: conn error: {}", e);
+                return;
+            }
+        };
+
+        let sql = format
+        (
+            "DELETE FROM {} WHERE rowid NOT IN (
+            SELECT MAX(rowid) FROM {} GROUP BY inp)",
+            history_table, history_table
+        );
+
+        match conn.execute(&sql, [])
+        {
+            Ok(_) => {}
+            Err(e) => match e
+            {
+                SqliteFailure(ee, msg) =>
+                {
+                    if ee.extended_code == 5
+                    {
+                        log!(
+                            "failed to delete dup histories: {}",
+                            msg.unwrap_or("db is locked?".to_owned()),
+                        );
+                        return;
+                    }
+                    println_stderr!
+                    (
+                        "cicada: history: delete dups error: {}: {:?}",
+                        &ee,
+                        &msg
+                    );
+                }
+                _ =>
+                {
+                    println_stderr!("cicada: history: delete dup error: {}", e);
+                }
+            },
+        }
+    }
+
+    pub fn add_raw(sh: &shell::Shell, line: &str, status: i32, tsb: f64, tse: f64)
+    {
+        let hfile = get_history_file();
+        let history_table = get_history_table();
+        if !Path::new(&hfile).exists()
+        {
+            init_db(&hfile, &history_table);
+        }
+
+        let conn = match Conn::open(&hfile)
+        {
+            Ok(x) => x,
+            Err(e) => 
+            {
+                println_stderr!("cicada: history: conn error: {}", e);
+                return;
+            }
+        };
+
+        let sql = format!
+        (
+            "INSERT INTO \
+            {} (inp, rtn, tsb, tse, sessionid, info) \
+            VALUES('{}', {}, {}, {}, '{}', 'dir:{}|');",
+            history_table,
+            str::replace(line.trim(), "'", "''"),
+            status,
+            tsb,
+            tse,
+            sh.session_id,
+            sh.current_dir,
+        );
+
+        match conn.execute(&sql, [])
+        {
+            Ok(_) => {}
+            Err(e) => println_stderr!("cicada: history: save error: {}", e),
+        }
+    }
+
+    pub fn add(sh: &shell::Shell, rl: &mut Interface<DefaultTerminal>, line: &str, status: i32, tsb: f64, tse: f64)
+    {
+        add_raw(sh, line, status, tsb, tse);
+        rl.add_history(line.to_string());
+    }
 }
 /**/
 pub mod jobc
 {
+    use ::
+    {
+        io::{ Write },
+        nix::
+        {
+            sys::
+            {
+                signal::Signal,
+                wait::waitpid,
+                wait::WaitPidFlag as WF,
+                wait::WaitStatus as WS,
+            },
+            unistd::{ Pid },
+        },
+        types::{ self, CommandResult },
+        *,
+    };
+    
+    pub fn get_job_line(job: &types::Job, trim: bool) -> String
+    {
+        let mut cmd = job.cmd.clone();
+        if trim && cmd.len() > 50
+        {
+            cmd.truncate(50);
+            cmd.push_str(" ...");
+        }
+        
+        let _cmd = if job.is_bg && job.status == "Running" { format!("{} &", cmd) }
+        else { cmd };
 
+        format!("[{}] {}  {}   {}", job.id, job.gid, job.status, _cmd)
+    }
+
+    pub fn print_job(job: &types::Job)
+    {
+        let line = get_job_line(job, true);
+        println_stderr!("{}", line);
+    }
+
+    pub fn mark_job_as_done(sh: &mut shell::Shell, gid: i32, pid: i32, reason: &str)
+    {
+        if let Some(mut job) = sh.remove_pid_from_job(gid, pid)
+        {
+            job.status = reason.to_string();
+            if job.is_bg
+            {
+                println_stderr!("");
+                print_job(&job);
+            }
+        }
+    }
+
+    pub fn mark_job_as_stopped(sh: &mut shell::Shell, gid: i32, report: bool)
+    {
+        sh.mark_job_as_stopped(gid);
+        if !report { return; }
+        
+        if let Some(job) = sh.get_job_by_gid(gid)
+        {
+            println_stderr!("");
+            print_job(job);
+        }
+    }
+
+    pub fn mark_job_member_stopped(sh: &mut shell::Shell, pid: i32, gid: i32, report: bool)
+    {
+        let _gid = if gid == 0 { unsafe { libc::getpgid(pid) } }
+        else { gid };
+
+        if let Some(job) = sh.mark_job_member_stopped(pid, gid)
+        {
+            if job.all_members_stopped() { mark_job_as_stopped(sh, gid, report); }
+        }
+    }
+
+    pub fn mark_job_member_continued(sh: &mut shell::Shell, pid: i32, gid: i32)
+    {
+        let _gid = if gid == 0 { unsafe { libc::getpgid(pid) } }
+        else { gid };
+
+        if let Some(job) = sh.mark_job_member_continued(pid, gid)
+        {
+            if job.all_members_running() { mark_job_as_running(sh, gid, true); }
+        }
+    }
+
+    pub fn mark_job_as_running(sh: &mut shell::Shell, gid: i32, bg: bool) { sh.mark_job_as_running(gid, bg); }
+    
+    pub fn waitpidx(wpid: i32, block: bool) -> types::WaitStatus
+    {
+        let options = if block { Some(WF::WUNTRACED | WF::WCONTINUED) }
+        else { Some(WF::WUNTRACED | WF::WCONTINUED | WF::WNOHANG) };
+
+        match waitpid(Pid::from_raw(wpid), options)
+        {
+            Ok(WS::Exited(pid, status)) =>
+            {
+                let pid = i32::from(pid);
+                types::WaitStatus::from_exited(pid, status)
+            }
+
+            Ok(WS::Stopped(pid, sig)) =>
+            {
+                let pid = i32::from(pid);
+                types::WaitStatus::from_stopped(pid, sig as i32)
+            }
+
+            Ok(WS::Continued(pid)) =>
+            {
+                let pid = i32::from(pid);
+                types::WaitStatus::from_continuted(pid)
+            }
+            
+            Ok(WS::Signaled(pid, sig, _core_dumped)) =>
+            {
+                let pid = i32::from(pid);
+                types::WaitStatus::from_signaled(pid, sig as i32)
+            }
+
+            Ok(WS::StillAlive) => { types::WaitStatus::empty() }
+
+            Ok(_others) => { types::WaitStatus::from_others() }
+
+            Err(e) => { types::WaitStatus::from_error(e as i32) }
+        }
+    }
+
+    pub fn wait_fg_job(sh: &mut shell::Shell, gid: i32, pids: &[i32]) -> CommandResult
+    {
+        let mut cmd_result = CommandResult::new();
+        let mut count_waited = 0;
+        let count_child = pids.len();
+        if count_child == 0 { return cmd_result; }
+
+        let pid_last = pids.last().unwrap();
+
+        loop
+        {
+            let ws = waitpidx(-1, true);
+            
+            if ws.is_error()
+            {
+                let err = ws.get_errno();
+                if err == nix::Error::ECHILD { break; }
+                
+                log!("jobc unexpected waitpid error: {}", err);
+                cmd_result = CommandResult::from_status(gid, err as i32);
+                break;
+            }
+
+            let pid = ws.get_pid();
+            let is_a_fg_child = pids.contains(&pid);
+            if is_a_fg_child && !ws.is_continued() { count_waited += 1; }
+
+            if ws.is_exited()
+            {
+                if is_a_fg_child { mark_job_as_done(sh, gid, pid, "Done"); }
+                else
+                {
+                    let status = ws.get_status();
+                    signals::insert_reap_map(pid, status);
+                }
+            }
+
+            else if ws.is_stopped()
+            {
+                if is_a_fg_child { mark_job_member_stopped(sh, pid, gid, true); }
+                else 
+                {
+                    signals::insert_stopped_map(pid);
+                    mark_job_member_stopped(sh, pid, 0, false);
+                }
+            }
+            
+            else if ws.is_continued()
+            {
+                if !is_a_fg_child { signals::insert_cont_map(pid); }
+                continue;
+            }
+
+            else if ws.is_signaled()
+            {
+                if is_a_fg_child { mark_job_as_done(sh, gid, pid, "Killed"); }
+                else { signals::killed_map_insert(pid, ws.get_signal()); }
+            }
+
+            if is_a_fg_child && pid == *pid_last
+            {
+                let status = ws.get_status();
+                cmd_result.status = status;
+            }
+
+            if count_waited >= count_child { break; }
+        }
+
+        cmd_result
+    }
+
+    pub fn try_wait_bg_jobs(sh: &mut shell::Shell, report: bool, sig_handler_enabled: bool)
+    {
+        if sh.jobs.is_empty() { return; }
+
+        if !sig_handler_enabled { signals::handle_sigchld(Signal::SIGCHLD as i32); }
+
+        let jobs = sh.jobs.clone();
+        
+        for (_i, job) in jobs.iter()
+        {
+            for pid in job.pids.iter()
+            {
+                if let Some(_status) = signals::pop_reap_map(*pid)
+                {
+                    mark_job_as_done(sh, job.gid, *pid, "Done");
+                    continue;
+                }
+
+                if let Some(sig) = signals::killed_map_pop(*pid)
+                {
+                    let reason = if sig == Signal::SIGQUIT as i32 { format!("Quit: {}", sig) }                    
+                    else if sig == Signal::SIGINT as i32 { format!("Interrupt: {}", sig) }                    
+                    else if sig == Signal::SIGKILL as i32 { format!("Killed: {}", sig) }                    
+                    else if sig == Signal::SIGTERM as i32 { format!("Terminated: {}", sig) }                    
+                    else { format!("Killed: {}", sig) };
+
+                    mark_job_as_done(sh, job.gid, *pid, &reason);
+                    continue;
+                }
+
+                if signals::pop_stopped_map(*pid) { mark_job_member_stopped(sh, *pid, job.gid, report); }
+                else if signals::pop_cont_map(*pid) { mark_job_member_continued(sh, *pid, job.gid); }
+            }
+        }
+    }
 }
 /**/
 pub mod libs
 {
+    pub mod colored
+    {
+        //! Setting prompt in crate lineread needs wrap every SEQ chars
+        //! with prefixing with '\x01' and suffix with '\x02'.
+        //! Color Reference: https://misc.flogisoft.com/bash/tip_colors_and_formatting
 
+        /// cicada special
+        pub const SEQ: &str = "\x01";
+        pub const END_SEQ: &str = "\x02";
+        pub const ESC: &str = "\x1B";
+        pub const BOLD: &str = "\x01\x1B[1m\x02";
+        pub const DIM: &str = "\x01\x1B[2m\x02";
+        pub const UNDERLINED: &str = "\x01\x1B[4m\x02";
+        pub const BLINK: &str = "\x01\x1B[5m\x02";
+        pub const REVERSE: &str = "\x01\x1B[7m\x02";
+        pub const HIDDEN: &str = "\x01\x1B[8m\x02";
+        pub const RESET: &str = "\x01\x1B[0m\x02";
+        pub const RESET_BOLD: &str = "\x01\x1B[21m\x02";
+        pub const RESET_DIM: &str = "\x01\x1B[22m\x02";
+        pub const RESET_UNDERLINED: &str = "\x01\x1B[24m\x02";
+        pub const RESET_BLINK: &str = "\x01\x1B[25m\x02";
+        pub const RESET_REVERSE: &str = "\x01\x1B[27m\x02";
+        pub const RESET_HIDDEN: &str = "\x01\x1B[28m\x02";
+        pub const DEFAULT: &str = "\x01\x1B[39m\x02";
+        pub const BLACK: &str = "\x01\x1B[30m\x02";
+        pub const RED: &str = "\x01\x1B[31m\x02";
+        pub const GREEN: &str = "\x01\x1B[32m\x02";
+        pub const YELLOW: &str = "\x01\x1B[33m\x02";
+        pub const BLUE: &str = "\x01\x1B[34m\x02";
+        pub const MAGENTA: &str = "\x01\x1B[35m\x02";
+        pub const CYAN: &str = "\x01\x1B[36m\x02";
+        pub const GRAY_L: &str = "\x01\x1B[37m\x02";
+        pub const GRAY_D: &str = "\x01\x1B[90m\x02";
+        pub const RED_L: &str = "\x01\x1B[91m\x02";
+        pub const GREEN_L: &str = "\x01\x1B[92m\x02";
+        pub const YELLOW_L: &str = "\x01\x1B[93m\x02";
+        pub const BLUE_L: &str = "\x01\x1B[94m\x02";
+        pub const MAGENTA_L: &str = "\x01\x1B[95m\x02";
+        pub const CYAN_L: &str = "\x01\x1B[96m\x02";
+        pub const WHITE: &str = "\x01\x1B[97m\x02";
+        pub const BLUE_B: &str = "\x01\x1B[34m\x1B[1m\x02";
+        pub const BLACK_B: &str = "\x01\x1B[30m\x1B[1m\x02";
+        pub const WHITE_B: &str = "\x01\x1B[97m\x1B[1m\x02";
+        pub const RED_B: &str = "\x01\x1B[31m\x1B[1m\x02";
+        pub const GREEN_B: &str = "\x01\x1B[32m\x1B[1m\x02";
+        pub const DEFAULT_BG: &str = "\x01\x1B[49m\x02";
+        pub const BLACK_BG: &str   = "\x01\x1B[40m\x02";
+        pub const RED_BG: &str     = "\x01\x1B[41m\x02";
+        pub const GREEN_BG: &str   = "\x01\x1B[42m\x02";
+        pub const YELLOW_BG: &str   = "\x01\x1B[43m\x02";
+        pub const BLUE_BG: &str    = "\x01\x1B[44m\x02";
+        pub const MAGENTA_BG: &str    = "\x01\x1B[45m\x02";
+        pub const CYAN_BG: &str    = "\x01\x1B[46m\x02";
+        pub const GRAY_L_BG: &str    = "\x01\x1B[47m\x02";
+        pub const GRAY_D_BG: &str   = "\x01\x1B[100m\x02";
+        pub const RED_L_BG: &str   = "\x01\x1B[101m\x02";
+        pub const GREEN_L_BG: &str   = "\x01\x1B[102m\x02";
+        pub const YELLOW_L_BG: &str   = "\x01\x1B[103m\x02";
+        pub const BLUE_L_BG: &str   = "\x01\x1B[104m\x02";
+        pub const MAGENTA_L_BG: &str   = "\x01\x1B[105m\x02";
+        pub const CYAN_L_BG: &str   = "\x01\x1B[106m\x02";
+        pub const WHITE_BG: &str   = "\x01\x1B[107m\x02";
+    }
+
+    pub mod fork
+    {
+        use ::
+        {
+            nix::
+            {
+                unistd::{fork as nix_fork, ForkResult},
+                Result,
+            },
+            *,
+        };
+        
+        pub fn fork() -> Result<ForkResult> { unsafe{ nix_fork() } }
+    }
+
+    pub mod os_type
+    {
+        use ::
+        {
+            *,
+        };
+
+        pub fn get_os_name() -> String
+        {
+            let uname = get_uname();
+            if uname.to_lowercase() == "darwin" { get_macos_name() }
+            else { get_other_os_name() }
+        }
+
+        fn get_other_os_name() -> String 
+        {
+            let mut name = get_release_value("PRETTY_NAME");
+            if !name.is_empty() { return name; }
+
+            name = get_release_value("DISTRIB_DESCRIPTION");
+            if !name.is_empty() { return name; }
+
+            name = get_release_value("IMAGE_DESCRIPTION");
+            if !name.is_empty() { return name; }
+
+            get_uname_mo()
+        }
+
+        fn get_release_value(ptn: &str) -> String 
+        {
+            let line = format!( "grep -i '{}' /etc/*release* 2>&1 | grep -o '=.*' | tr '\"=' ' '", ptn );
+            let cr = execute::run(&line);
+            return cr.stdout.trim().to_string();
+        }
+
+        fn get_uname() -> String 
+        {
+            let cr = execute::run("uname");
+            return cr.stdout.trim().to_string();
+        }
+
+        fn get_uname_mo() -> String 
+        {
+            let cr = execute::run("uname -m -o");
+            return cr.stdout.trim().to_string();
+        }
+
+        fn get_macos_name() -> String 
+        {
+            let mut os_name = get_osx_codename();
+            let ver = get_osx_version();
+            if !ver.is_empty()
+            {
+                os_name.push(' ');
+                os_name.push_str(&ver);
+            }
+
+            os_name
+        }
+
+        fn get_osx_codename() -> String 
+        {
+            let cr = execute::run("grep -o 'SOFTWARE LICENSE AGREEMENT FOR .*[a-zA-Z]' '/System/Library/CoreServices/Setup Assistant.app/Contents/Resources/en.lproj/OSXSoftwareLicense.rtf' | sed 's/SOFTWARE LICENSE AGREEMENT FOR *//'");
+            return cr.stdout.trim().to_string();
+        }
+
+        fn get_osx_version() -> String 
+        {
+            let cr = execute::run("sw_vers -productVersion");
+            return cr.stdout.trim().to_string();
+        }
+    }
+
+    pub mod path
+    {
+        use ::
+        {
+            borrow::{ Cow },
+            fs::{ read_dir },
+            io::{ ErrorKind, Write },
+            os::unix::fs::{ PermissionsExt },
+            regex::{ Regex },
+            *,
+        };
+
+        pub fn basename(path: &str) -> Cow<'_, str>
+        {
+            let mut pieces = path.rsplit('/');
+            match pieces.next()
+            {
+                Some(p) => p.into(),
+                None => path.into(),
+            }
+        }
+
+        pub fn expand_home(text: &str) -> String
+        {
+            let mut s: String = text.to_string();
+            let v = vec!
+            [
+                r"(?P<head> +)~(?P<tail> +)",
+                r"(?P<head> +)~(?P<tail>/)",
+                r"^(?P<head> *)~(?P<tail>/)",
+                r"(?P<head> +)~(?P<tail> *$)",
+            ];
+
+            for item in &v
+            {
+                let re;
+
+                if let Ok(x) = Regex::new(item) { re = x; }                
+                else { return String::new(); }
+                
+                let home = tools::get_user_home();
+                let ss = s.clone();
+                let to = format!("$head{}$tail", home);
+                let result = re.replace_all(ss.as_str(), to.as_str());
+                s = result.to_string();
+            }
+
+            s
+        }
+
+        pub fn find_file_in_path(filename: &str, exec: bool) -> String
+        {
+            let env_path = match env::var("PATH")
+            {
+                Ok(x) => x,
+                Err(e) =>
+                {
+                    println_stderr!("cicada: error with env PATH: {:?}", e);
+                    return String::new();
+                }
+            };
+
+            let vec_path: Vec<&str> = env_path.split(':').collect();
+            
+            for p in &vec_path
+            {
+                match read_dir(p)
+                {
+                    Ok(list) =>
+                    {
+                        for entry in list.flatten()
+                        {
+                            if let Ok(name) = entry.file_name().into_string()
+                            {
+                                if name != filename { continue; }
+
+                                if exec
+                                {
+                                    let _mode = match entry.metadata()
+                                    {
+                                        Ok(x) => x,
+                                        Err(e) =>
+                                        {
+                                            println_stderr!("cicada: metadata error: {:?}", e);
+                                            continue;
+                                        }
+                                    };
+
+                                    let mode = _mode.permissions().mode();
+                                    
+                                    if mode & 0o111 == 0 { continue; }
+                                }
+
+                                return entry.path().to_string_lossy().to_string();
+                            }
+                        }
+                    }
+
+                    Err(e) => 
+                    {
+                        if e.kind() == ErrorKind::NotFound { continue; }
+
+                        log!("cicada: fs read_dir error: {}: {}", p, e);
+                    }
+                }
+            }
+
+            String::new()
+        }
+
+        pub fn current_dir() -> String
+        {
+            let _current_dir = match env::current_dir()
+            {
+                Ok(x) => x,
+                Err(e) =>
+                {
+                    log!("cicada: PROMPT: env current_dir error: {}", e);
+                    return String::new();
+                }
+            };
+
+            let current_dir = match _current_dir.to_str()
+            {
+                Some(x) => x,
+                None =>
+                {
+                    log!("cicada: PROMPT: to_str error");
+                    return String::new();
+                }
+            };
+
+            current_dir.to_string()
+        }
+    }
+
+    pub mod re
+    {
+        use ::
+        {
+            *,
+        };
+
+        pub fn find_first_group(ptn: &str, text: &str) -> Option<String> 
+        {
+            let re = match regex::Regex::new(ptn) 
+            {
+                Ok(x) => x,
+                Err(_) => return None,
+            };
+
+            match re.captures(text) 
+            {
+                Some(caps) => 
+                {
+                    if let Some(x) = caps.get(1) { return Some(x.as_str().to_owned()); }
+                }
+
+                None => { return None; }
+            }
+
+            None
+        }
+
+        pub fn re_contains(text: &str, ptn: &str) -> bool
+        {
+            let re = match regex::Regex::new(ptn)
+            {
+                Ok(x) => x,
+                Err(e) =>
+                {
+                    println!("Regex new error: {:?}", e);
+                    return false;
+                }
+            };
+
+            re.is_match(text)
+        }
+
+        pub fn replace_all(text: &str, ptn: &str, ptn_to: &str) -> String
+        {
+            let re = regex::Regex::new(ptn).unwrap();
+            let result = re.replace_all(text, ptn_to);
+            result.to_string()
+        }
+    }
+
+    pub mod term_size
+    {
+        use ::
+        {
+            libc::{ c_int, c_ulong, winsize, STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO },
+            mem::{ zeroed },
+            *,
+        };
+        
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        static TIOCGWINSZ: c_ulong = 0x5413;
+
+        #[cfg(any
+        (
+            target_os = "macos",
+            target_os = "ios",
+            target_os = "dragonfly",
+            target_os = "freebsd",
+            target_os = "netbsd",
+            target_os = "openbsd"
+        ))]
+        static TIOCGWINSZ: c_ulong = 0x40087468;
+
+        #[cfg(target_os = "solaris")]
+        static TIOCGWINSZ: c_ulong = 0x5468;
+
+        extern "C" 
+        {
+            fn ioctl(fd: c_int, request: c_ulong, ...) -> c_int;
+        }
+        /// Runs the ioctl command. Returns (0, 0) if all of the streams are not to a terminal, or there is an error.
+        unsafe fn get_dimensions_any() -> winsize
+        {
+            let mut window: winsize = zeroed();
+            let mut result = ioctl(STDOUT_FILENO, TIOCGWINSZ, &mut window);
+
+            if result == -1
+            {
+                window = zeroed();
+                result = ioctl(STDIN_FILENO, TIOCGWINSZ, &mut window);
+
+                if result == -1 
+                {
+                    window = zeroed();
+                    result = ioctl(STDERR_FILENO, TIOCGWINSZ, &mut window);
+
+                    if result == -1 { return zeroed(); }
+                }
+            }
+
+            window
+        }
+        /// Query the current processes's stdout, stdin, and stderr in that order, 
+        /// in the attempt to dtermine terminal width.
+        pub fn dimensions() -> Option<(usize, usize)>
+        {
+            let w = unsafe { get_dimensions_any() };
+
+            if w.ws_col == 0 || w.ws_row == 0 { None }
+            else { Some((w.ws_col as usize, w.ws_row as usize)) }
+        }
+    }
+
+    pub mod progopts
+    {
+        use ::
+        {
+            *,
+        };
+
+        pub fn is_login(args: &[String]) -> bool
+        {
+
+            if !args.is_empty() && args[0].starts_with("-") { return true; }
+
+            if args.len() > 1 && (args[1] == "--login" || args[1] == "-l") { return true; }
+
+            if let Ok(term_program) = env::var("TERM_PROGRAM")
+            {
+                if term_program == "vscode" { return true; }
+            }
+
+            false
+        }
+
+        pub fn is_script(args: &[String]) -> bool { args.len() > 1 && !args[1].starts_with("-") }
+
+        pub fn is_command_string(args: &[String]) -> bool { args.len() > 1 && args[1] == "-c" }
+
+        pub fn is_non_tty() -> bool { unsafe { libc::isatty(0) == 0 } }
+    }
+
+    pub mod pipes
+    {
+        use ::
+        {
+            libc::{ c_int },
+            nix::{ Error },
+            os::fd::{ RawFd },
+            *,
+        };
+        
+        pub fn pipe() -> std::result::Result<(RawFd, RawFd), Error>
+        {
+            let mut fds = mem::MaybeUninit::<[c_int; 2]>::uninit();
+            let res = unsafe { libc::pipe(fds.as_mut_ptr() as *mut c_int) };
+            Error::result(res)?;
+            unsafe { Ok((fds.assume_init()[0], fds.assume_init()[1])) }
+        }
+    }
+
+    pub fn close(fd: i32) { unsafe { libc::close(fd); } }
+
+    pub fn dup(fd: i32) -> i32 { unsafe { libc::dup(fd) } }
+
+    pub fn dup2(src: i32, dst: i32) { unsafe { libc::dup2(src, dst); } }
 }
 /**/
 pub mod parsers
 {
+    pub mod parser_line
+    {
+        use ::
+        {
+            regex::{ Regex },
+            types::{LineInfo, Redirection, Tokens},
+            *,
+        };
+        
+        pub fn line_to_plain_tokens(line: &str) -> Vec<String>
+        {
+            let mut result = Vec::new();
+            let linfo = parse_line(line);
+            
+            for (_, r) in linfo.tokens
+            {
+                result.push(r.clone());
+            }
+            
+            result
+        }
 
+        pub fn tokens_to_args(tokens: &Tokens) -> Vec<String>
+        {
+            let mut result = Vec::new();
+            
+            for s in tokens
+            {
+                result.push(s.1.clone());
+            }
+            
+            result
+        }
+
+        pub fn tokens_to_line(tokens: &Tokens) -> String
+        {
+            let mut result = String::new();
+            
+            for t in tokens
+            {
+                if t.0.is_empty() { result.push_str(&t.1); }                
+                else
+                {
+                    let s = tools::wrap_sep_string(&t.0, &t.1);
+                    result.push_str(&s);
+                }
+
+                result.push(' ');
+            }
+            
+            if result.ends_with(' ')
+            {
+                let len = result.len();
+                result.truncate(len - 1);
+            }
+            
+            result
+        }
+        /// Parse command line for multiple commands.
+        pub fn line_to_cmds(line: &str) -> Vec<String>
+        {
+            let mut result = Vec::new();
+            let mut sep = String::new();
+            let mut token = String::new();
+            let mut has_backslash = false;
+            let len = line.chars().count();
+
+            for (i, c) in line.chars().enumerate()
+            {
+                if has_backslash
+                {
+                    token.push('\\');
+                    token.push(c);
+                    has_backslash = false;
+                    continue;
+                }
+
+                if c == '\\' && sep != "'"
+                {
+                    has_backslash = true;
+                    continue;
+                }
+
+                if c == '#'
+                {
+                    if sep.is_empty() {
+                        break;
+                    } else {
+                        token.push(c);
+                        continue;
+                    }
+                }
+                
+                if c == '\'' || c == '"' || c == '`'
+                {
+                    if sep.is_empty() {
+                        sep.push(c);
+                        token.push(c);
+                        continue;
+                    } else if sep == c.to_string() {
+                        token.push(c);
+                        sep = String::new();
+                        continue;
+                    } else {
+                        token.push(c);
+                        continue;
+                    }
+                }
+                
+                if c == '&' || c == '|' 
+                {
+                    // needs watch ahead here
+                    if sep.is_empty() {
+                        if i + 1 == len {
+                            // for bg commands, e.g. `ls &`
+                            token.push(c);
+                            continue;
+                        } else {
+                            let c_next = match line.chars().nth(i + 1) {
+                                Some(x) => x,
+                                None => {
+                                    println!("chars nth error - should never happen");
+                                    continue;
+                                }
+                            };
+
+                            if c_next != c {
+                                token.push(c);
+                                continue;
+                            }
+                        }
+                    }
+
+                    if sep.is_empty() {
+                        sep.push(c);
+                        continue;
+                    } else if c.to_string() == sep {
+                        let _token = token.trim().to_string();
+                        if !_token.is_empty() {
+                            result.push(_token);
+                        }
+                        token = String::new();
+                        result.push(format!("{}{}", sep, sep));
+                        sep = String::new();
+                        continue;
+                    } else {
+                        token.push(c);
+                        continue;
+                    }
+                }
+                
+                if c == ';' 
+                {
+                    if sep.is_empty() {
+                        let _token = token.trim().to_string();
+                        if !_token.is_empty() {
+                            result.push(_token);
+                        }
+                        result.push(String::from(";"));
+                        token = String::new();
+                        continue;
+                    } else {
+                        token.push(c);
+                        continue;
+                    }
+                }
+
+                token.push(c);
+            }
+
+            if !token.is_empty() { result.push(token.trim().to_string()); }
+            
+            result
+        }
+        /// parse command line to tokens
+        pub fn parse_line(line: &str) -> LineInfo
+        {
+            let mut result = Vec::new();
+            if tools::is_arithmetic(line)
+            {
+                for x in line.split(' ')
+                {
+                    result.push((String::from(""), x.to_string()));
+                }
+                
+                return LineInfo::new(result);
+            }
+
+            let mut sep = String::new();
+            let mut sep_second = String::new();
+            let mut token = String::new();
+            let mut has_backslash = false;
+            let mut met_parenthesis = false;
+            let mut new_round = true;
+            let mut skip_next = false;
+            let mut has_dollar = false;
+            let mut parens_left_ignored = false;
+            let mut sep_made = String::new();
+            let mut semi_ok = false;
+            let count_chars = line.chars().count();
+
+            for (i, c) in line.chars().enumerate()
+            {
+                if skip_next
+                {
+                    skip_next = false;
+                    continue;
+                }
+
+                
+                if has_backslash && sep.is_empty() && (c == '>' || c == '<') 
+                {
+                    sep_made = String::from("'");
+                    token.push(c);
+                    has_backslash = false;
+                    continue;
+                }
+
+                
+                if has_backslash && sep == "\"" && c != '\"' 
+                {
+                    token.push('\\');
+                    token.push(c);
+                    has_backslash = false;
+                    continue;
+                }
+
+                
+                if has_backslash 
+                {
+                    if new_round && sep.is_empty() && (c == '|' || c == '$') && token.is_empty() {
+                        sep = String::from("\\");
+                        token = format!("{}", c);
+                    } else {
+                        token.push(c);
+                    }
+                    new_round = false;
+                    has_backslash = false;
+                    continue;
+                }
+
+                
+                if c == '$' 
+                {
+                    has_dollar = true;
+                }
+                
+                if c == '(' && sep.is_empty() 
+                {
+                    if !has_dollar && token.is_empty() {
+                        parens_left_ignored = true;
+                        continue;
+                    }
+                    met_parenthesis = true;
+                }
+                
+                if c == ')' 
+                {
+                    if parens_left_ignored && !has_dollar {
+                        if i == count_chars - 1 ||
+                                (i + 1 < count_chars &&
+                                line.chars().nth(i + 1).unwrap() == ' ') {
+                            continue;
+                        }
+                    }
+                    if sep.is_empty() {
+                        met_parenthesis = false;
+                    }
+                }
+
+                
+                if c == '\\' 
+                {
+                    if sep == "'" || !sep_second.is_empty() {
+                        token.push(c)
+                    } else {
+                        has_backslash = true;
+                    }
+                    continue;
+                }
+
+                
+                if new_round 
+                {
+                    if c == ' ' {
+                        continue;
+                    } else if c == '"' || c == '\'' || c == '`' {
+                        sep = c.to_string();
+                        new_round = false;
+                        continue;
+                    }
+
+                    sep = String::new();
+
+                    if c == '#' {
+                        break;
+                    }
+
+                    if c == '|' {
+                        if i + 1 < count_chars && line.chars().nth(i + 1).unwrap() == '|' {
+                            result.push((String::from(""), "||".to_string()));
+                            skip_next = true;
+                        } else {
+                            result.push((String::from(""), "|".to_string()));
+                        }
+                        new_round = true;
+                        continue;
+                    }
+
+                    token.push(c);
+                    new_round = false;
+                    continue;
+                }
+
+                
+                if c == '|' && !has_backslash 
+                {
+                    if semi_ok {
+                        if sep.is_empty() && !sep_made.is_empty() {
+                            result.push((sep_made.to_string(), token));
+                            sep_made = String::new();
+                        } else {
+                            result.push((sep.to_string(), token));
+                        }
+                        result.push((String::from(""), "|".to_string()));
+                        sep = String::new();
+                        sep_second = String::new();
+                        token = String::new();
+                        new_round = true;
+                        semi_ok = false;
+                        continue;
+                    } else if !met_parenthesis && sep_second.is_empty() && sep.is_empty() {
+                        if sep.is_empty() && !sep_made.is_empty() {
+                            result.push((sep_made.to_string(), token));
+                            sep_made = String::new();
+                        } else {
+                            result.push((String::from(""), token));
+                        }
+                        result.push((String::from(""), "|".to_string()));
+                        sep = String::new();
+                        sep_second = String::new();
+                        token = String::new();
+                        new_round = true;
+                        continue;
+                    }
+                }
+
+                
+                if c == ' ' 
+                {
+                    if semi_ok {
+                        if sep.is_empty() && !sep_made.is_empty() {
+                            result.push((sep_made.to_string(), token));
+                            sep_made = String::new();
+                        } else {
+                            result.push((sep.to_string(), token));
+                        }
+                        sep = String::new();
+                        sep_second = String::new();
+                        token = String::new();
+                        new_round = true;
+                        semi_ok = false;
+                        continue;
+                    }
+
+                    if has_backslash {
+                        has_backslash = false;
+                        token.push(c);
+                        continue;
+                    }
+
+                    if met_parenthesis {
+                        token.push(c);
+                        continue;
+                    }
+
+                    if sep == "\\" {
+                        result.push((String::from("\\"), token));
+                        token = String::new();
+                        new_round = true;
+                        continue;
+                    }
+
+                    if sep.is_empty() {
+                        if sep_second.is_empty() {
+                            if sep.is_empty() && !sep_made.is_empty() {
+                                result.push((sep_made.clone(), token));
+                                sep_made = String::new();
+                            } else {
+                                result.push((String::from(""), token));
+                            }
+                            token = String::new();
+                            new_round = true;
+                            continue;
+                        } else {
+                            token.push(c);
+                            continue;
+                        }
+                    } else {
+                        token.push(c);
+                        continue;
+                    }
+                }
+
+                
+                if c == '\'' || c == '"' || c == '`' 
+                {
+                    if has_backslash {
+                        has_backslash = false;
+                        token.push(c);
+                        continue;
+                    }
+
+                    if sep != c.to_string() && semi_ok {
+                        if sep.is_empty() && !sep_made.is_empty() {
+                            result.push((sep_made.to_string(), token));
+                            sep_made = String::new();
+                        } else {
+                            result.push((sep.to_string(), token));
+                        }
+                        sep = String::new();
+                        sep_second = String::new();
+                        token = String::new();
+                        new_round = true;
+                        semi_ok = false;
+                    }
+
+                    if sep != c.to_string() && met_parenthesis {
+                        token.push(c);
+                        continue;
+                    }
+                    if sep.is_empty() && !sep_second.is_empty() && sep_second != c.to_string() {
+                        token.push(c);
+                        continue;
+                    }
+
+                    if sep.is_empty() {
+                        let is_an_env = libs::re::re_contains(&token, r"^[a-zA-Z0-9_]+=.*$");
+                        if !is_an_env && (c == '\'' || c == '"') {
+                            sep = c.to_string();
+                            continue;
+                        }
+
+                        token.push(c);
+                        if sep_second.is_empty() {
+                            sep_second = c.to_string();
+                        } else if sep_second == c.to_string() {
+                            sep_second = String::new();
+                        }
+                        continue;
+                    } else if sep == c.to_string() {
+                        semi_ok = true;
+                        continue;
+                    } else {
+                        token.push(c);
+                    }
+                } else {
+                    if has_backslash {
+                        has_backslash = false;
+                        if sep == "\"" || sep == "'" {
+                            token.push('\\');
+                        }
+                    }
+                    token.push(c);
+                }
+            }
+            
+            if !token.is_empty() || semi_ok 
+            {
+                if sep.is_empty() && !sep_made.is_empty() {
+                    result.push((sep_made.clone(), token));
+                } else {
+                    result.push((sep.clone(), token));
+                }
+            }
+
+            let mut is_line_complete = true;
+            if !result.is_empty() {
+                let token_last = result[result.len() - 1].clone();
+                if token_last.0.is_empty() && token_last.1 == "|" {
+                    is_line_complete = false;
+                }
+            }
+
+            if !sep.is_empty() {
+                is_line_complete = semi_ok;
+            }
+            if has_backslash {
+                is_line_complete = false;
+            }
+
+            LineInfo { tokens: result, is_complete: is_line_complete }
+        }
+
+        pub fn tokens_to_redirections(tokens: &Tokens) -> Result<(Tokens, Vec<Redirection>), String>
+        {
+            let mut tokens_new = Vec::new();
+            let mut redirects = Vec::new();
+            let mut to_be_continued = false;
+            let mut to_be_continued_s1 = String::new();
+            let mut to_be_continued_s2 = String::new();
+
+            for token in tokens {
+                let sep = &token.0;
+                if !sep.is_empty() && !to_be_continued {
+                    tokens_new.push(token.clone());
+                    continue;
+                }
+                let word = &token.1;
+
+                if to_be_continued {
+                    if sep.is_empty() && word.starts_with('&') {
+                        return Err(String::from("bad redirection syntax near &"));
+                    }
+
+                    let s3 = word.to_string();
+                    if libs::re::re_contains(&to_be_continued_s1, r"^\d+$") {
+                        if to_be_continued_s1 != "1" && to_be_continued_s1 != "2" {
+                            return Err(String::from("Bad file descriptor #3"));
+                        }
+                        let s1 = to_be_continued_s1.clone();
+                        let s2 = to_be_continued_s2.clone();
+                        redirects.push((s1, s2, s3));
+                    } else {
+                        if !to_be_continued_s1.is_empty() {
+                            tokens_new.push((sep.clone(), to_be_continued_s1.to_string()));
+                        }
+                        redirects.push(("1".to_string(), to_be_continued_s2.clone(), s3));
+                    }
+
+                    to_be_continued = false;
+                    continue;
+                }
+
+                let ptn1 = r"^([^>]*)(>>?)([^>]+)$";
+                let ptn2 = r"^([^>]*)(>>?)$";
+                if !libs::re::re_contains(word, r">") {
+                    tokens_new.push(token.clone());
+                } else if libs::re::re_contains(word, ptn1) {
+                    let re;
+                    if let Ok(x) = Regex::new(ptn1) {
+                        re = x;
+                    } else {
+                        return Err(String::from("Failed to build Regex"));
+                    }
+
+                    if let Some(caps) = re.captures(word) {
+                        let s1 = caps.get(1).unwrap().as_str();
+                        let s2 = caps.get(2).unwrap().as_str();
+                        let s3 = caps.get(3).unwrap().as_str();
+                        if s3.starts_with('&') && s3 != "&1" && s3 != "&2" {
+                            return Err(String::from("Bad file descriptor #1"));
+                        }
+
+                        if libs::re::re_contains(s1, r"^\d+$") {
+                            if s1 != "1" && s1 != "2" {
+                                return Err(String::from("Bad file descriptor #2"));
+                            }
+                            redirects.push((s1.to_string(), s2.to_string(), s3.to_string()));
+                        } else {
+                            if !s1.is_empty() {
+                                tokens_new.push((sep.clone(), s1.to_string()));
+                            }
+                            redirects.push((String::from("1"), s2.to_string(), s3.to_string()));
+                        }
+                    }
+                } else if libs::re::re_contains(word, ptn2) {
+                    let re;
+                    if let Ok(x) = Regex::new(ptn2) {
+                        re = x;
+                    } else {
+                        return Err(String::from("Failed to build Regex"));
+                    }
+
+                    if let Some(caps) = re.captures(word) {
+                        let s1 = caps.get(1).unwrap().as_str();
+                        let s2 = caps.get(2).unwrap().as_str();
+
+                        to_be_continued = true;
+                        to_be_continued_s1 = s1.to_string();
+                        to_be_continued_s2 = s2.to_string();
+                    }
+                }
+            }
+
+            if to_be_continued {
+                return Err(String::from("redirection syntax error"));
+            }
+
+            Ok((tokens_new, redirects))
+        }
+
+        pub fn unquote(text: &str) -> String 
+        {
+            let mut new_str = String::from(text);
+            for &c in ['"', '\''].iter() {
+                if text.starts_with(c) && text.ends_with(c) {
+                    new_str.remove(0);
+                    new_str.pop();
+                    break;
+                }
+            }
+            new_str
+        }
+    }
+
+    pub mod locust
+    {
+
+    }
 }
 /**/
 pub mod prompt
 {
+    use ::
+    {
+        prompt::
+        {
+            main::{ get_prompt_string, render_prompt },
+            multilines::{ EnterFunction },
+        },
+        *,
+    };
+    /**/
+    /*
+    linereader v0.0.0*/
+    pub mod lines
+    {
 
+    }
+    /**/
+    mod main
+    {
+        use ::
+        {
+            prompt::preset::{ apply_preset_item, apply_pyenv },
+            *,
+        };
+
+        pub const DEFAULT_PROMPT: &str = "${COLOR_STATUS}$USER${RESET}@${COLOR_STATUS}$HOSTNAME${RESET}: \
+        ${COLOR_STATUS}$CWD${RESET}$ ";
+
+        fn is_prefix_char(c: char) -> bool { c == '[' || c == '{' }
+
+        fn is_suffix_char(c: char) -> bool { c == ']' || c == '}' }
+
+        fn is_prompt_item_char(c: char, token: &str) -> bool
+        {
+            let s = c.to_string();
+            if token.is_empty() { libs::re::re_contains(&s, r#"^[a-zA-Z_]$"#) }
+            else { libs::re::re_contains(&s, r#"^[a-zA-Z0-9_]$"#) }
+        }
+
+        pub fn get_prompt_string() -> String
+        {
+            if let Ok(x) = env::var("PROMPT")
+            {
+                return x;
+            }
+
+            DEFAULT_PROMPT.to_string()
+        }
+
+        fn apply_prompt_item(sh: &shell::Shell, result: &mut String, token: &str)
+        {
+            if let Some(x) = sh.get_env(token)
+            {
+                result.push_str(&x);
+                return;
+            }
+
+            apply_preset_item(sh, result, token);
+        }
+
+        fn apply_command(result: &mut String, token: &str, prefix: &str, suffix: &str)
+        {
+            let cr = execute::run(token);
+            let output = cr.stdout.trim();
+            
+            if !output.is_empty()
+            {
+                result.push_str(prefix);
+                result.push_str(output);
+                result.push_str(suffix);
+            }
+        }
+
+        pub fn render_prompt(sh: &shell::Shell, ps: &str) -> String
+        {
+            let mut prompt = String::new();
+            apply_pyenv(&mut prompt);
+            let mut met_dollar = false;
+            let mut met_brace = false;
+            let mut met_paren = false;
+            let mut token = String::new();
+            let mut prefix = String::new();
+            let mut suffix = String::new();
+
+            for c in ps.chars()
+            {
+                if met_dollar
+                {
+                    if c == '(' && !met_brace && !met_paren
+                    {
+                        met_paren = true;
+                        continue;
+                    }
+                    
+                    if c == ')' && met_paren
+                    {
+                        apply_command(&mut prompt, &token, &prefix, &suffix);
+                        token.clear();
+                        prefix.clear();
+                        suffix.clear();
+                        met_dollar = false;
+                        met_paren = false;
+                        continue;
+                    }
+                    
+                    if c == '{' && !met_brace && !met_paren
+                    {
+                        met_brace = true;
+                        continue;
+                    }
+                    
+                    else if c == '}' && met_brace
+                    {
+                        apply_prompt_item(sh, &mut prompt, &token);
+                        token.clear();
+                        met_dollar = false;
+                        met_brace = false;
+                        continue;
+                    }
+                    
+                    else if c == '$'
+                    {
+                        if token.is_empty()
+                        {
+                            prompt.push('$');
+                            met_dollar = true;
+                            continue;
+                        }
+                        
+                        else
+                        {
+                            apply_prompt_item(sh, &mut prompt, &token);
+                            token.clear();
+                            continue;
+                        }
+                    }
+                    
+                    else if met_paren
+                    {
+                        if is_prefix_char(c) { prefix.push(c); }
+                        else if is_suffix_char(c) { suffix.push(c); }
+                        else { token.push(c); }
+
+                        continue;
+                    }
+                    
+                    else if is_prompt_item_char(c, &token)
+                    {
+                        token.push(c);
+                        continue;
+                    }
+                    
+                    else if token.is_empty()
+                    {
+                        prompt.push('$');
+                        prompt.push(c);
+                        met_dollar = false;
+                        continue;
+                    }
+                }
+
+                if c == '$'
+                {
+                    met_dollar = true;
+                    continue;
+                }
+
+                if !token.is_empty()
+                {
+                    apply_prompt_item(sh, &mut prompt, &token);
+                    token.clear();
+                }
+
+                prompt.push(c);
+                met_dollar = false;
+            }
+
+            if !token.is_empty()
+            {
+                apply_prompt_item(sh, &mut prompt, &token);
+                met_dollar = false;
+            }
+
+            if met_dollar { prompt.push('$'); }
+
+            if prompt.trim().is_empty() { return format!("cicada-{} >> ", "25.1.1" ); }
+
+            prompt
+        }
+    }
+    /**/
+    mod multilines
+    {
+        use ::
+        {
+            parsers::parser_line::{ self },
+            prompt::lines::{ Function, Prompter, Terminal },
+            *,
+        };
+
+        pub struct EnterFunction;
+
+        impl<T: Terminal> Function<T> for EnterFunction
+        {
+            fn execute(&self, prompter: &mut Prompter<T>, count: i32, _ch: char) -> io::Result<()>
+            {
+                let buf = prompter.buffer();
+                let linfo = parser_line::parse_line( buf );
+                if linfo.is_complete
+                {
+                    prompter.accept_input()
+                }
+
+                else if count > 0
+                {
+                    match prompter.insert(count as usize, '\n')
+                    {
+                        Ok(_) => {},
+                        Err(e) => { println!("sub-prompt error: {}", e); }
+                    }
+
+                    prompter.insert_str(">> ")
+                }
+                
+                else { Ok(()) }
+            }
+        }
+    }
+    /**/
+    mod preset
+    {
+        use ::
+        {
+            fs::{ File },
+            io::{ Read, Write },
+            path::{ Path },
+            *,
+        };
+        
+        fn apply_seq(prompt: &mut String) { prompt.push_str(libs::colored::SEQ); }
+        fn apply_end_seq(prompt: &mut String) { prompt.push_str(libs::colored::END_SEQ); }
+        fn apply_esc(prompt: &mut String) { prompt.push_str(libs::colored::ESC); }
+        fn apply_underlined(prompt: &mut String) { prompt.push_str(libs::colored::UNDERLINED); }
+        fn apply_user(prompt: &mut String)
+        {
+            let username = tools::get_user_name();
+            prompt.push_str(&username);
+        }
+        fn apply_black(prompt: &mut String) { prompt.push_str(libs::colored::BLACK); }
+        fn apply_black_b(prompt: &mut String) { prompt.push_str(libs::colored::BLACK_B); }
+        fn apply_black_bg(prompt: &mut String) { prompt.push_str(libs::colored::BLACK_BG); }
+        fn apply_blue(prompt: &mut String) { prompt.push_str(libs::colored::BLUE); }
+        fn apply_blue_b(prompt: &mut String) { prompt.push_str(libs::colored::BLUE_B); }
+        fn apply_blue_bg(prompt: &mut String) { prompt.push_str(libs::colored::BLUE_BG); }
+        fn apply_bold(prompt: &mut String) { prompt.push_str(libs::colored::BOLD); }
+        fn apply_green(prompt: &mut String) { prompt.push_str(libs::colored::GREEN); }
+        fn apply_green_b(prompt: &mut String) { prompt.push_str(libs::colored::GREEN_B); }
+        fn apply_green_bg(prompt: &mut String) { prompt.push_str(libs::colored::GREEN_BG); }
+        fn apply_red(prompt: &mut String) { prompt.push_str(libs::colored::RED); }
+        fn apply_red_b(prompt: &mut String) { prompt.push_str(libs::colored::RED_B); }
+        fn apply_red_bg(prompt: &mut String) { prompt.push_str(libs::colored::RED_BG); }
+        fn apply_white(prompt: &mut String) { prompt.push_str(libs::colored::WHITE); }
+        fn apply_white_b(prompt: &mut String) { prompt.push_str(libs::colored::WHITE_B); }
+        fn apply_white_bg(prompt: &mut String) { prompt.push_str(libs::colored::WHITE_BG); }
+        fn apply_hidden(prompt: &mut String) { prompt.push_str(libs::colored::HIDDEN); }
+        fn apply_reset(prompt: &mut String) { prompt.push_str(libs::colored::RESET); }
+        fn apply_reverse(prompt: &mut String) { prompt.push_str(libs::colored::REVERSE); }
+        fn apply_dim(prompt: &mut String) { prompt.push_str(libs::colored::DIM); }
+        fn apply_blink(prompt: &mut String) { prompt.push_str(libs::colored::BLINK); }
+        fn apply_reset_underlined(prompt: &mut String) { prompt.push_str(libs::colored::RESET_UNDERLINED); }
+        fn apply_reset_dim(prompt: &mut String) { prompt.push_str(libs::colored::RESET_DIM); }
+        fn apply_reset_reverse(prompt: &mut String) { prompt.push_str(libs::colored::RESET_REVERSE); }
+        fn apply_reset_hidden(prompt: &mut String) { prompt.push_str(libs::colored::RESET_HIDDEN); }
+        fn apply_reset_blink(prompt: &mut String) { prompt.push_str(libs::colored::RESET_BLINK); }
+        fn apply_reset_bold(prompt: &mut String) { prompt.push_str(libs::colored::RESET_BOLD); }
+        fn apply_default(prompt: &mut String) { prompt.push_str(libs::colored::DEFAULT); }
+        fn apply_default_bg(prompt: &mut String) { prompt.push_str(libs::colored::DEFAULT_BG); }
+        fn apply_cyan(prompt: &mut String) { prompt.push_str(libs::colored::CYAN); }
+        fn apply_cyan_l(prompt: &mut String) { prompt.push_str(libs::colored::CYAN_L); }
+        fn apply_cyan_bg(prompt: &mut String) { prompt.push_str(libs::colored::CYAN_BG); }
+        fn apply_cyan_l_bg(prompt: &mut String) { prompt.push_str(libs::colored::CYAN_L_BG); }
+        fn apply_red_l(prompt: &mut String) { prompt.push_str(libs::colored::RED_L); }
+        fn apply_red_l_bg(prompt: &mut String) { prompt.push_str(libs::colored::RED_L_BG); }
+        fn apply_green_l(prompt: &mut String) { prompt.push_str(libs::colored::GREEN_L); }
+        fn apply_green_l_bg(prompt: &mut String) { prompt.push_str(libs::colored::GREEN_L_BG); }
+        fn apply_gray_l(prompt: &mut String) { prompt.push_str(libs::colored::GRAY_L); }
+        fn apply_gray_l_bg(prompt: &mut String) { prompt.push_str(libs::colored::GRAY_L_BG); }
+        fn apply_gray_d(prompt: &mut String) { prompt.push_str(libs::colored::GRAY_D); }
+        fn apply_gray_d_bg(prompt: &mut String) { prompt.push_str(libs::colored::GRAY_D_BG); }
+        fn apply_magenta(prompt: &mut String) { prompt.push_str(libs::colored::MAGENTA); }
+        fn apply_magenta_bg(prompt: &mut String) { prompt.push_str(libs::colored::MAGENTA_BG); }
+        fn apply_magenta_l(prompt: &mut String) { prompt.push_str(libs::colored::MAGENTA_L); }
+        fn apply_magenta_l_bg(prompt: &mut String) { prompt.push_str(libs::colored::MAGENTA_L_BG); }
+        fn apply_yellow(prompt: &mut String) { prompt.push_str(libs::colored::YELLOW); }
+        fn apply_yellow_bg(prompt: &mut String) { prompt.push_str(libs::colored::YELLOW_BG); }
+        fn apply_yellow_l(prompt: &mut String) { prompt.push_str(libs::colored::YELLOW_L); }
+        fn apply_yellow_l_bg(prompt: &mut String) { prompt.push_str(libs::colored::YELLOW_L_BG); }
+        fn apply_blue_l(prompt: &mut String) { prompt.push_str(libs::colored::BLUE_L); }
+        fn apply_blue_l_bg(prompt: &mut String) { prompt.push_str(libs::colored::BLUE_L_BG); }
+        fn apply_color_status(sh: &shell::Shell, prompt: &mut String)
+        {
+            if sh.previous_status == 0 { prompt.push_str(libs::colored::GREEN_B); }
+            else { prompt.push_str(libs::colored::RED_B); }
+        }
+
+        fn _find_git_root() -> String
+        {
+            let current_dir = libs::path::current_dir();
+            let dir_git = format!("{}/.git", current_dir);
+            if Path::new(&dir_git).exists() { return current_dir; }
+
+            let mut _dir = current_dir.clone();
+            while Path::new(&_dir).parent().is_some()
+            {
+                match Path::new(&_dir).parent()
+                {
+                    Some(p) =>
+                    {
+                        _dir = p.to_string_lossy().to_string();
+                        let dir_git = format!("{}/.git", _dir);
+                        if Path::new(&dir_git).exists() { return _dir; }
+                    }
+
+                    None => { break; }
+                }
+            }
+
+            String::new()
+        }
+
+        fn apply_gitbr(prompt: &mut String)
+        {
+            let git_root = _find_git_root();
+            if git_root.is_empty() { return; }
+
+            let file_head = format!("{}/.git/HEAD", git_root);
+            if !Path::new(&file_head).exists() { return; }
+
+            let mut file;
+            match File::open(&file_head)
+            {
+                Ok(x) => file = x,
+                Err(e) =>
+                {
+                    println!("cicada: .git/HEAD err: {:?}", e);
+                    return;
+                }
+            }
+
+            let mut text = String::new();
+            match file.read_to_string(&mut text)
+            {
+                Ok(_) => {}
+                Err(e) =>
+                {
+                    println!("cicada: read_to_string error: {:?}", e);
+                    return;
+                }
+            }
+
+            if let Some(branch) = libs::re::find_first_group(r"^[a-z]+: ?[a-z]+/[a-z]+/(.+)$", text.trim())
+            {
+                apply_blue_b(prompt);
+                if let Ok(x) = env::var("CICADA_GITBR_PREFIX") { prompt.push_str(&x); }
+
+                let _len_default: i32 = 32;
+                let mut len_max = if let Ok(x) = env::var("CICADA_GITBR_MAX_LEN")
+                {
+                    match x.parse::<i32>()
+                    {
+                        Ok(n) => n,
+                        Err(_) => _len_default,
+                    }
+                }                
+                else { _len_default };
+
+                if len_max <= 0 { len_max = _len_default; }
+
+                if branch.len() as i32 <= len_max { prompt.push_str(&branch); }
+                else
+                {
+                    let len = branch.len() as i32;
+                    let offset = (len - len_max + 2) as usize;
+                    let branch_short = format!("..{}", &branch[offset..]);
+                    prompt.push_str(&branch_short);
+                }
+
+                if let Ok(x) = env::var("CICADA_GITBR_SUFFIX") { prompt.push_str(&x); }
+
+                apply_reset(prompt);
+            }
+        }
+
+        fn apply_cwd(prompt: &mut String)
+        {
+            let _current_dir = match env::current_dir()
+            {
+                Ok(x) => x,
+                Err(e) =>
+                {
+                    println_stderr!("cicada: PROMPT: env current_dir error: {}", e);
+                    return;
+                }
+            };
+            
+            let current_dir = match _current_dir.to_str()
+            {
+                Some(x) => x,
+                None => {
+                    println_stderr!("cicada: PROMPT: to_str error");
+                    return;
+                }
+            };
+
+            let _tokens: Vec<&str> = current_dir.split('/').collect();
+            let last = match _tokens.last()
+            {
+                Some(x) => x,
+                None =>
+                {
+                    log!("cicada: PROMPT: token last error");
+                    return;
+                }
+            };
+
+            let home = tools::get_user_home();
+            
+            let pwd = if last.is_empty()
+            {
+                "/"
+            }
+            else if current_dir == home { "~" }
+            else { last };
+
+            prompt.push_str(pwd);
+        }
+
+        fn apply_hostname(prompt: &mut String)
+        {
+            let hostname = tools::get_hostname();
+            prompt.push_str(&hostname);
+        }
+
+        fn apply_newline(prompt: &mut String) { prompt.push('\n'); }
+
+        pub fn apply_pyenv(prompt: &mut String)
+        {
+            if let Ok(x) = env::var("VIRTUAL_ENV")
+            {
+                if !x.is_empty()
+                {
+                    let _tokens: Vec<&str> = x.split('/').collect();
+                    let env_name = match _tokens.last()
+                    {
+                        Some(x) => x,
+                        None =>
+                        {
+                            log!("prompt token last error");
+                            return;
+                        }
+                    };
+
+                    apply_blue_b(prompt);
+                    prompt.push('(');
+                    prompt.push_str(env_name);
+                    prompt.push(')');
+                    apply_reset(prompt);
+                }
+            }
+        }
+
+        pub fn apply_preset_item(sh: &shell::Shell, prompt: &mut String, token: &str)
+        {
+            match token.to_ascii_lowercase().as_ref()
+            {
+                "black" => apply_black(prompt),
+                "black_b" => apply_black_b(prompt),
+                "black_bg" => apply_black_bg(prompt),
+                "blink" => apply_blink(prompt),
+                "blue" => apply_blue(prompt),
+                "blue_b" => apply_blue_b(prompt),
+                "blue_bg" => apply_blue_bg(prompt),
+                "blue_l" => apply_blue_l(prompt),
+                "blue_l_bg" => apply_blue_l_bg(prompt),
+                "bold" => apply_bold(prompt),
+                "color_status" => apply_color_status(sh, prompt),
+                "cwd" => apply_cwd(prompt),
+                "cyan" => apply_cyan(prompt),
+                "cyan_bg" => apply_cyan_bg(prompt),
+                "cyan_l" => apply_cyan_l(prompt),
+                "cyan_l_bg" => apply_cyan_l_bg(prompt),
+                "default" => apply_default(prompt),
+                "default_bg" => apply_default_bg(prompt),
+                "dim" => apply_dim(prompt),
+                "end_seq" => apply_end_seq(prompt),
+                "esc" => apply_esc(prompt),
+                "gitbr" => apply_gitbr(prompt),
+                "gray_d" => apply_gray_d(prompt),
+                "gray_d_bg" => apply_gray_d_bg(prompt),
+                "gray_l" => apply_gray_l(prompt),
+                "gray_l_bg" => apply_gray_l_bg(prompt),
+                "green" => apply_green(prompt),
+                "green_b" => apply_green_b(prompt),
+                "green_bg" => apply_green_bg(prompt),
+                "green_l" => apply_green_l(prompt),
+                "green_l_bg" => apply_green_l_bg(prompt),
+                "hidden" => apply_hidden(prompt),
+                "hostname" => apply_hostname(prompt),
+                "magenta" => apply_magenta(prompt),
+                "magenta_bg" => apply_magenta_bg(prompt),
+                "magenta_l" => apply_magenta_l(prompt),
+                "magenta_l_bg" => apply_magenta_l_bg(prompt),
+                "newline" => apply_newline(prompt),
+                "red" => apply_red(prompt),
+                "red_b" => apply_red_b(prompt),
+                "red_bg" => apply_red_bg(prompt),
+                "red_l" => apply_red_l(prompt),
+                "red_l_bg" => apply_red_l_bg(prompt),
+                "reset" => apply_reset(prompt),
+                "reset_blink" => apply_reset_blink(prompt),
+                "reset_bold" => apply_reset_bold(prompt),
+                "reset_dim" => apply_reset_dim(prompt),
+                "reset_hidden" => apply_reset_hidden(prompt),
+                "reset_reverse" => apply_reset_reverse(prompt),
+                "reset_underlined" => apply_reset_underlined(prompt),
+                "reverse" => apply_reverse(prompt),
+                "seq" => apply_seq(prompt),
+                "underlined" => apply_underlined(prompt),
+                "user" => apply_user(prompt),
+                "white" => apply_white(prompt),
+                "white_b" => apply_white_b(prompt),
+                "white_bg" => apply_white_bg(prompt),
+                "yellow" => apply_yellow(prompt),
+                "yellow_bg" => apply_yellow_bg(prompt),
+                "yellow_l" => apply_yellow_l(prompt),
+                "yellow_l_bg" => apply_yellow_l_bg(prompt),
+                _ => (),
+            }
+        }
+    }
+    /**/
+    fn get_prompt_len( prompt:&str ) -> i32
+    {
+        let mut count = 0;
+        let mut met_x01 = false;
+        
+        for c in prompt.chars()
+        {
+            if c == '\x01'
+            {
+                met_x01 = true;
+                continue;
+            }
+            
+            else if c == '\x02'
+            {
+                met_x01 = false;
+                continue;
+            }
+
+            if !met_x01 { count += 1; }
+        }
+
+        count
+    }
+
+    pub fn get_prompt( sh:&shell::Shell ) -> String
+    {
+        let ps = get_prompt_string();
+        let mut prompt = render_prompt(sh, &ps);
+        if let Some((w, _h)) = libs::term_size::dimensions()
+        {
+            if get_prompt_len(&prompt) > (w / 2) as i32 && !libs::re::re_contains(&ps, r#"(?i)\$\{?newline.\}?"#)
+            { prompt.push_str("\n$ "); }
+        }
+
+        else { log!("ERROR: Failed to get term size"); }
+        
+        prompt
+    }
 }
 /**/
 pub mod rcfile
 {
+    use ::
+    {
+        path::{ Path },
+        *,
+    };
 
-} 
+    pub fn get_rc_file() -> String
+    {
+        let dir_config = tools::get_config_dir();
+        let rc_file = format!( "{}/cicadarc", dir_config );
+
+        if Path::new(&rc_file).exists() { return rc_file; }
+
+        let home = tools::get_user_home();
+        let rc_file_home = format!( "{}/{}", home, ".cicadarc" );
+        
+        if Path::new( &rc_file_home ).exists() { return rc_file_home; }
+        
+        rc_file
+    }
+
+    pub fn load_rc_files( sh:&mut shell::Shell )
+    {
+        let rc_file = get_rc_file();
+
+        if !Path::new( &rc_file ).exists() { return; }
+
+        let args = vec![ "source".to_string(), rc_file ];
+        scripting::run_script( sh, &args );
+    }
+
+}
 /**/
 pub mod types
 {
@@ -1185,6 +6254,7 @@ pub mod uuid
             pub const fn into_uuid(self) -> Uuid { self.0 }
         }
     }
+
     pub mod error
     {
         use ::
@@ -4168,6 +9238,7 @@ pub mod signals
 /**/
 use ::
 {
+    fmt::{ * },
     io::{ stderr, Write },
     sync::{ Arc },
 };
@@ -4357,4 +9428,4 @@ fn main()
     }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 4360
+// 9431
