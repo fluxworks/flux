@@ -20,7 +20,8 @@ extern crate getrandom;
 extern crate libc;
 extern crate nix;
 extern crate regex;
-extern crate time;
+extern crate time as timed;
+extern crate unicode_normalization;
 extern crate unicode_width;
 /*
     #![allow(unknown_lints)]
@@ -118,7 +119,8 @@ extern crate unicode_width;
         libs::re::{ re_contains },
         os::unix::io::{ IntoRawFd },
         path::{ Path, PathBuf },
-        regex::{ Regex },        
+        regex::{ Regex },
+        result::{ Result },
         *,
     };
     /**/
@@ -476,6 +478,7 @@ pub mod builtins
     {
         use ::
         {
+            builtins::utils::{ * },
             regex::{ Regex },
             types::{ Command, CommandLine, CommandResult },
             *,
@@ -552,6 +555,7 @@ pub mod builtins
     {
         use ::
         {
+            builtins::utils::{ * },
             c::{ job },
             shell::{ Shell },
             types::{ CommandResult, CommandLine, Command },
@@ -649,6 +653,7 @@ pub mod builtins
     {
         use ::
         {
+            builtins::utils::{ * },
             path::{ Path },
             types::{Command, CommandLine, CommandResult},
             *,
@@ -658,7 +663,7 @@ pub mod builtins
         {
             let tokens = cmd.tokens.clone();
             let mut cr = CommandResult::new();
-            let args = parsers::line::tokens_to_args( &tokens );
+            let args = ::parsers::parser_line::tokens_to_args( &tokens );
 
             if args.len() > 2 {
                 let info = "pls:cd:too many argument";
@@ -729,6 +734,7 @@ pub mod builtins
     {
         use ::
         {
+            builtins::utils::{ * },
             shell::{ Shell },
             types::{ Command, CommandLine, CommandResult }, 
             *,
@@ -746,7 +752,7 @@ pub mod builtins
             let hfile = get::history_file();
             info.push( ( "history-file", &hfile ) );
 
-            let rcf = rc::file::get_rc_file();
+            let rcf = rcfile::get_rc_file();
             info.push( ( "rc-file", &rcf ) );
 
             let git_hash = std::env::var( "GIT_HASH" ); // env!( "GIT_HASH" );
@@ -787,6 +793,7 @@ pub mod builtins
     {
         use ::
         {
+            builtins::utils::{ * },
             shell::{ Shell },
             types::{ CommandResult, CommandLine, Command },
             *,
@@ -796,7 +803,7 @@ pub mod builtins
         {
             let mut cr = CommandResult::new();
             let tokens = cmd.tokens.clone();
-            let args = parsers::line::tokens_to_args( &tokens );
+            let args = ::parsers::parser_line::tokens_to_args( &tokens );
             let len = args.len();
             if len == 1
             {
@@ -816,6 +823,7 @@ pub mod builtins
     {
         use ::
         {
+            builtins::utils::{ * },
             shell::{ Shell },
             types::{ CommandResult, CommandLine, Command },
             *
@@ -864,6 +872,7 @@ pub mod builtins
     {
         use ::
         {
+            builtins::utils::{ * },
             regex::{ Regex },
             shell::{ Shell },
             types::{ CommandResult, CommandLine, Command },
@@ -899,7 +908,7 @@ pub mod builtins
 
                 for cap in re_name_ptn.captures_iter( text ) {
                     let name = cap[1].to_string();
-                    let token = parsers::line::unquote( &cap[2] );
+                    let token = ::parsers::parser_line::unquote( &cap[2] );
                     let value = expand::home( &token );
                     env::set_var( name, &value );
                 }
@@ -912,6 +921,7 @@ pub mod builtins
     {
         use ::
         {
+            builtins::utils::{ * },
             c::{ job },
             shell::{ self, Shell },
             types::{ CommandResult, CommandLine, Command },
@@ -1089,7 +1099,7 @@ pub mod builtins
                 print_stderr_with_capture( info, &mut cr, cl, cmd, capture );
                 return cr;
             }
-            let connection = match Connection::open( &hfile )
+            let Connection = match Connection::open( &hfile )
             {
                 Ok( x ) => x,
                 Err( e ) =>
@@ -1100,7 +1110,7 @@ pub mod builtins
             };
 
             let tokens = cmd.tokens.clone();
-            let args = parsers::line::tokens_to_args( &tokens );
+            let args = ::parsers::parser_line::tokens_to_args( &tokens );
 
             let show_usage = args.len() > 1 && ( args[1] == "-h" || args[1] == "--help" );
             let opt = OptMain::from_iter_safe( args );
@@ -1111,7 +1121,7 @@ pub mod builtins
                         Some( SubCommand::Delete {rowid:rowids} ) =>
         {                           let mut _count = 0;
                             for rowid in rowids {
-                                let _deleted = delete_history_item( &connection, rowid );
+                                let _deleted = delete_history_item( &Connection, rowid );
                                 if _deleted {
                                     _count += 1;
                                 }
@@ -1128,7 +1138,7 @@ pub mod builtins
                             cr
                         }
                         None =>
-        {                           let ( str_out, str_err ) = list_current_history( sh, &connection, &opt );
+        {                           let ( str_out, str_err ) = list_current_history( sh, &Connection, &opt );
                             if !str_out.is_empty() {
                                 print_stdout_with_capture( &str_out, &mut cr, cl, cmd, capture );
                             }
@@ -1159,7 +1169,7 @@ pub mod builtins
             history::add_raw( sh, input, 0, tsb, tse );
         }
 
-        pub fn list_current_history( sh:&Shell, connection:&Connection, opt:&OptMain ) -> ( String, String )
+        pub fn list_current_history( sh:&Shell, Connection:&Connection, opt:&OptMain ) -> ( String, String )
         {
             let mut result_stderr = String::new();
             let result_stdout = String::new();
@@ -1184,7 +1194,7 @@ pub mod builtins
             };
             sql = format!( "{} limit {} ", sql, opt.limit );
 
-            let mut stmt = match connection.prepare( &sql )
+            let mut stmt = match Connection.prepare( &sql )
             {
                 Ok( x ) => x,
                 Err( e ) =>
@@ -1261,11 +1271,11 @@ pub mod builtins
             ( buffer, result_stderr )
         }
 
-        fn delete_history_item( connection:&Connection, rowid:usize ) -> bool
+        fn delete_history_item( Connection:&Connection, rowid:usize ) -> bool
         {
             let history_table = get::history_table();
             let sql = format!( "DELETE from {} where rowid = {}", history_table, rowid );
-            match connection.execute( &sql, [] )
+            match Connection.execute( &sql, [] )
             {
                 Ok( _ ) => true,
                 Err( e ) =>
@@ -1317,6 +1327,7 @@ pub mod builtins
     {
         use ::
         {
+            builtins::utils::{ * },
             libs::re::re_contains,
             shell::{ Shell }, 
             types::{ CommandResult, CommandLine, Command },
@@ -1401,6 +1412,7 @@ pub mod builtins
     {
         use ::
         {
+            builtins::utils::{ * },
             shell::{ Shell },
             types::{ CommandResult, CommandLine, Command },
             *,
@@ -1410,7 +1422,7 @@ pub mod builtins
         {
             let mut cr = CommandResult::new();
             let tokens = &cmd.tokens;
-            let args = parsers::line::tokens_to_args( tokens );
+            let args = ::parsers::parser_line::tokens_to_args( tokens );
 
             if args.len() < 2 {
                 let info = "pls:source:no file specified";
@@ -1428,6 +1440,7 @@ pub mod builtins
     {
         use ::
         {
+            builtins::utils::{ * },
             shell::{ Shell },
             types::{ CommandResult, CommandLine, Command },
             *
@@ -1528,19 +1541,24 @@ pub mod builtins
         {
             let mut cr = CommandResult::new();
             let tokens = cmd.tokens.clone();
-            let args = parsers::line::tokens_to_args( &tokens );
+            let args = ::parsers::parser_line::tokens_to_args( &tokens );
             let len = args.len();
             let subcmd = if len > 1 { &args[1] } else { "" };
 
-            if len == 1 || ( len == 2 && subcmd == "ls" ) {
-                match get::virtual_environments() {
+            if len == 1 || ( len == 2 && subcmd == "ls" )
+            {
+                match get::virtual_environments()
+                {
                     Ok( venvs ) =>
-        {                       let info = venvs.join( "\n" );
+                    {
+                        let info = venvs.join( "\n" );
                         print_stdout_with_capture( &info, &mut cr, cl, cmd, capture );
                         return cr;
                     }
+
                     Err( reason ) =>
-        {                       print_stderr_with_capture( &reason, &mut cr, cl, cmd, capture );
+                    {
+                        print_stderr_with_capture( &reason, &mut cr, cl, cmd, capture );
                         return cr;
                     }
                 }
@@ -1583,6 +1601,7 @@ pub mod builtins
     {
         use ::
         {
+            builtins::utils::{ * },
             clap::{Parser, CommandFactory},
             io::{ Error },
             shell::{ Shell },
@@ -1611,7 +1630,7 @@ pub mod builtins
         {
             let mut cr = CommandResult::new();
             let tokens = &cmd.tokens;
-            let args = parsers::line::tokens_to_args( tokens );
+            let args = ::parsers::parser_line::tokens_to_args( tokens );
 
             if args.contains( &"--help".to_string() ) || args.contains( &"-h".to_string() ) {
                 App::command().print_help().unwrap();
@@ -1731,6 +1750,7 @@ pub mod builtins
     {
         use::
         {
+            builtins::utils::{ * },
             io::{ Write },
             shell::{ Shell },
             types::{CommandResult, CommandLine, Command},
@@ -1769,6 +1789,7 @@ pub mod builtins
     {
         use ::
         {
+            builtins::utils::{ * },
             shell::{ Shell },
             types::{ CommandResult, CommandLine, Command },
             *,
@@ -1790,7 +1811,7 @@ pub mod builtins
         {
             let mut cr = CommandResult::new();
             let tokens = &cmd.tokens;
-            let args = parsers::line::tokens_to_args( tokens );
+            let args = ::parsers::parser_line::tokens_to_args( tokens );
             let show_usage = args.len() > 1 && ( args[1] == "-h" || args[1] == "--help" );
 
             let opt = OptMain::from_iter_safe( args );
@@ -1824,6 +1845,7 @@ pub mod builtins
     {
         use ::
         {
+            builtins::utils::{ * },
             shell::{ Shell },
             types::{ CommandResult, CommandLine, Command },
             *
@@ -1850,6 +1872,7 @@ pub mod builtins
     {
         use ::
         {
+            builtins::utils::{ * },
             shell::{ Shell },
             types::{ CommandResult, CommandLine, Command },
             *
@@ -1954,9 +1977,6 @@ pub mod builtins
         }
 
         fn _get_dupped_stdout_fd(cmd: &Command, cl: &CommandLine) -> RawFd {
-            // if with pipeline, e.g. `history | grep foo`, then we don't need to
-            // dup stdout since it is running in a sperated process, whose fd can
-            // be dropped after use.
             if cl.with_pipeline() {
                 return 1;
             }
@@ -2081,7 +2101,7 @@ pub mod c
     {
         use ::
         {
-            time::{ OffsetDateTime },
+            timed::{ OffsetDateTime },
             *,
         };
 
@@ -2483,41 +2503,50 @@ pub mod ctime
 {
     use ::
     {
-        time::OffsetDateTime,
+        timed::OffsetDateTime,
         *,
     };
+
     #[derive(Debug, PartialEq, Eq)]
-    pub struct DateTime {
+    pub struct DateTime
+    {
         odt: OffsetDateTime,
     }
 
-    impl DateTime {
-        pub fn now() -> Self {
-            let odt: OffsetDateTime = match OffsetDateTime::now_local() {
+    impl DateTime 
+    {
+        pub fn now() -> Self
+        {
+            let odt: OffsetDateTime = match OffsetDateTime::now_local()
+            {
                 Ok(dt) => dt,
                 Err(_) => OffsetDateTime::now_utc(),
             };
+
             DateTime { odt }
         }
 
-        pub fn from_timestamp(ts: f64) -> Self {
+        pub fn from_timestamp(ts: f64) -> Self
+        {
             let dummy_now = Self::now();
             let offset_seconds = dummy_now.odt.offset().whole_minutes() * 60;
             let ts_nano = (ts + offset_seconds as f64) * 1000000000.0;
-            let odt: OffsetDateTime = match OffsetDateTime::from_unix_timestamp_nanos(ts_nano as i128) {
+            let odt: OffsetDateTime = match OffsetDateTime::from_unix_timestamp_nanos(ts_nano as i128)
+            {
                 Ok(x) => x,
                 Err(_) => OffsetDateTime::now_utc(),
             };
+
             DateTime { odt }
         }
 
-        pub fn unix_timestamp(&self) -> f64 {
-            self.odt.unix_timestamp_nanos() as f64 / 1000000000.0
-        }
+        pub fn unix_timestamp(&self) -> f64 { self.odt.unix_timestamp_nanos() as f64 / 1000000000.0 }
     }
 
-    impl fmt::Display for DateTime {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    impl fmt::Display for DateTime
+    {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+        {
             write!(f, "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:03}",
                 self.odt.year(),
                 self.odt.month() as u8,
@@ -2528,6 +2557,15 @@ pub mod ctime
                 self.odt.millisecond(),
             )
         }
+    }
+}
+/**/
+pub mod connect
+{
+    #[derive( Clone, Copy, Debug, Default, Eq, PartialEq )]
+    pub struct Connection
+    {
+
     }
 }
 /**/
@@ -2557,15 +2595,15 @@ pub mod completers
             prompt::lines::
             {
                 complete::{ Completer, Completion, escape, escaped_word_start, unescape, Suffix },
-                prompter::Prompter,
-                terminal::Terminal,
+                prompter::{ Prompter },
+                terminal::{ Terminals },
             },
             *,
         };        
         /// Performs completion by searching dotfiles
         pub struct DotsCompleter;
 
-        impl<Term: Terminal> Completer<Term> for DotsCompleter
+        impl<Term: Terminals> Completer<Term> for DotsCompleter
         {
             fn complete( &self, word: &str, reader: &Prompter<Term>, _start: usize, _end: usize ) -> 
             Option<Vec<Completion>>
@@ -2644,6 +2682,7 @@ pub mod completers
 
         fn handle_lv1_hash(res: &mut Vec<Completion>, h: &Hash, word: &str)
         {
+            /*
             for v in h.values()
             {
                 if let Yaml::Array(ref arr) = v
@@ -2658,11 +2697,13 @@ pub mod completers
                     }
                 }
             }
+            */
         }
 
         fn complete_dots(line: &str, word: &str) -> Vec<Completion>
         {
             let mut res = Vec::new();
+            /*
             if line.trim().is_empty() {
                 return res;
             }
@@ -2734,7 +2775,9 @@ pub mod completers
                     }
                 }
             }
+            */
             res
+        
         }
     }
 
@@ -2746,7 +2789,7 @@ pub mod completers
             {
                 complete::{Completer, Completion, Suffix},
                 prompter::{ Prompter },
-                terminal::{ Terminal },
+                terminal::{ Terminals },
             },
             sync::{ Arc },
             *,
@@ -2757,7 +2800,7 @@ pub mod completers
             pub sh: Arc<shell::Shell>,
         }
 
-        impl<Term: Terminal> Completer<Term> for EnvCompleter
+        impl<Term: Terminals> Completer<Term> for EnvCompleter
         {
             fn complete(
                 &self,
@@ -2826,7 +2869,7 @@ pub mod completers
         
         pub struct MakeCompleter;
 
-        impl<Term: Terminal> Completer<Term> for MakeCompleter 
+        impl<Term: Terminals> Completer<Term> for MakeCompleter 
         {
             fn complete(
                 &self,
@@ -2949,7 +2992,7 @@ pub mod completers
             !path.starts_with('"') && !path.starts_with('\'')
         }
 
-        impl<Term: Terminal> Completer<Term> for BinCompleter {
+        impl<Term: Terminals> Completer<Term> for BinCompleter {
             fn complete(
                 &self,
                 word: &str,
@@ -2965,7 +3008,7 @@ pub mod completers
             }
         }
 
-        impl<Term: Terminal> Completer<Term> for PathCompleter {
+        impl<Term: Terminals> Completer<Term> for PathCompleter {
             fn complete(
                 &self,
                 word: &str,
@@ -2977,7 +3020,7 @@ pub mod completers
             }
         }
 
-        impl<Term: Terminal> Completer<Term> for CdCompleter {
+        impl<Term: Terminals> Completer<Term> for CdCompleter {
             fn complete(
                 &self,
                 word: &str,
@@ -3216,7 +3259,7 @@ pub mod completers
 
         pub struct SshCompleter;
 
-        impl<Term: Terminal> Completer<Term> for SshCompleter 
+        impl<Term: Terminals> Completer<Term> for SshCompleter 
         {
             fn complete(
                 &self,
@@ -3351,7 +3394,7 @@ pub mod completers
         Path::new(dot_file.as_str()).exists()
     }
 
-    impl<Term: Terminal> Completer<Term> for CicadaCompleter
+    impl<Term: Terminals> Completer<Term> for CicadaCompleter
     {
         fn complete( &self, word:&str, reader:&Prompter<Term>, start:usize, _end:usize ) -> Option<Vec<Completion>>
         {
@@ -3467,183 +3510,6 @@ pub mod completers
     }
 }
 /**/
-pub mod execute
-{
-    use ::
-    {
-        collections::{ HashMap },
-        io::{self, Read, Write},
-        regex::{ Regex },
-        shell::{self, Shell},
-        types::{CommandLine, CommandResult, Tokens},
-        *,
-    };
-    /// Entry point for non-ttys (e.g. Cmd-N on MacVim)
-    pub fn run_procs_for_non_tty(sh: &mut Shell)
-    {
-        let mut buffer = String::new();
-        let stdin = io::stdin();
-        let mut handle = stdin.lock();
-        match handle.read_to_string(&mut buffer)
-        {
-            Ok(_) =>
-            {
-                log!("run non tty command: {}", &buffer);
-                run_command_line(sh, &buffer, false, false);
-            }
-
-            Err(e) => { println!("cicada: stdin.read_to_string() failed: {:?}", e); }
-        }
-    }
-
-    pub fn run_command_line(sh: &mut Shell, line: &str, tty: bool, capture: bool) -> Vec<CommandResult>
-    {
-        let mut cr_list = Vec::new();
-        let mut status = 0;
-        let mut sep = String::new();
-
-        for token in parsers::parser_line::line_to_cmds(line)
-        {
-            if token == ";" || token == "&&" || token == "||"
-            {
-                sep = token.clone();
-                continue;
-            }
-
-            if sep == "&&" && status != 0 { break; }
-
-            if sep == "||" && status == 0 { break; }
-
-            let cmd = token.clone();
-            let cr = run_proc(sh, &cmd, tty, capture);
-            status = cr.status;
-            sh.previous_status = status;
-            cr_list.push(cr);
-        }
-
-        cr_list
-    }
-
-    fn drain_env_tokens(tokens: &mut Tokens) -> HashMap<String, String>
-    {
-        let mut envs: HashMap<String, String> = HashMap::new();
-        let mut n = 0;
-        let ptn_env_exp = r"^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$";
-        let re = Regex::new(ptn_env_exp).unwrap();
-
-        for (sep, text) in tokens.iter()
-        {
-            if !sep.is_empty() || !libs::re::re_contains(text, ptn_env_exp) { break; }
-
-            for cap in re.captures_iter(text)
-            {
-                let name = cap[1].to_string();
-                let value = parsers::parser_line::unquote(&cap[2]);
-                envs.insert(name, value);
-            }
-
-            n += 1;
-        }
-
-        if n > 0 { tokens.drain(0..n); }
-
-        envs
-    }
-
-    fn line_to_tokens(sh: &mut Shell, line: &str) -> (Tokens, HashMap<String, String>)
-    {
-        let linfo = parsers::parser_line::parse_line(line);
-        let mut tokens = linfo.tokens;
-        shell::do_expansion(sh, &mut tokens);
-        let envs = drain_env_tokens(&mut tokens);
-
-        (tokens, envs)
-    }
-
-    fn set_shell_vars(sh: &mut Shell, envs: &HashMap<String, String>)
-    {
-        for (name, value) in envs.iter()
-        {
-            sh.set_env(name, value);
-        }
-    }
-    
-    fn run_proc(sh: &mut Shell, line: &str, tty: bool, capture: bool) -> CommandResult
-    {
-        let log_cmd = !sh.cmd.starts_with(' ');
-        match CommandLine::from_line(line, sh)
-        {
-            Ok(cl) =>
-            {
-                if cl.is_empty()
-                {
-                    if !cl.envs.is_empty() { set_shell_vars(sh, &cl.envs); }
-                    return CommandResult::new();
-                }
-
-                let (term_given, cr) = shell::run_pipeline(sh, &cl, tty, capture, log_cmd);
-                if term_given
-                {
-                    unsafe
-                    {
-                        let gid = libc::getpgid(0);
-                        shell::give_terminal_to(gid);
-                    }
-                }
-
-                cr
-            }
-
-            Err(e) =>
-            {
-                println_stderr!("cicada: {}", e);
-                CommandResult::from_status(0, 1)
-            }
-        }
-    }
-
-    fn run_with_shell(sh: &mut Shell, line: &str) -> CommandResult
-    {
-        let (tokens, envs) = line_to_tokens(sh, line);
-        
-        if tokens.is_empty()
-        {
-            set_shell_vars(sh, &envs);
-            return CommandResult::new();
-        }
-
-        match CommandLine::from_line(line, sh)
-        {
-            Ok(c) =>
-            {
-                let (term_given, cr) = shell::run_pipeline(sh, &c, false, true, false);
-                if term_given
-                {
-                    unsafe
-                    {
-                        let gid = libc::getpgid(0);
-                        shell::give_terminal_to(gid);
-                    }
-                }
-
-                cr
-            }
-
-            Err(e) =>
-            {
-                println_stderr!("cicada: {}", e);
-                CommandResult::from_status(0, 1)
-            }
-        }
-    }
-
-    pub fn run(line: &str) -> CommandResult
-    {
-        let mut sh = Shell::new();
-        run_with_shell(&mut sh, line)
-    }
-}
-/**/
 pub mod error
 {
     pub use std::error::{ * };
@@ -3661,7 +3527,8 @@ pub mod error
             use ::
             {
                 error::{ Errno },
-                libc::{self, c_int, size_t, strerror_r, strlen},
+                libc::{self, c_int, size_t, strerror_r, strlen},                
+                result::{ Result },
                 *,
             };
 
@@ -3894,6 +3761,1355 @@ pub mod error
     pub fn errno() -> Errno { sys::errno() }
     /// Sets the platform-specific value of `errno`.
     pub fn set_errno(err: Errno) { sys::set_errno(err) }
+}
+/**/
+pub mod execute
+{
+    use ::
+    {
+        collections::{ HashMap },
+        io::{self, Read, Write},
+        regex::{ Regex },
+        shell::{self, Shell},
+        types::{CommandLine, CommandResult, Tokens},
+        *,
+    };
+    /// Entry point for non-ttys (e.g. Cmd-N on MacVim)
+    pub fn run_procs_for_non_tty(sh: &mut Shell)
+    {
+        let mut buffer = String::new();
+        let stdin = io::stdin();
+        let mut handle = stdin.lock();
+        match handle.read_to_string(&mut buffer)
+        {
+            Ok(_) =>
+            {
+                log!("run non tty command: {}", &buffer);
+                run_command_line(sh, &buffer, false, false);
+            }
+
+            Err(e) => { println!("cicada: stdin.read_to_string() failed: {:?}", e); }
+        }
+    }
+
+    pub fn run_command_line(sh: &mut Shell, line: &str, tty: bool, capture: bool) -> Vec<CommandResult>
+    {
+        let mut cr_list = Vec::new();
+        let mut status = 0;
+        let mut sep = String::new();
+
+        for token in parsers::parser_line::line_to_cmds(line)
+        {
+            if token == ";" || token == "&&" || token == "||"
+            {
+                sep = token.clone();
+                continue;
+            }
+
+            if sep == "&&" && status != 0 { break; }
+
+            if sep == "||" && status == 0 { break; }
+
+            let cmd = token.clone();
+            let cr = run_proc(sh, &cmd, tty, capture);
+            status = cr.status;
+            sh.previous_status = status;
+            cr_list.push(cr);
+        }
+
+        cr_list
+    }
+
+    fn drain_env_tokens(tokens: &mut Tokens) -> HashMap<String, String>
+    {
+        let mut envs: HashMap<String, String> = HashMap::new();
+        let mut n = 0;
+        let ptn_env_exp = r"^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$";
+        let re = Regex::new(ptn_env_exp).unwrap();
+
+        for (sep, text) in tokens.iter()
+        {
+            if !sep.is_empty() || !libs::re::re_contains(text, ptn_env_exp) { break; }
+
+            for cap in re.captures_iter(text)
+            {
+                let name = cap[1].to_string();
+                let value = parsers::parser_line::unquote(&cap[2]);
+                envs.insert(name, value);
+            }
+
+            n += 1;
+        }
+
+        if n > 0 { tokens.drain(0..n); }
+
+        envs
+    }
+
+    fn line_to_tokens(sh: &mut Shell, line: &str) -> (Tokens, HashMap<String, String>)
+    {
+        let linfo = parsers::parser_line::parse_line(line);
+        let mut tokens = linfo.tokens;
+        shell::do_expansion(sh, &mut tokens);
+        let envs = drain_env_tokens(&mut tokens);
+
+        (tokens, envs)
+    }
+
+    fn set_shell_vars(sh: &mut Shell, envs: &HashMap<String, String>)
+    {
+        for (name, value) in envs.iter()
+        {
+            sh.set_env(name, value);
+        }
+    }
+    
+    fn run_proc(sh: &mut Shell, line: &str, tty: bool, capture: bool) -> CommandResult
+    {
+        let log_cmd = !sh.cmd.starts_with(' ');
+        match CommandLine::from_line(line, sh)
+        {
+            Ok(cl) =>
+            {
+                if cl.is_empty()
+                {
+                    if !cl.envs.is_empty() { set_shell_vars(sh, &cl.envs); }
+                    return CommandResult::new();
+                }
+
+                let (term_given, cr) = shell::run_pipeline(sh, &cl, tty, capture, log_cmd);
+                if term_given
+                {
+                    unsafe
+                    {
+                        let gid = libc::getpgid(0);
+                        shell::give_terminal_to(gid);
+                    }
+                }
+
+                cr
+            }
+
+            Err(e) =>
+            {
+                println_stderr!("cicada: {}", e);
+                CommandResult::from_status(0, 1)
+            }
+        }
+    }
+
+    fn run_with_shell(sh: &mut Shell, line: &str) -> CommandResult
+    {
+        let (tokens, envs) = line_to_tokens(sh, line);
+        
+        if tokens.is_empty()
+        {
+            set_shell_vars(sh, &envs);
+            return CommandResult::new();
+        }
+
+        match CommandLine::from_line(line, sh)
+        {
+            Ok(c) =>
+            {
+                let (term_given, cr) = shell::run_pipeline(sh, &c, false, true, false);
+                if term_given
+                {
+                    unsafe
+                    {
+                        let gid = libc::getpgid(0);
+                        shell::give_terminal_to(gid);
+                    }
+                }
+
+                cr
+            }
+
+            Err(e) =>
+            {
+                println_stderr!("cicada: {}", e);
+                CommandResult::from_status(0, 1)
+            }
+        }
+    }
+
+    pub fn run(line: &str) -> CommandResult
+    {
+        let mut sh = Shell::new();
+        run_with_shell(&mut sh, line)
+    }
+}
+/**/
+pub mod expand
+{
+    use ::
+    {
+        shell::{ brace_getitem, Shell },
+        regex::{ Regex },
+        *
+    };
+    /*
+    pub fn expand_alias( ... )*/
+    pub fn alias( sh:&Shell, tokens:&mut types::Tokens )
+    {
+        let mut idx:usize = 0;
+        let mut buff = Vec::new();
+        let mut is_head = true;
+        for ( sep, text ) in tokens.iter()
+        {
+            if sep.is_empty() && text == "|" {
+                is_head = true;
+                idx += 1;
+                continue;
+            }
+            if is_head && text == "xargs" {
+                idx += 1;
+                continue;
+            }
+
+            if !is_head || !sh.is_alias( text ) {
+                idx += 1;
+                is_head = false;
+                continue;
+            }
+
+            if let Some( value ) = sh.get_alias_content( text ) {
+                buff.push( ( idx, value.clone() ) );
+            }
+
+            idx += 1;
+            is_head = false;
+        }
+
+        for ( i, text ) in buff.iter().rev()
+        {
+            let linfo = parsers::parser_line::parse_line( text );
+            let tokens_ = linfo.tokens;
+            tokens.remove( *i );
+            for item in tokens_.iter().rev()
+            {
+                tokens.insert( *i, item.clone() );
+            }
+        }
+    }
+    /*
+    pub fn expand_arguments( ... )*/
+    pub fn arguments( line:&str, args:&[String] ) -> String
+    {
+        let linfo = parsers::parser_line::parse_line( line );
+        let mut tokens = linfo.tokens;
+        arguments_in_tokens( &mut tokens, args );
+        parsers::parser_line::tokens_to_line( &tokens )
+    }
+    /*
+    pub fn expand_args_for_single_token( ... )*/
+    pub fn arguments_for_token( token:&str, args:&[String] ) -> String
+    {
+        let re = Regex::new( r"^( .*? )\$\{?( [0-9]+|@ )\}?( .* )$" ).unwrap();
+        if !re.is_match( token ) { return token.to_string(); }
+
+        let mut result = String::new();
+        let mut _token = token.to_string();
+        let mut _head = String::new();
+        let mut _output = String::new();
+        let mut _tail = String::new();
+        loop
+        {
+            if !re.is_match( &_token )
+            {
+                if !_token.is_empty()
+                {
+                    result.push_str( &_token );
+                }
+                break;
+            }
+
+            for cap in re.captures_iter( &_token )
+            {
+                _head = cap[1].to_string();
+                _tail = cap[3].to_string();
+                let _key = cap[2].to_string();
+                if _key == "@"
+                { result.push_str( format!( "{}{}", _head, args[1..].join( " " ) ).as_str() ); } 
+                
+                else if let Ok( arg_idx ) = _key.parse::<usize>()
+                {
+                    if arg_idx < args.len()
+                    {
+                        result.push_str( format!( "{}{}", _head, args[arg_idx] ).as_str() );
+                    } 
+                    else
+                    {
+                        result.push_str( &_head );
+                    }
+                } 
+                else
+                { result.push_str( &_head ); }
+            }
+
+            if _tail.is_empty() {
+                break;
+            }
+            _token = _tail.clone();
+        }
+        result
+    }
+    /*
+    pub fn expand_args_in_tokens( ... )*/
+    pub fn arguments_in_tokens( tokens:&mut types::Tokens, args:&[String] )
+    {
+        let mut idx:usize = 0;
+        let mut buff = Vec::new();
+
+        for ( sep, token ) in tokens.iter()
+        {
+            if sep == "`" || sep == "'" || !is::arguments_in_token( token )
+            {
+                idx += 1;
+                continue;
+            }
+
+            let _token = arguments_for_token( token, args );
+            buff.push( ( idx, _token ) );
+            idx += 1;
+        }
+
+        for ( i, text ) in buff.iter().rev()
+        {
+            tokens[*i].1 = text.to_string();
+        }
+    }
+    /*
+    pub fn expand_brace( ... )*/
+    pub fn brace( tokens:&mut types::Tokens )
+    {
+        let mut idx:usize = 0;
+        let mut buff = Vec::new();
+        for ( sep, token ) in tokens.iter()
+        {
+            if !sep.is_empty() || !is::brace_expandable( token )
+            {
+                idx += 1;
+                continue;
+            }
+
+            let mut result:Vec<String> = Vec::new();
+            let items = brace_getitem( token, 0 );
+            for x in items.0
+            { result.push( x.clone() ); }
+            buff.push( ( idx, result ) );
+            idx += 1;
+        }
+
+        for ( i, items ) in buff.iter().rev()
+        {
+            tokens.remove( *i );
+            for ( j, token ) in items.iter().enumerate()
+            {
+                let sep = if token.contains( ' ' ) { "\"" } else { "" };
+                tokens.insert( *i + j, ( sep.to_string(), token.clone() ) );
+            }
+        }
+    }
+    /*
+    pub fn expand_brace_range( ... )*/
+    pub fn brace_range( tokens:&mut types::Tokens )
+    {
+        let re;
+        if let Ok( x ) = Regex::new( r#"\{( -?[0-9]+ )\.\.( -?[0-9]+ )( \.\. )?( [0-9]+ )?\}"# ) { re = x; }
+
+        else
+        {
+            println_stderr!( "pls:re new error" );
+            return;
+        }
+
+        let mut idx:usize = 0;
+        let mut buff:Vec<( usize, Vec<String> )> = Vec::new();
+        for ( sep, token ) in tokens.iter()
+        {
+            if !sep.is_empty() || !re.is_match( token )
+            {
+                idx += 1;
+                continue;
+            }
+
+            // safe to unwrap here, since the `is_match` above already validated
+            let caps = re.captures( token ).unwrap();
+            let start = match caps[1].to_string().parse::<i32>()
+            {
+                Ok( x ) => x,
+                Err( e ) =>
+                {
+                    println_stderr!( "pls:{}", e );
+                    return;
+                }
+            };
+
+            let end = match caps[2].to_string().parse::<i32>()
+            {
+                Ok( x ) => x,
+                Err( e ) =>
+                {
+                    println_stderr!( "pls:{}", e );
+                    return;
+                }
+            };
+
+            // incr is always positive
+            let mut incr = if caps.get( 4 ).is_none() { 1 }
+            else
+            {
+                match caps[4].to_string().parse::<i32>()
+                {
+                    Ok( x ) => x,
+                    Err( e ) =>
+                    {
+                        println_stderr!( "pls:{}", e );
+                        return;
+                    }
+                }
+            };
+
+            if incr <= 1
+            {
+                incr = 1;
+            }
+
+            let mut result:Vec<String> = Vec::new();
+            let mut n = start;
+            if start > end
+            {
+                while n >= end
+                {
+                    result.push( format!( "{}", n ) );
+                    n -= incr;
+                }
+            }
+
+            else
+            {
+                while n <= end
+                {
+                    result.push( format!( "{}", n ) );
+                    n += incr;
+                }
+            }
+
+            buff.push( ( idx, result ) );
+            idx += 1;
+        }
+
+        for ( i, items ) in buff.iter().rev()
+        {
+            tokens.remove( *i );
+            for ( j, token ) in items.iter().enumerate()
+            {
+                let sep = if token.contains( ' ' ) { "\"" } else { "" };
+                tokens.insert( *i + j, ( sep.to_string(), token.clone() ) );
+            }
+        }
+    }
+    /*
+    pub fn expand_env( ... )*/
+    pub fn environment( sh:&Shell, tokens:&mut types::Tokens )
+    {
+        let mut idx:usize = 0;
+        let mut buff = Vec::new();
+
+        for ( sep, token ) in tokens.iter()
+        {
+            if sep == "`" || sep == "'"
+            {
+                idx += 1;
+                continue;
+            }
+
+            if !is::environment_in_token( token )
+            {
+                idx += 1;
+                continue;
+            }
+
+            let mut _token = token.clone();
+            while is::environment_in_token( &_token ) 
+            { _token = single_environment( sh, &_token ); }
+            buff.push( ( idx, _token ) );
+            idx += 1;
+        }
+
+        for ( i, text ) in buff.iter().rev()
+        {
+            tokens[*i].1 = text.to_string();
+        }
+    }
+    /*
+    pub fn expand_env_string( ... )*/
+    pub fn environment_string( text:&mut String )
+    {
+        // expand "$HOME/.local/share" to "/home/tom/.local/share"
+        if !text.starts_with( '$' ) { return; }
+
+        let ptn = r"^\$( [A-Za-z_][A-Za-z0-9_]* )";
+        let mut env_value = String::new();
+        match regex::find_first_group( ptn, text )
+        {
+            Some( x ) =>
+            {
+                if let Ok( val ) = env::var( &x )
+                { env_value = val; }
+            }
+            None => { return; }
+        }
+
+        if env_value.is_empty() { return; }
+        let t = text.clone();
+        *text = regex::replace_all( &t, ptn, &env_value );
+    }
+    /*
+    pub fn expand_glob( ... )*/
+    pub fn glob( tokens:&mut types::Tokens )
+    {
+        let mut idx:usize = 0;
+        let mut buff = Vec::new();
+        for ( sep, text ) in tokens.iter()
+        {
+            if !sep.is_empty() || !is::globable( text )
+            {
+                idx += 1;
+                continue;
+            }
+
+            let mut result:Vec<String> = Vec::new();
+            let item = text.as_str();
+            if !item.contains( '*' ) || item.trim().starts_with( '\'' ) || item.trim().starts_with( '"' )
+            {
+                result.push( item.to_string() );
+            }
+
+            else
+            {
+                let _basename = path::basename( item );
+                let show_hidden = _basename.starts_with( ".*" );
+                match glob::glob( item )
+                {
+                    Ok( paths ) =>
+                    {
+                        let mut is_empty = true;
+                        for entry in paths
+                        {
+                            match entry
+                            {
+                                Ok( path ) =>
+                                {
+                                    let file_path = path.to_string_lossy();
+                                    let _basename = path::basename( &file_path );
+                                    if _basename == ".." || _basename == "." { continue; }
+                                    if _basename.starts_with( '.' ) && !show_hidden { continue; }
+                                    result.push( file_path.to_string() );
+                                    is_empty = false;
+                                }
+
+                                Err( e ) => { /*log!( "glob error:{:?}", e );*/ }
+                            }
+                        }
+
+                        if is_empty  { result.push( item.to_string() ); }
+                    }
+
+                    Err( e ) =>
+                    {
+                        println!( "glob error:{:?}", e );
+                        result.push( item.to_string() );
+                        return;
+                    }
+                }
+            }
+
+            buff.push( ( idx, result ) );
+            idx += 1;
+        }
+
+        for ( i, result ) in buff.iter().rev()
+        {
+            tokens.remove( *i );
+            for ( j, token ) in result.iter().enumerate()
+            {
+                let sep = if token.contains( ' ' ) { "\"" } else { "" };
+                tokens.insert( *i + j, ( sep.to_string(), token.clone() ) );
+            }
+        }
+    }
+    /*
+    pub fn expand_arguments( ... )*/
+    pub fn home( text:&str ) -> String
+    {
+        let mut s:String = text.to_string();
+        let v = vec!
+        [
+            r"( ?P<head> + )~( ?P<tail> + )",
+            r"( ?P<head> + )~( ?P<tail>/ )",
+            r"^( ?P<head> * )~( ?P<tail>/ )",
+            r"( ?P<head> + )~( ?P<tail> *$ )",
+        ];
+
+        for item in &v
+        {
+            let re;
+            if let Ok( x ) = Regex::new( item ) { re = x; }
+            else { return String::new(); }
+            let home = get::user_home();
+            let ss = s.clone();
+            let to = format!( "$head{}$tail", home );
+            let result = re.replace_all( ss.as_str(), to.as_str() );
+            s = result.to_string();
+        }
+        s
+    }
+    /*
+    pub fn expands_home( ... )*/
+    pub fn house( tokens:&mut types::Tokens )
+    {
+        let mut idx:usize = 0;
+        let mut buff = Vec::new();
+        for ( sep, text ) in tokens.iter()
+        {
+            if !sep.is_empty() || !text.starts_with( "~" )
+            {
+                idx += 1;
+                continue;
+            }
+
+            let mut s:String = text.clone();
+            let ptn = r"^~( ?P<tail>.* )";
+            let re = Regex::new( ptn ).expect( "invalid re ptn" );
+            let home = get::user_home();
+            let ss = s.clone();
+            let to = format!( "{}$tail", home );
+            let result = re.replace_all( ss.as_str(), to.as_str() );
+            s = result.to_string();
+
+            buff.push( ( idx, s.clone() ) );
+            idx += 1;
+        }
+
+        for ( i, text ) in buff.iter().rev()
+        {
+            tokens[*i].1 = text.to_string();
+        }
+    }
+    /*
+    pub fn expand_home_string( ... )*/
+    pub fn home_string( text:&mut String )
+    {
+        let v = vec!
+        [
+            r"( ?P<head> + )~( ?P<tail> + )",
+            r"( ?P<head> + )~( ?P<tail>/ )",
+            r"^( ?P<head> * )~( ?P<tail>/ )",
+            r"( ?P<head> + )~( ?P<tail> *$ )",
+        ];
+
+        for item in &v
+        {
+            let re;
+            if let Ok( x ) = Regex::new( item ) { re = x; }
+            else { return; }
+
+            let home = get::user_home();
+            let ss = text.clone();
+            let to = format!( "$head{}$tail", home );
+            let result = re.replace_all( ss.as_str(), to.as_str() );
+            *text = result.to_string();
+        }
+    }
+    /*
+    pub fn expand_line_to_toknes( ... )*/
+    pub fn line_to_tokens( line:&str, args:&[String], sh:&mut shell::Shell ) -> types::Tokens
+    {
+        let linfo = parsers::parser_line::parse_line( line );
+        let mut tokens = linfo.tokens;
+        arguments_in_tokens( &mut tokens, args );
+        shell::do_expansion( sh, &mut tokens );
+        tokens
+    }
+    /*
+    pub fn expand_one_env( ... )*/
+    pub fn single_environment( sh:&Shell, token:&str ) -> String
+    {
+        unsafe
+        {
+            let re1 = Regex::new( r"^( .*? )\$( [A-Za-z0-9_]+|\$|\? )( .* )$" ).unwrap();
+            let re2 = Regex::new( r"( .*? )\$\{( [A-Za-z0-9_]+|\$|\? )\}( .* )$" ).unwrap();
+            if !re1.is_match( token ) && !re2.is_match( token ){ return token.to_string(); }
+
+            let mut result = String::new();
+            let match_re1 = re1.is_match( token );
+            let match_re2 = re2.is_match( token );
+            if !match_re1 && !match_re2 { return token.to_string(); }
+
+            let cap_results = if match_re1 { re1.captures_iter( token ) } else { re2.captures_iter( token ) };
+
+            for cap in cap_results
+            {
+                let head = cap[1].to_string();
+                let tail = cap[3].to_string();
+                let key = cap[2].to_string();
+                if key == "?" { result.push_str( format!( "{}{}", head, sh.previous_status ).as_str() ); } 
+                else if key == "$" 
+                {
+                    let val = libc::getpid();
+                    result.push_str( format!( "{}{}", head, val ).as_str() );
+                } 
+                else if let Ok( val ) = env::var( &key ) { result.push_str( format!( "{}{}", head, val ).as_str() ); }
+                else if let Some( val ) = sh.get_env( &key ) { result.push_str( format!( "{}{}", head, val ).as_str() ); }
+                else { result.push_str( &head ); }
+
+                result.push_str( &tail );
+            }
+
+            result
+        }
+    }
+}
+/*
+State Reading */
+pub mod get
+{
+    use ::
+    {
+        error::{ errno },
+        libc::{ c_int, c_ulong, STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO,  winsize },
+        io::{ Error },
+        iter::{ pair::Pair },
+        os::
+        {
+            fd::{ RawFd },
+        },
+        parsers::{ self },
+        path::{ Path, PathBuf },
+        result::{ Result },
+        types::{ CommandLine, Redirection },
+        *
+    };
+    
+    #[cfg( any( target_os = "linux", target_os = "android" ) )]
+    static TIOCGWINSZ:c_ulong = 0x5413;
+
+    #[cfg
+    ( 
+        any
+        ( 
+            target_os = "macos",
+            target_os = "ios",
+            target_os = "dragonfly",
+            target_os = "freebsd",
+            target_os = "netbsd",
+            target_os = "openbsd"
+        )
+    )]
+    static TIOCGWINSZ:c_ulong = 0x40087468;
+
+    #[cfg( target_os = "solaris" )]
+    static TIOCGWINSZ:c_ulong = 0x5468;
+
+    extern "C"
+    {
+        fn gethostname( name:*mut libc::c_char, size:libc::size_t ) -> libc::c_int;
+        fn ioctl( fd:c_int, request:c_ulong, ... ) -> libc::c_int;
+    }
+    /*
+    get_user_home( ... ) -> String */
+    pub fn user_home() -> String
+    {
+        match env::var( "HOME" )
+        {
+            Ok( x ) => x,
+            Err( e ) =>
+            {
+                println_stderr!( "pls:env HOME error:{}", e );
+                String::new()
+            }
+        }
+    }
+    /*
+    get_config_dir( ... ) -> String */
+    pub fn configuration_directory() -> String
+    {
+        if let Ok( x ) = env::var( "XDG_CONFIG_HOME" ) { format!( "{}/pls", x ) }
+        else
+        {
+            let home = user_home();
+            format!( "{}/.config/pls", home )
+        }
+    }
+    /*
+    get_user_completer_dir( ... ) -> String */
+    pub fn user_completer_directory() -> String
+    {
+        let dir_config = ::get::configuration_directory();
+        format!( "{}/completers", dir_config )
+    }
+    /*
+    get_fd_from_file( ... ) -> i32 */
+    pub fn descriptor_from_file( file_name:&str ) -> i32
+    {
+        let path = path::Path::new( file_name );
+        let display = path.display();
+        let file = match fs::File::open( path )
+        {
+            Err( why ) =>
+            {
+                println_stderr!( "pls:{}:{}", display, why );
+                return -1;
+            }
+
+            Ok( file ) => file,
+        };
+
+        file.into_raw_fd()
+    }
+    /*
+    get_current_dir( ... ) -> String */
+    pub fn current_directory() -> String
+    {
+        let mut current_dir = path::PathBuf::new();
+        match env::current_dir()
+        {
+            Ok( x ) => current_dir = x,
+            Err( e ) =>
+            {
+                println_stderr!( "env current_dir() failed:{}", e );
+            }
+        }
+
+        let mut str_current_dir = "";
+        match current_dir.to_str()
+        {
+            Some( x ) => str_current_dir = x,
+            None => { println_stderr!( "current_dir to str failed." ); }
+        }
+
+        str_current_dir.to_string()
+    }
+    /*
+    get_hostname( ... ) -> String
+    https://gist.github.com/conradkleinespel/6c8174aee28fa22bfe26 */
+    pub fn hostname() -> String
+    {
+        unsafe
+        {
+            let len = 255;
+            let mut buf = Vec::<u8>::with_capacity( len );
+            let ptr = buf.as_mut_slice().as_mut_ptr();
+            let err = gethostname( ptr as *mut libc::c_char, len as libc::size_t ) as i32;
+
+            match err
+            {
+                0 =>
+                {
+                    let real_len;
+                    let mut i = 0;
+                    loop
+                    {
+                        let byte = unsafe { *( ( ( ptr as u64 ) + ( i as u64 ) ) as *const u8 ) };
+                        if byte == 0
+                        {
+                            real_len = i;
+                            break;
+                        }
+
+                        i += 1;
+                    }
+                    buf.set_len( real_len );
+                    String::from_utf8_lossy( buf.as_slice() ).into_owned()
+                }
+                _ => String::from( "unknown" ),
+            }
+        }
+    }
+    /*
+    get_limit( ... ) -> ( String, String ) */
+    pub fn limit( limit_name:&str, single_print:bool, for_hard:bool ) -> ( String, String )
+    {
+        unsafe
+        {
+            let ( desc, limit_id ) = match limit_name
+            {
+                "open_files" => ( "open files", libc::RLIMIT_NOFILE ),
+                "core_file_size" => ( "core file size", libc::RLIMIT_CORE ),
+                _ => return ( String::new(), String::from( "ulimit:error:invalid limit name" ) ),
+            };
+
+            let mut rlp = libc::rlimit { rlim_cur:0, rlim_max:0 };
+            let mut result_stdout = String::new();
+            let mut result_stderr = String::new();            
+            if libc::getrlimit( limit_id, &mut rlp ) != 0
+            {
+                result_stderr.push_str( &format!( "error getting limit:{}", Error::last_os_error() ) );
+                return ( result_stdout, result_stderr );
+            }
+
+            let to_print = if for_hard { rlp.rlim_max } else { rlp.rlim_cur };
+            let info = if to_print == libc::RLIM_INFINITY 
+            { if single_print { "unlimited\n".to_string() } else { format!( "{}\t\tunlimited\n", desc ) } }
+            else if single_print
+            { format!( "{}\n", to_print ) }
+            else
+            { format!( "{}\t\t{}\n", desc, to_print ) };
+
+            result_stdout.push_str( &info );
+            ( result_stdout, result_stderr )
+        }
+
+        
+    }
+    /*
+    get_user_name( ... ) -> String */
+    pub fn username() -> String
+    {
+        match env::var( "USER" )
+        {
+            Ok( x ) => { return x; }
+            Err( e ) => { log!( "pls:env USER error:{}", e ); }
+        }
+
+        let cmd_result = execute::run( "whoami" );
+        return cmd_result.stdout.trim().to_string();
+    }
+    /*
+    get_envs_home( ... ) -> String */
+    pub fn virtual_environments_home() -> String
+    {
+        env::var( "VIRTUALENV_HOME" ).unwrap_or_default()
+    }
+    /*
+    get_all_venvs( ... ) -> Result<Vec<String>, String> */
+    pub fn virtual_environments() -> Result<Vec<String>, String>
+    {
+        let home_envs = virtual_environments_home();
+        if home_envs.is_empty()
+        {
+            let info = String::from( "you need to set VIRTUALENV_HOME to use vox" );
+            return Err( info );
+        }
+
+        if !Path::new( home_envs.as_str() ).exists()
+        {
+            match fs::create_dir_all( home_envs.as_str() )
+            {
+                Ok( _ ) => {}
+                Err( e ) =>
+                {
+                    let info = format!( "fs create_dir_all failed:{:?}", e );
+                    return Err( info );
+                }
+            }
+        }
+
+        let mut venvs = Vec::new();
+        let pdir = home_envs.clone();
+        if let Ok( list ) = fs::read_dir( home_envs )
+        {
+            for ent in list.flatten()
+            {
+                let ent_name = ent.file_name();
+                if let Ok( path ) = ent_name.into_string()
+                {
+                    let full_path = format!( "{}/{}/bin/activate", pdir, path );
+                    if !Path::new( full_path.as_str() ).exists(){ continue; }
+                    venvs.push( path );
+                }
+            }
+        }
+
+        Ok( venvs )
+    }
+    /*
+    _get_std_fds( ... ) -> ( Option<RawFd>, Option<RawFd> ) */
+    pub fn std_fds( redirects:&[Redirection] ) -> ( Option<RawFd>, Option<RawFd> )
+    {
+        if redirects.is_empty(){ return ( None, None ); }
+        let mut fd_out = None;
+        let mut fd_err = None;
+
+        for i in 0..redirects.len()
+        {
+            let item = &redirects[i];
+            if item.0 == "1"
+            {
+                let mut _fd_candidate = None;
+                if item.2 == "&2"
+                {
+                    let ( _fd_out, _fd_err ) = std_fds( &redirects[i+1..] );
+                    if let Some( fd ) = _fd_err {
+                        _fd_candidate = Some( fd );
+                    } else {
+                        _fd_candidate = unsafe { Some( libc::dup( 2 ) ) };
+                    }
+                }
+
+                else
+                {  
+                    let append = item.1 == ">>";
+                    if let Ok( fd ) = fs::create_raw_fd_from_file( &item.2, append )
+                    { _fd_candidate = Some( fd ); }
+                }
+                /*
+                For command like this:`alias > a.txt > b.txt > c.txt`, 
+                we need to return the last one, but close the previous two. */
+                if let Some( fd ) = fd_out { unsafe { libc::close( fd ); } }
+                fd_out = _fd_candidate;
+            }
+
+            if item.0 == "2" {
+                let mut _fd_candidate = None;
+
+                if item.2 == "&1" {
+                    if let Some( fd ) = fd_out {
+                        _fd_candidate = unsafe { Some( libc::dup( fd ) ) };
+                    }
+                } else {
+                    let append = item.1 == ">>";
+                    if let Ok( fd ) = fs::create_raw_fd_from_file( &item.2, append ) {
+                        _fd_candidate = Some( fd );
+                    }
+                }
+
+                if let Some( fd ) = fd_err {
+                    unsafe { libc::close( fd ); }
+                }
+
+                fd_err = _fd_candidate;
+            }
+        }
+
+        ( fd_out, fd_err )
+    }
+    /*
+    _get_dupped_stdout_fd( ... ) -> Result<Vec<String>, String> */
+    pub fn dupped_stdout_fd( cmd:&Command, cl:&CommandLine ) -> RawFd
+    {
+        /*
+        If with pipeline, e.g. `history | grep foo`,
+        Then we don't need to dup stdout since it is running in a sperated process. */
+        unsafe
+        {
+            if cl.with_pipeline() { return 1; }
+            let ( _fd_out, _fd_err ) = get::std_fds( &cmd.redirects_to );
+            if let Some( fd ) = _fd_err { libc::close( fd ); }
+            if let Some( fd ) = _fd_out { fd }
+            else
+            {
+                let fd = libc::dup( 1 );
+                if fd == -1
+                {
+                    let eno = errno();
+                    println_stderr!( "pls:dup:{}", eno );
+                }
+                fd
+            }
+        }
+    }
+    /*
+    _get_dupped_stderr_fd( ... ) -> Result<Vec<String>, String> */
+    pub fn dupped_stderr_fd( cmd:&Command, cl:&CommandLine ) -> RawFd
+    {
+        unsafe
+        {
+            if cl.with_pipeline(){ return 2; }
+            let ( _fd_out, _fd_err ) = get::std_fds( &cmd.redirects_to );
+            if let Some( fd ) = _fd_out { libc::close( fd ); }
+            if let Some( fd ) = _fd_err { fd } 
+            else
+            {
+                let fd = libc::dup( 2 );
+                if fd == -1
+                {
+                    let eno = errno();
+                    println_stderr!( "pls:dup:{}", eno );
+                }
+                fd
+            }
+        }
+    }
+    /*
+    get_osx_version( ... ) -> String */
+    pub fn osx_version() -> String
+    {
+        let cr = execute::run( "sw_vers -productVersion" );
+        return cr.stdout.trim().to_string();
+    }
+    /*
+    get_osx_codename( ... ) -> String */
+    pub fn osx_codename() -> String
+    {
+        let cr = execute::run( "grep -o 'SOFTWARE LICENSE AGREEMENT FOR .*[a-zA-Z]' '/System/Library/CoreServices/Setup Assistant.app/Contents/Resources/en.lproj/OSXSoftwareLicense.rtf' | sed 's/SOFTWARE LICENSE AGREEMENT FOR *//'" );
+        return cr.stdout.trim().to_string();
+    }
+    /*
+    get_macos_name( ... ) -> String */
+    pub fn macos_name() -> String
+    {
+        let mut os_name = osx_codename();
+        let ver = osx_version();
+        if !ver.is_empty()
+        {
+            os_name.push( ' ' );
+            os_name.push_str( &ver );
+        }
+        os_name
+    }
+    /*
+    get_uname_mo( ... ) -> String */
+    pub fn uname_mo() -> String
+    {
+        let cr = execute::run( "uname -m -o" );
+        return cr.stdout.trim().to_string();
+    }
+    /*
+    get_uname( ... ) -> String */
+    pub fn uname() -> String
+    {
+        let cr = execute::run( "uname" );
+        return cr.stdout.trim().to_string();
+    }
+    /*
+    get_release_value( ... ) -> String */
+    pub fn release_value( ptn:&str ) -> String
+    {
+        let line = format!( 
+            "grep -i '{}' /etc/*release* 2>&1 | grep -o '=.*' | tr '\"=' ' '",
+            ptn
+ );
+        let cr = execute::run( &line );
+        return cr.stdout.trim().to_string();
+    }
+    /*
+    get_other_os_name( ... ) -> String */
+    pub fn other_os_name() -> String
+    {
+        let mut name = release_value( "PRETTY_NAME" );
+        if !name.is_empty() {
+            return name;
+        }
+        name = release_value( "DISTRIB_DESCRIPTION" );
+        if !name.is_empty() {
+            return name;
+        }
+        name = release_value( "IMAGE_DESCRIPTION" );
+        if !name.is_empty() {
+            return name;
+        }
+        uname_mo()
+    }
+    /*
+    get_os_name( ... ) -> String */
+    pub fn os_name() -> String
+    {
+        let uname = uname();
+        if uname.to_lowercase() == "darwin" {
+           macos_name()
+        } else {
+            other_os_name()
+        }
+    }
+    /*
+    get_dimensions_any( ... ) -> winsize
+    Runs the ioctl command. 
+    Returns ( 0, 0 ) if all of the streams are not to a terminal, or there is an error.
+    ( 0, 0 ) is an invalid size to have anyway, which is why it can be used as a nil value. */
+    unsafe fn any_dimensions() -> winsize
+    {
+        let mut window:winsize = ::mem::zeroed();
+        let mut result = ioctl( STDOUT_FILENO, TIOCGWINSZ, &mut window );
+        if result == -1
+        {
+            window = ::mem::zeroed();
+            result = ioctl( STDIN_FILENO, TIOCGWINSZ, &mut window );
+            if result == -1
+            {
+                window = ::mem::zeroed();
+                result = ioctl( STDERR_FILENO, TIOCGWINSZ, &mut window );
+                if result == -1
+                {
+                    return ::mem::zeroed();
+                }
+            }
+        }
+        window
+    }
+    /*
+    Query the current processes's output ( `stdout` ), input ( `stdin` ), and error ( `stderr` ) in that order,
+    in the attempt to dtermine terminal width. */
+    pub fn dimensions() -> Option<( usize, usize )>
+    {
+        let w = unsafe { any_dimensions() };
+        if w.ws_col == 0 || w.ws_row == 0
+        { None }
+        else
+        { Some( ( w.ws_col as usize, w.ws_row as usize ) ) }
+    }
+    /*
+    get_prompt_len( ... ) -> i32 */
+    pub fn prompt_len( prompt:&str ) -> i32
+    {
+        let mut count = 0;
+        let mut met_x01 = false;
+        for c in prompt.chars() {
+            if c == '\x01' {
+                met_x01 = true;
+                continue;
+            } else if c == '\x02' {
+                met_x01 = false;
+                continue;
+            }
+            if !met_x01 {
+                count += 1;
+            }
+        }
+        count
+    }
+    /*
+    get_prompt( ... ) -> String */
+    pub fn prompt( sh:&shell::Shell ) -> String
+    {
+        let ps = prompt_string();
+        let mut prompt = prompt::main::render_prompt( sh, &ps );
+        if let Some( ( w, _h ) ) = dimensions()
+        {
+            if prompt_len( &prompt ) > ( w / 2 ) as i32 && !regex::re_contains( &ps, r#"( ?i )\$\{?newline.\}?"# )
+            {
+                prompt.push_str( "\n$ " );
+            }
+        } 
+        else 
+        {
+            //log!( "ERROR:Failed to get term size" );
+        }
+        prompt
+    }
+    /*
+    get_prompt_string( ... ) -> String */
+    pub fn prompt_string() -> String
+    {
+        if let Ok( x ) = env::var( "PROMPT" ) { return x; }
+        unsafe { ::prompt::main::DEFAULT_PROMPT.to_string() }
+    }
+    /*
+    get_for_result_from_init( ... ) -> Vec<String> */
+    pub fn for_result_from_init
+    ( 
+        sh:&mut shell::Shell,
+        pair_init:Pair<parsers::locust::Rule>,
+        args:&[String]
+    ) -> Vec<String>
+    {
+        let mut result:Vec<String> = Vec::new();
+        /*
+        let pairs = pair_init.into_inner();
+        for pair in pairs
+        {
+            let rule = pair.as_rule();
+            if rule == parsers::locust::Rule::TEST
+            {
+                let line = pair.as_str().trim();
+                let tokens = expand_line_to_toknes( line, &args[1..], sh );
+                for ( sep, token ) in tokens {
+                    if sep.is_empty() {
+                        for x in token.split_whitespace() {
+                            result.push( x.to_string() );
+                        }
+                    } else {
+                        result.push( token.clone() );
+                    }
+                }
+            }
+        }
+        */
+        result
+    }
+    /*
+    get_for_result_list( ... ) -> Vec<String> */
+    pub fn for_result_list
+    ( 
+        sh:&mut shell::Shell,
+        pair_head:Pair<parsers::locust::Rule>,
+        args:&[String]
+    ) -> Vec<String>
+    {
+        /*
+        let pairs = pair_head.into_inner();
+        for pair in pairs {
+            let rule = pair.as_rule();
+            if rule == parsers::locust::Rule::FOR_INIT {
+                return get_for_result_from_init( sh, pair, args );
+            }
+        }
+        */
+        Vec::new()
+    }
+    /*
+    get_for_var_name( ... ) -> String */
+    pub fn for_var_name( pair_head:Pair<parsers::locust::Rule> ) -> String
+    {
+        /*
+        let pairs = pair_head.into_inner();
+        for pair in pairs
+        {
+            let rule = pair.as_rule();
+            if rule == parsers::locust::Rule::FOR_INIT
+            {
+                let pairs_init = pair.into_inner();
+                for pair_init in pairs_init {
+                    let rule_init = pair_init.as_rule();
+                    if rule_init == parsers::locust::Rule::FOR_VAR {
+                        let line = pair_init.as_str().trim();
+                        return line.to_string();
+                    }
+                }
+            }
+        }
+        */
+        String::new()
+    }
+    /*
+    get::history_file( ... ) -> String */
+    pub fn history_file() -> String
+    {
+        if let Ok( hfile ) = env::var( "HISTORY_FILE" ){ hfile } 
+        else if let Ok( d ) = env::var( "XDG_DATA_HOME" ){ format!( "{}/{}", d, "pls/history.sqlite" ) } 
+        else
+        {
+            let home = get::user_home();
+            format!( "{}/{}", home, ".local/share/pls/history.sqlite" )
+        }
+    }
+    /*
+    get_history_table( ... ) -> String */
+    pub fn history_table() -> String
+    {
+        if let Ok( hfile ) = env::var( "HISTORY_TABLE" ){ hfile } 
+        else { String::from( "cicada_history" ) }
+    }
+    /*
+    get_job_line( ... ) -> String */
+    pub fn job_line( job:&types::Job, trim:bool ) -> String
+    {
+        let mut cmd = job.cmd.clone();
+        if trim && cmd.len() > 50
+        {
+            cmd.truncate( 50 );
+            cmd.push_str( " ..." );
+        }
+
+        let _cmd = if job.is_bg && job.status == "Running"
+        {
+            format!( "{} &", cmd )
+        }
+        else { cmd };
+        format!( "[{}] {}  {}   {}", job.id, job.gid, job.status, _cmd )
+    }
 }
 /*
 glob v0.3.0*/
@@ -4653,22 +5869,17 @@ pub mod glob
 /**/
 pub mod highlight
 {
+    //! Syntax highlighting functionality for the terminal interface
     use ::
     {
-        ops::Range,
-        sync::Arc,
         collections::HashSet,
+        ops::Range,
+        os::unix::fs::PermissionsExt,
         path::Path,
         parsers::parser_line,
-        prompt::lines::highlighting::{Highlighter, Style},
-        sync::Mutex,
-        os::unix::fs::PermissionsExt,
+        sync::{ Arc, Mutex },
         *,
     };
-
-    #[derive(Clone)]
-    pub struct CicadaHighlighter;
-
     // ANSI color codes wrapped with \x01 and \x02 for lineread
     const GREEN: &str = "\x01\x1b[0;32m\x02";
 
@@ -4677,6 +5888,25 @@ pub mod highlight
         static ref AVAILABLE_COMMANDS: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
         static ref ALIASES: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
     }
+
+    /// Represents a style to be applied to a text range.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub enum Style 
+    {
+        /// A style using raw ANSI color codes
+        AnsiColor(String),
+        /// The default terminal style
+        Default,
+    }
+    /// A trait for providing style information for a line of text.
+    pub trait Highlighter 
+    {
+        /// Takes the current line buffer and returns a list of styled ranges.
+        fn highlight(&self, line: &str) -> Vec<(Range<usize>, Style)>;
+    }
+
+    #[derive(Clone)]
+    pub struct CicadaHighlighter;
     /// Initialize the available commands cache by scanning PATH directories
     pub fn init_command_cache() 
     {
@@ -4805,7 +6035,7 @@ pub mod highlight
 
             if line.is_empty() { return styles; }
 
-            let line_info = parser_line::parse_line(line);
+            let line_info = ::parsers::parser_line::parse_line(line);
             
             if line_info.tokens.is_empty()
             {
@@ -4864,6 +6094,216 @@ pub mod highlight
         Arc::new(CicadaHighlighter)
     }
 }
+/*
+State Testing */
+pub mod is
+{
+    use ::
+    {
+        char::{ char_width },
+        regex::{ Regex },
+        *,
+    };
+    /*
+    is_arithmetic( ... ) -> bool*/
+    pub fn arithmetic( line:&str ) -> bool
+    {
+        if !re_contains( line, r"[0-9]+" )
+        { return false; }
+
+        if !re_contains( line, r"\+|\-|\*|/|\^" )
+        { return false; }
+
+        re_contains( line, r"^[ 0-9\.\( \ )\+\-\*/\^]+[\.0-9 \ )]$" )
+    }
+    /*
+    is_builtin( ... ) -> bool*/
+    pub fn builtin( s:&str ) -> bool
+    {
+        let builtins =
+        [
+            "alias", "bg", "cd", "cinfo", "exec", "exit", "export", "fg",
+            "history", "jobs", "read", "source", "ulimit", "unalias", "vox",
+            "minfd", "set", "unset", "unpath",
+        ];
+
+        builtins.contains( &s )
+    }
+    /*
+    is_env( ... ) -> bool*/
+    pub fn environment( line:&str ) -> bool
+    { re_contains( line, r"^[a-zA-Z_][a-zA-Z0-9_]*=.*$" ) }
+    /*
+    is_shell_altering_command( ... ) -> bool*/
+    pub fn shell_altering_command( line:&str ) -> bool
+    {
+        let line = line.trim();
+        if re_contains( line, r"^[A-Za-z_][A-Za-z0-9_]*=.*$" )
+        { return true; }
+
+        line.starts_with( "alias " )
+        || line.starts_with( "export " )
+        || line.starts_with( "unalias " )
+        || line.starts_with( "unset " )
+        || line.starts_with( "source " )
+    }
+    /*
+    is_signal_handler_enabled( ... ) -> bool*/
+    pub fn signal_handler_enabled() -> bool
+    {
+        env::var( "CICADA_ENABLE_SIG_HANDLER" ).map_or( false, |x| x == "1" )
+    }
+    /*
+    is_login( ... ) -> bool */
+    pub fn login( args:&[String] ) -> bool
+    {
+        if !args.is_empty() && args[0].starts_with( "-" ) {
+            return true;
+        }
+
+        if args.len() > 1 && ( args[1] == "--login" || args[1] == "-l" ) {
+            return true;
+        }
+
+        false
+    }
+    /*
+    is_script( ... ) -> bool */
+    pub fn script( args:&[String] ) -> bool
+    { args.len() > 1 && !args[1].starts_with( "-" ) }
+    /*
+    is_command_string( ... ) -> bool */
+    pub fn command_string( args:&[String] ) -> bool
+    { args.len() > 1 && args[1] == "-c" }
+    /*
+    is_non_tty( ... ) -> bool */
+    pub fn non_tty() -> bool
+    { unsafe { libc::isatty( 0 ) == 0 } }
+    /*
+    is::prefix_char( ... ) -> bool */
+    pub fn prefix_char( c:char ) -> bool
+    {
+        c == '[' || c == '{'
+    }
+    /*
+    is::suffix_char( ... ) -> bool */
+    pub fn suffix_char( c:char ) -> bool
+    {
+        c == ']' || c == '}'
+    }
+    /*
+    is::prompt_item_char( ... ) -> bool */
+    pub fn prompt_item_char( c:char, token:&str ) -> bool
+    {
+        let s = c.to_string();
+        if token.is_empty() { regex::re_contains( &s, r#"^[a-zA-Z_]$"# ) }
+        else { regex::re_contains( &s, r#"^[a-zA-Z0-9_]$"# ) }
+    }
+    /*
+    is_args_in_token( ... ) -> bool */
+    pub fn arguments_in_token( token:&str ) -> bool
+    {
+        ::regex::re_contains( token, r"\$\{?[0-9@]+\}?" )
+    }
+    /*
+    needs_globbing( ... ) -> bool */
+    pub fn globable ( line:&str ) -> bool
+    {
+        let re = Regex::new( r"\*+" ).expect( "Invalid regex ptn" );
+        re.is_match( line )
+    }
+    /*
+    need_expand_brace( ... ) -> bool */
+    pub fn brace_expandable( line:&str ) -> bool
+    {
+        regex::re_contains( line, r#"\{[^ "']*,[^ "']*,?[^ "']*\}"# )
+    }
+    /*
+    env_in_token( ... ) -> bool */
+    pub fn environment_in_token( token:&str ) -> bool
+    {
+        if regex::re_contains( token, r"\$\{?[\$\?]\}?" ){ return true; }
+        let ptn_env_name = r"[a-zA-Z_][a-zA-Z0-9_]*";
+        let ptn_env = format!( r"\$\{{?{}\}}?", ptn_env_name );
+        if !regex::re_contains( token, &ptn_env ) { return false; }
+        
+        let ptn_cmd_sub1 = format!( r"^{}=`.*`$", ptn_env_name );
+        let ptn_cmd_sub2 = format!( r"^{}=\$\( .*\ )$", ptn_env_name );
+        if regex::re_contains( token, &ptn_cmd_sub1 )
+        || regex::re_contains( token, &ptn_cmd_sub2 )
+        || regex::re_contains( token, r"^\$\( .+\ )$" )
+        {
+            return false;
+        }
+        
+        let ptn_env = format!( r"='.*\$\{{?{}\}}?.*'$", ptn_env_name );
+        !regex::re_contains( token, &ptn_env )
+    }
+    /*
+    is_env_prefix( ... ) -> bool */
+    pub fn env_prefix( line:&str ) -> bool
+    { ::regex::re_contains( line, r" *\$[a-zA-Z_][A-Za-z0-9_]*" ) }
+    /*
+    is_pipelined( ... ) -> bool */
+    pub fn pipelined( path:&str ) -> bool
+    {
+        if !path.contains( '|' ) { return false; }
+        !path.starts_with( '"' ) && !path.starts_with( '\'' )
+    }
+    /*
+    is_visible( ... ) -> bool */
+    pub fn visible( ch:char ) -> bool
+    {
+        match ch
+        {
+            '\t' | '\r' | '\n' => true,
+            _ => char_width( ch ).unwrap_or( 0 ) != 0
+        }
+    }
+    /*
+    is_combining_mark( ... ) -> bool */
+    #[inline] pub fn combining_mark( ch:char ) -> bool
+    { unicode_normalization::char::is_combining_mark( ch ) }
+
+    fn is_flag( i:u8 ) -> bool
+    {
+        i == b' ' || i == b'-' || i == b'+' || i == b'#'
+    }    
+    /*
+    is_alphabetic( ... ) -> bool */
+    #[inline] pub fn alphabetic(chr: u8) -> bool { (chr >= 0x41 && chr <= 0x5A) || (chr >= 0x61 && chr <= 0x7A) }
+
+    /// Tests if byte is ASCII digit: 0-9.
+    
+    /*
+    is::digit( ... ) -> bool */
+    #[inline] pub fn digit(chr: u8) -> bool  { chr >= 0x30 && chr <= 0x39 }
+
+    /// Tests if byte is ASCII hex digit: 0-9, A-F, a-f.
+    #[inline] pub fn is_hex_digit(chr: u8) -> bool {
+    (chr >= 0x30 && chr <= 0x39) || (chr >= 0x41 && chr <= 0x46) || (chr >= 0x61 && chr <= 0x66)
+    }
+
+    /// Tests if byte is ASCII octal digit: 0-7.
+    #[inline] pub fn is_oct_digit(chr: u8) -> bool {
+    chr >= 0x30 && chr <= 0x37
+    }
+
+    /// Tests if byte is ASCII alphanumeric: A-Z, a-z, 0-9.
+    #[inline] pub fn is_alphanumeric(chr: u8) -> bool {
+    is::alphabetic(chr) || is::digit(chr)
+    }
+
+    /// Tests if byte is ASCII space or tab.
+    #[inline] pub fn is_space(chr: u8) -> bool {
+    chr == b' ' || chr == b'\t'
+    }
+
+    /// Tests if byte is ASCII newline: \n.
+    #[inline] pub fn is_newline(chr: u8) -> bool {
+    chr == b'\n'
+    }
+}
 /**/
 pub mod iter
 {
@@ -4883,14 +6323,14 @@ pub mod iter
     mod flat_pairs
     mod line_index;
     mod pair;
-    pub(crate) mod pairs;
+    pub mod pairs;
     mod queueable_token;
     mod tokens;
 
     pub use self::flat_pairs::FlatPairs;
     pub use self::pair::Pair;
     pub use self::pairs::Pairs;
-    pub(crate) use self::queueable_token::QueueableToken;
+    pub use self::queueable_token::QueueableToken;
     pub use self::tokens::Tokens;
     */
     pub mod line_index
@@ -5767,7 +7207,7 @@ pub mod history
         *,
     };
     /*
-    use rusqlite::Connection as Conn;
+    use rusqlite::Connection as Connection;
     use rusqlite::Error::SqliteFailure;
     */
     pub fn init_db(hfile: &str, htable: &str)
@@ -5811,12 +7251,12 @@ pub mod history
     {
         let hfile = get_history_file();
         let history_table = get_history_table();
-        let conn = match Conn::open(&hfile)
+        let Connection = match Connection::open(&hfile)
         {
             Ok(x) => x,
             Err(e) =>
             {
-                println_stderr!("cicada: history: conn error: {}", e);
+                println_stderr!("cicada: history: Connection error: {}", e);
                 return;
             }
         };
@@ -5828,7 +7268,7 @@ pub mod history
             history_table, history_table
         );
 
-        match conn.execute(&sql, [])
+        match Connection.execute(&sql, [])
         {
             Ok(_) => {}
             Err(e) => match e
@@ -5867,12 +7307,12 @@ pub mod history
             init_db(&hfile, &history_table);
         }
 
-        let conn = match Conn::open(&hfile)
+        let Connection = match Connection::open(&hfile)
         {
             Ok(x) => x,
             Err(e) => 
             {
-                println_stderr!("cicada: history: conn error: {}", e);
+                println_stderr!("cicada: history: Connection error: {}", e);
                 return;
             }
         };
@@ -5891,7 +7331,7 @@ pub mod history
             sh.current_dir,
         );
 
-        match conn.execute(&sql, [])
+        match Connection.execute(&sql, [])
         {
             Ok(_) => {}
             Err(e) => println_stderr!("cicada: history: save error: {}", e),
@@ -6909,7 +8349,23 @@ pub mod mortal
             }
         }
     }
-    pub use self::sequence::{ FindResult, SequenceMap };
+    pub use self::sequence::{ * };
+
+    pub mod terminal
+    {
+        /// Represents the visual appearance of the cursor in the terminal
+        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+        pub enum CursorMode
+        {
+            /// Normal mode
+            Normal,
+            /// Invisible mode
+            Invisible,
+            /// Overwrite mode
+            Overwrite,
+        }
+    }
+    pub use self::terminal::{ * };
 }
 /**/
 pub mod option
@@ -6962,6 +8418,7 @@ pub mod parsers
         use ::
         {
             regex::{ Regex },
+            result::{ Result },
             types::{LineInfo, Redirection, Tokens},
             *,
         };
@@ -8514,7 +9971,7 @@ pub mod prompt
                 *,
             };
             /// Implements custom functionality for a `Prompter` command
-            pub trait Function<Term: Terminal>: Send + Sync 
+            pub trait Function<Term: Terminals>: Send + Sync 
             {
                 /// Executes the function.
                 fn execute(&self, prompter: &mut Prompter<Term>, count: i32, ch: char) -> io::Result<()>;
@@ -8522,7 +9979,7 @@ pub mod prompt
                 fn category(&self) -> Category { Category::Other }
             }
 
-            impl<F, Term: Terminal> Function<Term> for F where
+            impl<F, Term: Terminals> Function<Term> for F where
             F: Send + Sync,
             F: Fn(&mut Prompter<Term>, i32, char) -> io::Result<()> 
             {
@@ -8531,6 +9988,12 @@ pub mod prompt
             }
         }
         pub use self::function::{ Function };
+
+        pub mod highlighting
+        {
+
+        }
+        pub use self::highlighting::{ * };
 
         pub mod inputrc
         {
@@ -9085,7 +10548,7 @@ pub mod prompt
             pub struct Interface<Term: Terminals>
             {
                 term: Term,
-                write: Mutex<Write>,
+                write: Mutex<dyn Write>,
                 read: Mutex<Read<Term>>,
             }
             /*
@@ -9105,7 +10568,7 @@ pub mod prompt
                     }
                 }
 
-                impl<Term: Terminal> Interface<Term>
+                impl<Term: Terminals> Interface<Term>
                 {
                     /// Creates a new `Interface` instance with a particular terminal implementation.
                     ///
@@ -9182,7 +10645,7 @@ pub mod prompt
                 ///
                 /// If the read lock is already held, e.g. because a `read_line` call is in
                 /// progress, the method will block until the lock is released.
-                impl<Term: Terminal> Interface<Term>
+                impl<Term: Terminals> Interface<Term>
                 {
                     /// Interactively reads a line from the terminal device.
                     ///
@@ -9348,7 +10811,7 @@ pub mod prompt
                 /// The lock is released before the method returns.
                 ///
                 /// If the write lock is already held, the method will block until it is released.
-                impl<Term: Terminal> Interface<Term> 
+                impl<Term: Terminals> Interface<Term> 
                 {
                     /// Returns the current input buffer.
                     pub fn buffer(&self) -> String {
@@ -9504,7 +10967,7 @@ pub mod prompt
                 /// The locks are released before the method returns.
                 ///
                 /// If either lock is already held, the method will block until it is released.
-                impl<Term: Terminal> Interface<Term> 
+                impl<Term: Terminals> Interface<Term> 
                 {
                     /// Sets the prompt that will be displayed when `read_line` is called.
                     ///
@@ -9633,7 +11096,7 @@ pub mod prompt
             /// Provides access to the current state of input while a `read_line` call is in progress.
             pub struct Prompter<'a, 'b: 'a, Term: 'b + Terminals>
             {
-                pub(crate) read: &'a mut ReadLock<'b, Term>,
+                pub read: &'a mut ReadLock<'b, Term>,
                 write: WriteLock<'b, Term>,
             }
 
@@ -10611,8 +12074,6 @@ pub mod prompt
 
                     if self.read.page_completions &&
                             n_completions >= self.read.completion_query_items {
-                        // TODO: Replace borrowed data in `Table` with owned data.
-                        // Then, store table here to avoid regenerating column widths
                         self.start_page_completions(n_completions)
                     } else {
                         self.show_list_completions(table)?;
@@ -11188,7 +12649,7 @@ pub mod prompt
             }
 
             #[derive(Copy, Clone, Debug)]
-            pub(crate) enum InputState 
+            pub enum InputState 
             {
                 Inactive,
                 NewSequence,
@@ -11601,11 +13062,6 @@ pub mod prompt
                 }
 
                 /// Reads the next character of input.
-                ///
-                /// Performs a non-blocking read from the terminal, if necessary.
-                ///
-                /// If non-input data was received (e.g. a signal) or insufficient input
-                /// is available, `Ok(None)` is returned.
                 pub fn read_char(&mut self) -> io::Result<Option<char>> {
                     if let Some(ch) = self.macro_pop() {
                         Ok(Some(ch))
@@ -12010,6 +13466,243 @@ pub mod prompt
             }
         }
         pub use self::reader::{ Reader };
+
+        pub mod signal
+        {
+            //! Contains types relating to operating system signals
+            use ::
+            {
+                iter::{ FromIterator },
+                *,
+            };
+            
+            const NUM_SIGNALS: u8 = 6;
+
+            macro_rules! impl_op {
+                ( $tr:ident , $tr_meth:ident , $method:ident ) => {
+                    impl ops::$tr for SignalSet {
+                        type Output = SignalSet;
+
+                        fn $tr_meth(self, rhs: SignalSet) -> SignalSet {
+                            self.$method(rhs)
+                        }
+                    }
+                }
+            }
+
+            macro_rules! impl_mut_op {
+                ( $tr:ident , $tr_meth:ident , $method:ident ) => {
+                    impl ops::$tr for SignalSet {
+                        fn $tr_meth(&mut self, rhs: SignalSet) {
+                            *self = self.$method(rhs);
+                        }
+                    }
+                }
+            }
+
+            macro_rules! impl_unary_op {
+                ( $tr:ident , $tr_meth:ident , $method:ident ) => {
+                    impl ops::$tr for SignalSet {
+                        type Output = SignalSet;
+
+                        fn $tr_meth(self) -> SignalSet {
+                            self.$method()
+                        }
+                    }
+                }
+            }
+            /// Signal received through a terminal device
+            #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+            pub enum Signal {
+                /// Break signal (`CTRL_BREAK_EVENT`); Windows only
+                Break,
+                /// Continue signal (`SIGCONT`); Unix only
+                Continue,
+                /// Interrupt signal (`SIGINT` on Unix, `CTRL_C_EVENT` on Windows)
+                Interrupt,
+                /// Terminal window resize (`SIGWINCH` on Unix,
+                /// `WINDOW_BUFFER_SIZE_EVENT` on Windows)
+                ///
+                /// When this signal is received, it will be translated into an
+                /// `Event::Resize(_)` value containing the new size of the terminal.
+                Resize,
+                /// Suspend signal (`SIGTSTP`); Unix only
+                Suspend,
+                /// Quit signal (`SIGQUIT`); Unix only
+                Quit,
+            }
+
+            impl Signal {
+                fn as_bit(&self) -> u8 {
+                    1 << (*self as u8)
+                }
+
+                fn all_bits() -> u8 {
+                    (1 << NUM_SIGNALS) - 1
+                }
+            }
+
+            impl ops::BitOr for Signal {
+                type Output = SignalSet;
+
+                fn bitor(self, rhs: Signal) -> SignalSet {
+                    let mut set = SignalSet::new();
+
+                    set.insert(self);
+                    set.insert(rhs);
+                    set
+                }
+            }
+
+            impl ops::Not for Signal {
+                type Output = SignalSet;
+
+                fn not(self) -> SignalSet {
+                    !SignalSet::from(self)
+                }
+            }
+            /// Represents a set of `Signal` values
+            #[derive(Copy, Clone, Default, Eq, PartialEq)]
+            pub struct SignalSet(u8);
+
+            impl SignalSet {
+                /// Returns an empty `SignalSet`.
+                pub fn new() -> SignalSet {
+                    SignalSet(0)
+                }
+
+                /// Returns a `SignalSet` containing all available signals.
+                pub fn all() -> SignalSet {
+                    SignalSet(Signal::all_bits())
+                }
+
+                /// Returns whether this set contains the given `Signal`.
+                pub fn contains(&self, sig: Signal) -> bool {
+                    self.0 & sig.as_bit() != 0
+                }
+
+                /// Returns whether this set contains all signals present in another set.
+                pub fn contains_all(&self, other: SignalSet) -> bool {
+                    self.0 & other.0 == other.0
+                }
+
+                /// Returns whether this set contains any signals present in another set.
+                pub fn intersects(&self, other: SignalSet) -> bool {
+                    self.0 & other.0 != 0
+                }
+
+                /// Returns whether this set contains any signals.
+                pub fn is_empty(&self) -> bool {
+                    self.0 == 0
+                }
+
+                /// Inserts a `Signal` into this set.
+                pub fn insert(&mut self, sig: Signal) {
+                    self.0 |= sig.as_bit();
+                }
+
+                /// Removes a `Signal` from this set.
+                pub fn remove(&mut self, sig: Signal) {
+                    self.0 &= !sig.as_bit();
+                }
+
+                /// Sets whether this set contains the given `Signal`.
+                pub fn set(&mut self, sig: Signal, set: bool) {
+                    if set {
+                        self.insert(sig);
+                    } else {
+                        self.remove(sig);
+                    }
+                }
+                /// Returns the difference of two sets.
+                pub fn difference(&self, other: SignalSet) -> SignalSet {
+                    SignalSet(self.0 & !other.0)
+                }
+                /// Returns the symmetric difference of two sets.
+                pub fn symmetric_difference(&self, other: SignalSet) -> SignalSet {
+                    SignalSet(self.0 ^ other.0)
+                }
+                /// Returns the intersection of two sets.
+                pub fn intersection(&self, other: SignalSet) -> SignalSet {
+                    SignalSet(self.0 & other.0)
+                }
+                /// Returns the union of two sets.
+                pub fn union(&self, other: SignalSet) -> SignalSet {
+                    SignalSet(self.0 | other.0)
+                }
+                /// Returns the inverse of the set.
+                pub fn inverse(&self) -> SignalSet {
+                    SignalSet(!self.0 & Signal::all_bits())
+                }
+            }
+
+            impl fmt::Debug for SignalSet {
+                fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                    const SIGNALS: &[Signal] = &[
+                        Signal::Break,
+                        Signal::Continue,
+                        Signal::Interrupt,
+                        Signal::Resize,
+                        Signal::Suspend,
+                        Signal::Quit,
+                    ];
+
+                    let mut first = true;
+
+                    f.write_str("SignalSet(")?;
+
+                    for &sig in SIGNALS {
+                        if self.contains(sig) {
+                            if !first {
+                                f.write_str(" | ")?;
+                            }
+
+                            write!(f, "{:?}", sig)?;
+                            first = false;
+                        }
+                    }
+
+                    f.write_str(")")
+                }
+            }
+
+            impl From<Signal> for SignalSet {
+                fn from(sig: Signal) -> SignalSet {
+                    let mut set = SignalSet::new();
+                    set.insert(sig);
+                    set
+                }
+            }
+
+            impl Extend<Signal> for SignalSet {
+                fn extend<I: IntoIterator<Item=Signal>>(&mut self, iter: I) {
+                    for sig in iter {
+                        self.insert(sig);
+                    }
+                }
+            }
+
+            impl FromIterator<Signal> for SignalSet {
+                fn from_iter<I: IntoIterator<Item=Signal>>(iter: I) -> SignalSet {
+                    let mut set = SignalSet::new();
+
+                    set.extend(iter);
+                    set
+                }
+            }
+
+            impl_op!{ BitAnd, bitand, intersection }
+            impl_op!{ BitOr, bitor, union }
+            impl_op!{ BitXor, bitxor, symmetric_difference }
+            impl_op!{ Sub, sub, difference }
+
+            impl_unary_op!{ Not, not, inverse }
+
+            impl_mut_op!{ BitAndAssign, bitand_assign, intersection }
+            impl_mut_op!{ BitOrAssign, bitor_assign, union }
+            impl_mut_op!{ BitXorAssign, bitxor_assign, symmetric_difference }
+            impl_mut_op!{ SubAssign, sub_assign, difference }
+        }
 
         pub mod system
         {
@@ -13003,6 +14696,232 @@ pub mod prompt
                 name == value || (name.starts_with(value) && name.as_bytes()[value.len()] == b'-')
             }
         }
+        pub use self::util::{ * };
+
+        pub mod variables
+        {
+            //! Contains types associated with user-configurable variables
+            use ::
+            {
+                borrow::{ Cow },
+                mem::{ replace },
+                timed::{ Duration },
+                *,
+            };
+            /// Default `keyseq_timeout`, in milliseconds
+            const KEYSEQ_TIMEOUT_MS: u64 = 500;
+            /// Iterator over `Reader` variable values
+            #[derive(Clone)]
+            pub struct VariableIter<'a> {
+                vars: &'a Variables,
+                n: usize,
+            }
+            /// Represents a `Reader` variable of a given type
+            #[derive(Clone, Debug)]
+            pub enum Variable {
+                /// Boolean variable
+                Boolean(bool),
+                /// Integer variable
+                Integer(i32),
+                /// String variable
+                String(Cow<'static, str>),
+            }
+
+            impl From<bool> for Variable {
+                fn from(b: bool) -> Variable {
+                    Variable::Boolean(b)
+                }
+            }
+
+            impl From<i32> for Variable {
+                fn from(i: i32) -> Variable {
+                    Variable::Integer(i)
+                }
+            }
+
+            impl From<&'static str> for Variable {
+                fn from(s: &'static str) -> Variable {
+                    Variable::String(s.into())
+                }
+            }
+
+            impl From<Cow<'static, str>> for Variable {
+                fn from(s: Cow<'static, str>) -> Variable {
+                    Variable::String(s)
+                }
+            }
+
+            impl From<String> for Variable {
+                fn from(s: String) -> Variable {
+                    Variable::String(s.into())
+                }
+            }
+
+            impl fmt::Display for Variable {
+                fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                    match *self {
+                        Variable::Boolean(b) => f.write_str(if b { "on" } else { "off" }),
+                        Variable::Integer(n) => fmt::Display::fmt(&n, f),
+                        Variable::String(ref s) => fmt::Display::fmt(&s[..], f),
+                    }
+                }
+            }
+
+            macro_rules! define_variables {
+                ( $( $field:ident : $ty:ty => ( $name:expr , $conv:ident ,
+                        |$gr:ident| $getter:expr , |$sr:ident, $v:ident| $setter:expr ) , )+ ) => {
+                    static VARIABLE_NAMES: &[&str] = &[ $( $name ),+ ];
+
+                    pub struct Variables {
+                        $( pub $field : $ty ),*
+                    }
+
+                    impl Variables {
+                        pub fn get_variable(&self, name: &str) -> Option<Variable> {
+                            match name {
+                                $( $name => {
+                                    let $gr = self;
+                                    Some(Variable::from($getter))
+                                } )+
+                                _ => None
+                            }
+                        }
+
+                        pub fn set_variable(&mut self, name: &str, value: &str)
+                                -> Option<Variable> {
+                            match name {
+                                $( $name => {
+                                    if let Some($v) = $conv(value) {
+                                        let $sr = self;
+                                        Some(Variable::from($setter))
+                                    } else {
+                                        None
+                                    }
+                                } )+
+                                _ => None
+                            }
+                        }
+
+                        pub fn iter(&self) -> VariableIter {
+                            VariableIter{vars: self, n: 0}
+                        }
+                    }
+
+                    impl<'a> Iterator for VariableIter<'a> {
+                        type Item = (&'static str, Variable);
+
+                        fn next(&mut self) -> Option<Self::Item> {
+                            let res = match VARIABLE_NAMES.get(self.n).cloned() {
+                                $( Some($name) => ($name, {
+                                    let $gr = self.vars;
+                                    Variable::from($getter)
+                                }) , )+
+                                _ => return None
+                            };
+
+                            self.n += 1;
+                            Some(res)
+                        }
+                    }
+                }
+            }
+
+            define_variables!{
+                blink_matching_paren: bool => ("blink-matching-paren", parse_bool,
+                    |r| r.blink_matching_paren,
+                    |r, v| replace(&mut r.blink_matching_paren, v)),
+                comment_begin: Cow<'static, str> => ("comment-begin", parse_string,
+                    |r| r.comment_begin.clone(),
+                    |r, v| replace(&mut r.comment_begin, v.into())),
+                completion_display_width: usize => ("completion-display-width", parse_usize,
+                    |r| usize_as_i32(r.completion_display_width),
+                    |r, v| usize_as_i32(replace(&mut r.completion_display_width, v))),
+                completion_query_items: usize => ("completion-query-items", parse_usize,
+                    |r| usize_as_i32(r.completion_query_items),
+                    |r, v| usize_as_i32(replace(&mut r.completion_query_items, v))),
+                disable_completion: bool => ("disable-completion", parse_bool,
+                    |r| r.disable_completion,
+                    |r, v| replace(&mut r.disable_completion, v)),
+                echo_control_characters: bool => ("echo-control-characters", parse_bool,
+                    |r| r.echo_control_characters,
+                    |r, v| replace(&mut r.echo_control_characters, v)),
+                keyseq_timeout: Option<Duration> => ("keyseq-timeout", parse_duration,
+                    |r| as_millis(r.keyseq_timeout),
+                    |r, v| as_millis(replace(&mut r.keyseq_timeout, v))),
+                page_completions: bool => ("page-completions", parse_bool,
+                    |r| r.page_completions,
+                    |r, v| replace(&mut r.page_completions, v)),
+                print_completions_horizontally: bool => ("print-completions-horizontally", parse_bool,
+                    |r| r.print_completions_horizontally,
+                    |r, v| replace(&mut r.print_completions_horizontally, v)),
+            }
+
+            impl Default for Variables {
+                fn default() -> Variables {
+                    Variables{
+                        blink_matching_paren: false,
+                        comment_begin: "#".into(),
+                        completion_display_width: usize::max_value(),
+                        completion_query_items: 100,
+                        disable_completion: false,
+                        echo_control_characters: true,
+                        keyseq_timeout: Some(Duration::from_millis(KEYSEQ_TIMEOUT_MS)),
+                        page_completions: true,
+                        print_completions_horizontally: false,
+                    }
+                }
+            }
+
+            fn parse_bool(s: &str) -> Option<bool> {
+                match s {
+                    "0" => Some(false),
+                    "1" => Some(true),
+                    s if s.eq_ignore_ascii_case("off") => Some(false),
+                    s if s.eq_ignore_ascii_case("on") => Some(true),
+                    _ => None
+                }
+            }
+
+            fn parse_string(s: &str) -> Option<String> {
+                Some(s.to_owned())
+            }
+
+            fn as_millis(timeout: Option<Duration>) -> i32 {
+                match timeout {
+                    Some(t) => {
+                        let s = (t.as_secs() * 1_000) as i32;
+                        let ms = (t.subsec_nanos() / 1_000_000) as i32;
+
+                        s + ms
+                    }
+                    None => -1
+                }
+            }
+
+            fn parse_duration(s: &str) -> Option<Option<Duration>> {
+                match s.parse::<i32>() {
+                    Ok(n) if n <= 0 => Some(None),
+                    Ok(n) => Some(Some(Duration::from_millis(n as u64))),
+                    Err(_) => Some(None)
+                }
+            }
+
+            fn usize_as_i32(u: usize) -> i32 {
+                match u {
+                    u if u > i32::max_value() as usize => -1,
+                    u => u as i32
+                }
+            }
+
+            fn parse_usize(s: &str) -> Option<usize> {
+                match s.parse::<i32>() {
+                    Ok(n) if n < 0 => Some(usize::max_value()),
+                    Ok(n) => Some(n as usize),
+                    Err(_) => None
+                }
+            }
+        }
+        pub use self::variables::{ * };
 
         pub mod writer
         {
@@ -13013,7 +14932,9 @@ pub mod prompt
                 char::{is_ctrl, unctrl, ESCAPE, RUBOUT},
                 collections::{vec_deque, VecDeque},
                 iter::{repeat, Skip},
+                mortal::{ CursorMode },
                 ops::{Deref, DerefMut, Range},
+                prompt::lines::{ Terminals },
                 sync::MutexGuard,
                 time::{Duration, Instant},
                 *,
@@ -13022,7 +14943,7 @@ pub mod prompt
             use super::
             {
                 reader::{START_INVISIBLE, END_INVISIBLE},
-                terminal::{CursorMode, Size, Terminal, TerminalWriter},
+                terminal::{ Size, Terminal, TerminalWriter },
                 util::
                 {
                     backward_char, forward_char, backward_search_char, forward_search_char,
@@ -13050,12 +14971,12 @@ pub mod prompt
             // Length of "': "
             const PROMPT_SEARCH_SUFFIX: usize = 3;
             /// Provides an interface to write line-by-line output to the terminal device.
-            pub struct Writer<'a, 'b: 'a, Term: 'b + Terminal> 
+            pub struct Writer<'a, 'b: 'a, Term: 'b + Terminals> 
             {
                 write: WriterImpl<'a, 'b, Term>,
             }
 
-            enum WriterImpl<'a, 'b: 'a, Term: 'b + Terminal> 
+            enum WriterImpl<'a, 'b: 'a, Term: 'b + Terminals> 
             {
                 Mutex(WriteLock<'b, Term>),
                 MutRef(&'a mut WriteLock<'b, Term>),
@@ -13110,13 +15031,13 @@ pub mod prompt
                 pub screen_size: Size,
             }
 
-            pub(crate) struct WriteLock<'a, Term: 'a + Terminal>
+            pub struct WriteLock<'a, Term: 'a + Terminals>
             {
                 term: Box<dyn TerminalWriter<Term> + 'a>,
                 data: MutexGuard<'a, Write>,
             }
 
-            impl<'a, Term: Terminal> WriteLock<'a, Term>
+            impl<'a, Term: Terminals> WriteLock<'a, Term>
             {
                 pub fn new(term: Box<dyn TerminalWriter<Term> + 'a>, data: MutexGuard<'a, Write>)
                         -> WriteLock<'a, Term> {
@@ -13898,7 +15819,7 @@ pub mod prompt
                     self.term.clear_to_screen_end()
                 }
 
-                pub(crate) fn clear_prompt(&mut self) -> io::Result<()> {
+                pub fn clear_prompt(&mut self) -> io::Result<()> {
                     let (line, _) = self.line_col(self.cursor);
 
                     self.term.move_up(line)?;
@@ -13981,7 +15902,7 @@ pub mod prompt
                 expiry: Instant,
             }
 
-            impl<'a, 'b: 'a, Term: 'b + Terminal> Writer<'a, 'b, Term>
+            impl<'a, 'b: 'a, Term: 'b + Terminals> Writer<'a, 'b, Term>
             {
                 fn new(mut write: WriterImpl<'a, 'b, Term>, clear: bool) -> io::Result<Self> {
                     write.expire_blink()?;
@@ -13998,11 +15919,11 @@ pub mod prompt
                     Ok(Writer{write})
                 }
 
-                pub(crate) fn with_lock(write: WriteLock<'b, Term>, clear: bool) -> io::Result<Self> {
+                pub fn with_lock(write: WriteLock<'b, Term>, clear: bool) -> io::Result<Self> {
                     Writer::new(WriterImpl::Mutex(write), clear)
                 }
 
-                pub(crate) fn with_ref(write: &'a mut WriteLock<'b, Term>, clear: bool) -> io::Result<Self> {
+                pub fn with_ref(write: &'a mut WriteLock<'b, Term>, clear: bool) -> io::Result<Self> {
                     Writer::new(WriterImpl::MutRef(write), clear)
                 }
 
@@ -14036,16 +15957,15 @@ pub mod prompt
                 }
             }
 
-            impl<'a, 'b: 'a, Term: 'b + Terminal> Drop for Writer<'a, 'b, Term> {
+            impl<'a, 'b: 'a, Term: 'b + Terminals> Drop for Writer<'a, 'b, Term> {
                 fn drop(&mut self) {
                     if self.write.is_prompt_drawn {
-                        // There's not really anything useful to be done with this error.
                         let _ = self.write.draw_prompt();
                     }
                 }
             }
 
-            impl<'a, Term: 'a + Terminal> Deref for WriteLock<'a, Term> {
+            impl<'a, Term: 'a + Terminals> Deref for WriteLock<'a, Term> {
                 type Target = Write;
 
                 fn deref(&self) -> &Write {
@@ -14053,7 +15973,7 @@ pub mod prompt
                 }
             }
 
-            impl<'a, Term: 'a + Terminal> DerefMut for WriteLock<'a, Term> {
+            impl<'a, Term: 'a + Terminals> DerefMut for WriteLock<'a, Term> {
                 fn deref_mut(&mut self) -> &mut Write {
                     &mut self.data
                 }
@@ -14187,12 +16107,11 @@ pub mod prompt
                     col - start_col
                 }
             }
-
             /// Maximum value of digit input
             const NUMBER_MAX: i32 = 1_000_000;
 
             #[derive(Copy, Clone, Debug)]
-            pub(crate) enum Digit {
+            pub enum Digit {
                 None,
                 NegNone,
                 Num(i32),
@@ -14230,8 +16149,6 @@ pub mod prompt
 
             impl From<char> for Digit {
                 /// Convert a decimal digit character to a `Digit` value.
-                ///
-                /// The input must be in the range `'0' ..= '9'`.
                 fn from(ch: char) -> Digit {
                     let n = (ch as u8) - b'0';
                     Digit::Num(n as i32)
@@ -14239,7 +16156,7 @@ pub mod prompt
             }
 
             #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-            pub(crate) enum PromptType {
+            pub enum PromptType {
                 Normal,
                 Number,
                 Search,
@@ -14248,12 +16165,12 @@ pub mod prompt
             }
 
             impl PromptType {
-                pub(crate) fn is_normal(&self) -> bool {
+                pub fn is_normal(&self) -> bool {
                     *self == PromptType::Normal
                 }
             }
 
-            impl<'a, 'b, Term: 'b + Terminal> Deref for WriterImpl<'a, 'b, Term> {
+            impl<'a, 'b, Term: 'b + Terminals> Deref for WriterImpl<'a, 'b, Term> {
                 type Target = WriteLock<'b, Term>;
 
                 fn deref(&self) -> &WriteLock<'b, Term> {
@@ -14264,7 +16181,7 @@ pub mod prompt
                 }
             }
 
-            impl<'a, 'b: 'a, Term: 'b + Terminal> DerefMut for WriterImpl<'a, 'b, Term> {
+            impl<'a, 'b: 'a, Term: 'b + Terminals> DerefMut for WriterImpl<'a, 'b, Term> {
                 fn deref_mut(&mut self) -> &mut WriteLock<'b, Term> {
                     match *self {
                         WriterImpl::Mutex(ref mut m) => m,
@@ -14272,7 +16189,6 @@ pub mod prompt
                     }
                 }
             }
-
             /// Iterator over `Interface` history entries
             pub struct HistoryIter<'a>(vec_deque::Iter<'a, String>);
 
@@ -14305,7 +16221,7 @@ pub mod prompt
             }
 
             #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-            pub(crate) enum DisplaySequence {
+            pub enum DisplaySequence {
                 Char(char),
                 Escape(char),
                 End,
@@ -14341,13 +16257,13 @@ pub mod prompt
             }
 
             #[derive(Copy, Clone, Debug, Default)]
-            pub(crate) struct Display {
+            pub struct Display {
                 allow_tab: bool,
                 allow_newline: bool,
                 allow_escape: bool,
             }
 
-            pub(crate) fn display(ch: char, style: Display) -> DisplaySequence {
+            pub fn display(ch: char, style: Display) -> DisplaySequence {
                 match ch {
                     '\t' if style.allow_tab => DisplaySequence::Char(ch),
                     '\n' if style.allow_newline => DisplaySequence::Char(ch),
@@ -14359,7 +16275,7 @@ pub mod prompt
                 }
             }
 
-            pub(crate) fn display_str<'a>(s: &'a str, style: Display) -> Cow<'a, str> {
+            pub fn display_str<'a>(s: &'a str, style: Display) -> Cow<'a, str> {
                 if s.chars().all(|ch| display(ch, style) == DisplaySequence::Char(ch)) {
                     Borrowed(s)
                 } else {
@@ -14394,7 +16310,7 @@ pub mod prompt
         pub use self::writer::{ Writer };
     }
     /**/
-    mod main
+    pub mod main
     {
         use ::
         {
@@ -14568,7 +16484,7 @@ pub mod prompt
         }
     }
     /**/
-    mod multilines
+    pub mod multilines
     {
         use ::
         {
@@ -14584,7 +16500,7 @@ pub mod prompt
             fn execute(&self, prompter: &mut Prompter<T>, count: i32, _ch: char) -> io::Result<()>
             {
                 let buf = prompter.buffer();
-                let linfo = parser_line::parse_line( buf );
+                let linfo = ::parsers::parser_line::parse_line( buf );
                 if linfo.is_complete
                 {
                     prompter.accept_input()
@@ -14992,1822 +16908,6 @@ pub mod rcfile
         let args = vec![ "source".to_string(), rc_file ];
         scripting::run_script( sh, &args );
     }
-
-}
-/**/
-pub mod types
-{
-    use ::
-    {
-        collections::{ HashMap, HashSet },
-        parsers::
-        {
-            self,
-            parser_line::tokens_to_redirections,
-        },
-        regex::{ Regex },
-        *,
-    };
-
-    #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-    pub struct WaitStatus(i32, i32, i32);
-
-    impl WaitStatus
-    {
-        pub fn from_exited(pid: i32, status: i32) -> Self { WaitStatus(pid, 0, status) }
-
-        pub fn from_signaled(pid: i32, sig: i32) -> Self { WaitStatus(pid, 1, sig) }
-
-        pub fn from_stopped(pid: i32, sig: i32) -> Self { WaitStatus(pid, 2, sig) }
-
-        pub fn from_continuted(pid: i32) -> Self { WaitStatus(pid, 3, 0) }
-
-        pub fn from_others() -> Self { WaitStatus(0, 9, 9) }
-
-        pub fn from_error(errno: i32) -> Self { WaitStatus(0, 255, errno) }
-
-        pub fn empty() -> Self { WaitStatus(0, 0, 0) }
-
-        pub fn is_error(&self) -> bool { self.1 == 255 }
-
-        pub fn is_others(&self) -> bool { self.1 == 9 }
-
-        pub fn is_signaled(&self) -> bool { self.1 == 1 }
-
-        pub fn get_errno(&self) -> nix::Error { nix::Error::from_raw(self.2) }
-
-        pub fn is_exited(&self) -> bool { self.0 != 0 && self.1 == 0 }
-
-        pub fn is_stopped(&self) -> bool { self.1 == 2 }
-
-        pub fn is_continued(&self) -> bool { self.1 == 3 }
-
-        pub fn get_pid(&self) -> i32 { self.0 }
-
-        fn _get_signaled_status(&self) -> i32 { self.2 + 128 }
-
-        pub fn get_signal(&self) -> i32 { self.2 }
-
-        pub fn get_name(&self) -> String
-        {
-            match true
-            {
-                true if self.is_exited()    => { "Exited".to_string() }
-                true if self.is_stopped()   => { "Stopped".to_string() }
-                true if self.is_continued() => { "Continued".to_string() }
-                true if self.is_signaled()  => { "Signaled".to_string() }
-                true if self.is_others()    => { "Others".to_string() }
-                true if self.is_error()     => { "Error".to_string() }
-                true if self.is_exited()    => { "Exited".to_string() }
-                true if self.is_exited()    => { "Exited".to_string() }
-                unknown                     => { format!( "unknown: {}", self.2 ) }
-            }
-        }
-
-        pub fn get_status(&self) -> i32 {
-            if self.is_exited() {
-                self.2
-            } else {
-                self._get_signaled_status()
-            }
-        }
-    }
-
-    impl fmt::Debug for WaitStatus
-    {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-        {
-            let mut formatter = f.debug_struct("WaitStatus");
-            formatter.field("pid", &self.0);
-            let name = self.get_name();
-            formatter.field("name", &name);
-            formatter.field("ext", &self.2);
-            formatter.finish()
-        }
-    }
-
-    pub type Token = (String, String);
-    pub type Tokens = Vec<Token>;
-    pub type Redirection = (String, String, String);
-
-    #[derive(Debug)]
-    pub struct LineInfo 
-    {
-        pub tokens: Tokens,
-        pub is_complete: bool,
-    }
-
-    impl LineInfo
-    {
-        pub fn new(tokens: Tokens) -> Self
-        {
-            LineInfo { tokens, is_complete: true }
-        }
-    }
-    /// command line: `ls 'foo bar' 2>&1 > /dev/null < one-file` would be:
-    /// Command {
-    ///     tokens: [("", "ls"), ("", "-G"), ("\'", "foo bar")],
-    ///     redirects_to: [
-    ///         ("2", ">", "&1"),
-    ///         ("1", ">", "/dev/null"),
-    ///     ],
-    ///     redirect_from: Some(("<", "one-file")),
-    /// }
-    #[derive(Debug)]
-    pub struct Command 
-    {
-        pub tokens: Tokens,
-        pub redirects_to: Vec<Redirection>,
-        pub redirect_from: Option<Token>,
-    }
-
-    #[derive(Debug)]
-    pub struct CommandLine
-    {
-        pub line: String,
-        pub commands: Vec<Command>,
-        pub envs: HashMap<String, String>,
-        pub background: bool,
-    }
-
-    impl Command
-    {
-        pub fn from_tokens(tokens: Tokens) -> Result<Command, String>
-        {
-            let mut tokens_new = tokens.clone();
-            let mut redirects_from_type = String::new();
-            let mut redirects_from_value = String::new();
-            let mut has_redirect_from = tokens_new.iter().any(|x| x.1 == "<" || x.1 == "<<<");
-
-            let mut len = tokens_new.len();
-            while has_redirect_from
-            {
-                if let Some(idx) = tokens_new.iter().position(|x| x.1 == "<")
-                {
-                    redirects_from_type = "<".to_string();
-                    tokens_new.remove(idx);
-                    len -= 1;
-                    if len > idx
-                    {
-                        redirects_from_value = tokens_new.remove(idx).1;
-                        len -= 1;
-                    }
-                }
-
-                if let Some(idx) = tokens_new.iter().position(|x| x.1 == "<<<")
-                {
-                    redirects_from_type = "<<<".to_string();
-                    tokens_new.remove(idx);
-                    len -= 1;
-                    if len > idx
-                    {
-                        redirects_from_value = tokens_new.remove(idx).1;
-                        len -= 1;
-                    }
-                }
-
-                has_redirect_from = tokens_new.iter().any(|x| x.1 == "<" || x.1 == "<<<");
-            }
-
-            let tokens_final;
-            let redirects_to;
-            match tokens_to_redirections(&tokens_new)
-            {
-                Ok((_tokens, _redirects_to)) =>
-                {
-                    tokens_final = _tokens;
-                    redirects_to = _redirects_to;
-                }
-                
-                Err(e) => { return Err(e); }
-            }
-
-            let redirect_from = if redirects_from_type.is_empty() { None } 
-            else { Some((redirects_from_type, redirects_from_value)) };
-
-            Ok(
-                Command
-                {
-                    tokens: tokens_final,
-                    redirects_to,
-                    redirect_from,
-                })
-            }
-
-        pub fn has_redirect_from(&self) -> bool
-        {
-            self.redirect_from.is_some() &&
-            self.redirect_from.clone().unwrap().0 == "<"
-        }
-
-        pub fn has_here_string(&self) -> bool
-        {
-            self.redirect_from.is_some() &&
-            self.redirect_from.clone().unwrap().0 == "<<<"
-        }
-
-        pub fn is_builtin(&self) -> bool { tools::is_builtin(&self.tokens[0].1) }
-    }
-
-    #[derive(Debug, Clone, Default)]
-    pub struct Job
-    {
-        pub cmd: String,
-        pub id: i32,
-        pub gid: i32,
-        pub pids: Vec<i32>,
-        pub pids_stopped: HashSet<i32>,
-        pub status: String,
-        pub is_bg: bool,
-    }
-
-    impl Job
-    {
-        pub fn all_members_stopped(&self) -> bool
-        {
-            for pid in &self.pids
-            {
-                if !self.pids_stopped.contains(pid) { return false; }
-            }
-
-            true
-        }
-
-        pub fn all_members_running(&self) -> bool { self.pids_stopped.is_empty() }
-    }
-
-    #[allow(dead_code)]
-    #[derive(Clone, Debug, Default)]
-    pub struct CommandResult
-    {
-        pub gid: i32,
-        pub status: i32,
-        pub stdout: String,
-        pub stderr: String,
-    }
-
-    impl CommandResult
-    {
-        pub const fn new() -> CommandResult
-        {
-            CommandResult
-            {
-                gid: 0,
-                status: 0,
-                stdout: String::new(),
-                stderr: String::new(),
-            }
-        }
-
-        pub fn from_status(gid: i32, status: i32) -> CommandResult
-        {
-            CommandResult
-            {
-                gid,
-                status,
-                stdout: String::new(),
-                stderr: String::new(),
-            }
-        }
-
-        pub fn error() -> CommandResult
-        {
-            CommandResult
-            {
-                gid: 0,
-                status: 1,
-                stdout: String::new(),
-                stderr: String::new(),
-            }
-        }
-    }
-
-    #[allow(dead_code)]
-    #[derive(Clone, Debug, Default)]
-    pub struct CommandOptions
-    {
-        pub background: bool,
-        pub isatty: bool,
-        pub capture_output: bool,
-        pub envs: HashMap<String, String>,
-    }
-
-    fn split_tokens_by_pipes(tokens: &[Token]) -> Vec<Tokens>
-    {
-        let mut cmd = Vec::new();
-        let mut cmds = Vec::new();
-        for token in tokens
-        {
-            let sep = &token.0;
-            let value = &token.1;
-            if sep.is_empty() && value == "|"
-            {
-                if cmd.is_empty() { return Vec::new(); }
-                cmds.push(cmd.clone());
-                cmd = Vec::new();
-            } 
-            else { cmd.push(token.clone()); }
-        }
-
-        if cmd.is_empty() { return Vec::new(); }
-
-        cmds.push(cmd.clone());
-        cmds
-    }
-
-    fn drain_env_tokens(tokens: &mut Tokens) -> HashMap<String, String>
-    {
-        let mut envs: HashMap<String, String> = HashMap::new();
-        let mut n = 0;
-        let re = Regex::new(r"^([a-zA-Z0-9_]+)=(.*)$").unwrap();
-        for (sep, text) in tokens.iter()
-        {
-            if !sep.is_empty() || !libs::re::re_contains(text, r"^([a-zA-Z0-9_]+)=(.*)$") { break; }
-
-            for cap in re.captures_iter(text)
-            {
-                let name = cap[1].to_string();
-                let value = parsers::parser_line::unquote(&cap[2]);
-                envs.insert(name, value);
-            }
-
-            n += 1;
-        }
-
-        if n > 0 { tokens.drain(0..n); }
-        envs
-    }
-
-    impl CommandLine
-    {
-        pub fn from_line(line: &str, sh: &mut shell::Shell) -> Result<CommandLine, String>
-        {
-            let linfo = parsers::parser_line::parse_line(line);
-            let mut tokens = linfo.tokens;
-            shell::do_expansion(sh, &mut tokens);
-            let envs = drain_env_tokens(&mut tokens);
-            let mut background = false;
-            let len = tokens.len();
-            if len > 1 && tokens[len - 1].1 == "&"
-            {
-                background = true;
-                tokens.pop();
-            }
-
-            let mut commands = Vec::new();
-            for sub_tokens in split_tokens_by_pipes(&tokens)
-            {
-                match Command::from_tokens(sub_tokens)
-                {
-                    Ok(c) => { commands.push(c); }
-                    Err(e) => { return Err(e); }
-                }
-            }
-
-            Ok
-            (
-                CommandLine
-                {
-                    line:line.to_string(),
-                    commands,
-                    envs,
-                    background,
-                }
-            ) 
-        }
-
-        pub fn is_empty(&self) -> bool { self.commands.is_empty() }
-
-        pub fn with_pipeline(&self) -> bool { self.commands.len() > 1 }
-
-        pub fn is_single_and_builtin(&self) -> bool { self.commands.len() == 1 && self.commands[0].is_builtin() }
-    }
-}
-/*
-uuid v0.0.0 */
-pub mod uuid
-{
-    //! Generate and parse universally unique identifiers (UUIDs).
-    pub mod builder
-    {
-        //! A Builder type for [`Uuid`]s.
-        use ::
-        {
-            uuid::
-            {
-                error::{ * },
-                timestamp, Bytes, Uuid, Variant, Version,
-            },
-            *,
-        };
-        /// A builder for creating a UUID.
-        #[derive(Debug)]
-        pub struct Builder( Uuid );
-
-        impl Uuid
-        {
-            /// The 'nil UUID' (all zeros).
-            pub const fn nil() -> Self { Uuid::from_bytes([0; 16]) }
-            /// The 'max UUID' (all ones).
-            pub const fn max() -> Self { Uuid::from_bytes([0xFF; 16]) }
-            /// Creates a UUID from four field values.
-            pub const fn from_fields(d1: u32, d2: u16, d3: u16, d4: &[u8; 8]) -> Uuid
-            {
-                Uuid::from_bytes
-                ([
-                    (d1 >> 24) as u8, (d1 >> 16) as u8, (d1 >> 8) as u8, d1 as u8,
-                    (d2 >> 8) as u8, d2 as u8,
-                    (d3 >> 8) as u8, d3 as u8,
-                    d4[0], d4[1], d4[2], d4[3], d4[4], d4[5], d4[6], d4[7],
-                ])
-            }
-            /// Creates a UUID from four field values in little-endian order.
-            pub const fn from_fields_le(d1: u32, d2: u16, d3: u16, d4: &[u8; 8]) -> Uuid
-            {
-                Uuid::from_bytes
-                ([
-                    d1 as u8, (d1 >> 8) as u8, (d1 >> 16) as u8, (d1 >> 24) as u8,
-                    (d2) as u8, (d2 >> 8) as u8,
-                    d3 as u8, (d3 >> 8) as u8,
-                    d4[0], d4[1], d4[2], d4[3], d4[4], d4[5], d4[6], d4[7],
-                ])
-            }
-            /// Creates a UUID from a 128bit value.
-            pub const fn from_u128(v: u128) -> Self
-            {
-                Uuid::from_bytes
-                ([
-                    (v >> 120) as u8, (v >> 112) as u8, (v >> 104) as u8, (v >> 96) as u8, (v >> 88) as u8, 
-                    (v >> 80) as u8, (v >> 72) as u8, (v >> 64) as u8, (v >> 56) as u8, (v >> 48) as u8, 
-                    (v >> 40) as u8, (v >> 32) as u8, (v >> 24) as u8, (v >> 16) as u8, (v >> 8) as u8, v as u8,
-                ])
-            }
-            /// Creates a UUID from a 128bit value in little-endian order.
-            pub const fn from_u128_le(v: u128) -> Self
-            {
-                Uuid::from_bytes
-                ([
-                    v as u8, (v >> 8) as u8, (v >> 16) as u8, (v >> 24) as u8, (v >> 32) as u8, (v >> 40) as u8, 
-                    (v >> 48) as u8, (v >> 56) as u8, (v >> 64) as u8, (v >> 72) as u8, (v >> 80) as u8, 
-                    (v >> 88) as u8, (v >> 96) as u8, (v >> 104) as u8, (v >> 112) as u8, (v >> 120) as u8,
-                ])
-            }
-            /// Creates a UUID from two 64bit values.
-            pub const fn from_u64_pair(high_bits: u64, low_bits: u64) -> Self
-            {
-                Uuid::from_bytes
-                ([
-                    (high_bits >> 56) as u8, (high_bits >> 48) as u8, (high_bits >> 40) as u8,
-                    (high_bits >> 32) as u8,  (high_bits >> 24) as u8, (high_bits >> 16) as u8,
-                    (high_bits >> 8) as u8, high_bits as u8,
-
-                    (low_bits >> 56) as u8, (low_bits >> 48) as u8, (low_bits >> 40) as u8, (low_bits >> 32) as u8,
-                    (low_bits >> 24) as u8, (low_bits >> 16) as u8, (low_bits >> 8) as u8, low_bits as u8,
-                ])
-            }
-            /// Creates a UUID using the supplied bytes.
-            pub fn from_slice(b: &[u8]) -> Result<Uuid, Error>
-            {
-                if b.len() != 16 { return Err(Error(ErrorKind::ByteLength { len: b.len() })); }
-
-                let mut bytes: Bytes = [0; 16];
-                bytes.copy_from_slice(b);
-                Ok(Uuid::from_bytes(bytes))
-            }
-
-            /// Creates a UUID using the supplied bytes in little endian order.
-            pub fn from_slice_le(b: &[u8]) -> Result<Uuid, Error>
-            {
-                if b.len() != 16 { return Err(Error(ErrorKind::ByteLength { len: b.len() })); }
-
-                let mut bytes: Bytes = [0; 16];
-                bytes.copy_from_slice(b);
-                Ok(Uuid::from_bytes_le(bytes))
-            }
-            /// Creates a UUID using the supplied bytes.
-            pub const fn from_bytes(bytes: Bytes) -> Uuid { Uuid(bytes) }
-            /// Creates a UUID using the supplied bytes in little endian order.
-            pub const fn from_bytes_le(b: Bytes) -> Uuid
-            {
-                Uuid
-                ([
-                    b[3], b[2], b[1], b[0], b[5], b[4], b[7], b[6], b[8], 
-                    b[9], b[10], b[11], b[12], b[13], b[14], b[15],
-                ])
-            }
-            /// Creates a reference to a UUID from a reference to the supplied bytes.
-            pub fn from_bytes_ref(bytes: &Bytes) -> &Uuid
-            { unsafe { &*(bytes as *const Bytes as *const Uuid) } }
-        }
-
-        impl Builder
-        {
-            /// Creates a `Builder` using the supplied bytes.
-            pub const fn from_bytes(b: Bytes) -> Self { Builder(Uuid::from_bytes(b)) }
-            /// Creates a `Builder` using the supplied bytes in little endian order.
-            pub const fn from_bytes_le(b: Bytes) -> Self { Builder(Uuid::from_bytes_le(b)) }
-            /// Creates a `Builder` for a version 1 UUID using the supplied timestamp and node ID.
-            pub const fn from_rfc4122_timestamp(ticks: u64, counter: u16, node_id: &[u8; 6]) -> Self 
-            { Builder(timestamp::encode_rfc4122_timestamp(ticks, counter, node_id)) }
-            /// Creates a `Builder` for a version 3 UUID using the supplied MD5 hashed bytes.
-            pub const fn from_md5_bytes(md5_bytes: Bytes) -> Self
-            {
-                Builder(Uuid::from_bytes(md5_bytes))
-                .with_variant(Variant::RFC4122)
-                .with_version(Version::Md5)
-            }
-            /// Creates a `Builder` for a version 4 UUID using the supplied random bytes.
-            pub const fn from_random_bytes(random_bytes: Bytes) -> Self
-            {
-                Builder(Uuid::from_bytes(random_bytes))
-                .with_variant(Variant::RFC4122)
-                .with_version(Version::Random)
-            }
-            /// Creates a `Builder` for a version 5 UUID using the supplied SHA-1 hashed bytes.
-            pub const fn from_sha1_bytes(sha1_bytes: Bytes) -> Self
-            {
-                Builder(Uuid::from_bytes(sha1_bytes))
-                .with_variant(Variant::RFC4122)
-                .with_version(Version::Sha1)
-            }
-            /// Creates a `Builder` for a version 6 UUID using the supplied timestamp and node ID.
-            pub const fn from_sorted_rfc4122_timestamp( ticks: u64, counter: u16, node_id: &[u8; 6] ) -> Self
-            { Builder(timestamp::encode_sorted_rfc4122_timestamp( ticks, counter, node_id )) }
-            /// Creates a `Builder` for a version 7 UUID using the supplied Unix timestamp and random bytes.
-            pub const fn from_unix_timestamp_millis(millis: u64, random_bytes: &[u8; 10]) -> Self
-            {
-                Builder(timestamp::encode_unix_timestamp_millis
-                (
-                    millis,
-                    random_bytes,
-                ))
-            }
-            /// Creates a `Builder` for a version 8 UUID using the supplied user-defined bytes.
-            pub const fn from_custom_bytes(custom_bytes: Bytes) -> Self
-            {
-                Builder::from_bytes(custom_bytes)
-                .with_variant(Variant::RFC4122)
-                .with_version(Version::Custom)
-            }
-            /// Creates a `Builder` using the supplied bytes.
-            pub fn from_slice(b: &[u8]) -> Result<Self, Error> { Ok(Builder(Uuid::from_slice(b)?)) }
-            /// Creates a `Builder` using the supplied bytes in little endian order.
-            pub fn from_slice_le(b: &[u8]) -> Result<Self, Error> { Ok(Builder(Uuid::from_slice_le(b)?)) }
-            /// Creates a `Builder` from four field values.
-            pub const fn from_fields(d1: u32, d2: u16, d3: u16, d4: &[u8; 8]) -> Self 
-            { Builder(Uuid::from_fields(d1, d2, d3, d4)) }
-            /// Creates a `Builder` from four field values.
-            pub const fn from_fields_le(d1: u32, d2: u16, d3: u16, d4: &[u8; 8]) -> Self 
-            { Builder(Uuid::from_fields_le(d1, d2, d3, d4)) }
-            /// Creates a `Builder` from a 128bit value.
-            pub const fn from_u128(v: u128) -> Self { Builder(Uuid::from_u128(v)) }
-            /// Creates a UUID from a 128bit value in little-endian order.
-            pub const fn from_u128_le(v: u128) -> Self { Builder(Uuid::from_u128_le(v)) }
-            /// Creates a `Builder` with an initial [`Uuid::nil`].
-            pub const fn nil() -> Self { Builder(Uuid::nil()) }
-            /// Specifies the variant of the UUID.
-            pub fn set_variant(&mut self, v: Variant) -> &mut Self
-            {
-                *self = Builder(self.0).with_variant(v);
-                self
-            }
-            /// Specifies the variant of the UUID.
-            pub const fn with_variant(mut self, v: Variant) -> Self
-            {
-                let byte = (self.0).0[8];
-
-                (self.0).0[8] = match v
-                {
-                    Variant::NCS => byte & 0x7f,
-                    Variant::RFC4122 => (byte & 0x3f) | 0x80,
-                    Variant::Microsoft => (byte & 0x1f) | 0xc0,
-                    Variant::Future => byte | 0xe0,
-                };
-
-                self
-            }
-            /// Specifies the version number of the UUID.
-            pub fn set_version(&mut self, v: Version) -> &mut Self
-            {
-                *self = Builder(self.0).with_version(v);
-                self
-            }
-            /// Specifies the version number of the UUID.
-            pub const fn with_version(mut self, v: Version) -> Self
-            {
-                (self.0).0[6] = ((self.0).0[6] & 0x0f) | ((v as u8) << 4);
-                self
-            }
-            /// Get a reference to the underlying [`Uuid`].
-            pub const fn as_uuid(&self) -> &Uuid { &self.0 }
-            /// Convert the builder into a [`Uuid`].
-            pub const fn into_uuid(self) -> Uuid { self.0 }
-        }
-    }
-
-    pub mod error
-    {
-        use ::
-        {
-            *,
-        };
-        /// A general error that can occur when working with UUIDs.
-        #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-        pub struct Error(pub(crate) ErrorKind);
-
-        #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-        pub(crate) enum ErrorKind
-        {
-            /// Invalid character in the [`Uuid`] string.
-            Char { character: char, index: usize },
-            /// A simple [`Uuid`] didn't contain 32 characters.
-            SimpleLength { len: usize },
-            /// A byte array didn't contain 16 bytes
-            ByteLength { len: usize },
-            /// A hyphenated [`Uuid`] didn't contain 5 groups
-            GroupCount { count: usize },
-            /// A hyphenated [`Uuid`] had a group that wasn't the right length
-            GroupLength
-            {
-                group: usize,
-                len: usize,
-                index: usize,
-            },
-            /// The input was not a valid UTF8 string
-            InvalidUTF8,
-            /// Some other error occurred.
-            Other,
-        }
-        /// A string that is guaranteed to fail to parse to a [`Uuid`].
-        #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-        pub struct InvalidUuid<'a>(pub(crate) &'a [u8]);
-
-        impl<'a> InvalidUuid<'a>
-        {
-            /// Converts the lightweight error type into detailed diagnostics.
-            pub fn into_err(self) -> Error
-            {
-                // Check whether or not the input was ever actually a valid UTF8 string
-                let input_str = match std::str::from_utf8(self.0)
-                {
-                    Ok(s) => s,
-                    Err(_) => return Error(ErrorKind::InvalidUTF8),
-                };
-
-                let (uuid_str, offset, simple) = match input_str.as_bytes()
-                {
-                    [b'{', s @ .., b'}'] => (s, 1, false),
-                    [b'u', b'r', b'n', b':', b'u', b'u', b'i', b'd', b':', s @ ..] =>
-                    {
-                        (s, "urn:uuid:".len(), false)
-                    }
-                    
-                    s => (s, 0, true),
-                };
-
-                let mut hyphen_count = 0;
-                let mut group_bounds = [0; 4];
-                let uuid_str = unsafe { str::from_utf8_unchecked(uuid_str) };
-
-                for (index, character) in uuid_str.char_indices()               
-                {
-                    let byte = character as u8;
-                    if character as u32 - byte as u32 > 0
-                    {
-                        return Error(ErrorKind::Char
-                        {
-                            character,
-                            index: index + offset + 1,
-                        });
-                    }
-                    
-                    else if byte == b'-'
-                    {
-                        if hyphen_count < 4 { group_bounds[hyphen_count] = index; }
-                        hyphen_count += 1;
-                    }
-                    
-                    else if !matches!(byte, b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F')
-                    {
-                        return Error(ErrorKind::Char
-                        {
-                            character: byte as char,
-                            index: index + offset + 1,
-                        });
-                    }
-                }
-
-                if hyphen_count == 0 && simple
-                {
-                    Error(ErrorKind::SimpleLength
-                    {
-                        len: input_str.len()
-                    })
-
-                }
-                
-                else if hyphen_count != 4
-                {
-                    Error(ErrorKind::GroupCount
-                    {
-                        count: hyphen_count + 1,
-                    })
-
-                }
-                
-                else
-                {
-                    const BLOCK_STARTS: [usize; 5] = [0, 9, 14, 19, 24];
-                    for i in 0..4
-                    {
-                        if group_bounds[i] != BLOCK_STARTS[i + 1] - 1
-                        {
-                            return Error(ErrorKind::GroupLength
-                            {
-                                group: i,
-                                len: group_bounds[i] - BLOCK_STARTS[i],
-                                index: offset + BLOCK_STARTS[i] + 1,
-                            });
-                        }
-                    }
-                    
-                    Error(ErrorKind::GroupLength
-                    {
-                        group: 4,
-                        len: input_str.len() - BLOCK_STARTS[4],
-                        index: offset + BLOCK_STARTS[4] + 1,
-                    })
-                }
-            }
-        }
-        
-        impl fmt::Display for Error
-        {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
-            {
-                match self.0
-                {
-                    ErrorKind::Char { character, index, .. } => 
-                    { write!(f, "invalid character: expected an optional prefix of `urn:uuid:` followed by [0-9a-fA-F-], found `{}` at {}", character, index) }
-                    ErrorKind::SimpleLength { len } =>
-                    {
-                        write ( f, "invalid length: expected length 32 for simple format, found {}", len )
-                    }
-                    ErrorKind::ByteLength { len } =>
-                    {
-                        write!(f, "invalid length: expected 16 bytes, found {}", len)
-                    }
-                    ErrorKind::GroupCount { count } =>
-                    {
-                        write!(f, "invalid group count: expected 5, found {}", count)
-                    }
-                    ErrorKind::GroupLength { group, len, .. } =>
-                    {
-                        let expected = [8, 4, 4, 4, 12][group];
-                        write!
-                        (
-                            f,
-                            "invalid group length in group {}: expected {}, found {}",
-                            group, expected, len
-                        )
-                    }
-                    ErrorKind::InvalidUTF8 => write!(f, "non-UTF8 input"),
-                    ErrorKind::Other => write!(f, "failed to parse a UUID"),
-                }
-            }
-        }
-    }
-
-    pub mod parser
-    {
-        //! [`Uuid`] parsing constructs and utilities.
-        use ::
-        {
-            convert::{ TryFrom },
-            uuid::
-            {
-                error::*,
-                Uuid,
-            },
-            *,
-        };
-
-        const HEX_TABLE: &[u8; 256] = &
-        {
-            let mut buf = [0; 256];
-            let mut i: u8 = 0;
-
-            loop
-            {
-                buf[i as usize] = match i
-                {
-                    b'0'..=b'9' => i - b'0',
-                    b'a'..=b'f' => i - b'a' + 10,
-                    b'A'..=b'F' => i - b'A' + 10,
-                    _ => 0xff,
-                };
-
-                if i == 255 { break buf; }
-
-                i += 1
-            }
-        };
-
-        const SHL4_TABLE: &[u8; 256] = &
-        {
-            let mut buf = [0; 256];
-            let mut i: u8 = 0;
-
-            loop
-            {
-                buf[i as usize] = i.wrapping_shl(4);
-
-                if i == 255 { break buf; }
-
-                i += 1;
-            }
-        };
-
-        impl str::FromStr for Uuid
-        {
-            type Err = Error;
-            fn from_str(uuid_str: &str) -> Result<Self, Self::Err> { Uuid::parse_str(uuid_str) }
-        }
-
-        impl TryFrom<&'_ str> for Uuid
-        {
-            type Error = Error;
-            fn try_from(uuid_str: &'_ str) -> Result<Self, Self::Error> { Uuid::parse_str(uuid_str) }
-        }
-
-        impl Uuid
-        {
-            /// Parses a `Uuid` from a string of hexadecimal digits with optional hyphens.
-            pub fn parse_str(input: &str) -> Result<Uuid, Error>
-            {
-                try_parse(input.as_bytes())
-                .map(Uuid::from_bytes)
-                .map_err(InvalidUuid::into_err)
-            }
-            /// Parses a `Uuid` from a string of hexadecimal digits with optional hyphens.
-            pub const fn try_parse(input: &str) -> Result<Uuid, Error> { Self::try_parse_ascii(input.as_bytes()) }
-            /// Parses a `Uuid` from a string of hexadecimal digits with optional hyphens.
-            pub const fn try_parse_ascii(input: &[u8]) -> Result<Uuid, Error>
-            {
-                match try_parse(input)
-                {
-                    Ok(bytes) => Ok(Uuid::from_bytes(bytes)),
-                    Err(_) => Err(Error(ErrorKind::Other)),
-                }
-            }
-        }
-
-        const fn try_parse(input: &[u8]) -> Result<[u8; 16], InvalidUuid>
-        {
-            let result = match (input.len(), input)
-            {
-                (32, s) => parse_simple(s),
-                (36, s)
-                | (38, [b'{', s @ .., b'}'])
-                | (45, [b'u', b'r', b'n', b':', b'u', b'u', b'i', b'd', b':', s @ ..]) => {
-                    parse_hyphenated(s)
-                }
-                _ => Err(()),
-            };
-
-            match result
-            {
-                Ok(b) => Ok(b),
-                Err(()) => Err(InvalidUuid(input)),
-            }
-        }
-
-        #[inline] const fn parse_simple(s: &[u8]) -> Result<[u8; 16], ()>
-        {
-            if s.len() != 32 { return Err(()); }
-
-            let mut buf: [u8; 16] = [0; 16];
-            let mut i = 0;
-
-            while i < 16
-            {
-                let h1 = HEX_TABLE[s[i * 2] as usize];
-                let h2 = HEX_TABLE[s[i * 2 + 1] as usize];
-                
-                if h1 | h2 == 0xff { return Err(()); }
-
-                buf[i] = SHL4_TABLE[h1 as usize] | h2;
-                i += 1;
-            }
-
-            Ok(buf)
-        }
-
-        #[inline] const fn parse_hyphenated(s: &[u8]) -> Result<[u8; 16], ()>
-        {            
-            if s.len() != 36 { return Err(()); }
-            
-            match [s[8], s[13], s[18], s[23]]
-            {
-                [b'-', b'-', b'-', b'-'] => {}
-                _ => return Err(()),
-            }
-
-            let positions: [u8; 8] = [0, 4, 9, 14, 19, 24, 28, 32];
-            let mut buf: [u8; 16] = [0; 16];
-            let mut j = 0;
-
-            while j < 8
-            {
-                let i = positions[j];
-                let h1 = HEX_TABLE[s[i as usize] as usize];
-                let h2 = HEX_TABLE[s[(i + 1) as usize] as usize];
-                let h3 = HEX_TABLE[s[(i + 2) as usize] as usize];
-                let h4 = HEX_TABLE[s[(i + 3) as usize] as usize];
-
-                if h1 | h2 | h3 | h4 == 0xff { return Err(()); }
-
-                buf[j * 2] = SHL4_TABLE[h1 as usize] | h2;
-                buf[j * 2 + 1] = SHL4_TABLE[h3 as usize] | h4;
-                j += 1;
-            }
-
-            Ok(buf)
-        }
-    }
-
-    pub mod fmt
-    {
-        //! Adapters for alternative string formats.
-        use ::
-        {
-            borrow::{ Borrow },
-            uuid::{ Uuid, Variant },
-            *,
-        };
-
-        macro_rules! impl_fmt_traits
-        {
-            ($($T:ident<$($a:lifetime),*>),+) => 
-            {$(
-                impl<$($a),*> fmt::Display for $T<$($a),*>
-                {
-                    #[inline]
-                    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { fmt::LowerHex::fmt(self, f) }
-                }
-
-                impl<$($a),*> fmt::LowerHex for $T<$($a),*> 
-                {
-                    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-                    { f.write_str(self.encode_lower(&mut [0; Self::LENGTH])) }
-                }
-
-                impl<$($a),*> fmt::UpperHex for $T<$($a),*>
-                {
-                    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-                    { f.write_str(self.encode_upper(&mut [0; Self::LENGTH])) }
-                }
-
-                impl_fmt_from!($T<$($a),*>);
-            )+}
-        }
-
-        macro_rules! impl_fmt_from
-        {
-            ($T:ident<>) =>
-            {
-                impl From<Uuid> for $T {
-                    #[inline]
-                    fn from(f: Uuid) -> Self {
-                        $T(f)
-                    }
-                }
-
-                impl From<$T> for Uuid {
-                    #[inline]
-                    fn from(f: $T) -> Self {
-                        f.into_uuid()
-                    }
-                }
-
-                impl AsRef<Uuid> for $T {
-                    #[inline]
-                    fn as_ref(&self) -> &Uuid {
-                        &self.0
-                    }
-                }
-
-                impl Borrow<Uuid> for $T {
-                    #[inline]
-                    fn borrow(&self) -> &Uuid {
-                        &self.0
-                    }
-                }
-            };
-
-            ($T:ident<$a:lifetime>) => 
-            {
-                impl<$a> From<&$a Uuid> for $T<$a> {
-                    #[inline]
-                    fn from(f: &$a Uuid) -> Self {
-                        $T::from_uuid_ref(f)
-                    }
-                }
-
-                impl<$a> From<$T<$a>> for &$a Uuid {
-                    #[inline]
-                    fn from(f: $T<$a>) -> &$a Uuid {
-                        f.0
-                    }
-                }
-
-                impl<$a> AsRef<Uuid> for $T<$a> {
-                    #[inline]
-                    fn as_ref(&self) -> &Uuid {
-                        self.0
-                    }
-                }
-
-                impl<$a> Borrow<Uuid> for $T<$a> {
-                    #[inline]
-                    fn borrow(&self) -> &Uuid {
-                        self.0
-                    }
-                }
-            };
-        }
-
-        impl fmt::Debug for Uuid
-        {
-            #[inline] fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { fmt::LowerHex::fmt(self, f) }
-        }
-
-        impl fmt::Display for Uuid
-        {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { fmt::LowerHex::fmt(self, f) }
-        }
-
-        impl fmt::Display for Variant
-        {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-            {
-                match *self
-                {
-                    Variant::NCS => write!(f, "NCS"),
-                    Variant::RFC4122 => write!(f, "RFC4122"),
-                    Variant::Microsoft => write!(f, "Microsoft"),
-                    Variant::Future => write!(f, "Future"),
-                }
-            }
-        }
-
-        impl fmt::LowerHex for Uuid
-        {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { fmt::LowerHex::fmt(self.as_hyphenated(), f) }
-        }
-
-        impl fmt::UpperHex for Uuid
-        {
-            #[inline] fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result 
-            { fmt::UpperHex::fmt(self.as_hyphenated(), f) }
-        }
-        /// Format a [`Uuid`] as a hyphenated string, like `67e55044-10b1-426f-9247-bb680e5fe0c8`.
-        #[repr( transparent )] #[derive( Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd )]
-        pub struct Hyphenated( Uuid );
-        /// Format a [`Uuid`] as a simple string, like `67e5504410b1426f9247bb680e5fe0c8`.
-        #[repr( transparent )] #[derive( Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd )]
-        pub struct Simple( Uuid );
-        /// Format a [`Uuid`] as a URN string, like `urn:uuid:67e55044-10b1-426f-9247-bb680e5fe0c8`.
-        #[repr( transparent )] #[derive( Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd )]
-        pub struct Urn( Uuid );
-        /// Format a [`Uuid`] as a braced hyphenated string, like `{67e55044-10b1-426f-9247-bb680e5fe0c8}`.
-        #[repr( transparent )] #[derive( Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd )]
-        pub struct Braced( Uuid );
-
-        impl Uuid
-        {
-            /// Get a [`Hyphenated`] formatter.
-            #[inline] pub const fn hyphenated(self) -> Hyphenated { Hyphenated(self) }
-            /// Get a borrowed [`Hyphenated`] formatter.
-            #[inline] pub fn as_hyphenated(&self) -> &Hyphenated 
-            { unsafe { &*(self as *const Uuid as *const Hyphenated) } }
-            /// Get a [`Simple`] formatter.
-            #[inline] pub const fn simple(self) -> Simple { Simple(self) }
-            /// Get a borrowed [`Simple`] formatter.
-            #[inline] pub fn as_simple(&self) -> &Simple { unsafe { &*(self as *const Uuid as *const Simple) } }
-            /// Get a [`Urn`] formatter.
-            #[inline] pub const fn urn(self) -> Urn { Urn(self) }
-            /// Get a borrowed [`Urn`] formatter.
-            #[inline] pub fn as_urn(&self) -> &Urn { unsafe { &*(self as *const Uuid as *const Urn) } }
-            /// Get a [`Braced`] formatter.
-            #[inline]  pub const fn braced(self) -> Braced { Braced(self) }
-            /// Get a borrowed [`Braced`] formatter.
-            #[inline]
-            pub fn as_braced(&self) -> &Braced { unsafe { &*(self as *const Uuid as *const Braced) } }
-        }
-
-        const UPPER: [u8; 16] =
-        [
-            b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'A', b'B', b'C', b'D', b'E', b'F',
-        ];
-
-        const LOWER: [u8; 16] =
-        [
-            b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'a', b'b', b'c', b'd', b'e', b'f',
-        ];
-
-        #[inline] const fn format_simple(src: &[u8; 16], upper: bool) -> [u8; 32]
-        {
-            let lut = if upper { &UPPER } else { &LOWER };
-            let mut dst = [0; 32];
-            let mut i = 0;
-
-            while i < 16
-            {
-                let x = src[i];
-                dst[i * 2] = lut[(x >> 4) as usize];
-                dst[i * 2 + 1] = lut[(x & 0x0f) as usize];
-                i += 1;
-            }
-
-            dst
-        }
-
-        #[inline] const fn format_hyphenated(src: &[u8; 16], upper: bool) -> [u8; 36]
-        {
-            let lut = if upper { &UPPER } else { &LOWER };
-            let groups = [(0, 8), (9, 13), (14, 18), (19, 23), (24, 36)];
-            let mut dst = [0; 36];
-            let mut group_idx = 0;
-            let mut i = 0;
-
-            while group_idx < 5
-            {
-                let (start, end) = groups[group_idx];
-                let mut j = start;
-
-                while j < end
-                {
-                    let x = src[i];
-                    i += 1;
-                    dst[j] = lut[(x >> 4) as usize];
-                    dst[j + 1] = lut[(x & 0x0f) as usize];
-                    j += 2;
-                }
-
-                if group_idx < 4 { dst[end] = b'-'; }
-                
-                group_idx += 1;
-            }
-
-            dst
-        }
-
-        #[inline] fn encode_simple<'b>(src: &[u8; 16], buffer: &'b mut [u8], upper: bool) -> &'b mut str
-        {
-            unsafe
-            {
-                let buf = &mut buffer[..Simple::LENGTH];
-                let dst = buf.as_mut_ptr();
-                ptr::write(dst.cast(), format_simple(src, upper));
-                str::from_utf8_unchecked_mut(buf)
-            }
-        }
-
-        #[inline] fn encode_hyphenated<'b>(src: &[u8; 16], buffer: &'b mut [u8], upper: bool) -> &'b mut str
-        {
-            unsafe
-            {
-                let buf = &mut buffer[..Hyphenated::LENGTH];
-                let dst = buf.as_mut_ptr();
-                ptr::write(dst.cast(), format_hyphenated(src, upper));
-                str::from_utf8_unchecked_mut(buf)
-            }
-        }
-
-        #[inline] fn encode_braced<'b>(src: &[u8; 16], buffer: &'b mut [u8], upper: bool) -> &'b mut str
-        {
-            unsafe
-            {
-                let buf = &mut buffer[..Braced::LENGTH];
-                buf[0] = b'{';
-                buf[Braced::LENGTH - 1] = b'}';
-                let dst = buf.as_mut_ptr().add(1);
-                ptr::write(dst.cast(), format_hyphenated(src, upper));
-                str::from_utf8_unchecked_mut(buf)
-            }
-        }
-
-        #[inline] fn encode_urn<'b>(src: &[u8; 16], buffer: &'b mut [u8], upper: bool) -> &'b mut str
-        {
-            unsafe
-            {
-                let buf = &mut buffer[..Urn::LENGTH];
-                buf[..9].copy_from_slice(b"urn:uuid:");
-                let dst = buf.as_mut_ptr().add(9);
-                ptr::write(dst.cast(), format_hyphenated(src, upper));
-                str::from_utf8_unchecked_mut(buf)
-            }
-        }
-
-        impl Hyphenated
-        {
-            /// The length of a hyphenated [`Uuid`] string.
-            pub const LENGTH: usize = 36;
-
-            /// Creates a [`Hyphenated`] from a [`Uuid`].
-            pub const fn from_uuid(uuid: Uuid) -> Self { Hyphenated(uuid) }
-            /// Writes the [`Uuid`] as a lower-case hyphenated string to `buffer`, 
-            /// and returns the subslice of the buffer that contains the encoded UUID.
-            #[inline] pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str
-            { encode_hyphenated(self.0.as_bytes(), buffer, false) }
-            /// Writes the [`Uuid`] as an upper-case hyphenated string to `buffer`,
-            /// and returns the subslice of the buffer that contains the encoded UUID.
-            #[inline] pub fn encode_upper<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str 
-            { encode_hyphenated(self.0.as_bytes(), buffer, true) }
-            /// Get a reference to the underlying [`Uuid`].
-            pub const fn as_uuid(&self) -> &Uuid { &self.0 }
-            /// Consumes the [`Hyphenated`], returning the underlying [`Uuid`].
-            pub const fn into_uuid(self) -> Uuid { self.0 }
-        }
-
-        impl Braced
-        {
-            /// The length of a braced [`Uuid`] string.
-            pub const LENGTH: usize = 38;
-            /// Creates a [`Braced`] from a [`Uuid`].
-            pub const fn from_uuid(uuid: Uuid) -> Self { Braced(uuid) }
-            /// Writes the [`Uuid`] as a lower-case hyphenated string surrounded by braces to `buffer`, 
-            /// and returns the subslice of the buffer that contains the encoded UUID.
-            #[inline] pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str
-            { encode_braced(self.0.as_bytes(), buffer, false) }
-            /// Writes the [`Uuid`] as an upper-case hyphenated string surrounded by braces to `buffer`,
-            /// and returns the subslice of the buffer that contains the encoded UUID.
-            #[inline] pub fn encode_upper<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str
-            { encode_braced(self.0.as_bytes(), buffer, true) }
-            /// Get a reference to the underlying [`Uuid`].
-            pub const fn as_uuid(&self) -> &Uuid { &self.0 }
-            /// Consumes the [`Braced`], returning the underlying [`Uuid`].
-            pub const fn into_uuid(self) -> Uuid { self.0 }
-        }
-
-        impl Simple
-        {
-            /// The length of a simple [`Uuid`] string.
-            pub const LENGTH: usize = 32;
-
-            /// Creates a [`Simple`] from a [`Uuid`].
-            pub const fn from_uuid(uuid: Uuid) -> Self { Simple(uuid) }
-            /// Writes the [`Uuid`] as a lower-case simple string to `buffer`,
-            /// and returns the subslice of the buffer that contains the encoded UUID.
-            #[inline] pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str
-            { encode_simple(self.0.as_bytes(), buffer, false) }
-            /// Writes the [`Uuid`] as an upper-case simple string to `buffer`,
-            /// and returns the subslice of the buffer that contains the encoded UUID.
-            #[inline] pub fn encode_upper<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str
-            { encode_simple(self.0.as_bytes(), buffer, true) }
-            /// Get a reference to the underlying [`Uuid`].
-            pub const fn as_uuid(&self) -> &Uuid { &self.0 }
-            /// Consumes the [`Simple`], returning the underlying [`Uuid`].
-            pub const fn into_uuid(self) -> Uuid { self.0 }
-        }
-
-        impl Urn
-        {
-            /// The length of a URN [`Uuid`] string.
-            pub const LENGTH: usize = 45;
-            /// Creates a [`Urn`] from a [`Uuid`].
-            pub const fn from_uuid(uuid: Uuid) -> Self { Urn(uuid) }
-            /// Writes the [`Uuid`] as a lower-case URN string to
-            /// `buffer`, and returns the subslice of the buffer that contains the
-            /// encoded UUID.
-            #[inline] pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str
-            { encode_urn(self.0.as_bytes(), buffer, false) }
-            /// Writes the [`Uuid`] as an upper-case URN string to
-            /// `buffer`, and returns the subslice of the buffer that contains the
-            /// encoded UUID.
-            #[inline] pub fn encode_upper<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str
-            { encode_urn(self.0.as_bytes(), buffer, true) }
-            /// Get a reference to the underlying [`Uuid`].
-            pub const fn as_uuid(&self) -> &Uuid { &self.0 }
-            /// Consumes the [`Urn`], returning the underlying [`Uuid`].
-            pub const fn into_uuid(self) -> Uuid { self.0 }
-        }
-
-        impl_fmt_traits!
-        {
-            Hyphenated<>,
-            Simple<>,
-            Urn<>,
-            Braced<>
-        }
-    }
-
-    pub mod timestamp
-    {
-        //! Generating UUIDs from timestamps.
-        use ::
-        {
-            uuid::Uuid,
-            *,
-        };
-
-        /// The number of 100 nanosecond ticks between the RFC4122 epoch (`1582-10-15 00:00:00`)
-        /// and the Unix epoch (`1970-01-01 00:00:00`).
-        pub const UUID_TICKS_BETWEEN_EPOCHS: u64 = 0x01B2_1DD2_1381_4000;
-        /// A timestamp that can be encoded into a UUID.
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-        pub struct Timestamp 
-        {
-            pub(crate) seconds: u64,
-            pub(crate) nanos: u32,
-        }
-
-        impl Timestamp
-        {
-            /// Get a timestamp representing the current system time.
-            pub fn now(context: impl ClockSequence<Output = u16>) -> Self
-            {
-                let _ = context;
-                let (seconds, nanos) = now();
-
-                Timestamp
-                {
-                    seconds,
-                    nanos,
-                }
-            }
-            /// Construct a `Timestamp` from an RFC4122 timestamp and counter, as used in versions 1 and 6 UUIDs.
-            pub const fn from_rfc4122(ticks: u64, counter: u16) -> Self
-            {
-                let _ = counter;
-                let (seconds, nanos) = Self::rfc4122_to_unix(ticks);
-                Timestamp
-                {
-                    seconds,
-                    nanos,
-                }
-            }
-            /// Construct a `Timestamp` from a Unix timestamp, as used in version 7 UUIDs.
-            pub fn from_unix(context: impl ClockSequence<Output = u16>, seconds: u64, nanos: u32) -> Self
-            {
-                let _ = context;
-                Timestamp { seconds, nanos }
-            }
-            /// Get the value of timestamp as an RFC4122 timestamp and counter, as used in versions 1 and 6 UUIDs.
-            #[cfg(any(feature = "v1", feature = "v6"))]
-            pub const fn to_rfc4122(&self) -> (u64, u16)
-            {
-                ( 0, 0 )
-            }
-            /// Get the value of the timestamp as a Unix timestamp, as used in version 7 UUIDs.
-            pub const fn to_unix(&self) -> (u64, u32)
-            {
-                (self.seconds, self.nanos)
-            }
-            
-            const fn unix_to_rfc4122_ticks(seconds: u64, nanos: u32) -> u64
-            {
-                0
-            }
-
-            const fn rfc4122_to_unix(ticks: u64) -> (u64, u32)
-            {
-                (
-                    ticks.wrapping_sub(UUID_TICKS_BETWEEN_EPOCHS) / 10_000_000,
-                    (ticks.wrapping_sub(UUID_TICKS_BETWEEN_EPOCHS) % 10_000_000) as u32 * 100,
-                )
-            }
-
-            #[deprecated(note = "use `to_unix` instead; this method will be removed in a future release")]
-            /// Get the number of fractional nanoseconds in the Unix timestamp.
-            pub const fn to_unix_nanos(&self) -> u32
-            {
-                panic!("`Timestamp::to_unix_nanos` is deprecated and will be removed: use `Timestamp::to_unix` instead")
-            }
-        }
-
-        pub const fn encode_rfc4122_timestamp(ticks: u64, counter: u16, node_id: &[u8; 6]) -> Uuid
-        {
-            let time_low = (ticks & 0xFFFF_FFFF) as u32;
-            let time_mid = ((ticks >> 32) & 0xFFFF) as u16;
-            let time_high_and_version = (((ticks >> 48) & 0x0FFF) as u16) | (1 << 12);
-            let mut d4 = [0; 8];
-
-            d4[0] = (((counter & 0x3F00) >> 8) as u8) | 0x80;
-            d4[1] = (counter & 0xFF) as u8;
-            d4[2] = node_id[0];
-            d4[3] = node_id[1];
-            d4[4] = node_id[2];
-            d4[5] = node_id[3];
-            d4[6] = node_id[4];
-            d4[7] = node_id[5];
-
-            Uuid::from_fields(time_low, time_mid, time_high_and_version, &d4)
-        }
-
-        pub const fn decode_rfc4122_timestamp(uuid: &Uuid) -> (u64, u16)
-        {
-            let bytes = uuid.as_bytes();
-            let ticks: u64 = ((bytes[6] & 0x0F) as u64) << 56
-            | (bytes[7] as u64) << 48
-            | (bytes[4] as u64) << 40
-            | (bytes[5] as u64) << 32
-            | (bytes[0] as u64) << 24
-            | (bytes[1] as u64) << 16
-            | (bytes[2] as u64) << 8
-            | (bytes[3] as u64);
-
-            let counter: u16 = ((bytes[8] & 0x3F) as u16) << 8 | (bytes[9] as u16);
-
-            (ticks, counter)
-        }
-        
-        pub const fn encode_sorted_rfc4122_timestamp( ticks: u64, counter: u16, node_id: &[u8; 6] ) -> Uuid
-        {
-            let time_high = ((ticks >> 28) & 0xFFFF_FFFF) as u32;
-            let time_mid = ((ticks >> 12) & 0xFFFF) as u16;
-            let time_low_and_version = ((ticks & 0x0FFF) as u16) | (0x6 << 12);
-            let mut d4 = [0; 8];
-
-            d4[0] = (((counter & 0x3F00) >> 8) as u8) | 0x80;
-            d4[1] = (counter & 0xFF) as u8;
-            d4[2] = node_id[0];
-            d4[3] = node_id[1];
-            d4[4] = node_id[2];
-            d4[5] = node_id[3];
-            d4[6] = node_id[4];
-            d4[7] = node_id[5];
-
-            Uuid::from_fields(time_high, time_mid, time_low_and_version, &d4)
-        }
-        
-        pub const fn decode_sorted_rfc4122_timestamp(uuid: &Uuid) -> (u64, u16)
-        {
-            let bytes = uuid.as_bytes();
-            let ticks: u64 = ((bytes[0]) as u64) << 52
-            | (bytes[1] as u64) << 44
-            | (bytes[2] as u64) << 36
-            | (bytes[3] as u64) << 28
-            | (bytes[4] as u64) << 20
-            | (bytes[5] as u64) << 12
-            | ((bytes[6] & 0xF) as u64) << 8
-            | (bytes[7] as u64);
-
-            let counter: u16 = ((bytes[8] & 0x3F) as u16) << 8 | (bytes[9] as u16);
-
-            (ticks, counter)
-        }
-        
-        pub const fn encode_unix_timestamp_millis(millis: u64, random_bytes: &[u8; 10]) -> Uuid
-        {
-            let millis_high = ((millis >> 16) & 0xFFFF_FFFF) as u32;
-            let millis_low = (millis & 0xFFFF) as u16;
-
-            let random_and_version = 
-            (random_bytes[1] as u16 | ((random_bytes[0] as u16) << 8) & 0x0FFF) | (0x7 << 12);
-
-            let mut d4 = [0; 8];
-
-            d4[0] = (random_bytes[2] & 0x3F) | 0x80;
-            d4[1] = random_bytes[3];
-            d4[2] = random_bytes[4];
-            d4[3] = random_bytes[5];
-            d4[4] = random_bytes[6];
-            d4[5] = random_bytes[7];
-            d4[6] = random_bytes[8];
-            d4[7] = random_bytes[9];
-
-            Uuid::from_fields(millis_high, millis_low, random_and_version, &d4)
-        }
-        
-        pub const fn decode_unix_timestamp_millis(uuid: &Uuid) -> u64
-        {
-            let bytes = uuid.as_bytes();
-            let millis: u64 = (bytes[0] as u64) << 40
-            | (bytes[1] as u64) << 32
-            | (bytes[2] as u64) << 24
-            | (bytes[3] as u64) << 16
-            | (bytes[4] as u64) << 8
-            | (bytes[5] as u64);
-
-            millis
-        }
-        
-        fn now() -> (u64, u32)
-        {
-            let dur = std::time::SystemTime::UNIX_EPOCH.elapsed().expect
-            (
-                "Getting elapsed time since UNIX_EPOCH. If this fails, we've somehow violated causality",
-            );
-
-            (dur.as_secs(), dur.subsec_nanos())
-        }
-        /// A counter that can be used by version 1 and version 6 UUIDs to support the uniqueness of timestamps.
-        pub trait ClockSequence
-        {
-            /// The type of sequence returned by this counter.
-            type Output;
-            /// Get the next value in the sequence to feed into a timestamp.
-            fn generate_sequence(&self, seconds: u64, subsec_nanos: u32) -> Self::Output;
-        }
-
-        impl<'a, T: ClockSequence + ?Sized> ClockSequence for &'a T
-        {
-            type Output = T::Output;
-            fn generate_sequence(&self, seconds: u64, subsec_nanos: u32) -> Self::Output
-            { (**self).generate_sequence(seconds, subsec_nanos) }
-        }
-        /// Default implementations for the [`ClockSequence`] trait.
-        pub mod context
-        {
-            use super::ClockSequence;
-
-            /// An empty counter that will always return the value `0`.
-            #[derive(Debug, Clone, Copy, Default)]
-            pub struct NoContext;
-
-            impl ClockSequence for NoContext
-            {
-                type Output = u16;
-
-                fn generate_sequence(&self, _seconds: u64, _nanos: u32) -> Self::Output { 0 }
-            }
-        }
-    }
-    pub use self::timestamp::{context::NoContext, ClockSequence, Timestamp};  
-    
-    pub mod v1 {/* UNSUPPORTED */}
-    mod v3 {/* UNSUPPORTED */}
-
-    mod v4
-    {
-        use super::Uuid;
-        impl Uuid
-        {
-            /// Creates a random UUID.
-            pub fn new_v4() -> Uuid
-            {
-                ::uuid::Builder::from_random_bytes( ::uuid::rng::bytes() ).into_uuid()
-            }
-        }
-    }
-    mod v5 {/* UNSUPPORTED */}
-    mod v6 {/* UNSUPPORTED */}
-    mod v7 {/* UNSUPPORTED */}
-    mod v8 {/* UNSUPPORTED */}
-
-    pub mod rng
-    {
-        pub fn bytes() -> [u8; 16]
-        {
-             let mut bytes = [0u8; 16];
-
-            getrandom::getrandom(&mut bytes).unwrap_or_else(|err| 
-            {
-                panic!("could not retrieve random bytes for uuid: {}", err)
-            });
-
-            bytes
-        }
-    }
-
-    #[macro_use] mod macros
-    {
-        macro_rules! define_uuid_macro
-        {
-            {$(#[$doc:meta])*} =>
-            {
-
-                $(#[$doc])* 
-                #[macro_export] macro_rules! uuid 
-                {
-                    ($uuid:literal) => 
-                    {{
-                        const OUTPUT: $crate::uuid::Uuid = match $crate::uuid::Uuid::try_parse($uuid)
-                        {
-                            Ok(u) => u,
-                            Err(_) =>
-                            {
-                                let _ = ["invalid uuid representation"][1];
-                                loop {} // -> never type
-                            }
-                        };
-
-                        OUTPUT
-                    }};
-                }
-            }
-        }
-
-        define_uuid_macro!
-        {
-            /// Parse [`Uuid`][uuid::Uuid]s from string literals at compile time.
-        }
-    }
-    /// A 128-bit (16 byte) buffer containing the UUID.
-    pub type Bytes = [u8; 16];
-    /// A 128-bit (16 byte) buffer containing the UUID.
-    #[repr( u8 )] #[non_exhaustive] #[derive( Clone, Copy, Debug, PartialEq )]
-    pub enum Version
-    {
-        /// The "nil" (all zeros) UUID.
-        Nil = 0u8,
-        /// Version 1: Timestamp and node ID.
-        Mac = 1,
-        /// Version 2: DCE Security.
-        Dce = 2,
-        /// Version 3: MD5 hash.
-        Md5 = 3,
-        /// Version 4: Random.
-        Random = 4,
-        /// Version 5: SHA-1 hash.
-        Sha1 = 5,
-        /// Version 6: Sortable Timestamp and node ID.
-        SortMac = 6,
-        /// Version 7: Timestamp and random.
-        SortRand = 7,
-        /// Version 8: Custom.
-        Custom = 8,
-        /// The "max" (all ones) UUID.
-        Max = 0xff,
-    }
-    /// The reserved variants of UUIDs.
-    #[repr( u8 )] #[non_exhaustive] #[derive( Clone, Copy, Debug, PartialEq )]
-    pub enum Variant
-    {
-        /// Reserved by the NCS for backward compatibility.
-        NCS = 0u8,
-        /// As described in the RFC4122 Specification (default).
-        RFC4122,
-        /// Reserved by Microsoft for backward compatibility.
-        Microsoft,
-        /// Reserved for future expansion.
-        Future,
-    }
-    /// A Universally Unique Identifier (UUID).
-    #[repr( transparent )] #[derive( Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd )]    
-    pub struct Uuid( Bytes );
-
-    impl Uuid
-    {
-        /// UUID namespace for Domain Name System (DNS).
-        pub const NAMESPACE_DNS: Self = Uuid
-        ([ 0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8 ]);
-        /// UUID namespace for ISO Object Identifiers (OIDs).
-        pub const NAMESPACE_OID: Self = Uuid
-        ([ 0x6b, 0xa7, 0xb8, 0x12, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8 ]);
-        /// UUID namespace for Uniform Resource Locators (URLs).
-        pub const NAMESPACE_URL: Self = Uuid
-        ([ 0x6b, 0xa7, 0xb8, 0x11, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8 ]);
-        /// UUID namespace for X.500 Distinguished Names (DNs).
-        pub const NAMESPACE_X500: Self = Uuid
-        ([ 0x6b, 0xa7, 0xb8, 0x14, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8 ]);
-        /// Returns the variant of the UUID structure.
-        pub const fn get_variant(&self) -> Variant
-        {
-            match self.as_bytes()[8]
-            {
-                x if x & 0x80 == 0x00 => Variant::NCS,
-                x if x & 0xc0 == 0x80 => Variant::RFC4122,
-                x if x & 0xe0 == 0xc0 => Variant::Microsoft,
-                x if x & 0xe0 == 0xe0 => Variant::Future,
-                _ => Variant::Future,
-            }
-        }
-        /// Returns the version number of the UUID.
-        pub const fn get_version_num(&self) -> usize { (self.as_bytes()[6] >> 4) as usize }
-        /// Returns the version of the UUID.
-        pub const fn get_version(&self) -> Option<Version>
-        {
-            match self.get_version_num()
-            {
-                0 if self.is_nil() => Some(Version::Nil),
-                1 => Some(Version::Mac),
-                2 => Some(Version::Dce),
-                3 => Some(Version::Md5),
-                4 => Some(Version::Random),
-                5 => Some(Version::Sha1),
-                6 => Some(Version::SortMac),
-                7 => Some(Version::SortRand),
-                8 => Some(Version::Custom),
-                0xf => Some(Version::Max),
-                _ => None,
-            }
-        }
-        /// Returns the four field values of the UUID.
-        pub fn as_fields(&self) -> (u32, u16, u16, &[u8; 8])
-        {
-            let bytes = self.as_bytes();
-
-            let d1 = (bytes[0] as u32) << 24
-            | (bytes[1] as u32) << 16
-            | (bytes[2] as u32) << 8
-            | (bytes[3] as u32);
-
-            let d2 = (bytes[4] as u16) << 8 | (bytes[5] as u16);
-
-            let d3 = (bytes[6] as u16) << 8 | (bytes[7] as u16);
-
-            let d4: &[u8; 8] = convert::TryInto::try_into(&bytes[8..16]).unwrap();
-
-            (d1, d2, d3, d4)
-        }
-        /// Returns the four field values of the UUID in little-endian order.
-        pub fn to_fields_le(&self) -> (u32, u16, u16, &[u8; 8])
-        {
-            let d1 = (self.as_bytes()[0] as u32)
-            | (self.as_bytes()[1] as u32) << 8
-            | (self.as_bytes()[2] as u32) << 16
-            | (self.as_bytes()[3] as u32) << 24;
-
-            let d2 = (self.as_bytes()[4] as u16) | (self.as_bytes()[5] as u16) << 8;
-            let d3 = (self.as_bytes()[6] as u16) | (self.as_bytes()[7] as u16) << 8;
-            let d4: &[u8; 8] = convert::TryInto::try_into(&self.as_bytes()[8..16]).unwrap();
-            (d1, d2, d3, d4)
-        }
-        /// Returns a 128bit value containing the value.
-        pub const fn as_u128(&self) -> u128 { u128::from_be_bytes(*self.as_bytes()) }
-        /// Returns a 128bit little-endian value containing the value.
-        pub const fn to_u128_le(&self) -> u128 { u128::from_le_bytes(*self.as_bytes()) }
-        /// Returns two 64bit values containing the value.
-        pub const fn as_u64_pair(&self) -> (u64, u64)
-        {
-            let value = self.as_u128();
-            ((value >> 64) as u64, value as u64)
-        }
-        /// Returns a slice of 16 octets containing the value.
-        pub const fn as_bytes(&self) -> &Bytes { &self.0 }
-        /// Consumes self and returns the underlying byte value of the UUID.
-        pub const fn into_bytes(self) -> Bytes { self.0 }
-        /// Returns the bytes of the UUID in little-endian order.
-        pub const fn to_bytes_le(&self) -> Bytes
-        {
-            [
-                self.0[3], self.0[2], self.0[1], self.0[0], self.0[5], self.0[4], self.0[7], self.0[6], self.0[8], 
-                self.0[9], self.0[10], self.0[11], self.0[12], self.0[13], self.0[14], self.0[15],
-            ]
-        }
-        /// Tests if the UUID is nil (all zeros).
-        pub const fn is_nil(&self) -> bool { self.as_u128() == u128::MIN }
-        /// Tests if the UUID is max (all ones).
-        pub const fn is_max(&self) -> bool { self.as_u128() == u128::MAX }
-        /// A buffer that can be used for `encode_...` calls, that is
-        /// guaranteed to be long enough for any of the format adapters.
-        pub const fn encode_buffer() -> [u8; fmt::Urn::LENGTH] { [0; fmt::Urn::LENGTH] }
-        /// If the UUID is the correct version (v1, v6, or v7) this will return the timestamp,
-        // and counter portion parsed from a V1 UUID.
-        pub const fn get_timestamp(&self) -> Option<Timestamp>
-        {
-            match self.get_version()
-            {
-                Some(Version::Mac) =>
-                {
-                    let (ticks, counter) = timestamp::decode_rfc4122_timestamp(self);
-                    Some(Timestamp::from_rfc4122(ticks, counter))
-                }
-                
-                Some(Version::SortMac) =>
-                {
-                    let (ticks, counter) = timestamp::decode_sorted_rfc4122_timestamp(self);
-                    Some(Timestamp::from_rfc4122(ticks, counter))
-                }
-                
-                Some(Version::SortRand) =>
-                {
-                    let millis = timestamp::decode_unix_timestamp_millis(self);
-                    let seconds = millis / 1000;
-                    let nanos = ((millis % 1000) * 1_000_000) as u32;
-
-                    Some(Timestamp
-                    {
-                        seconds,
-                        nanos,
-                        #[cfg(any(feature = "v1", feature = "v6"))]
-                        counter: 0,
-                    })
-                }
-                _ => None,
-            }
-        }
-    }
-
-    impl Default for Uuid
-    {
-        #[inline] fn default() -> Self { Uuid::nil() }
-    }
-
-    impl AsRef<[u8]> for Uuid
-    {
-        #[inline] fn as_ref(&self) -> &[u8] { &self.0 }
-    }
-    
-    use ::
-    {
-        *,
-    };
-
-    pub use self::{ builder::Builder, error::Error }; 
 
 }
 /**/
@@ -17830,7 +17930,7 @@ pub mod shell
 
     fn need_expand_brace(line: &str) -> bool { libs::re::re_contains(line, r#"\{[^ "']*,[^ "']*,?[^ "']*\}"#) }
 
-    fn brace_getitem(s: &str, depth: i32) -> (Vec<String>, String)
+    pub fn brace_getitem(s: &str, depth: i32) -> (Vec<String>, String)
     {
         let mut out: Vec<String> = vec![String::new()];
         let mut ss = s.to_string();
@@ -18677,7 +18777,6 @@ pub mod shell
 
         (term_given, cmd_result)
     }
-
     /// Run a single command.
     /// e.g. the `sort -k2` part of `ps ax | sort -k2 | head`
     fn run_single_program
@@ -18916,9 +19015,7 @@ pub mod shell
                         process::exit(status);
                     }
                 }
-
-                // our strings do not have '\x00' bytes in them,
-                // we can use CString::new().expect() safely.
+                
                 let mut c_envs: Vec<_> = env::vars()
                     .map(|(k, v)| {
                         CString::new(format!("{}={}", k, v).as_str()).expect("CString error")
@@ -18975,12 +19072,6 @@ pub mod shell
                 if idx_cmd == 0 {
                     *pgid = pid;
                     unsafe {
-                        // we need to wait pgid of child set to itself,
-                        // before give terminal to it (for macos).
-                        // 1. this loop causes `bash`, `htop` etc to go `T` status
-                        //    immediate after start on linux (ubuntu).
-                        // 2. but on mac, we need this loop, otherwise commands
-                        //    like `vim` will go to `T` status after start.
                         if cfg!(target_os = "macos") {
                             loop {
                                 let _pgid = libc::getpgid(pid);
@@ -19477,14 +19568,1828 @@ pub mod signals
     }
 }
 /**/
+pub mod types
+{
+    use ::
+    {
+        collections::{ HashMap, HashSet },
+        parsers::
+        {
+            self,
+            parser_line::tokens_to_redirections,
+        },
+        regex::{ Regex },
+        *,
+    };
+
+    #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+    pub struct WaitStatus(i32, i32, i32);
+
+    impl WaitStatus
+    {
+        pub fn from_exited(pid: i32, status: i32) -> Self { WaitStatus(pid, 0, status) }
+
+        pub fn from_signaled(pid: i32, sig: i32) -> Self { WaitStatus(pid, 1, sig) }
+
+        pub fn from_stopped(pid: i32, sig: i32) -> Self { WaitStatus(pid, 2, sig) }
+
+        pub fn from_continuted(pid: i32) -> Self { WaitStatus(pid, 3, 0) }
+
+        pub fn from_others() -> Self { WaitStatus(0, 9, 9) }
+
+        pub fn from_error(errno: i32) -> Self { WaitStatus(0, 255, errno) }
+
+        pub fn empty() -> Self { WaitStatus(0, 0, 0) }
+
+        pub fn is_error(&self) -> bool { self.1 == 255 }
+
+        pub fn is_others(&self) -> bool { self.1 == 9 }
+
+        pub fn is_signaled(&self) -> bool { self.1 == 1 }
+
+        pub fn get_errno(&self) -> nix::Error { nix::Error::from_raw(self.2) }
+
+        pub fn is_exited(&self) -> bool { self.0 != 0 && self.1 == 0 }
+
+        pub fn is_stopped(&self) -> bool { self.1 == 2 }
+
+        pub fn is_continued(&self) -> bool { self.1 == 3 }
+
+        pub fn get_pid(&self) -> i32 { self.0 }
+
+        fn _get_signaled_status(&self) -> i32 { self.2 + 128 }
+
+        pub fn get_signal(&self) -> i32 { self.2 }
+
+        pub fn get_name(&self) -> String
+        {
+            match true
+            {
+                true if self.is_exited()    => { "Exited".to_string() }
+                true if self.is_stopped()   => { "Stopped".to_string() }
+                true if self.is_continued() => { "Continued".to_string() }
+                true if self.is_signaled()  => { "Signaled".to_string() }
+                true if self.is_others()    => { "Others".to_string() }
+                true if self.is_error()     => { "Error".to_string() }
+                true if self.is_exited()    => { "Exited".to_string() }
+                true if self.is_exited()    => { "Exited".to_string() }
+                unknown                     => { format!( "unknown: {}", self.2 ) }
+            }
+        }
+
+        pub fn get_status(&self) -> i32 {
+            if self.is_exited() {
+                self.2
+            } else {
+                self._get_signaled_status()
+            }
+        }
+    }
+
+    impl fmt::Debug for WaitStatus
+    {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+        {
+            let mut formatter = f.debug_struct("WaitStatus");
+            formatter.field("pid", &self.0);
+            let name = self.get_name();
+            formatter.field("name", &name);
+            formatter.field("ext", &self.2);
+            formatter.finish()
+        }
+    }
+
+    pub type Token = (String, String);
+    pub type Tokens = Vec<Token>;
+    pub type Redirection = (String, String, String);
+
+    #[derive(Debug)]
+    pub struct LineInfo 
+    {
+        pub tokens: Tokens,
+        pub is_complete: bool,
+    }
+
+    impl LineInfo
+    {
+        pub fn new(tokens: Tokens) -> Self
+        {
+            LineInfo { tokens, is_complete: true }
+        }
+    }
+    /// command line: `ls 'foo bar' 2>&1 > /dev/null < one-file` would be:
+    /// Command {
+    ///     tokens: [("", "ls"), ("", "-G"), ("\'", "foo bar")],
+    ///     redirects_to: [
+    ///         ("2", ">", "&1"),
+    ///         ("1", ">", "/dev/null"),
+    ///     ],
+    ///     redirect_from: Some(("<", "one-file")),
+    /// }
+    #[derive(Debug)]
+    pub struct Command 
+    {
+        pub tokens: Tokens,
+        pub redirects_to: Vec<Redirection>,
+        pub redirect_from: Option<Token>,
+    }
+
+    #[derive(Debug)]
+    pub struct CommandLine
+    {
+        pub line: String,
+        pub commands: Vec<Command>,
+        pub envs: HashMap<String, String>,
+        pub background: bool,
+    }
+
+    impl Command
+    {
+        pub fn from_tokens(tokens: Tokens) -> Result<Command, String>
+        {
+            let mut tokens_new = tokens.clone();
+            let mut redirects_from_type = String::new();
+            let mut redirects_from_value = String::new();
+            let mut has_redirect_from = tokens_new.iter().any(|x| x.1 == "<" || x.1 == "<<<");
+
+            let mut len = tokens_new.len();
+            while has_redirect_from
+            {
+                if let Some(idx) = tokens_new.iter().position(|x| x.1 == "<")
+                {
+                    redirects_from_type = "<".to_string();
+                    tokens_new.remove(idx);
+                    len -= 1;
+                    if len > idx
+                    {
+                        redirects_from_value = tokens_new.remove(idx).1;
+                        len -= 1;
+                    }
+                }
+
+                if let Some(idx) = tokens_new.iter().position(|x| x.1 == "<<<")
+                {
+                    redirects_from_type = "<<<".to_string();
+                    tokens_new.remove(idx);
+                    len -= 1;
+                    if len > idx
+                    {
+                        redirects_from_value = tokens_new.remove(idx).1;
+                        len -= 1;
+                    }
+                }
+
+                has_redirect_from = tokens_new.iter().any(|x| x.1 == "<" || x.1 == "<<<");
+            }
+
+            let tokens_final;
+            let redirects_to;
+            match tokens_to_redirections(&tokens_new)
+            {
+                Ok((_tokens, _redirects_to)) =>
+                {
+                    tokens_final = _tokens;
+                    redirects_to = _redirects_to;
+                }
+                
+                Err(e) => { return Err(e); }
+            }
+
+            let redirect_from = if redirects_from_type.is_empty() { None } 
+            else { Some((redirects_from_type, redirects_from_value)) };
+
+            Ok(
+                Command
+                {
+                    tokens: tokens_final,
+                    redirects_to,
+                    redirect_from,
+                })
+            }
+
+        pub fn has_redirect_from(&self) -> bool
+        {
+            self.redirect_from.is_some() &&
+            self.redirect_from.clone().unwrap().0 == "<"
+        }
+
+        pub fn has_here_string(&self) -> bool
+        {
+            self.redirect_from.is_some() &&
+            self.redirect_from.clone().unwrap().0 == "<<<"
+        }
+
+        pub fn is_builtin(&self) -> bool { tools::is_builtin(&self.tokens[0].1) }
+    }
+
+    #[derive(Debug, Clone, Default)]
+    pub struct Job
+    {
+        pub cmd: String,
+        pub id: i32,
+        pub gid: i32,
+        pub pids: Vec<i32>,
+        pub pids_stopped: HashSet<i32>,
+        pub status: String,
+        pub is_bg: bool,
+    }
+
+    impl Job
+    {
+        pub fn all_members_stopped(&self) -> bool
+        {
+            for pid in &self.pids
+            {
+                if !self.pids_stopped.contains(pid) { return false; }
+            }
+
+            true
+        }
+
+        pub fn all_members_running(&self) -> bool { self.pids_stopped.is_empty() }
+    }
+
+    #[allow(dead_code)]
+    #[derive(Clone, Debug, Default)]
+    pub struct CommandResult
+    {
+        pub gid: i32,
+        pub status: i32,
+        pub stdout: String,
+        pub stderr: String,
+    }
+
+    impl CommandResult
+    {
+        pub const fn new() -> CommandResult
+        {
+            CommandResult
+            {
+                gid: 0,
+                status: 0,
+                stdout: String::new(),
+                stderr: String::new(),
+            }
+        }
+
+        pub fn from_status(gid: i32, status: i32) -> CommandResult
+        {
+            CommandResult
+            {
+                gid,
+                status,
+                stdout: String::new(),
+                stderr: String::new(),
+            }
+        }
+
+        pub fn error() -> CommandResult
+        {
+            CommandResult
+            {
+                gid: 0,
+                status: 1,
+                stdout: String::new(),
+                stderr: String::new(),
+            }
+        }
+    }
+
+    #[allow(dead_code)]
+    #[derive(Clone, Debug, Default)]
+    pub struct CommandOptions
+    {
+        pub background: bool,
+        pub isatty: bool,
+        pub capture_output: bool,
+        pub envs: HashMap<String, String>,
+    }
+
+    fn split_tokens_by_pipes(tokens: &[Token]) -> Vec<Tokens>
+    {
+        let mut cmd = Vec::new();
+        let mut cmds = Vec::new();
+        for token in tokens
+        {
+            let sep = &token.0;
+            let value = &token.1;
+            if sep.is_empty() && value == "|"
+            {
+                if cmd.is_empty() { return Vec::new(); }
+                cmds.push(cmd.clone());
+                cmd = Vec::new();
+            } 
+            else { cmd.push(token.clone()); }
+        }
+
+        if cmd.is_empty() { return Vec::new(); }
+
+        cmds.push(cmd.clone());
+        cmds
+    }
+
+    fn drain_env_tokens(tokens: &mut Tokens) -> HashMap<String, String>
+    {
+        let mut envs: HashMap<String, String> = HashMap::new();
+        let mut n = 0;
+        let re = Regex::new(r"^([a-zA-Z0-9_]+)=(.*)$").unwrap();
+        for (sep, text) in tokens.iter()
+        {
+            if !sep.is_empty() || !libs::re::re_contains(text, r"^([a-zA-Z0-9_]+)=(.*)$") { break; }
+
+            for cap in re.captures_iter(text)
+            {
+                let name = cap[1].to_string();
+                let value = parsers::parser_line::unquote(&cap[2]);
+                envs.insert(name, value);
+            }
+
+            n += 1;
+        }
+
+        if n > 0 { tokens.drain(0..n); }
+        envs
+    }
+
+    impl CommandLine
+    {
+        pub fn from_line(line: &str, sh: &mut shell::Shell) -> Result<CommandLine, String>
+        {
+            let linfo = parsers::parser_line::parse_line(line);
+            let mut tokens = linfo.tokens;
+            shell::do_expansion(sh, &mut tokens);
+            let envs = drain_env_tokens(&mut tokens);
+            let mut background = false;
+            let len = tokens.len();
+            if len > 1 && tokens[len - 1].1 == "&"
+            {
+                background = true;
+                tokens.pop();
+            }
+
+            let mut commands = Vec::new();
+            for sub_tokens in split_tokens_by_pipes(&tokens)
+            {
+                match Command::from_tokens(sub_tokens)
+                {
+                    Ok(c) => { commands.push(c); }
+                    Err(e) => { return Err(e); }
+                }
+            }
+
+            Ok
+            (
+                CommandLine
+                {
+                    line:line.to_string(),
+                    commands,
+                    envs,
+                    background,
+                }
+            ) 
+        }
+
+        pub fn is_empty(&self) -> bool { self.commands.is_empty() }
+
+        pub fn with_pipeline(&self) -> bool { self.commands.len() > 1 }
+
+        pub fn is_single_and_builtin(&self) -> bool { self.commands.len() == 1 && self.commands[0].is_builtin() }
+    }
+}
+/*
+uuid v0.0.0 */
+pub mod uuid
+{
+    //! Generate and parse universally unique identifiers (UUIDs).
+    pub mod builder
+    {
+        //! A Builder type for [`Uuid`]s.
+        use ::
+        {
+            uuid::
+            {
+                error::{ self },
+                timestamp, Bytes, Uuid, Variant, Version,
+            },
+            *,
+        };
+        /// A builder for creating a UUID.
+        #[derive(Debug)]
+        pub struct Builder( Uuid );
+
+        impl Uuid
+        {
+            /// The 'nil UUID' (all zeros).
+            pub const fn nil() -> Self { Uuid::from_bytes([0; 16]) }
+            /// The 'max UUID' (all ones).
+            pub const fn max() -> Self { Uuid::from_bytes([0xFF; 16]) }
+            /// Creates a UUID from four field values.
+            pub const fn from_fields(d1: u32, d2: u16, d3: u16, d4: &[u8; 8]) -> Uuid
+            {
+                Uuid::from_bytes
+                ([
+                    (d1 >> 24) as u8, (d1 >> 16) as u8, (d1 >> 8) as u8, d1 as u8,
+                    (d2 >> 8) as u8, d2 as u8,
+                    (d3 >> 8) as u8, d3 as u8,
+                    d4[0], d4[1], d4[2], d4[3], d4[4], d4[5], d4[6], d4[7],
+                ])
+            }
+            /// Creates a UUID from four field values in little-endian order.
+            pub const fn from_fields_le(d1: u32, d2: u16, d3: u16, d4: &[u8; 8]) -> Uuid
+            {
+                Uuid::from_bytes
+                ([
+                    d1 as u8, (d1 >> 8) as u8, (d1 >> 16) as u8, (d1 >> 24) as u8,
+                    (d2) as u8, (d2 >> 8) as u8,
+                    d3 as u8, (d3 >> 8) as u8,
+                    d4[0], d4[1], d4[2], d4[3], d4[4], d4[5], d4[6], d4[7],
+                ])
+            }
+            /// Creates a UUID from a 128bit value.
+            pub const fn from_u128(v: u128) -> Self
+            {
+                Uuid::from_bytes
+                ([
+                    (v >> 120) as u8, (v >> 112) as u8, (v >> 104) as u8, (v >> 96) as u8, (v >> 88) as u8, 
+                    (v >> 80) as u8, (v >> 72) as u8, (v >> 64) as u8, (v >> 56) as u8, (v >> 48) as u8, 
+                    (v >> 40) as u8, (v >> 32) as u8, (v >> 24) as u8, (v >> 16) as u8, (v >> 8) as u8, v as u8,
+                ])
+            }
+            /// Creates a UUID from a 128bit value in little-endian order.
+            pub const fn from_u128_le(v: u128) -> Self
+            {
+                Uuid::from_bytes
+                ([
+                    v as u8, (v >> 8) as u8, (v >> 16) as u8, (v >> 24) as u8, (v >> 32) as u8, (v >> 40) as u8, 
+                    (v >> 48) as u8, (v >> 56) as u8, (v >> 64) as u8, (v >> 72) as u8, (v >> 80) as u8, 
+                    (v >> 88) as u8, (v >> 96) as u8, (v >> 104) as u8, (v >> 112) as u8, (v >> 120) as u8,
+                ])
+            }
+            /// Creates a UUID from two 64bit values.
+            pub const fn from_u64_pair(high_bits: u64, low_bits: u64) -> Self
+            {
+                Uuid::from_bytes
+                ([
+                    (high_bits >> 56) as u8, (high_bits >> 48) as u8, (high_bits >> 40) as u8,
+                    (high_bits >> 32) as u8,  (high_bits >> 24) as u8, (high_bits >> 16) as u8,
+                    (high_bits >> 8) as u8, high_bits as u8,
+
+                    (low_bits >> 56) as u8, (low_bits >> 48) as u8, (low_bits >> 40) as u8, (low_bits >> 32) as u8,
+                    (low_bits >> 24) as u8, (low_bits >> 16) as u8, (low_bits >> 8) as u8, low_bits as u8,
+                ])
+            }
+            /// Creates a UUID using the supplied bytes.
+            pub fn from_slice(b: &[u8]) -> Result<Uuid, Error>
+            {
+                if b.len() != 16 { return Err(Error( error::ErrorKind::ByteLength { len: b.len() })); }
+
+                let mut bytes: Bytes = [0; 16];
+                bytes.copy_from_slice(b);
+                Ok(Uuid::from_bytes(bytes))
+            }
+            /// Creates a UUID using the supplied bytes in little endian order.
+            pub fn from_slice_le(b: &[u8]) -> Result<Uuid, Error>
+            {
+                if b.len() != 16 { return Err(Error( error::ErrorKind::ByteLength { len: b.len() })); }
+
+                let mut bytes: Bytes = [0; 16];
+                bytes.copy_from_slice(b);
+                Ok(Uuid::from_bytes_le(bytes))
+            }
+            /// Creates a UUID using the supplied bytes.
+            pub const fn from_bytes(bytes: Bytes) -> Uuid { Uuid(bytes) }
+            /// Creates a UUID using the supplied bytes in little endian order.
+            pub const fn from_bytes_le(b: Bytes) -> Uuid
+            {
+                Uuid
+                ([
+                    b[3], b[2], b[1], b[0], b[5], b[4], b[7], b[6], b[8], 
+                    b[9], b[10], b[11], b[12], b[13], b[14], b[15],
+                ])
+            }
+            /// Creates a reference to a UUID from a reference to the supplied bytes.
+            pub fn from_bytes_ref(bytes: &Bytes) -> &Uuid { unsafe { &*(bytes as *const Bytes as *const Uuid) } }
+        }
+
+        impl Builder
+        {
+            /// Creates a `Builder` using the supplied bytes.
+            pub const fn from_bytes(b: Bytes) -> Self { Builder(Uuid::from_bytes(b)) }
+            /// Creates a `Builder` using the supplied bytes in little endian order.
+            pub const fn from_bytes_le(b: Bytes) -> Self { Builder(Uuid::from_bytes_le(b)) }
+            /// Creates a `Builder` for a version 1 UUID using the supplied timestamp and node ID.
+            pub const fn from_rfc4122_timestamp(ticks: u64, counter: u16, node_id: &[u8; 6]) -> Self 
+            { Builder(timestamp::encode_rfc4122_timestamp(ticks, counter, node_id)) }
+            /// Creates a `Builder` for a version 3 UUID using the supplied MD5 hashed bytes.
+            pub const fn from_md5_bytes(md5_bytes: Bytes) -> Self
+            {
+                Builder(Uuid::from_bytes(md5_bytes))
+                .with_variant(Variant::RFC4122)
+                .with_version(Version::Md5)
+            }
+            /// Creates a `Builder` for a version 4 UUID using the supplied random bytes.
+            pub const fn from_random_bytes(random_bytes: Bytes) -> Self
+            {
+                Builder(Uuid::from_bytes(random_bytes))
+                .with_variant(Variant::RFC4122)
+                .with_version(Version::Random)
+            }
+            /// Creates a `Builder` for a version 5 UUID using the supplied SHA-1 hashed bytes.
+            pub const fn from_sha1_bytes(sha1_bytes: Bytes) -> Self
+            {
+                Builder(Uuid::from_bytes(sha1_bytes))
+                .with_variant(Variant::RFC4122)
+                .with_version(Version::Sha1)
+            }
+            /// Creates a `Builder` for a version 6 UUID using the supplied timestamp and node ID.
+            pub const fn from_sorted_rfc4122_timestamp( ticks: u64, counter: u16, node_id: &[u8; 6] ) -> Self
+            { Builder(timestamp::encode_sorted_rfc4122_timestamp( ticks, counter, node_id )) }
+            /// Creates a `Builder` for a version 7 UUID using the supplied Unix timestamp and random bytes.
+            pub const fn from_unix_timestamp_millis(millis: u64, random_bytes: &[u8; 10]) -> Self
+            {
+                Builder(timestamp::encode_unix_timestamp_millis
+                (
+                    millis,
+                    random_bytes,
+                ))
+            }
+            /// Creates a `Builder` for a version 8 UUID using the supplied user-defined bytes.
+            pub const fn from_custom_bytes(custom_bytes: Bytes) -> Self
+            {
+                Builder::from_bytes(custom_bytes)
+                .with_variant(Variant::RFC4122)
+                .with_version(Version::Custom)
+            }
+            /// Creates a `Builder` using the supplied bytes.
+            pub fn from_slice(b: &[u8]) -> Result<Self, Error> { Ok(Builder(Uuid::from_slice(b)?)) }
+            /// Creates a `Builder` using the supplied bytes in little endian order.
+            pub fn from_slice_le(b: &[u8]) -> Result<Self, Error> { Ok(Builder(Uuid::from_slice_le(b)?)) }
+            /// Creates a `Builder` from four field values.
+            pub const fn from_fields(d1: u32, d2: u16, d3: u16, d4: &[u8; 8]) -> Self 
+            { Builder(Uuid::from_fields(d1, d2, d3, d4)) }
+            /// Creates a `Builder` from four field values.
+            pub const fn from_fields_le(d1: u32, d2: u16, d3: u16, d4: &[u8; 8]) -> Self 
+            { Builder(Uuid::from_fields_le(d1, d2, d3, d4)) }
+            /// Creates a `Builder` from a 128bit value.
+            pub const fn from_u128(v: u128) -> Self { Builder(Uuid::from_u128(v)) }
+            /// Creates a UUID from a 128bit value in little-endian order.
+            pub const fn from_u128_le(v: u128) -> Self { Builder(Uuid::from_u128_le(v)) }
+            /// Creates a `Builder` with an initial [`Uuid::nil`].
+            pub const fn nil() -> Self { Builder(Uuid::nil()) }
+            /// Specifies the variant of the UUID.
+            pub fn set_variant(&mut self, v: Variant) -> &mut Self
+            {
+                *self = Builder(self.0).with_variant(v);
+                self
+            }
+            /// Specifies the variant of the UUID.
+            pub const fn with_variant(mut self, v: Variant) -> Self
+            {
+                let byte = (self.0).0[8];
+
+                (self.0).0[8] = match v
+                {
+                    Variant::NCS => byte & 0x7f,
+                    Variant::RFC4122 => (byte & 0x3f) | 0x80,
+                    Variant::Microsoft => (byte & 0x1f) | 0xc0,
+                    Variant::Future => byte | 0xe0,
+                };
+
+                self
+            }
+            /// Specifies the version number of the UUID.
+            pub fn set_version(&mut self, v: Version) -> &mut Self
+            {
+                *self = Builder(self.0).with_version(v);
+                self
+            }
+            /// Specifies the version number of the UUID.
+            pub const fn with_version(mut self, v: Version) -> Self
+            {
+                (self.0).0[6] = ((self.0).0[6] & 0x0f) | ((v as u8) << 4);
+                self
+            }
+            /// Get a reference to the underlying [`Uuid`].
+            pub const fn as_uuid(&self) -> &Uuid { &self.0 }
+            /// Convert the builder into a [`Uuid`].
+            pub const fn into_uuid(self) -> Uuid { self.0 }
+        }
+    }
+
+    pub mod error
+    {
+        use ::
+        {
+            *,
+        };
+        /// A general error that can occur when working with UUIDs.
+        #[derive(Clone, Debug, Eq, Hash, PartialEq)]
+        pub struct Error(pub ErrorKind);
+
+        #[derive(Clone, Debug, Eq, Hash, PartialEq)]
+        pub enum ErrorKind
+        {
+            /// Invalid character in the [`Uuid`] string.
+            Char { character: char, index: usize },
+            /// A simple [`Uuid`] didn't contain 32 characters.
+            SimpleLength { len: usize },
+            /// A byte array didn't contain 16 bytes
+            ByteLength { len: usize },
+            /// A hyphenated [`Uuid`] didn't contain 5 groups
+            GroupCount { count: usize },
+            /// A hyphenated [`Uuid`] had a group that wasn't the right length
+            GroupLength
+            {
+                group: usize,
+                len: usize,
+                index: usize,
+            },
+            /// The input was not a valid UTF8 string
+            InvalidUTF8,
+            /// Some other error occurred.
+            Other,
+        }
+        /// A string that is guaranteed to fail to parse to a [`Uuid`].
+        #[derive(Clone, Debug, Eq, Hash, PartialEq)]
+        pub struct InvalidUuid<'a>(pub &'a [u8]);
+
+        impl<'a> InvalidUuid<'a>
+        {
+            /// Converts the lightweight error type into detailed diagnostics.
+            pub fn into_err(self) -> Error
+            {
+                // Check whether or not the input was ever actually a valid UTF8 string
+                let input_str = match std::str::from_utf8(self.0)
+                {
+                    Ok(s) => s,
+                    Err(_) => return Error(ErrorKind::InvalidUTF8),
+                };
+
+                let (uuid_str, offset, simple) = match input_str.as_bytes()
+                {
+                    [b'{', s @ .., b'}'] => (s, 1, false),
+                    [b'u', b'r', b'n', b':', b'u', b'u', b'i', b'd', b':', s @ ..] =>
+                    {
+                        (s, "urn:uuid:".len(), false)
+                    }
+                    
+                    s => (s, 0, true),
+                };
+
+                let mut hyphen_count = 0;
+                let mut group_bounds = [0; 4];
+                let uuid_str = unsafe { str::from_utf8_unchecked(uuid_str) };
+
+                for (index, character) in uuid_str.char_indices()               
+                {
+                    let byte = character as u8;
+                    if character as u32 - byte as u32 > 0
+                    {
+                        return Error(ErrorKind::Char
+                        {
+                            character,
+                            index: index + offset + 1,
+                        });
+                    }
+                    
+                    else if byte == b'-'
+                    {
+                        if hyphen_count < 4 { group_bounds[hyphen_count] = index; }
+                        hyphen_count += 1;
+                    }
+                    
+                    else if !matches!(byte, b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F')
+                    {
+                        return Error(ErrorKind::Char
+                        {
+                            character: byte as char,
+                            index: index + offset + 1,
+                        });
+                    }
+                }
+
+                if hyphen_count == 0 && simple
+                {
+                    Error(ErrorKind::SimpleLength
+                    {
+                        len: input_str.len()
+                    })
+
+                }
+                
+                else if hyphen_count != 4
+                {
+                    Error(ErrorKind::GroupCount
+                    {
+                        count: hyphen_count + 1,
+                    })
+
+                }
+                
+                else
+                {
+                    const BLOCK_STARTS: [usize; 5] = [0, 9, 14, 19, 24];
+                    for i in 0..4
+                    {
+                        if group_bounds[i] != BLOCK_STARTS[i + 1] - 1
+                        {
+                            return Error(ErrorKind::GroupLength
+                            {
+                                group: i,
+                                len: group_bounds[i] - BLOCK_STARTS[i],
+                                index: offset + BLOCK_STARTS[i] + 1,
+                            });
+                        }
+                    }
+                    
+                    Error(ErrorKind::GroupLength
+                    {
+                        group: 4,
+                        len: input_str.len() - BLOCK_STARTS[4],
+                        index: offset + BLOCK_STARTS[4] + 1,
+                    })
+                }
+            }
+        }
+        
+        impl fmt::Display for Error
+        {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+            {
+                match self.0
+                {
+                    ErrorKind::Char { character, index, .. } => 
+                    { write!(f, "invalid character: expected an optional prefix of `urn:uuid:` followed by [0-9a-fA-F-], found `{}` at {}", character, index) }
+                    ErrorKind::SimpleLength { len } =>
+                    {
+                        write ( f, "invalid length: expected length 32 for simple format, found {}", len )
+                    }
+                    ErrorKind::ByteLength { len } =>
+                    {
+                        write!(f, "invalid length: expected 16 bytes, found {}", len)
+                    }
+                    ErrorKind::GroupCount { count } =>
+                    {
+                        write!(f, "invalid group count: expected 5, found {}", count)
+                    }
+                    ErrorKind::GroupLength { group, len, .. } =>
+                    {
+                        let expected = [8, 4, 4, 4, 12][group];
+                        write!
+                        (
+                            f,
+                            "invalid group length in group {}: expected {}, found {}",
+                            group, expected, len
+                        )
+                    }
+                    ErrorKind::InvalidUTF8 => write!(f, "non-UTF8 input"),
+                    ErrorKind::Other => write!(f, "failed to parse a UUID"),
+                }
+            }
+        }
+    }
+
+    pub mod parser
+    {
+        //! [`Uuid`] parsing constructs and utilities.
+        use ::
+        {
+            convert::{ TryFrom },
+            result::{ Result },
+            uuid::
+            {
+                error::{ self },
+                Uuid,
+            },
+            *,
+        };
+
+        const HEX_TABLE: &[u8; 256] = &
+        {
+            let mut buf = [0; 256];
+            let mut i: u8 = 0;
+
+            loop
+            {
+                buf[i as usize] = match i
+                {
+                    b'0'..=b'9' => i - b'0',
+                    b'a'..=b'f' => i - b'a' + 10,
+                    b'A'..=b'F' => i - b'A' + 10,
+                    _ => 0xff,
+                };
+
+                if i == 255 { break buf; }
+
+                i += 1
+            }
+        };
+
+        const SHL4_TABLE: &[u8; 256] = &
+        {
+            let mut buf = [0; 256];
+            let mut i: u8 = 0;
+
+            loop
+            {
+                buf[i as usize] = i.wrapping_shl(4);
+
+                if i == 255 { break buf; }
+
+                i += 1;
+            }
+        };
+
+        impl str::FromStr for Uuid
+        {
+            type Err = error::Error;
+            fn from_str(uuid_str: &str) -> Result<Self, Self::Err> { Uuid::parse_str(uuid_str) }
+        }
+
+        impl TryFrom<&'_ str> for Uuid
+        {
+            type Error = error::Error;
+            fn try_from(uuid_str: &'_ str) -> Result<Self, Self::Error> { Uuid::parse_str(uuid_str) }
+        }
+
+        impl Uuid
+        {
+            /// Parses a `Uuid` from a string of hexadecimal digits with optional hyphens.
+            pub fn parse_str(input: &str) -> Result<Uuid, Error>
+            {
+                try_parse(input.as_bytes())
+                .map(Uuid::from_bytes)
+                .map_err( error::InvalidUuid::into_err)
+            }
+            /// Parses a `Uuid` from a string of hexadecimal digits with optional hyphens.
+            pub const fn try_parse(input: &str) -> Result<Uuid, Error> { Self::try_parse_ascii(input.as_bytes()) }
+            /// Parses a `Uuid` from a string of hexadecimal digits with optional hyphens.
+            pub const fn try_parse_ascii(input: &[u8]) -> Result<Uuid, Error>
+            {
+                match try_parse(input)
+                {
+                    Ok(bytes) => Ok(Uuid::from_bytes(bytes)),
+                    Err(_) => Err(Error( error::ErrorKind::Other)),
+                }
+            }
+        }
+
+        const fn try_parse(input: &[u8]) -> Result<[u8; 16], error::InvalidUuid>
+        {
+            let result = match (input.len(), input)
+            {
+                (32, s) => parse_simple(s),
+                (36, s)
+                | (38, [b'{', s @ .., b'}'])
+                | (45, [b'u', b'r', b'n', b':', b'u', b'u', b'i', b'd', b':', s @ ..]) => {
+                    parse_hyphenated(s)
+                }
+                _ => Err(()),
+            };
+
+            match result
+            {
+                Ok(b) => Ok(b),
+                Err(()) => Err( error::InvalidUuid(input) ),
+            }
+        }
+
+        #[inline] const fn parse_simple(s: &[u8]) -> Result<[u8; 16], ()>
+        {
+            if s.len() != 32 { return Err(()); }
+
+            let mut buf: [u8; 16] = [0; 16];
+            let mut i = 0;
+
+            while i < 16
+            {
+                let h1 = HEX_TABLE[s[i * 2] as usize];
+                let h2 = HEX_TABLE[s[i * 2 + 1] as usize];
+                
+                if h1 | h2 == 0xff { return Err(()); }
+
+                buf[i] = SHL4_TABLE[h1 as usize] | h2;
+                i += 1;
+            }
+
+            Ok(buf)
+        }
+
+        #[inline] const fn parse_hyphenated(s: &[u8]) -> Result<[u8; 16], ()>
+        {            
+            if s.len() != 36 { return Err(()); }
+            
+            match [s[8], s[13], s[18], s[23]]
+            {
+                [b'-', b'-', b'-', b'-'] => {}
+                _ => return Err(()),
+            }
+
+            let positions: [u8; 8] = [0, 4, 9, 14, 19, 24, 28, 32];
+            let mut buf: [u8; 16] = [0; 16];
+            let mut j = 0;
+
+            while j < 8
+            {
+                let i = positions[j];
+                let h1 = HEX_TABLE[s[i as usize] as usize];
+                let h2 = HEX_TABLE[s[(i + 1) as usize] as usize];
+                let h3 = HEX_TABLE[s[(i + 2) as usize] as usize];
+                let h4 = HEX_TABLE[s[(i + 3) as usize] as usize];
+
+                if h1 | h2 | h3 | h4 == 0xff { return Err(()); }
+
+                buf[j * 2] = SHL4_TABLE[h1 as usize] | h2;
+                buf[j * 2 + 1] = SHL4_TABLE[h3 as usize] | h4;
+                j += 1;
+            }
+
+            Ok(buf)
+        }
+    }
+
+    pub mod fmt
+    {
+        //! Adapters for alternative string formats.
+        use ::
+        {
+            borrow::{ Borrow },
+            uuid::{ Uuid, Variant },
+            *,
+        };
+
+        macro_rules! impl_fmt_traits
+        {
+            ($($T:ident<$($a:lifetime),*>),+) => 
+            {$(
+                impl<$($a),*> fmt::Display for $T<$($a),*>
+                {
+                    #[inline]
+                    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { fmt::LowerHex::fmt(self, f) }
+                }
+
+                impl<$($a),*> fmt::LowerHex for $T<$($a),*> 
+                {
+                    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                    { f.write_str(self.encode_lower(&mut [0; Self::LENGTH])) }
+                }
+
+                impl<$($a),*> fmt::UpperHex for $T<$($a),*>
+                {
+                    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                    { f.write_str(self.encode_upper(&mut [0; Self::LENGTH])) }
+                }
+
+                impl_fmt_from!($T<$($a),*>);
+            )+}
+        }
+
+        macro_rules! impl_fmt_from
+        {
+            ($T:ident<>) =>
+            {
+                impl From<Uuid> for $T {
+                    #[inline]
+                    fn from(f: Uuid) -> Self {
+                        $T(f)
+                    }
+                }
+
+                impl From<$T> for Uuid {
+                    #[inline]
+                    fn from(f: $T) -> Self {
+                        f.into_uuid()
+                    }
+                }
+
+                impl AsRef<Uuid> for $T {
+                    #[inline]
+                    fn as_ref(&self) -> &Uuid {
+                        &self.0
+                    }
+                }
+
+                impl Borrow<Uuid> for $T {
+                    #[inline]
+                    fn borrow(&self) -> &Uuid {
+                        &self.0
+                    }
+                }
+            };
+
+            ($T:ident<$a:lifetime>) => 
+            {
+                impl<$a> From<&$a Uuid> for $T<$a> {
+                    #[inline]
+                    fn from(f: &$a Uuid) -> Self {
+                        $T::from_uuid_ref(f)
+                    }
+                }
+
+                impl<$a> From<$T<$a>> for &$a Uuid {
+                    #[inline]
+                    fn from(f: $T<$a>) -> &$a Uuid {
+                        f.0
+                    }
+                }
+
+                impl<$a> AsRef<Uuid> for $T<$a> {
+                    #[inline]
+                    fn as_ref(&self) -> &Uuid {
+                        self.0
+                    }
+                }
+
+                impl<$a> Borrow<Uuid> for $T<$a> {
+                    #[inline]
+                    fn borrow(&self) -> &Uuid {
+                        self.0
+                    }
+                }
+            };
+        }
+
+        impl fmt::Debug for Uuid
+        {
+            #[inline] fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { fmt::LowerHex::fmt(self, f) }
+        }
+
+        impl fmt::Display for Uuid
+        {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { fmt::LowerHex::fmt(self, f) }
+        }
+
+        impl fmt::Display for Variant
+        {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+            {
+                match *self
+                {
+                    Variant::NCS => write!(f, "NCS"),
+                    Variant::RFC4122 => write!(f, "RFC4122"),
+                    Variant::Microsoft => write!(f, "Microsoft"),
+                    Variant::Future => write!(f, "Future"),
+                }
+            }
+        }
+
+        impl fmt::LowerHex for Uuid
+        {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { fmt::LowerHex::fmt(self.as_hyphenated(), f) }
+        }
+
+        impl fmt::UpperHex for Uuid
+        {
+            #[inline] fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result 
+            { fmt::UpperHex::fmt(self.as_hyphenated(), f) }
+        }
+        /// Format a [`Uuid`] as a hyphenated string, like `67e55044-10b1-426f-9247-bb680e5fe0c8`.
+        #[repr( transparent )] #[derive( Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd )]
+        pub struct Hyphenated( Uuid );
+        /// Format a [`Uuid`] as a simple string, like `67e5504410b1426f9247bb680e5fe0c8`.
+        #[repr( transparent )] #[derive( Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd )]
+        pub struct Simple( Uuid );
+        /// Format a [`Uuid`] as a URN string, like `urn:uuid:67e55044-10b1-426f-9247-bb680e5fe0c8`.
+        #[repr( transparent )] #[derive( Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd )]
+        pub struct Urn( Uuid );
+        /// Format a [`Uuid`] as a braced hyphenated string, like `{67e55044-10b1-426f-9247-bb680e5fe0c8}`.
+        #[repr( transparent )] #[derive( Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd )]
+        pub struct Braced( Uuid );
+
+        impl Uuid
+        {
+            /// Get a [`Hyphenated`] formatter.
+            #[inline] pub const fn hyphenated(self) -> Hyphenated { Hyphenated(self) }
+            /// Get a borrowed [`Hyphenated`] formatter.
+            #[inline] pub fn as_hyphenated(&self) -> &Hyphenated 
+            { unsafe { &*(self as *const Uuid as *const Hyphenated) } }
+            /// Get a [`Simple`] formatter.
+            #[inline] pub const fn simple(self) -> Simple { Simple(self) }
+            /// Get a borrowed [`Simple`] formatter.
+            #[inline] pub fn as_simple(&self) -> &Simple { unsafe { &*(self as *const Uuid as *const Simple) } }
+            /// Get a [`Urn`] formatter.
+            #[inline] pub const fn urn(self) -> Urn { Urn(self) }
+            /// Get a borrowed [`Urn`] formatter.
+            #[inline] pub fn as_urn(&self) -> &Urn { unsafe { &*(self as *const Uuid as *const Urn) } }
+            /// Get a [`Braced`] formatter.
+            #[inline]  pub const fn braced(self) -> Braced { Braced(self) }
+            /// Get a borrowed [`Braced`] formatter.
+            #[inline]
+            pub fn as_braced(&self) -> &Braced { unsafe { &*(self as *const Uuid as *const Braced) } }
+        }
+
+        const UPPER: [u8; 16] =
+        [
+            b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'A', b'B', b'C', b'D', b'E', b'F',
+        ];
+
+        const LOWER: [u8; 16] =
+        [
+            b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'a', b'b', b'c', b'd', b'e', b'f',
+        ];
+
+        #[inline] const fn format_simple(src: &[u8; 16], upper: bool) -> [u8; 32]
+        {
+            let lut = if upper { &UPPER } else { &LOWER };
+            let mut dst = [0; 32];
+            let mut i = 0;
+
+            while i < 16
+            {
+                let x = src[i];
+                dst[i * 2] = lut[(x >> 4) as usize];
+                dst[i * 2 + 1] = lut[(x & 0x0f) as usize];
+                i += 1;
+            }
+
+            dst
+        }
+
+        #[inline] const fn format_hyphenated(src: &[u8; 16], upper: bool) -> [u8; 36]
+        {
+            let lut = if upper { &UPPER } else { &LOWER };
+            let groups = [(0, 8), (9, 13), (14, 18), (19, 23), (24, 36)];
+            let mut dst = [0; 36];
+            let mut group_idx = 0;
+            let mut i = 0;
+
+            while group_idx < 5
+            {
+                let (start, end) = groups[group_idx];
+                let mut j = start;
+
+                while j < end
+                {
+                    let x = src[i];
+                    i += 1;
+                    dst[j] = lut[(x >> 4) as usize];
+                    dst[j + 1] = lut[(x & 0x0f) as usize];
+                    j += 2;
+                }
+
+                if group_idx < 4 { dst[end] = b'-'; }
+                
+                group_idx += 1;
+            }
+
+            dst
+        }
+
+        #[inline] fn encode_simple<'b>(src: &[u8; 16], buffer: &'b mut [u8], upper: bool) -> &'b mut str
+        {
+            unsafe
+            {
+                let buf = &mut buffer[..Simple::LENGTH];
+                let dst = buf.as_mut_ptr();
+                ptr::write(dst.cast(), format_simple(src, upper));
+                str::from_utf8_unchecked_mut(buf)
+            }
+        }
+
+        #[inline] fn encode_hyphenated<'b>(src: &[u8; 16], buffer: &'b mut [u8], upper: bool) -> &'b mut str
+        {
+            unsafe
+            {
+                let buf = &mut buffer[..Hyphenated::LENGTH];
+                let dst = buf.as_mut_ptr();
+                ptr::write(dst.cast(), format_hyphenated(src, upper));
+                str::from_utf8_unchecked_mut(buf)
+            }
+        }
+
+        #[inline] fn encode_braced<'b>(src: &[u8; 16], buffer: &'b mut [u8], upper: bool) -> &'b mut str
+        {
+            unsafe
+            {
+                let buf = &mut buffer[..Braced::LENGTH];
+                buf[0] = b'{';
+                buf[Braced::LENGTH - 1] = b'}';
+                let dst = buf.as_mut_ptr().add(1);
+                ptr::write(dst.cast(), format_hyphenated(src, upper));
+                str::from_utf8_unchecked_mut(buf)
+            }
+        }
+
+        #[inline] fn encode_urn<'b>(src: &[u8; 16], buffer: &'b mut [u8], upper: bool) -> &'b mut str
+        {
+            unsafe
+            {
+                let buf = &mut buffer[..Urn::LENGTH];
+                buf[..9].copy_from_slice(b"urn:uuid:");
+                let dst = buf.as_mut_ptr().add(9);
+                ptr::write(dst.cast(), format_hyphenated(src, upper));
+                str::from_utf8_unchecked_mut(buf)
+            }
+        }
+
+        impl Hyphenated
+        {
+            /// The length of a hyphenated [`Uuid`] string.
+            pub const LENGTH: usize = 36;
+
+            /// Creates a [`Hyphenated`] from a [`Uuid`].
+            pub const fn from_uuid(uuid: Uuid) -> Self { Hyphenated(uuid) }
+            /// Writes the [`Uuid`] as a lower-case hyphenated string to `buffer`, 
+            /// and returns the subslice of the buffer that contains the encoded UUID.
+            #[inline] pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str
+            { encode_hyphenated(self.0.as_bytes(), buffer, false) }
+            /// Writes the [`Uuid`] as an upper-case hyphenated string to `buffer`,
+            /// and returns the subslice of the buffer that contains the encoded UUID.
+            #[inline] pub fn encode_upper<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str 
+            { encode_hyphenated(self.0.as_bytes(), buffer, true) }
+            /// Get a reference to the underlying [`Uuid`].
+            pub const fn as_uuid(&self) -> &Uuid { &self.0 }
+            /// Consumes the [`Hyphenated`], returning the underlying [`Uuid`].
+            pub const fn into_uuid(self) -> Uuid { self.0 }
+        }
+
+        impl Braced
+        {
+            /// The length of a braced [`Uuid`] string.
+            pub const LENGTH: usize = 38;
+            /// Creates a [`Braced`] from a [`Uuid`].
+            pub const fn from_uuid(uuid: Uuid) -> Self { Braced(uuid) }
+            /// Writes the [`Uuid`] as a lower-case hyphenated string surrounded by braces to `buffer`, 
+            /// and returns the subslice of the buffer that contains the encoded UUID.
+            #[inline] pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str
+            { encode_braced(self.0.as_bytes(), buffer, false) }
+            /// Writes the [`Uuid`] as an upper-case hyphenated string surrounded by braces to `buffer`,
+            /// and returns the subslice of the buffer that contains the encoded UUID.
+            #[inline] pub fn encode_upper<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str
+            { encode_braced(self.0.as_bytes(), buffer, true) }
+            /// Get a reference to the underlying [`Uuid`].
+            pub const fn as_uuid(&self) -> &Uuid { &self.0 }
+            /// Consumes the [`Braced`], returning the underlying [`Uuid`].
+            pub const fn into_uuid(self) -> Uuid { self.0 }
+        }
+
+        impl Simple
+        {
+            /// The length of a simple [`Uuid`] string.
+            pub const LENGTH: usize = 32;
+
+            /// Creates a [`Simple`] from a [`Uuid`].
+            pub const fn from_uuid(uuid: Uuid) -> Self { Simple(uuid) }
+            /// Writes the [`Uuid`] as a lower-case simple string to `buffer`,
+            /// and returns the subslice of the buffer that contains the encoded UUID.
+            #[inline] pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str
+            { encode_simple(self.0.as_bytes(), buffer, false) }
+            /// Writes the [`Uuid`] as an upper-case simple string to `buffer`,
+            /// and returns the subslice of the buffer that contains the encoded UUID.
+            #[inline] pub fn encode_upper<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str
+            { encode_simple(self.0.as_bytes(), buffer, true) }
+            /// Get a reference to the underlying [`Uuid`].
+            pub const fn as_uuid(&self) -> &Uuid { &self.0 }
+            /// Consumes the [`Simple`], returning the underlying [`Uuid`].
+            pub const fn into_uuid(self) -> Uuid { self.0 }
+        }
+
+        impl Urn
+        {
+            /// The length of a URN [`Uuid`] string.
+            pub const LENGTH: usize = 45;
+            /// Creates a [`Urn`] from a [`Uuid`].
+            pub const fn from_uuid(uuid: Uuid) -> Self { Urn(uuid) }
+            /// Writes the [`Uuid`] as a lower-case URN string to
+            /// `buffer`, and returns the subslice of the buffer that contains the
+            /// encoded UUID.
+            #[inline] pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str
+            { encode_urn(self.0.as_bytes(), buffer, false) }
+            /// Writes the [`Uuid`] as an upper-case URN string to
+            /// `buffer`, and returns the subslice of the buffer that contains the
+            /// encoded UUID.
+            #[inline] pub fn encode_upper<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str
+            { encode_urn(self.0.as_bytes(), buffer, true) }
+            /// Get a reference to the underlying [`Uuid`].
+            pub const fn as_uuid(&self) -> &Uuid { &self.0 }
+            /// Consumes the [`Urn`], returning the underlying [`Uuid`].
+            pub const fn into_uuid(self) -> Uuid { self.0 }
+        }
+
+        impl_fmt_traits!
+        {
+            Hyphenated<>,
+            Simple<>,
+            Urn<>,
+            Braced<>
+        }
+    }
+
+    pub mod timestamp
+    {
+        //! Generating UUIDs from timestamps.
+        use ::
+        {
+            uuid::Uuid,
+            *,
+        };
+
+        /// The number of 100 nanosecond ticks between the RFC4122 epoch (`1582-10-15 00:00:00`)
+        /// and the Unix epoch (`1970-01-01 00:00:00`).
+        pub const UUID_TICKS_BETWEEN_EPOCHS: u64 = 0x01B2_1DD2_1381_4000;
+        /// A timestamp that can be encoded into a UUID.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        pub struct Timestamp 
+        {
+            pub seconds: u64,
+            pub nanos: u32,
+        }
+
+        impl Timestamp
+        {
+            /// Get a timestamp representing the current system time.
+            pub fn now(context: impl ClockSequence<Output = u16>) -> Self
+            {
+                let _ = context;
+                let (seconds, nanos) = now();
+
+                Timestamp
+                {
+                    seconds,
+                    nanos,
+                }
+            }
+            /// Construct a `Timestamp` from an RFC4122 timestamp and counter, as used in versions 1 and 6 UUIDs.
+            pub const fn from_rfc4122(ticks: u64, counter: u16) -> Self
+            {
+                let _ = counter;
+                let (seconds, nanos) = Self::rfc4122_to_unix(ticks);
+                Timestamp
+                {
+                    seconds,
+                    nanos,
+                }
+            }
+            /// Construct a `Timestamp` from a Unix timestamp, as used in version 7 UUIDs.
+            pub fn from_unix(context: impl ClockSequence<Output = u16>, seconds: u64, nanos: u32) -> Self
+            {
+                let _ = context;
+                Timestamp { seconds, nanos }
+            }
+            /// Get the value of timestamp as an RFC4122 timestamp and counter, as used in versions 1 and 6 UUIDs.
+            #[cfg(any(feature = "v1", feature = "v6"))]
+            pub const fn to_rfc4122(&self) -> (u64, u16)
+            {
+                ( 0, 0 )
+            }
+            /// Get the value of the timestamp as a Unix timestamp, as used in version 7 UUIDs.
+            pub const fn to_unix(&self) -> (u64, u32)
+            {
+                (self.seconds, self.nanos)
+            }
+            
+            const fn unix_to_rfc4122_ticks(seconds: u64, nanos: u32) -> u64
+            {
+                0
+            }
+
+            const fn rfc4122_to_unix(ticks: u64) -> (u64, u32)
+            {
+                (
+                    ticks.wrapping_sub(UUID_TICKS_BETWEEN_EPOCHS) / 10_000_000,
+                    (ticks.wrapping_sub(UUID_TICKS_BETWEEN_EPOCHS) % 10_000_000) as u32 * 100,
+                )
+            }
+
+            #[deprecated(note = "use `to_unix` instead; this method will be removed in a future release")]
+            /// Get the number of fractional nanoseconds in the Unix timestamp.
+            pub const fn to_unix_nanos(&self) -> u32
+            {
+                panic!("`Timestamp::to_unix_nanos` is deprecated and will be removed: use `Timestamp::to_unix` instead")
+            }
+        }
+
+        pub const fn encode_rfc4122_timestamp(ticks: u64, counter: u16, node_id: &[u8; 6]) -> Uuid
+        {
+            let time_low = (ticks & 0xFFFF_FFFF) as u32;
+            let time_mid = ((ticks >> 32) & 0xFFFF) as u16;
+            let time_high_and_version = (((ticks >> 48) & 0x0FFF) as u16) | (1 << 12);
+            let mut d4 = [0; 8];
+
+            d4[0] = (((counter & 0x3F00) >> 8) as u8) | 0x80;
+            d4[1] = (counter & 0xFF) as u8;
+            d4[2] = node_id[0];
+            d4[3] = node_id[1];
+            d4[4] = node_id[2];
+            d4[5] = node_id[3];
+            d4[6] = node_id[4];
+            d4[7] = node_id[5];
+
+            Uuid::from_fields(time_low, time_mid, time_high_and_version, &d4)
+        }
+
+        pub const fn decode_rfc4122_timestamp(uuid: &Uuid) -> (u64, u16)
+        {
+            let bytes = uuid.as_bytes();
+            let ticks: u64 = ((bytes[6] & 0x0F) as u64) << 56
+            | (bytes[7] as u64) << 48
+            | (bytes[4] as u64) << 40
+            | (bytes[5] as u64) << 32
+            | (bytes[0] as u64) << 24
+            | (bytes[1] as u64) << 16
+            | (bytes[2] as u64) << 8
+            | (bytes[3] as u64);
+
+            let counter: u16 = ((bytes[8] & 0x3F) as u16) << 8 | (bytes[9] as u16);
+
+            (ticks, counter)
+        }
+        
+        pub const fn encode_sorted_rfc4122_timestamp( ticks: u64, counter: u16, node_id: &[u8; 6] ) -> Uuid
+        {
+            let time_high = ((ticks >> 28) & 0xFFFF_FFFF) as u32;
+            let time_mid = ((ticks >> 12) & 0xFFFF) as u16;
+            let time_low_and_version = ((ticks & 0x0FFF) as u16) | (0x6 << 12);
+            let mut d4 = [0; 8];
+
+            d4[0] = (((counter & 0x3F00) >> 8) as u8) | 0x80;
+            d4[1] = (counter & 0xFF) as u8;
+            d4[2] = node_id[0];
+            d4[3] = node_id[1];
+            d4[4] = node_id[2];
+            d4[5] = node_id[3];
+            d4[6] = node_id[4];
+            d4[7] = node_id[5];
+
+            Uuid::from_fields(time_high, time_mid, time_low_and_version, &d4)
+        }
+        
+        pub const fn decode_sorted_rfc4122_timestamp(uuid: &Uuid) -> (u64, u16)
+        {
+            let bytes = uuid.as_bytes();
+            let ticks: u64 = ((bytes[0]) as u64) << 52
+            | (bytes[1] as u64) << 44
+            | (bytes[2] as u64) << 36
+            | (bytes[3] as u64) << 28
+            | (bytes[4] as u64) << 20
+            | (bytes[5] as u64) << 12
+            | ((bytes[6] & 0xF) as u64) << 8
+            | (bytes[7] as u64);
+
+            let counter: u16 = ((bytes[8] & 0x3F) as u16) << 8 | (bytes[9] as u16);
+
+            (ticks, counter)
+        }
+        
+        pub const fn encode_unix_timestamp_millis(millis: u64, random_bytes: &[u8; 10]) -> Uuid
+        {
+            let millis_high = ((millis >> 16) & 0xFFFF_FFFF) as u32;
+            let millis_low = (millis & 0xFFFF) as u16;
+
+            let random_and_version = 
+            (random_bytes[1] as u16 | ((random_bytes[0] as u16) << 8) & 0x0FFF) | (0x7 << 12);
+
+            let mut d4 = [0; 8];
+
+            d4[0] = (random_bytes[2] & 0x3F) | 0x80;
+            d4[1] = random_bytes[3];
+            d4[2] = random_bytes[4];
+            d4[3] = random_bytes[5];
+            d4[4] = random_bytes[6];
+            d4[5] = random_bytes[7];
+            d4[6] = random_bytes[8];
+            d4[7] = random_bytes[9];
+
+            Uuid::from_fields(millis_high, millis_low, random_and_version, &d4)
+        }
+        
+        pub const fn decode_unix_timestamp_millis(uuid: &Uuid) -> u64
+        {
+            let bytes = uuid.as_bytes();
+            let millis: u64 = (bytes[0] as u64) << 40
+            | (bytes[1] as u64) << 32
+            | (bytes[2] as u64) << 24
+            | (bytes[3] as u64) << 16
+            | (bytes[4] as u64) << 8
+            | (bytes[5] as u64);
+
+            millis
+        }
+        
+        fn now() -> (u64, u32)
+        {
+            let dur = std::time::SystemTime::UNIX_EPOCH.elapsed().expect
+            (
+                "Getting elapsed time since UNIX_EPOCH. If this fails, we've somehow violated causality",
+            );
+
+            (dur.as_secs(), dur.subsec_nanos())
+        }
+        /// A counter that can be used by version 1 and version 6 UUIDs to support the uniqueness of timestamps.
+        pub trait ClockSequence
+        {
+            /// The type of sequence returned by this counter.
+            type Output;
+            /// Get the next value in the sequence to feed into a timestamp.
+            fn generate_sequence(&self, seconds: u64, subsec_nanos: u32) -> Self::Output;
+        }
+
+        impl<'a, T: ClockSequence + ?Sized> ClockSequence for &'a T
+        {
+            type Output = T::Output;
+            fn generate_sequence(&self, seconds: u64, subsec_nanos: u32) -> Self::Output
+            { (**self).generate_sequence(seconds, subsec_nanos) }
+        }
+        /// Default implementations for the [`ClockSequence`] trait.
+        pub mod context
+        {
+            use super::ClockSequence;
+
+            /// An empty counter that will always return the value `0`.
+            #[derive(Debug, Clone, Copy, Default)]
+            pub struct NoContext;
+
+            impl ClockSequence for NoContext
+            {
+                type Output = u16;
+
+                fn generate_sequence(&self, _seconds: u64, _nanos: u32) -> Self::Output { 0 }
+            }
+        }
+    }
+    pub use self::timestamp::{context::NoContext, ClockSequence, Timestamp};  
+    
+    pub mod v1 {/* UNSUPPORTED */}
+    mod v3 {/* UNSUPPORTED */}
+
+    mod v4
+    {
+        use super::Uuid;
+        impl Uuid
+        {
+            /// Creates a random UUID.
+            pub fn new_v4() -> Uuid
+            {
+                ::uuid::Builder::from_random_bytes( ::uuid::rng::bytes() ).into_uuid()
+            }
+        }
+    }
+    mod v5 {/* UNSUPPORTED */}
+    mod v6 {/* UNSUPPORTED */}
+    mod v7 {/* UNSUPPORTED */}
+    mod v8 {/* UNSUPPORTED */}
+
+    pub mod rng
+    {
+        pub fn bytes() -> [u8; 16]
+        {
+             let mut bytes = [0u8; 16];
+
+            getrandom::getrandom(&mut bytes).unwrap_or_else(|err| 
+            {
+                panic!("could not retrieve random bytes for uuid: {}", err)
+            });
+
+            bytes
+        }
+    }
+
+    #[macro_use] mod macros
+    {
+        macro_rules! define_uuid_macro
+        {
+            {$(#[$doc:meta])*} =>
+            {
+
+                $(#[$doc])* 
+                #[macro_export] macro_rules! uuid 
+                {
+                    ($uuid:literal) => 
+                    {{
+                        const OUTPUT: $crate::uuid::Uuid = match $crate::uuid::Uuid::try_parse($uuid)
+                        {
+                            Ok(u) => u,
+                            Err(_) =>
+                            {
+                                let _ = ["invalid uuid representation"][1];
+                                loop {} // -> never type
+                            }
+                        };
+
+                        OUTPUT
+                    }};
+                }
+            }
+        }
+
+        define_uuid_macro!
+        {
+            /// Parse [`Uuid`][uuid::Uuid]s from string literals at compile time.
+        }
+    }
+    /// A 128-bit (16 byte) buffer containing the UUID.
+    pub type Bytes = [u8; 16];
+    /// A 128-bit (16 byte) buffer containing the UUID.
+    #[repr( u8 )] #[non_exhaustive] #[derive( Clone, Copy, Debug, PartialEq )]
+    pub enum Version
+    {
+        /// The "nil" (all zeros) UUID.
+        Nil = 0u8,
+        /// Version 1: Timestamp and node ID.
+        Mac = 1,
+        /// Version 2: DCE Security.
+        Dce = 2,
+        /// Version 3: MD5 hash.
+        Md5 = 3,
+        /// Version 4: Random.
+        Random = 4,
+        /// Version 5: SHA-1 hash.
+        Sha1 = 5,
+        /// Version 6: Sortable Timestamp and node ID.
+        SortMac = 6,
+        /// Version 7: Timestamp and random.
+        SortRand = 7,
+        /// Version 8: Custom.
+        Custom = 8,
+        /// The "max" (all ones) UUID.
+        Max = 0xff,
+    }
+    /// The reserved variants of UUIDs.
+    #[repr( u8 )] #[non_exhaustive] #[derive( Clone, Copy, Debug, PartialEq )]
+    pub enum Variant
+    {
+        /// Reserved by the NCS for backward compatibility.
+        NCS = 0u8,
+        /// As described in the RFC4122 Specification (default).
+        RFC4122,
+        /// Reserved by Microsoft for backward compatibility.
+        Microsoft,
+        /// Reserved for future expansion.
+        Future,
+    }
+    /// A Universally Unique Identifier (UUID).
+    #[repr( transparent )] #[derive( Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd )]    
+    pub struct Uuid( Bytes );
+
+    impl Uuid
+    {
+        /// UUID namespace for Domain Name System (DNS).
+        pub const NAMESPACE_DNS: Self = Uuid
+        ([ 0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8 ]);
+        /// UUID namespace for ISO Object Identifiers (OIDs).
+        pub const NAMESPACE_OID: Self = Uuid
+        ([ 0x6b, 0xa7, 0xb8, 0x12, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8 ]);
+        /// UUID namespace for Uniform Resource Locators (URLs).
+        pub const NAMESPACE_URL: Self = Uuid
+        ([ 0x6b, 0xa7, 0xb8, 0x11, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8 ]);
+        /// UUID namespace for X.500 Distinguished Names (DNs).
+        pub const NAMESPACE_X500: Self = Uuid
+        ([ 0x6b, 0xa7, 0xb8, 0x14, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8 ]);
+        /// Returns the variant of the UUID structure.
+        pub const fn get_variant(&self) -> Variant
+        {
+            match self.as_bytes()[8]
+            {
+                x if x & 0x80 == 0x00 => Variant::NCS,
+                x if x & 0xc0 == 0x80 => Variant::RFC4122,
+                x if x & 0xe0 == 0xc0 => Variant::Microsoft,
+                x if x & 0xe0 == 0xe0 => Variant::Future,
+                _ => Variant::Future,
+            }
+        }
+        /// Returns the version number of the UUID.
+        pub const fn get_version_num(&self) -> usize { (self.as_bytes()[6] >> 4) as usize }
+        /// Returns the version of the UUID.
+        pub const fn get_version(&self) -> Option<Version>
+        {
+            match self.get_version_num()
+            {
+                0 if self.is_nil() => Some(Version::Nil),
+                1 => Some(Version::Mac),
+                2 => Some(Version::Dce),
+                3 => Some(Version::Md5),
+                4 => Some(Version::Random),
+                5 => Some(Version::Sha1),
+                6 => Some(Version::SortMac),
+                7 => Some(Version::SortRand),
+                8 => Some(Version::Custom),
+                0xf => Some(Version::Max),
+                _ => None,
+            }
+        }
+        /// Returns the four field values of the UUID.
+        pub fn as_fields(&self) -> (u32, u16, u16, &[u8; 8])
+        {
+            let bytes = self.as_bytes();
+
+            let d1 = (bytes[0] as u32) << 24
+            | (bytes[1] as u32) << 16
+            | (bytes[2] as u32) << 8
+            | (bytes[3] as u32);
+
+            let d2 = (bytes[4] as u16) << 8 | (bytes[5] as u16);
+
+            let d3 = (bytes[6] as u16) << 8 | (bytes[7] as u16);
+
+            let d4: &[u8; 8] = convert::TryInto::try_into(&bytes[8..16]).unwrap();
+
+            (d1, d2, d3, d4)
+        }
+        /// Returns the four field values of the UUID in little-endian order.
+        pub fn to_fields_le(&self) -> (u32, u16, u16, &[u8; 8])
+        {
+            let d1 = (self.as_bytes()[0] as u32)
+            | (self.as_bytes()[1] as u32) << 8
+            | (self.as_bytes()[2] as u32) << 16
+            | (self.as_bytes()[3] as u32) << 24;
+
+            let d2 = (self.as_bytes()[4] as u16) | (self.as_bytes()[5] as u16) << 8;
+            let d3 = (self.as_bytes()[6] as u16) | (self.as_bytes()[7] as u16) << 8;
+            let d4: &[u8; 8] = convert::TryInto::try_into(&self.as_bytes()[8..16]).unwrap();
+            (d1, d2, d3, d4)
+        }
+        /// Returns a 128bit value containing the value.
+        pub const fn as_u128(&self) -> u128 { u128::from_be_bytes(*self.as_bytes()) }
+        /// Returns a 128bit little-endian value containing the value.
+        pub const fn to_u128_le(&self) -> u128 { u128::from_le_bytes(*self.as_bytes()) }
+        /// Returns two 64bit values containing the value.
+        pub const fn as_u64_pair(&self) -> (u64, u64)
+        {
+            let value = self.as_u128();
+            ((value >> 64) as u64, value as u64)
+        }
+        /// Returns a slice of 16 octets containing the value.
+        pub const fn as_bytes(&self) -> &Bytes { &self.0 }
+        /// Consumes self and returns the underlying byte value of the UUID.
+        pub const fn into_bytes(self) -> Bytes { self.0 }
+        /// Returns the bytes of the UUID in little-endian order.
+        pub const fn to_bytes_le(&self) -> Bytes
+        {
+            [
+                self.0[3], self.0[2], self.0[1], self.0[0], self.0[5], self.0[4], self.0[7], self.0[6], self.0[8], 
+                self.0[9], self.0[10], self.0[11], self.0[12], self.0[13], self.0[14], self.0[15],
+            ]
+        }
+        /// Tests if the UUID is nil (all zeros).
+        pub const fn is_nil(&self) -> bool { self.as_u128() == u128::MIN }
+        /// Tests if the UUID is max (all ones).
+        pub const fn is_max(&self) -> bool { self.as_u128() == u128::MAX }
+        /// A buffer that can be used for `encode_...` calls, that is
+        /// guaranteed to be long enough for any of the format adapters.
+        pub const fn encode_buffer() -> [u8; fmt::Urn::LENGTH] { [0; fmt::Urn::LENGTH] }
+        /// If the UUID is the correct version (v1, v6, or v7) this will return the timestamp,
+        // and counter portion parsed from a V1 UUID.
+        pub const fn get_timestamp(&self) -> Option<Timestamp>
+        {
+            match self.get_version()
+            {
+                Some(Version::Mac) =>
+                {
+                    let (ticks, counter) = timestamp::decode_rfc4122_timestamp(self);
+                    Some(Timestamp::from_rfc4122(ticks, counter))
+                }
+                
+                Some(Version::SortMac) =>
+                {
+                    let (ticks, counter) = timestamp::decode_sorted_rfc4122_timestamp(self);
+                    Some(Timestamp::from_rfc4122(ticks, counter))
+                }
+                
+                Some(Version::SortRand) =>
+                {
+                    let millis = timestamp::decode_unix_timestamp_millis(self);
+                    let seconds = millis / 1000;
+                    let nanos = ((millis % 1000) * 1_000_000) as u32;
+
+                    Some(Timestamp
+                    {
+                        seconds,
+                        nanos,
+                        #[cfg(any(feature = "v1", feature = "v6"))]
+                        counter: 0,
+                    })
+                }
+                _ => None,
+            }
+        }
+    }
+
+    impl Default for Uuid
+    {
+        #[inline] fn default() -> Self { Uuid::nil() }
+    }
+
+    impl AsRef<[u8]> for Uuid
+    {
+        #[inline] fn as_ref(&self) -> &[u8] { &self.0 }
+    }
+    
+    use ::
+    {
+        *,
+    };
+
+    pub use self::{ builder::Builder, error::Error }; 
+
+}
+/**/
 pub use std::{ *, };
 /// Represents an error calling `exec`.
-pub use ::types::CommandResult;
-pub use ::types::LineInfo;
+pub use ::types::{ CommandResult, LineInfo };
 /**/
 use ::
 {
-    fmt::{ * },
+    fmt::{ Result as Displayed, * },
     io::{ stderr, Write },
     sync::{ Arc },
 };
@@ -19663,4 +21568,4 @@ fn main()
     }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 19666
+// 21571
