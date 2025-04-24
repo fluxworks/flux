@@ -1,0 +1,4072 @@
+//! Cicada is a bash-like Unix shell written in Rust.
+#![feature
+(
+    tool_lints,
+)]
+
+#![allow
+(
+    dead_code,
+    unknown_lints,
+    unreachable_patterns,
+    unused_variables,
+)]
+#[macro_use] extern crate bitflags;
+#[macro_use] extern crate lazy_static;
+/**/
+extern crate libc;
+extern crate memchr;
+extern crate time as timed;
+extern crate regex as re;
+extern crate smallvec;
+extern crate unicode_normalization;
+extern crate unicode_width;
+/*
+extern crate clap;
+extern crate getrandom;
+extern crate libc;
+extern crate nix;
+
+extern crate unicode_normalization;
+extern crate unicode_width;
+*/
+/// Macros
+#[macro_use] pub mod macros
+{
+    use ::
+    {
+        *,
+    };
+
+    #[macro_export] macro_rules! println_stderr
+    {
+        ($fmt:expr) =>
+        (
+            match writeln!(&mut ::io::stderr(), $fmt)
+            {
+                Ok(_) => {}
+                Err(e) => println!("write to stderr failed: {:?}", e)
+            }
+        );
+        
+        ($fmt:expr, $($arg:tt)*) =>
+        (
+            match writeln!(&mut ::io::stderr(), $fmt, $($arg)*)
+            {
+                Ok(_) => {}
+                Err(e) => println!("write to stderr failed: {:?}", e)
+            }
+        );
+    }
+    
+    #[macro_export] macro_rules! log
+    {
+        ($fmt:expr) =>
+        (
+            let log_file = if let Ok(x) = ::env::var("CICADA_LOG_FILE") { x.clone() } else { String::new() };
+
+            if !log_file.is_empty()
+            {
+                use ::io::Write as _;
+
+                let msg = $fmt;
+                match std::fs::OpenOptions::new().append(true).create(true).open(&log_file) {
+                    Ok(mut cfile) => {
+                        let pid = ::process::getpid();
+                        let now = ::time::c::DateTime::now();
+                        let msg = format!("[{}][{}] {}", now, pid, msg);
+                        let msg = if msg.ends_with('\n') { msg } else { format!("{}\n", msg) };
+                        match cfile.write_all(msg.as_bytes()) {
+                            Ok(_) => {}
+                            Err(_) => println!("tlog: write_all error")
+                        }
+                    }
+                    Err(_) => println!("tlog: open file error"),
+                }
+
+            }
+        );
+
+        ($fmt:expr, $($arg:tt)*) => (
+            let msg = format!($fmt, $($arg)*);
+            log!(&msg);
+        );
+    }
+}
+/// Memory allocation APIs.
+pub mod alloc
+{
+    pub use std::alloc::{ * };
+}
+/// Utilities for dynamic typing or type reflection.
+pub mod any
+{
+    pub use std::any::{ * };
+}
+/// SIMD and vendor intrinsics module.
+pub mod arch
+{
+    pub use std::arch::x86_64::{ * };
+}
+/// Utilities for the array primitive type.
+pub mod array
+{
+    pub use std::array::{ * };
+}
+/// Operations on ASCII strings and characters.
+pub mod ascii
+{
+    pub use std::ascii::{ * };
+}
+/// Support for capturing a stack backtrace of an OS thread
+pub mod backtrace
+{
+    pub use std::backtrace::{ * };
+}
+/// A module for working with borrowed data.
+pub mod borrow
+{
+    pub use std::borrow::{ * };
+}
+/// The Box<T> type for heap allocation.
+pub mod boxed
+{
+    pub use std::boxed::{ * };
+}
+/// Shareable mutable containers.
+pub mod cell
+{
+    pub use std::cell::{ * };
+}
+/// Utilities for the char primitive type.
+pub mod char
+{
+    pub use std::char::{ * };
+}
+/// The Clone trait for types that cannot be ‘implicitly copied’.
+pub mod clone
+{
+    pub use std::clone::{ * };
+}
+/// Utilities for comparing and ordering values.
+pub mod cmp
+{
+    pub use std::cmp::{ * };
+}
+/// Collection types.
+pub mod collections
+{
+    pub use std::collections::{ * };
+}
+/// Traits for conversions between types.
+pub mod convert
+{
+    pub use std::convert::{ * };
+}
+/// The Default trait for types with a default value.
+pub mod default
+{
+    pub use std::default::{ * };
+}
+/// Emission & Printing Utilities
+pub mod emit
+{
+    use ::
+    {
+        *,
+    };
+}
+/// Inspection and manipulation of the process’s environment.
+pub mod env
+{
+    pub use std::env::{ * };
+}
+/// Expansions
+pub mod expand
+{
+    use ::
+    {
+        error::meta::{ self as err },
+        io::{ BufWriter, Write },
+        *,
+    };
+    /*
+        terminfo v0.9.0::expand
+        
+        use terminfo::parser::expansion::*;
+
+        terminfo aka terminal meta
+            system::capability
+                use terminfo::expand::{Context, Expand, Parameter};
+                
+    */
+    /// Trait for items that can be expanded.
+    pub trait Expand 
+    {
+        fn expand<W: Write>
+        (
+            &self,
+            output: W,
+            parameters: &[Parameter],
+            context: &mut Context,
+        ) -> err::Result<()>;
+    }
+    /// An expansion parameter.
+    #[derive(Eq, PartialEq, Clone, Debug)]
+    pub enum Parameter
+    {
+        /// A number.
+        Number(i32),
+        /// An ASCII string.
+        String(Vec<u8>),
+    }
+
+    impl Default for Parameter
+    {
+        fn default() -> Self { Parameter::Number(0) }
+    }
+    /// The expansion context.
+    #[derive(Eq, PartialEq, Default, Debug)]
+    pub struct Context
+    {
+        pub fixed: [Parameter; 26],
+        pub dynamic: [Parameter; 26],
+    }
+}
+/// Interfaces for working with Errors.
+pub mod error
+{
+    pub use std::error::{ * };
+    /*  terminfo v0.9.0::error */
+    pub mod meta
+    {
+        use ::
+        {
+            *,
+        };
+
+        #[derive(Debug)]
+        pub enum Error
+        {
+            /// IO error.
+            Io(io::Error),
+            /// Database not found.
+            NotFound,
+            /// Parsing error.
+            Parse,
+            /// Expansion error.
+            Expand(Expand),
+        }
+
+        #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+        pub enum Expand
+        {
+            /// The expansion string is invalid.
+            Invalid,
+            /// There was a type mismatch while expanding.
+            TypeMismatch,
+            /// The stack underflowed while expanding.
+            StackUnderflow,
+        }
+
+        pub type Result<T> = ::result::Result<T, Error>;
+
+        impl From<io::Error> for Error
+        {
+            fn from(value: io::Error) -> Self { Error::Io(value) }
+        }
+
+        impl From<Expand> for Error
+        {
+            fn from(value: Expand) -> Self { Error::Expand(value) }
+        }
+
+        impl fmt::Display for Error
+        {
+            fn fmt(&self, f: &mut fmt::Formatter) -> ::std::result::Result<(), fmt::Error>
+            {
+                match *self
+                {
+                    Error::Io(ref err) => err.fmt(f),
+                    Error::NotFound => f.write_str("Capability database not found."),
+                    Error::Parse => f.write_str("Failed to parse capability database."),
+                    Error::Expand(ref err) => match *err
+                    {
+                        Expand::Invalid => f.write_str("The expansion string is invalid."),
+                        Expand::StackUnderflow => f.write_str("Not enough elements on the stack."),
+                        Expand::TypeMismatch => f.write_str("Type mismatch."),
+                    },
+                }
+            }
+        }
+
+        impl error::Error for Error {}
+    }
+    /*  nom v7.1.3::error */
+    pub mod nom
+    {
+        //! Error management
+        use ::
+        {
+            primitive::nom::{ Parser },
+            *,
+        };
+        /// Creates a parse error from a `nom::ErrorKind` and the position in the input
+        #[macro_export(local_inner_macros)]
+        macro_rules! error_position
+        (
+            ($input:expr, $code:expr) => 
+            ({
+                ::error::nom::make_error($input, $code)
+            });
+        );
+        /// Creates a parse error from a `nom::ErrorKind`,
+        /// the position in the input and the next error in the parsing tree
+        #[macro_export(local_inner_macros)]
+        macro_rules! error_node_position
+        (
+            ($input:expr, $code:expr, $next:expr) => 
+            ({
+                $crate::error::nom::append_error($input, $code, $next)
+            });
+        );
+        /// This trait must be implemented by the error type of a nom parser.
+        pub trait ParseError<I>: Sized
+        {
+            /// Creates an error from the input position and an [ErrorKind]
+            fn from_error_kind(input: I, kind: ErrorKind) -> Self;
+            /// Combines an existing error with a new one created from the input position and an [ErrorKind].
+            fn append(input: I, kind: ErrorKind, other: Self) -> Self;
+            /// Creates an error from an input position and an expected character
+            fn from_char(input: I, _: char) -> Self { Self::from_error_kind(input, ErrorKind::Char) }
+            /// Combines two existing errors.
+            fn or(self, other: Self) -> Self { other }
+        }
+        /// This trait is required by the `context` combinator to add a static string to an existing error.
+        pub trait ContextError<I>: Sized
+        {
+            /// Creates a new error from an input position, a static string and an existing error.
+            fn add_context(_input: I, _ctx: &'static str, other: Self) -> Self { other }
+        }
+        /// This trait is required by the `map_res` combinator to integrate error types from external functions.
+        pub trait FromExternalError<I, E>
+        {
+            /// Creates a new error from an input position, 
+            /// an [ErrorKind] indicating the wrapping parser, and an external error.
+            fn from_external_error(input: I, kind: ErrorKind, e: E) -> Self;
+        }
+        /// default error type, only contains the error' location and code
+        #[derive(Debug, PartialEq)]
+        pub struct Error<I>
+        {
+            /// position of the error in the input data
+            pub input: I,
+            /// nom error code
+            pub code: ErrorKind,
+        }
+
+        impl<I> Error<I>
+        {
+            /// creates a new basic error
+            pub fn new(input: I, code: ErrorKind) -> Error<I>
+            {
+                Error { input, code }
+            }
+        }
+
+        impl<I> ParseError<I> for Error<I>
+        {
+            fn from_error_kind(input: I, kind: ErrorKind) -> Self
+            {
+                Error { input, code: kind }
+            }
+            fn append(_: I, _: ErrorKind, other: Self) -> Self { other }
+        }
+
+        impl<I> ContextError<I> for Error<I> {}
+
+        impl<I, E> FromExternalError<I, E> for Error<I>
+        {
+            /// Create a new error from an input position and an external error
+            fn from_external_error(input: I, kind: ErrorKind, _e: E) -> Self { Error { input, code: kind } }
+        }
+
+        /// The Display implementation allows the std::error::Error implementation
+        impl<I: fmt::Display> fmt::Display for Error<I>
+        {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result 
+            { write!(f, "error {:?} at: {}", self.code, self.input) }
+        }
+        
+        impl<I: fmt::Debug + fmt::Display> std::error::Error for Error<I> {}
+        
+        impl<I> ParseError<I> for (I, ErrorKind)
+        {
+            fn from_error_kind(input: I, kind: ErrorKind) -> Self { (input, kind) }
+            fn append(_: I, _: ErrorKind, other: Self) -> Self { other }
+        }
+
+        impl<I> ContextError<I> for (I, ErrorKind) {}
+
+        impl<I, E> FromExternalError<I, E> for (I, ErrorKind)
+        {
+            fn from_external_error(input: I, kind: ErrorKind, _e: E) -> Self { (input, kind) }
+        }
+
+        impl<I> ParseError<I> for ()
+        {
+            fn from_error_kind(_: I, _: ErrorKind) -> Self {}
+            fn append(_: I, _: ErrorKind, _: Self) -> Self {}
+        }
+
+        impl<I> ContextError<I> for () {}
+
+        impl<I, E> FromExternalError<I, E> for ()
+        {
+            fn from_external_error(_input: I, _kind: ErrorKind, _e: E) -> Self {}
+        }
+        /// Creates an error from the input position and an [ErrorKind]
+        pub fn make_error<I, E: ParseError<I>>(input: I, kind: ErrorKind) -> E { E::from_error_kind(input, kind) }
+        /// Combines an existing error with a new one created from the input position and an [ErrorKind].
+        pub fn append_error<I, E: ParseError<I>>(input: I, kind: ErrorKind, other: E) -> E
+        { E::append(input, kind, other) }
+        /// This error type accumulates errors and their position when backtracking through a parse tree.
+        #[derive(Clone, Debug, PartialEq)]
+        pub struct VerboseError<I>
+        {
+            /// List of errors accumulated by `VerboseError`, 
+            /// containing the affected part of input data, and some context
+            pub errors: ::vec::Vec<(I, VerboseErrorKind)>,
+        }
+        #[derive(Clone, Debug, PartialEq)]
+        /// Error context for `VerboseError`
+        pub enum VerboseErrorKind
+        {
+            /// Static string added by the `context` function
+            Context(&'static str),
+            /// Indicates which character was expected by the `char` function
+            Char(char),
+            /// Error kind given by various nom parsers
+            Nom(ErrorKind),
+        }
+        
+        impl<I> ParseError<I> for VerboseError<I>
+        {
+            fn from_error_kind(input: I, kind: ErrorKind) -> Self
+            {
+                VerboseError
+                {
+                    errors: vec![(input, VerboseErrorKind::Nom(kind))],
+                }
+            }
+            fn append(input: I, kind: ErrorKind, mut other: Self) -> Self
+            {
+                other.errors.push((input, VerboseErrorKind::Nom(kind)));
+                other
+            }
+            fn from_char(input: I, c: char) -> Self
+            {
+                VerboseError
+                {
+                    errors: vec![(input, VerboseErrorKind::Char(c))],
+                }
+            }
+        }
+        
+        impl<I> ContextError<I> for VerboseError<I>
+        {
+            fn add_context(input: I, ctx: &'static str, mut other: Self) -> Self
+            {
+                other.errors.push((input, VerboseErrorKind::Context(ctx)));
+                other
+            }
+        }
+        
+        impl<I, E> FromExternalError<I, E> for VerboseError<I>
+        {
+            /// Create a new error from an input position and an external error
+            fn from_external_error(input: I, kind: ErrorKind, _e: E) -> Self { Self::from_error_kind(input, kind) }
+        }
+        
+        impl<I: fmt::Display> fmt::Display for VerboseError<I>
+        {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+            {
+                writeln!(f, "Parse error:")?;
+
+                for (input, error) in &self.errors
+                {
+                    match error
+                    {
+                        VerboseErrorKind::Nom(e) => writeln!(f, "{:?} at: {}", e, input)?,
+                        VerboseErrorKind::Char(c) => writeln!(f, "expected '{}' at: {}", c, input)?,
+                        VerboseErrorKind::Context(s) => writeln!(f, "in section '{}', at: {}", s, input)?,
+                    }
+                }
+
+                Ok(())
+            }
+        }
+        
+        impl<I: fmt::Debug + fmt::Display> std::error::Error for VerboseError<I> {}
+
+        use ::primitive::nom::{Err, IResult};
+        /// Create a new error from an input position, a static string and an existing error.
+        pub fn context<I: Clone, E: ContextError<I>, F, O>( context: &'static str, mut f: F ) ->
+        impl FnMut(I) -> IResult<I, O, E> where
+        F: Parser<I, O, E>
+        {
+            move |i: I| match f.parse(i.clone())
+            {
+                Ok(o) => Ok(o),
+                Err(Err::Incomplete(i)) => Err(Err::Incomplete(i)),
+                Err(Err::Error(e)) => Err(Err::Error(E::add_context(i, context, e))),
+                Err(Err::Failure(e)) => Err(Err::Failure(E::add_context(i, context, e))),
+            }
+        }
+        /// Transforms a `VerboseError` into a trace with input position information.
+        pub fn convert_error<I: core::ops::Deref<Target = str>>( input: I, e: VerboseError<I> ) -> 
+        ::string::String
+        {
+            use ::fmt::Write;
+            //use nom::traits::Offset;
+
+            let mut result = ::string::String::new();
+
+            for (i, (substring, kind)) in e.errors.iter().enumerate()
+            {
+                let offset = input.offset(substring);
+
+                if input.is_empty()
+                {
+                    match kind
+                    {
+                        VerboseErrorKind::Char(c) =>
+                        { write!(&mut result, "{}: expected '{}', got empty input\n\n", i, c) }
+                        VerboseErrorKind::Context(s) => write!(&mut result, "{}: in {}, got empty input\n\n", i, s),
+                        VerboseErrorKind::Nom(e) => write!(&mut result, "{}: in {:?}, got empty input\n\n", i, e),
+                    }
+                }
+
+                else
+                {
+                    let prefix = &input.as_bytes()[..offset];
+                    let line_number = prefix.iter().filter(|&&b| b == b'\n').count() + 1;
+                    
+                    let line_begin = prefix
+                    .iter()
+                    .rev()
+                    .position(|&b| b == b'\n')
+                    .map(|pos| offset - pos)
+                    .unwrap_or(0);
+                    
+                    let line = input[line_begin..]
+                    .lines()
+                    .next()
+                    .unwrap_or(&input[line_begin..])
+                    .trim_end();
+                    
+                    let column_number = line.offset(substring) + 1;
+
+                    match kind
+                    {
+                        VerboseErrorKind::Char(c) =>
+                        {
+                            if let Some(actual) = substring.chars().next()
+                            {
+                                write!(
+                                &mut result,
+                                "{i}: at line {line_number}:\n\
+                                {line}\n\
+                                {caret:>column$}\n\
+                                expected '{expected}', found {actual}\n\n",
+                                i = i,
+                                line_number = line_number,
+                                line = line,
+                                caret = '^',
+                                column = column_number,
+                                expected = c,
+                                actual = actual,
+                                )
+                            }
+                            
+                            else
+                            {
+                                write!(
+                                &mut result,
+                                "{i}: at line {line_number}:\n\
+                                {line}\n\
+                                {caret:>column$}\n\
+                                expected '{expected}', got end of input\n\n",
+                                i = i,
+                                line_number = line_number,
+                                line = line,
+                                caret = '^',
+                                column = column_number,
+                                expected = c,
+                                )
+                            }
+                        }
+
+                        VerboseErrorKind::Context(s) => write!
+                        (
+                            &mut result,
+                            "{i}: at line {line_number}, in {context}:\n\
+                                {line}\n\
+                                {caret:>column$}\n\n",
+                            i = i,
+                            line_number = line_number,
+                            context = s,
+                            line = line,
+                            caret = '^',
+                            column = column_number,
+                        ),
+
+                        VerboseErrorKind::Nom(e) => write!
+                        (
+                            &mut result,
+                            "{i}: at line {line_number}, in {nom_err:?}:\n\
+                                {line}\n\
+                                {caret:>column$}\n\n",
+                            i = i,
+                            line_number = line_number,
+                            nom_err = e,
+                            line = line,
+                            caret = '^',
+                            column = column_number,
+                        ),
+                    }
+                }.unwrap();
+            }
+
+            result
+        }
+        /// Indicates which parser returned an error
+        #[derive(Debug,PartialEq,Eq,Hash,Clone,Copy)]
+        pub enum ErrorKind
+        {
+            Tag,
+            MapRes,
+            MapOpt,
+            Alt,
+            IsNot,
+            IsA,
+            SeparatedList,
+            SeparatedNonEmptyList,
+            Many0,
+            Many1,
+            ManyTill,
+            Count,
+            TakeUntil,
+            LengthValue,
+            TagClosure,
+            Alpha,
+            Digit,
+            HexDigit,
+            OctDigit,
+            AlphaNumeric,
+            Space,
+            MultiSpace,
+            LengthValueFn,
+            Eof,
+            Switch,
+            TagBits,
+            OneOf,
+            NoneOf,
+            Char,
+            CrLf,
+            RegexpMatch,
+            RegexpMatches,
+            RegexpFind,
+            RegexpCapture,
+            RegexpCaptures,
+            TakeWhile1,
+            Complete,
+            Fix,
+            Escaped,
+            EscapedTransform,
+            NonEmpty,
+            ManyMN,
+            Not,
+            Permutation,
+            Verify,
+            TakeTill1,
+            TakeWhileMN,
+            TooLarge,
+            Many0Count,
+            Many1Count,
+            Float,
+            Satisfy,
+            Fail,
+        }
+        /// Converts an ErrorKind to a number
+        pub fn error_to_u32(e: &ErrorKind) -> u32
+        {
+            match *e
+            {
+                ErrorKind::Tag                       => 1,
+                ErrorKind::MapRes                    => 2,
+                ErrorKind::MapOpt                    => 3,
+                ErrorKind::Alt                       => 4,
+                ErrorKind::IsNot                     => 5,
+                ErrorKind::IsA                       => 6,
+                ErrorKind::SeparatedList             => 7,
+                ErrorKind::SeparatedNonEmptyList     => 8,
+                ErrorKind::Many1                     => 9,
+                ErrorKind::Count                     => 10,
+                ErrorKind::TakeUntil                 => 12,
+                ErrorKind::LengthValue               => 15,
+                ErrorKind::TagClosure                => 16,
+                ErrorKind::Alpha                     => 17,
+                ErrorKind::Digit                     => 18,
+                ErrorKind::AlphaNumeric              => 19,
+                ErrorKind::Space                     => 20,
+                ErrorKind::MultiSpace                => 21,
+                ErrorKind::LengthValueFn             => 22,
+                ErrorKind::Eof                       => 23,
+                ErrorKind::Switch                    => 27,
+                ErrorKind::TagBits                   => 28,
+                ErrorKind::OneOf                     => 29,
+                ErrorKind::NoneOf                    => 30,
+                ErrorKind::Char                      => 40,
+                ErrorKind::CrLf                      => 41,
+                ErrorKind::RegexpMatch               => 42,
+                ErrorKind::RegexpMatches             => 43,
+                ErrorKind::RegexpFind                => 44,
+                ErrorKind::RegexpCapture             => 45,
+                ErrorKind::RegexpCaptures            => 46,
+                ErrorKind::TakeWhile1                => 47,
+                ErrorKind::Complete                  => 48,
+                ErrorKind::Fix                       => 49,
+                ErrorKind::Escaped                   => 50,
+                ErrorKind::EscapedTransform          => 51,
+                ErrorKind::NonEmpty                  => 56,
+                ErrorKind::ManyMN                    => 57,
+                ErrorKind::HexDigit                  => 59,
+                ErrorKind::OctDigit                  => 61,
+                ErrorKind::Many0                     => 62,
+                ErrorKind::Not                       => 63,
+                ErrorKind::Permutation               => 64,
+                ErrorKind::ManyTill                  => 65,
+                ErrorKind::Verify                    => 66,
+                ErrorKind::TakeTill1                 => 67,
+                ErrorKind::TakeWhileMN               => 69,
+                ErrorKind::TooLarge                  => 70,
+                ErrorKind::Many0Count                => 71,
+                ErrorKind::Many1Count                => 72,
+                ErrorKind::Float                     => 73,
+                ErrorKind::Satisfy                   => 74,
+                ErrorKind::Fail                      => 75,
+            }
+        }
+
+        impl ErrorKind
+        {
+            /// Converts an ErrorKind to a text description
+            pub fn description(&self) -> &str
+            {
+                match *self
+                {
+                    ErrorKind::Tag                       => "Tag",
+                    ErrorKind::MapRes                    => "Map on Result",
+                    ErrorKind::MapOpt                    => "Map on Option",
+                    ErrorKind::Alt                       => "Alternative",
+                    ErrorKind::IsNot                     => "IsNot",
+                    ErrorKind::IsA                       => "IsA",
+                    ErrorKind::SeparatedList             => "Separated list",
+                    ErrorKind::SeparatedNonEmptyList     => "Separated non empty list",
+                    ErrorKind::Many0                     => "Many0",
+                    ErrorKind::Many1                     => "Many1",
+                    ErrorKind::Count                     => "Count",
+                    ErrorKind::TakeUntil                 => "Take until",
+                    ErrorKind::LengthValue               => "Length followed by value",
+                    ErrorKind::TagClosure                => "Tag closure",
+                    ErrorKind::Alpha                     => "Alphabetic",
+                    ErrorKind::Digit                     => "Digit",
+                    ErrorKind::AlphaNumeric              => "AlphaNumeric",
+                    ErrorKind::Space                     => "Space",
+                    ErrorKind::MultiSpace                => "Multiple spaces",
+                    ErrorKind::LengthValueFn             => "LengthValueFn",
+                    ErrorKind::Eof                       => "End of file",
+                    ErrorKind::Switch                    => "Switch",
+                    ErrorKind::TagBits                   => "Tag on bitstream",
+                    ErrorKind::OneOf                     => "OneOf",
+                    ErrorKind::NoneOf                    => "NoneOf",
+                    ErrorKind::Char                      => "Char",
+                    ErrorKind::CrLf                      => "CrLf",
+                    ErrorKind::RegexpMatch               => "RegexpMatch",
+                    ErrorKind::RegexpMatches             => "RegexpMatches",
+                    ErrorKind::RegexpFind                => "RegexpFind",
+                    ErrorKind::RegexpCapture             => "RegexpCapture",
+                    ErrorKind::RegexpCaptures            => "RegexpCaptures",
+                    ErrorKind::TakeWhile1                => "TakeWhile1",
+                    ErrorKind::Complete                  => "Complete",
+                    ErrorKind::Fix                       => "Fix",
+                    ErrorKind::Escaped                   => "Escaped",
+                    ErrorKind::EscapedTransform          => "EscapedTransform",
+                    ErrorKind::NonEmpty                  => "NonEmpty",
+                    ErrorKind::ManyMN                    => "Many(m, n)",
+                    ErrorKind::HexDigit                  => "Hexadecimal Digit",
+                    ErrorKind::OctDigit                  => "Octal digit",
+                    ErrorKind::Not                       => "Negation",
+                    ErrorKind::Permutation               => "Permutation",
+                    ErrorKind::ManyTill                  => "ManyTill",
+                    ErrorKind::Verify                    => "predicate verification",
+                    ErrorKind::TakeTill1                 => "TakeTill1",
+                    ErrorKind::TakeWhileMN               => "TakeWhileMN",
+                    ErrorKind::TooLarge                  => "Needed data size is too large",
+                    ErrorKind::Many0Count                => "Count occurrence of >=0 patterns",
+                    ErrorKind::Many1Count                => "Count occurrence of >=1 patterns",
+                    ErrorKind::Float                     => "Float",
+                    ErrorKind::Satisfy                   => "Satisfy",
+                    ErrorKind::Fail                      => "Fail",
+                }
+            }
+        }
+        /// Prints a message and the input if the parser fails.
+        pub fn dbg_dmp<'a, F, O, E: ::fmt::Debug>( f: F, context: &'static str ) -> impl Fn(&'a [u8]) -> 
+        IResult<&'a [u8], O, E> where
+        F: Fn(&'a [u8]) -> IResult<&'a [u8], O, E>,
+        {
+            use ::fmt::nom::HexDisplay;
+            move |i: &'a [u8]| match f(i)
+            {
+                Err(e) =>
+                {
+                    println!("{}: Error({:?}) at:\n{}", context, e, i.to_hex(8));
+                    Err(e)
+                }
+                a => a,
+            }
+        }
+    }
+}
+/// Constants for the f32 single-precision floating point type.
+pub mod f32
+{
+    pub use std::f32::{ * };
+}
+/// Constants for the f64 double-precision floating point type.
+pub mod f64
+{
+    pub use std::f64::{ * };
+}
+/// Utilities related to Foreign Function Interface bindings.
+pub mod ffi
+{
+    pub use std::ffi::{ * };
+}
+/// Utilities for formatting and printing Strings.
+pub mod fmt
+{
+    pub use std::fmt::{ * };
+    /*  nom v7.1.3::traits */
+    pub mod nom
+    {
+        use ::
+        {
+            *,
+        };
+
+        pub static CHARS: &[u8] = b"0123456789abcdef";
+        /// Helper trait to show a byte slice as a hex dump
+        pub trait HexDisplay
+        {
+            /// Converts the value of `self` to a hex dump, returning the owned `String`.
+            fn to_hex(&self, chunk_size: usize) -> String;
+            /// Converts the value of `self` to a hex dump beginning at `from` address, returning the owned `String`.
+            fn to_hex_from(&self, chunk_size: usize, from: usize) -> String;
+        }
+        
+        impl HexDisplay for [u8]
+        {
+            fn to_hex(&self, chunk_size: usize) -> String { self.to_hex_from(chunk_size, 0) }
+            
+            fn to_hex_from(&self, chunk_size: usize, from: usize) -> String
+            {
+                let mut v = Vec::with_capacity(self.len() * 3);
+                let mut i = from;
+                for chunk in self.chunks(chunk_size)
+                {
+                    let s = format!("{:08x}", i);
+                    for &ch in s.as_bytes().iter()
+                    {
+                        v.push(ch);
+                    }
+                    v.push(b'\t');
+
+                    i += chunk_size;
+
+                    for &byte in chunk
+                    {
+                        v.push(CHARS[(byte >> 4) as usize]);
+                        v.push(CHARS[(byte & 0xf) as usize]);
+                        v.push(b' ');
+                    }
+                    
+                    if chunk_size > chunk.len()
+                    {
+                        for j in 0..(chunk_size - chunk.len()) {
+                        v.push(b' ');
+                        v.push(b' ');
+                        v.push(b' ');
+                        }
+                    }
+
+                    v.push(b'\t');
+
+                    for &byte in chunk
+                    {
+                        if matches!(byte, 32..=126 | 128..=255) {
+                        v.push(byte);
+                        } else {
+                        v.push(b'.');
+                        }
+                    }
+
+                    v.push(b'\n');
+                }
+
+                String::from_utf8_lossy(&v[..]).into_owned()
+            }
+        }
+        
+        impl HexDisplay for str
+        {
+            fn to_hex(&self, chunk_size: usize) -> String { self.to_hex_from(chunk_size, 0) }
+            fn to_hex_from(&self, chunk_size: usize, from: usize) -> String
+            { self.as_bytes().to_hex_from(chunk_size, from) }
+        }
+    }
+}
+/// Filesystem manipulation operations.
+pub mod fs
+{
+    pub use std::fs::{ * };
+}
+/// Asynchronous basic functionality.
+pub mod future
+{
+    pub use std::future::{ * };
+}
+/// State Reading
+pub mod get
+{
+    use ::
+    {
+        *,
+    };
+}
+/// Generic hashing support.
+pub mod hash
+{
+    pub use std::hash::{ * };
+}
+/// Hints to compiler that affects how code should be emitted or optimized.
+pub mod hint
+{
+    pub use std::hint::{ * };
+}
+/// State Verification
+pub mod is
+{
+    use ::
+    {
+        *,
+    };
+    /*
+    fn is_flag(...) -> bool */
+    fn flag(i: u8) -> bool { i == b' ' || i == b'-' || i == b'+' || i == b'#' }
+}
+/// Traits, helpers, and type definitions for core I/O functionality.
+pub mod io
+{
+    pub use std::io::{ * };
+}
+/// Composable external iteration.
+pub mod iter
+{
+    pub use std::iter::{ * };
+}
+/// Primitive traits and types representing basic properties of types.
+pub mod marker
+{
+    pub use std::marker::{ * };
+}
+/// Basic functions for dealing with memory.
+pub mod mem
+{
+    pub use std::mem::{ * };
+}
+/// Networking primitives for TCP/UDP communication.
+pub mod net
+{
+    pub use std::net::{ * };
+}
+/// Additional functionality for numerics.
+pub mod num
+{
+    pub use std::num::{ * };
+}
+/// Overloadable operators.
+pub mod ops
+{
+    pub use std::ops::{ * };
+}
+/// Optional values.
+pub mod option
+{
+    pub use std::option::{ * };
+}
+/// OS-specific functionality.
+pub mod os
+{
+    pub use std::os::{ * };
+}
+/// Panic support in the standard library.
+pub mod panic
+{
+    pub use std::panic::{ * };
+}
+/// Parsing implementations
+pub mod parsers
+{
+    pub mod line
+    {
+        use ::
+        {
+            *,
+        };
+    }
+
+    pub mod nom
+    {
+        use ::
+        {
+            *,
+        };
+
+        pub mod branch
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod bytes
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod character
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod combinator
+        {
+            use ::
+            {
+                *,
+            };
+        }
+    }
+
+    pub mod meta
+    {
+        use ::
+        {
+            *,
+        };
+
+        pub mod expansion
+        {
+            use ::
+            {
+                error::nom::{ make_error, ErrorKind },
+                primitive::nom::
+                {
+                    IResult
+                },
+                *,
+            };  
+            /*
+            terminfo v0.9.0::parser::expansion
+            use crate::parser::util::number;
+            use nom::branch::alt;
+            use nom::bytes::complete;
+            use nom::bytes::streaming::{tag, take, take_while};
+            use nom::character::is_digit;
+            use nom::character::streaming::one_of;
+            use nom::combinator::{map, opt, value};
+            use nom::IResult; */
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub enum Item<'a>
+            {
+                String(&'a [u8]),
+                Constant(Constant),
+                Variable(Variable),
+                Operation(Operation),
+                Conditional(Conditional),
+                Print(Print),
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub enum Constant {
+                Character(u8),
+                Integer(i32),
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub enum Variable {
+                Length,
+                Push(u8),
+                Set(bool, u8),
+                Get(bool, u8),
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub enum Operation {
+                Increment,
+                Unary(Unary),
+                Binary(Binary),
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub enum Unary {
+                Not,
+                NOT,
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub enum Binary {
+                Add,
+                Subtract,
+                Multiply,
+                Divide,
+                Remainder,
+
+                AND,
+                OR,
+                XOR,
+
+                And,
+                Or,
+
+                Equal,
+                Greater,
+                Lesser,
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub enum Conditional {
+                If,
+                Then,
+                Else,
+                End,
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub struct Print {
+                pub flags: Flags,
+                pub format: Format,
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub enum Format {
+                Chr,
+                Uni,
+                Str,
+                Dec,
+                Oct,
+                Hex,
+                HEX,
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Default, Debug)]
+            pub struct Flags {
+                pub width: usize,
+                pub precision: usize,
+
+                pub alternate: bool,
+                pub left: bool,
+                pub sign: bool,
+                pub space: bool,
+            }
+
+            pub fn parse(input: &[u8]) -> IResult<&[u8], Item> {
+                alt((expansion, string))(input)
+            }
+
+            fn string(input: &[u8]) -> IResult<&[u8], Item> {
+                map(complete::take_till(|b| b == b'%'), Item::String)(input)
+            }
+
+            fn expansion(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, _) = tag("%")(input)?;
+                let (input, item) = alt((percent, constant, variable, operation, conditional, print))(input)?;
+
+                Ok((input, item))
+            }
+
+            fn percent(input: &[u8]) -> IResult<&[u8], Item> {
+                value(Item::String(b"%"), tag("%"))(input)
+            }
+
+            fn constant(input: &[u8]) -> IResult<&[u8], Item> {
+                alt((constant_char, constant_integer))(input)
+            }
+
+            fn constant_char(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, _) = tag("'")(input)?;
+                let (input, ch) = take(1_usize)(input)?;
+                let (input, _) = tag("'")(input)?;
+
+                Ok((input, Item::Constant(Constant::Character(ch[0]))))
+            }
+
+            fn constant_integer(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, _) = tag("{")(input)?;
+                let (input, digit) = take_while(is_digit)(input)?;
+                let (input, _) = tag("}")(input)?;
+
+                Ok((input, Item::Constant(Constant::Integer(number(digit)))))
+            }
+
+            fn variable(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, c) = take(1_usize)(input)?;
+                match c {
+                    b"l" => Ok((input, Item::Variable(Variable::Length))),
+
+                    b"p" => map(one_of("123456789"), |n| Item::Variable(Variable::Push(n as u8 - b'1')))(input),
+
+                    b"P" => alt((
+                        map(one_of("abcdefghijklmnopqrstuvwxyz"), |n| {
+                            Item::Variable(Variable::Set(true, n as u8 - b'a'))
+                        }),
+                        map(one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ"), |n| {
+                            Item::Variable(Variable::Set(false, n as u8 - b'A'))
+                        }),
+                    ))(input),
+
+                    b"g" => alt((
+                        map(one_of("abcdefghijklmnopqrstuvwxyz"), |n| {
+                            Item::Variable(Variable::Get(true, n as u8 - b'a'))
+                        }),
+                        map(one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ"), |n| {
+                            Item::Variable(Variable::Get(false, n as u8 - b'A'))
+                        }),
+                    ))(input),
+
+                    _ => Err(nom::Err::Error(make_error(input, ErrorKind::Switch))),
+                }
+            }
+
+            fn operation(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, c) = take(1_usize)(input)?;
+                match c {
+                    b"+" => Ok((input, Item::Operation(Operation::Binary(Binary::Add)))),
+                    b"-" => Ok((input, Item::Operation(Operation::Binary(Binary::Subtract)))),
+                    b"*" => Ok((input, Item::Operation(Operation::Binary(Binary::Multiply)))),
+                    b"/" => Ok((input, Item::Operation(Operation::Binary(Binary::Divide)))),
+                    b"m" => Ok((input, Item::Operation(Operation::Binary(Binary::Remainder)))),
+                    b"i" => Ok((input, Item::Operation(Operation::Increment))),
+
+                    b"&" => Ok((input, Item::Operation(Operation::Binary(Binary::AND)))),
+                    b"|" => Ok((input, Item::Operation(Operation::Binary(Binary::OR)))),
+                    b"^" => Ok((input, Item::Operation(Operation::Binary(Binary::XOR)))),
+                    b"~" => Ok((input, Item::Operation(Operation::Unary(Unary::NOT)))),
+
+                    b"A" => Ok((input, Item::Operation(Operation::Binary(Binary::And)))),
+                    b"O" => Ok((input, Item::Operation(Operation::Binary(Binary::Or)))),
+                    b"!" => Ok((input, Item::Operation(Operation::Unary(Unary::Not)))),
+
+                    b"=" => Ok((input, Item::Operation(Operation::Binary(Binary::Equal)))),
+                    b">" => Ok((input, Item::Operation(Operation::Binary(Binary::Greater)))),
+                    b"<" => Ok((input, Item::Operation(Operation::Binary(Binary::Lesser)))),
+
+                    _ => Err(nom::Err::Error(make_error(input, ErrorKind::Switch))),
+                }
+            }
+
+            fn conditional(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, c) = take(1_usize)(input)?;
+                match c {
+                    b"?" => Ok((input, Item::Conditional(Conditional::If))),
+                    b"t" => Ok((input, Item::Conditional(Conditional::Then))),
+                    b"e" => Ok((input, Item::Conditional(Conditional::Else))),
+                    b";" => Ok((input, Item::Conditional(Conditional::End))),
+
+                    _ => Err(nom::Err::Error(make_error(input, ErrorKind::Switch))),
+                }
+            }
+
+            fn print(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, _) = opt(tag(":"))(input)?;
+
+                let (input, flags) = take_while(is::flag)(input)?;
+                let (input, width) = opt(take_while(is_digit))(input)?;
+                let (input, precision) = opt(|input| {
+                    let (input, _) = tag(".")(input)?;
+                    let (input, amount) = take_while(is_digit)(input)?;
+
+                    Ok((input, amount))
+                })(input)?;
+
+                let (input, format) = one_of("doxXsc")(input)?;
+
+                Ok((
+                    input,
+                    Item::Print(Print {
+                        flags: Flags {
+                            width: number(width.unwrap_or(b"0")) as usize,
+                            precision: number(precision.unwrap_or(b"0")) as usize,
+
+                            alternate: flags.contains(&b'#'),
+                            left: flags.contains(&b'-'),
+                            sign: flags.contains(&b'+'),
+                            space: flags.contains(&b' '),
+                        },
+
+                        format: match format {
+                            'd' => Format::Dec,
+                            'o' => Format::Oct,
+                            'x' => Format::Hex,
+                            'X' => Format::HEX,
+                            's' => Format::Str,
+                            'c' => Format::Chr,
+                            'u' => Format::Uni,
+                            _ => unreachable!(),
+                        },
+                    }),
+                ))
+            }
+        }
+    }
+}
+/// Cross-platform path manipulation.
+pub mod path
+{
+    pub use std::path::{ * };
+}
+/// Types that pin data to a location in memory.
+pub mod pin
+{
+    pub use std::pin::{ * };
+}
+/// Types that pin data to a location in memory.
+pub mod prelude
+{
+    pub use std::prelude::v1::{ * };
+    
+    pub use std::
+    {
+      assert, assert_eq, assert_ne, cfg, column, compile_error, concat, dbg, debug_assert, debug_assert_eq, 
+      debug_assert_ne, env, eprint, eprintln, file, format, format_args, include, include_bytes, include_str, 
+      is_x86_feature_detected, line, matches, module_path, option_env, panic, print, println, stringify, thread_local,
+      todo, try, unimplemented, unreachable, vec, write, writeln
+    };
+
+}
+/// Reexports the primitive types to allow usage that is not possibly shadowed by other declared types.
+pub mod primitive
+{
+
+    pub use std::primitive::{ * };
+    use ::
+    {
+        *,
+    };
+    
+    pub mod nom
+    {
+        /**  nom v7.1.3::internal 
+            nom v7.1.3::traits 
+                use core::iter::Enumerate;
+                use core::str::CharIndices;
+
+                use nom::error::{ErrorKind, ParseError};
+                use nom::internal::{Err, IResult, Needed};
+                use nom::lib::std::iter::Copied;
+                use nom::lib::std::ops::{
+                Bound, Range, RangeBounds, RangeFrom, RangeFull, RangeInclusive, RangeTo, RangeToInclusive,
+                };
+                use nom::lib::std::slice::Iter;
+                use nom::lib::std::str::from_utf8;
+                use nom::lib::std::str::FromStr;
+                use nom::IsStreaming;
+                use nom::Mode;
+
+        */
+        use ::
+        {
+            borrow::{ ToOwned },
+            boxed::{ Box },
+            error::{ Error, nom::{ self as err, ErrorKind } },
+            num::{ NonZeroUsize },
+            primitive::nom::{ Needed::*, err::ParseError, },
+            str::{ Chars, CharsIndices },
+            string::{ String },
+            vec::{ Vec },
+            *,
+        };
+        /// Holds the result of parsing functions.
+        pub type IResult<I, O, E = err::Error<I>> = Result<(I, O), Err<E>>;
+        /// Parser result type.
+        pub type PResult<OM, I, O, E> = Result
+        <(I,<<OM as OutputMode>::Output as Mode>::Output<O>),Err<E, <<OM as OutputMode>::Error as Mode>::Output<E>>>;
+        /// Helper trait to convert a parser's result to a more manageable type
+        pub trait Finish<I, O, E>
+        {
+            /// Converts the parser's result to a type that is more consumable by error management libraries.
+            fn finish(self) -> Result<(I, O), E>;
+        }
+
+        impl<I, O, E> Finish<I, O, E> for IResult<I, O, E>
+        {
+            fn finish(self) -> Result<(I, O), E>
+            {
+                match self
+                {
+                    Ok(res) => Ok(res),
+                    Err(Err::Error(e)) | Err(Err::Failure(e)) => Err(e),
+                    Err(Err::Incomplete(_)) =>
+                    {
+                        panic!("Cannot call `finish()` on `Err(Err::Incomplete(_))`: \
+                        this result means that the parser does not have enough data to decide, \
+                        you should gather more data and try to reapply  the parser instead")
+                    }
+                }
+            }
+        }
+        /// Contains information on needed data if a parser returned `Incomplete`
+        #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+        pub enum Needed
+        {
+            /// Needs more data, but we do not know how much
+            Unknown,
+            /// Contains the required data size in bytes
+            Size(NonZeroUsize),
+        }
+
+        impl Needed
+        {
+            /// Creates `Needed` instance, returns `Needed::Unknown` if the argument is zero
+            pub fn new(s: usize) -> Self
+            {
+                match NonZeroUsize::new(s)
+                {
+                    Some(sz) => Needed::Size(sz),
+                    None => Needed::Unknown,
+                }
+            }
+            /// Indicates if we know how many bytes we need
+            pub fn is_known(&self) -> bool { *self != Unknown }
+            /// Maps a `Needed` to `Needed` by applying a function to a contained `Size` value.
+            #[inline] pub fn map<F: Fn(NonZeroUsize) -> usize>(self, f: F) -> Needed
+            {
+                match self
+                {
+                    Unknown => Unknown,
+                    Size(n) => Needed::new(f(n)),
+                }
+            }
+        }
+        /// The `Err` enum indicates the parser was not successful.
+        #[derive(Debug, Clone, PartialEq)]
+        pub enum Err<E>
+        {
+            /// There was not enough data
+            Incomplete(Needed),
+            /// The parser had an error (recoverable)
+            Error(E),
+            /// The parser had an unrecoverable error: we got to the right
+            /// branch and we know other branches won't work, so backtrack
+            /// as fast as possible
+            Failure(E),
+        }
+
+        impl<E> Err<E>
+        {
+            /// Tests if the result is Incomplete
+            pub fn is_incomplete(&self) -> bool { if let Err::Incomplete(_) = self { true } else { false } }
+            /// Applies the given function to the inner error
+            pub fn map<E2, F>(self, f: F) -> Err<E2> where
+            F: FnOnce(E) -> E2
+            {
+                match self
+                {
+                    Err::Incomplete(n) => Err::Incomplete(n),
+                    Err::Failure(t) => Err::Failure(f(t)),
+                    Err::Error(t) => Err::Error(f(t)),
+                }
+            }
+            /// Automatically converts between errors if the underlying type supports it
+            pub fn convert<F>(e: Err<F>) -> Self where
+            E: From<F>
+            {
+                e.map( convert::Into::into )
+            }
+        }
+
+        impl<T> Err<(T, ErrorKind)>
+        {
+            /// Maps `Err<(T, ErrorKind)>` to `Err<(U, ErrorKind)>` with the given `F: T -> U`
+            pub fn map_input<U, F>(self, f: F) -> Err<(U, ErrorKind)> where
+            F: FnOnce(T) -> U
+            {
+                match self
+                {
+                    Err::Incomplete(n) => Err::Incomplete(n),
+                    Err::Failure((input, k)) => Err::Failure((f(input), k)),
+                    Err::Error((input, k)) => Err::Error((f(input), k)),
+                }
+            }
+        }
+
+        impl<T> Err<err::Error<T>>
+        {
+            /// Maps `Err<error::Error<T>>` to `Err<error::Error<U>>` with the given `F: T -> U`
+            pub fn map_input<U, F>(self, f: F) -> Err<err::Error<U>> where
+            F: FnOnce(T) -> U
+            {
+                match self
+                {
+                    Err::Incomplete(n) => Err::Incomplete(n),
+                    Err::Failure(err::Error { input, code }) => Err::Failure(err::Error
+                    {
+                        input: f(input),
+                        code,
+                    }),
+
+                    Err::Error(err::Error { input, code }) => Err::Error(err::Error
+                    {
+                        input: f(input),
+                        code,
+                    }),
+                }
+            }
+        }
+        
+        impl Err<(&[u8], ErrorKind)>
+        {
+            /// Obtaining ownership
+            pub fn to_owned(self) -> Err<(Vec<u8>, ErrorKind)> { self.map_input(ToOwned::to_owned) }
+        }
+        
+        impl Err<(&str, ErrorKind)>
+        {
+            /// Obtaining ownership
+            pub fn to_owned(self) -> Err<(String, ErrorKind)> { self.map_input(ToOwned::to_owned) }
+        }
+        
+        impl Err<err::Error<&[u8]>>
+        {
+            /// Obtaining ownership
+            pub fn to_owned(self) -> Err<err::Error<Vec<u8>>> { self.map_input(ToOwned::to_owned) }
+        }
+        
+        impl Err<err::Error<&str>>
+        {
+            /// Obtaining ownership
+            pub fn to_owned(self) -> Err<err::Error<String>> { self.map_input(ToOwned::to_owned) }
+        }
+
+        impl<E: Eq> Eq for Err<E> {}
+
+        impl<E> fmt::Display for Err<E> where
+        E: fmt::Debug
+        {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+            {
+                match self
+                {
+                    Err::Incomplete(Needed::Size(u)) => write!(f, "Parsing requires {} bytes/chars", u),
+                    Err::Incomplete(Needed::Unknown) => write!(f, "Parsing requires more data"),
+                    Err::Failure(c) => write!(f, "Parsing Failure: {:?}", c),
+                    Err::Error(c) => write!(f, "Parsing Error: {:?}", c),
+                }
+            }
+        }
+        
+        impl<E> Error for Err<E> where
+        E: fmt::Debug
+        {
+            fn source(&self) -> Option<&(dyn Error + 'static)> { None }
+        }
+        /// All nom parsers implement this trait.
+        pub trait Parser<I, O, E>
+        {
+            /// A parser takes in input type, 
+            /// and returns a `Result` containing either the remaining input and the output value, or an error.
+            fn parse(&mut self, input: I) -> IResult<I, O, E>;
+            /// Maps a function over the result of a parser
+            fn map<G, O2>(self, g: G) -> Map<Self, G, O> where
+            G: Fn(O) -> O2,
+            Self: ::marker::Sized,
+            {
+                Map
+                {
+                    f: self,
+                    g,
+                    phantom: ::marker::PhantomData,
+                }
+            }
+            /// Creates a second parser from the output of the first one, then apply over the rest of the input.
+            fn flat_map<G, H, O2>(self, g: G) -> FlatMap<Self, G, O> where
+            G: FnMut(O) -> H,
+            H: Parser<I, O2, E>,
+            Self: ::marker::Sized
+            {
+                FlatMap
+                {
+                    f: self,
+                    g,
+                    phantom: ::marker::PhantomData
+                }
+            }
+            /// Applies a second parser over the output of the first one.
+            fn and_then<G, O2>(self, g: G) -> AndThen<Self, G, O> where
+            G: Parser<O, O2, E>,
+            Self: ::marker::Sized
+            {
+                AndThen
+                {
+                    f: self,
+                    g,
+                    phantom: ::marker::PhantomData
+                }
+            }
+            /// Applies a second parser after the first one, return their results as a tuple.
+            fn and<G, O2>(self, g: G) -> And<Self, G> where
+            G: Parser<I, O2, E>,
+            Self: ::marker::Sized
+            {
+                And { f: self, g }
+            }
+            /// Applies a second parser over the input if the first one failed.
+            fn or<G>(self, g: G) -> Or<Self, G> where
+            G: Parser<I, O, E>,
+            Self: ::marker::Sized
+            {
+                Or { f: self, g }
+            }
+            /// Automatically converts the parser's output and error values to another type, 
+            /// as long as they implement the `From` trait.
+            fn into<O2: From<O>, E2: From<E>>(self) -> Into<Self, O, O2, E, E2> where
+            Self: ::marker::Sized
+            {
+                Into
+                {
+                    f: self,
+                    phantom_out1: ::marker::PhantomData,
+                    phantom_err1: ::marker::PhantomData,
+                    phantom_out2: ::marker::PhantomData,
+                    phantom_err2: ::marker::PhantomData,
+                }
+            }
+        }
+
+        impl<'a, I, O, E, F> Parser<I, O, E> for F where
+        F: FnMut(I) -> IResult<I, O, E> + 'a,
+        {
+            fn parse(&mut self, i: I) -> IResult<I, O, E> { self(i) }
+        }
+        
+        impl<'a, I, O, E> Parser<I, O, E> for Box<dyn Parser<I, O, E> + 'a>
+        {
+            fn parse(&mut self, input: I) -> IResult<I, O, E> { (**self).parse(input) }
+        }
+        /// Implementation of `Parser::map`
+        pub struct Map<F, G, O1>
+        {
+            f: F,
+            g: G,
+            phantom: ::marker::PhantomData<O1>
+        }
+
+        impl<'a, I, O1, O2, E, F: Parser<I, O1, E>, G: Fn(O1) -> O2> Parser<I, O2, E> for Map<F, G, O1>
+        {
+            fn parse(&mut self, i: I) -> IResult<I, O2, E>
+            {
+                match self.f.parse(i)
+                {
+                    Err(e) => Err(e),
+                    Ok((i, o)) => Ok((i, (self.g)(o))),
+                }
+            }
+        }
+
+        /// Implementation of `Parser::flat_map`
+        pub struct FlatMap<F, G, O1>
+        {
+            f: F,
+            g: G,
+            phantom: ::marker::PhantomData<O1>,
+        }
+
+        impl<'a, I, O1, O2, E, F: Parser<I, O1, E>, G: Fn(O1) -> H, H: Parser<I, O2, E>> Parser<I, O2, E>
+        for FlatMap<F, G, O1>
+        {
+            fn parse(&mut self, i: I) -> IResult<I, O2, E>
+            {
+                let (i, o1) = self.f.parse(i)?;
+                (self.g)(o1).parse(i)
+            }
+        }
+        /// Implementation of `Parser::and_then`
+        pub struct AndThen<F, G, O1>
+        {
+            f: F,
+            g: G,
+            phantom: ::marker::PhantomData<O1>,
+        }
+
+        impl<'a, I, O1, O2, E, F: Parser<I, O1, E>, G: Parser<O1, O2, E>> Parser<I, O2, E>
+        for AndThen<F, G, O1>
+        {
+            fn parse(&mut self, i: I) -> IResult<I, O2, E>
+            {
+                let (i, o1) = self.f.parse(i)?;
+                let (_, o2) = self.g.parse(o1)?;
+                Ok((i, o2))
+            }
+        }
+        /// Implementation of `Parser::and`
+        pub struct And<F, G>
+        {
+            f: F,
+            g: G,
+        }
+
+        impl<'a, I, O1, O2, E, F: Parser<I, O1, E>, G: Parser<I, O2, E>> Parser<I, (O1, O2), E>
+        for And<F, G>
+        {
+            fn parse(&mut self, i: I) -> IResult<I, (O1, O2), E>
+            {
+                let (i, o1) = self.f.parse(i)?;
+                let (i, o2) = self.g.parse(i)?;
+                Ok((i, (o1, o2)))
+            }
+        }
+        /// Implementation of `Parser::or`
+        pub struct Or<F, G>
+        {
+            f: F,
+            g: G,
+        }
+
+        impl<'a, I: Clone, O, E: ::error::nom::ParseError<I>, F: Parser<I, O, E>, G: Parser<I, O, E>>
+        Parser<I, O, E> for Or<F, G>
+        {
+            fn parse(&mut self, i: I) -> IResult<I, O, E>
+            {
+                match self.f.parse(i.clone())
+                {
+                    Err(Err::Error(e1)) => match self.g.parse(i)
+                    {
+                        Err(Err::Error(e2)) => Err(Err::Error(e1.or(e2))),
+                        res => res,
+                    },
+                    res => res,
+                }
+            }
+        }
+        /// Implementation of `Parser::into`
+        pub struct Into<F, O1, O2: From<O1>, E1, E2: From<E1>>
+        {
+            f: F,
+            phantom_out1: core::marker::PhantomData<O1>,
+            phantom_err1: core::marker::PhantomData<E1>,
+            phantom_out2: core::marker::PhantomData<O2>,
+            phantom_err2: core::marker::PhantomData<E2>,
+        }
+
+        impl
+        <
+            'a,
+            I: Clone,
+            O1,
+            O2: From<O1>,
+            E1,
+            E2: ::error::nom::ParseError<I> + From<E1>,
+            F: Parser<I, O1, E1>,
+        > Parser<I, O2, E2> for Into<F, O1, O2, E1, E2>
+        {
+            fn parse(&mut self, i: I) -> IResult<I, O2, E2>
+            {
+                match self.f.parse(i)
+                {
+                    Ok((i, o)) => Ok((i, o.into())),
+                    Err(Err::Error(e)) => Err(Err::Error(e.into())),
+                    Err(Err::Failure(e)) => Err(Err::Failure(e.into())),
+                    Err(Err::Incomplete(e)) => Err(Err::Incomplete(e)),
+                }
+            }
+        }
+        /// Parser mode: influences how combinators build values.
+        pub trait Mode
+        {
+            /// The output type that may be generated
+            type Output<T>;
+            /// Produces a value
+            fn bind<T, F: FnOnce() -> T>(f: F) -> Self::Output<T>;
+            /// Applies a function over the produced value
+            fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U>;
+            /// Combines two values generated by previous parsers
+            fn combine<T, U, V, F: FnOnce(T, U) -> V>
+            ( x: Self::Output<T>, y: Self::Output<U>, f: F ) -> Self::Output<V>;
+        }
+
+        /// Parser input types must implement this trait
+        pub trait Input: Clone + Sized {
+        /// The current input type is a sequence of that `Item` type.
+        ///
+        /// Example: `u8` for `&[u8]` or `char` for `&str`
+        type Item;
+
+        /// An iterator over the input type, producing the item
+        type Iter: Iterator<Item = Self::Item>;
+
+        /// An iterator over the input type, producing the item and its byte position
+        /// If we're iterating over `&str`, the position
+        /// corresponds to the byte index of the character
+        type IterIndices: Iterator<Item = (usize, Self::Item)>;
+
+        /// Calculates the input length, as indicated by its name,
+        /// and the name of the trait itself
+        fn input_len(&self) -> usize;
+
+        /// Returns a slice of `index` bytes. panics if index > length
+        fn take(&self, index: usize) -> Self;
+        /// Returns a slice starting at `index` bytes. panics if index > length
+        fn take_from(&self, index: usize) -> Self;
+        /// Split the stream at the `index` byte offset. panics if index > length
+        fn take_split(&self, index: usize) -> (Self, Self);
+
+        /// Returns the byte position of the first element satisfying the predicate
+        fn position<P>(&self, predicate: P) -> Option<usize>
+        where
+            P: Fn(Self::Item) -> bool;
+
+        /// Returns an iterator over the elements
+        fn iter_elements(&self) -> Self::Iter;
+        /// Returns an iterator over the elements and their byte offsets
+        fn iter_indices(&self) -> Self::IterIndices;
+
+        /// Get the byte offset from the element's position in the stream
+        fn slice_index(&self, count: usize) -> Result<usize, Needed>;
+
+        /// Looks for the first element of the input type for which the condition returns true,
+        /// and returns the input up to this position.
+        ///
+        /// *streaming version*: If no element is found matching the condition, this will return `Incomplete`
+        fn split_at_position<P, E: ParseError<Self>>(&self, predicate: P) -> IResult<Self, Self, E>
+        where
+            P: Fn(Self::Item) -> bool,
+        {
+            match self.position(predicate) {
+            Some(n) => Ok(self.take_split(n)),
+            None => Err(Err::Incomplete(Needed::new(1))),
+            }
+        }
+
+        /// Looks for the first element of the input type for which the condition returns true
+        /// and returns the input up to this position.
+        ///
+        /// Fails if the produced slice is empty.
+        ///
+        /// *streaming version*: If no element is found matching the condition, this will return `Incomplete`
+        fn split_at_position1<P, E: ParseError<Self>>(
+            &self,
+            predicate: P,
+            e: ErrorKind,
+        ) -> IResult<Self, Self, E>
+        where
+            P: Fn(Self::Item) -> bool,
+        {
+            match self.position(predicate) {
+            Some(0) => Err(Err::Error(E::from_error_kind(self.clone(), e))),
+            Some(n) => Ok(self.take_split(n)),
+            None => Err(Err::Incomplete(Needed::new(1))),
+            }
+        }
+
+        /// Looks for the first element of the input type for which the condition returns true,
+        /// and returns the input up to this position.
+        ///
+        /// *complete version*: If no element is found matching the condition, this will return the whole input
+        fn split_at_position_complete<P, E: ParseError<Self>>(
+            &self,
+            predicate: P,
+        ) -> IResult<Self, Self, E>
+        where
+            P: Fn(Self::Item) -> bool,
+        {
+            match self.split_at_position(predicate) {
+            Err(Err::Incomplete(_)) => Ok(self.take_split(self.input_len())),
+            res => res,
+            }
+        }
+
+        /// Looks for the first element of the input type for which the condition returns true
+        /// and returns the input up to this position.
+        ///
+        /// Fails if the produced slice is empty.
+        ///
+        /// *complete version*: If no element is found matching the condition, this will return the whole input
+        fn split_at_position1_complete<P, E: ParseError<Self>>(
+            &self,
+            predicate: P,
+            e: ErrorKind,
+        ) -> IResult<Self, Self, E>
+        where
+            P: Fn(Self::Item) -> bool,
+        {
+            match self.split_at_position1(predicate, e) {
+            Err(Err::Incomplete(_)) => {
+                if self.input_len() == 0 {
+                Err(Err::Error(E::from_error_kind(self.clone(), e)))
+                } else {
+                Ok(self.take_split(self.input_len()))
+                }
+            }
+            res => res,
+            }
+        }
+
+        /// mode version of split_at_position
+        fn split_at_position_mode<OM: crate::OutputMode, P, E: ParseError<Self>>(
+            &self,
+            predicate: P,
+        ) -> crate::PResult<OM, Self, Self, E>
+        where
+            P: Fn(Self::Item) -> bool,
+        {
+            match self.position(predicate) {
+            Some(n) => Ok((self.take_from(n), OM::Output::bind(|| self.take(n)))),
+            None => {
+                if OM::Incomplete::is_streaming() {
+                Err(Err::Incomplete(Needed::new(1)))
+                } else {
+                let len = self.input_len();
+                Ok((self.take_from(len), OM::Output::bind(|| self.take(len))))
+                }
+            }
+            }
+        }
+
+        /// mode version of split_at_position
+        fn split_at_position_mode1<OM: crate::OutputMode, P, E: ParseError<Self>>(
+            &self,
+            predicate: P,
+            e: ErrorKind,
+        ) -> crate::PResult<OM, Self, Self, E>
+        where
+            P: Fn(Self::Item) -> bool,
+        {
+            match self.position(predicate) {
+            Some(0) => Err(Err::Error(OM::Error::bind(|| {
+                E::from_error_kind(self.clone(), e)
+            }))),
+            Some(n) => Ok((self.take_from(n), OM::Output::bind(|| self.take(n)))),
+            None => {
+                if OM::Incomplete::is_streaming() {
+                Err(Err::Incomplete(Needed::new(1)))
+                } else {
+                let len = self.input_len();
+                if len == 0 {
+                    Err(Err::Error(OM::Error::bind(|| {
+                    E::from_error_kind(self.clone(), e)
+                    })))
+                } else {
+                    Ok((self.take_from(len), OM::Output::bind(|| self.take(len))))
+                }
+                }
+            }
+            }
+        }
+        }
+
+        impl<'a> Input for &'a [u8] {
+        type Item = u8;
+        type Iter = Copied<Iter<'a, u8>>;
+        type IterIndices = Enumerate<Self::Iter>;
+
+        fn input_len(&self) -> usize {
+            self.len()
+        }
+
+        #[inline]
+        fn take(&self, index: usize) -> Self {
+            &self[0..index]
+        }
+
+        fn take_from(&self, index: usize) -> Self {
+            &self[index..]
+        }
+        #[inline]
+        fn take_split(&self, index: usize) -> (Self, Self) {
+            let (prefix, suffix) = self.split_at(index);
+            (suffix, prefix)
+        }
+
+        #[inline]
+        fn position<P>(&self, predicate: P) -> Option<usize>
+        where
+            P: Fn(Self::Item) -> bool,
+        {
+            self.iter().position(|b| predicate(*b))
+        }
+
+        #[inline]
+        fn iter_elements(&self) -> Self::Iter {
+            self.iter().copied()
+        }
+
+        #[inline]
+        fn iter_indices(&self) -> Self::IterIndices {
+            self.iter_elements().enumerate()
+        }
+
+        #[inline]
+        fn slice_index(&self, count: usize) -> Result<usize, Needed> {
+            if self.len() >= count {
+            Ok(count)
+            } else {
+            Err(Needed::new(count - self.len()))
+            }
+        }
+
+        #[inline(always)]
+        fn split_at_position<P, E: ParseError<Self>>(&self, predicate: P) -> IResult<Self, Self, E>
+        where
+            P: Fn(Self::Item) -> bool,
+        {
+            match self.iter().position(|c| predicate(*c)) {
+            Some(i) => Ok(self.take_split(i)),
+            None => Err(Err::Incomplete(Needed::new(1))),
+            }
+        }
+
+        #[inline(always)]
+        fn split_at_position1<P, E: ParseError<Self>>(
+            &self,
+            predicate: P,
+            e: ErrorKind,
+        ) -> IResult<Self, Self, E>
+        where
+            P: Fn(Self::Item) -> bool,
+        {
+            match self.iter().position(|c| predicate(*c)) {
+            Some(0) => Err(Err::Error(E::from_error_kind(self, e))),
+            Some(i) => Ok(self.take_split(i)),
+            None => Err(Err::Incomplete(Needed::new(1))),
+            }
+        }
+
+        fn split_at_position_complete<P, E: ParseError<Self>>(
+            &self,
+            predicate: P,
+        ) -> IResult<Self, Self, E>
+        where
+            P: Fn(Self::Item) -> bool,
+        {
+            match self.iter().position(|c| predicate(*c)) {
+            Some(i) => Ok(self.take_split(i)),
+            None => Ok(self.take_split(self.len())),
+            }
+        }
+
+        #[inline(always)]
+        fn split_at_position1_complete<P, E: ParseError<Self>>(
+            &self,
+            predicate: P,
+            e: ErrorKind,
+        ) -> IResult<Self, Self, E>
+        where
+            P: Fn(Self::Item) -> bool,
+        {
+            match self.iter().position(|c| predicate(*c)) {
+            Some(0) => Err(Err::Error(E::from_error_kind(self, e))),
+            Some(i) => Ok(self.take_split(i)),
+            None => {
+                if self.is_empty() {
+                Err(Err::Error(E::from_error_kind(self, e)))
+                } else {
+                Ok(self.take_split(self.len()))
+                }
+            }
+            }
+        }
+
+        /// mode version of split_at_position
+        #[inline(always)]
+        fn split_at_position_mode<OM: crate::OutputMode, P, E: ParseError<Self>>(
+            &self,
+            predicate: P,
+        ) -> crate::PResult<OM, Self, Self, E>
+        where
+            P: Fn(Self::Item) -> bool,
+        {
+            match self.iter().position(|c| predicate(*c)) {
+            Some(n) => Ok((self.take_from(n), OM::Output::bind(|| self.take(n)))),
+            None => {
+                if OM::Incomplete::is_streaming() {
+                Err(Err::Incomplete(Needed::new(1)))
+                } else {
+                Ok((
+                    self.take_from(self.len()),
+                    OM::Output::bind(|| self.take(self.len())),
+                ))
+                }
+            }
+            }
+        }
+
+        /// mode version of split_at_position
+        #[inline(always)]
+        fn split_at_position_mode1<OM: crate::OutputMode, P, E: ParseError<Self>>(
+            &self,
+            predicate: P,
+            e: ErrorKind,
+        ) -> crate::PResult<OM, Self, Self, E>
+        where
+            P: Fn(Self::Item) -> bool,
+        {
+            match self.iter().position(|c| predicate(*c)) {
+            Some(0) => Err(Err::Error(OM::Error::bind(|| E::from_error_kind(self, e)))),
+            Some(n) => Ok((self.take_from(n), OM::Output::bind(|| self.take(n)))),
+            None => {
+                if OM::Incomplete::is_streaming() {
+                Err(Err::Incomplete(Needed::new(1)))
+                } else if self.is_empty() {
+                Err(Err::Error(OM::Error::bind(|| E::from_error_kind(self, e))))
+                } else {
+                Ok((
+                    self.take_from(self.len()),
+                    OM::Output::bind(|| self.take(self.len())),
+                ))
+                }
+            }
+            }
+        }
+        }
+
+        impl<'a> Input for &'a str
+        {
+            type Item = char;
+            type Iter = Chars<'a>;
+            type IterIndices = CharIndices<'a>;
+
+            fn input_len(&self) -> usize { self.len() }
+
+            #[inline]
+            fn take(&self, index: usize) -> Self {
+                &self[..index] }
+
+            #[inline]
+            fn take_from(&self, index: usize) -> Self {
+                &self[index..]
+            }
+
+            // return byte index
+            #[inline]
+            fn take_split(&self, index: usize) -> (Self, Self) {
+                let (prefix, suffix) = self.split_at(index);
+                (suffix, prefix)
+            }
+
+            fn position<P>(&self, predicate: P) -> Option<usize>
+            where
+                P: Fn(Self::Item) -> bool,
+            {
+                self.find(predicate)
+            }
+
+            #[inline]
+            fn iter_elements(&self) -> Self::Iter {
+                self.chars()
+            }
+
+            #[inline]
+            fn iter_indices(&self) -> Self::IterIndices {
+                self.char_indices()
+            }
+
+            #[inline]
+            fn slice_index(&self, count: usize) -> Result<usize, Needed> {
+                let mut cnt = 0;
+                for (index, _) in self.char_indices() {
+                if cnt == count {
+                    return Ok(index);
+                }
+                cnt += 1;
+                }
+                if cnt == count {
+                return Ok(self.len());
+                }
+                Err(Needed::Unknown)
+            }
+
+            #[inline(always)]
+            fn split_at_position<P, E: ParseError<Self>>(&self, predicate: P) -> IResult<Self, Self, E>
+            where
+                P: Fn(Self::Item) -> bool,
+            {
+                match self.find(predicate) {
+                // The position i is returned from str::find() which means it is within the bounds of the string
+                Some(i) => {
+                    let (str1, str2) = self.split_at(i);
+                    Ok((str2, str1))
+                }
+                None => Err(Err::Incomplete(Needed::new(1))),
+                }
+            }
+
+            #[inline(always)]
+            fn split_at_position1<P, E: ParseError<Self>>(
+                &self,
+                predicate: P,
+                e: ErrorKind,
+            ) -> IResult<Self, Self, E>
+            where
+                P: Fn(Self::Item) -> bool,
+            {
+                match self.find(predicate) {
+                Some(0) => Err(Err::Error(E::from_error_kind(self, e))),
+                // The position i is returned from str::find() which means it is within the bounds of the string
+                Some(i) => {
+                    let (str1, str2) = self.split_at(i);
+                    Ok((str2, str1))
+                }
+                None => Err(Err::Incomplete(Needed::new(1))),
+                }
+            }
+
+            #[inline(always)]
+            fn split_at_position_complete<P, E: ParseError<Self>>(
+                &self,
+                predicate: P,
+            ) -> IResult<Self, Self, E>
+            where
+                P: Fn(Self::Item) -> bool,
+            {
+                match self.find(predicate) {
+                // The position i is returned from str::find() which means it is within the bounds of the string
+                Some(i) => {
+                    let (str1, str2) = self.split_at(i);
+                    Ok((str2, str1))
+                }
+                None => Ok(self.split_at(0)),
+                }
+            }
+
+            #[inline(always)]
+            fn split_at_position1_complete<P, E: ParseError<Self>>(
+                &self,
+                predicate: P,
+                e: ErrorKind,
+            ) -> IResult<Self, Self, E>
+            where
+                P: Fn(Self::Item) -> bool,
+            {
+                match self.find(predicate) {
+                Some(0) => Err(Err::Error(E::from_error_kind(self, e))),
+                // The position i is returned from str::find() which means it is within the bounds of the string
+                Some(i) => {
+                    let (str1, str2) = self.split_at(i);
+                    Ok((str2, str1))
+                }
+                None => {
+                    if self.is_empty() {
+                    Err(Err::Error(E::from_error_kind(self, e)))
+                    } else {
+                    // the end of slice is a char boundary
+                    let (str1, str2) = self.split_at(self.len());
+                    Ok((str2, str1))
+                    }
+                }
+                }
+            }
+
+            /// mode version of split_at_position
+            #[inline(always)]
+            fn split_at_position_mode<OM: crate::OutputMode, P, E: ParseError<Self>>(
+                &self,
+                predicate: P,
+            ) -> crate::PResult<OM, Self, Self, E>
+            where
+                P: Fn(Self::Item) -> bool,
+            {
+                match self.find(predicate) {
+                Some(n) => unsafe {
+                    // find() returns a byte index that is already in the slice at a char boundary
+                    Ok((
+                    self.get_unchecked(n..),
+                    OM::Output::bind(|| self.get_unchecked(..n)),
+                    ))
+                },
+                None => {
+                    if OM::Incomplete::is_streaming() {
+                    Err(Err::Incomplete(Needed::new(1)))
+                    } else {
+                    // the end of slice is a char boundary
+                    unsafe {
+                        Ok((
+                        self.get_unchecked(self.len()..),
+                        OM::Output::bind(|| self.get_unchecked(..self.len())),
+                        ))
+                    }
+                    }
+                }
+                }
+            }
+
+            /// mode version of split_at_position
+            #[inline(always)] fn split_at_position_mode1<OM: crate::OutputMode, P, E: ParseError<Self>>
+            ( &self, predicate: P, e: ErrorKind ) -> crate::PResult<OM, Self, Self, E> where
+            P: Fn(Self::Item) -> bool
+            {
+                match self.find(predicate)
+                {
+                Some(0) => Err(Err::Error(OM::Error::bind(|| E::from_error_kind(self, e)))),
+                Some(n) => unsafe {
+                    // find() returns a byte index that is already in the slice at a char boundary
+                    Ok((
+                    self.get_unchecked(n..),
+                    OM::Output::bind(|| self.get_unchecked(..n)),
+                    ))
+                },
+                None => {
+                    if OM::Incomplete::is_streaming() {
+                    Err(Err::Incomplete(Needed::new(1)))
+                    } else if self.is_empty() {
+                    Err(Err::Error(OM::Error::bind(|| E::from_error_kind(self, e))))
+                    } else {
+                    // the end of slice is a char boundary
+                    unsafe {
+                        Ok((
+                        self.get_unchecked(self.len()..),
+                        OM::Output::bind(|| self.get_unchecked(..self.len())),
+                        ))
+                    }
+                    }
+                }
+                }
+            }
+        }
+        /// Useful functions to calculate the offset between slices and show a hexdump of a slice.
+        pub trait Offset
+        {
+            /// Offset between the first byte of self and the first byte of the arguments.
+            fn offset(&self, second: &Self) -> usize;
+        }
+
+        impl Offset for [u8]
+        {
+            fn offset(&self, second: &Self) -> usize
+            {
+                let fst = self.as_ptr();
+                let snd = second.as_ptr();
+                snd as usize - fst as usize
+            }
+        }
+
+        impl<'a> Offset for &'a [u8]
+        {
+            fn offset(&self, second: &Self) -> usize
+            {
+                let fst = self.as_ptr();
+                let snd = second.as_ptr();
+                snd as usize - fst as usize
+            }
+        }
+
+        impl Offset for str
+        {
+            fn offset(&self, second: &Self) -> usize
+            {
+                let fst = self.as_ptr();
+                let snd = second.as_ptr();
+                snd as usize - fst as usize
+            }
+        }
+
+        impl<'a> Offset for &'a str
+        {
+            fn offset(&self, second: &Self) -> usize
+            {
+                let fst = self.as_ptr();
+                let snd = second.as_ptr();
+                snd as usize - fst as usize
+            }
+        }
+        /// Helper trait for types that can be viewed as a byte slice
+        pub trait AsBytes
+        {
+            /// Casts the input type to a byte slice
+            fn as_bytes(&self) -> &[u8];
+        }
+
+        impl<'a> AsBytes for &'a str
+        {
+            #[inline(always)] fn as_bytes(&self) -> &[u8] { (*self).as_bytes() }
+        }
+
+        impl AsBytes for str
+        {
+            #[inline(always)] fn as_bytes(&self) -> &[u8] { self.as_ref() }
+        }
+
+        impl<'a> AsBytes for &'a [u8]
+        {
+            #[inline(always)] fn as_bytes(&self) -> &[u8] { self }
+        }
+
+        impl AsBytes for [u8]
+        {
+            #[inline(always)] fn as_bytes(&self) -> &[u8] { self }
+        }
+
+        impl<'a, const N: usize> AsBytes for &'a [u8; N]
+        {
+            #[inline(always)] fn as_bytes(&self) -> &[u8] { self.as_slice() }
+        }
+
+        impl<const N: usize> AsBytes for [u8; N]
+        {
+            #[inline(always)] fn as_bytes(&self) -> &[u8] { self }
+        }
+        /// Transforms common types to a char for basic token parsing
+        pub trait AsChar: Copy
+        {
+            /// makes a char from self
+            fn as_char(self) -> char;
+            /// Tests that self is an alphabetic character.
+            fn is_alpha(self) -> bool;
+            /// Tests that self is an alphabetic character or a decimal digit.
+            fn is_alphanum(self) -> bool;
+            /// Tests that self is a decimal digit
+            fn is_dec_digit(self) -> bool;
+            /// Tests that self is an hex digit
+            fn is_hex_digit(self) -> bool;
+            /// Tests that self is an octal digit
+            fn is_oct_digit(self) -> bool;
+            /// Tests that self is a binary digit
+            fn is_bin_digit(self) -> bool;
+            /// Gets the len in bytes for self
+            fn len(self) -> usize;
+            /// Tests that self is ASCII space or tab
+            fn is_space(self) -> bool;
+            /// Tests if byte is ASCII newline: \n
+            fn is_newline(self) -> bool;
+        }
+
+        impl AsChar for u8
+        {
+            #[inline] fn as_char(self) -> char { self as char }
+            #[inline] fn is_alpha(self) -> bool { matches!(self, 0x41..=0x5A | 0x61..=0x7A) }
+            #[inline] fn is_alphanum(self) -> bool { self.is_alpha() || self.is_dec_digit() }
+            #[inline] fn is_dec_digit(self) -> bool { matches!(self, 0x30..=0x39) }
+            #[inline] fn is_hex_digit(self) -> bool { matches!(self, 0x30..=0x39 | 0x41..=0x46 | 0x61..=0x66) }
+            #[inline] fn is_oct_digit(self) -> bool { matches!(self, 0x30..=0x37) }
+            #[inline] fn is_bin_digit(self) -> bool { matches!(self, 0x30..=0x31) }
+            #[inline] fn len(self) -> usize { 1 }
+            #[inline] fn is_space(self) -> bool { self == b' ' || self == b'\t' } 
+            fn is_newline(self) -> bool { self == b'\n' }
+        }
+
+        impl<'a> AsChar for &'a u8
+        {
+            #[inline] fn as_char(self) -> char { *self as char }
+            #[inline] fn is_alpha(self) -> bool { matches!(*self, 0x41..=0x5A | 0x61..=0x7A) }
+            #[inline] fn is_alphanum(self) -> bool { self.is_alpha() || self.is_dec_digit() }
+            #[inline] fn is_dec_digit(self) -> bool { matches!(*self, 0x30..=0x39) }
+            #[inline] fn is_hex_digit(self) -> bool { matches!(*self, 0x30..=0x39 | 0x41..=0x46 | 0x61..=0x66) }
+            #[inline] fn is_oct_digit(self) -> bool { matches!(*self, 0x30..=0x37) }
+            #[inline] fn is_bin_digit(self) -> bool { matches!(*self, 0x30..=0x31) }
+            #[inline] fn len(self) -> usize { 1 }
+            #[inline] fn is_space(self) -> bool { *self == b' ' || *self == b'\t' } 
+            fn is_newline(self) -> bool { *self == b'\n' }
+        }
+
+        impl AsChar for char
+        {
+            #[inline] fn as_char(self) -> char { self }
+            #[inline] fn is_alpha(self) -> bool { self.is_ascii_alphabetic() }
+            #[inline] fn is_alphanum(self) -> bool { self.is_alpha() || self.is_dec_digit() }
+            #[inline] fn is_dec_digit(self) -> bool { self.is_ascii_digit() }
+            #[inline] fn is_hex_digit(self) -> bool { self.is_ascii_hexdigit() }
+            #[inline] fn is_oct_digit(self) -> bool { self.is_digit(8) }
+            #[inline] fn is_bin_digit(self) -> bool { self.is_digit(2) }
+            #[inline] fn len(self) -> usize { self.len_utf8() }
+            #[inline] fn is_space(self) -> bool { self == ' ' || self == '\t' } 
+            fn is_newline(self) -> bool { self == '\n' }
+        }
+
+        impl<'a> AsChar for &'a char
+        {
+            #[inline] fn as_char(self) -> char { *self } 
+            #[inline] fn is_alpha(self) -> bool { self.is_ascii_alphabetic() }
+            #[inline] fn is_alphanum(self) -> bool { self.is_alpha() || self.is_dec_digit() }
+            #[inline] fn is_dec_digit(self) -> bool { self.is_ascii_digit() }
+            #[inline] fn is_hex_digit(self) -> bool { self.is_ascii_hexdigit() }
+            #[inline] fn is_oct_digit(self) -> bool { self.is_digit(8) }
+            #[inline] fn is_bin_digit(self) -> bool { self.is_digit(2) }
+            #[inline] fn len(self) -> usize { self.len_utf8() }
+            #[inline] fn is_space(self) -> bool { *self == ' ' || *self == '\t' } 
+            #[inline] fn is_newline(self) -> bool { *self == '\n' }
+        }
+        /// Indicates whether a comparison was successful, an error, or if more data was needed.
+        #[derive(Debug, Eq, PartialEq)]
+        pub enum CompareResult
+        {
+            /// Comparison was successful
+            Ok,
+            /// We need more data to be sure
+            Incomplete,
+            /// Comparison failed
+            Error,
+        }
+        /// Abstracts comparison operations.
+        pub trait Compare<T>
+        {
+            /// Compares self to another value for equality
+            fn compare(&self, t: T) -> CompareResult;
+            /// Compares self to another value for equality independently of the case.
+            fn compare_no_case(&self, t: T) -> CompareResult;
+        }
+
+        fn lowercase_byte(c: u8) -> u8
+        {
+            match c
+            {
+                b'A'..=b'Z' => c - b'A' + b'a',
+                _ => c,
+            }
+        }
+
+        impl<'a, 'b> Compare<&'b [u8]> for &'a [u8]
+        {
+            #[inline(always)] fn compare(&self, t: &'b [u8]) -> CompareResult
+            {
+                let pos = self.iter().zip(t.iter()).position(|(a, b)| a != b);
+                match pos
+                {
+                    Some(_) => CompareResult::Error,
+                    None =>
+                    {
+                        if self.len() >= t.len() { CompareResult::Ok }
+                        else { CompareResult::Incomplete }
+                    }
+                }
+            }
+
+            #[inline(always)] fn compare_no_case(&self, t: &'b [u8]) -> CompareResult
+            {
+                if self
+                .iter()
+                .zip(t)
+                .any(|(a, b)| lowercase_byte(*a) != lowercase_byte(*b)) { CompareResult::Error }
+                else if self.len() < t.len() { CompareResult::Incomplete } else { CompareResult::Ok }
+            }
+        }
+
+        impl<'a, 'b> Compare<&'b str> for &'a [u8]
+        {
+            #[inline(always)] fn compare(&self, t: &'b str) -> CompareResult
+            { self.compare(AsBytes::as_bytes(t)) }
+            #[inline(always)] fn compare_no_case(&self, t: &'b str) -> CompareResult 
+            { self.compare_no_case(AsBytes::as_bytes(t)) }
+        }
+
+        impl<'a, 'b> Compare<&'b str> for &'a str
+        {
+            #[inline(always)] fn compare(&self, t: &'b str) -> CompareResult { self.as_bytes().compare(t.as_bytes()) }
+            
+            #[inline(always)] fn compare_no_case(&self, t: &'b str) -> CompareResult
+            {
+                let pos = self
+                .chars()
+                .zip(t.chars())
+                .position(|(a, b)| a.to_lowercase().ne(b.to_lowercase()));
+
+                match pos
+                {
+                    Some(_) => CompareResult::Error,
+                    None =>
+                    {
+                        if self.len() >= t.len() { CompareResult::Ok } 
+                        else { CompareResult::Incomplete }
+                    }
+                }
+            }
+        }
+
+        impl<'a, 'b> Compare<&'b [u8]> for &'a str
+        {
+            #[inline(always)]
+            fn compare(&self, t: &'b [u8]) -> CompareResult { AsBytes::as_bytes(self).compare(t) }
+            #[inline(always)]
+            fn compare_no_case(&self, t: &'b [u8]) -> CompareResult { AsBytes::as_bytes(self).compare_no_case(t) }
+        }
+        /// Look for a token in self
+        pub trait FindToken<T>
+        {
+            /// Returns true if self contains the token
+            fn find_token(&self, token: T) -> bool;
+        }
+
+        impl<'a> FindToken<u8> for &'a [u8]
+        {
+            fn find_token(&self, token: u8) -> bool { memchr::memchr(token, self).is_some() }
+        }
+
+        impl<'a> FindToken<u8> for &'a str
+        {
+            fn find_token(&self, token: u8) -> bool { self.as_bytes().find_token(token) }
+        }
+
+        impl<'a, 'b> FindToken<&'a u8> for &'b [u8]
+        {
+            fn find_token(&self, token: &u8) -> bool { self.find_token(*token) }
+        }
+
+        impl<'a, 'b> FindToken<&'a u8> for &'b str
+        {
+            fn find_token(&self, token: &u8) -> bool { self.as_bytes().find_token(token) }
+        }
+
+        impl<'a> FindToken<char> for &'a [u8]
+        {
+            fn find_token(&self, token: char) -> bool { self.iter().any(|i| *i == token as u8) }
+        }
+
+        impl<'a> FindToken<char> for &'a str
+        {
+            fn find_token(&self, token: char) -> bool { self.chars().any(|i| i == token) }
+        }
+
+        impl<'a> FindToken<char> for &'a [char]
+        {
+            fn find_token(&self, token: char) -> bool { self.iter().any(|i| *i == token) }
+        }
+
+        impl<'a, 'b> FindToken<&'a char> for &'b [char]
+        {
+            fn find_token(&self, token: &char) -> bool { self.find_token(*token) }
+        }
+        /// Look for a substring in self
+        pub trait FindSubstring<T>
+        {
+            /// Returns the byte position of the substring if it is found
+            fn find_substring(&self, substr: T) -> Option<usize>;
+        }
+
+        impl<'a, 'b> FindSubstring<&'b [u8]> for &'a [u8]
+        {
+            fn find_substring(&self, substr: &'b [u8]) -> Option<usize>
+            {
+                if substr.len() > self.len() { return None; }
+
+                let (&substr_first, substr_rest) = match substr.split_first()
+                {
+                    Some(split) => split,
+                    None => return Some(0),
+                };
+
+                if substr_rest.is_empty() { return memchr::memchr(substr_first, self); }
+
+                let mut offset = 0;
+                let haystack = &self[..self.len() - substr_rest.len()];
+
+                while let Some(position) = memchr::memchr(substr_first, &haystack[offset..])
+                {
+                    offset += position;
+                    let next_offset = offset + 1;
+
+                    if &self[next_offset..][..substr_rest.len()] == substr_rest { return Some(offset); }
+
+                    offset = next_offset;
+                }
+
+                None
+            }
+        }
+
+        impl<'a, 'b> FindSubstring<&'b str> for &'a [u8]
+        {
+            fn find_substring(&self, substr: &'b str) -> Option<usize> 
+            { self.find_substring(AsBytes::as_bytes(substr)) }
+        }
+
+        impl<'a, 'b> FindSubstring<&'b str> for &'a str
+        {
+            fn find_substring(&self, substr: &'b str) -> Option<usize> { self.find(substr) }
+        }
+        /// Used to integrate `str`'s `parse()` method
+        pub trait ParseTo<R>
+        {
+            /// Succeeds if `parse()` succeeded.
+            fn parse_to(&self) -> Option<R>;
+        }
+
+        impl<'a, R: FromStr> ParseTo<R> for &'a [u8]
+        {
+            fn parse_to(&self) -> Option<R> { from_utf8(self).ok().and_then(|s| s.parse().ok()) }
+        }
+
+        impl<'a, R: FromStr> ParseTo<R> for &'a str
+        {
+            fn parse_to(&self) -> Option<R> { self.parse().ok() }
+        }
+
+        impl<'a, const N: usize> Compare<[u8; N]> for &'a [u8]
+        {
+            #[inline(always)] fn compare(&self, t: [u8; N]) -> CompareResult { self.compare(&t[..]) }
+            #[inline(always)] fn compare_no_case(&self, t: [u8; N]) -> CompareResult { self.compare_no_case(&t[..]) }
+        }
+
+        impl<'a, 'b, const N: usize> Compare<&'b [u8; N]> for &'a [u8]
+        {
+            #[inline(always)] fn compare(&self, t: &'b [u8; N]) -> CompareResult { self.compare(&t[..]) }
+            #[inline(always)] fn compare_no_case(&self, t: &'b [u8; N]) -> CompareResult 
+            { self.compare_no_case(&t[..]) }
+        }
+
+        impl<const N: usize> FindToken<u8> for [u8; N]
+        {
+            fn find_token(&self, token: u8) -> bool { memchr::memchr(token, &self[..]).is_some() }
+        }
+
+        impl<'a, const N: usize> FindToken<&'a u8> for [u8; N]
+        {
+            fn find_token(&self, token: &u8) -> bool { self.find_token(*token) }
+        }
+        /// Abstracts something which can extend an `Extend`.
+        pub trait ExtendInto
+        {
+            /// The current input type is a sequence of that `Item` type.
+            type Item;
+            /// The type that will be produced
+            type Extender;
+            /// Create a new `Extend` of the correct type
+            fn new_builder(&self) -> Self::Extender;
+            /// Accumulate the input into an accumulator
+            fn extend_into(&self, acc: &mut Self::Extender);
+        }
+        
+        impl ExtendInto for [u8]
+        {
+            type Item = u8;
+            type Extender = Vec<u8>;
+            #[inline] fn new_builder(&self) -> Vec<u8> { Vec::new() }
+            #[inline] fn extend_into(&self, acc: &mut Vec<u8>) { acc.extend(self.iter().cloned()); }
+        }
+        
+        impl ExtendInto for &[u8]
+        {
+            type Item = u8;
+            type Extender = Vec<u8>;
+            #[inline] fn new_builder(&self) -> Vec<u8> { Vec::new() }
+            #[inline] fn extend_into(&self, acc: &mut Vec<u8>) { acc.extend_from_slice(self); }
+        }
+        
+        impl ExtendInto for str
+        {
+            type Item = char;
+            type Extender = String;
+            #[inline] fn new_builder(&self) -> String { String::new() }
+            #[inline] fn extend_into(&self, acc: &mut String) { acc.push_str(self); }
+        }
+        
+        impl ExtendInto for &str
+        {
+            type Item = char;
+            type Extender = String;
+            #[inline] fn new_builder(&self) -> String { String::new() }
+            #[inline] fn extend_into(&self, acc: &mut String) { acc.push_str(self); }
+        }
+        
+        impl ExtendInto for char
+        {
+            type Item = char;
+            type Extender = String;
+            #[inline] fn new_builder(&self) -> String { String::new() }
+            #[inline] fn extend_into(&self, acc: &mut String) { acc.push(*self); }
+        }
+        /// Helper trait to convert numbers to usize.
+        pub trait ToUsize
+        {
+            /// converts self to usize
+            fn to_usize(&self) -> usize;
+        }
+
+        impl ToUsize for u8
+        {
+            #[inline] fn to_usize(&self) -> usize { *self as usize }
+        }
+
+        impl ToUsize for u16
+        {
+            #[inline] fn to_usize(&self) -> usize { *self as usize }
+        }
+
+        impl ToUsize for usize
+        {
+            #[inline] fn to_usize(&self) -> usize { *self }
+        }
+        
+        impl ToUsize for u32
+        {
+            #[inline] fn to_usize(&self) -> usize { *self as usize }
+        }
+        
+        impl ToUsize for u64
+        {
+            #[inline] fn to_usize(&self) -> usize { *self as usize }
+        }
+        /// Equivalent From implementation to avoid orphan rules in bits parsers
+        pub trait ErrorConvert<E>
+        {
+            /// Transform to another error type
+            fn convert(self) -> E;
+        }
+
+        impl<I> ErrorConvert<(I, ErrorKind)> for ((I, usize), ErrorKind)
+        {
+            fn convert(self) -> (I, ErrorKind) { ((self.0).0, self.1) }
+        }
+
+        impl<I> ErrorConvert<((I, usize), ErrorKind)> for (I, ErrorKind)
+        {
+            fn convert(self) -> ((I, usize), ErrorKind) { ((self.0, 0), self.1) }
+        }
+
+        use ::error::nom as error;
+        impl<I> ErrorConvert<error::Error<I>> for error::Error<(I, usize)>
+        {
+            fn convert(self) -> error::Error<I>
+            {
+                error::Error
+                {
+                    input: self.input.0,
+                    code: self.code,
+                }
+            }
+        }
+
+        impl<I> ErrorConvert<error::Error<(I, usize)>> for error::Error<I>
+        {
+            fn convert(self) -> error::Error<(I, usize)>
+            {
+                error::Error
+                {
+                    input: (self.input, 0),
+                    code: self.code,
+                }
+            }
+        }
+
+        impl ErrorConvert<()> for ()
+        {
+            fn convert(self) {}
+        }
+        /// Helper trait to show a byte slice as a hex dump
+        pub trait HexDisplay
+        {
+            /// Converts the value of `self` to a hex dump, returning the owned `String`.
+            fn to_hex(&self, chunk_size: usize) -> String;
+
+            /// Converts the value of `self` to a hex dump beginning at `from` address, returning the owned `String`.
+            fn to_hex_from(&self, chunk_size: usize, from: usize) -> String;
+        }
+        
+        static CHARS: &[u8] = b"0123456789abcdef";
+        
+        impl HexDisplay for [u8]
+        {
+            #[allow(unused_variables)]
+            fn to_hex(&self, chunk_size: usize) -> String {
+                self.to_hex_from(chunk_size, 0)
+            }
+            
+            fn to_hex_from(&self, chunk_size: usize, from: usize) -> String
+            {
+                let mut v = Vec::with_capacity(self.len() * 3);
+                let mut i = from;
+                for chunk in self.chunks(chunk_size)
+                {
+                    let s = format!("{:08x}", i);
+                    for &ch in s.as_bytes().iter()
+                    {
+                        v.push(ch);
+                    }
+                    v.push(b'\t');
+
+                    i += chunk_size;
+
+                    for &byte in chunk
+                    {
+                        v.push(CHARS[(byte >> 4) as usize]);
+                        v.push(CHARS[(byte & 0xf) as usize]);
+                        v.push(b' ');
+                    }
+                    
+                    if chunk_size > chunk.len()
+                    {
+                        for j in 0..(chunk_size - chunk.len())
+                        {
+                            v.push(b' ');
+                            v.push(b' ');
+                            v.push(b' ');
+                        }
+                    }
+                    
+                    v.push(b'\t');
+
+                    for &byte in chunk
+                    {
+                        if matches!(byte, 32..=126 | 128..=255) { v.push(byte); } else { v.push(b'.'); }
+                    }
+
+                    v.push(b'\n');
+                }
+
+                String::from_utf8_lossy(&v[..]).into_owned()
+            }
+        }
+        
+        impl HexDisplay for str
+        {
+            fn to_hex(&self, chunk_size: usize) -> String { self.to_hex_from(chunk_size, 0) }
+            fn to_hex_from(&self, chunk_size: usize, from: usize) -> String { self.as_bytes().to_hex_from(chunk_size, from) }
+        }
+        /// A saturating iterator for usize.
+        pub struct SaturatingIterator
+        {
+            count: usize,
+        }
+
+        impl Iterator for SaturatingIterator
+        {
+            type Item = usize;
+            fn next(&mut self) -> Option<Self::Item>
+            {
+                let old_count = self.count;
+                self.count = self.count.saturating_add(1);
+                Some(old_count)
+            }
+        }
+        /// Abstractions for range-like types.
+        pub trait NomRange<Idx>
+        {
+            /// The saturating iterator type.
+            type Saturating: Iterator<Item = Idx>;
+            /// The bounded iterator type.
+            type Bounded: Iterator<Item = Idx>;
+            /// `true` if `item` is contained in the range.
+            fn contains(&self, item: &Idx) -> bool;
+            /// Returns the bounds of this range.
+            fn bounds(&self) -> (Bound<Idx>, Bound<Idx>);
+            /// `true` if the range is inverted.
+            fn is_inverted(&self) -> bool;
+            /// Creates a saturating iterator.
+            fn saturating_iter(&self) -> Self::Saturating;
+            /// Creates a bounded iterator.
+            fn bounded_iter(&self) -> Self::Bounded;
+        }
+
+        impl NomRange<usize> for Range<usize>
+        {
+            type Saturating = Range<usize>;
+            type Bounded = Range<usize>;
+            fn bounds(&self) -> (Bound<usize>, Bound<usize>) { (Bound::Included(self.start), Bound::Excluded(self.end)) }
+            fn contains(&self, item: &usize) -> bool { RangeBounds::contains(self, item) }
+            fn is_inverted(&self) -> bool { self.start >= self.end }
+            fn saturating_iter(&self) -> Self::Saturating
+            { if self.end == 0 { Range::default() } else { 0..self.end - 1 } }
+            fn bounded_iter(&self) -> Self::Bounded { if self.end == 0 { Range::default() } else { 0..self.end - 1 } }
+        }
+
+        impl NomRange<usize> for RangeInclusive<usize>
+        {
+            type Saturating = Range<usize>;
+            type Bounded = Range<usize>;
+            fn bounds(&self) -> (Bound<usize>, Bound<usize>) { (Bound::Included(*self.start()), Bound::Included(*self.end())) }
+            fn contains(&self, item: &usize) -> bool { RangeBounds::contains(self, item) }
+            fn is_inverted(&self) -> bool { !RangeInclusive::contains(self, self.start()) }
+            fn saturating_iter(&self) -> Self::Saturating { 0..*self.end() }
+            fn bounded_iter(&self) -> Self::Bounded { 0..*self.end() }
+        }
+
+        impl NomRange<usize> for RangeFrom<usize> 
+        {
+            type Saturating = SaturatingIterator;
+            type Bounded = Range<usize>;
+            fn bounds(&self) -> (Bound<usize>, Bound<usize>) { (Bound::Included(self.start), Bound::Unbounded) }
+            fn contains(&self, item: &usize) -> bool { RangeBounds::contains(self, item) }
+            fn is_inverted(&self) -> bool { false }
+            fn saturating_iter(&self) -> Self::Saturating { SaturatingIterator { count: 0 } }
+            fn bounded_iter(&self) -> Self::Bounded { 0..usize::MAX }
+        }
+
+        impl NomRange<usize> for RangeTo<usize>
+        {
+            type Saturating = Range<usize>;
+            type Bounded = Range<usize>;
+            fn bounds(&self) -> (Bound<usize>, Bound<usize>) { (Bound::Unbounded, Bound::Excluded(self.end)) }
+            fn contains(&self, item: &usize) -> bool { RangeBounds::contains(self, item) }
+            fn is_inverted(&self) -> bool { false }
+            fn saturating_iter(&self) -> Self::Saturating
+            { if self.end == 0 { Range::default() } else { 0..self.end - 1 } }
+            fn bounded_iter(&self) -> Self::Bounded { if self.end == 0 { Range::default() } else { 0..self.end - 1 } }
+        }
+
+        impl NomRange<usize> for RangeToInclusive<usize>
+        {
+            type Saturating = Range<usize>;
+            type Bounded = Range<usize>;
+            fn bounds(&self) -> (Bound<usize>, Bound<usize>) {(Bound::Unbounded, Bound::Included(self.end)) }
+            fn contains(&self, item: &usize) -> bool {RangeBounds::contains(self, item) }
+            fn is_inverted(&self) -> bool { false }
+            fn saturating_iter(&self) -> Self::Saturating {0..self.end }
+            fn bounded_iter(&self) -> Self::Bounded {0..self.end }
+        }
+
+        impl NomRange<usize> for RangeFull
+        {
+            type Saturating = SaturatingIterator;
+            type Bounded = Range<usize>;
+            fn bounds(&self) -> (Bound<usize>, Bound<usize>) { (Bound::Unbounded, Bound::Unbounded) }
+            fn contains(&self, item: &usize) -> bool { RangeBounds::contains(self, item) }
+            fn is_inverted(&self) -> bool { false }
+            fn saturating_iter(&self) -> Self::Saturating { SaturatingIterator { count: 0 } }
+            fn bounded_iter(&self) -> Self::Bounded { 0..usize::MAX }
+        }
+
+        impl NomRange<usize> for usize
+        {
+            type Saturating = Range<usize>;
+            type Bounded = Range<usize>;
+            fn bounds(&self) -> (Bound<usize>, Bound<usize>) { (Bound::Included(*self), Bound::Included(*self)) }
+            fn contains(&self, item: &usize) -> bool { self == item }
+            fn is_inverted(&self) -> bool { false }
+            fn saturating_iter(&self) -> Self::Saturating { 0..*self }
+            fn bounded_iter(&self) -> Self::Bounded { 0..*self }
+        }
+    }
+}
+/// A module for working with processes.
+pub mod process
+{
+    
+    pub use std::process::{ * };
+    use ::
+    {
+        *,
+    };
+    
+    pub fn getpid() -> i32
+    {
+        unsafe { libc::getpid() }
+    }
+}
+/// A module for working with processes.
+pub mod ptr
+{
+    pub use std::ptr::{ * };
+}
+/// Single-threaded reference-counting pointers.
+pub mod rc
+{
+    pub use std::rc::{ * };
+}
+/// Regular expressions
+pub mod regex
+{
+    pub use re::{ * };
+}
+/// Error handling with the `Result` type.
+pub mod result
+{
+    //! Error handling with the `Result` type.
+    pub use std::result::{ * };
+}
+/// Message Passing
+pub mod signals
+{
+    use ::
+    {
+        *,
+    };
+
+}
+/// Slice management and manipulation.
+pub mod slice
+{
+    //! Slice management and manipulation.
+    pub use std::slice::{ * };
+}
+/// String manipulation.
+pub mod str
+{
+    //! String manipulation.
+    pub use std::str::{ * };
+    use ::
+    {
+        borrow::{ Borrow, BorrowMut, Cow },
+        boxed::{ Box },
+        cmp::{ Ordering },
+        ffi::{ OsStr, OsString },
+        hash::{Hash, Hasher},
+        iter::{ FromIterator },
+        string::{ String },
+        vec::{ Array, SmallVec },
+        *,
+    };
+    /* smallstr v.0.3.0 */
+    macro_rules! eq_str
+    {
+        ( $rhs:ty ) =>
+        {
+            impl<'a, A: Array<Item = u8>> PartialEq<$rhs> for SmallString<A>
+            {
+                #[inline] fn eq(&self, rhs: &$rhs) -> bool { &self[..] == &rhs[..] }
+                #[inline] fn ne(&self, rhs: &$rhs) -> bool { &self[..] != &rhs[..] }
+            }
+        };
+    }
+
+    macro_rules! impl_index_str
+    {
+        ($index_type: ty) =>
+        {
+            impl<A: Array<Item = u8>> ops::Index<$index_type> for SmallString<A>
+            {
+                type Output = str;
+                #[inline] fn index(&self, index: $index_type) -> &str { &self.as_str()[index] }
+            }
+
+            impl<A: Array<Item = u8>> ops::IndexMut<$index_type> for SmallString<A>
+            {
+                #[inline] fn index_mut(&mut self, index: $index_type) -> &mut str { &mut self.as_mut_str()[index] }
+            }
+        };
+    }
+    /// A `String`-like container that can store a small number of bytes inline.
+    #[derive(Clone, Default)]
+    pub struct SmallString<A: Array<Item = u8>>
+    {
+        data: SmallVec<A>,
+    }
+
+    impl<A: Array<Item = u8>> SmallString<A>
+    {
+        /// Construct an empty string.
+        #[inline] pub fn new() -> SmallString<A>
+        {
+            SmallString
+            {
+                data: SmallVec::new(),
+            }
+        }
+        /// Construct an empty string with enough capacity pre-allocated to store at least `n` bytes.
+        #[inline] pub fn with_capacity(n: usize) -> SmallString<A>
+        {
+            SmallString
+            {
+                data: SmallVec::with_capacity(n),
+            }
+        }
+        /// Construct a `SmallString` by copying data from a `&str`.
+        #[inline] pub fn from_str(s: &str) -> SmallString<A>
+        {
+            SmallString
+            {
+                data: SmallVec::from_slice(s.as_bytes()),
+            }
+        }
+        /// Construct a `SmallString` by using an existing allocation.
+        #[inline] pub fn from_string(s: String) -> SmallString<A>
+        {
+            SmallString
+            {
+                data: SmallVec::from_vec(s.into_bytes()),
+            }
+        }
+        /// Constructs a new `SmallString` on the stack using UTF-8 bytes.
+        #[inline] pub fn from_buf(buf: A) -> Result<SmallString<A>, FromUtf8Error<A>>
+        {
+            let data = SmallVec::from_buf(buf);
+            match from_utf8(&data)
+            {
+                Ok(_) => Ok(SmallString { data }),
+                Err(error) =>
+                {
+                    let buf = data.into_inner().ok().unwrap();
+                    Err(FromUtf8Error { buf, error })
+                }
+            }
+        }
+        /// Constructs a new `SmallString` on the stack using the provided byte array without checks.
+        #[inline] pub unsafe fn from_buf_unchecked(buf: A) -> SmallString<A>
+        {
+            SmallString
+            {
+                data: SmallVec::from_buf(buf),
+            }
+        }
+        /// The maximum number of bytes this string can hold inline.
+        #[inline] pub fn inline_size(&self) -> usize { A::size() }
+        /// Returns the length of this string, in bytes.
+        #[inline] pub fn len(&self) -> usize { self.data.len() }
+        /// Returns `true` if this string is empty.
+        #[inline] pub fn is_empty(&self) -> bool { self.data.is_empty() }
+        /// Returns the number of bytes this string can hold without reallocating.
+        #[inline] pub fn capacity(&self) -> usize { self.data.capacity() }
+        /// Returns `true` if the data has spilled into a separate heap-allocated buffer.
+        #[inline] pub fn spilled(&self) -> bool { self.data.spilled() }
+        /// Empties the string and returns an iterator over its former contents.
+        pub fn drain( &mut self ) -> Drain
+        {
+            unsafe
+            {
+                let len = self.len();
+                self.data.set_len(0);
+                let ptr = self.as_ptr();
+                let slice = slice::from_raw_parts(ptr, len);
+                let s = from_utf8_unchecked(slice);
+                Drain { iter: s.chars() }
+            }
+        }
+        /// Appends the given `char` to the end of this string.
+        #[inline] pub fn push(&mut self, ch: char)
+        {
+            match ch.len_utf8()
+            {
+                1 => self.data.push(ch as u8),
+                _ => self.push_str(ch.encode_utf8(&mut [0; 4])),
+            }
+        }
+        /// Appends the given string slice to the end of this string.
+        #[inline] pub fn push_str(&mut self, s: &str) { self.data.extend_from_slice(s.as_bytes()); }
+        /// Removes the last character from this string and returns it.
+        #[inline] pub fn pop( &mut self ) -> Option<char>
+        {
+            match self.chars().next_back()
+            {
+                Some(ch) => unsafe
+                {
+                    let new_len = self.len() - ch.len_utf8();
+                    self.data.set_len(new_len);
+                    Some(ch)
+                },
+                None => None,
+            }
+        }
+        /// Reallocates to set the new capacity to `new_cap`.
+        #[inline] pub fn grow(&mut self, new_cap: usize) { self.data.grow(new_cap); }
+        /// Ensures that this string's capacity is at least `additional` bytes larger than its length.
+        #[inline] pub fn reserve(&mut self, additional: usize) { self.data.reserve(additional); }
+        /// Ensures that this string's capacity is `additional` bytes larger than its length.
+        #[inline] pub fn reserve_exact(&mut self, additional: usize) { self.data.reserve(additional); }
+        /// Shrink the capacity of the string as much as possible.
+        #[inline] pub fn shrink_to_fit( &mut self ) { self.data.shrink_to_fit(); }
+        /// Shorten the string, keeping the first `len` bytes.
+        #[inline] pub fn truncate(&mut self, len: usize)
+        {
+            assert!(self.is_char_boundary(len));
+            self.data.truncate(len);
+        }
+        /// Extracts a string slice containing the entire string.
+        #[inline] pub fn as_str(&self) -> &str { self }
+        /// Extracts a string slice containing the entire string.
+        #[inline] pub fn as_mut_str( &mut self ) -> &mut str { self }
+        /// Removes all contents of the string.
+        #[inline] pub fn clear( &mut self ) { self.data.clear(); }
+        /// Removes a `char` from this string at a byte position and returns it.
+        #[inline] pub fn remove(&mut self, idx: usize) -> char
+        {
+            unsafe
+            {
+                let ch = match self[idx..].chars().next()
+                {
+                    Some(ch) => ch,
+                    None => panic!("cannot remove a char from the end of a string"),
+                };
+
+                let ch_len = ch.len_utf8();
+                let next = idx + ch_len;
+                let len = self.len();
+                ptr::copy(
+                    self.as_ptr().add(next),
+                    self.as_mut_ptr().add(idx),
+                    len - next,
+                );
+                self.data.set_len(len - ch_len);
+                ch
+            }
+        }
+        /// Inserts a `char` into this string at the given byte position.
+        #[inline] pub fn insert(&mut self, idx: usize, ch: char)
+        {
+            assert!(self.is_char_boundary(idx));
+            match ch.len_utf8()
+            {
+                1 => self.data.insert(idx, ch as u8),
+                _ => self.insert_str(idx, ch.encode_utf8(&mut [0; 4])),
+            }
+        }
+        /// Inserts a `&str` into this string at the given byte position.
+        #[inline] pub fn insert_str(&mut self, idx: usize, s: &str)
+        {
+            unsafe
+            {   
+                assert!(self.is_char_boundary(idx));
+                let len = self.len();
+                let amt = s.len();
+                self.data.reserve(amt);
+                ptr::copy
+                (
+                    self.as_ptr().add(idx),
+                    self.as_mut_ptr().add(idx + amt),
+                    len - idx,
+                );
+                ptr::copy_nonoverlapping(s.as_ptr(), self.as_mut_ptr().add(idx), amt);
+                self.data.set_len(len + amt);
+            }
+        }
+        /// Returns a mutable reference to the contents of the `SmallString`.
+        #[inline] pub unsafe fn as_mut_vec( &mut self ) -> &mut SmallVec<A> { &mut self.data }
+        /// Converts the `SmallString` into a `String`, 
+        /// without reallocating if the `SmallString` has already spilled onto the heap.
+        #[inline] pub fn into_string(self) -> String { unsafe { String::from_utf8_unchecked(self.data.into_vec()) } }
+        /// Converts the `SmallString` into a `Box<str>`, without reallocating if the
+        /// `SmallString` has already spilled onto the heap.
+        #[inline] pub fn into_boxed_str(self) -> Box<str> { self.into_string().into_boxed_str() }
+        /// Convert the `SmallString` into `A`, if possible. Otherwise, return `Err(self)`.
+        #[inline] pub fn into_inner(self) -> Result<A, Self>
+        { self.data.into_inner().map_err(|data| SmallString { data }) }
+        /// Retains only the characters specified by the predicate.
+        #[inline] pub fn retain<F: FnMut(char) -> bool>(&mut self, mut f: F)
+        {
+            unsafe
+            {
+                struct SetLenOnDrop<'a, A: Array<Item = u8>>
+                {
+                    s: &'a mut SmallString<A>,
+                    idx: usize,
+                    del_bytes: usize,
+                }
+
+                impl<'a, A: Array<Item = u8>> Drop for SetLenOnDrop<'a, A>
+                {
+                    fn drop( &mut self )
+                    {
+                        unsafe
+                        {
+                            let new_len = self.idx - self.del_bytes;
+                            debug_assert!(new_len <= self.s.len());
+                            self.s.data.set_len(new_len);
+                        }
+                    }
+                }
+
+                let len = self.len();
+                let mut guard = SetLenOnDrop
+                {
+                    s: self,
+                    idx: 0,
+                    del_bytes: 0,
+                };
+
+                while guard.idx < len
+                {
+                    let ch = guard.s.get_unchecked(guard.idx..len).chars().next().unwrap();
+                    let ch_len = ch.len_utf8();
+
+                    if !f(ch) { guard.del_bytes += ch_len; } else if guard.del_bytes > 0
+                    {   
+                        ptr::copy
+                        (
+                            guard.s.data.as_ptr().add(guard.idx),
+                            guard.s.data.as_mut_ptr().add(guard.idx - guard.del_bytes),
+                            ch_len,
+                        );
+                    }
+                    
+                    guard.idx += ch_len;
+                }
+
+                drop(guard);
+            }
+        }
+
+        fn as_mut_ptr( &mut self ) -> *mut u8 { self.as_ptr() as *mut u8 }
+    }
+
+    impl<A: Array<Item = u8>> ops::Deref for SmallString<A> 
+    {
+        type Target = str;
+        #[inline] fn deref(&self) -> &str
+        {
+            unsafe
+            {
+                let bytes: &[u8] = &self.data;
+                from_utf8_unchecked(bytes)
+            }
+        }
+    }
+
+    impl<A: Array<Item = u8>> ops::DerefMut for SmallString<A> 
+    {
+        #[inline] fn deref_mut( &mut self ) -> &mut str
+        {
+            unsafe 
+            { 
+                let bytes: &mut [u8] = &mut self.data;
+                from_utf8_unchecked_mut(bytes)
+            }
+        }
+    }
+
+    impl<A: Array<Item = u8>> AsRef<str> for SmallString<A> 
+    {
+        #[inline] fn as_ref(&self) -> &str { self }
+    }
+
+    impl<A: Array<Item = u8>> AsMut<str> for SmallString<A> 
+    {
+        #[inline] fn as_mut( &mut self ) -> &mut str { self }
+    }
+
+    impl<A: Array<Item = u8>> Borrow<str> for SmallString<A> 
+    {
+        #[inline] fn borrow(&self) -> &str { self }
+    }
+
+    impl<A: Array<Item = u8>> BorrowMut<str> for SmallString<A> 
+    {
+        #[inline] fn borrow_mut( &mut self ) -> &mut str { self }
+    }
+
+    impl<A: Array<Item = u8>> AsRef<[u8]> for SmallString<A> 
+    {
+        #[inline] fn as_ref(&self) -> &[u8] { self.data.as_ref() }
+    }
+
+    impl<A: Array<Item = u8>> fmt::Write for SmallString<A> 
+    {
+        #[inline] fn write_str(&mut self, s: &str) -> fmt::Result 
+        {
+            self.push_str(s);
+            Ok(())
+        }
+
+        #[inline] fn write_char(&mut self, ch: char) -> fmt::Result 
+        {
+            self.push(ch);
+            Ok(())
+        }
+    }
+
+    impl<A: Array<Item = u8>> From<char> for SmallString<A> 
+    {
+        #[inline] fn from(ch: char) -> SmallString<A> { SmallString::from_str(ch.encode_utf8(&mut [0; 4])) }
+    }
+
+    impl<'a, A: Array<Item = u8>> From<&'a str> for SmallString<A> 
+    {
+        #[inline] fn from(s: &str) -> SmallString<A> { SmallString::from_str(s) }
+    }
+
+    impl<A: Array<Item = u8>> From<Box<str>> for SmallString<A> 
+    {
+        #[inline] fn from(s: Box<str>) -> SmallString<A> { SmallString::from_string(s.into()) }
+    }
+
+    impl<A: Array<Item = u8>> From<String> for SmallString<A> 
+    {
+        #[inline] fn from(s: String) -> SmallString<A> { SmallString::from_string(s) }
+    }
+
+    impl<'a, A: Array<Item = u8>> From<Cow<'a, str>> for SmallString<A> 
+    {
+        fn from(value: Cow<'a, str>) -> Self
+        {
+            match value
+            {
+                Cow::Borrowed(s) => Self::from_str(s),
+                Cow::Owned(s) => Self::from_string(s),
+            }
+        }
+    }
+
+    impl_index_str!(ops::Range<usize>);
+    impl_index_str!(ops::RangeFrom<usize>);
+    impl_index_str!(ops::RangeTo<usize>);
+    impl_index_str!(ops::RangeFull);
+
+    impl<A: Array<Item = u8>> FromIterator<char> for SmallString<A> 
+    {
+        fn from_iter<I: IntoIterator<Item = char>>(iter: I) -> SmallString<A> {
+            let mut s = SmallString::new();
+            s.extend(iter);
+            s
+        }
+    }
+
+    impl<'a, A: Array<Item = u8>> FromIterator<&'a char> for SmallString<A> 
+    {
+        fn from_iter<I: IntoIterator<Item = &'a char>>(iter: I) -> SmallString<A>
+        {
+            let mut s = SmallString::new();
+            s.extend(iter.into_iter().cloned());
+            s
+        }
+    }
+
+    impl<'a, A: Array<Item = u8>> FromIterator<Cow<'a, str>> for SmallString<A> 
+    {
+        fn from_iter<I: IntoIterator<Item = Cow<'a, str>>>(iter: I) -> SmallString<A>
+        {
+            let mut s = SmallString::new();
+            s.extend(iter);
+            s
+        }
+    }
+
+    impl<'a, A: Array<Item = u8>> FromIterator<&'a str> for SmallString<A> 
+    {
+        fn from_iter<I: IntoIterator<Item = &'a str>>(iter: I) -> SmallString<A>
+        {
+            let mut s = SmallString::new();
+            s.extend(iter);
+            s
+        }
+    }
+
+    impl<A: Array<Item = u8>> FromIterator<String> for SmallString<A> 
+    {
+        fn from_iter<I: IntoIterator<Item = String>>(iter: I) -> SmallString<A>
+        {
+            let mut s = SmallString::new();
+            s.extend(iter);
+            s
+        }
+    }
+
+    impl<A: Array<Item = u8>> Extend<char> for SmallString<A> 
+    {
+        fn extend<I: IntoIterator<Item = char>>(&mut self, iter: I)
+        {
+            let iter = iter.into_iter();
+            let (lo, _) = iter.size_hint();
+            self.reserve(lo);
+
+            for ch in iter
+            {
+                self.push(ch);
+            }
+        }
+    }
+
+    impl<'a, A: Array<Item = u8>> Extend<&'a char> for SmallString<A> 
+    {
+        fn extend<I: IntoIterator<Item = &'a char>>(&mut self, iter: I) { self.extend(iter.into_iter().cloned()); }
+    }
+
+    impl<'a, A: Array<Item = u8>> Extend<Cow<'a, str>> for SmallString<A> 
+    {
+        fn extend<I: IntoIterator<Item = Cow<'a, str>>>(&mut self, iter: I)
+        {
+            for s in iter
+            {
+                self.push_str(&s);
+            }
+        }
+    }
+
+    impl<'a, A: Array<Item = u8>> Extend<&'a str> for SmallString<A> 
+    {
+        fn extend<I: IntoIterator<Item = &'a str>>(&mut self, iter: I)
+        {
+            for s in iter
+            {
+                self.push_str(s);
+            }
+        }
+    }
+
+    impl<A: Array<Item = u8>> Extend<String> for SmallString<A> 
+    {
+        fn extend<I: IntoIterator<Item = String>>(&mut self, iter: I)
+        {
+            for s in iter
+            {
+                self.push_str(&s);
+            }
+        }
+    }
+
+    impl<A: Array<Item = u8>> fmt::Debug for SmallString<A> 
+    {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { fmt::Debug::fmt(&**self, f) }
+    }
+
+    impl<A: Array<Item = u8>> fmt::Display for SmallString<A>
+    {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { fmt::Display::fmt(&**self, f) }
+    }
+
+    eq_str!(str);
+    eq_str!(&'a str);
+    eq_str!(String);
+    eq_str!(Cow<'a, str>);
+    
+    impl<A: Array<Item = u8>> PartialEq<OsStr> for SmallString<A>
+    {
+        #[inline] fn eq(&self, rhs: &OsStr) -> bool { &self[..] == rhs }
+        #[inline] fn ne(&self, rhs: &OsStr) -> bool { &self[..] != rhs }
+    }
+    
+    impl<'a, A: Array<Item = u8>> PartialEq<&'a OsStr> for SmallString<A>
+    {
+        #[inline] fn eq(&self, rhs: &&OsStr) -> bool { &self[..] == *rhs }
+        #[inline] fn ne(&self, rhs: &&OsStr) -> bool { &self[..] != *rhs }
+    }
+    
+    impl<A: Array<Item = u8>> PartialEq<OsString> for SmallString<A>
+    {
+        #[inline] fn eq(&self, rhs: &OsString) -> bool { &self[..] == rhs }
+        #[inline] fn ne(&self, rhs: &OsString) -> bool { &self[..] != rhs }
+    }
+    
+    impl<'a, A: Array<Item = u8>> PartialEq<Cow<'a, OsStr>> for SmallString<A>
+    {
+        #[inline] fn eq(&self, rhs: &Cow<OsStr>) -> bool { self[..] == **rhs }
+        #[inline] fn ne(&self, rhs: &Cow<OsStr>) -> bool { self[..] != **rhs }
+    }
+
+    impl<A, B> PartialEq<SmallString<B>> for SmallString<A> where
+    A: Array<Item = u8>,
+    B: Array<Item = u8>
+    {
+        #[inline] fn eq(&self, rhs: &SmallString<B>) -> bool { &self[..] == &rhs[..] }
+        #[inline] fn ne(&self, rhs: &SmallString<B>) -> bool { &self[..] != &rhs[..] }
+    }
+
+    impl<A: Array<Item = u8>> Eq for SmallString<A> {}
+
+    impl<A: Array<Item = u8>> PartialOrd for SmallString<A>
+    {
+        #[inline] fn partial_cmp(&self, rhs: &SmallString<A>) -> Option<Ordering> { self[..].partial_cmp(&rhs[..]) }
+    }
+
+    impl<A: Array<Item = u8>> Ord for SmallString<A>
+    {
+        #[inline] fn cmp(&self, rhs: &SmallString<A>) -> Ordering { self[..].cmp(&rhs[..]) }
+    }
+
+    impl<A: Array<Item = u8>> Hash for SmallString<A>
+    {
+        #[inline] fn hash<H: Hasher>(&self, state: &mut H) { self[..].hash(state) }
+    }
+    /// A draining iterator for `SmallString`.
+    pub struct Drain<'a>
+    {
+        iter: Chars<'a>,
+    }
+
+    impl<'a> Iterator for Drain<'a>
+    {
+        type Item = char;
+        #[inline] fn next( &mut self ) -> Option<char> { self.iter.next() }
+        #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
+    }
+
+    impl<'a> DoubleEndedIterator for Drain<'a>
+    {
+        #[inline] fn next_back( &mut self ) -> Option<char> { self.iter.next_back() }
+    }
+    /// A possible error value when creating a `SmallString` from a byte array.
+    #[derive(Debug)]
+    pub struct FromUtf8Error<A: Array<Item = u8>>
+    {
+        buf: A,
+        error: Utf8Error,
+    }
+
+    impl<A: Array<Item = u8>> FromUtf8Error<A>
+    {
+        /// Returns the slice of `[u8]` bytes that were attempted to convert to a `SmallString`.
+        #[inline] pub fn as_bytes(&self) -> &[u8]
+        {
+            unsafe
+            { 
+                let ptr = &self.buf as *const _ as *const u8;
+                slice::from_raw_parts(ptr, A::size())
+            }
+        }
+        /// Returns the byte array that was attempted to convert into a `SmallString`.
+        #[inline] pub fn into_buf(self) -> A { self.buf }
+        /// Returns the `Utf8Error` to get more details about the conversion failure.
+        #[inline] pub fn utf8_error(&self) -> Utf8Error { self.error }
+    }
+
+    impl<A: Array<Item = u8>> fmt::Display for FromUtf8Error<A>
+    {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+        {
+            fmt::Display::fmt(&self.error, f)
+        }
+    }
+}
+/// A UTF-8–encoded, growable string.
+pub mod string
+{
+    //! A UTF-8–encoded, growable string.
+    pub use std::string::{ * };
+}
+/*
+mortal v0.2.4*/
+pub mod system
+{
+    /*
+    [dependencies]
+
+    [target.'cfg(unix)'.dependencies]
+    libc = "0.2"
+    nix = { version = "0.26", default-features = false, features = ["poll", "signal", "term"] }
+    terminfo = "0.8"
+
+    [target.'cfg(windows)'.dependencies]
+    winapi = { version = "0.3", features = [
+        "consoleapi", "handleapi", "minwindef", "ntdef", "processenv", "synchapi",
+        "winbase", "wincon", "winerror", "winnt", "winuser" ] }
+    */
+    use ::
+    {
+        *,
+    };
+    
+    pub mod capability
+    {
+        use ::
+        {
+            io::{ Write },
+            error::meta::{ self as err },
+            *,
+        };
+        /*
+        terminfo v0.9.0::capability 
+        use std::borrow::Cow;
+        use terminfo::error;
+        use terminfo::expand::{Context, Expand, Parameter}; */
+        /// Expansion helper struct.
+        #[derive(Debug)]
+        pub struct Expansion<'a, T: 'a + AsRef<[u8]>> {
+            string: &'a T,
+            params: [Parameter; 9],
+            context: Option<&'a mut Context>,
+        }
+
+        impl<'a, T: AsRef<[u8]>> Expansion<'a, T>
+        {
+            /// Expand using the given context.
+            pub fn with<'c: 'a>(mut self, context: &'c mut Context) -> Self
+            {
+                self.context = Some(context);
+                self
+            }
+            /// Expand to the given output.
+            pub fn to<W: Write>(self, output: W) -> err::Result<()>
+            {
+                self.string.as_ref().expand
+                (
+                    output,
+                    &self.params,
+                    self.context.unwrap_or(&mut Default::default()),
+                )
+            }
+            /// Expand into a vector.
+            pub fn to_vec(self) -> err::Result<Vec<u8>>
+            {
+                let mut result = Vec::with_capacity(self.string.as_ref().len());
+                self.to(&mut result)?;
+                Ok(result)
+            }
+        }
+    }
+}
+/// Types and Traits for working with asynchronous tasks.
+pub mod task
+{
+    pub use std::task::{ * };
+}
+/// Native threads.
+pub mod thread
+{
+    pub use std::thread::{ * };
+}
+/// Temporal quantification.
+pub mod time
+{
+    pub use std::time::{ * };
+    pub mod c
+    {
+        pub use timed::{ * };
+        use ::
+        {
+            *,
+        };
+
+        #[derive(Debug, PartialEq, Eq)]
+        pub struct DateTime
+        {
+            odt: OffsetDateTime,
+        }
+
+        impl DateTime
+        {
+            pub fn now() -> Self
+            {
+                let odt: OffsetDateTime = match OffsetDateTime::now_local()
+                {
+                    Ok(dt) => dt,
+                    Err(_) => OffsetDateTime::now_utc(),
+                };
+                DateTime { odt }
+            }
+
+            pub fn from_timestamp(ts: f64) -> Self
+            {
+                let dummy_now = Self::now();
+                let offset_seconds = dummy_now.odt.offset().whole_minutes() * 60;
+                let ts_nano = (ts + offset_seconds as f64) * 1000000000.0;
+                let odt: OffsetDateTime = match OffsetDateTime::from_unix_timestamp_nanos(ts_nano as i128)
+                {
+                    Ok(x) => x,
+                    Err(_) => OffsetDateTime::now_utc(),
+                };
+                DateTime { odt }
+            }
+
+            pub fn unix_timestamp(&self) -> f64 { self.odt.unix_timestamp_nanos() as f64 / 1000000000.0 }
+        }
+
+        impl fmt::Display for DateTime
+        {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+            {
+                write!
+                (
+                    f, 
+                    "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:03}",
+                    self.odt.year(),
+                    self.odt.month() as u8,
+                    self.odt.day(),
+                    self.odt.hour(),
+                    self.odt.minute(),
+                    self.odt.second(),
+                    self.odt.millisecond(),
+                )
+            }
+        }
+    }
+    
+}
+/// A contiguous growable array type with heap-allocated contents, written Vec<T>.
+pub mod vec
+{
+    pub use std::vec::{ * };
+    pub use smallvec::{ * };
+}
+
+pub unsafe fn domain()
+{
+    env::initialize_pathing();
+
+    let mut sh = shell::Shell::new();
+    let args: Vec<String> = env::args().collect();
+
+    if libs::progopts::is_login(&args) {
+        rcfile::load_rc_files(&mut sh);
+        sh.is_login = true;
+    }
+
+    // Initialize command cache for highlighting
+    highlight::init_command_cache();
+    highlight::update_aliases(&sh);
+
+    if libs::progopts::is_script(&args) {
+        log!("run script: {:?} ", &args);
+        let status = scripting::run_script(&mut sh, &args);
+        std::process::exit(status);
+    }
+
+    if libs::progopts::is_command_string(&args) {
+        // handles `cicada -c 'echo hi && echo yoo'`,
+        // e.g. it could be triggered from Vim (`:!ls` etc).
+        let line = tools::env_args_to_command_line();
+        log!("run with -c args: {}", &line);
+        execute::run_command_line(&mut sh, &line, false, false);
+        std::process::exit(sh.previous_status);
+    }
+
+    if libs::progopts::is_non_tty() {
+        // cases like open a new MacVim window,
+        // (i.e. CMD+N) on an existing one
+        execute::run_procs_for_non_tty(&mut sh);
+        return;
+    }
+
+    let mut rl;
+    match Interface::new("cicada") {
+        Ok(x) => rl = x,
+        Err(e) => {
+            // non-tty will raise errors here
+            println!("cicada: lineread error: {}", e);
+            return;
+        }
+    }
+
+    rl.define_function("enter-function", Arc::new(prompt::EnterFunction));
+    rl.bind_sequence("\r", Command::from_str("enter-function"));
+
+    let highlighter = highlight::create_highlighter();
+    rl.set_highlighter(highlighter);
+
+    history::init(&mut rl);
+    rl.set_completer(Arc::new(completers::CicadaCompleter {
+        sh: Arc::new(sh.clone()),
+    }));
+
+    let sig_handler_enabled = tools::is_signal_handler_enabled();
+    if sig_handler_enabled {
+        signals::setup_sigchld_handler();
+        // block the signals at most of time, since Rust is not "async-signal-safe"
+        // yet. see https://github.com/rust-lang/rfcs/issues/1368
+        // we'll unblock them when necessary only.
+        signals::block_signals();
+    }
+
+    loop {
+        let prompt = prompt::get_prompt(&sh);
+        match rl.set_prompt(&prompt) {
+            Ok(_) => {}
+            Err(e) => {
+                println_stderr!("cicada: prompt error: {}", e);
+            }
+        }
+
+        if sig_handler_enabled {
+            // FIXME: in `rl.read_line()` below, there is lots of Rust code,
+            // which may not be async-signal-safe. see follow links for details:
+            // - https://ldpreload.com/blog/signalfd-is-useless
+            // - https://man7.org/linux/man-pages/man7/signal-safety.7.html
+            signals::unblock_signals();
+        }
+        match rl.read_line() {
+            Ok(ReadResult::Input(line)) => {
+                if sig_handler_enabled {
+                    signals::block_signals();
+                }
+
+                let line = shell::trim_multiline_prompts(&line);
+                if line.trim() == "" {
+                    jobc::try_wait_bg_jobs(&mut sh, true, sig_handler_enabled);
+                    continue;
+                }
+                sh.cmd = line.clone();
+
+                let tsb = time::c::DateTime::now().unix_timestamp();
+                let mut line = line.clone();
+
+                // since `!!` expansion is only meaningful in an interactive
+                // shell we extend it here, instead of in `run_command_line()`.
+                tools::extend_bangbang(&sh, &mut line);
+
+                let mut status = 0;
+                let cr_list = now::run_command_line(&mut sh, &line, true, false);
+                if let Some(last) = cr_list.last() {
+                    status = last.status;
+                }
+                let tse = time::c::DateTime::now().unix_timestamp();
+
+                if !sh.cmd.starts_with(' ') && line != sh.previous_cmd {
+                    history::add(&sh, &mut rl, &line, status, tsb, tse);
+                    sh.previous_cmd = line.clone();
+                }
+
+                if tools::is_shell_altering_command(&line) {
+                    // since our shell object need to be passed into
+                    // `lineread::Completer` with an Arc.
+                    // I currently do not know how to share the same sh
+                    // instance at hand with it.
+
+                    // update the Arc clone when alias/function/env changes
+                    rl.set_completer(Arc::new(completers::CicadaCompleter {
+                        sh: Arc::new(sh.clone()),
+                    }));
+
+                    // Update aliases in the highlighter when they might have changed
+                    highlight::update_aliases(&sh);
+                }
+
+                jobc::try_wait_bg_jobs(&mut sh, true, sig_handler_enabled);
+                continue;
+            }
+            Ok(ReadResult::Eof) => {
+                if let Ok(x) = env::var("NO_EXIT_ON_CTRL_D") {
+                    if x == "1" {
+                        println!();
+                    }
+                } else {
+                    println!("exit");
+                    break;
+                }
+            }
+            Ok(ReadResult::Signal(s)) => {
+                println_stderr!("readline signal: {:?}", s);
+            }
+            Err(e) => {
+                println_stderr!("readline error: {}", e);
+                // There maybe other reason of this Err, but possibly it occurs
+                // in cases we give term to a child, and it stops, and we
+                // didn't have term back to shell in waitpid places. Here
+                // it's a last resort.
+                // FIXME: we only need this trick when job-control has issues
+                unsafe {
+                    let gid = libc::getpgid(0);
+                    shell::give_terminal_to(gid);
+                }
+            }
+        }
+        if sig_handler_enabled {
+            signals::block_signals();
+        }
+    }
+}
+
+fn main()
+{
+    unsafe
+    {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+        libc::signal(libc::SIGTSTP, libc::SIG_IGN);
+        libc::signal(libc::SIGQUIT, libc::SIG_IGN);
+        domain();
+    }
+}
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// 4072
