@@ -7,13 +7,13 @@
 #![allow
 ( 
     dead_code,
+    non_camel_case_types,
     unknown_lints,
     unreachable_patterns,
     unused_variables,
  )]
-/*
+
 #[macro_use] extern crate bitflags;
-*/
 #[macro_use] extern crate lazy_static;
 /*
 */
@@ -500,7 +500,7 @@ pub mod char
     pub fn forward_char( n:usize, s:&str, cur: usize ) -> usize */
     pub fn forward( n:usize, s:&str, cur: usize ) -> usize
     {
-        let mut chars = s[cur..].char_indices().filter( |&( _, ch )| !is_combining_mark( ch ) );
+        let mut chars = s[cur..].char_indices().filter( |&( _, ch )| !is::combining_mark( ch ) );
 
         for _ in 0..n
         {
@@ -637,6 +637,15 @@ pub mod char
     {
         use unicode_width::UnicodeWidthChar;
         ch.width()
+    }
+    /* pub fn format_char(...) -> String */
+    pub fn format( ch: char ) -> String
+    {
+        match ch
+        {
+            '\n' => String::from( "\\n" ),
+            ch => format!( "{}", ch ),
+        }
     }
 }
 /// The Clone trait for types that cannot be ‘implicitly copied’.
@@ -2693,7 +2702,7 @@ pub mod error
                     big::{ BigInt, ParseBigIntError },
                     ParseIntError
                 },
-                parsers::over::{ chars::{ format_char }, MAX_DEPTH, ParseResult },
+                parsers::over::{ MAX_DEPTH, ParseResult },
                 primitive::{ Type, Value },
                 *,
             };
@@ -2813,7 +2822,7 @@ pub mod error
                             f,
                             "Invalid escape character '\\{}' at line {}, column {}. \
                             If you meant to write a backslash, use '\\\\'",
-                            format_char( *ch),
+                            char::format( *ch ),
                             line,
                             col
                         ),
@@ -2821,7 +2830,7 @@ pub mod error
                         ( 
                             f,
                             "Invalid character '{}' for field at line {}, column {}",
-                            format_char( *ch),
+                            char::format( *ch ),
                             line,
                             col
                         ),
@@ -2869,7 +2878,7 @@ pub mod error
                         ( 
                             f,
                             "Invalid character '{}' for value at line {}, column {}",
-                            format_char( *ch),
+                            char::format( *ch ),
                             line,
                             col
                         ),
@@ -4079,6 +4088,14 @@ pub mod is
             '\t' | '\r' | '\n' => true,
             _ => width( ch ).unwrap_or(0) != 0
         }
+    }
+    /*
+    is_arithmetic( ... ) -> bool */
+    pub fn arithmetic( line:&str ) -> bool
+    {
+        if !re_contains(line, r"[0-9]+") { return false; }
+        if !re_contains(line, r"\+|\-|\*|/|\^") { return false; }
+        contains(line, r"^[ 0-9\.\(\)\+\-\*/\^]+[\.0-9 \)]$")
     }
 }
 /// Traits, helpers, and type definitions for core I/O functionality.
@@ -6604,40 +6621,32 @@ pub mod io
 
         impl<'a> ExactSizeIterator for HistoryIter<'a> {}
 
-        impl<'a> Iterator for HistoryIter<'a> {
+        impl<'a> Iterator for HistoryIter<'a>
+        {
             type Item = &'a str;
-
-            #[inline] fn next( &mut self ) -> Option<&'a str> {
-                self.0.next().map( |s| &s[..] )
-            }
-
-            #[inline] fn nth( &mut self, n: usize ) -> Option<&'a str> {
-                self.0.nth( n ).map( |s| &s[..] )
-            }
-
-            #[inline] fn size_hint( &self ) -> ( usize, Option<usize> )
-            {
-                self.0.size_hint()
-            }
+            #[inline] fn next( &mut self ) -> Option<&'a str> { self.0.next().map( |s| &s[..] ) }
+            #[inline] fn nth( &mut self, n: usize ) -> Option<&'a str> { self.0.nth( n ).map( |s| &s[..] ) }
+            #[inline] fn size_hint( &self ) -> ( usize, Option<usize> ) { self.0.size_hint() }        
         }
 
-        impl<'a> DoubleEndedIterator for HistoryIter<'a> {
-            #[inline] fn next_back( &mut self ) -> Option<&'a str> {
-                self.0.next_back().map( |s| &s[..] )
-            }
+        impl<'a> DoubleEndedIterator for HistoryIter<'a>
+        {
+            #[inline] fn next_back( &mut self ) -> Option<&'a str> { self.0.next_back().map( |s| &s[..] ) }
         }
 
         #[derive( Copy, Clone, Debug, Eq, PartialEq )]
-        pub enum DisplaySequence {
+        pub enum DisplaySequence
+        {
             Char( char ),
             Escape( char ),
             End,
         }
 
-        impl Iterator for DisplaySequence {
+        impl Iterator for DisplaySequence
+        {
             type Item = char;
-
-            fn next( &mut self ) -> Option<char> {
+            fn next( &mut self ) -> Option<char>
+            {
                 use self::DisplaySequence::*;
 
                 let ( res, next ) = match *self {
@@ -6649,30 +6658,31 @@ pub mod io
                 *self = next;
                 Some( res )
             }
-
             fn size_hint( &self ) -> ( usize, Option<usize> )
             {
                 use self::DisplaySequence::*;
-
-                let n = match *self {
+                let n = match *self
+                {
                     Char( _ ) => 1,
                     Escape( _ ) => 2,
                     End => 0,
                 };
-
                 ( n, Some( n ) )
             }
         }
 
         #[derive( Copy, Clone, Debug, Default )]
-        pub struct Display {
+        pub struct Display
+        {
             allow_tab:bool,
             allow_newline:bool,
             allow_escape:bool,
         }
 
-        pub fn display( ch: char, style: Display ) -> DisplaySequence {
-            match ch {
+        pub fn display( ch: char, style: Display ) -> DisplaySequence
+        {
+            match ch
+            {
                 '\t' if style.allow_tab => DisplaySequence::Char( ch ),
                 '\n' if style.allow_newline => DisplaySequence::Char( ch ),
                 ESCAPE if style.allow_escape => DisplaySequence::Char( ch ),
@@ -6683,21 +6693,18 @@ pub mod io
             }
         }
 
-        pub fn display_str<'a>( s:&'a str, style: Display ) -> Cow<'a, str> {
-            if s.chars().all( |ch| display( ch, style ) == DisplaySequence::Char( ch ) )
+        pub fn display_str<'a>( s:&'a str, style: Display ) -> Cow<'a, str>
+        {
+            if s.chars().all( |ch| display( ch, style ) == DisplaySequence::Char( ch ) ) { Borrowed( s ) }
+            else { Owned( s.chars().flat_map( |ch| display( ch, style ) ).collect() ) }
+        }
+
+        fn complete_intro( n: usize ) -> String { format!( "Display all {} possibilities? ( y/n )", n ) }
+
+        fn number_len( n: i32 ) -> usize
+        {
+            match n
             {
-                Borrowed( s )
-            } else {
-                Owned( s.chars().flat_map( |ch| display( ch, style ) ).collect() )
-            }
-        }
-
-        fn complete_intro( n: usize ) -> String {
-            format!( "Display all {} possibilities? ( y/n )", n )
-        }
-
-        fn number_len( n: i32 ) -> usize {
-            match n {
                 -1_000_000              => 8,
                 -  999_999 ..= -100_000 => 7,
                 -   99_999 ..= - 10_000 => 6,
@@ -6705,13 +6712,13 @@ pub mod io
                 -      999 ..= -    100 => 4,
                 -       99 ..= -     10 => 3,
                 -        9 ..= -      1 => 2,
-                        0 ..=        9 => 1,
+                        0 ..=         9 => 1,
                         10 ..=       99 => 2,
-                    100 ..=      999 => 3,
-                    1_000 ..=    9_999 => 4,
+                    100 ..=         999 => 3,
+                    1_000 ..=     9_999 => 4,
                     10_000 ..=   99_999 => 5,
-                100_000 ..=  999_999 => 6,
-                1_000_000              => 7,
+                100_000 ..=     999_999 => 6,
+                1_000_000               => 7,
                 _ => unreachable!()
             }
         }
@@ -17289,6 +17296,31 @@ pub mod parsers
             result
         }
 
+        pub fn tokens_to_line(tokens: &Tokens) -> String
+        {
+            let mut result = String::new();
+            for t in tokens
+            {
+                if t.0.is_empty() { result.push_str(&t.1); }
+                
+                else
+                {
+                    let s = string::wrap_separator(&t.0, &t.1);
+                    result.push_str(&s);
+                }
+
+                result.push(' ');
+            }
+
+            if result.ends_with(' ')
+            {
+                let len = result.len();
+                result.truncate(len - 1);
+            }
+
+            result
+        }
+
         pub fn tokens_to_redirections(tokens: &Tokens) -> Result<(Tokens, Vec<Redirection>), String>
         {
             let mut tokens_new = Vec::new();
@@ -17424,6 +17456,10 @@ pub mod parsers
                 ParseErrorKind::*,
                 parse_err, ParseError,
             },
+            io::
+            {
+                reader::{ read_file_str },
+            },
             num::
             {
                 big::{ BigInt },
@@ -17448,20 +17484,19 @@ pub mod parsers
             //! Character stream used for parsing.
             use ::
             {
+                cell::{ RefCell },
+                database::{ INDENT_STEP },
+                fs::{ File },
+                io::{ self, Read },
+                iter::{ Peekable },
+                rc::{ Rc },
+                str::{ Chars },
                 *,
             };
-            /*
-            use std::cell::RefCell;
-            use std::fs::File;
-            use std::io;
-            use std::io::Read;
-            use std::iter::Peekable;
-            use std::mem;
-            use std::rc::Rc;
-            use std::str::Chars; */
 
             #[derive( Clone, Debug )]
-            struct Inner {
+            struct Inner
+            {
                 file: Option<String>,
                 contents: String,
                 stream: Peekable<Chars<'static>>,
@@ -17470,32 +17505,63 @@ pub mod parsers
             }
 
             #[derive( Clone, Debug )]
-            pub struct CharStream {
+            pub struct CharStream
+            {
                 inner: Rc<RefCell<Inner>>,
             }
 
-            impl CharStream {
-                pub fn from_file( path: &str ) -> io::Result<CharStream> {
+            impl CharStream
+            {
+                pub fn from_file( path: &str ) -> io::Result<CharStream>
+                {
                     let mut file = File::open( path )?;
-
                     let len = file.metadata()?.len();
                     let mut contents = String::with_capacity( len as usize );
-
                     file.read_to_string( &mut contents )?;
-
                     Self::from_string_impl( Some( String::from( path ) ), contents )
                 }
 
-                pub fn from_string( contents: String ) -> io::Result<CharStream> {
-                    Self::from_string_impl( None, contents )
+                pub fn from_string( contents: String ) -> io::Result<CharStream>
+                { Self::from_string_impl( None, contents ) }
+
+                pub fn peek( &self ) -> Option<char>
+                {
+                    let mut inner = self.inner.borrow_mut();
+                    let opt = inner.stream.peek();
+
+                    match opt
+                    {
+                        Some( ch ) => Some( *ch ),
+                        None => None,
+                    }
                 }
 
-                fn from_string_impl( file: Option<String>, contents: String ) -> io::Result<CharStream> {
+                pub fn file( &self ) -> Option<String>
+                {
+                    let inner = self.inner.borrow();
+                    inner.file.clone()
+                }
+
+                pub fn line( &self ) -> usize
+                {
+                    let inner = self.inner.borrow();
+                    inner.line
+                }
+
+                pub fn col( &self ) -> usize
+                {
+                    let inner = self.inner.borrow();
+                    inner.col
+                }
+
+                fn from_string_impl( file: Option<String>, contents: String ) -> io::Result<CharStream>
+                {
                     let chars: Chars = unsafe { mem::transmute( contents.chars() ) };
                     let stream = chars.peekable();
-
-                    Ok( CharStream {
-                        inner: Rc::new( RefCell::new( Inner {
+                    Ok( CharStream
+                    {
+                        inner: Rc::new( RefCell::new( Inner
+                        {
                             file,
                             contents,
                             stream,
@@ -17505,72 +17571,52 @@ pub mod parsers
                     } )
                 }
 
-                pub fn peek( &self ) -> Option<char> {
-                    let mut inner = self.inner.borrow_mut();
-                    let opt = inner.stream.peek();
-
-                    match opt {
-                        Some( ch ) => Some( *ch ),
-                        None => None,
-                    }
-                }
-
-                pub fn file( &self ) -> Option<String> {
-                    let inner = self.inner.borrow();
-                    inner.file.clone()
-                }
-
-                pub fn line( &self ) -> usize {
-                    let inner = self.inner.borrow();
-                    inner.line
-                }
-
-                pub fn col( &self ) -> usize {
-                    let inner = self.inner.borrow();
-                    inner.col
-                }
-
-                fn set_line( &mut self, value: usize ) {
+                fn set_line( &mut self, value: usize )
+                {
                     let mut inner = self.inner.borrow_mut();
                     inner.line = value;
                 }
 
-                fn set_col( &mut self, value: usize ) {
+                fn set_col( &mut self, value: usize )
+                {
                     let mut inner = self.inner.borrow_mut();
                     inner.col = value;
                 }
             }
 
-            impl Iterator for CharStream {
+            impl Iterator for CharStream
+            {
                 type Item = char;
-
-                fn next( &mut self ) -> Option<Self::Item> {
-                    let opt = {
+                fn next( &mut self ) -> Option<Self::Item>
+                {
+                    let opt =
+                    {
                         let mut inner = self.inner.borrow_mut();
                         inner.stream.next()
                     };
 
-                    match opt {
-                        Some( ch ) => {
-                            if ch == '\n' {
+                    match opt
+                    {
+                        Some( ch ) =>
+                        {
+                            if ch == '\n'
+                            {
                                 let line = self.line();
                                 self.set_line( line + 1 );
                                 self.set_col( 1 );
-                            } else {
+                            }
+                            
+                            else
+                            {
                                 let col = self.col();
                                 self.set_col( col + 1 );
                             }
+                            
                             Some( ch )
                         }
+
                         None => None,
                     }
-                }
-            }
-
-            pub fn format_char( ch: char ) -> String {
-                match ch {
-                    '\n' => String::from( "\\n" ),
-                    ch => format!( "{}", ch ),
                 }
             }
         } 
@@ -17580,26 +17626,25 @@ pub mod parsers
             //! Module containing functions for formatting output of objects.
             use ::
             {
+                database::{ INDENT_STEP },
+                num::
+                {
+                    big::{ BigInt },
+                    rational::{ BigRational },
+                    traits::{ One },
+                },
+                parsers::
+                {
+                    over::{ Arr, Obj, Tup },
+                },
+                primitive::{ Type::{ self, * }, Value },
                 *,
             };
-            /*
-            
-            use crate::types::Type::*;
-            use crate::arr::Arr;
-            use crate::obj::Obj;
-            use crate::tup::Tup;
-            use crate::value::Value;
-            use crate::INDENT_STEP;
-            use num_int::BigInt;
-            use num_rational::BigRational;
-            use num_traits::One; */
+            /// Returns a `String` with the given amount of spaces.
+            pub fn indent( amount: usize ) -> String { " ".repeat( amount ) }
 
-            // Returns a `String` with the given amount of spaces.
-            fn indent( amount: usize ) -> String {
-                " ".repeat( amount )
-            }
-
-            fn get_char_map( ch: char ) -> Option<&'static str> {
+            fn get_char_map( ch: char ) -> Option<&'static str>
+            {
                 match ch {
                     '\\' => Some( "\\\\" ),
                     '\"' => Some( "\\\"" ),
@@ -17781,7 +17826,6 @@ pub mod parsers
                     if self.is_empty() && !self.has_parent()
                     {
                         if full { String::from( "{}" ) }
-                        
                         else { String::new() }
                     } 
 
@@ -17892,25 +17936,18 @@ pub mod parsers
             depth: usize,
         ) -> ParseResult<Value>
         {
-            // Check depth.
-            if depth > MAX_DEPTH {
-                return parse_err( stream.file(), MaxDepth( stream.line(), stream.col() ) );
-            }
-
-            // We must already be at a '{'.
+            if depth > MAX_DEPTH { return parse_err( stream.file(), MaxDepth( stream.line(), stream.col() ) ); }
+            
             let ch = stream.next().unwrap();
             assert_eq!( ch, '{' );
-
-            // Go to the first non-whitespace character, or error if there is none.
-            if !find_char( stream.clone() ) {
-                return parse_err( stream.file(), UnexpectedEnd( stream.line() ) );
-            }
+            
+            if !find_char( stream.clone() ) { return parse_err( stream.file(), UnexpectedEnd( stream.line() ) ); }
 
             let mut obj: ObjMap = HashMap::new();
             let mut parent = None;
-
-            // Parse field/value pairs.
-            while parse_field_value_pair( 
+            
+            while parse_field_value_pair
+            (
                 &mut stream,
                 &mut obj,
                 globals,
@@ -17920,7 +17957,8 @@ pub mod parsers
                 Some( '}' ),
             )? {}
 
-            let obj = match parent {
+            let obj = match parent
+            {
                 Some( parent ) => Obj::from_map_with_parent_unchecked( obj, parent ),
                 None => Obj::from_map_unchecked( obj ),
             };
@@ -18010,23 +18048,19 @@ pub mod parsers
         fn parse_arr_file( path: &str, mut included: &mut IncludedMap ) -> ParseResult<Arr>
         {
             let mut stream = CharStream::from_file( path )?;
-
             let obj: ObjMap = HashMap::new();
             let mut globals: GlobalMap = HashMap::new();
-
             let mut vec = Vec::new();
             let mut tcur = Type::Any;
             let mut has_any = true;
 
-            loop {
-                // Go to the first non-whitespace character, or error if there is none.
-                if !find_char( stream.clone() ) {
-                    break;
-                }
+            loop
+            {
+                if !find_char( stream.clone() ) { break; }
 
-                // At a non-whitespace character, parse value.
                 let ( value_line, value_col ) = ( stream.line(), stream.col() );
-                let value = parse_value( 
+                let value = parse_value
+                (
                     &mut stream,
                     &obj,
                     &mut globals,
@@ -18040,21 +18074,31 @@ pub mod parsers
 
                 let tnew = value.get_type();
 
-                if has_any {
-                    match Type::most_specific( &tcur, &tnew ) {
-                        Some(( t, any )) => {
+                if has_any
+                {
+                    match Type::most_specific( &tcur, &tnew )
+                    {
+                        Some(( t, any )) =>
+                        {
                             tcur = t;
                             has_any = any;
                         }
-                        None => {
-                            return parse_err( 
+                        
+                        None =>
+                        {
+                            return parse_err
+                            (
                                 stream.file(),
                                 ExpectedType( tcur, tnew, value_line, value_col ),
                             );
                         }
                     }
-                } else if tcur != tnew {
-                    return parse_err( 
+                }
+
+                else if tcur != tnew
+                {
+                    return parse_err
+                    (
                         stream.file(),
                         ExpectedType( tcur, tnew, value_line, value_col ),
                     );
@@ -18064,7 +18108,6 @@ pub mod parsers
             }
 
             let arr = Arr::from_vec_unchecked( vec, tcur );
-
             Ok( arr )
         }
         
@@ -18077,12 +18120,8 @@ pub mod parsers
             depth: usize,
         ) -> ParseResult<Value>
         {
-            // Check depth.
-            if depth > MAX_DEPTH {
-                return parse_err( stream.file(), MaxDepth( stream.line(), stream.col() ) );
-            }
-
-            // We must already be at a '['.
+            if depth > MAX_DEPTH { return parse_err( stream.file(), MaxDepth( stream.line(), stream.col() ) ); }
+            
             let ch = stream.next().unwrap();
             assert_eq!( ch, '[' );
 
@@ -18090,26 +18129,29 @@ pub mod parsers
             let mut tcur = Type::Any;
             let mut has_any = true;
 
-            loop {
-                // Go to the first non-whitespace character, or error if there is none.
-                if !find_char( stream.clone() ) {
-                    return parse_err( stream.file(), UnexpectedEnd( stream.line() ) );
-                }
+            loop
+            {
+                if !find_char( stream.clone() ) { return parse_err( stream.file(), UnexpectedEnd( stream.line() ) ); }
 
                 let peek = stream.peek().unwrap();
-                if peek == ']' {
+
+                if peek == ']'
+                {
                     let _ = stream.next();
                     break;
-                } else if is_end_delimiter( peek ) {
-                    return parse_err( 
+                }
+                else if is_end_delimiter( peek )
+                {
+                    return parse_err
+                    (
                         stream.file(),
                         InvalidClosingBracket( Some( ']' ), peek, stream.line(), stream.col() ),
                     );
                 }
-
-                // At a non-whitespace character, parse value.
+                
                 let ( value_line, value_col ) = ( stream.line(), stream.col() );
-                let value = parse_value( 
+                let value = parse_value
+                (
                     &mut stream,
                     obj,
                     &mut globals,
@@ -18123,21 +18165,31 @@ pub mod parsers
 
                 let tnew = value.get_type();
 
-                if has_any {
-                    match Type::most_specific( &tcur, &tnew ) {
-                        Some(( t, any )) => {
+                if has_any
+                {
+                    match Type::most_specific( &tcur, &tnew )
+                    {
+                        Some(( t, any )) =>
+                        {
                             tcur = t;
                             has_any = any;
                         }
-                        None => {
-                            return parse_err( 
+                        
+                        None =>
+                        {
+                            return parse_err
+                            (
                                 stream.file(),
                                 ExpectedType( tcur, tnew, value_line, value_col ),
                             );
                         }
                     }
-                } else if tcur != tnew {
-                    return parse_err( 
+                }
+                
+                else if tcur != tnew
+                {
+                    return parse_err
+                    (
                         stream.file(),
                         ExpectedType( tcur, tnew, value_line, value_col ),
                     );
@@ -18147,27 +18199,23 @@ pub mod parsers
             }
 
             let arr = Arr::from_vec_unchecked( vec, tcur );
-
             Ok( arr.into() )
         }
         
         fn parse_tup_file( path: &str, mut included: &mut IncludedMap ) -> ParseResult<Tup>
         {
             let mut stream = CharStream::from_file( path )?;
-
             let mut vec: Vec<Value> = Vec::new();
             let obj: ObjMap = HashMap::new();
             let mut globals: GlobalMap = HashMap::new();
 
-            loop {
-                // Go to the first non-whitespace character, or error if there is none.
-                if !find_char( stream.clone() ) {
-                    break;
-                }
-
-                // At a non-whitespace character, parse value.
+            loop
+            {
+                if !find_char( stream.clone() ) { break; }
+                
                 let ( value_line, value_col ) = ( stream.line(), stream.col() );
-                let value = parse_value( 
+                let value = parse_value
+                (
                     &mut stream,
                     &obj,
                     &mut globals,
@@ -18194,37 +18242,37 @@ pub mod parsers
             depth: usize,
         ) -> ParseResult<Value>
         {
-            // Check depth.
-            if depth > MAX_DEPTH {
-                return parse_err( stream.file(), MaxDepth( stream.line(), stream.col() ) );
-            }
-
-            // We must already be at a '('.
+            if depth > MAX_DEPTH { return parse_err( stream.file(), MaxDepth( stream.line(), stream.col() ) ); }
+            
             let ch = stream.next().unwrap();
             assert_eq!( ch, '(' );
 
             let mut vec = Vec::new();
 
-            loop {
-                // Go to the first non-whitespace character, or error if there is none.
-                if !find_char( stream.clone() ) {
-                    return parse_err( stream.file(), UnexpectedEnd( stream.line() ) );
-                }
+            loop
+            {
+                if !find_char( stream.clone() )
+                { return parse_err( stream.file(), UnexpectedEnd( stream.line() ) ); }
 
                 let peek = stream.peek().unwrap();
-                if peek == ')' {
+                
+                if peek == ')'
+                {
                     let _ = stream.next();
                     break;
-                } else if is_end_delimiter( peek ) {
-                    return parse_err( 
+                }
+                else if is_end_delimiter( peek )
+                {
+                    return parse_err
+                    (
                         stream.file(),
                         InvalidClosingBracket( Some( ')' ), peek, stream.line(), stream.col() ),
                     );
                 }
-
-                // At a non-whitespace character, parse value.
+                
                 let ( value_line, value_col ) = ( stream.line(), stream.col() );
-                let value = parse_value( 
+                let value = parse_value
+                (
                     &mut stream,
                     obj,
                     &mut globals,
@@ -18240,7 +18288,6 @@ pub mod parsers
             }
 
             let tup = Tup::from_vec( vec );
-
             Ok( tup.into() )
         }
         
@@ -18262,14 +18309,16 @@ pub mod parsers
                 field.push( ch );
             }
 
-            while let Some( ch ) = stream.next() {
-                match ch {
-                    ':' if !first => {
-                        break;
-                    }
+            while let Some( ch ) = stream.next()
+            {
+                match ch
+                {
+                    ':' if !first => { break; }
                     ch if Obj::is_valid_field_char( ch, first ) => field.push( ch ),
-                    ch => {
-                        return parse_err( 
+                    ch =>
+                    {
+                        return parse_err
+                        (
                             stream.file(),
                             InvalidFieldChar( ch, stream.line(), stream.col() - 1 ),
                         );
@@ -18278,16 +18327,15 @@ pub mod parsers
 
                 first = false;
             }
+            
+            match field.as_str()
+            {
+                _field_str if is_reserved( _field_str ) =>
+                { parse_err( stream.file(), InvalidFieldName( field.clone(), line, col ) ) }
 
-            // Check for invalid field names.
-            match field.as_str() {
-                _field_str if is_reserved( _field_str ) => {
-                    parse_err( stream.file(), InvalidFieldName( field.clone(), line, col ) )
-                }
-                "^" => Ok( ( field.clone(), false, true ) ),
-                bad if bad.starts_with( '^' ) => {
-                    parse_err( stream.file(), InvalidFieldName( field.clone(), line, col ) )
-                }
+                "^" => Ok( ( field.clone(), false, true ) ), bad if bad.starts_with( '^' ) =>
+                { parse_err( stream.file(), InvalidFieldName( field.clone(), line, col ) ) }
+
                 _ => Ok( ( field.clone(), is_global, false ) ),
             }
         }
@@ -18305,61 +18353,42 @@ pub mod parsers
             is_first: bool,
         ) -> ParseResult<Value>
         {
-            // Peek to determine what kind of value we'll be parsing.
-            let res = match stream.peek().unwrap() {
+            let res = match stream.peek().unwrap()
+            {
                 '"' => parse_str( &mut stream )?,
                 '\'' => parse_char( &mut stream )?,
                 '{' => parse_obj( &mut stream, &mut globals, included, depth + 1 )?,
                 '[' => parse_arr( &mut stream, obj, &mut globals, included, depth + 1 )?,
                 '(' => parse_tup( &mut stream, obj, &mut globals, included, depth + 1 )?,
-                '@' => parse_variable( 
-                    &mut stream,
-                    obj,
-                    globals,
-                    included,
-                    line,
-                    col,
-                    depth,
-                    cur_brace,
-                )?,
+                '@' => parse_variable( &mut stream, globals, included, line, col, depth, cur_brace )?,
                 '<' => parse_include( &mut stream, obj, &mut globals, &mut included, depth + 1 )?,
-                ch @ '+' | ch @ '-' => {
-                    parse_unary_op( &mut stream, obj, globals, included, depth, cur_brace, ch )?
-                }
+                ch @ '+' | ch @ '-' => parse_unary_op( &mut stream, obj, globals, included, depth, cur_brace, ch )?,
                 ch if is_numeric_char( ch ) => parse_numeric( &mut stream, line, col )?,
-                ch if Obj::is_valid_field_char( ch, true ) => parse_variable( 
-                    &mut stream,
-                    obj,
-                    globals,
-                    included,
-                    line,
-                    col,
-                    depth,
-                    cur_brace,
-                )?,
-                ch => {
-                    return parse_err( stream.file(), InvalidValueChar( ch, line, col ) );
-                }
-            };
+                ch if Obj::is_valid_field_char( ch, true ) => 
+                { parse_variable( &mut stream, obj, globals, included, line, col, depth, cur_brace )? }
 
-            // Process operations if this is the first value.
-            if is_first {
+                ch => { return parse_err( stream.file(), InvalidValueChar( ch, line, col ) ); }
+            };
+            
+            if is_first
+            {
                 let mut val_deque: VecDeque<( Value, usize, usize )> = VecDeque::new();
                 let mut op_deque: VecDeque<char> = VecDeque::new();
                 val_deque.push_back( ( res, line, col ) );
 
-                loop {
-                    match stream.peek() {
-                        Some( ch ) if is_operator( ch ) => {
+                loop
+                {
+                    match stream.peek()
+                    {
+                        Some( ch ) if is_operator( ch ) =>
+                        {
                             let _ = stream.next();
-                            if stream.peek().is_none() {
-                                return parse_err( stream.file(), UnexpectedEnd( stream.line() ) );
-                            }
+                            if stream.peek().is_none()
+                            { return parse_err( stream.file(), UnexpectedEnd( stream.line() ) ); }
 
                             let ( line2, col2 ) = ( stream.line(), stream.col() );
-
-                            // Parse another value.
-                            let val2 = parse_value( 
+                            let val2 = parse_value
+                            (
                                 &mut stream,
                                 obj,
                                 &mut globals,
@@ -18371,11 +18400,15 @@ pub mod parsers
                                 false,
                             )?;
 
-                            if is_priority_operator( ch ) {
+                            if is_priority_operator( ch )
+                            {
                                 let ( val1, line1, col1 ) = val_deque.pop_back().unwrap();
                                 let res = binary_op_on_values( stream, val1, val2, ch, line2, col2 )?;
                                 val_deque.push_back( ( res, line1, col1 ) );
-                            } else {
+                            }
+                            
+                            else
+                            {
                                 val_deque.push_back( ( val2, line2, col2 ) );
                                 op_deque.push_back( ch );
                             }
@@ -18383,14 +18416,15 @@ pub mod parsers
                         _ => break,
                     }
                 }
-
-                // Check for valid characters after the value.
+                
                 check_value_end( stream, cur_brace )?;
-
                 let ( mut val1, _, _ ) = val_deque.pop_front().unwrap();
-                while !op_deque.is_empty() {
+                
+                while !op_deque.is_empty()
+                {
                     let ( val2, line2, col2 ) = val_deque.pop_front().unwrap();
-                    val1 = binary_op_on_values( 
+                    val1 = binary_op_on_values
+                    (
                         stream,
                         val1,
                         val2,
@@ -18399,10 +18433,10 @@ pub mod parsers
                         col2,
                     )?;
                 }
+
                 Ok( val1 )
-            } else {
-                Ok( res )
             }
+            else { Ok( res ) }
         }
 
         fn parse_unary_op
@@ -18419,9 +18453,10 @@ pub mod parsers
             let _ = stream.next();
             let line = stream.line();
             let col = stream.col();
-
-            let res = match stream.peek() {
-                Some( _ ) => parse_value( 
+            let res = match stream.peek()
+            {
+                Some( _ ) => parse_value
+                (
                     &mut stream,
                     obj,
                     &mut globals,
@@ -18444,79 +18479,53 @@ pub mod parsers
             let mut dec = false;
             let mut under = false;
 
-            while let Some( ch ) = stream.peek() {
-                match ch {
+            while let Some( ch ) = stream.peek()
+            {
+                match ch
+                {
                     ch if is_value_end_char( ch ) => break,
-                    ch if is_digit( ch ) => {
-                        if !dec {
-                            s1.push( ch );
-                        } else {
-                            s2.push( ch );
-                        }
+                    ch if is_digit( ch ) =>
+                    {
+                        if !dec { s1.push( ch ); }
+                        else { s2.push( ch ); }
                     }
-                    '.' | ',' => {
-                        if !dec {
-                            dec = true;
-                        } else {
-                            return parse_err( 
-                                stream.file(),
-                                InvalidValueChar( ch, stream.line(), stream.col() ),
-                            );
-                        }
+
+                    '.' | ',' =>
+                    {
+                        if !dec { dec = true; }
+                        else { return parse_err(stream.file(), InvalidValueChar(ch, stream.line(), stream.col())); }
                     }
-                    '_' => {
-                        if !under {
-                            under = true;
-                        } else {
-                            return parse_err( 
-                                stream.file(),
-                                InvalidValueChar( ch, stream.line(), stream.col() ),
-                            );
-                        }
+
+                    '_' =>
+                    {
+                        if !under { under = true; }
+                        else { return parse_err(stream.file(), InvalidValueChar(ch, stream.line(), stream.col())); }
                     }
-                    _ => {
-                        return parse_err( 
-                            stream.file(),
-                            InvalidValueChar( ch, stream.line(), stream.col() ),
-                        );
-                    }
+
+                    _ => { return parse_err( stream.file(), InvalidValueChar( ch, stream.line(), stream.col() ) ); }
                 }
 
-                if ch != '_' {
-                    under = false;
-                }
+                if ch != '_' { under = false; }
 
                 let _ = stream.next();
             }
 
-            if dec {
-                // Parse a Frac from a number with a decimal.
-                if s1.is_empty() && s2.is_empty() {
-                    return parse_err( stream.file(), InvalidNumeric( line, col ) );
-                }
+            if dec
+            {
+                if s1.is_empty() && s2.is_empty() { return parse_err( stream.file(), InvalidNumeric( line, col ) ); }
 
-                let whole: BigInt = if s1.is_empty() {
-                    0u8.into()
-                } else {
-                    s1.parse()?
-                };
-
-                // Remove trailing zeros.
+                let whole: BigInt = if s1.is_empty() { 0u8.into() } else { s1.parse()? };
                 let s2 = s2.trim_end_matches( '0' );
-
-                let ( decimal, dec_len ): ( BigInt, usize ) = if s2.is_empty() {
-                    ( 0u8.into(), 1 )
-                } else {
-                    ( s2.parse()?, s2.len() )
-                };
+                let ( decimal, dec_len ): ( BigInt, usize ) = if s2.is_empty() { ( 0u8.into(), 1 ) } 
+                else { ( s2.parse()?, s2.len() ) };
 
                 let f = frac_from_whole_and_dec( whole, decimal, dec_len );
                 Ok( f.into() )
-            } else {
-                // Parse an Int.
-                if s1.is_empty() {
-                    return parse_err( stream.file(), InvalidNumeric( line, col ) );
-                }
+            }
+
+            else
+            {
+                if s1.is_empty() { return parse_err( stream.file(), InvalidNumeric( line, col ) ); }
 
                 let i: BigInt = s1.parse()?;
                 Ok( i.into() )
@@ -18539,23 +18548,30 @@ pub mod parsers
             let mut is_global = false;
             let mut dot = false;
             let mut dot_global = false;
-
             let ch = stream.peek().unwrap();
-            if ch == '@' {
+
+            if ch == '@'
+            {
                 let ch = stream.next().unwrap();
                 is_global = true;
                 var.push( ch );
             }
 
-            while let Some( ch ) = stream.peek() {
-                match ch {
-                    '.' => {
+            while let Some( ch ) = stream.peek()
+            {
+                match ch
+                {
+                    '.' =>
+                    {
                         let _ = stream.next();
-                        match stream.peek() {
+                        match stream.peek()
+                        {
                             Some( '@' ) => dot_global = true,
                             Some( ch ) if Obj::is_valid_field_char( ch, true ) || is_numeric_char( ch ) => (),
-                            Some( ch ) => {
-                                return parse_err( 
+                            Some( ch ) =>
+                            {
+                                return parse_err
+                                (
                                     stream.file(),
                                     InvalidValueChar( ch, stream.line(), stream.col() ),
                                 );
@@ -18567,12 +18583,16 @@ pub mod parsers
                         break;
                     }
                     ch if is_value_end_char( ch ) => break,
-                    ch if Obj::is_valid_field_char( ch, false ) => {
+                    ch if Obj::is_valid_field_char( ch, false ) =>
+                    {
                         let _ = stream.next();
                         var.push( ch );
                     }
-                    ch => {
-                        return parse_err( 
+
+                    ch =>
+                    {
+                        return parse_err
+                        (
                             stream.file(),
                             InvalidValueChar( ch, stream.line(), stream.col() ),
                         );
@@ -18580,32 +18600,35 @@ pub mod parsers
                 }
             }
 
-            let mut value = match var.as_str() {
+            let mut value = match var.as_str()
+            {
                 "null" => Value::Null,
                 "true" => Value::Bool( true ),
                 "false" => Value::Bool( false ),
-
                 "Obj" => Value::Obj( OBJ_SENTINEL.clone() ),
                 "Str" => Value::Obj( STR_SENTINEL.clone() ),
                 "Arr" => Value::Obj( ARR_SENTINEL.clone() ),
                 "Tup" => Value::Obj( TUP_SENTINEL.clone() ),
-
                 var @ "@" => return parse_err( stream.file(), InvalidValue( var.into(), line, col ) ),
-                var if is_global => {
-                    // Global variable, get value from globals map.
-                    match globals.get( var ) {
+                var if is_global =>
+                {
+                    match globals.get( var )
+                    {
                         Some( value ) => value.clone(),
-                        None => {
+                        None =>
+                        {
                             let var = String::from( var );
                             return parse_err( stream.file(), GlobalNotFound( var, line, col ) );
                         }
                     }
                 }
-                var => {
-                    // Regular variable, get value from the current Obj.
-                    match obj.get( var ) {
+                var =>
+                {
+                    match obj.get( var ) 
+                    {
                         Some( value ) => value.clone(),
-                        None => {
+                        None =>
+                        {
                             let var = String::from( var );
                             return parse_err( stream.file(), VariableNotFound( var, line, col ) );
                         }
@@ -18613,11 +18636,15 @@ pub mod parsers
                 }
             };
 
-            if dot {
-                value = match value {
-                    Value::Arr( arr ) => {
+            if dot
+            {
+                value = match value
+                {
+                    Value::Arr( arr ) =>
+                    {
                         let ( line, col ) = ( stream.line(), stream.col() );
-                        let value = parse_value( 
+                        let value = parse_value
+                        (
                             &mut stream,
                             obj,
                             &mut globals,
@@ -18629,24 +18656,27 @@ pub mod parsers
                             false,
                         )?;
 
-                        match value {
-                            Value::Int( int ) => match int.to_usize() {
+                        match value
+                        {
+                            Value::Int( int ) => match int.to_usize()
+                            {
                                 Some( index ) => arr
-                                    .get( index )
-                                    .map_err( |e| ParseError::from_over( &e, stream.file(), line, col ) )?,
+                                .get( index )
+                                .map_err( |e| ParseError::from_over( &e, stream.file(), line, col ) )?,
                                 None => return parse_err( stream.file(), InvalidIndex( int, line, col ) ),
                             },
-                            _ => {
-                                return parse_err( 
-                                    stream.file(),
-                                    ExpectedType( Type::Int, value.get_type(), line, col ),
-                                );
+                            _ =>
+                            {
+                                return parse_err(stream.file(), ExpectedType(Type::Int, value.get_type(), line, col));
                             }
                         }
                     }
-                    Value::Tup( tup ) => {
+
+                    Value::Tup( tup ) =>
+                    {
                         let ( line, col ) = ( stream.line(), stream.col() );
-                        let value = parse_value( 
+                        let value = parse_value
+                        (
                             &mut stream,
                             obj,
                             &mut globals,
@@ -18658,29 +18688,35 @@ pub mod parsers
                             false,
                         )?;
 
-                        match value {
-                            Value::Int( int ) => match int.to_usize() {
+                        match value
+                        {
+                            Value::Int( int ) => match int.to_usize()
+                            {
                                 Some( index ) => tup
-                                    .get( index )
-                                    .map_err( |e| ParseError::from_over( &e, stream.file(), line, col ) )?,
+                                .get( index )
+                                .map_err( |e| ParseError::from_over( &e, stream.file(), line, col ) )?,
                                 None => return parse_err( stream.file(), InvalidIndex( int, line, col ) ),
                             },
-                            _ => {
-                                return parse_err( 
+
+                            _ =>
+                            {
+                                return parse_err
+                                ( 
                                     stream.file(),
                                     ExpectedType( Type::Int, value.get_type(), line, col ),
                                 );
                             }
                         }
                     }
-                    Value::Obj( obj ) => {
+
+                    Value::Obj( obj ) =>
+                    {
                         let ( line, col ) = ( stream.line(), stream.col() );
 
-                        if dot_global {
-                            return parse_err( stream.file(), InvalidValueChar( '@', line, col ) );
-                        }
+                        if dot_global { return parse_err( stream.file(), InvalidValueChar( '@', line, col ) ); }
 
-                        parse_variable( 
+                        parse_variable
+                        (
                             &mut stream,
                             obj.map_ref(),
                             globals,
@@ -18691,6 +18727,7 @@ pub mod parsers
                             cur_brace,
                         )?
                     }
+
                     _ => return parse_err( stream.file(), InvalidDot( value.get_type(), line, col ) ),
                 }
             }
@@ -18703,10 +18740,13 @@ pub mod parsers
             let ch = stream.next().unwrap();
             assert_eq!( ch, '\'' );
 
-            let ( escape, mut ch ) = match stream.next() {
+            let ( escape, mut ch ) = match stream.next()
+            {
                 Some( '\\' ) => ( true, '\0' ),
-                Some( ch ) if ch == '\n' || ch == '\r' || ch == '\t' => {
-                    return parse_err( 
+                Some( ch ) if ch == '\n' || ch == '\r' || ch == '\t' =>
+                {
+                    return parse_err
+                    (
                         stream.file(),
                         InvalidValueChar( ch, stream.line(), stream.col() - 1 ),
                     );
@@ -18715,12 +18755,17 @@ pub mod parsers
                 None => return parse_err( stream.file(), UnexpectedEnd( stream.line() ) ),
             };
 
-            if escape {
-                ch = match stream.next() {
-                    Some( ch ) => match get::escape_char( ch ) {
+            if escape
+            {
+                ch = match stream.next()
+                {
+                    Some( ch ) => match get::escape_char( ch )
+                    {
                         Some( ch ) => ch,
-                        None => {
-                            return parse_err( 
+                        None =>
+                        {
+                            return parse_err
+                            (
                                 stream.file(),
                                 InvalidEscapeChar( ch, stream.line(), stream.col() - 1 ),
                             );
@@ -18730,10 +18775,13 @@ pub mod parsers
                 }
             }
 
-            match stream.next() {
+            match stream.next()
+            {
                 Some( '\'' ) => (),
-                Some( ch ) => {
-                    return parse_err( 
+                Some( ch ) =>
+                {
+                    return parse_err
+                    (
                         stream.file(),
                         InvalidValueChar( ch, stream.line(), stream.col() - 1 ),
                     );
@@ -18753,26 +18801,37 @@ pub mod parsers
         fn parse_str( stream: &mut CharStream ) -> ParseResult<Value>
         {
             let ch = stream.next().unwrap();
+            
             assert_eq!( ch, '"' );
 
             let mut s = String::new();
             let mut escape = false;
 
-            loop {
-                match stream.next() {
-                    Some( ch ) => {
-                        if escape {
-                            match get::escape_char( ch ) {
+            loop
+            {
+                match stream.next()
+                {
+                    Some( ch ) =>
+                    {
+                        if escape
+                        {
+                            match get::escape_char( ch )
+                            {
                                 Some( ch ) => s.push( ch ),
-                                None => {
-                                    return parse_err( 
+                                None =>
+                                {
+                                    return parse_err
+                                    (
                                         stream.file(),
                                         InvalidEscapeChar( ch, stream.line(), stream.col() - 1 ),
                                     );
                                 }
                             }
                             escape = false;
-                        } else {
+                        }
+                        
+                        else
+                        {
                             match ch {
                                 '"' => break,
                                 '\\' => escape = true,
@@ -18780,13 +18839,12 @@ pub mod parsers
                             }
                         }
                     }
+
                     None => return parse_err( stream.file(), UnexpectedEnd( stream.line() ) ),
                 }
             }
-
-            // Replace \r\n line endings with \n for consistency in internal handling.
+            
             let s = s.replace( "\r\n", "\n" );
-
             Ok( s.into() )
         }
 
@@ -18799,28 +18857,25 @@ pub mod parsers
             depth: usize,
         ) -> ParseResult<Value>
         {
-            enum IncludeType {
+            enum IncludeType
+            {
                 Obj,
                 Str,
                 Arr,
                 Tup,
             }
-
-            // Check depth.
-            if depth > MAX_DEPTH {
-                return parse_err( stream.file(), MaxDepth( stream.line(), stream.col() ) );
-            }
+            
+            if depth > MAX_DEPTH { return parse_err( stream.file(), MaxDepth( stream.line(), stream.col() ) ); }
 
             let ch = stream.next().unwrap();
+            
             assert_eq!( ch, '<' );
-
-            // Go to the next non-whitespace character, or error if there is none.
-            if !find_char( stream.clone() ) {
-                return parse_err( stream.file(), UnexpectedEnd( stream.line() ) );
-            }
+            
+            if !find_char( stream.clone() ) { return parse_err( stream.file(), UnexpectedEnd( stream.line() ) ); }
 
             let ( mut line, mut col ) = ( stream.line(), stream.col() );
-            let mut value = parse_value( 
+            let mut value = parse_value
+            (
                 &mut stream,
                 obj,
                 &mut globals,
@@ -18831,32 +18886,32 @@ pub mod parsers
                 Some( '>' ),
                 true,
             )?;
-
-            let mut include_type = IncludeType::Obj; // Default include type if no token is present.
-            let mut parse_again = true; // True if an include token was found.
-            match value {
+            let mut include_type = IncludeType::Obj;
+            let mut parse_again = true;
+            match value
+            {
                 Value::Obj( ref obj ) if obj.ptr_eq( &OBJ_SENTINEL ) => include_type = IncludeType::Obj,
                 Value::Obj( ref obj ) if obj.ptr_eq( &STR_SENTINEL ) => include_type = IncludeType::Str,
                 Value::Obj( ref obj ) if obj.ptr_eq( &ARR_SENTINEL ) => include_type = IncludeType::Arr,
                 Value::Obj( ref obj ) if obj.ptr_eq( &TUP_SENTINEL ) => include_type = IncludeType::Tup,
                 Value::Str( _ ) => parse_again = false,
-                _ => {
-                    return parse_err( 
+                _ =>
+                {
+                    return parse_err
+                    (
                         stream.file(),
                         InvalidIncludeToken( value.get_type(), line, col ),
                     );
                 }
             }
 
-            if parse_again {
-                // Go to the next non-whitespace character, or error if there is none.
-                if !find_char( stream.clone() ) {
-                    return parse_err( stream.file(), UnexpectedEnd( stream.line() ) );
-                }
-
+            if parse_again
+            {
+                if !find_char( stream.clone() ) { return parse_err( stream.file(), UnexpectedEnd( stream.line() ) ); }
                 line = stream.line();
                 col = stream.col();
-                value = parse_value( 
+                value = parse_value
+                (
                     &mut stream,
                     obj,
                     &mut globals,
@@ -18868,93 +18923,93 @@ pub mod parsers
                     true,
                 )?;
             }
+            
+            if !find_char( stream.clone() ) { return parse_err( stream.file(), UnexpectedEnd( stream.line() ) ); }
 
-            // Go to the next non-whitespace character, or error if there is none.
-            if !find_char( stream.clone() ) {
-                return parse_err( stream.file(), UnexpectedEnd( stream.line() ) );
-            }
-
-            match stream.next().unwrap() {
+            match stream.next().unwrap()
+            {
                 '>' => (),
-                ch => {
-                    return parse_err( 
+                ch =>
+                {
+                    return parse_err
+                    (
                         stream.file(),
                         InvalidClosingBracket( Some( '>' ), ch, stream.line(), stream.col() - 1 ),
                     );
                 }
             }
-
-            // Get the full path of the include file.
-            let include_file = match value {
+            
+            let include_file = match value
+            {
                 Value::Str( s ) => s,
-                _ => {
-                    return parse_err( 
+                _ =>
+                {
+                    return parse_err
+                    (
                         stream.file(),
                         ExpectedType( Type::Str, value.get_type(), line, col ),
                     );
                 }
             };
 
-            let pathbuf = match stream.file().as_ref() {
-                Some( file ) => Path::new( file )
-                    .parent()
-                    .unwrap()
-                    .join( Path::new( &include_file ) ),
+            let pathbuf = match stream.file().as_ref()
+            {
+                Some( file ) => Path::new( file ).parent().unwrap().join( Path::new( &include_file ) ),
                 None => Path::new( &include_file ).to_path_buf(),
             };
             let path = pathbuf.as_path();
-            if !path.is_file() {
-                return parse_err( stream.file(), InvalidIncludePath( include_file, line, col ) );
-            }
-
-            // Get the include file as a path relative to the current working directory.
-            let path_str = match path.to_str() {
+            
+            if !path.is_file() { return parse_err( stream.file(), InvalidIncludePath( include_file, line, col ) ); }
+            
+            let path_str = match path.to_str()
+            {
                 Some( path ) => path,
                 None => return parse_err( stream.file(), InvalidIncludePath( include_file, line, col ) ),
             };
-
-            // Get the include file as an absolute path.
-            let path = match path.canonicalize() {
+            
+            let path = match path.canonicalize()
+            {
                 Ok( path ) => path,
                 Err( _ ) => return parse_err( stream.file(), InvalidIncludePath( include_file, line, col ) ),
             };
-            let full_path_str = match path.to_str() {
+
+            let full_path_str = match path.to_str()
+            {
                 Some( path ) => path,
                 None => return parse_err( stream.file(), InvalidIncludePath( include_file, line, col ) ),
             };
-
-            // Prevent cyclic includes by temporarily storing the current file path.
-            let storing = if let Some( file ) = stream.file() {
+            
+            let storing = if let Some( file ) = stream.file()
+            {
                 let full_file = String::from( Path::new( &file ).canonicalize().unwrap().to_str().unwrap() );
                 included.1.insert( full_file.clone() );
                 Some( full_file )
-            } else {
-                None
-            };
-            if included.1.contains( full_path_str ) {
-                return parse_err( stream.file(), CyclicInclude( include_file, line, col ) );
             }
+            else { None };
 
-            // Get either the tracked value or parse it if it's our first time seeing the include.
-            let value = if included.0.contains_key( full_path_str ) {
+            if included.1.contains( full_path_str )
+            { return parse_err( stream.file(), CyclicInclude( include_file, line, col ) ); }
+            
+            let value = if included.0.contains_key( full_path_str )
+            {
                 let value = &included.0[full_path_str];
                 value.clone()
-            } else {
-                let value: Value = match include_type {
+            }
+            else
+            {
+                let value: Value = match include_type
+                {
                     IncludeType::Obj => parse_obj_file_includes( path_str, included )?.into(),
                     IncludeType::Str => parse_str_file( path_str )?.into(),
                     IncludeType::Arr => parse_arr_file( path_str, included )?.into(),
                     IncludeType::Tup => parse_tup_file( path_str, included )?.into(),
                 };
-                // Use full path as included key.
+                
                 included.0.insert( full_path_str.into(), value.clone() );
                 value
             };
-
-            // Remove the stored file path.
-            if let Some( file ) = storing {
-                included.1.remove( &file );
-            }
+            
+            if let Some( file ) = storing { included.1.remove( &file ); }
 
             Ok( value )
         }
@@ -18970,8 +19025,8 @@ pub mod parsers
         {
 
             let t = val.get_type();
-
-            Ok( match op {
+            let ret = match op
+            {
                 '+' => match t {
                     Int | Frac => val,
                     _ => return parse_err( stream.file(), UnaryOperatorError( t, op, line, col ) ),
@@ -18982,7 +19037,9 @@ pub mod parsers
                     _ => return parse_err( stream.file(), UnaryOperatorError( t, op, line, col ) ),
                 },
                 _ => return parse_err( stream.file(), UnaryOperatorError( t, op, line, col ) ),
-            } )
+            };
+
+            Ok( ret )
         }
         
         fn binary_op_on_values
@@ -19056,7 +19113,7 @@ pub mod parsers
                                     // Get the inner type.
                                     let arr = if let Arr( ref t ) = t {
                                         // Because we know the type already, we can safely use `_unchecked`.
-                                        arr::Arr::from_vec_unchecked( vec, t.deref().clone() )
+                                        arrays::Arr::from_vec_unchecked( vec, t.deref().clone() )
                                     } else {
                                         panic!( "Logic error" )
                                     };
@@ -20222,6 +20279,17 @@ pub mod process
             Ok( ( fds.assume_init()[0], fds.assume_init()[1] ) )
         }
     }
+    /*
+    fn proc_has_terminal(...) -> bool */
+    fn has_terminal() -> bool
+    {
+        unsafe
+        {
+            let tgid = libc::tcgetpgrp( 0 );
+            let pgid = libc::getpgid( 0 );
+            tgid == pgid
+        }
+    }
 }
 /// A module for working with processes.
 pub mod ptr
@@ -20458,7 +20526,7 @@ pub mod shell
         pub fn new() -> Shell {
             let uuid = Uuid::new_v4().as_hyphenated().to_string();
             let current_dir = tools::get_current_dir();
-            let has_terminal = proc_has_terminal();
+            let has_terminal = process::has_terminal();
             let ( session_id, _ ) = uuid.split_at( 13 );
             Shell
             {
@@ -21034,16 +21102,10 @@ pub mod shell
         }
     }
 
-    fn do_command_substitution( sh:&mut Shell, tokens:&mut types::Tokens )
-            {
-        do_command_substitution_for_dot( sh, tokens );
-        do_command_substitution_for_dollar( sh, tokens );
-    }
-
     pub fn do_expansion( sh:&mut Shell, tokens:&mut types::Tokens )
-            {
+    {
         let line = parsers::line::tokens_to_line( tokens );
-        if tools::is_arithmetic( &line ) { return; }
+        if is::arithmetic( &line ) { return; }
 
         if tokens.len() >= 2 && tokens[0].1 == "export" && tokens[1].1.starts_with( "PROMPT=" ) { return; }
 
@@ -21063,12 +21125,10 @@ pub mod shell
         regex::replace_all( &line_new, r"( ?P<NEWLINE>\n )>> ", "$NEWLINE" )
     }
 
-    fn proc_has_terminal() -> bool {
-        unsafe {
-            let tgid = libc::tcgetpgrp( 0 );
-            let pgid = libc::getpgid( 0 );
-            tgid == pgid
-        }
+    fn do_command_substitution( sh:&mut Shell, tokens:&mut types::Tokens )
+    {
+        do_command_substitution_for_dot( sh, tokens );
+        do_command_substitution_for_dollar( sh, tokens );
     }
 }
 /// Send and receive signals to processes
@@ -22102,6 +22162,40 @@ pub mod str
 pub mod string
 {
     pub use std::string::{ * };
+    /*
+    pub fn wrap_sep_string(...) -> String */
+    pub fn wrap_separator(sep: &str, s: &str) -> String
+    {
+        let mut _token = String::new();
+        let mut met_subsep = false;
+        let mut previous_subsep = 'N';
+
+        for c in s.chars()
+        {
+            if sep.is_empty() && (c == '`' || c == '"')
+            {
+                if !met_subsep
+                {
+                    met_subsep = true;
+                    previous_subsep = c;
+                }
+                
+                else if c == previous_subsep
+                {
+                    met_subsep = false;
+                    previous_subsep = 'N';
+                }
+            }
+
+            if c.to_string() == sep { _token.push('\\'); }
+            
+            if c == ' ' && sep.is_empty() && !met_subsep { _token.push('\\'); }
+            
+            _token.push(c);
+        }
+
+        format!("{}{}{}", sep, _token, sep)
+    }
 }
 /// Useful synchronization primitives.
 pub mod sync
@@ -22763,12 +22857,447 @@ pub mod system
     
     pub mod signal
     {
+        //! Contains types relating to operating system signals
+        use ::
+        {
+            iter::{ FromIterator },
+            *,
+        };
 
+        pub const NUM_SIGNALS: u8 = 6;
+
+        macro_rules! impl_op
+        {
+            ( $tr:ident , $tr_meth:ident , $method:ident ) =>
+            {
+                impl ops::$tr for SignalSet {
+                    type Output = SignalSet;
+
+                    fn $tr_meth(self, rhs: SignalSet) -> SignalSet {
+                        self.$method(rhs)
+                    }
+                }
+            }
+        }
+
+        macro_rules! impl_mut_op
+        {
+            ( $tr:ident , $tr_meth:ident , $method:ident ) => {
+                impl ops::$tr for SignalSet {
+                    fn $tr_meth(&mut self, rhs: SignalSet) {
+                        *self = self.$method(rhs);
+                    }
+                }
+            }
+        }
+
+        macro_rules! impl_unary_op
+        {
+            ( $tr:ident , $tr_meth:ident , $method:ident ) => {
+                impl ops::$tr for SignalSet {
+                    type Output = SignalSet;
+
+                    fn $tr_meth(self) -> SignalSet {
+                        self.$method()
+                    }
+                }
+            }
+        }
+        /// Signal received through a terminal device
+        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+        pub enum Signal
+        {
+            /// Break signal (`CTRL_BREAK_EVENT`); Windows only
+            Break,
+            /// Continue signal (`SIGCONT`); Unix only
+            Continue,
+            /// Interrupt signal (`SIGINT` on Unix, `CTRL_C_EVENT` on Windows)
+            Interrupt,
+            /// Terminal window resize (`SIGWINCH` on Unix, `WINDOW_BUFFER_SIZE_EVENT` on Windows).
+            Resize,
+            /// Suspend signal (`SIGTSTP`); Unix only
+            Suspend,
+            /// Quit signal (`SIGQUIT`); Unix only
+            Quit,
+        }
+
+        impl Signal
+        {
+            fn as_bit(&self) -> u8 { 1 << (*self as u8) }
+            fn all_bits() -> u8 { (1 << NUM_SIGNALS) - 1 }
+        }
+
+        impl ops::BitOr for Signal
+        {
+            type Output = SignalSet;
+            fn bitor(self, rhs: Signal) -> SignalSet
+            {
+                let mut set = SignalSet::new();
+                set.insert(self);
+                set.insert(rhs);
+                set
+            }
+        }
+
+        impl ops::Not for Signal
+        {
+            type Output = SignalSet;
+
+            fn not(self) -> SignalSet { !SignalSet::from(self) }
+        }
+
+        /// Represents a set of `Signal` values
+        #[derive(Copy, Clone, Default, Eq, PartialEq)]
+        pub struct SignalSet(u8);
+
+        impl SignalSet
+        {
+            /// Returns an empty `SignalSet`.
+            pub fn new() -> SignalSet { SignalSet(0) }
+            /// Returns a `SignalSet` containing all available signals.
+            pub fn all() -> SignalSet { SignalSet(Signal::all_bits()) }
+            /// Returns whether this set contains the given `Signal`.
+            pub fn contains(&self, sig: Signal) -> bool { self.0 & sig.as_bit() != 0 }
+            /// Returns whether this set contains all signals present in another set.
+            pub fn contains_all(&self, other: SignalSet) -> bool { self.0 & other.0 == other.0 }
+            /// Returns whether this set contains any signals present in another set.
+            pub fn intersects(&self, other: SignalSet) -> bool { self.0 & other.0 != 0 }
+            /// Returns whether this set contains any signals.
+            pub fn is_empty(&self) -> bool { self.0 == 0 }
+            /// Inserts a `Signal` into this set.
+            pub fn insert(&mut self, sig: Signal) { self.0 |= sig.as_bit(); }
+            /// Removes a `Signal` from this set.
+            pub fn remove(&mut self, sig: Signal) { self.0 &= !sig.as_bit(); }
+            /// Sets whether this set contains the given `Signal`.
+            pub fn set(&mut self, sig: Signal, set: bool) { if set { self.insert(sig); } else { self.remove(sig); } }
+            /// Returns the difference of two sets.
+            pub fn difference(&self, other: SignalSet) -> SignalSet { SignalSet(self.0 & !other.0) }
+            /// Returns the symmetric difference of two sets.
+            pub fn symmetric_difference(&self, other: SignalSet) -> SignalSet { SignalSet(self.0 ^ other.0) }
+            /// Returns the intersection of two sets.
+            pub fn intersection(&self, other: SignalSet) -> SignalSet { SignalSet(self.0 & other.0) }
+            /// Returns the union of two sets.
+            pub fn union(&self, other: SignalSet) -> SignalSet { SignalSet(self.0 | other.0) }
+            /// Returns the inverse of the set.
+            pub fn inverse(&self) -> SignalSet { SignalSet(!self.0 & Signal::all_bits()) }
+        }
+
+        impl fmt::Debug for SignalSet
+        {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+            {
+                const SIGNALS: &[Signal] = &[
+                    Signal::Break,
+                    Signal::Continue,
+                    Signal::Interrupt,
+                    Signal::Resize,
+                    Signal::Suspend,
+                    Signal::Quit,
+                ];
+
+                let mut first = true;
+
+                f.write_str("SignalSet(")?;
+
+                for &sig in SIGNALS {
+                    if self.contains(sig) {
+                        if !first {
+                            f.write_str(" | ")?;
+                        }
+
+                        write!(f, "{:?}", sig)?;
+                        first = false;
+                    }
+                }
+
+                f.write_str(")")
+            }
+        }
+
+        impl From<Signal> for SignalSet
+        {
+            fn from(sig: Signal) -> SignalSet
+            {
+                let mut set = SignalSet::new();
+                set.insert(sig);
+                set
+            }
+        }
+
+        impl Extend<Signal> for SignalSet
+        {
+            fn extend<I: IntoIterator<Item=Signal>>(&mut self, iter: I)
+            {
+                for sig in iter {
+                    self.insert(sig);
+                }
+            }
+        }
+
+        impl FromIterator<Signal> for SignalSet
+        {
+            fn from_iter<I: IntoIterator<Item=Signal>>(iter: I) -> SignalSet
+            {
+                let mut set = SignalSet::new();
+                set.extend(iter);
+                set
+            }
+        }
+
+        impl_op!{ BitAnd, bitand, intersection }
+        impl_op!{ BitOr, bitor, union }
+        impl_op!{ BitXor, bitxor, symmetric_difference }
+        impl_op!{ Sub, sub, difference }
+
+        impl_unary_op!{ Not, not, inverse }
+
+        impl_mut_op!{ BitAndAssign, bitand_assign, intersection }
+        impl_mut_op!{ BitOrAssign, bitor_assign, union }
+        impl_mut_op!{ BitXorAssign, bitxor_assign, symmetric_difference }
+        impl_mut_op!{ SubAssign, sub_assign, difference }
     }
     
     pub mod terminal
     {
+        //! Provides an interface to terminal devices
+        use ::
+        {
+            system::
+            {
+                signal::{ Signal, SignalSet },
+            },
+            *,
+        };
+        /*
+        use std::fmt;
+        use std::io;
+        use std::sync::{LockResult, TryLockResult};
+        use std::time::Duration;
 
+        use crate::priv_util::{map_lock_result, map_try_lock_result};
+        use crate::sys;
+        */
+        /// Represents a keyboard key press event
+        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+        pub enum Key
+        {
+            /// Backspace
+            Backspace,
+            /// Enter
+            Enter,
+            /// Escape
+            Escape,
+            /// Tab
+            Tab,
+            /// Up arrow
+            Up,
+            /// Down arrow
+            Down,
+            /// Left arrow
+            Left,
+            /// Right arrow
+            Right,
+            /// Delete
+            Delete,
+            /// Insert
+            Insert,
+            /// Home
+            Home,
+            /// End
+            End,
+            /// PageUp
+            PageUp,
+            /// PageDown
+            PageDown,
+            /// Character key
+            Char(char),
+            /// Control character.
+            Ctrl(char),
+            /// Function `n` key; e.g. F1, F2, ...
+            F(u32),
+        }
+
+        impl From<char> for Key
+        {
+            fn from(ch: char) -> Key
+            {
+                use ::char::unctrl_lower;
+                match ch
+                {
+                    '\x1b' => Key::Escape,
+                    '\x7f' => Key::Backspace,
+                    '\r' | '\n' => Key::Enter,
+                    '\t' => Key::Tab,
+                    _ if is::ctrl(ch) => Key::Ctrl( unctrl_lower(ch) ),
+                    _ => Key::Char(ch),
+                }
+            }
+        }
+        /// Represents the cursor position in a terminal device
+        #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+        pub struct Cursor
+        {
+            /// Index of line in terminal, beginning at `0`.
+            pub line: usize,
+            /// Index of column in terminal, beginning at `0`.
+            pub column: usize,
+        }
+
+        impl Cursor
+        {
+            /// Returns the position of the next cell within a terminal of the given size.
+            #[inline] pub fn next(&self, size: Size) -> Option<Cursor>
+            {
+                let mut line = self.line;
+                let mut column = self.column + 1;
+
+                if column >= size.columns
+                {
+                    column = 0;
+                    line += 1;
+                }
+
+                if line >= size.lines { None } else { Some(Cursor{line, column}) }
+            }
+            /// Returns the position of the previous cell within a terminal of the given size.
+            #[inline] pub fn previous(&self, size: Size) -> Option<Cursor>
+            {
+                if self.column == 0
+                {
+                    if self.line == 0 { None } else { Some(Cursor{line: self.line - 1, column: size.columns - 1}) }
+                }
+                else { Some(Cursor{line: self.line, column: self.column - 1}) }
+            }
+            /// Returns a `Cursor` pointing to the first cell, i.e. `(0, 0)`.
+            #[inline] pub fn first() -> Cursor
+            {
+                Cursor
+                {
+                    line: 0,
+                    column: 0,
+                }
+            }
+            /// Returns a `Cursor` pointing to the last cell of a screen of the given size.
+            #[inline] pub fn last(size: Size) -> Cursor
+            {
+                Cursor
+                {
+                    line: size.lines - 1,
+                    column: size.columns - 1,
+                }
+            }
+            /// Returns whether the cursor is out of bounds of the given size.
+            #[inline] pub fn is_out_of_bounds(&self, size: Size) -> bool
+            { self.line >= size.lines || self.column >= size.columns }
+            /// Returns the index of the cursor position within a one-dimensional array of the given size.
+            pub fn as_index(&self, size: Size) -> usize { self.line * size.columns + self.column }
+        }
+
+        impl From<(usize, usize)> for Cursor
+        {
+            /// Returns a `Cursor` value from a `(line, column)` or `(y, x)` tuple.
+            fn from((line, column): (usize, usize)) -> Cursor { Cursor{line, column} }
+        }
+        /// Represents the visual appearance of the cursor in the terminal.
+        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+        pub enum CursorMode
+        {
+            /// Normal mode
+            Normal,
+            /// Invisible mode
+            Invisible,
+            /// Overwrite mode
+            Overwrite,
+        }
+        /// Represents a button on a mouse device
+        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+        pub enum MouseButton
+        {
+            /// Left mouse button
+            Left,
+            /// Right mouse button
+            Right,
+            /// Middle mouse button
+            Middle,
+            /// Other mouse button
+            Other(u32),
+        }
+        /// Represents the type of mouse input event
+        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+        pub enum MouseInput
+        {
+            /// The mouse cursor was moved
+            Motion,
+            /// A mouse button was pressed
+            ButtonPressed(MouseButton),
+            /// A mouse button was released
+            ButtonReleased(MouseButton),
+            /// The mouse wheel was scrolled up
+            WheelUp,
+            /// The mouse wheel was scrolled down
+            WheelDown,
+        }
+
+        bitflags!
+        {
+            /// Represents a set of modifier keys
+            #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+            pub struct ModifierState: u8
+            {
+                /// Alt key
+                const ALT   = 1 << 0;
+                /// Ctrl key
+                const CTRL  = 1 << 1;
+                /// Shift key
+                const SHIFT = 1 << 2;
+            }
+        }
+        /// Represents a mouse event
+        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+        pub struct Mouse
+        {
+            /// The position of the mouse within the terminal when the event occurred
+            pub position: Cursor,
+            /// The input event that occurred
+            pub input: MouseInput,
+            /// Modifier keys held when the input event occurred.
+            pub modifiers: ModifierState,
+        }
+        /// Represents an event generated from a terminal interface
+        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+        pub enum Event
+        {
+            /// Keyboard event
+            Key( Key ),
+            /// Mouse event
+            Mouse( Mouse ),
+            /// Raw data read
+            Raw( usize ),
+            /// Terminal window size changed; contained value is the new size.
+            Resize( Size ),
+            /// Terminal signal received
+            Signal( Signal ),
+            /// No event.
+            NoEvent,
+        }
+        /// Represents the size of a terminal window.
+        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+        pub struct Size
+        {
+            /// Number of lines in the terminal
+            pub lines: usize,
+            /// Number of columns in the terminal
+            pub columns: usize,
+        }
+
+        impl Size
+        {
+            /// Returns the total number of cells in a terminal of the given size.
+            #[inline] pub fn area(&self) -> usize
+            { self.checked_area().unwrap_or_else( || panic!("overflow in Size::area {:?}", self)) }
+            /// Returns the total number of cells in a terminal of the given size.
+            #[inline] pub fn checked_area(&self) -> Option<usize> { self.lines.checked_mul(self.columns) }
+        }
     }
 
     pub mod unix
@@ -22781,14 +23310,12 @@ pub mod system
             //! Unix extension trait
             use ::
             {
+                path::{ Path },
+                system::{ Private },
+                time::{ Duration },
                 *,
             };
             /*
-            use std::io;
-            use std::path::Path;
-            use std::time::Duration;
-
-            use crate::priv_util::Private;
             use crate::terminal::Event;
             */
             /// Implements Unix-only extensions for terminal interfaces.
@@ -29566,4 +30093,4 @@ fn main()
     }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 29569
+// 30096
