@@ -23,13 +23,15 @@ extern crate num_integer;
 extern crate num_traits;
 extern crate rand;
 extern crate regex as re;
+extern crate smallvec;
 extern crate time as timed;
+extern crate unicode_normalization;
+extern crate unicode_width;
 /*
     extern crate clap;
     extern crate getrandom;
     extern crate libc;
     extern crate nix;
-
     extern crate unicode_normalization;
     extern crate unicode_width;
 */
@@ -152,80 +154,44 @@ extern crate time as timed;
     /// Converts each element of a list to a `Value` and returns an `Arr` containing a vector of the values.
     #[macro_export] macro_rules! arr
     {
-        [] => { $crate::database::arrays::Arr::from_vec( vec![]).unwrap() };
-        
-        [ $( $elem:expr ),+ , ] =>
-        {
-            try_arr![ $( $elem ),+ ].unwrap()
-        };
-
-        [ $( $elem:expr ),+ ] =>
-        {
-            try_arr![ $( $elem ),+ ].unwrap()
-        };
+        [] => { $crate::database::arrays::Arr::from_vec( vec![]).unwrap() };        
+        [ $( $elem:expr ),+ , ] => { try_arr![ $( $elem ),+ ].unwrap() };
+        [ $( $elem:expr ),+ ] => { try_arr![ $( $elem ),+ ].unwrap() };
     }
     /// Converts each element of a list to a `Value` and returns an `Arr` containing a vector of the values.
     #[macro_export] macro_rules! try_arr
     {
-        [ $( $elem:expr ),+ , ] =>
-        {
-            try_arr![ $( $elem ),+ ]
-        };
-        
-        [ $( $elem:expr ),+ ] =>
-        {
-            {
-                $crate::database::arrays::Arr::from_vec( vec![ $( $elem.into() ),+ ])
-            }
-        };
+        [ $( $elem:expr ),+ , ] => { try_arr![ $( $elem ),+ ] };        
+        [ $( $elem:expr ),+ ] => {{ $crate::database::arrays::Arr::from_vec( vec![ $( $elem.into() ),+ ]) }};
     }
     /// Converts each element  of a list to `Value`s and returns a `Tup` containing a vector of the values.
     #[macro_export] macro_rules! tup
     {
-        ( $( $elem:expr ),* , ) =>
-        {
-            tup!( $( $elem ),* )
-        };
+        ( $( $elem:expr ),* , ) => { tup!( $( $elem ),* ) };
 
-        ( $( $elem:expr ),* ) => {
-            {
-                $crate::database::tuples::Tup::from_vec( vec![ $( $elem.into() ),+ ])
-            }
-        };
+        ( $( $elem:expr ),* ) =>
+        {{
+            $crate::database::tuples::Tup::from_vec( vec![ $( $elem.into() ),+ ])
+        }};
     }
     /// Given a list of field/value pairs, returns an `Obj` containing each pair.
     #[macro_export] macro_rules! obj
     {
-        {} =>
-        {
-            $crate::database::objects::Obj::from_map_unchecked( ::collections::HashMap::new())
-        };
-
-        { $( $field:expr => $inner:expr ),+ , } =>
-        {
-            try_obj!{ $( $field => $inner ),+ }.unwrap()
-        };
-
-        { $( $field:expr => $inner:expr ),+ } =>
-        {
-            try_obj!{ $( $field => $inner ),+ }.unwrap()
-        };
+        {} => { $crate::database::objects::Obj::from_map_unchecked( ::collections::HashMap::new()) };
+        { $( $field:expr => $inner:expr ),+ , } => { try_obj!{ $( $field => $inner ),+ }.unwrap() };
+        { $( $field:expr => $inner:expr ),+ } => { try_obj!{ $( $field => $inner ),+ }.unwrap() };
     }
     /// Given a list of field to `Value` pairs, returns an `Obj` with the fields and values.
     #[macro_export] macro_rules! try_obj
     {
-        { $( $field:expr => $inner:expr ),+ , } =>
-        {
-            try_obj!{ $( $field => $inner ),* };
-        };
+        { $( $field:expr => $inner:expr ),+ , } => { try_obj!{ $( $field => $inner ),* }; };
 
         { $( $field:expr => $inner:expr ),+ } =>
         {
             {
                 use $crate::database::objects::Obj;
-
                 let mut _map = ::collections::HashMap::new();
-                let mut _parent: Option<$crate::database::value::Value> = None;
+                let mut _parent: Option<$crate::primitive::Value> = None;
 
                 $( 
                     if $field == "^" { _parent = Some( $inner.into() ); }
@@ -234,7 +200,8 @@ extern crate time as timed;
 
                 match _parent
                 {
-                    Some( parent ) => match parent.get_obj() {
+                    Some( parent ) => match parent.get_obj()
+                    {
                         Ok( parent ) => Obj::from_map_with_parent( _map, parent),
                         e @ Err( _ ) => e,
                     }
@@ -246,223 +213,169 @@ extern crate time as timed;
     /// Writes attributes and formatted text to a `Terminal` or `Screen`.
     #[macro_export] macro_rules! term_write
     {
-        // Entry rule
-        ( $term:expr , $first:tt $($rest:tt)* ) => {
-            match $term.borrow_term_write_guard() {
-                mut term => {
+        ( $term:expr , $first:tt $($rest:tt)* ) =>
+        {
+            match $term.borrow_term_write_guard()
+            {
+                mut term =>
+                {
                     let init = $crate::macros::Chain::init();
                     term_write!(@_INTERNAL main: term ; init ; $first $($rest)*)
                 }
             }
         };
-
-        // Final rule
-        ( @_INTERNAL main: $term:expr ; $result:expr ; ) => {
-            $result
-        };
-
-        // Color/style rules
-        ( @_INTERNAL main: $term:expr ; $result:expr ; [ $($tt:tt)* ] $($rest:tt)* ) => {
-            term_write!(
+        
+        ( @_INTERNAL main: $term:expr ; $result:expr ; ) => { $result };
+        
+        ( @_INTERNAL main: $term:expr ; $result:expr ; [ $($tt:tt)* ] $($rest:tt)* ) =>
+        {
+            term_write!
+            (
                 @_INTERNAL main: $term;
                 term_write!(@_INTERNAL style: $term; $result; $($tt)*);
                 $($rest)*
             )
         };
-
-        // Formatting rules
-        ( @_INTERNAL main: $term:expr ; $result:expr ; ( $($tt:tt)* ) $($rest:tt)* ) => {
-            term_write!(
+        
+        ( @_INTERNAL main: $term:expr ; $result:expr ; ( $($tt:tt)* ) $($rest:tt)* ) =>
+        {
+            term_write!
+            (
                 @_INTERNAL main: $term;
                 term_write!(@_INTERNAL format: $term; $result; $($tt)*);
                 $($rest)*
             )
         };
-        ( @_INTERNAL main: $term:expr ; $result:expr ; $tt:tt $($rest:tt)* ) => {
-            term_write!(
+        
+        ( @_INTERNAL main: $term:expr ; $result:expr ; $tt:tt $($rest:tt)* ) =>
+        {
+            term_write!
+            (
                 @_INTERNAL main: $term;
                 term_write!(@_INTERNAL literal: $term; $result; $tt);
                 $($rest)*
             )
         };
+        
+        ( @_INTERNAL style: $term:expr ; $result:expr ; black ) => 
+        { $crate::macros::Chain::chain( $result, || $term.set_fg($crate::Color::Black)) };
 
-        // Set foreground color
-        ( @_INTERNAL style: $term:expr ; $result:expr ; black ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.set_fg($crate::Color::Black))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; blue ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.set_fg($crate::Color::Blue))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; cyan ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.set_fg($crate::Color::Cyan))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; green ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.set_fg($crate::Color::Green))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; magenta ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.set_fg($crate::Color::Magenta))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; red ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.set_fg($crate::Color::Red))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; white ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.set_fg($crate::Color::White))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; yellow ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.set_fg($crate::Color::Yellow))
-        };
+        ( @_INTERNAL style: $term:expr ; $result:expr ; blue ) => 
+        { $crate::macros::Chain::chain( $result, || $term.set_fg($crate::Color::Blue)) };
 
-        // Set background color
-        ( @_INTERNAL style: $term:expr ; $result:expr ; # black ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.set_bg($crate::Color::Black))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; # blue ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.set_bg($crate::Color::Blue))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; # cyan ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.set_bg($crate::Color::Cyan))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; # green ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.set_bg($crate::Color::Green))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; # magenta ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.set_bg($crate::Color::Magenta))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; # red ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.set_bg($crate::Color::Red))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; # white ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.set_bg($crate::Color::White))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; # yellow ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.set_bg($crate::Color::Yellow))
-        };
+        ( @_INTERNAL style: $term:expr ; $result:expr ; cyan ) => 
+        { $crate::macros::Chain::chain( $result, || $term.set_fg($crate::Color::Cyan)) };
 
-        // Add style
-        ( @_INTERNAL style: $term:expr ; $result:expr ; bold ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.add_style($crate::Style::BOLD))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; italic ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.add_style($crate::Style::ITALIC))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; reverse ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.add_style($crate::Style::REVERSE))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; underline ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.add_style($crate::Style::UNDERLINE))
-        };
+        ( @_INTERNAL style: $term:expr ; $result:expr ; green ) => 
+        { $crate::macros::Chain::chain( $result, || $term.set_fg($crate::Color::Green)) };
 
-        // Remove style
-        ( @_INTERNAL style: $term:expr ; $result:expr ; ! bold ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.remove_style($crate::Style::BOLD))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; ! italic ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.remove_style($crate::Style::ITALIC))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; ! reverse ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.remove_style($crate::Style::REVERSE))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; ! underline ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.remove_style($crate::Style::UNDERLINE))
-        };
+        ( @_INTERNAL style: $term:expr ; $result:expr ; magenta ) => 
+        { $crate::macros::Chain::chain( $result, || $term.set_fg($crate::Color::Magenta)) };
 
-        // Clear attributes
-        ( @_INTERNAL style: $term:expr ; $result:expr ; reset ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.clear_attributes())
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; ! fg ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.set_fg(None))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; ! bg ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.set_bg(None))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; ! style ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.set_style(None))
-        };
+        ( @_INTERNAL style: $term:expr ; $result:expr ; red ) => 
+        { $crate::macros::Chain::chain( $result, || $term.set_fg($crate::Color::Red)) };
 
-        // Color/style expressions
-        ( @_INTERNAL style: $term:expr ; $result:expr ; fg = $e:expr ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.set_fg($e))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; bg = $e:expr ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.set_bg($e))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; style = $e:expr ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.set_style($e))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; style += $e:expr ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.add_style($e))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; style -= $e:expr ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.remove_style($e))
-        };
-        ( @_INTERNAL style: $term:expr ; $result:expr ; theme = $e:expr ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.set_theme($e))
-        };
+        ( @_INTERNAL style: $term:expr ; $result:expr ; white ) => 
+        { $crate::macros::Chain::chain( $result, || $term.set_fg($crate::Color::White)) };
 
-        // std::fmt formatting
-        ( @_INTERNAL format: $term:expr ; $result:expr ; : $e:expr ) => {
-            $crate::macros::Chain::chain(
-                $result, || write!($term, "{}", $e))
-        };
-        ( @_INTERNAL format: $term:expr ; $result:expr ; ? $e:expr ) => {
-            $crate::macros::Chain::chain(
-                $result, || write!($term, "{:?}", $e))
-        };
-        ( @_INTERNAL format: $term:expr ; $result:expr ; $($tt:tt)* ) => {
-            $crate::macros::Chain::chain(
-                $result, || write!($term, $($tt)*))
-        };
+        ( @_INTERNAL style: $term:expr ; $result:expr ; yellow ) => 
+        { $crate::macros::Chain::chain( $result, || $term.set_fg($crate::Color::Yellow)) };
+        
+        ( @_INTERNAL style: $term:expr ; $result:expr ; # black ) => 
+        { $crate::macros::Chain::chain( $result, || $term.set_bg($crate::Color::Black)) };
 
-        // Literal formatting
-        ( @_INTERNAL literal: $term:expr ; $result:expr ; $lit:tt ) => {
-            $crate::macros::Chain::chain(
-                $result, || $term.write_str(concat!($lit)))
-        };
+        ( @_INTERNAL style: $term:expr ; $result:expr ; # blue ) => 
+        { $crate::macros::Chain::chain( $result, || $term.set_bg($crate::Color::Blue)) };
+
+        ( @_INTERNAL style: $term:expr ; $result:expr ; # cyan ) => 
+        { $crate::macros::Chain::chain( $result, || $term.set_bg($crate::Color::Cyan)) };
+
+        ( @_INTERNAL style: $term:expr ; $result:expr ; # green ) =>
+        { $crate::macros::Chain::chain( $result, || $term.set_bg($crate::Color::Green)) };
+        
+        ( @_INTERNAL style: $term:expr ; $result:expr ; # magenta ) =>
+        { $crate::macros::Chain::chain( $result, || $term.set_bg($crate::Color::Magenta)) };
+        
+        ( @_INTERNAL style: $term:expr ; $result:expr ; # red ) =>
+        { $crate::macros::Chain::chain( $result, || $term.set_bg($crate::Color::Red)) };
+        
+        ( @_INTERNAL style: $term:expr ; $result:expr ; # white ) =>
+        { $crate::macros::Chain::chain( $result, || $term.set_bg($crate::Color::White)) };
+        
+        ( @_INTERNAL style: $term:expr ; $result:expr ; # yellow ) =>
+        { $crate::macros::Chain::chain( $result, || $term.set_bg($crate::Color::Yellow)) };
+        
+        ( @_INTERNAL style: $term:expr ; $result:expr ; bold ) =>
+        { $crate::macros::Chain::chain( $result, || $term.add_style($crate::Style::BOLD)) };
+        
+        ( @_INTERNAL style: $term:expr ; $result:expr ; italic ) =>
+        { $crate::macros::Chain::chain( $result, || $term.add_style($crate::Style::ITALIC)) };
+        
+        ( @_INTERNAL style: $term:expr ; $result:expr ; reverse ) =>
+        { $crate::macros::Chain::chain( $result, || $term.add_style($crate::Style::REVERSE)) };
+        
+        ( @_INTERNAL style: $term:expr ; $result:expr ; underline ) =>
+        { $crate::macros::Chain::chain( $result, || $term.add_style($crate::Style::UNDERLINE)) };
+        
+        ( @_INTERNAL style: $term:expr ; $result:expr ; ! bold ) =>
+        { $crate::macros::Chain::chain( $result, || $term.remove_style($crate::Style::BOLD)) };
+        
+        ( @_INTERNAL style: $term:expr ; $result:expr ; ! italic ) =>
+        { $crate::macros::Chain::chain( $result, || $term.remove_style($crate::Style::ITALIC)) };
+        
+        ( @_INTERNAL style: $term:expr ; $result:expr ; ! reverse ) =>
+        { $crate::macros::Chain::chain( $result, || $term.remove_style($crate::Style::REVERSE)) };
+
+        ( @_INTERNAL style: $term:expr ; $result:expr ; ! underline ) =>
+        { $crate::macros::Chain::chain( $result, || $term.remove_style($crate::Style::UNDERLINE)) };
+        
+        ( @_INTERNAL style: $term:expr ; $result:expr ; reset ) =>
+        { $crate::macros::Chain::chain( $result, || $term.clear_attributes()) };
+        
+        ( @_INTERNAL style: $term:expr ; $result:expr ; ! fg ) =>
+        { $crate::macros::Chain::chain( $result, || $term.set_fg(None)) };
+
+        ( @_INTERNAL style: $term:expr ; $result:expr ; ! bg ) =>
+        { $crate::macros::Chain::chain( $result, || $term.set_bg(None)) };
+        
+        ( @_INTERNAL style: $term:expr ; $result:expr ; ! style ) =>
+        { $crate::macros::Chain::chain( $result, || $term.set_style(None)) };
+        
+        ( @_INTERNAL style: $term:expr ; $result:expr ; fg = $e:expr ) =>
+        { $crate::macros::Chain::chain( $result, || $term.set_fg($e)) };
+        
+        ( @_INTERNAL style: $term:expr ; $result:expr ; bg = $e:expr ) =>
+        { $crate::macros::Chain::chain( $result, || $term.set_bg($e)) };
+        
+        ( @_INTERNAL style: $term:expr ; $result:expr ; style = $e:expr ) =>
+        { $crate::macros::Chain::chain( $result, || $term.set_style($e)) };
+        
+        ( @_INTERNAL style: $term:expr ; $result:expr ; style += $e:expr ) =>
+        { $crate::macros::Chain::chain( $result, || $term.add_style($e)) };
+
+        ( @_INTERNAL style: $term:expr ; $result:expr ; style -= $e:expr ) =>
+        { $crate::macros::Chain::chain( $result, || $term.remove_style($e)) };
+
+        ( @_INTERNAL style: $term:expr ; $result:expr ; theme = $e:expr ) =>
+        { $crate::macros::Chain::chain( $result, || $term.set_theme($e)) };
+        
+        ( @_INTERNAL format: $term:expr ; $result:expr ; : $e:expr ) =>
+        { $crate::macros::Chain::chain( $result, || write!($term, "{}", $e)) };
+
+        ( @_INTERNAL format: $term:expr ; $result:expr ; ? $e:expr ) =>
+        { $crate::macros::Chain::chain( $result, || write!($term, "{:?}", $e)) };
+        
+        ( @_INTERNAL format: $term:expr ; $result:expr ; $($tt:tt)* ) =>
+        { $crate::macros::Chain::chain( $result, || write!($term, $($tt)*)) };
+        
+        ( @_INTERNAL literal: $term:expr ; $result:expr ; $lit:tt ) =>
+        { $crate::macros::Chain::chain( $result, || $term.write_str(concat!($lit))) };
     }
     /// Writes attributes and formatted text to a `Terminal` or `Screen`.
     #[macro_export] macro_rules! term_writeln
     {
-        ( $term:expr ) => {
-            term_write!($term, "\n")
-        };
-        ( $term:expr , $($tt:tt)* ) => {
-            term_write!($term, $($tt)* "\n")
-        };
+        ( $term:expr ) => { term_write!($term, "\n") };
+        ( $term:expr , $($tt:tt)* ) => { term_write!($term, $($tt)* "\n") };
     }
     /// Facilitates chaining calls from either a `Terminal` or `Screen` lock.
     pub trait Chain: Sized
@@ -538,9 +451,42 @@ pub mod char
     {
         borrow::{ Cow },
         ops::{ Range, RangeFrom, RangeFull, RangeTo },
-        str::{ from_utf8, from_utf8_unchecked },
+        str::{ CharIndices, from_utf8, from_utf8_unchecked },
         *,
     };
+
+    pub const CTRL_MASK: u8 = 0x1f;
+    pub const UNCTRL_BIT: u8 = 0x40;    
+    /// Returns the control character corresponding to the given character.
+    #[inline] pub fn ctrl(ch: char) -> char { ((ch as u8) & CTRL_MASK) as char }
+    /// Returns the ASCII character corresponding to the given control character.
+    #[inline] pub fn unctrl_upper(ch: char) -> char { ((ch as u8) | UNCTRL_BIT) as char }
+    /// Returns the lowercase ASCII character corresponding to the given control character.
+    #[inline] pub fn unctrl_lower(ch: char) -> char { unctrl_upper(ch).to_ascii_lowercase() }
+    /// Iterator over string prefixes.
+    pub struct Prefixes<'a>
+    {
+        s: &'a str,
+        iter: CharIndices<'a>,
+    }
+    /// Returns an iterator over all non-empty prefixes of `s`, beginning with the shortest.
+    #[inline] pub fn prefixes(s: &str) -> Prefixes
+    {
+        Prefixes
+        {
+            s,
+            iter: s.char_indices(),
+        }
+    }
+
+    impl<'a> Iterator for Prefixes<'a>
+    {
+        type Item = &'a str;
+        fn next(&mut self) -> Option<&'a str>
+        {
+            self.iter.next().map(|(idx, ch)| &self.s[..idx + ch.len_utf8()])
+        }
+    }
     /*
     pub fn repeat_char( ch: char, n: usize ) -> String */
     /// Returns a string consisting of a `char`, repeated `n` times.
@@ -604,7 +550,7 @@ pub mod char
     pub fn backward( n:usize, s:&str, cur: usize ) -> usize
     {
         let mut chars = s[..cur].char_indices()
-            .filter( |&( _, ch )| !is_combining_mark( ch ) );
+            .filter( |&( _, ch )| !is::combining_mark( ch ) );
         let mut res = cur;
 
         for _ in 0..n {
@@ -684,6 +630,13 @@ pub mod char
         }
 
         res
+    }
+    /* pub fn char_width(ch: char) -> Option<usize> */
+    /// Returns the width of a character in the terminal.
+    #[inline] pub fn width(ch: char) -> Option<usize>
+    {
+        use unicode_width::UnicodeWidthChar;
+        ch.width()
     }
 }
 /// The Clone trait for types that cannot be ‘implicitly copied’.
@@ -3208,7 +3161,7 @@ pub mod ffi
         fn category( &self ) -> Category { Category::Other }
     }
 
-    impl<F, Term: Terminal> Function<Term> for F where
+    impl<F, Term: Terminals> Function<Term> for F where
     F: Send + Sync,
     F: Fn( &mut Prompter<Term>, i32, char ) -> io::Result<()>
     {
@@ -3954,6 +3907,7 @@ pub mod is
 {
     use ::
     {
+        char::{ CTRL_MASK, width },
         env::{ var },
         regex::{ contains, Regex },
         *,
@@ -4002,13 +3956,13 @@ pub mod is
     pub fn signal_handler_enabled() -> bool { var( "CICADA_ENABLE_SIG_HANDLER" ).map_or( false, |x| x == "1" ) }
     /*
     is_prefix_char( ... ) -> bool */
-    fn prefix_char( c: char ) -> bool { c == '[' || c == '{' }
+    pub fn prefix_char( c: char ) -> bool { c == '[' || c == '{' }
     /*
     is_suffix_char( ... ) -> bool */
-    fn suffix_char( c: char ) -> bool { c == ']' || c == '}' }
+    pub fn suffix_char( c: char ) -> bool { c == ']' || c == '}' }
     /*
     is_prompt_item_char( ... ) -> bool */
-    fn prompt_item_char( c: char, token:&str ) -> bool 
+    pub fn prompt_item_char( c: char, token:&str ) -> bool 
     {
         let s = c.to_string();
 
@@ -4018,7 +3972,7 @@ pub mod is
     }
     /*
     needs_globbing( ... ) -> bool */
-    fn globable( line:&str ) -> bool 
+    pub fn globable( line:&str ) -> bool 
     {
         let re = Regex::new( r"\*+" ).expect( "Invalid regex ptn" );
         re.is_match( line )
@@ -4098,6 +4052,32 @@ pub mod is
         {
             "@" | "null" | "true" | "false" | "Obj" | "Str" | "Arr" | "Tup" => true,
             _ => false,
+        }
+    }
+    /*
+    is_combining_mark( ... ) -> bool */
+    /// Returns whether the given character is a combining mark.
+    #[inline] pub fn combining_mark(ch: char) -> bool
+    {
+        use unicode_normalization::char::is_combining_mark;
+        is_combining_mark(ch)
+    }
+    /*
+    is_ctrl( ... ) -> bool */
+    /// Returns whether the given character is a control character.
+    #[inline] pub fn ctrl(ch: char) -> bool
+    {
+        let ch = ch as u32;
+        ch & (CTRL_MASK as u32) == ch
+    }
+    /*
+    is_visible( ... ) -> bool */
+    pub fn visible(ch: char) -> bool
+    {
+        match ch
+        {
+            '\t' | '\r' | '\n' => true,
+            _ => width( ch ).unwrap_or(0) != 0
         }
     }
 }
@@ -4227,7 +4207,7 @@ pub mod io
             pub max_wait_duration:Option<Duration>,
         }
 
-        pub struct ReadLock<'a, Term: 'a + Terminal> {
+        pub struct ReadLock<'a, Term: 'a + Terminals> {
             term: Box<dyn TerminalReader<Term> + 'a>,
             data: MutexGuard<'a, Read<Term>>,
         }
@@ -4260,7 +4240,7 @@ pub mod io
             QuotedInsert( usize ),
         }
 
-        impl<'a, Term: 'a + Terminal> Reader<'a, Term> 
+        impl<'a, Term: 'a + Terminals> Reader<'a, Term> 
         {
             pub fn new( iface:&'a Interface<Term>, lock:ReadLock<'a, Term> )
                     -> Reader<'a, Term> {
@@ -4886,7 +4866,7 @@ pub mod io
             }
         }
 
-        impl<'a, Term: 'a + Terminal> ReadLock<'a, Term> 
+        impl<'a, Term: 'a + Terminals> ReadLock<'a, Term> 
         {
             pub fn new( term: Box<dyn TerminalReader<Term> + 'a>, data: MutexGuard<'a, Read<Term>> )
                     -> ReadLock<'a, Term> {
@@ -4960,7 +4940,7 @@ pub mod io
             }
         }
 
-        impl<'a, Term: 'a + Terminal> Deref for ReadLock<'a, Term> {
+        impl<'a, Term: 'a + Terminals> Deref for ReadLock<'a, Term> {
             type Target = Read<Term>;
 
             fn deref( &self ) -> &Read<Term> {
@@ -4968,13 +4948,13 @@ pub mod io
             }
         }
 
-        impl<'a, Term: 'a + Terminal> DerefMut for ReadLock<'a, Term> {
+        impl<'a, Term: 'a + Terminals> DerefMut for ReadLock<'a, Term> {
             fn deref_mut( &mut self ) -> &mut Read<Term> {
                 &mut self.data
             }
         }
 
-        impl<Term: Terminal> Deref for Read<Term> {
+        impl<Term: Terminals> Deref for Read<Term> {
             type Target = Variables;
 
             fn deref( &self ) -> &Variables {
@@ -4982,13 +4962,13 @@ pub mod io
             }
         }
 
-        impl<Term: Terminal> DerefMut for Read<Term> {
+        impl<Term: Terminals> DerefMut for Read<Term> {
             fn deref_mut( &mut self ) -> &mut Variables {
                 &mut self.variables
             }
         }
 
-        impl<Term: Terminal> Read<Term> {
+        impl<Term: Terminals> Read<Term> {
             pub fn new( term:&Term, application: Cow<'static, str> ) -> Read<Term> {
                 let mut r = Read{
                     application,
@@ -5326,18 +5306,21 @@ pub mod io
         //! Provides access to terminal write operations
         use ::
         {
+            borrow::{ Cow::{ self, Borrowed, Owned }, },
+            collections::{ vec_deque, VecDeque },
+            iter::{ repeat, Skip },
+            ops::{ Deref, DerefMut, Range },
+            sync::{ MutexGuard },
+            terminal::{ Size, Terminals },
+            time::{ Duration, Instant },
             *,
         };
         /*
-        use std::borrow::Cow::{self, Borrowed, Owned};
-        use std::collections::{vec_deque, VecDeque};
         use std::fmt;
         use std::io;
         use std::iter::{repeat, Skip};
         use std::mem::swap;
-        use std::ops::{Deref, DerefMut, Range};
         use std::sync::MutexGuard;
-        use std::time::{Duration, Instant};
 
         use crate::chars::{is_ctrl, unctrl, ESCAPE, RUBOUT};
         use crate::reader::{START_INVISIBLE, END_INVISIBLE};
@@ -5350,50 +5333,31 @@ pub mod io
         /// Duration to wait for input when "blinking"
         pub const BLINK_DURATION: Duration = Duration::from_millis( 500 );
 
-        const COMPLETE_MORE:&'static str = "--More--";
-
+        pub const COMPLETE_MORE:&'static str = "--More--";
         /// Default maximum history size
-        const MAX_HISTORY: usize = !0;
-
+        pub const MAX_HISTORY: usize = !0;
         /// Tab column interval
-        const TAB_STOP: usize = 8;
-
-        // Length of "( arg: "
-        const PROMPT_NUM_PREFIX: usize = 6;
-        // Length of " ) "
-        const PROMPT_NUM_SUFFIX: usize = 2;
-
-        // Length of "( i-search )`"
-        const PROMPT_SEARCH_PREFIX: usize = 11;
-        // Length of "failed "
-        const PROMPT_SEARCH_FAILED_PREFIX: usize = 7;
-        // Length of "reverse-"
-        const PROMPT_SEARCH_REVERSE_PREFIX: usize = 8;
-        // Length of "': "
-        const PROMPT_SEARCH_SUFFIX: usize = 3;
-
+        pub const TAB_STOP: usize = 8;
+        pub const PROMPT_NUM_PREFIX: usize = 6;
+        pub const PROMPT_NUM_SUFFIX: usize = 2;
+        pub const PROMPT_SEARCH_PREFIX: usize = 11;
+        pub const PROMPT_SEARCH_FAILED_PREFIX: usize = 7;
+        pub const PROMPT_SEARCH_REVERSE_PREFIX: usize = 8;
+        pub const PROMPT_SEARCH_SUFFIX: usize = 3;
         /// Provides an interface to write line-by-line output to the terminal device.
-        ///
-        /// Holds a lock on terminal write operations.
-        /// See [`Interface`] for more information about concurrent operations.
-        ///
-        /// An instance of this type can be constructed using either the
-        /// [`Interface::lock_writer_append`] or the [`Interface::lock_writer_erase`]
-        /// method.
-        ///
-        /// [`Interface`]: ../interface/struct.Interface.html
-        /// [`Interface::lock_writer_append`]: ../interface/struct.Interface.html#method.lock_writer_append
-        /// [`Interface::lock_writer_erase`]: ../interface/struct.Interface.html#method.lock_writer_erase
-        pub struct Writer<'a, 'b: 'a, Term: 'b + Terminal> {
+        pub struct Writer<'a, 'b: 'a, Term: 'b + Terminals>
+        {
             write: WriterImpl<'a, 'b, Term>,
         }
 
-        enum WriterImpl<'a, 'b: 'a, Term: 'b + Terminal> {
+        enum WriterImpl<'a, 'b: 'a, Term: 'b + Terminals>
+        {
             Mutex( WriteLock<'b, Term> ),
             MutRef( &'a mut WriteLock<'b, Term> ),
         }
 
-        pub struct Write {
+        pub struct Write
+        {
             /// Input buffer
             pub buffer: String,
             /// Original buffer entered before searching through history
@@ -5402,7 +5366,6 @@ pub mod io
             pub cursor:usize,
             /// Position of the cursor if currently performing a blink
             blink:Option<Blink>,
-
             /// Stored history entries
             pub history: VecDeque<String>,
             /// History entry currently being edited;
@@ -5412,20 +5375,16 @@ pub mod io
             history_size:usize,
             /// Number of history entries added since last loading history
             history_new_entries:usize,
-
             /// Whether the prompt is drawn; i.e. a `read_line` operation is in progress
             pub is_prompt_drawn:bool,
-
             /// Portion of prompt up to and including the final newline
             pub prompt_prefix: String,
             prompt_prefix_len:usize,
             /// Portion of prompt after the final newline
             pub prompt_suffix: String,
             prompt_suffix_len:usize,
-
             /// Current type of prompt
             pub prompt_type: PromptType,
-
             /// Whether a search in progress is a reverse search
             pub reverse_search:bool,
             /// Whether a search in progress has failed to find a match
@@ -5438,22 +5397,22 @@ pub mod io
             pub prev_history:Option<usize>,
             /// Position of the cursor prior to a history search
             pub prev_cursor:usize,
-
             /// Numerical argument
             pub input_arg: Digit,
             /// Whether a numerical argument was supplied
             pub explicit_arg:bool,
-
             /// Terminal size as of last draw operation
             pub screen_size:Size,
         }
 
-        pub struct WriteLock<'a, Term: 'a + Terminal> {
+        pub struct WriteLock<'a, Term: 'a + Terminals>
+        {
             term: Box<dyn TerminalWriter<Term> + 'a>,
             data: MutexGuard<'a, Write>,
         }
 
-        impl<'a, Term: Terminal> WriteLock<'a, Term> {
+        impl<'a, Term: Terminals> WriteLock<'a, Term>
+        {
             pub fn new( term: Box<dyn TerminalWriter<Term> + 'a>, data: MutexGuard<'a, Write> )
                     -> WriteLock<'a, Term> {
                 WriteLock{term, data}
@@ -5618,47 +5577,53 @@ pub mod io
                 }, true )
             }
 
-            fn draw_text_impl( &mut self, start_col:usize, text:&str, disp: Display,
-                    handle_invisible:bool ) -> io::Result<()> {
+            fn draw_text_impl( &mut self, start_col:usize, text:&str, disp: Display, handle_invisible:bool ) -> 
+            io::Result<()>
+            {
                 let width = self.screen_size.columns;
                 let mut col = start_col;
                 let mut out = String::with_capacity( text.len() );
-
                 let mut clear = false;
                 let mut hidden = false;
 
                 for ch in text.chars()
-            {
-                    if handle_invisible && ch == START_INVISIBLE {
-                        hidden = true;
-                    } else if handle_invisible && ch == END_INVISIBLE {
-                        hidden = false;
-                    } else if hidden {
-                        // Render the character, but assume it has 0 width.
-                        out.push( ch );
-                    } else {
+                {
+                    if handle_invisible && ch == START_INVISIBLE { hidden = true; }
+                    else if handle_invisible && ch == END_INVISIBLE { hidden = false; }
+                    else if hidden { out.push( ch ); }
+                    else
+                    {
                         for ch in display( ch, disp )
-            {
-                            if ch == '\t' {
+                        {
+                            if ch == '\t'
+                            {
                                 let n = TAB_STOP - ( col % TAB_STOP );
 
-                                if col + n > width {
+                                if col + n > width
+                                {
                                     let pre = width - col;
                                     out.extend( repeat( ' ' ).take( pre ) );
                                     out.push_str( " \r" );
                                     out.extend( repeat( ' ' ).take( n - pre ) );
                                     col = n - pre;
-                                } else {
+                                }
+                                else
+                                {
                                     out.extend( repeat( ' ' ).take( n ) );
                                     col += n;
 
-                                    if col == width {
+                                    if col == width
+                                    {
                                         out.push_str( " \r" );
                                         col = 0;
                                     }
                                 }
-                            } else if ch == '\n' {
-                                if !clear {
+                            }
+
+                            else if ch == '\n'
+                            {
+                                if !clear
+                                {
                                     self.term.write( &out )?;
                                     out.clear();
                                     self.term.clear_to_screen_end()?;
@@ -5667,26 +5632,30 @@ pub mod io
 
                                 out.push( '\n' );
                                 col = 0;
-                            } else if is_combining_mark( ch )
-            {
-                                out.push( ch );
-                            } else if is_wide( ch )
-            {
-                                if col == width - 1 {
+                            }
+                            else if is::combining_mark( ch ) { out.push( ch ); }
+                            else if is_wide( ch )
+                            {
+                                if col == width - 1
+                                {
                                     out.push_str( "  \r" );
                                     out.push( ch );
                                     col = 2;
-                                } else {
+                                }
+                                else
+                                {
                                     out.push( ch );
                                     col += 2;
                                 }
-                            } else {
+                            }
+
+                            else
+                            {
                                 out.push( ch );
                                 col += 1;
 
-                                if col == width {
-                                    // Space pushes the cursor to the next line,
-                                    // CR brings back to the start of the line.
+                                if col == width
+                                {
                                     out.push_str( " \r" );
                                     col = 0;
                                 }
@@ -5695,9 +5664,7 @@ pub mod io
                     }
                 }
 
-                if col == width {
-                    out.push_str( " \r" );
-                }
+                if col == width { out.push_str( " \r" ); }
 
                 self.term.write( &out )
             }
@@ -6348,7 +6315,7 @@ pub mod io
             expiry: Instant,
         }
 
-        impl<'a, 'b: 'a, Term: 'b + Terminal> Writer<'a, 'b, Term> {
+        impl<'a, 'b: 'a, Term: 'b + Terminals> Writer<'a, 'b, Term> {
             fn new( mut write: WriterImpl<'a, 'b, Term>, clear:bool ) -> io::Result<Self> {
                 write.expire_blink()?;
 
@@ -6402,7 +6369,7 @@ pub mod io
             }
         }
 
-        impl<'a, 'b: 'a, Term: 'b + Terminal> Drop for Writer<'a, 'b, Term> {
+        impl<'a, 'b: 'a, Term: 'b + Terminals> Drop for Writer<'a, 'b, Term> {
             fn drop( &mut self )
             {
                 if self.write.is_prompt_drawn {
@@ -6412,7 +6379,7 @@ pub mod io
             }
         }
 
-        impl<'a, Term: 'a + Terminal> Deref for WriteLock<'a, Term> {
+        impl<'a, Term: 'a + Terminals> Deref for WriteLock<'a, Term> {
             type Target = Write;
 
             fn deref( &self ) -> &Write {
@@ -6420,53 +6387,48 @@ pub mod io
             }
         }
 
-        impl<'a, Term: 'a + Terminal> DerefMut for WriteLock<'a, Term> {
+        impl<'a, Term: 'a + Terminals> DerefMut for WriteLock<'a, Term> {
             fn deref_mut( &mut self ) -> &mut Write {
                 &mut self.data
             }
         }
 
-        impl Write {
-            pub fn new( screen_size:Size ) -> Write {
-                Write{
+        impl Write
+        {
+            pub fn new( screen_size:Size ) -> Write
+            {
+                Write
+                {
                     buffer: String::new(),
                     backup_buffer: String::new(),
                     cursor: 0,
                     blink: None,
-
                     history: VecDeque::new(),
                     history_index: None,
                     history_size: MAX_HISTORY,
                     history_new_entries: 0,
-
                     is_prompt_drawn: false,
-
                     prompt_prefix: String::new(),
                     prompt_prefix_len: 0,
                     prompt_suffix: String::new(),
                     prompt_suffix_len: 0,
-
                     prompt_type: PromptType::Normal,
-
                     reverse_search: false,
                     search_failed: false,
                     search_buffer: String::new(),
                     last_search: String::new(),
                     prev_history: None,
                     prev_cursor: !0,
-
                     input_arg: Digit::None,
                     explicit_arg: false,
-
                     screen_size,
                 }
             }
 
-            pub fn history( &self ) -> HistoryIter {
-                HistoryIter( self.history.iter() )
-            }
+            pub fn history( &self ) -> HistoryIter { HistoryIter( self.history.iter() ) }
 
-            pub fn new_history( &self ) -> Skip<HistoryIter> {
+            pub fn new_history( &self ) -> Skip<HistoryIter>
+            {
                 let first_new = self.history.len() - self.history_new_entries;
                 self.history().skip( first_new )
             }
@@ -6481,17 +6443,12 @@ pub mod io
                 self.backup_buffer.clear();
                 self.cursor = 0;
                 self.history_index = None;
-
                 self.prompt_type = PromptType::Normal;
-
                 self.input_arg = Digit::None;
                 self.explicit_arg = false;
             }
 
-            pub fn reset_new_history( &mut self )
-            {
-                self.history_new_entries = 0;
-            }
+            pub fn reset_new_history( &mut self ) { self.history_new_entries = 0; }
 
             pub fn set_buffer( &mut self, buf:&str )
             {
@@ -6502,11 +6459,8 @@ pub mod io
 
             pub fn set_cursor( &mut self, pos: usize )
             {
-                if !self.buffer.is_char_boundary( pos )
-            {
-                    panic!( "invalid cursor position {} in buffer {:?}",
-                        pos, self.buffer );
-                }
+                if !self.buffer.is_char_boundary( pos ) 
+                { panic!( "invalid cursor position {} in buffer {:?}", pos, self.buffer ); }
 
                 self.cursor = pos;
             }
@@ -6514,44 +6468,40 @@ pub mod io
             pub fn set_prompt( &mut self, prompt:&str )
             {
                 let ( pre, suf ) = match prompt.rfind( '\n' )
-            {
+                {
                     Some( pos ) => ( &prompt[..pos + 1], &prompt[pos + 1..] ),
                     None => ( &prompt[..0], prompt )
                 };
 
                 self.prompt_prefix = pre.to_owned();
                 self.prompt_suffix = suf.to_owned();
-
                 let pre_virt = filter_visible( pre );
                 self.prompt_prefix_len = self.display_size( &pre_virt, 0 );
-
                 let suf_virt = filter_visible( suf );
                 self.prompt_suffix_len = self.display_size( &suf_virt, 0 );
             }
 
-            pub fn display_size( &self, s:&str, start_col: usize ) -> usize {
+            pub fn display_size( &self, s:&str, start_col: usize ) -> usize
+            {
                 let width = self.screen_size.columns;
                 let mut col = start_col;
-
-                let disp = Display{
+                let disp = Display
+                {
                     allow_tab: true,
                     allow_newline: true,
                     .. Display::default()
                 };
 
                 for ch in s.chars().flat_map( |ch| display( ch, disp ) )
-            {
-                    let n = match ch {
+                {
+                    let n = match ch
+                    {
                         '\n' => width - ( col % width ),
                         '\t' => TAB_STOP - ( col % TAB_STOP ),
-                        ch if is_combining_mark( ch ) => 0,
-                        ch if is_wide( ch ) => {
-                            if col % width == width - 1 {
-                                // Can't render a fullwidth character into last column
-                                3
-                            } else {
-                                2
-                            }
+                        ch if is::combining_mark( ch ) => 0,
+                        ch if is::wide( ch ) =>
+                        {
+                            if col % width == width - 1 { 3 } else { 2 }
                         }
                         _ => 1
                     };
@@ -6562,12 +6512,12 @@ pub mod io
                 col - start_col
             }
         }
-
         /// Maximum value of digit input
-        const NUMBER_MAX: i32 = 1_000_000;
+        pub const NUMBER_MAX: i32 = 1_000_000;
 
         #[derive( Copy, Clone, Debug )]
-        pub enum Digit {
+        pub enum Digit
+        {
             None,
             NegNone,
             Num( i32 ),
@@ -6629,7 +6579,7 @@ pub mod io
             }
         }
 
-        impl<'a, 'b, Term: 'b + Terminal> Deref for WriterImpl<'a, 'b, Term> {
+        impl<'a, 'b, Term: 'b + Terminals> Deref for WriterImpl<'a, 'b, Term> {
             type Target = WriteLock<'b, Term>;
 
             fn deref( &self ) -> &WriteLock<'b, Term> {
@@ -6640,7 +6590,7 @@ pub mod io
             }
         }
 
-        impl<'a, 'b: 'a, Term: 'b + Terminal> DerefMut for WriterImpl<'a, 'b, Term> {
+        impl<'a, 'b: 'a, Term: 'b + Terminals> DerefMut for WriterImpl<'a, 'b, Term> {
             fn deref_mut( &mut self ) -> &mut WriteLock<'b, Term> {
                 match *self {
                     WriterImpl::Mutex( ref mut m ) => m,
@@ -6781,6 +6731,12 @@ pub mod marker
 pub mod mem
 {
     pub use std::mem::{ * };
+}
+/*
+terminfo v0.9.0*/
+pub mod metadata
+{
+    
 }
 /// Networking primitives for TCP/UDP communication.
 pub mod net
@@ -7153,7 +7109,7 @@ pub mod now
 
                     if options.isatty && !options.capture_output
                     {
-                        let _cmd = parsers::parser_line::tokens_to_line( &cmd.tokens );
+                        let _cmd = parsers::line::tokens_to_line( &cmd.tokens );
                         sh.insert_job( *pgid, pid, &_cmd, "Running", cl.background );
                     }
 
@@ -20219,7 +20175,7 @@ pub mod primitive
             for cap in re.captures_iter( text )
             {
                 let name = cap[1].to_string();
-                let value = parsers::parser_line::unquote( &cap[2] );
+                let value = parsers::line::unquote( &cap[2] );
                 envs.insert( name, value );
             }
 
@@ -21086,7 +21042,7 @@ pub mod shell
 
     pub fn do_expansion( sh:&mut Shell, tokens:&mut types::Tokens )
             {
-        let line = parsers::parser_line::tokens_to_line( tokens );
+        let line = parsers::line::tokens_to_line( tokens );
         if tools::is_arithmetic( &line ) { return; }
 
         if tokens.len() >= 2 && tokens[0].1 == "export" && tokens[1].1.starts_with( "PROMPT=" ) { return; }
@@ -21481,8 +21437,15 @@ pub mod str
     pub use std::str::{ * };
     use ::
     {
-        borrow::Cow::{self, Borrowed, Owned},
+        borrow::{ Borrow, BorrowMut, Cow::{ self, Borrowed, Owned } },
+        boxed::{ Box },
+        cmp::{ Ordering },
+        ffi::{ OsStr, OsString },
         fs::{ File },
+        hash::{ Hash, Hasher },
+        iter::{ FromIterator, repeat, Skip },
+        string::{ String },
+        vec::{ Array, SmallVec },
         *,
     };
     /*
@@ -21502,8 +21465,617 @@ pub mod str
         backward_char, forward_char, backward_search_char, forward_search_char,
         filter_visible, is_combining_mark, is_wide, RangeArgument,
     };
-
     */
+    /*
+    smallstr 0.2.0 | Implements `SmallString`, a `String`-like container for small strings */
+    macro_rules! eq_str
+    {
+        ( $rhs:ty ) =>
+        {
+            impl<'a, A: Array<Item = u8>> PartialEq<$rhs> for SmallString<A>
+            {
+                #[inline] fn eq(&self, rhs: &$rhs) -> bool { &self[..] == &rhs[..] }
+                #[inline] fn ne(&self, rhs: &$rhs) -> bool { &self[..] != &rhs[..] }
+            }
+        };
+    }
+
+    macro_rules! impl_index_str
+    {
+        ($index_type: ty) =>
+        {
+            impl<A: Array<Item = u8>> ops::Index<$index_type> for SmallString<A>
+            {
+                type Output = str;
+                #[inline] fn index(&self, index: $index_type) -> &str { &self.as_str()[index] }
+            }
+
+            impl<A: Array<Item = u8>> ops::IndexMut<$index_type> for SmallString<A>
+            {
+                #[inline] fn index_mut(&mut self, index: $index_type) -> &mut str { &mut self.as_mut_str()[index] }
+            }
+        };
+    }
+    /// A `String`-like container that can store a small number of bytes inline.
+    #[derive(Clone, Default)]
+    pub struct SmallString<A: Array<Item = u8>>
+    {
+        data: SmallVec<A>,
+    }
+
+    impl<A: Array<Item = u8>> SmallString<A>
+    {
+        /// Construct an empty string.
+        #[inline] pub fn new() -> SmallString<A>
+        {
+            SmallString
+            {
+                data: SmallVec::new(),
+            }
+        }
+        /// Construct an empty string with enough capacity pre-allocated to store at least `n` bytes.
+        #[inline] pub fn with_capacity(n: usize) -> SmallString<A>
+        {
+            SmallString
+            {
+                data: SmallVec::with_capacity(n),
+            }
+        }
+        /// Construct a `SmallString` by copying data from a `&str`.
+        #[inline] pub fn from_str(s: &str) -> SmallString<A>
+        {
+            SmallString
+            {
+                data: SmallVec::from_slice(s.as_bytes()),
+            }
+        }
+        /// Construct a `SmallString` by using an existing allocation.
+        #[inline] pub fn from_string(s: String) -> SmallString<A>
+        {
+            SmallString
+            {
+                data: SmallVec::from_vec(s.into_bytes()),
+            }
+        }
+        /// Constructs a new `SmallString` on the stack using UTF-8 bytes.
+        #[inline] pub fn from_buf(buf: A) -> Result<SmallString<A>, FromUtf8Error<A>>
+        {
+            let data = SmallVec::from_buf(buf);
+
+            match str::from_utf8(&data)
+            {
+                Ok(_) => Ok(SmallString { data }),
+                Err(error) =>
+                {
+                    let buf = data.into_inner().ok().unwrap();
+                    Err(FromUtf8Error { buf, error })
+                }
+            }
+        }
+
+        /// Constructs a new `SmallString` on the stack using the provided byte array
+        /// without checking that the array contains valid UTF-8.
+        #[inline] pub unsafe fn from_buf_unchecked(buf: A) -> SmallString<A>
+        {
+            SmallString
+            {
+                data: SmallVec::from_buf(buf),
+            }
+        }
+        /// The maximum number of bytes this string can hold inline.
+        #[inline] pub fn inline_size(&self) -> usize { A::size() }
+        /// Returns the length of this string, in bytes.
+        #[inline] pub fn len(&self) -> usize { self.data.len() }
+        /// Returns `true` if this string is empty.
+        #[inline] pub fn is_empty(&self) -> bool { self.data.is_empty() }
+        /// Returns the number of bytes this string can hold without reallocating.
+        #[inline] pub fn capacity(&self) -> usize { self.data.capacity() }
+        /// Returns `true` if the data has spilled into a separate heap-allocated buffer.
+        #[inline] pub fn spilled(&self) -> bool { self.data.spilled() }
+        /// Empties the string and returns an iterator over its former contents.
+        pub fn drain(&mut self) -> Drain
+        {
+            unsafe
+            {
+                let len = self.len();
+                self.data.set_len(0);
+                let ptr = self.as_ptr();
+                let slice = slice::from_raw_parts(ptr, len);
+                let s = str::from_utf8_unchecked(slice);
+                Drain { iter: s.chars() }
+            }
+        }
+        /// Appends the given `char` to the end of this string.
+        #[inline] pub fn push(&mut self, ch: char)
+        {
+            match ch.len_utf8()
+            {
+                1 => self.data.push(ch as u8),
+                _ => self.push_str(ch.encode_utf8(&mut [0; 4])),
+            }
+        }
+        /// Appends the given string slice to the end of this string.
+        #[inline] pub fn push_str(&mut self, s: &str) { self.data.extend_from_slice(s.as_bytes()); }
+        /// Removes the last character from this string and returns it.
+        #[inline] pub fn pop(&mut self) -> Option<char>
+        {
+            match self.chars().next_back()
+            {
+                Some(ch) => unsafe
+                {
+                    let new_len = self.len() - ch.len_utf8();
+                    self.data.set_len(new_len);
+                    Some(ch)
+                },
+                None => None,
+            }
+        }
+        /// Reallocates to set the new capacity to `new_cap`.
+        #[inline] pub fn grow(&mut self, new_cap: usize) { self.data.grow(new_cap); }
+        /// Ensures that this string's capacity is at least `additional` bytes larger than its length.
+        #[inline] pub fn reserve(&mut self, additional: usize) { self.data.reserve(additional); }
+        /// Ensures that this string's capacity is `additional` bytes larger than its length.
+        #[inline] pub fn reserve_exact(&mut self, additional: usize) { self.data.reserve(additional); }
+        /// Shrink the capacity of the string as much as possible.
+        #[inline] pub fn shrink_to_fit(&mut self) { self.data.shrink_to_fit(); }
+        /// Shorten the string, keeping the first `len` bytes.
+        #[inline] pub fn truncate(&mut self, len: usize)
+        {
+            assert!(self.is_char_boundary(len));
+            self.data.truncate(len);
+        }
+        /// Extracts a string slice containing the entire string.
+        #[inline] pub fn as_str(&self) -> &str { self }
+        /// Extracts a string slice containing the entire string.
+        #[inline] pub fn as_mut_str(&mut self) -> &mut str { self }
+        /// Removes all contents of the string.
+        #[inline] pub fn clear(&mut self) { self.data.clear(); }
+        /// Removes a `char` from this string at a byte position and returns it.
+        #[inline] pub fn remove(&mut self, idx: usize) -> char
+        {
+            unsafe
+            {
+                let ch = match self[idx..].chars().next()
+                {
+                    Some(ch) => ch,
+                    None => panic!("cannot remove a char from the end of a string"),
+                };
+
+                let ch_len = ch.len_utf8();
+                let next = idx + ch_len;
+                let len = self.len();
+                ptr::copy
+                (
+                    self.as_ptr().add(next),
+                    self.as_mut_ptr().add(idx),
+                    len - next,
+                );
+                self.data.set_len(len - ch_len);
+            }
+
+            ch
+        }
+        /// Inserts a `char` into this string at the given byte position.
+        #[inline] pub fn insert(&mut self, idx: usize, ch: char)
+        {
+            assert!(self.is_char_boundary(idx));
+
+            match ch.len_utf8()
+            {
+                1 => self.data.insert(idx, ch as u8),
+                _ => self.insert_str(idx, ch.encode_utf8(&mut [0; 4])),
+            }
+        }
+        /// Inserts a `&str` into this string at the given byte position.
+        #[inline] pub fn insert_str(&mut self, idx: usize, s: &str)
+        {
+            unsafe
+            {
+                assert!(self.is_char_boundary(idx));
+                let len = self.len();
+                let amt = s.len();
+                self.data.reserve(amt);
+                ptr::copy
+                (
+                    self.as_ptr().add(idx),
+                    self.as_mut_ptr().add(idx + amt),
+                    len - idx,
+                );
+                ptr::copy_nonoverlapping(s.as_ptr(), self.as_mut_ptr().add(idx), amt);
+                self.data.set_len(len + amt);
+            }
+        }
+        /// Returns a mutable reference to the contents of the `SmallString`.
+        #[inline] pub unsafe fn as_mut_vec(&mut self) -> &mut SmallVec<A> { &mut self.data }
+        /// Converts the `SmallString` into a `String`, 
+        /// without reallocating if the `SmallString` has already spilled onto the heap.
+        #[inline] pub fn into_string(self) -> String { unsafe { String::from_utf8_unchecked(self.data.into_vec()) } }
+        /// Converts the `SmallString` into a `Box<str>`, 
+        /// without reallocating if the `SmallString` has already spilled onto the heap.
+        #[inline] pub fn into_boxed_str(self) -> Box<str> { self.into_string().into_boxed_str() }
+        /// Convert the `SmallString` into `A`, if possible. Otherwise, return `Err(self)`.
+        #[inline] pub fn into_inner(self) -> Result<A, Self>
+        { self.data.into_inner().map_err(|data| SmallString { data }) }
+        /// Retains only the characters specified by the predicate.
+        #[inline] pub fn retain<F: FnMut(char) -> bool>(&mut self, mut f: F)
+        {
+            unsafe
+            {    
+                struct SetLenOnDrop<'a, A: Array<Item = u8>>
+                {
+                    s: &'a mut SmallString<A>,
+                    idx: usize,
+                    del_bytes: usize,
+                }
+
+                impl<'a, A: Array<Item = u8>> Drop for SetLenOnDrop<'a, A>
+                {
+                    fn drop(&mut self)
+                    {
+                        unsafe
+                        {
+                            let new_len = self.idx - self.del_bytes;
+                            debug_assert!(new_len <= self.s.len());
+                            self.s.data.set_len(new_len)
+                        };
+                    }
+                }
+
+                let len = self.len();
+                let mut guard = SetLenOnDrop
+                {
+                    s: self,
+                    idx: 0,
+                    del_bytes: 0,
+                };
+
+                while guard.idx < len
+                {
+                    let ch = guard
+                    .s
+                    .get_unchecked(guard.idx..len)
+                    .chars()
+                    .next()
+                    .unwrap();
+                    let ch_len = ch.len_utf8();
+
+                    if !f(ch) { guard.del_bytes += ch_len; } else if guard.del_bytes > 0
+                    {
+                        ptr::copy
+                        (
+                            guard.s.data.as_ptr().add(guard.idx),
+                            guard.s.data.as_mut_ptr().add(guard.idx - guard.del_bytes),
+                            ch_len,
+                        );
+                    }
+                    
+                    guard.idx += ch_len;
+                }
+
+                drop(guard);
+            }
+        }
+
+        fn as_mut_ptr(&mut self) -> *mut u8 { self.as_ptr() as *mut u8 }
+    }
+
+    impl<A: Array<Item = u8>> ops::Deref for SmallString<A>
+    {
+        type Target = str;
+        #[inline] fn deref(&self) -> &str
+        {
+            unsafe
+            { 
+                let bytes: &[u8] = &self.data;
+                str::from_utf8_unchecked(bytes)
+            }
+        }
+    }
+
+    impl<A: Array<Item = u8>> ops::DerefMut for SmallString<A>
+    {
+        #[inline] fn deref_mut(&mut self) -> &mut str
+        {
+            unsafe 
+            {
+                let bytes: &mut [u8] = &mut self.data;
+                str::from_utf8_unchecked_mut(bytes)
+            }
+        }
+    }
+
+    impl<A: Array<Item = u8>> AsRef<str> for SmallString<A>
+    {
+        #[inline] fn as_ref(&self) -> &str { self }
+    }
+
+    impl<A: Array<Item = u8>> AsMut<str> for SmallString<A>
+    {
+        #[inline] fn as_mut(&mut self) -> &mut str { self }
+    }
+
+    impl<A: Array<Item = u8>> Borrow<str> for SmallString<A>
+    {
+        #[inline] fn borrow(&self) -> &str { self }
+    }
+
+    impl<A: Array<Item = u8>> BorrowMut<str> for SmallString<A>
+    {
+        #[inline] fn borrow_mut(&mut self) -> &mut str { self }
+    }
+
+    impl<A: Array<Item = u8>> AsRef<[u8]> for SmallString<A>
+    {
+        #[inline] fn as_ref(&self) -> &[u8] { self.data.as_ref() }
+    }
+
+    impl<A: Array<Item = u8>> fmt::Write for SmallString<A>
+    {
+        #[inline] fn write_str(&mut self, s: &str) -> fmt::Result
+        {
+            self.push_str(s);
+            Ok(())
+        }
+
+        #[inline] fn write_char(&mut self, ch: char) -> fmt::Result
+        {
+            self.push(ch);
+            Ok(())
+        }
+    }
+
+    impl<A: Array<Item = u8>> From<char> for SmallString<A>
+    {
+        #[inline] fn from(ch: char) -> SmallString<A> { SmallString::from_str(ch.encode_utf8(&mut [0; 4])) }
+    }
+
+    impl<'a, A: Array<Item = u8>> From<&'a str> for SmallString<A>
+    {
+        #[inline] fn from(s: &str) -> SmallString<A> { SmallString::from_str(s) }
+    }
+
+    impl<A: Array<Item = u8>> From<Box<str>> for SmallString<A>
+    {
+        #[inline] fn from(s: Box<str>) -> SmallString<A> { SmallString::from_string(s.into()) }
+    }
+
+    impl<A: Array<Item = u8>> From<String> for SmallString<A>
+    {
+        #[inline] fn from(s: String) -> SmallString<A> { SmallString::from_string(s) }
+    }
+
+    impl<'a, A: Array<Item = u8>> From<Cow<'a, str>> for SmallString<A>
+    {
+        fn from(value: Cow<'a, str>) -> Self
+        {
+            match value
+            {
+                Cow::Borrowed(s) => Self::from_str(s),
+                Cow::Owned(s) => Self::from_string(s),
+            }
+        }
+    }
+
+    impl_index_str!(ops::Range<usize>);
+    impl_index_str!(ops::RangeFrom<usize>);
+    impl_index_str!(ops::RangeTo<usize>);
+    impl_index_str!(ops::RangeFull);
+
+    impl<A: Array<Item = u8>> FromIterator<char> for SmallString<A>
+    {
+        fn from_iter<I: IntoIterator<Item = char>>(iter: I) -> SmallString<A>
+        {
+            let mut s = SmallString::new();
+            s.extend(iter);
+            s
+        }
+    }
+
+    impl<'a, A: Array<Item = u8>> FromIterator<&'a char> for SmallString<A>
+    {
+        fn from_iter<I: IntoIterator<Item = &'a char>>(iter: I) -> SmallString<A>
+        {
+            let mut s = SmallString::new();
+            s.extend(iter.into_iter().cloned());
+            s
+        }
+    }
+
+    impl<'a, A: Array<Item = u8>> FromIterator<Cow<'a, str>> for SmallString<A>
+    {
+        fn from_iter<I: IntoIterator<Item = Cow<'a, str>>>(iter: I) -> SmallString<A>
+        {
+            let mut s = SmallString::new();
+            s.extend(iter);
+            s
+        }
+    }
+
+    impl<'a, A: Array<Item = u8>> FromIterator<&'a str> for SmallString<A>
+    {
+        fn from_iter<I: IntoIterator<Item = &'a str>>(iter: I) -> SmallString<A>
+        {
+            let mut s = SmallString::new();
+            s.extend(iter);
+            s
+        }
+    }
+
+    impl<A: Array<Item = u8>> FromIterator<String> for SmallString<A>
+    {
+        fn from_iter<I: IntoIterator<Item = String>>(iter: I) -> SmallString<A>
+        {
+            let mut s = SmallString::new();
+            s.extend(iter);
+            s
+        }
+    }
+
+    impl<A: Array<Item = u8>> Extend<char> for SmallString<A>
+    {
+        fn extend<I: IntoIterator<Item = char>>(&mut self, iter: I)
+        {
+            let iter = iter.into_iter();
+            let (lo, _) = iter.size_hint();
+            self.reserve(lo);
+
+            for ch in iter
+            {
+                self.push(ch);
+            }
+        }
+    }
+
+    impl<'a, A: Array<Item = u8>> Extend<&'a char> for SmallString<A>
+    {
+        fn extend<I: IntoIterator<Item = &'a char>>(&mut self, iter: I) { self.extend(iter.into_iter().cloned()); }
+    }
+
+    impl<'a, A: Array<Item = u8>> Extend<Cow<'a, str>> for SmallString<A>
+    {
+        fn extend<I: IntoIterator<Item = Cow<'a, str>>>(&mut self, iter: I)
+        {
+            for s in iter
+            {
+                self.push_str(&s);
+            }
+        }
+    }
+
+    impl<'a, A: Array<Item = u8>> Extend<&'a str> for SmallString<A>
+    {
+        fn extend<I: IntoIterator<Item = &'a str>>(&mut self, iter: I)
+        {
+            for s in iter
+            {
+                self.push_str(s);
+            }
+        }
+    }
+
+    impl<A: Array<Item = u8>> Extend<String> for SmallString<A>
+    {
+        fn extend<I: IntoIterator<Item = String>>(&mut self, iter: I)
+        {
+            for s in iter
+            {
+                self.push_str(&s);
+            }
+        }
+    }
+
+    impl<A: Array<Item = u8>> fmt::Debug for SmallString<A>
+    {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { fmt::Debug::fmt(&**self, f) }
+    }
+
+    impl<A: Array<Item = u8>> fmt::Display for SmallString<A>
+    {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { fmt::Display::fmt(&**self, f) }
+    }
+
+    eq_str!(str);
+    eq_str!(&'a str);
+    eq_str!(String);
+    eq_str!(Cow<'a, str>);
+    
+    impl<A: Array<Item = u8>> PartialEq<OsStr> for SmallString<A>
+    {
+        #[inline] fn eq(&self, rhs: &OsStr) -> bool { &self[..] == rhs }
+        #[inline] fn ne(&self, rhs: &OsStr) -> bool { &self[..] != rhs }
+    }
+    
+    impl<'a, A: Array<Item = u8>> PartialEq<&'a OsStr> for SmallString<A>
+    {
+        #[inline] fn eq(&self, rhs: &&OsStr) -> bool { &self[..] == *rhs }
+        #[inline] fn ne(&self, rhs: &&OsStr) -> bool { &self[..] != *rhs }
+    }
+    
+    impl<A: Array<Item = u8>> PartialEq<OsString> for SmallString<A>
+    {
+        #[inline] fn eq(&self, rhs: &OsString) -> bool { &self[..] == rhs }
+        #[inline] fn ne(&self, rhs: &OsString) -> bool { &self[..] != rhs }
+    }
+    
+    impl<'a, A: Array<Item = u8>> PartialEq<Cow<'a, OsStr>> for SmallString<A>
+    {
+        #[inline] fn eq(&self, rhs: &Cow<OsStr>) -> bool { self[..] == **rhs }
+        #[inline] fn ne(&self, rhs: &Cow<OsStr>) -> bool { self[..] != **rhs }
+    }
+
+    impl<A, B> PartialEq<SmallString<B>> for SmallString<A> where
+    A: Array<Item = u8>,
+    B: Array<Item = u8>
+    {
+        #[inline] fn eq(&self, rhs: &SmallString<B>) -> bool { &self[..] == &rhs[..] }
+        #[inline] fn ne(&self, rhs: &SmallString<B>) -> bool { &self[..] != &rhs[..] }
+    }
+
+    impl<A: Array<Item = u8>> Eq for SmallString<A> {}
+
+    impl<A: Array<Item = u8>> PartialOrd for SmallString<A>
+    {
+        #[inline] fn partial_cmp(&self, rhs: &SmallString<A>) -> Option<Ordering> { self[..].partial_cmp(&rhs[..]) }
+    }
+
+    impl<A: Array<Item = u8>> Ord for SmallString<A>
+    {
+        #[inline] fn cmp(&self, rhs: &SmallString<A>) -> Ordering { self[..].cmp(&rhs[..]) }
+    }
+
+    impl<A: Array<Item = u8>> Hash for SmallString<A>
+    {
+        #[inline] fn hash<H: Hasher>(&self, state: &mut H) { self[..].hash(state) }
+    }
+    /// A draining iterator for `SmallString`.
+    pub struct Drain<'a>
+    {
+        iter: Chars<'a>,
+    }
+
+    impl<'a> Iterator for Drain<'a>
+    {
+        type Item = char;
+        #[inline] fn next(&mut self) -> Option<char> { self.iter.next() }
+        #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
+    }
+
+    impl<'a> DoubleEndedIterator for Drain<'a>
+    {
+        #[inline] fn next_back(&mut self) -> Option<char> { self.iter.next_back() }
+    }
+    /// A possible error value when creating a `SmallString` from a byte array.
+    #[derive(Debug)]
+    pub struct FromUtf8Error<A: Array<Item = u8>>
+    {
+        buf: A,
+        error: Utf8Error,
+    }
+
+    impl<A: Array<Item = u8>> FromUtf8Error<A>
+    {
+        /// Returns the slice of `[u8]` bytes that were attempted to convert to a `SmallString`.
+        #[inline] pub fn as_bytes(&self) -> &[u8]
+        {
+            unsafe
+            {
+                let ptr = &self.buf as *const _ as *const u8;
+                slice::from_raw_parts(ptr, A::size())
+            }
+        }
+        /// Returns the byte array that was attempted to convert into a `SmallString`.
+        #[inline] pub fn into_buf(self) -> A { self.buf }
+        /// Returns the `Utf8Error` to get more details about the conversion failure.
+        #[inline] pub fn utf8_error(&self) -> Utf8Error { self.error }
+    }
+
+    impl<A: Array<Item = u8>> fmt::Display for FromUtf8Error<A>
+    {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+        {
+            fmt::Display::fmt(&self.error, f)
+        }
+    }
     /*
     pub fn display_str<'a>( s:&'a str, style: Display ) -> Cow<'a, str> */
     pub fn display<'a>( s:&'a str, style: Display ) -> Cow<'a, str>
@@ -21539,8 +22111,8 @@ pub mod sync
 /// Provides System implementations
 pub mod system
 {
-    //! Mortal v.0.0.0 
-        /*
+    //! Mortal v.0.2.4 
+    /*
     MORTAL
     #[macro_use] extern crate bitflags;
     extern crate smallstr;
@@ -21553,25 +22125,652 @@ pub mod system
 
     #[cfg(windows)] extern crate winapi;
 
-    pub use crate::screen::{Screen, ScreenReadGuard, ScreenWriteGuard};
-    pub use crate::sequence::{FindResult, SequenceMap};
-    pub use crate::signal::{Signal, SignalSet};
-    pub use crate::terminal::{
+    pub use mortal::screen::{Screen, ScreenReadGuard, ScreenWriteGuard};
+    pub use mortal::sequence::{FindResult, SequenceMap};
+    pub use mortal::signal::{Signal, SignalSet};
+    pub use mortal::terminal::{
         Color, Cursor, CursorMode, Size, Style, Theme,
         Event, Key, MouseEvent, MouseInput, MouseButton, ModifierState,
         PrepareConfig, PrepareState,
         Terminal, TerminalReadGuard, TerminalWriteGuard,
     };
+
+        use std::sync::{LockResult, PoisonError, TryLockError, TryLockResult};
+
+        use mortal::screen::{Screen, ScreenReadGuard};
+        use mortal::terminal::{Terminal, TerminalReadGuard};
+        use mortal::util::char_width;
     */
-    #[macro_use] mod buffer;
-    #[doc(hidden)]
-    #[macro_use] pub mod macros;
-    mod priv_util;
-    pub mod screen;
-    pub mod sequence;
-    pub mod signal;
-    pub mod terminal;
-    pub mod util;
+    use ::
+    {
+        sync::{ LockResult, PoisonError, TryLockError, TryLockResult },
+        *,
+    };
+    #[macro_use] mod buffer
+    {
+        /*
+        use smallstr::SmallString;
+
+        use mortal::priv_util::is_visible;
+        use mortal::terminal::{Color, Cursor, Size, Style, Theme};
+        use mortal::util::{char_width, is_combining_mark};
+        */
+        use ::
+        {
+            mem::{ swap },
+            ops::{ Range },
+            str::{ SmallString },
+            *,
+        };
+        pub const TAB_STOP: usize = 8;
+
+        /// Generates buffer methods forwarded to a buffer contained in self.
+        macro_rules! forward_screen_buffer_methods
+        {
+            ( |$slf:ident| $field:expr ) =>
+            {
+                pub fn size(&self) -> ::system::terminal::Size 
+                {
+                    let $slf = self;
+                    $field.size()
+                }
+
+                pub fn cursor(&self) -> ::system::terminal::Cursor 
+                {
+                    let $slf = self;
+                    $field.cursor()
+                }
+
+                pub fn set_cursor(&self, pos: ::system::terminal::Cursor) 
+                {
+                    let $slf = self;
+                    $field.set_cursor(pos);
+                }
+
+                pub fn next_line(&self, column: usize) 
+                {
+                    let $slf = self;
+                    $field.next_line(column);
+                }
+
+                pub fn clear_screen(&self) 
+                {
+                    let $slf = self;
+                    $field.clear_screen();
+                }
+
+                pub fn clear_attributes(&self) 
+                {
+                    let $slf = self;
+                    $field.clear_attributes();
+                }
+
+                pub fn add_style(&self, style: ::system::terminal::Style) 
+                {
+                    let $slf = self;
+                    $field.add_style(style);
+                }
+
+                pub fn remove_style(&self, style: ::system::terminal::Style) 
+                {
+                    let $slf = self;
+                    $field.remove_style(style);
+                }
+
+                pub fn set_style(&self, style: ::system::terminal::Style) 
+                {
+                    let $slf = self;
+                    $field.set_style(style);
+                }
+
+                pub fn set_fg(&self, fg: Option<::system::terminal::Color>) 
+                {
+                    let $slf = self;
+                    $field.set_fg(fg);
+                }
+
+                pub fn set_bg(&self, bg: Option<::system::terminal::Color>) 
+                {
+                    let $slf = self;
+                    $field.set_bg(bg);
+                }
+
+                pub fn set_theme(&self, theme: ::system::terminal::Theme) 
+                {
+                    let $slf = self;
+                    $field.set_theme(theme)
+                }
+
+                pub fn write_char(&self, ch: char) 
+                {
+                    let $slf = self;
+                    let _ = $field.write_char(ch);
+                }
+
+                pub fn write_str(&self, s: &str) 
+                {
+                    let $slf = self;
+                    let _ = $field.write_str(s);
+                }
+
+                pub fn write_at(&self, pos: ::system::terminal::Cursor, text: &str) 
+                {
+                    let $slf = self;
+                    let _ = $field.write_at(pos, text);
+                }
+
+                pub fn write_styled
+                (
+                    &self,
+                    fg: Option<::system::terminal::Color>,
+                    bg: Option<::system::terminal::Color>,
+                    style: ::system::terminal::Style,
+                    text: &str
+                )
+                {
+                    let $slf = self;
+                    let _ = $field.write_styled(fg, bg, style, text);
+                }
+
+                pub fn write_styled_at
+                (
+                    &self,
+                    pos: ::system::terminal::Cursor,
+                    fg: Option<::system::terminal::Color>,
+                    bg: Option<::system::terminal::Color>,
+                    style: ::system::terminal::Style,
+                    text: &str
+                )
+                {
+                    let $slf = self;
+                    let _ = $field.write_styled_at(pos, fg, bg, style, text);
+                }
+            }
+        }
+        
+        macro_rules! forward_screen_buffer_mut_methods
+        {
+            ( |$slf:ident| $field:expr ) =>
+            {
+                pub fn size(&self) -> ::system::terminal::Size
+                {
+                    let $slf = self;
+                    $field.size()
+                }
+
+                pub fn cursor(&self) -> ::system::terminal::Cursor
+                {
+                    let $slf = self;
+                    $field.cursor()
+                }
+
+                pub fn set_cursor(&mut self, pos: ::system::terminal::Cursor)
+                {
+                    let $slf = self;
+                    $field.set_cursor(pos);
+                }
+
+                pub fn next_line(&mut self, column: usize)
+                {
+                    let $slf = self;
+                    $field.next_line(column);
+                }
+
+                pub fn clear_screen(&mut self)
+                {
+                    let $slf = self;
+                    $field.clear_screen();
+                }
+
+                pub fn clear_attributes(&mut self)
+                {
+                    let $slf = self;
+                    $field.clear_attributes();
+                }
+
+                pub fn add_style(&mut self, style: ::system::terminal::Style)
+                {
+                    let $slf = self;
+                    $field.add_style(style);
+                }
+
+                pub fn remove_style(&mut self, style: ::system::terminal::Style)
+                {
+                    let $slf = self;
+                    $field.remove_style(style);
+                }
+
+                pub fn set_style(&mut self, style: ::system::terminal::Style)
+                {
+                    let $slf = self;
+                    $field.set_style(style);
+                }
+
+                pub fn set_fg(&mut self, fg: Option<::system::terminal::Color>)
+                {
+                    let $slf = self;
+                    $field.set_fg(fg);
+                }
+
+                pub fn set_bg(&mut self, bg: Option<::system::terminal::Color>)
+                {
+                    let $slf = self;
+                    $field.set_bg(bg);
+                }
+
+                pub fn set_theme(&mut self, theme: ::system::terminal::Theme)
+                {
+                    let $slf = self;
+                    $field.set_theme(theme);
+                }
+
+                pub fn write_char(&mut self, ch: char)
+                {
+                    let $slf = self;
+                    let _ = $field.write_char(ch);
+                }
+
+                pub fn write_str(&mut self, s: &str)
+                {
+                    let $slf = self;
+                    let _ = $field.write_str(s);
+                }
+
+                pub fn write_at(&mut self, pos: ::system::terminal::Cursor, text: &str)
+                {
+                    let $slf = self;
+                    let _ = $field.write_at(pos, text);
+                }
+
+                pub fn write_styled
+                (
+                    &mut self,
+                    fg: Option<::system::terminal::Color>,
+                    bg: Option<::system::terminal::Color>,
+                    style: ::system::terminal::Style, 
+                    text: &str
+                )
+                {
+                    let $slf = self;
+                    let _ = $field.write_styled(fg, bg, style, text);
+                }
+
+                pub fn write_styled_at
+                (
+                    &mut self, 
+                    pos: ::system::terminal::Cursor,
+                    fg: Option<::system::terminal::Color>, 
+                    bg: Option<::system::terminal::Color>,
+                    style: ::system::terminal::Style, 
+                    text: &str
+                )
+                {
+                    let $slf = self;
+                    let _ = $field.write_styled_at(pos, fg, bg, style, text);
+                }
+            }
+        }
+
+        pub struct ScreenBuffer
+        {
+            buffer: Vec<Cell>,
+            back_buffer: Vec<Cell>,
+            size: Size,
+            cursor: Cursor,
+            fg: Option<Color>,
+            bg: Option<Color>,
+            style: Style,
+        }
+
+        impl ScreenBuffer
+        {
+            pub fn new(size: Size) -> ScreenBuffer
+            {
+                let area = size.area();
+
+                ScreenBuffer
+                {
+                    buffer: vec![Cell::default(); area],
+                    back_buffer: vec![Cell::default(); area],
+                    size: size,
+                    cursor: Cursor::default(),
+                    fg: None,
+                    bg: None,
+                    style: Style::empty(),
+                }
+            }
+
+            pub fn cursor(&self) -> Cursor { self.cursor }
+
+            pub fn size(&self) -> Size { self.size }
+
+            pub fn resize(&mut self, new_size: Size)
+            {
+                resize_buffer(&mut self.buffer, self.size, new_size);
+                new_buffer(&mut self.back_buffer, new_size);
+                self.size = new_size;
+            }
+
+            pub fn set_cursor(&mut self, pos: Cursor) { self.cursor = pos; }
+
+            pub fn next_line(&mut self, column: usize)
+            {
+                self.cursor.line += 1;
+                self.cursor.column = column;
+            }
+
+            pub fn clear_attributes(&mut self)
+            {
+                self.fg = None;
+                self.bg = None;
+                self.style = Style::empty();
+            }
+
+            pub fn add_style(&mut self, style: Style) { self.style |= style; }
+            pub fn remove_style(&mut self, style: Style) { self.style -= style; }
+            pub fn set_style(&mut self, style: Style) { self.style = style; }
+            pub fn set_fg(&mut self, fg: Option<Color>) { self.fg = fg; }
+            pub fn set_bg(&mut self, bg: Option<Color>) { self.bg = bg; }
+            pub fn set_theme(&mut self, theme: Theme)
+            {
+                self.set_fg(theme.fg);
+                self.set_bg(theme.bg);
+                self.set_style(theme.style);
+            }
+
+            pub fn clear_screen(&mut self)
+            {
+                for cell in &mut self.buffer
+                {
+                    *cell = Cell::default();
+                }
+            }
+
+            pub fn indices(&self) -> Range<usize> { 0..self.size.area() }
+            
+            pub fn next_cell(&mut self, indices: &mut Range<usize>) -> Option<(Cursor, Cell)>
+            {
+                while let Some(idx) = indices.next()
+                {
+                    let first = self.buffer[idx].first_char();
+                    let width = char_width(first).unwrap_or(0);
+                    
+                    if width == 2 { let _ = indices.next(); }
+
+                    if self.buffer[idx] != self.back_buffer[idx]
+                    {
+                        let cell = self.buffer[idx].clone();
+                        let line = idx / self.size.columns;
+                        let column = idx % self.size.columns;
+                        self.back_buffer[idx] = cell.clone();
+                        return Some((Cursor{line, column}, cell));
+                    }
+                }
+
+                None
+            }
+
+            pub fn write_char(&mut self, ch: char) -> Result<(), OutOfBounds>
+            {
+                if ch == '\t'
+                {
+                    self.try_cursor()?;
+                    let rem = self.size.columns - self.cursor.column;
+                    let n = rem.min(TAB_STOP - (self.cursor.column % TAB_STOP));
+
+                    for _ in 0..n 
+                    {
+                        self.write_char(' ')?;
+                    }
+                }
+                
+                else if ch == '\r'
+                {
+                    self.cursor.column = 0;
+                }
+                
+                else if ch == '\n'
+                {
+                    self.cursor.line += 1;
+                    self.cursor.column = 0;
+                }
+                
+                else if is_combining_mark(ch)
+                {
+                    if let Some(prev) = self.cursor.previous(self.size)
+                    {
+                        self.try_cursor_at(prev)?;
+                        self.cell_mut(prev).text.push(ch);
+                    }
+                }
+                
+                else if is_visible(ch)
+                {
+                    self.try_cursor()?;
+
+                    if let Some(prev) = self.cursor.previous(self.size)
+                    {
+                        let cell = self.cell_mut(prev);
+
+                        if cell.is_wide() { *cell = Cell::default(); }
+                    }
+
+                    let rem = self.size.columns - self.cursor.column;
+                    let width = char_width(ch).unwrap_or(0);
+                    
+                    if rem < width
+                    {
+                        self.try_cursor()?;
+                        let mut pos = self.cursor;
+
+                        for _ in 0..rem
+                        {
+                            self.set_cell(pos, ch);
+                            pos.column += 1;
+                        }
+
+                        self.cursor.column = 0;
+                        self.cursor.line += 1;
+                    }
+
+                    self.try_cursor()?;
+                    let mut pos = self.cursor;
+                    self.set_cell(pos, ch);
+
+                    for _ in 1..width
+                    {
+                        pos.column += 1;
+                        self.set_cell(pos, ' ');
+                    }
+
+                    self.cursor.column += width;
+
+                    if self.cursor.column >= self.size.columns
+                    {
+                        self.cursor.line += 1;
+                        self.cursor.column = 0;
+                    }
+                }
+
+                Ok(())
+            }
+
+            pub fn write_str(&mut self, s: &str) -> Result<(), OutOfBounds>
+            {
+                for ch in s.chars()
+                {
+                    self.write_char(ch)?;
+                }
+
+                Ok(())
+            }
+
+            pub fn write_at(&mut self, pos: Cursor, text: &str) -> Result<(), OutOfBounds>
+            {
+                self.try_cursor_at(pos)?;
+                self.cursor = pos;
+                self.write_str(text)
+            }
+
+            pub fn write_styled
+            (
+                &mut self,
+                fg: Option<Color>,
+                bg: Option<Color>,
+                style: Style,
+                text: &str
+            ) -> Result<(), OutOfBounds>
+            {
+                self.fg = fg;
+                self.bg = bg;
+                self.style = style;
+                self.write_str(text)?;
+                self.clear_attributes();
+                Ok(())
+            }
+
+            pub fn write_styled_at
+            (
+                &mut self, 
+                pos: Cursor, 
+                fg: Option<Color>, 
+                bg: Option<Color>, 
+                style: Style, 
+                text: &str
+            ) -> Result<(), OutOfBounds>
+            {
+                self.try_cursor_at(pos)?;
+                self.cursor = pos;
+                self.write_styled(fg, bg, style, text)
+            }
+
+            fn try_cursor(&self) -> Result<(), OutOfBounds> { self.try_cursor_at(self.cursor) }
+
+            fn try_cursor_at(&self, pos: Cursor) -> Result<(), OutOfBounds>
+            {
+                if pos.line >= self.size.lines || pos.column >= self.size.columns { Err(OutOfBounds(())) }
+                else { Ok(()) }
+            }
+            
+            fn cell_mut(&mut self, pos: Cursor) -> &mut Cell
+            {
+                let size = self.size;
+                &mut self.buffer[pos.as_index(size)]
+            }
+
+            fn set_cell(&mut self, pos: Cursor, ch: char)
+            {
+                let fg = self.fg;
+                let bg = self.bg;
+                let style = self.style;
+                let cell = self.cell_mut(pos);
+                cell.fg = fg;
+                cell.bg = bg;
+                cell.style = style;
+                cell.text = ch.into();
+            }
+        }
+
+        #[derive(Debug)]
+        pub struct OutOfBounds(());
+
+        #[derive(Clone, Debug, Eq, PartialEq)]
+        pub struct Cell
+        {
+            fg: Option<Color>,
+            bg: Option<Color>,
+            style: Style,
+            text: SmallString<[u8; 8]>,
+        }
+
+        impl Cell
+        {
+            fn new(fg: Option<Color>, bg: Option<Color>, style: Style, chr: char) -> Cell
+            {
+                Cell
+                {
+                    fg,
+                    bg,
+                    style,
+                    text: chr.into(),
+                }
+            }
+            fn invalid() -> Cell
+            {
+                Cell
+                {
+                    fg: None,
+                    bg: None,
+                    style: Style::empty(),
+                    text: SmallString::new(),
+                }
+            }
+            pub fn attrs(&self) -> (Option<Color>, Option<Color>, Style) { (self.fg, self.bg, self.style) }
+            pub fn text(&self) -> &str { &self.text }
+            fn first_char(&self) -> char { self.text.chars().next().expect("empty cell text") }
+            fn is_wide(&self) -> bool 
+            {
+                self.text.chars().next()
+                    .and_then(char_width).unwrap_or(0) == 2
+            }
+        }
+
+        impl Default for Cell
+        {
+            fn default() -> Cell { Cell::new(None, None, Style::empty(), ' ') }
+        }
+
+        fn resize_buffer(buf: &mut Vec<Cell>, old: Size, new: Size)
+        {
+            if old != new
+            {
+                let mut new_buf = vec![Cell::default(); new.area()];
+
+                if !buf.is_empty()
+                {
+                    let n_cols = old.columns.min(new.columns);
+
+                    for (old, new) in buf.chunks_mut(old.columns).zip(new_buf.chunks_mut(new.columns))
+                    {
+                        for i in 0..n_cols
+                        {
+                            swap(&mut new[i], &mut old[i]);
+                        }
+                    }
+                }
+
+                *buf = new_buf;
+            }
+        }
+
+        fn new_buffer(buf: &mut Vec<Cell>, new_size: Size) { *buf = vec![Cell::invalid(); new_size.area()]; }
+    }
+
+    #[macro_use] pub mod macros
+    {
+
+    }
+    
+    pub mod screen
+    {
+
+    }
+    
+    pub mod sequence
+    {
+
+    }
+    
+    pub mod signal
+    {
+
+    }
+    
+    pub mod terminal
+    {
+
+    }
+
     pub mod unix
     {
         pub use self::screen::{ Screen, ScreenReadGuard, ScreenWriteGuard };
@@ -24983,10 +26182,74 @@ pub mod system
                 }
             }
         }
-    }
-    #[cfg( unix )] pub use self::unix::{ * };
-    #[cfg( windows )] pub use self::windows::{ * };
     
+    }
+    #[cfg( unix )] pub use self::unix as api;
+    #[cfg( windows )] pub use self::windows as api;
+    /// Private trait used to prevent external crates from implementing extension traits
+    pub trait Private {}
+
+    impl Private for Screen {}
+    impl<'a> Private for ScreenReadGuard<'a> {}
+    impl Private for Terminal {}
+    impl<'a> Private for TerminalReadGuard<'a> {}
+    
+    pub fn map_lock_result<F, T, U>(res: LockResult<T>, f: F) -> LockResult<U> where
+    F: FnOnce(T) -> U
+    {
+        match res
+        {
+            Ok(t) => Ok(f(t)),
+            Err(e) => Err(PoisonError::new(f(e.into_inner()))),
+        }
+    
+    }
+
+    pub fn map_try_lock_result<F, T, U>(res: TryLockResult<T>, f: F) -> TryLockResult<U> where
+    F: FnOnce(T) -> U
+    {
+        match res
+        {
+            Ok(t) => Ok(f(t)),
+            Err(TryLockError::Poisoned(p)) => Err(TryLockError::Poisoned( PoisonError::new(f(p.into_inner())))),
+            Err(TryLockError::WouldBlock) => Err(TryLockError::WouldBlock),
+        }
+    }
+
+    pub fn map2_lock_result<F, T, U, R>(res: LockResult<T>, res2: LockResult<U>, f: F) -> LockResult<R> where 
+    F: FnOnce(T, U) -> R
+    {
+        match (res, res2)
+        {
+            (Ok(a), Ok(b)) => Ok(f(a, b)),
+            (Ok(a), Err(b)) => Err(PoisonError::new(f(a, b.into_inner()))),
+            (Err(a), Ok(b)) => Err(PoisonError::new(f(a.into_inner(), b))),
+            (Err(a), Err(b)) => Err(PoisonError::new(f(a.into_inner(), b.into_inner()))),
+        }
+    }
+
+    pub fn map2_try_lock_result<F, T, U, R>( res: TryLockResult<T>, res2: TryLockResult<U>, f: F) -> 
+    TryLockResult<R> where 
+    F: FnOnce(T, U) -> R
+    {
+        match (res, res2)
+        {
+            (Ok(a), Ok(b)) => Ok(f(a, b)), (Err(TryLockError::WouldBlock), _) => 
+            Err(TryLockError::WouldBlock),
+
+            (_, Err(TryLockError::WouldBlock)) => 
+            Err(TryLockError::WouldBlock),
+            
+            (Ok(a), Err(TryLockError::Poisoned(b))) => 
+            Err(TryLockError::Poisoned(PoisonError::new(f(a, b.into_inner())))),
+
+            (Err(TryLockError::Poisoned(a)), Ok(b)) =>
+            Err(TryLockError::Poisoned(PoisonError::new(f(a.into_inner(), b)))),
+
+            (Err(TryLockError::Poisoned(a)), Err(TryLockError::Poisoned(b))) =>
+            Err(TryLockError::Poisoned(PoisonError::new( f(a.into_inner(), b.into_inner())))),
+        }
+    }
 }
 /// Types and Traits for working with asynchronous tasks.
 pub mod task
@@ -27727,6 +28990,7 @@ pub mod terminal
             #[inline] pub fn checked_area( &self ) -> Option<usize> { self.lines.checked_mul( self.columns ) }
         }
     }
+    pub use self::size::{ Size };
 
     pub mod color
     {
@@ -27823,8 +29087,9 @@ pub mod terminal
     impl Interface<DefaultTerminal> 
     {
         /// Creates a new `Interface` with the given application name.
-        pub fn new<T>( application:T ) -> io::Result<Interface<DefaultTerminal>>
-                where T: Into<Cow<'static, str>> {
+        pub fn new<T>( application:T ) -> io::Result<Interface<DefaultTerminal>> where
+        T: Into<Cow<'static, str>>
+        {
             let term = DefaultTerminal::new()?;
             Interface::with_term( application, term )
         }
@@ -27848,165 +29113,115 @@ pub mod terminal
             } )
         }
         /// Acquires the read lock and returns a `Reader` instance.
-        pub fn lock_reader( &self ) -> Reader<Term> {
-            Reader::new( self, self.lock_read() )
-        }
+        pub fn lock_reader( &self ) -> Reader<Term> { Reader::new( self, self.lock_read() ) }
         /// Acquires the write lock and returns a `Writer` instance.
-        pub fn lock_writer_append( &self ) -> io::Result<Writer<Term>> {
-            Writer::with_lock( self.lock_write()?, false )
-        }
+        pub fn lock_writer_append( &self ) -> io::Result<Writer<Term>>
+        { Writer::with_lock( self.lock_write()?, false ) }
         /// Acquires the write lock and returns a `Writer` instance.
-        pub fn lock_writer_erase( &self ) -> io::Result<Writer<Term>> {
-            Writer::with_lock( self.lock_write()?, true )
-        }
+        pub fn lock_writer_erase( &self ) -> io::Result<Writer<Term>>
+        { Writer::with_lock( self.lock_write()?, true ) }
 
-        fn lock_read( &self ) -> ReadLock<Term> {
-            ReadLock::new( 
-                self.term.lock_read(),
-                self.read.lock().expect( "Interface::lock_read" ) )
-        }
+        fn lock_read( &self ) -> ReadLock<Term>
+        { ReadLock::new(  self.term.lock_read(), self.read.lock().expect( "Interface::lock_read" ) ) }
 
-        pub fn lock_write( &self )
-                -> io::Result<WriteLock<Term>> {
+        pub fn lock_write( &self ) -> io::Result<WriteLock<Term>>
+        {
             let guard = self.write.lock().unwrap();
             let term_writer = self.term.lock_write();
-
             Ok( WriteLock::new( term_writer, guard, self.highlighter.clone() ) )
         }
 
-        pub fn lock_write_data( &self ) -> MutexGuard<Write> {
-            self.write.lock().expect( "Interface::lock_write_data" )
-        }
+        pub fn lock_write_data( &self ) -> MutexGuard<Write> { self.write.lock().expect( "Interface::lock_write_data" ) }
     }
     /// ## Locking
     /// The following methods internally acquire the read lock.
     impl<Term: Terminals> Interface<Term> 
     {
         /// Interactively reads a line from the terminal device.
-        pub fn read_line( &self ) -> io::Result<ReadResult> {
-            self.lock_reader().read_line()
-        }
+        pub fn read_line( &self ) -> io::Result<ReadResult> { self.lock_reader().read_line() }
         /// Performs one step of the interactive `read_line` loop.
-        pub fn read_line_step( &self, timeout:Option<Duration> )
-                -> io::Result<Option<ReadResult>> {
-            self.lock_reader().read_line_step( timeout )
-        }
+        pub fn read_line_step( &self, timeout:Option<Duration> ) -> io::Result<Option<ReadResult>>
+        { self.lock_reader().read_line_step( timeout ) }
         /// Cancels an in-progress `read_line` operation.
-        pub fn cancel_read_line( &self ) -> io::Result<()> {
-            self.lock_reader().cancel_read_line()
-        }
+        pub fn cancel_read_line( &self ) -> io::Result<()> { self.lock_reader().cancel_read_line() }
         /// Returns a clone of the current completer instance.
-        pub fn completer( &self ) -> Arc<dyn Completer<Term>> {
-            self.lock_reader().completer().clone()
-        }
+        pub fn completer( &self ) -> Arc<dyn Completer<Term>> { self.lock_reader().completer().clone() }
         /// Replaces the current completer, returning the previous instance.
         pub fn set_completer( &self, completer: Arc<dyn Completer<Term>> )
-                -> Arc<dyn Completer<Term>> {
-            self.lock_reader().set_completer( completer )
-        }
+        -> Arc<dyn Completer<Term>> { self.lock_reader().set_completer( completer ) }
         /// Returns the value of the named variable or `None` if no such variable exists.
-        pub fn get_variable( &self, name:&str ) -> Option<Variable> {
-            self.lock_reader().get_variable( name )
-        }
+        pub fn get_variable( &self, name:&str ) -> Option<Variable> { self.lock_reader().get_variable( name ) }
         /// Sets the value of the named variable and returns the previous value.
-        pub fn set_variable( &self, name:&str, value:&str ) -> Option<Variable> {
-            self.lock_reader().set_variable( name, value )
-        }
+        pub fn set_variable( &self, name:&str, value:&str ) -> Option<Variable> { self.lock_reader().set_variable( name, value ) }
         /// Returns whether the given `Signal` is ignored.
-        pub fn ignore_signal( &self, signal: Signal ) -> bool {
-            self.lock_reader().ignore_signal( signal )
-        }
+        pub fn ignore_signal( &self, signal: Signal ) -> bool { self.lock_reader().ignore_signal( signal ) }
         /// Sets whether the given `Signal` will be ignored.
-        pub fn set_ignore_signal( &self, signal: Signal, set:bool )
-            {
-            self.lock_reader().set_ignore_signal( signal, set )
-        }
+        pub fn set_ignore_signal( &self, signal: Signal, set:bool ) { self.lock_reader().set_ignore_signal( signal, set ) }
         /// Returns whether the given `Signal` is reported.
-        pub fn report_signal( &self, signal: Signal ) -> bool {
-            self.lock_reader().report_signal( signal )
-        }
+        pub fn report_signal( &self, signal: Signal ) -> bool { self.lock_reader().report_signal( signal ) }
         /// Sets whether the given `Signal` is reported.
-        pub fn set_report_signal( &self, signal: Signal, set:bool )
-            {
-            self.lock_reader().set_report_signal( signal, set )
-        }
+        pub fn set_report_signal( &self, signal: Signal, set:bool ) 
+        { self.lock_reader().set_report_signal( signal, set ) }
         /// Binds a sequence to a command.
         pub fn bind_sequence<T>( &self, seq:T, cmd: Command ) -> Option<Command> where 
-        T: Into<Cow<'static, str>> {
-            self.lock_reader().bind_sequence( seq, cmd )
-        }
-
+        T: Into<Cow<'static, str>>
+        { self.lock_reader().bind_sequence( seq, cmd ) }
         /// Binds a sequence to a command, if and only if the given sequence is not already bound to a command.
         pub fn bind_sequence_if_unbound<T>( &self, seq:T, cmd: Command ) -> bool where
-        T: Into<Cow<'static, str>> {
-            self.lock_reader().bind_sequence_if_unbound( seq, cmd )
-        }
+        T: Into<Cow<'static, str>>
+        { self.lock_reader().bind_sequence_if_unbound( seq, cmd ) }
         /// Removes a binding for the given sequence.
-        pub fn unbind_sequence( &self, seq:&str ) -> Option<Command> {
-            self.lock_reader().unbind_sequence( seq )
-        }
+        pub fn unbind_sequence( &self, seq:&str ) -> Option<Command> { self.lock_reader().unbind_sequence( seq ) }
         /// Defines a named function to which sequences may be bound.
-        pub fn define_function<T>( &self, name:T, cmd: Arc<dyn Function<Term>> )
-                -> Option<Arc<dyn Function<Term>>> where T: Into<Cow<'static, str>> {
-            self.lock_reader().define_function( name, cmd )
-        }
+        pub fn define_function<T>( &self, name:T, cmd: Arc<dyn Function<Term>> ) -> Option<Arc<dyn Function<Term>>>
+        where
+        T: Into<Cow<'static, str>>
+        { self.lock_reader().define_function( name, cmd ) }
         /// Removes a function defined with the given name.
-        pub fn remove_function( &self, name:&str ) -> Option<Arc<dyn Function<Term>>> {
-            self.lock_reader().remove_function( name )
-        }
+        pub fn remove_function( &self, name:&str ) -> Option<Arc<dyn Function<Term>>>
+        { self.lock_reader().remove_function( name ) }
         /// Evaluates a series of configuration directives.
         pub fn evaluate_directives( &self, dirs: Vec<Directive> )
-            {
-            self.lock_reader().evaluate_directives( &self.term, dirs )
-        }
+        { self.lock_reader().evaluate_directives( &self.term, dirs ) }
         /// Evaluates a single configuration directive.
         pub fn evaluate_directive( &self, dir: Directive )
-            {
-            self.lock_reader().evaluate_directive( &self.term, dir )
-        }
+        { self.lock_reader().evaluate_directive( &self.term, dir ) }
     }
     /// ## Locking
     /// The following methods internally acquire the write lock.
     impl<Term: Terminals> Interface<Term>
     {
         /// Returns the current input buffer.
-        pub fn buffer( &self ) -> String {
-            self.lock_write().map( |lock| lock.buffer.to_owned() ).unwrap_or_default()
-        }
+        pub fn buffer( &self ) -> String { self.lock_write().map( |lock| lock.buffer.to_owned() ).unwrap_or_default() }
         /// Returns the current number of history entries.
-        pub fn history_len( &self ) -> usize {
-            self.lock_write().map( |lock| lock.history_len() ).unwrap_or( 0 )
-        }
+        pub fn history_len( &self ) -> usize { self.lock_write().map( |lock| lock.history_len() ).unwrap_or( 0 ) }
         /// Returns the maximum number of history entries.
-        pub fn history_size( &self ) -> usize {
-            self.lock_write().map( |lock| lock.history_size() ).unwrap_or( 0 )
-        }
+        pub fn history_size( &self ) -> usize { self.lock_write().map( |lock| lock.history_size() ).unwrap_or( 0 ) }
         /// Save history entries to the specified file.
-        pub fn save_history<P: AsRef<Path>>( &self, path:P ) -> io::Result<()> {
+        pub fn save_history<P: AsRef<Path>>( &self, path:P ) -> io::Result<()>
+        {
             let path = path.as_ref();
             let mut w = self.lock_write()?;
 
-            if !path.exists() || w.history_size() == !0 {
-                self.append_history( path, &w )?;
-            } else {
-                self.rewrite_history( path, &w )?;
-            }
+            if !path.exists() || w.history_size() == !0 { self.append_history( path, &w )?; } 
+            else { self.rewrite_history( path, &w )?; }
 
             w.reset_new_history();
             Ok( () )
         }
 
-        fn append_history<P: AsRef<Path>>( &self, path: P, w:&WriteLock<Term> )
-                -> io::Result<()> {
+        fn append_history<P: AsRef<Path>>( &self, path: P, w:&WriteLock<Term> ) -> io::Result<()>
+        {
             let file = OpenOptions::new()
-                .append( true )
-                .create( true )
-                .open( path.as_ref() )?;
+            .append( true )
+            .create( true )
+            .open( path.as_ref() )?;
 
             self.append_history_to( &file, w )
         }
 
-        fn append_history_to( &self, file:&File, w:&WriteLock<Term> ) -> io::Result<()> {
+        fn append_history_to( &self, file:&File, w:&WriteLock<Term> ) -> io::Result<()>
+        {
             let mut wtr = BufWriter::new( file );
 
             for entry in w.new_history()
@@ -28018,35 +29233,31 @@ pub mod terminal
             wtr.flush()
         }
 
-        fn rewrite_history<P: AsRef<Path>>( &self, path: P, w:&WriteLock<Term> )
-                -> io::Result<()> {
-            fn nth_line( s:&str, n: usize ) -> Option<usize> {
+        fn rewrite_history<P: AsRef<Path>>( &self, path: P, w:&WriteLock<Term> ) -> io::Result<()>
+        {
+            fn nth_line( s:&str, n: usize ) -> Option<usize>
+            {
                 let start = s.as_ptr() as usize;
-
-                s.lines().nth( n )
-                    .map( |s| s.as_ptr() as usize - start )
+                s.lines().nth( n ).map( |s| s.as_ptr() as usize - start )
             }
 
             let mut file = OpenOptions::new()
-                .create( true )
-                .read( true )
-                .write( true )
-                .open( path.as_ref() )?;
+            .create( true )
+            .read( true )
+            .write( true )
+            .open( path.as_ref() )?;
 
             let mut hist = String::new();
-
             file.read_to_string( &mut hist )?;
-
             let n_lines = hist.lines().count();
-            let n = n_lines.saturating_sub( 
-                w.history_size() - w.new_history_entries() );
+            let n = n_lines.saturating_sub( w.history_size() - w.new_history_entries() );
 
-            if n != 0 {
-                if let Some( pos ) = nth_line( &hist, n )
+            if n != 0
             {
+                if let Some( pos ) = nth_line( &hist, n )
+                {
                     file.seek( SeekFrom::Start( 0 ) )?;
                     file.write_all( hist[pos..].as_bytes() )?;
-
                     let n = file.seek( SeekFrom::Current( 0 ) )?;
                     file.set_len( n )?;
                 }
@@ -28058,7 +29269,6 @@ pub mod terminal
         pub fn load_history<P: AsRef<Path>>( &self, path:P ) -> io::Result<()>
         {
             let mut writer = self.lock_write()?;
-
             let file = File::open( &path )?;
             let rdr = BufReader::new( file );
 
@@ -28072,66 +29282,39 @@ pub mod terminal
             Ok( () )
         }
         /// Writes formatted text to the terminal display.
-        pub fn write_fmt( &self, args:fmt::Arguments ) -> io::Result<()> {
+        pub fn write_fmt( &self, args:fmt::Arguments ) -> io::Result<()>
+        {
             let s = args.to_string();
             self.write_str( &s )
         }
 
-        fn write_str( &self, line:&str ) -> io::Result<()> {
-            self.lock_writer_erase()?.write_str( line )
-        }
+        fn write_str( &self, line:&str ) -> io::Result<()> { self.lock_writer_erase()?.write_str( line ) }
     }
     /// ## Locking
     /// The following methods internally acquire both the read and write locks.
     impl<Term: Terminals> Interface<Term> 
     {
         /// Sets the prompt that will be displayed when `read_line` is called.
-        pub fn set_prompt( &self, prompt:&str ) -> io::Result<()> {
-            self.lock_reader().set_prompt( prompt )
-        }
+        pub fn set_prompt( &self, prompt:&str ) -> io::Result<()> { self.lock_reader().set_prompt( prompt ) }
         /// Sets the input buffer to the given string.
-        pub fn set_buffer( &self, buf:&str ) -> io::Result<()> {
-            self.lock_reader().set_buffer( buf )
-        }
+        pub fn set_buffer( &self, buf:&str ) -> io::Result<()> { self.lock_reader().set_buffer( buf ) }
         /// Sets the cursor position in the input buffer.
-        pub fn set_cursor( &self, pos: usize ) -> io::Result<()> {
-            self.lock_reader().set_cursor( pos )
-        }
+        pub fn set_cursor( &self, pos: usize ) -> io::Result<()> { self.lock_reader().set_cursor( pos ) }
         /// Adds a line to history.
-        pub fn add_history( &self, line: String )
-            {
-            self.lock_reader().add_history( line );
-        }
+        pub fn add_history( &self, line: String ) { self.lock_reader().add_history( line ); }
         /// Adds a line to history, unless it is identical to the most recent entry.
-        pub fn add_history_unique( &self, line: String )
-            {
-            self.lock_reader().add_history_unique( line );
-        }
+        pub fn add_history_unique( &self, line: String ) { self.lock_reader().add_history_unique( line ); }
         /// Removes all history entries.
-        pub fn clear_history( &self )
-            {
-            self.lock_reader().clear_history();
-        }
+        pub fn clear_history( &self ) { self.lock_reader().clear_history(); }
         /// Removes the history entry at the given index.
-        pub fn remove_history( &self, idx: usize )
-            {
-            self.lock_reader().remove_history( idx );
-        }
+        pub fn remove_history( &self, idx: usize ) { self.lock_reader().remove_history( idx ); }
         /// Sets the maximum number of history entries.
-        pub fn set_history_size( &self, n: usize )
-            {
-            self.lock_reader().set_history_size( n );
-        }
+        pub fn set_history_size( &self, n: usize ) { self.lock_reader().set_history_size( n ); }
         /// Truncates history to the only the most recent `n` entries.
-        pub fn truncate_history( &self, n: usize )
-            {
-            self.lock_reader().truncate_history( n );
-        }
+        pub fn truncate_history( &self, n: usize ) { self.lock_reader().truncate_history( n ); }
         /// Sets the syntax highlighter for the input line.
         pub fn set_highlighter( &mut self, highlighter: Arc<dyn Highlighter + Send + Sync> )
-            {
-            self.highlighter = Some( highlighter );
-        }
+        { self.highlighter = Some( highlighter ); }
     }
 }
 /// Native threads.
@@ -28202,10 +29385,12 @@ pub mod time
             }
         }
     }
+
 }
 /// A contiguous growable array type with heap-allocated contents, written Vec<T>.
 pub mod vec
 {
+    pub use smallvec::{ * };
     pub use std::vec::{ * };
 }
 
@@ -28381,4 +29566,4 @@ fn main()
     }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 28384
+// 29569
