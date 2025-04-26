@@ -10,6 +10,8 @@
     non_camel_case_types,
     unknown_lints,
     unreachable_patterns,
+    unused_imports,
+    unused_macros,
     unused_variables,
  )]
 
@@ -17,6 +19,7 @@
 #[macro_use] extern crate lazy_static;
 /*
 */
+extern crate fnv;
 extern crate libc;
 extern crate nix;
 extern crate num_integer;
@@ -377,6 +380,28 @@ extern crate unicode_width;
         ( $term:expr ) => { term_write!($term, "\n") };
         ( $term:expr , $($tt:tt)* ) => { term_write!($term, $($tt)* "\n") };
     }
+    /// Expand a parametrized string.
+    #[macro_export] macro_rules! expand
+    {
+        ($value:expr) => ( $crate::expand!($value;) );
+        ($value:expr => $context:expr) => ( $crate::expand!($value => $context;) );
+        ($value:expr; $($item:expr),*) => 
+        ( $crate::expand!($value => &mut ::default::Default::default(); $($item),*) );
+        ($value:expr => $context:expr; $($item:expr),*) =>
+        ({
+            let mut output = ::vec::Vec::new();
+            $crate::expand!(&mut output, $value => $context; $($item),*).map(|()| output)
+        });
+        ($output:expr, $value:expr) => ( $crate::expand!($output, $value;) );
+        ($output:expr, $value:expr => $context:expr) => ( $crate::expand!($output, $value => $context;) );
+        ($output:expr, $value:expr; $($item:expr),*) => 
+        ( $crate::expand!($output, $value => &mut ::default::Default::default(); $($item),*) );
+        ($output:expr, $value:expr => $context:expr; $($item:expr),*) => 
+        ({
+            use $crate::expand::Expand;
+            $value.expand($output, &[$($item.into()),*], $context)
+        })
+    }
     /// Facilitates chaining calls from either a `Terminal` or `Screen` lock.
     pub trait Chain: Sized
     {
@@ -482,10 +507,7 @@ pub mod char
     impl<'a> Iterator for Prefixes<'a>
     {
         type Item = &'a str;
-        fn next(&mut self) -> Option<&'a str>
-        {
-            self.iter.next().map(|(idx, ch)| &self.s[..idx + ch.len_utf8()])
-        }
+        fn next(&mut self) -> Option<&'a str> { self.iter.next().map(|(idx, ch)| &self.s[..idx + ch.len_utf8()]) }
     }
     /*
     pub fn repeat_char( ch: char, n: usize ) -> String */
@@ -549,11 +571,11 @@ pub mod char
     pub fn backward_char( n:usize, s:&str, cur: usize ) -> usize */
     pub fn backward( n:usize, s:&str, cur: usize ) -> usize
     {
-        let mut chars = s[..cur].char_indices()
-            .filter( |&( _, ch )| !is::combining_mark( ch ) );
+        let mut chars = s[..cur].char_indices().filter( |&( _, ch )| !is::combining_mark( ch ) );
         let mut res = cur;
 
-        for _ in 0..n {
+        for _ in 0..n
+        {
             match chars.next_back()
             {
                 Some(( idx, _ )) => res = idx,
@@ -754,7 +776,7 @@ pub mod collections
             };
 
             let incomplete = self.sequences.get( n + ( found as usize ) )
-                .map_or( false, |&( ref next, _ )| next.as_ref().starts_with( key ) );
+            .map_or( false, |&( ref next, _ )| next.as_ref().starts_with( key ) );
 
             match ( found, incomplete )
             {
@@ -764,42 +786,40 @@ pub mod collections
                 ( true, true ) => FindResult::Undecided( &self.sequences[n].1 ),
             }
         }
-
         /// Returns the corresponding value for the given sequence.
-        pub fn get( &self, key:&str ) -> Option<&V> {
+        pub fn get( &self, key:&str ) -> Option<&V>
+        {
             match self.search( key )
             {
                 Ok( n ) => Some( &self.sequences[n].1 ),
                 Err( _ ) => None
             }
         }
-
         /// Returns a mutable reference to the corresponding value for the given sequence.
-        pub fn get_mut( &mut self, key:&str ) -> Option<&mut V> {
+        pub fn get_mut( &mut self, key:&str ) -> Option<&mut V>
+        {
             match self.search( key )
             {
                 Ok( n ) => Some( &mut self.sequences[n].1 ),
                 Err( _ ) => None
             }
         }
-
         /// Inserts a key-value pair into the map.
-        ///
-        /// If the key already exists in the map, the new value will replace the old
-        /// value and the old value will be returned.
-        pub fn insert( &mut self, key: K, value: V ) -> Option<V> {
+        pub fn insert( &mut self, key: K, value: V ) -> Option<V>
+        {
             match self.search( key.as_ref() )
             {
                 Ok( n ) => Some( replace( &mut self.sequences[n], ( key, value ) ).1 ),
-                Err( n ) => {
+                Err( n ) =>
+                {
                     self.sequences.insert( n, ( key, value ) );
                     None
                 }
             }
         }
-
         /// Removes a key-value pair from the map.
-        pub fn remove( &mut self, key:&str ) -> Option<( K, V )> {
+        pub fn remove( &mut self, key:&str ) -> Option<( K, V )>
+        {
             match self.search( key )
             {
                 Ok( n ) => Some( self.sequences.remove( n ) ),
@@ -807,7 +827,8 @@ pub mod collections
             }
         }
 
-        fn search( &self, key:&str ) -> Result<usize, usize> {
+        fn search( &self, key:&str ) -> Result<usize, usize>
+        {
             self.sequences.binary_search_by_key( &key, |&( ref k, _ )| &k.as_ref() )
         }
     }
@@ -934,8 +955,7 @@ pub mod collections
         /// Removes the entry and returns the value.
         pub fn remove( self ) -> V { self.map.sequences.remove( self.index ).1 }
         /// Removes the entry and returns the key-value pair.
-        pub fn remove_entry( self ) -> ( K, V )
-            { self.map.sequences.remove( self.index ) }
+        pub fn remove_entry( self ) -> ( K, V ) { self.map.sequences.remove( self.index ) }
     }
 
     impl<'a, K: fmt::Debug, V: fmt::Debug> fmt::Debug for OccupiedEntry<'a, K, V>
@@ -1027,16 +1047,16 @@ pub mod command
             impl Command
             {
                 /// Constructs a command from a `'static str` reference.
-                pub fn from_str( name:&'static str ) -> Command {
-                    Command::opt_from_str( name )
-                        .unwrap_or_else( || Command::Custom( Borrowed( name ) ) )
+                pub fn from_str( name:&'static str ) -> Command
+                {
+                    Command::opt_from_str( name ).unwrap_or_else( || Command::Custom( Borrowed( name ) ) )
                 }
                 /// Constructs a command from a non-`'static` string-like type.
                 pub fn from_string<T>( name:T ) -> Command where
                 T: AsRef<str> + Into<String>
                 {
                     Command::opt_from_str( name.as_ref() )
-                        .unwrap_or_else( || Command::Custom( Owned( name.into() ) ) )
+                    .unwrap_or_else( || Command::Custom( Owned( name.into() ) ) )
                 }
 
                 fn opt_from_str( s:&str ) -> Option<Command>
@@ -1167,9 +1187,8 @@ pub mod command
             {
                 DigitArgument => Category::Digit,
                 Complete | InsertCompletions | PossibleCompletions |
-                    MenuComplete | MenuCompleteBackward => Category::Complete,
-                BackwardKillLine | KillLine | BackwardKillWord | KillWord |
-                    UnixWordRubout => Category::Kill,
+                MenuComplete | MenuCompleteBackward => Category::Complete,
+                BackwardKillLine | KillLine | BackwardKillWord | KillWord | UnixWordRubout => Category::Kill,
                 ForwardSearchHistory | ReverseSearchHistory => Category::IncrementalSearch,
                 HistorySearchForward | HistorySearchBackward => Category::Search,
                 Yank | YankPop => Category::Yank,
@@ -1376,56 +1395,34 @@ pub mod database
                     inner: Arc::new( ArrInner { vec, inner_t }),
                 }
             }
-
             /// Returns a reference to the inner vec of this `Arr`.
-            pub fn vec_ref( &self ) -> &Vec<Value> {
-                &self.inner.vec
-            }
-
+            pub fn vec_ref( &self ) -> &Vec<Value> { &self.inner.vec }
             /// Iterates over each `Value` in `self`, applying `Fn` `f`.
             pub fn with_each<F>( &self, mut f: F)
             where
-                F: FnMut( &Value),
+            F: FnMut( &Value)
             {
-                for value in &self.inner.vec {
+                for value in &self.inner.vec
+                {
                     f( value)
                 }
             }
-
             /// Gets the value at `index`.
-            /// Returns an error if `index` is out of bounds.
-            pub fn get( &self, index: usize ) -> OverResult<Value> {
-                if index >= self.inner.vec.len() {
-                    Err( OverError::ArrOutOfBounds( index))
-                } else {
-                    Ok( self.inner.vec[index].clone())
-                }
+            pub fn get( &self, index: usize ) -> OverResult<Value>
+            {
+                if index >= self.inner.vec.len() { Err( OverError::ArrOutOfBounds( index)) } 
+                else { Ok( self.inner.vec[index].clone()) }
             }
-
             /// Returns the type of all elements in this `Arr`.
-            pub fn inner_type( &self ) -> Type {
-                self.inner.inner_t.clone()
-            }
-
+            pub fn inner_type( &self ) -> Type { self.inner.inner_t.clone() }
             /// Returns the length of this `Arr`.
-            pub fn len( &self ) -> usize {
-                self.inner.vec.len()
-            }
-
+            pub fn len( &self ) -> usize { self.inner.vec.len() }
             /// Returns whether this `Arr` is empty.
-            pub fn is_empty( &self ) -> bool {
-                self.inner.vec.is_empty()
-            }
-
+            pub fn is_empty( &self ) -> bool { self.inner.vec.is_empty() }
             /// Returns whether `self` and `other` point to the same data.
-            pub fn ptr_eq( &self, other: &Self ) -> bool {
-                Arc::ptr_eq( &self.inner, &other.inner)
-            }
-
+            pub fn ptr_eq( &self, other: &Self ) -> bool { Arc::ptr_eq( &self.inner, &other.inner) }
             /// Returns an iterator over the Arr.
-            pub fn iter( &self ) -> Iter<Value> {
-                self.vec_ref().iter()
-            }
+            pub fn iter( &self ) -> Iter<Value> { self.vec_ref().iter() }
         }
 
         impl Default for Arr
@@ -1768,7 +1765,6 @@ pub mod database
         impl FromStr for Obj
         {
             type Err = OverError;
-
             fn from_str( s: &str ) -> Result<Self, Self::Err> { Ok( parse::load_from_str( s)? ) }
         }
         /// For two Objs to be equal, the following two checks must pass:
@@ -1894,6 +1890,222 @@ pub mod database
         }
     }
     pub use self::tuples::{ Tup };
+    /*
+    terminfo v0.9.0::database*/
+    pub mod metadata
+    {
+        use ::
+        {
+            error::metadata::{ self as error, Error },
+            *,
+        };
+        /*
+        use fnv::FnvHasher;
+        use std::collections::HashMap;
+        use std::env;
+        use std::fs::{self, File};
+        use std::hash::BuildHasherDefault;
+        use std::io::Read;
+        use std::path::{Path, PathBuf};
+
+        use crate::capability::{Capability, Value};
+        use crate::names;
+        use crate::parser::compiled;
+        */
+        /// A capability database.
+        #[derive(Eq, PartialEq, Clone, Debug)]
+        pub struct Database
+        {
+            name: String,
+            aliases: Vec<String>,
+            description: String,
+            inner: HashMap<String, Value, BuildHasherDefault<FnvHasher>>,
+        }
+        /// Builder for a new `Database`.
+        #[derive(Default, Debug)]
+        pub struct Builder
+        {
+            name: Option<String>,
+            aliases: Vec<String>,
+            description: Option<String>,
+            inner: HashMap<String, Value, BuildHasherDefault<FnvHasher>>,
+        }
+
+        impl Builder
+        {
+            /// Build the database.
+            pub fn build(self) -> Result<Database, ()>
+            {
+                Ok(Database
+                {
+                    name: self.name.ok_or(())?,
+                    aliases: self.aliases,
+                    description: self.description.unwrap_or_default(),
+                    inner: self.inner,
+                })
+            }
+            /// Set the terminal name.
+            pub fn name<T: Into<String>>(&mut self, name: T) -> &mut Self
+            {
+                self.name = Some(name.into());
+                self
+            }
+            /// Set the terminal aliases.
+            pub fn aliases<T, I>(&mut self, iter: I) -> &mut Self
+            where
+            T: Into<String>,
+            I: IntoIterator<Item = T>
+            {
+                self.aliases = iter.into_iter().map(|a| a.into()).collect();
+                self
+            }
+            /// Set the terminal description.
+            pub fn description<T: Into<String>>(&mut self, description: T) -> &mut Self
+            {
+                self.description = Some(description.into());
+                self
+            }
+            /// Set a capability.
+            pub fn set<'a, C: Capability<'a>>(&'a mut self, value: C) -> &mut Self 
+            {
+                if !self.inner.contains_key(C::name())
+                {
+                    if let Some(value) = C::into(value)
+                    {
+                        self.inner.insert(C::name().into(), value);
+                    }
+                }
+
+                self
+            }
+            /// Set a raw capability.
+            pub fn raw<S: AsRef<str>, V: Into<Value>>(&mut self, name: S, value: V) -> &mut Self
+            {
+                let name = name.as_ref();
+                let name = names::ALIASES.get(name).copied().unwrap_or(name);
+
+                if !self.inner.contains_key(name) { self.inner.insert(name.into(), value.into()); }
+
+                self
+            }
+        }
+
+        impl Database
+        {
+            /// Create a database builder for constucting a database.
+            pub fn new() -> Builder
+            {
+                Builder::default()
+            }
+            /// Load a database from the current environment.
+            pub fn from_env() -> error::Result<Self>
+            {
+                if let Ok(name) = env::var("TERM") { Self::from_name(name) }
+                else { Err(Error::NotFound) }
+            }
+            /// Load a database for the given name.
+            pub fn from_name<N: AsRef<str>>(name: N) -> error::Result<Self>
+            {
+                let name = name.as_ref();
+                let first = name.chars().next().ok_or(Error::NotFound)?;
+
+                // See https://manpages.debian.org/buster/ncurses-bin/terminfo.5.en.html#Fetching_Compiled_Descriptions
+                let mut search = Vec::<PathBuf>::new();
+
+                #[allow(deprecated)]
+                if let Some(dir) = env::var_os("TERMINFO") {
+                    search.push(dir.into());
+                } else if let Some(mut home) = std::env::home_dir() {
+                    home.push(".terminfo");
+                    search.push(home);
+                }
+
+                if let Ok(dirs) = env::var("TERMINFO_DIRS") {
+                    for dir in dirs.split(':') {
+                        search.push(dir.into());
+                    }
+                }
+
+                // handle non-FHS systems like Termux
+                if let Ok(prefix) = env::var("PREFIX") {
+                    let path = Path::new(&prefix);
+                    search.push(path.join("etc/terminfo"));
+                    search.push(path.join("lib/terminfo"));
+                    search.push(path.join("share/terminfo"));
+                }
+
+                search.push("/etc/terminfo".into());
+                search.push("/lib/terminfo".into());
+                search.push("/usr/share/terminfo".into());
+                search.push("/usr/local/share/terminfo".into());
+                search.push("/usr/local/share/site-terminfo".into());
+                search.push("/boot/system/data/terminfo".into());
+
+                for path in search {
+                    if fs::metadata(&path).is_err() {
+                        continue;
+                    }
+
+                    // Check standard location.
+                    {
+                        let mut path = path.clone();
+                        path.push(first.to_string());
+                        path.push(name);
+
+                        if fs::metadata(&path).is_ok() {
+                            return Self::from_path(path);
+                        }
+                    }
+
+                    // Check non-standard location.
+                    {
+                        let mut path = path.clone();
+                        path.push(format!("{:x}", first as usize));
+                        path.push(name);
+
+                        if fs::metadata(&path).is_ok() {
+                            return Self::from_path(path);
+                        }
+                    }
+                }
+
+                Err(Error::NotFound)
+            }
+            /// Load a database from the given path.
+            pub fn from_path<P: AsRef<Path>>(path: P) -> error::Result<Self> 
+            {
+                let mut file = File::open(path)?;
+                let mut buffer = Vec::new();
+                file.read_to_end(&mut buffer)?;
+
+                Self::from_buffer(buffer)
+            }
+            /// Load a database from a buffer.
+            pub fn from_buffer<T: AsRef<[u8]>>(buffer: T) -> error::Result<Self> 
+            {
+                if let Ok((_, database)) = compiled::parse(buffer.as_ref()) {
+                    Ok(database.into())
+                } else {
+                    Err(Error::Parse)
+                }
+            }
+            /// The terminal name.
+            pub fn name(&self) -> &str { &self.name }
+            /// The terminal aliases.
+            pub fn aliases(&self) -> &[String] { &self.aliases }
+            /// The terminal description.
+            pub fn description(&self) -> &str { &self.description }
+            /// Get a capability.
+            pub fn get<'a, C: Capability<'a>>(&'a self) -> Option<C> { C::from(self.inner.get(C::name())) }
+            /// Get a capability by name.
+            pub fn raw<S: AsRef<str>>(&self, name: S) -> Option<&Value>
+            {
+                let name = name.as_ref();
+                let name = names::ALIASES.get(name).copied().unwrap_or(name);
+                self.inner.get(name)
+            }
+        }
+    }
 }
 /// The Default trait for types with a default value.
 pub mod default
@@ -2025,16 +2237,52 @@ pub mod env
 /// Expansions
 pub mod expand
 {
+    /*
+    use std::char;
+    use std::io::{BufWriter, Write};
+
+    use crate::error;
+    use crate::parser::expansion::*;
+    */
     use ::
     {
         borrow::{ Cow },
+        error::metadata::{ self as error },
         fs::{ read_dir },
-        io::{ErrorKind, Write},
+        io::{ BufWriter, ErrorKind, Write },
         os::unix::fs::PermissionsExt,
+        parsers::metadata::expansion::*,
         regex::{ Regex },
         shell::{ env_in_token, Shell },
         *,
     };
+
+    macro_rules! from
+    {
+        (number $ty:ty) => {
+            impl From<$ty> for Parameter {
+                fn from(value: $ty) -> Self {
+                    Parameter::Number(value as i32)
+                }
+            }
+        };
+
+        (string ref $ty:ty) => {
+            impl<'a> From<&'a $ty> for Parameter {
+                fn from(value: &'a $ty) -> Self {
+                    Parameter::String(value.into())
+                }
+            }
+        };
+
+        (string $ty:ty) => {
+            impl From<$ty> for Parameter {
+                fn from(value: $ty) -> Self {
+                    Parameter::String(value.into())
+                }
+            }
+        };
+    }
     /*
     fn expand_alias( sh:&Shell, tokens:&mut types::Tokens ) */
     pub fn alias( sh:&Shell, tokens:&mut types::Tokens )
@@ -2044,12 +2292,15 @@ pub mod expand
         let mut is_head = true;
         for ( sep, text ) in tokens.iter()
         {
-            if sep.is_empty() && text == "|" {
+            if sep.is_empty() && text == "|" 
+            {
                 is_head = true;
                 idx += 1;
                 continue;
             }
-            if is_head && text == "xargs" {
+            
+            if is_head && text == "xargs" 
+            {
                 idx += 1;
                 continue;
             }
@@ -2088,7 +2339,7 @@ pub mod expand
     {
         let mut pieces = path.rsplit( '/' );
         match pieces.next()
-            {
+        {
             Some( p ) => p.into(),
             None => path.into(),
         }
@@ -2178,7 +2429,9 @@ pub mod expand
 
                         if is_empty { result.push( item.to_string() ); }
                     }
-                    Err( e ) => {
+
+                    Err( e ) =>
+                    {
                         println!( "glob error: {:?}", e );
                         result.push( item.to_string() );
                         return;
@@ -2196,8 +2449,7 @@ pub mod expand
             
             for ( j, token ) in result.iter().enumerate()
             {
-                let sep = if token.contains( ' ' )
-            { "\"" } else { "" };
+                let sep = if token.contains( ' ' ) { "\"" } else { "" };
                 tokens.insert( *i + j, ( sep.to_string(), token.clone() ) );
             }
         }
@@ -2205,48 +2457,40 @@ pub mod expand
 
     fn expand_one_env( sh:&Shell, token:&str ) -> String 
     {
-        let re1 = Regex::new( r"^( .*? )\$( [A-Za-z0-9_]+|\$|\? )( .* )$" ).unwrap();
-        let re2 = Regex::new( r"( .*? )\$\{( [A-Za-z0-9_]+|\$|\? )\}( .* )$" ).unwrap();
-        if !re1.is_match( token ) && !re2.is_match( token )
-            { return token.to_string(); }
+        unsafe
+        {
+            let re1 = Regex::new( r"^( .*? )\$( [A-Za-z0-9_]+|\$|\? )( .* )$" ).unwrap();
+            let re2 = Regex::new( r"( .*? )\$\{( [A-Za-z0-9_]+|\$|\? )\}( .* )$" ).unwrap();
+            if !re1.is_match( token ) && !re2.is_match( token ) { return token.to_string(); }
 
-        let mut result = String::new();
-        let match_re1 = re1.is_match( token );
-        let match_re2 = re2.is_match( token );
-        if !match_re1 && !match_re2 {
-            return token.to_string();
-        }
+            let mut result = String::new();
+            let match_re1 = re1.is_match( token );
+            let match_re2 = re2.is_match( token );
+            if !match_re1 && !match_re2 { return token.to_string(); }
 
-        let cap_results = if match_re1 {
-            re1.captures_iter( token )
-        } else {
-            re2.captures_iter( token )
-        };
+            let cap_results = if match_re1 { re1.captures_iter( token ) } else { re2.captures_iter( token ) };
 
-        for cap in cap_results {
-            let head = cap[1].to_string();
-            let tail = cap[3].to_string();
-            let key = cap[2].to_string();
-            if key == "?" {
-                result.push_str( format!( "{}{}", head, sh.previous_status ).as_str() );
-            } else if key == "$" {
-                unsafe {
+            for cap in cap_results
+            {
+                let head = cap[1].to_string();
+                let tail = cap[3].to_string();
+                let key = cap[2].to_string();
+
+                if key == "?" { result.push_str( format!( "{}{}", head, sh.previous_status ).as_str() ); }
+                else if key == "$"
+                {   
                     let val = libc::getpid();
                     result.push_str( format!( "{}{}", head, val ).as_str() );
                 }
-            } else if let Ok( val ) = env::var( &key )
-            {
-                result.push_str( format!( "{}{}", head, val ).as_str() );
-            } else if let Some( val ) = sh.get_env( &key )
-            {
-                result.push_str( format!( "{}{}", head, val ).as_str() );
-            } else {
-                result.push_str( &head );
-            }
-            result.push_str( &tail );
-        }
+                else if let Ok( val ) = env::var( &key ) { result.push_str( format!( "{}{}", head, val ).as_str() ); }
+                else if let Some( val ) = sh.get_env( &key ) { result.push_str( format!( "{}{}", head, val ).as_str() ); }
+                else { result.push_str( &head ); }
 
-        result
+                result.push_str( &tail );
+            }
+
+            result
+        }
     }
     /*
     expand_brace( tokens:&mut types::Tokens ) */
@@ -2264,20 +2508,22 @@ pub mod expand
 
             let mut result: Vec<String> = Vec::new();
             let items = brace_getitem( token, 0 );
-            for x in items.0 {
+            
+            for x in items.0
+            {
                 result.push( x.clone() );
             }
+            
             buff.push( ( idx, result ) );
             idx += 1;
         }
 
         for ( i, items ) in buff.iter().rev()
-            {
+        {
             tokens.remove( *i );
             for ( j, token ) in items.iter().enumerate()
             {
-                let sep = if token.contains( ' ' )
-            { "\"" } else { "" };
+                let sep = if token.contains( ' ' ) { "\"" } else { "" };
                 tokens.insert( *i + j, ( sep.to_string(), token.clone() ) );
             }
         }
@@ -2287,18 +2533,19 @@ pub mod expand
     pub fn brace_range( tokens:&mut types::Tokens )
     {
         let re;
-        if let Ok( x ) = Regex::new( r#"\{( -?[0-9]+ )\.\.( -?[0-9]+ )( \.\. )?( [0-9]+ )?\}"# )
-            {
-            re = x;
-        } else {
+
+        if let Ok( x ) = Regex::new( r#"\{( -?[0-9]+ )\.\.( -?[0-9]+ )( \.\. )?( [0-9]+ )?\}"# ) { re = x; }
+        else
+        {
             println_stderr!( "cicada: re new error" );
             return;
         }
 
         let mut idx: usize = 0;
         let mut buff: Vec<( usize, Vec<String> )> = Vec::new();
+
         for ( sep, token ) in tokens.iter()
-            {
+        {
             if !sep.is_empty() || !re.is_match( token )
             {
                 idx += 1;
@@ -2310,7 +2557,8 @@ pub mod expand
             let start = match caps[1].to_string().parse::<i32>()
             {
                 Ok( x ) => x,
-                Err( e ) => {
+                Err( e ) =>
+                {
                     println_stderr!( "cicada: {}", e );
                     return;
                 }
@@ -2319,38 +2567,45 @@ pub mod expand
             let end = match caps[2].to_string().parse::<i32>()
             {
                 Ok( x ) => x,
-                Err( e ) => {
+                Err( e ) =>
+                {
                     println_stderr!( "cicada: {}", e );
                     return;
                 }
             };
             
-            let mut incr = if caps.get( 4 ).is_none()
+            let mut incr = if caps.get( 4 ).is_none() { 1 }
+            else
             {
-                1
-            } else {
                 match caps[4].to_string().parse::<i32>()
-            {
+                {
                     Ok( x ) => x,
-                    Err( e ) => {
+                    Err( e ) =>
+                    {
                         println_stderr!( "cicada: {}", e );
                         return;
                     }
                 }
             };
-            if incr <= 1 {
-                incr = 1;
-            }
+
+            if incr <= 1 { incr = 1; }
 
             let mut result: Vec<String> = Vec::new();
             let mut n = start;
-            if start > end {
-                while n >= end {
+
+            if start > end
+            {
+                while n >= end
+                {
                     result.push( format!( "{}", n ) );
                     n -= incr;
                 }
-            } else {
-                while n <= end {
+            }
+
+            else
+            {
+                while n <= end
+                {
                     result.push( format!( "{}", n ) );
                     n += incr;
                 }
@@ -2363,10 +2618,10 @@ pub mod expand
         for ( i, items ) in buff.iter().rev()
         {
             tokens.remove( *i );
+
             for ( j, token ) in items.iter().enumerate()
             {
-                let sep = if token.contains( ' ' )
-            { "\"" } else { "" };
+                let sep = if token.contains( ' ' ) { "\"" } else { "" };
                 tokens.insert( *i + j, ( sep.to_string(), token.clone() ) );
             }
         }
@@ -2378,7 +2633,7 @@ pub mod expand
         let mut idx: usize = 0;
         let mut buff = Vec::new();
         for ( sep, text ) in tokens.iter()
-            {
+        {
             if !sep.is_empty() || !text.starts_with( "~" )
             {
                 idx += 1;
@@ -2393,13 +2648,12 @@ pub mod expand
             let to = format!( "{}$tail", home );
             let result = re.replace_all( ss.as_str(), to.as_str() );
             s = result.to_string();
-
             buff.push( ( idx, s.clone() ) );
             idx += 1;
         }
 
         for ( i, text ) in buff.iter().rev()
-            {
+        {
             tokens[*i].1 = text.to_string();
         }
     }
@@ -2412,7 +2666,8 @@ pub mod expand
 
         for ( sep, token ) in tokens.iter()
         {
-            if sep == "`" || sep == "'" {
+            if sep == "`" || sep == "'"
+            {
                 idx += 1;
                 continue;
             }
@@ -2424,10 +2679,12 @@ pub mod expand
             }
 
             let mut _token = token.clone();
+
             while env_in_token( &_token )
             {
                 _token = expand_one_env( sh, &_token );
             }
+
             buff.push( ( idx, _token ) );
             idx += 1;
         }
@@ -2448,31 +2705,448 @@ pub mod expand
         let mut replaced = false;
         let mut new_line = String::new();
         let linfo = parsers::line::parse( line );
+
         for ( sep, token ) in linfo.tokens
         {
-            if !sep.is_empty()
-            {
-                new_line.push_str( &sep );
-            }
+            if !sep.is_empty() { new_line.push_str( &sep ); }
 
-            if re_contains( &token, r"!!" ) && sep != "'" {
+            if re_contains( &token, r"!!" ) && sep != "'"
+            {
                 let line2 = token.clone();
                 let result = re.replace_all( &line2, sh.previous_cmd.as_str() );
                 new_line.push_str( &result );
                 replaced = true;
-            } else {
-                new_line.push_str( &token );
             }
+            else { new_line.push_str( &token ); }
 
             if !sep.is_empty()
             {
                 new_line.push_str( &sep );
             }
+
             new_line.push( ' ' );
         }
 
         *line = new_line.trim_end().to_string();
         if replaced { println!( "{}", line ); }
+    }
+    
+    /// Trait for items that can be expanded.
+    pub trait Expand 
+    {
+        fn expand<W: Write>
+        (
+            &self,
+            output: W,
+            parameters: &[Parameter],
+            context: &mut Context,
+        ) -> error::Result<()>;
+    }
+    /// An expansion parameter.
+    #[derive(Eq, PartialEq, Clone, Debug)]
+    pub enum Parameter 
+    {
+        /// A number.
+        Number(i32),
+
+        /// An ASCII string.
+        String(Vec<u8>),
+    }
+
+    impl Default for Parameter 
+    {
+        fn default() -> Self { Parameter::Number(0) }
+    }
+
+    from!(number bool);
+    from!(number u8);
+    from!(number i8);
+    from!(number u16);
+    from!(number i16);
+    from!(number u32);
+    from!(number i32);
+
+    from!(string String);
+    from!(string ref str);
+    from!(string Vec<u8>);
+    from!(string ref [u8]);
+
+    /// The expansion context.
+    #[derive(Eq, PartialEq, Default, Debug)]
+    pub struct Context 
+    {
+        pub fixed: [Parameter; 26],
+        pub dynamic: [Parameter; 26],
+    }
+
+    impl Expand for [u8] 
+    {
+        fn expand<W: Write>
+        (
+            &self,
+            output: W,
+            parameters: &[Parameter],
+            context: &mut Context,
+        ) -> error::Result<()> 
+        {
+            let mut output = BufWriter::new(output);
+            let mut input = self;
+            let mut params: [Parameter; 9] = Default::default();
+            let mut stack = Vec::new();
+            let mut conditional = false;
+            let mut incremented = false;
+
+            for (dest, source) in params.iter_mut().zip(parameters.iter())
+            {
+                *dest = source.clone();
+            }
+
+            macro_rules! next 
+            {
+                () => {
+                    match parse(input) {
+                        Ok((rest, item)) => {
+                            input = rest;
+                            item
+                        }
+
+                        Err(_) => return Err(error::Expand::Invalid.into()),
+                    }
+                };
+            }
+
+            'main: while !input.is_empty() 
+            {
+                match next!() 
+                {
+                    Item::Conditional(Conditional::If) => {
+                        conditional = true;
+                    }
+
+                    Item::Conditional(Conditional::End) if conditional => {
+                        conditional = false;
+                    }
+
+                    Item::Conditional(Conditional::Then) if conditional => match stack.pop() {
+                        Some(Parameter::Number(0)) => {
+                            let mut level = 0;
+
+                            while !input.is_empty() {
+                                match next!() {
+                                    Item::Conditional(Conditional::End)
+                                    | Item::Conditional(Conditional::Else)
+                                        if level == 0 =>
+                                    {
+                                        continue 'main
+                                    }
+
+                                    Item::Conditional(Conditional::If) => level += 1,
+
+                                    Item::Conditional(Conditional::End) => level -= 1,
+
+                                    _ => (),
+                                }
+                            }
+
+                            return Err(error::Expand::Invalid.into());
+                        }
+
+                        Some(_) => (),
+
+                        None => return Err(error::Expand::StackUnderflow.into()),
+                    },
+
+                    Item::Conditional(Conditional::Else) if conditional => {
+                        let mut level = 0;
+
+                        while !input.is_empty() {
+                            match next!() {
+                                Item::Conditional(Conditional::End) if level == 0 => continue 'main,
+
+                                Item::Conditional(Conditional::If) => level += 1,
+
+                                Item::Conditional(Conditional::End) => level -= 1,
+
+                                _ => (),
+                            }
+                        }
+
+                        return Err(error::Expand::Invalid.into());
+                    }
+
+                    Item::Conditional(..) => return Err(error::Expand::Invalid.into()),
+
+                    Item::String(value) => output.write_all(value)?,
+
+                    Item::Constant(Constant::Character(ch)) => {
+                        stack.push(Parameter::Number(ch as i32));
+                    }
+
+                    Item::Constant(Constant::Integer(value)) => {
+                        stack.push(Parameter::Number(value));
+                    }
+
+                    Item::Variable(Variable::Length) => match stack.pop() {
+                        Some(Parameter::String(ref value)) => {
+                            stack.push(Parameter::Number(value.len() as i32));
+                        }
+
+                        Some(_) => {
+                            return Err(error::Expand::TypeMismatch.into());
+                        }
+
+                        None => {
+                            return Err(error::Expand::StackUnderflow.into());
+                        }
+                    },
+
+                    Item::Variable(Variable::Push(index)) => {
+                        stack.push(params[index as usize].clone());
+                    }
+
+                    Item::Variable(Variable::Set(dynamic, index)) => {
+                        if let Some(value) = stack.pop() {
+                            if dynamic {
+                                context.dynamic[index as usize] = value.clone();
+                            } else {
+                                context.fixed[index as usize] = value.clone();
+                            }
+                        } else {
+                            return Err(error::Expand::StackUnderflow.into());
+                        }
+                    }
+
+                    Item::Variable(Variable::Get(dynamic, index)) => {
+                        if dynamic {
+                            stack.push(context.dynamic[index as usize].clone());
+                        } else {
+                            stack.push(context.fixed[index as usize].clone());
+                        }
+                    }
+
+                    Item::Operation(Operation::Increment) if !incremented => {
+                        incremented = true;
+
+                        if let (&Parameter::Number(x), &Parameter::Number(y)) = (&params[0], &params[1])
+                        {
+                            params[0] = Parameter::Number(x + 1);
+                            params[1] = Parameter::Number(y + 1);
+                        } else {
+                            return Err(error::Expand::TypeMismatch.into());
+                        }
+                    }
+
+                    Item::Operation(Operation::Increment) => (),
+
+                    Item::Operation(Operation::Binary(operation)) => match (stack.pop(), stack.pop()) {
+                        (Some(Parameter::Number(y)), Some(Parameter::Number(x))) => {
+                            stack.push(Parameter::Number(match operation {
+                                Binary::Add => x + y,
+                                Binary::Subtract => x - y,
+                                Binary::Multiply => x * y,
+                                Binary::Divide => {
+                                    if y != 0 {
+                                        x / y
+                                    } else {
+                                        0
+                                    }
+                                }
+                                Binary::Remainder => {
+                                    if y != 0 {
+                                        x % y
+                                    } else {
+                                        0
+                                    }
+                                }
+
+                                Binary::AND => x & y,
+                                Binary::OR => x | y,
+                                Binary::XOR => x ^ y,
+
+                                Binary::And => (x != 0 && y != 0) as i32,
+                                Binary::Or => (x != 0 || y != 0) as i32,
+
+                                Binary::Equal => (x == y) as i32,
+                                Binary::Greater => (x > y) as i32,
+                                Binary::Lesser => (x < y) as i32,
+                            }))
+                        }
+
+                        (Some(_), Some(_)) => return Err(error::Expand::TypeMismatch.into()),
+
+                        _ => return Err(error::Expand::StackUnderflow.into()),
+                    },
+
+                    Item::Operation(Operation::Unary(operation)) => match stack.pop() {
+                        Some(Parameter::Number(x)) => stack.push(Parameter::Number(match operation {
+                            Unary::Not => (x != 0) as i32,
+                            Unary::NOT => !x,
+                        })),
+
+                        Some(_) => return Err(error::Expand::TypeMismatch.into()),
+
+                        _ => return Err(error::Expand::StackUnderflow.into()),
+                    },
+
+                    Item::Print(p) => {
+                        /// Calculate the length of a formatted number.
+                        fn length(value: i32, p: &Print) -> usize {
+                            let digits = match p.format {
+                                Format::Dec => (value as f32).abs().log(10.0).floor() as usize + 1,
+
+                                Format::Oct => (value as f32).abs().log(8.0).floor() as usize + 1,
+
+                                Format::Hex | Format::HEX => {
+                                    (value as f32).abs().log(16.0).floor() as usize + 1
+                                }
+
+                                _ => unreachable!(),
+                            };
+
+                            let mut length = digits;
+
+                            // Add the minimum number of digits.
+                            if p.flags.precision > digits {
+                                length += p.flags.precision - digits;
+                            }
+
+                            // Add the sign if present.
+                            if p.format == Format::Dec && (value < 0 || p.flags.sign) {
+                                length += 1;
+                            }
+
+                            // Add the alternate representation.
+                            if p.flags.alternate {
+                                match p.format {
+                                    Format::Hex | Format::HEX => length += 2,
+
+                                    Format::Oct => length += 1,
+
+                                    _ => (),
+                                }
+                            }
+
+                            length
+                        }
+
+                        macro_rules! w {
+                            ($value:expr) => (
+                                output.write_all($value)?
+                            );
+
+                            ($($item:tt)*) => (
+                                write!(output, $($item)*)?
+                            );
+                        }
+
+                        macro_rules! f {
+                            (by $length:expr) => (
+                                for _ in 0 .. p.flags.width - $length {
+                                    output.write_all(if p.flags.space { b" " } else { b"0" })?;
+                                }
+                            );
+
+                            (before by $length:expr) => (
+                                if !p.flags.left && p.flags.width > $length {
+                                    f!(by $length);
+                                }
+                            );
+
+                            (after by $length:expr) => (
+                                if p.flags.left && p.flags.width > $length {
+                                    f!(by $length);
+                                }
+                            );
+
+                            (before $value:expr) => (
+                                f!(before by length($value, &p));
+                            );
+
+                            (after $value:expr) => (
+                                f!(after by length($value, &p));
+                            );
+                        }
+
+                        match (p.format, stack.pop()) {
+                            (Format::Str, Some(Parameter::String(ref value))) => {
+                                let mut value = &value[..];
+
+                                if p.flags.precision > 0 && p.flags.precision < value.len() {
+                                    value = &value[..p.flags.precision];
+                                }
+
+                                f!(before by value.len());
+                                w!(value);
+                                f!(after by value.len());
+                            }
+
+                            (Format::Chr, Some(Parameter::Number(value))) => {
+                                w!("{}", value as u8 as char)
+                            }
+
+                            (Format::Uni, Some(Parameter::Number(value))) => w!(
+                                "{}",
+                                char::from_u32(value as u32).ok_or(error::Expand::TypeMismatch)?
+                            ),
+
+                            (Format::Dec, Some(Parameter::Number(value))) => {
+                                f!(before value);
+
+                                if p.flags.sign && value >= 0 {
+                                    w!(b"+");
+                                }
+
+                                w!("{:.1$}", value, p.flags.precision);
+
+                                f!(after value);
+                            }
+
+                            (Format::Oct, Some(Parameter::Number(value))) => {
+                                f!(before value);
+
+                                if p.flags.alternate {
+                                    w!(b"0");
+                                }
+
+                                w!("{:.1$o}", value, p.flags.precision);
+
+                                f!(after value);
+                            }
+
+                            (Format::Hex, Some(Parameter::Number(value))) => {
+                                f!(before value);
+
+                                if p.flags.alternate {
+                                    w!(b"0x");
+                                }
+
+                                w!("{:.1$x}", value, p.flags.precision);
+
+                                f!(after value);
+                            }
+
+                            (Format::HEX, Some(Parameter::Number(value))) => {
+                                f!(before value);
+
+                                if p.flags.alternate {
+                                    w!(b"0X");
+                                }
+
+                                w!("{:.1$X}", value, p.flags.precision);
+
+                                f!(after value);
+                            }
+
+                            (_, Some(_)) => return Err(error::Expand::TypeMismatch.into()),
+
+                            (_, None) => return Err(error::Expand::StackUnderflow.into()),
+                        }
+                    }
+                }
+            }
+
+            Ok(())
+        }
     }
 }
 /// Interfaces for working with Errors.
@@ -2545,42 +3219,50 @@ pub mod error
                 fn errno_location() -> *mut c_int;
             }
 
-            fn from_utf8_lossy( input:&[u8] ) -> &str
-            {
-                match str::from_utf8( input )
-            {
-                    Ok( valid ) => valid,
-                    Err( error ) => unsafe { str::from_utf8_unchecked( &input[..error.valid_up_to()] ) },
-                }
-            }
-
             pub fn with_description<F, T>( err: Errno, callback: F ) -> T where
-            F: FnOnce( Result<&str, Errno> ) -> T,
+            F: FnOnce( Result<&str, Errno> ) -> T
             {
-                let mut buf = [0u8; 1024];
-                let c_str = unsafe {
-                    let rc = strerror_r( err.0, buf.as_mut_ptr() as *mut _, buf.len() as size_t );
-                    if rc != 0
+                unsafe
+                {
+                    let mut buf = [0u8; 1024];
+                    let c_str =
                     {
-                        let fm_err = match rc < 0 {
-                            true => errno(),
-                            false => Errno( rc ),
-                        };
-                        if fm_err != Errno( libc::ERANGE )
-            {
-                            return callback( Err( fm_err ) );
+                        let rc = strerror_r( err.0, buf.as_mut_ptr() as *mut _, buf.len() as size_t );
+
+                        if rc != 0
+                        {
+                            let fm_err = match rc < 0
+                            {
+                                true => errno(),
+                                false => Errno( rc ),
+                            };
+
+                            if fm_err != Errno( libc::ERANGE )
+                            {
+                                return callback( Err( fm_err ) );
+                            }
                         }
-                    }
-                    let c_str_len = strlen( buf.as_ptr() as *const _ );
-                    &buf[..c_str_len]
-                };
-                callback( Ok( from_utf8_lossy( c_str ) ) )
+
+                        let c_str_len = strlen( buf.as_ptr() as *const _ );
+                        &buf[..c_str_len]
+                    };
+                    callback( Ok( from_utf8_lossy( c_str ) ) )
+                }
             }
             
             pub fn errno() -> Errno { unsafe { Errno( *errno_location() ) } }
 
             pub fn set_errno( Errno( errno ): Errno )
             { unsafe { *errno_location() = errno; } }
+
+            fn from_utf8_lossy( input:&[u8] ) -> &str
+            {
+                match str::from_utf8( input )
+                {
+                    Ok( valid ) => valid,
+                    Err( error ) => unsafe { str::from_utf8_unchecked( &input[..error.valid_up_to()] ) },
+                }
+            }
         }
 
         pub mod windows
@@ -2598,16 +3280,14 @@ pub mod error
             pub const FORMAT_MESSAGE_FROM_SYSTEM: FORMAT_MESSAGE_OPTIONS = FORMAT_MESSAGE_OPTIONS( 4096u32 );
             pub const FORMAT_MESSAGE_IGNORE_INSERTS: FORMAT_MESSAGE_OPTIONS = FORMAT_MESSAGE_OPTIONS( 512u32 );
             
-            pub type WIN32_ERROR = u32;
-            
+            pub type WIN32_ERROR = u32;            
             pub type PWSTR = *mut u16;
 
             #[repr( transparent )] #[derive( Clone, Copy, Debug, Default, Eq, PartialEq )]
             pub struct FORMAT_MESSAGE_OPTIONS( pub u32 );
             
             #[inline] pub unsafe fn GetLastError() -> WIN32_ERROR { 0 }
-            #[inline] pub unsafe fn SetLastError( dwerrcode:WIN32_ERROR )
-            { }
+            #[inline] pub unsafe fn SetLastError( dwerrcode:WIN32_ERROR ) { }
             #[inline] pub unsafe fn FormatMessageW
             ( 
                 dwflags: FORMAT_MESSAGE_OPTIONS, 
@@ -2617,26 +3297,8 @@ pub mod error
                 lpbuffer:PWSTR, 
                 nsize: u32, 
                 arguments:Option<*const *const i8>
-           ) -> u32
-            {
-                0
-            }
-
-            fn from_utf16_lossy<'a>( input:&[u16], output:&'a mut [u8] ) -> &'a str
-            {
-                let mut output_len = 0;
-                for c in char::decode_utf16( input.iter().copied().take_while( |&x| x != 0 ) )
-                    .map( |x| x.unwrap_or( REPLACEMENT_CHARACTER ) )
-                {
-                    let c_len = c.len_utf8();
-                    if c_len > output.len() - output_len {
-                        break;
-                    }
-                    c.encode_utf8( &mut output[output_len..] );
-                    output_len += c_len;
-                }
-                unsafe { str::from_utf8_unchecked( &output[..output_len] ) }
-            }
+            ) -> u32
+            { 0 }
 
             pub fn with_description<F, T>( err: Errno, callback: F ) -> T where
             F: FnOnce( Result<&str, Errno> ) -> T
@@ -2671,8 +3333,26 @@ pub mod error
             
             pub fn errno() -> Errno { unsafe { Errno( GetLastError() as i32 ) } }
 
-            pub fn set_errno( Errno( errno ): Errno )
-            { unsafe { SetLastError( errno as WIN32_ERROR ) } }
+            pub fn set_errno( Errno( errno ): Errno ){ unsafe { SetLastError( errno as WIN32_ERROR ) } }
+
+            fn from_utf16_lossy<'a>( input:&[u16], output:&'a mut [u8] ) -> &'a str
+            {
+                unsafe
+                {
+                    str::from_utf8_unchecked( &output[..output_len] )
+                    let mut output_len = 0;
+                    for c in char::decode_utf16( input.iter().copied().take_while( |&x| x != 0 ) )
+                    .map( |x| x.unwrap_or( REPLACEMENT_CHARACTER ) )
+                    {
+                        let c_len = c.len_utf8();
+
+                        if c_len > output.len() - output_len { break; }
+                        
+                        c.encode_utf8( &mut output[output_len..] );
+                        output_len += c_len;
+                    }
+                }
+            }
         }
     }
     #[cfg( unix )] pub use self::imply::unix as sys;
@@ -2765,21 +3445,18 @@ pub mod error
                             "Could not apply operator {} on types {} and {} at line {}, column {}",
                             op, expected, found, line, col,
                         ),
-
                         CyclicInclude( ref file, ref line, ref col ) => write!
                         ( 
                             f,
                             "Tried to cyclically include file \"{}\" at line {}, column {}",
                             file, line, col
                         ),
-
                         DuplicateField( ref field, ref line, ref col ) => write!
                         ( 
                             f,
                             "Duplicate field \"{}\" at line {}, column {}",
                             field, line, col
                         ),
-
                         DuplicateGlobal( ref field, ref line, ref col ) => write!
                         ( 
                             f,
@@ -2805,7 +3482,8 @@ pub mod error
                             found,
                             line,
                             col,
-                            match *expected {
+                            match *expected
+                            {
                                 Some( ch ) => format!( "'{}'", ch),
                                 None => String::from( "none"),
                             }
@@ -2865,9 +3543,8 @@ pub mod error
                             "Invalid index {} at line {}, column {}",
                             index, line, col
                         ),
-                        InvalidNumeric( ref line, ref col ) => {
-                            write!( f, "Invalid numeric value at line {}, column {}", line, col)
-                        }
+                        InvalidNumeric( ref line, ref col ) =>
+                        { write!( f, "Invalid numeric value at line {}, column {}", line, col) }
                         InvalidValue( ref value, ref line, ref col ) => write!
                         ( 
                             f,
@@ -2916,11 +3593,10 @@ pub mod error
                 {
                     use self::ParseErrorKind::*;
 
-                    match ( *self).kind {
-                        BinaryOperatorError( _, _, _, _, _ ) | UnaryOperatorError( _, _, _, _ ) => {
-                            "Could not apply operator"
-                        }
-
+                    match ( *self).kind
+                    {
+                        BinaryOperatorError( _, _, _, _, _ ) | UnaryOperatorError( _, _, _, _ ) =>
+                        { "Could not apply operator" }
                         CyclicInclude( _, _, _ ) => "Tried to cyclically include file",
                         DuplicateField( _, _, _ ) => "Duplicate field",
                         DuplicateGlobal( _, _, _ ) => "Duplicate global",
@@ -2941,7 +3617,6 @@ pub mod error
                         MaxDepth( _, _ ) => "Exceeded maximum depth for a container",
                         UnexpectedEnd( _ ) => "Unexpected end when reading value",
                         VariableNotFound( _, _, _ ) => "Variable could not be found",
-
                         IoError( ref error ) | OverError( ref error ) | ParseIntError( ref error ) => error,
                     }
                 }
@@ -2996,7 +3671,6 @@ pub mod error
                 }
             }
         }
-
         pub use self::parse::{ ParseError, ParseErrorKind, parse_err };
         /// Result type for this crate.
         pub type OverResult<T> = Result<T, OverError>;
@@ -3051,11 +3725,14 @@ pub mod error
             }
         }
 
-        impl Error for OverError {
-            fn description( &self ) -> &str {
+        impl Error for OverError
+        {
+            fn description( &self ) -> &str
+            {
                 use self::OverError::*;
 
-                match *self {
+                match *self
+                {
                     ArrOutOfBounds( _ ) => "Arr index out of bounds",
                     ArrTypeMismatch( _, _ ) => "Arr inner types do not match",
                     FieldNotFound( _ ) => "Field not found",
@@ -3064,7 +3741,6 @@ pub mod error
                     TupOutOfBounds( _ ) => "Tup index out of bounds",
                     TupTypeMismatch( _, _, _ ) => "Tup inner types do not match",
                     TypeMismatch( _, _ ) => "Type mismatch",
-
                     ParseError( ref error ) | IoError( ref error ) => error,
                 }
             }
@@ -3080,6 +3756,73 @@ pub mod error
             fn from( e: ParseError ) -> Self { OverError::ParseError( format!( "{}", e)) }
         }
     }
+    /*
+    terminfo v0.9.0::error*/
+    pub mod metadata
+    {
+        use ::
+        {
+            *,
+        };
+
+        #[derive(Debug)]
+        pub enum Error
+        {
+            /// IO error.
+            Io(io::Error),
+            /// Database not found.
+            NotFound,
+            /// Parsing error.
+            Parse,
+            /// Expansion error.
+            Expand(Expand),
+        }
+
+        #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+        pub enum Expand 
+        {
+            /// The expansion string is invalid.
+            Invalid,
+            /// There was a type mismatch while expanding.
+            TypeMismatch,
+            /// The stack underflowed while expanding.
+            StackUnderflow,
+        }
+
+        pub type Result<T> = ::result::Result<T, Error>;
+
+        impl From<io::Error> for Error
+        {
+            fn from(value: io::Error) -> Self { Error::Io(value) }
+        }
+
+        impl From<Expand> for Error
+        {
+            fn from(value: Expand) -> Self { Error::Expand(value) }
+        }
+
+        impl fmt::Display for Error
+        {
+            fn fmt(&self, f: &mut fmt::Formatter) -> ::std::result::Result<(), fmt::Error>
+            {
+                match *self
+                {
+                    Error::Io(ref err) => err.fmt(f),
+                    Error::NotFound => f.write_str("Capability database not found."),
+                    Error::Parse => f.write_str("Failed to parse capability database."),
+                    Error::Expand(ref err) => match *err
+                    {
+                        Expand::Invalid => f.write_str("The expansion string is invalid."),
+                        Expand::StackUnderflow => f.write_str("Not enough elements on the stack."),
+                        Expand::TypeMismatch => f.write_str("Type mismatch."),
+                    },
+                }
+            }
+        }
+
+        impl error::Error for Error {}
+    }
+
     /// Wraps a platform-specific error code.
     #[derive( Copy, Clone, Eq, Ord, PartialEq, PartialOrd, Hash )]
     pub struct Errno( pub i32 );
@@ -3105,7 +3848,8 @@ pub mod error
             sys::with_description( *self, |desc| match desc
             {
                 Ok( desc ) => fmt.write_str( desc ),
-                Err( fm_err ) => write!( 
+                Err( fm_err ) => write!
+                (
                     fmt,
                     "OS error {} ( {} returned error {} )",
                     self.0,
@@ -3217,13 +3961,13 @@ pub mod fmt
     /// Formats a series of strings into columns, fitting within a given screen width.
     pub fn columns<S: AsRef<str>>( strs:&[S], screen_width:usize, horizontal:bool ) -> Option<Vec<usize>>
     {
-        if strs.is_empty()
-            { return None; }
+        if strs.is_empty() { return None; }
 
         let n_strs = strs.len();
         let ( mut min_len, mut max_len ) = min_max( strs.iter().map( |s| s.as_ref().chars().count() ) );
 
         if min_len == 0 { min_len = 1; }
+
         if max_len == 0 { max_len = 1; }
 
         let mut min_cols = min( n_strs, screen_width / max_len );
@@ -3234,10 +3978,7 @@ pub mod fmt
         if max_cols <= 1 { return None; }
 
         let mut col_sizes = if min_cols == max_cols { vec![vec![0; max_cols]] }
-        else
-        {
-            ( min_cols..max_cols + 1 ).map( |n| vec![0; n] ).collect::<Vec<_>>()
-        };
+        else { ( min_cols..max_cols + 1 ).map( |n| vec![0; n] ).collect::<Vec<_>>() };
 
         for ( i, s ) in strs.iter().enumerate()
         {
@@ -3285,14 +4026,12 @@ pub mod fs
         let dir_config = tools::get_config_dir();
         let rc_file = format!( "{}/cicadarc", dir_config );
         
-        if Path::new( &rc_file ).exists()
-            { return rc_file; }
+        if Path::new( &rc_file ).exists() { return rc_file; }
         
         let home = tools::get_user_home();
         let rc_file_home = format!( "{}/{}", home, ".cicadarc" );
         
-        if Path::new( &rc_file_home ).exists()
-            { return rc_file_home; }
+        if Path::new( &rc_file_home ).exists() { return rc_file_home; }
         
         rc_file
     }
@@ -3301,8 +4040,7 @@ pub mod fs
     {
         let rc_file = get_rc_file();
 
-        if !Path::new( &rc_file ).exists()
-            { return; }
+        if !Path::new( &rc_file ).exists() { return; }
 
         let args = vec!["source".to_string(), rc_file];
         scripts::run( sh, &args );
@@ -3512,11 +4250,12 @@ pub mod get
         for _ in 0..n
         {
             drop_while( &mut chars, |( _, ch )| word_break.contains( ch ) );
-            if chars.clone().next().is_none()
-            { break; }
+            
+            if chars.clone().next().is_none() { break; }
+
             drop_while( &mut chars, |( _, ch )| !word_break.contains( ch ) );
-            if chars.clone().next().is_none()
-            { break; }
+            
+            if chars.clone().next().is_none() { break; }
         }
 
         match chars.next()
@@ -3667,11 +4406,12 @@ pub mod history
     {
         let path = Path::new( hfile );
         if !path.exists()
-            {
+        {
             let _parent = match path.parent()
             {
                 Some( x ) => x,
-                None => {
+                None =>
+                {
                     println_stderr!( "cicada: history init - no parent found" );
                     return;
                 }
@@ -3679,112 +4419,117 @@ pub mod history
             let parent = match _parent.to_str()
             {
                 Some( x ) => x,
-                None => {
+                None =>
+                {
                     println_stderr!( "cicada: parent to_str is None" );
                     return;
                 }
             };
+
             match fs::create_dir_all( parent )
             {
                 Ok( _ ) => {}
-                Err( e ) => {
+                Err( e ) =>
+                {
                     println_stderr!( "cicada: histdir create error: {}", e );
                     return;
                 }
             }
+
             match fs::File::create( hfile )
             {
-                Ok( _ ) => {
-                    println!( "cicada: created history file: {}", hfile );
-                }
-                Err( e ) => {
-                    println_stderr!( "cicada: history: file create failed: {}", e );
-                }
+                Ok( _ ) => { println!( "cicada: created history file: {}", hfile ); }
+                Err( e ) => { println_stderr!( "cicada: history: file create failed: {}", e ); }
             }
         }
 
         let conn = match Connection::open( hfile )
-            {
+        {
             Ok( x ) => x,
-            Err( e ) => {
+            Err( e ) =>
+            {
                 println_stderr!( "cicada: history: open db error: {}", e );
                 return;
             }
         };
-        let sql = format!( 
-            "
+
+        let sql = format!
+        ("
             CREATE TABLE IF NOT EXISTS {}
-                ( inp TEXT,
+            (
+                inp TEXT,
                 rtn INTEGER,
                 tsb REAL,
                 tse REAL,
                 sessionid TEXT,
                 out TEXT,
                 info TEXT
-               );
-        ",
-            htable
-       );
+            );", htable 
+        );
+
         match conn.execute( &sql, [] )
-            {
+        {
             Ok( _ ) => {}
             Err( e ) => println_stderr!( "cicada: history: query error: {}", e ),
         }
     }
 
     pub fn init( rl:&mut Interface<DefaultTerminal> )
-            {
+    {
         let mut hist_size: usize = 99999;
+
         if let Ok( x ) = env::var( "HISTORY_SIZE" )
-            {
+        {
             if let Ok( y ) = x.parse::<usize>()
             {
                 hist_size = y;
             }
         }
+
         rl.set_history_size( hist_size );
 
         let history_table = get_history_table();
         let hfile = get_history_file();
 
         if !Path::new( &hfile ).exists()
-            {
+        {
             init_db( &hfile, &history_table );
         }
 
         let mut delete_dups = true;
         if let Ok( x ) = env::var( "HISTORY_DELETE_DUPS" )
-            {
-            if x == "0" {
-                delete_dups = false;
-            }
-        }
-        if delete_dups {
-            delete_duplicated_histories();
+        {
+            if x == "0" { delete_dups = false; }
         }
 
+        if delete_dups { delete_duplicated_histories(); }
+
         let conn = match Connection::open( &hfile )
-            {
+        {
             Ok( x ) => x,
-            Err( e ) => {
+            Err( e ) =>
+            {
                 println_stderr!( "cicada: history: conn error: {}", e );
                 return;
             }
         };
+
         let sql = format!( "SELECT inp FROM {} ORDER BY tsb;", history_table );
         let mut stmt = match conn.prepare( &sql )
-            {
+        {
             Ok( x ) => x,
-            Err( e ) => {
+            Err( e ) =>
+            {
                 println_stderr!( "cicada: prepare select error: {}", e );
                 return;
             }
         };
 
         let rows = match stmt.query_map( [], |row| row.get( 0 ) )
-            {
+        {
             Ok( x ) => x,
-            Err( e ) => {
+            Err( e ) =>
+            {
                 println_stderr!( "cicada: query select error: {}", e );
                 return;
             }
@@ -3792,100 +4537,96 @@ pub mod history
 
         let mut dict_helper: HashMap<String, bool> = HashMap::new();
         for x in rows.flatten()
-            {
+        {
             let inp: String = x;
-            if dict_helper.contains_key( &inp )
-            {
-                continue;
-            }
+
+            if dict_helper.contains_key( &inp ) { continue; }
+            
             dict_helper.insert( inp.clone(), true );
             rl.add_history( inp.trim().to_string() );
         }
     }
 
-    pub fn get_history_file() -> String {
-        if let Ok( hfile ) = env::var( "HISTORY_FILE" )
-            {
-            hfile
-        } else if let Ok( d ) = env::var( "XDG_DATA_HOME" )
-            {
-            format!( "{}/{}", d, "cicada/history.sqlite" )
-        } else {
+    pub fn get_history_file() -> String
+    {
+        if let Ok( hfile ) = env::var( "HISTORY_FILE" ) { hfile } 
+        else if let Ok( d ) = env::var( "XDG_DATA_HOME" ) { format!( "{}/{}", d, "cicada/history.sqlite" ) }
+        else
+        {
             let home = get::user_home();
             format!( "{}/{}", home, ".local/share/cicada/history.sqlite" )
         }
     }
 
-    pub fn get_history_table() -> String {
-        if let Ok( hfile ) = env::var( "HISTORY_TABLE" )
-            {
-            hfile
-        } else {
-            String::from( "cicada_history" )
-        }
+    pub fn get_history_table() -> String
+    {
+        if let Ok( hfile ) = env::var( "HISTORY_TABLE" ) { hfile }
+        else { String::from( "cicada_history" ) }
     }
 
     fn delete_duplicated_histories()
-            {
+    {
         let hfile = get_history_file();
         let history_table = get_history_table();
         let conn = match Connection::open( &hfile )
-            {
+        {
             Ok( x ) => x,
-            Err( e ) => {
+            Err( e ) =>
+            {
                 println_stderr!( "cicada: history: conn error: {}", e );
                 return;
             }
         };
-        let sql = format!( 
+        let sql = format!
+        (
             "DELETE FROM {} WHERE rowid NOT IN ( 
             SELECT MAX( rowid ) FROM {} GROUP BY inp )",
             history_table, history_table
-       );
+        );
+        
         match conn.execute( &sql, [] )
-            {
+        {
             Ok( _ ) => {}
-            Err( e ) => match e {
-                SqliteFailure( ee, msg ) => {
-                    if ee.extended_code == 5 {
-                        log!( 
-                            "failed to delete dup histories: {}",
-                            msg.unwrap_or( "db is locked?".to_owned() ),
-                       );
+            Err( e ) => match e
+            {
+                SqliteFailure( ee, msg ) =>
+                {
+                    if ee.extended_code == 5
+                    {
+                        log!( "failed to delete dup histories: {}", msg.unwrap_or( "db is locked?".to_owned() ) );
                         return;
                     }
-                    println_stderr!( 
+
+                    println_stderr!
+                    (
                         "cicada: history: delete dups error: {}: {:?}",
                         &ee,
                         &msg
                    );
                 }
-                _ => {
-                    println_stderr!( "cicada: history: delete dup error: {}", e );
-                }
+                _ => { println_stderr!( "cicada: history: delete dup error: {}", e ); }
             },
         }
     }
 
-    pub fn add_raw( sh:&shell::Shell, line:&str, status: i32,
-                tsb: f64, tse: f64 )
-            {
+    pub fn add_raw( sh:&shell::Shell, line:&str, status: i32, tsb: f64, tse: f64 )
+    {
         let hfile = get_history_file();
         let history_table = get_history_table();
-        if !Path::new( &hfile ).exists()
-            {
-            init_db( &hfile, &history_table );
-        }
+
+        if !Path::new( &hfile ).exists() { init_db( &hfile, &history_table ); }
 
         let conn = match Connection::open( &hfile )
-            {
+        {
             Ok( x ) => x,
-            Err( e ) => {
+            Err( e ) =>
+            {
                 println_stderr!( "cicada: history: conn error: {}", e );
                 return;
             }
         };
-        let sql = format!( 
+        let sql = format!
+        (
             "INSERT INTO \
             {} ( inp, rtn, tsb, tse, sessionid, info ) \
             VALUES( '{}', {}, {}, {}, '{}', 'dir:{}|' );",
@@ -3895,18 +4636,17 @@ pub mod history
             tsb,
             tse,
             sh.session_id,
-            sh.current_dir,
-       );
+            sh.current_dir
+        );
         match conn.execute( &sql, [] )
-            {
+        {
             Ok( _ ) => {}
             Err( e ) => println_stderr!( "cicada: history: save error: {}", e ),
         }
     }
 
-    pub fn add( sh:&shell::Shell, rl:&mut Interface<DefaultTerminal>, line:&str,
-            status: i32, tsb: f64, tse: f64 )
-            {
+    pub fn add( sh:&shell::Shell, rl:&mut Interface<DefaultTerminal>, line:&str, status: i32, tsb: f64, tse: f64 )
+    {
         add_raw( sh, line, status, tsb, tse );
         rl.add_history( line.to_string() );
     }
@@ -3921,6 +4661,70 @@ pub mod is
         regex::{ contains, Regex },
         *,
     };
+    
+    pub const NONE: u8 = 0b000000;
+    pub const PRINT: u8 = 0b000001;
+    pub const SPACE: u8 = 0b000010;
+    pub const CONTROL: u8 = 0b000100;
+    pub const PIPE: u8 = 0b001000;
+    pub const COMMA: u8 = 0b010000;
+    pub const EOL: u8 = 0b100000;
+
+    pub static ASCII: [u8; 256] =
+    [
+        NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
+        NONE, SPACE, EOL, NONE, NONE, EOL, NONE, NONE,
+        NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
+        NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
+        PRINT | SPACE, PRINT, PRINT, PRINT | CONTROL, PRINT, PRINT, PRINT, PRINT,
+        PRINT, PRINT, PRINT, PRINT, PRINT | COMMA | CONTROL, PRINT, PRINT, PRINT,
+        PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT,
+        PRINT, PRINT, PRINT, PRINT, PRINT, PRINT | CONTROL, PRINT, PRINT,
+        PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT,
+        PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT,
+        PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT,
+        PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT,
+        PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT,
+        PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT,
+        PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT,
+        PRINT, PRINT, PRINT, PRINT, PRINT | PIPE, PRINT, PRINT, NONE,
+        NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
+        NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
+        NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
+        NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
+        NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
+        NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
+        NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
+        NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
+        NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
+        NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
+        NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
+        NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
+        NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
+        NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
+        NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
+        NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
+    ];
+    /*
+    is_ws( ... ) -> bool */
+    #[inline(always)] pub fn ws(ch: u8) -> bool
+    { unsafe { ASCII.get_unchecked(ch as usize) & SPACE == SPACE } }
+    /*
+    is_eol( ... ) -> bool */
+    #[inline(always)] pub fn eol(ch: u8) -> bool
+    { unsafe { ASCII.get_unchecked(ch as usize) & EOL == EOL } }
+    /*
+    is_printable_no_pipe( ... ) -> bool */
+    #[inline(always)] pub fn printable_no_pipe(ch: u8) -> bool
+    { unsafe { ASCII.get_unchecked(ch as usize) & (PRINT | PIPE) == PRINT } }
+    /*
+    is_printable_no_comma( ... ) -> bool */
+    #[inline(always)] pub fn printable_no_comma(ch: u8) -> bool
+    { unsafe { ASCII.get_unchecked(ch as usize) & (PRINT | COMMA) == PRINT } }
+    /*
+    is_printable_no_control( ... ) -> bool */
+    #[inline(always)] pub fn printable_no_control(ch: u8) -> bool 
+    { unsafe { ASCII.get_unchecked(ch as usize) & (PRINT | CONTROL) == PRINT } }
     /*
     is_command_string( ... ) -> bool */
     pub fn command_string( args:&[String] ) -> bool { args.len() > 1 && args[1] == "-c" }
@@ -3948,8 +4752,7 @@ pub mod is
     {
         let line = line.trim();
         
-        if contains( line, r"^[A-Za-z_][A-Za-z0-9_]*=.*$" )
-            { return true; }
+        if contains( line, r"^[A-Za-z_][A-Za-z0-9_]*=.*$" ) { return true; }
         
         line.starts_with( "alias " )
         || line.starts_with( "export " )
@@ -3975,8 +4778,7 @@ pub mod is
     {
         let s = c.to_string();
 
-        if token.is_empty()
-            { contains( &s, r#"^[a-zA-Z_]$"# ) } 
+        if token.is_empty() { contains( &s, r#"^[a-zA-Z_]$"# ) } 
         else { contains( &s, r#"^[a-zA-Z0-9_]$"# ) }
     }
     /*
@@ -4000,7 +4802,7 @@ pub mod is
     {
         match ch
         {
-            '0'...'9' => true,
+            '0'..='9' => true,
             _ => false,
         }
     }
@@ -4171,27 +4973,22 @@ pub mod io
         {
             /// Application name
             pub application: Cow<'static, str>,
-
             /// Pending input
             pub input_buffer: Vec<u8>,
             /// Pending macro sequence
             pub macro_buffer: String,
-
             pub bindings: SequenceMap<Cow<'static, str>, Command>,
             pub functions: HashMap<Cow<'static, str>, Arc<dyn Function<Term>>>,
-
             /// Current input sequence
             pub sequence: String,
             /// Whether newline has been received
             pub input_accepted:bool,
-
             /// Whether overwrite mode is currently active
             pub overwrite_mode:bool,
             /// Characters appended while in overwrite mode
             pub overwritten_append:usize,
             /// Characters overwritten in overwrite mode
             pub overwritten_chars: String,
-
             /// Configured completer
             pub completer: Arc<dyn Completer<Term>>,
             /// Character appended to completions
@@ -4204,33 +5001,30 @@ pub mod io
             pub completion_start:usize,
             /// Start of the inserted prefix of a completed word
             pub completion_prefix:usize,
-
             pub string_chars: Cow<'static, str>,
             pub word_break: Cow<'static, str>,
-
             pub last_cmd: Category,
             pub last_yank:Option<( usize, usize )>,
             pub kill_ring: VecDeque<String>,
-
             pub catch_signals:bool,
             pub ignore_signals: SignalSet,
             pub report_signals: SignalSet,
             pub last_resize:Option<Size>,
             pub last_signal:Option<Signal>,
-
             variables: Variables,
-
             pub state: InputState,
             pub max_wait_duration:Option<Duration>,
         }
 
-        pub struct ReadLock<'a, Term: 'a + Terminals> {
+        pub struct ReadLock<'a, Term: 'a + Terminals>
+        {
             term: Box<dyn TerminalReader<Term> + 'a>,
             data: MutexGuard<'a, Read<Term>>,
         }
         /// Returned from [`read_line`] to indicate user input
         #[derive( Debug )]
-        pub enum ReadResult {
+        pub enum ReadResult
+        {
             /// User issued end-of-file
             Eof,
             /// User input received
@@ -4240,14 +5034,17 @@ pub mod io
         }
 
         #[derive( Copy, Clone, Debug )]
-        pub enum InputState {
+        pub enum InputState
+        {
             Inactive,
             NewSequence,
-            ContinueSequence{
+            ContinueSequence
+            {
                 expiry:Option<Instant>,
             },
             Number,
-            CharSearch{
+            CharSearch
+            {
                 n:usize,
                 backward:bool,
             },
@@ -4259,120 +5056,68 @@ pub mod io
 
         impl<'a, Term: 'a + Terminals> Reader<'a, Term> 
         {
-            pub fn new( iface:&'a Interface<Term>, lock:ReadLock<'a, Term> )
-                    -> Reader<'a, Term> {
+            pub fn new( iface:&'a Interface<Term>, lock:ReadLock<'a, Term> ) -> Reader<'a, Term>
+            {
                 Reader{iface, lock}
             }
             /// Interactively reads a line from the terminal device.
-            pub fn read_line( &mut self ) -> io::Result<ReadResult> {
-                loop {
-                    if let Some( res ) = self.read_line_step( None )? {
-                        return Ok( res );
-                    }
+            pub fn read_line( &mut self ) -> io::Result<ReadResult>
+            {
+                loop
+                {
+                    if let Some( res ) = self.read_line_step( None )? { return Ok( res ); }
                 }
             }
-
             /// Performs one step of the interactive `read_line` loop.
-            ///
-            /// This method can be used to drive the `read_line` process asynchronously.
-            /// It will wait for input only up to the specified duration, then process
-            /// any available input from the terminal.
-            ///
-            /// If the user completes the input process, `Ok( Some( result ) )` is returned.
-            /// Otherwise, `Ok( None )` is returned to indicate that the interactive loop
-            /// may continue.
-            ///
-            /// The interactive prompt may be cancelled prematurely using the
-            /// [`cancel_read_line`] method.
-            ///
-            /// See [`read_line`] for details on the return value.
-            ///
-            /// [`cancel_read_line`]: #method.cancel_read_line
-            /// [`read_line`]: #method.read_line
-            pub fn read_line_step( &mut self, timeout:Option<Duration> )
-                    -> io::Result<Option<ReadResult>> {
+            pub fn read_line_step( &mut self, timeout:Option<Duration> ) -> io::Result<Option<ReadResult>>
+            {
                 self.initialize_read_line()?;
-
                 let state = self.prepare_term()?;
                 let res = self.read_line_step_impl( timeout );
                 self.lock.term.restore( state )?;
-
                 res
             }
-
             /// Cancels an in-progress `read_line` operation.
-            ///
-            /// This method will reset internal data structures to their original state
-            /// and move the terminal cursor to a new, empty line.
-            ///
-            /// This method is called to prematurely end the interactive loop when
-            /// using the [`read_line_step`] method.
-            ///
-            /// It is not necessary to call this method if using the [`read_line`] method.
-            ///
-            /// [`read_line`]: #method.read_line
-            /// [`read_line_step`]: #method.read_line_step
-            pub fn cancel_read_line( &mut self ) -> io::Result<()> {
-                self.end_read_line()
-            }
+            pub fn cancel_read_line( &mut self ) -> io::Result<()> { self.end_read_line() }
 
-            fn initialize_read_line( &mut self ) -> io::Result<()> {
-                if !self.lock.is_active()
+            fn initialize_read_line( &mut self ) -> io::Result<()>
             {
-                    self.prompter().start_read_line()?;
-                }
+                if !self.lock.is_active() { self.prompter().start_read_line()?; }
                 Ok( () )
             }
 
-            fn read_line_step_impl( &mut self, timeout:Option<Duration> )
-                    -> io::Result<Option<ReadResult>> {
-                let do_read = if self.lock.is_input_available()
+            fn read_line_step_impl( &mut self, timeout:Option<Duration> ) -> io::Result<Option<ReadResult>>
             {
-                    // This branch will be taken only if a macro has buffered some input.
-                    // We check for input with a zero duration to see if the user has
-                    // entered Ctrl-C, e.g. to interrupt an infinitely recursive macro.
-                    self.lock.term.wait_for_input( Some( Duration::from_secs( 0 ) ) )?
-                } else {
+                let do_read = if self.lock.is_input_available()
+                { self.lock.term.wait_for_input( Some( Duration::from_secs( 0 ) ) )? }
+                
+                else
+                {
                     let timeout = limit_duration( timeout, self.lock.max_wait_duration );
                     self.lock.term.wait_for_input( timeout )?
                 };
 
-                if do_read {
-                    self.lock.read_input()?;
-                }
+                if do_read { self.lock.read_input()?; }
 
-                if let Some( size ) = self.lock.take_resize()
-            {
-                    self.handle_resize( size )?;
-                }
+                if let Some( size ) = self.lock.take_resize() { self.handle_resize( size )?; }
 
                 if let Some( sig ) = self.lock.take_signal()
-            {
-                    if self.lock.report_signals.contains( sig )
-            {
-                        return Ok( Some( ReadResult::Signal( sig ) ) );
-                    }
-                    if !self.lock.ignore_signals.contains( sig )
-            {
-                        self.handle_signal( sig )?;
-                    }
+                {
+                    if self.lock.report_signals.contains( sig ) { return Ok( Some( ReadResult::Signal( sig ) ) ); }
+                    if !self.lock.ignore_signals.contains( sig ) { self.handle_signal( sig )?; }
                 }
 
-                // Acquire the write lock and process all available input
                 {
                     let mut prompter = self.prompter();
-
                     prompter.check_expire_timeout()?;
-
-                    // If the macro buffer grows in size while input is being processed,
-                    // we end this step and let the caller try again. This is to allow
-                    // reading Ctrl-C to interrupt ( perhaps infinite ) macro execution.
                     let mut macro_len = prompter.read.data.macro_buffer.len();
 
                     while prompter.read.is_input_available()
-            {
-                        if let Some( ch ) = prompter.read.read_char()? {
-                            if let Some( r ) = prompter.handle_input( ch )? {
+                    {
+                        if let Some( ch ) = prompter.read.read_char()?
+                        {
+                            if let Some( r ) = prompter.handle_input( ch )?
+                            {
                                 prompter.end_read_line()?;
                                 return Ok( Some( r ) );
                             }
@@ -4380,9 +5125,7 @@ pub mod io
 
                         let new_macro_len = prompter.read.data.macro_buffer.len();
 
-                        if new_macro_len != 0 && new_macro_len >= macro_len {
-                            break;
-                        }
+                        if new_macro_len != 0 && new_macro_len >= macro_len { break; }
 
                         macro_len = new_macro_len;
                     }
@@ -4391,564 +5134,301 @@ pub mod io
                 Ok( None )
             }
 
-            fn end_read_line( &mut self ) -> io::Result<()> {
-                if self.lock.is_active()
+            fn end_read_line( &mut self ) -> io::Result<()>
             {
-                    self.prompter().end_read_line()?;
-                }
+                if self.lock.is_active() { self.prompter().end_read_line()?; }
+                
                 Ok( () )
             }
 
-            fn prepare_term( &mut self ) -> io::Result<Term::PrepareState> {
-                if self.read_next_raw()
+            fn prepare_term( &mut self ) -> io::Result<Term::PrepareState>
             {
-                    self.lock.term.prepare( true, SignalSet::new() )
-                } else {
+                if self.read_next_raw() { self.lock.term.prepare( true, SignalSet::new() ) }
+                else
+                {
                     let mut signals = self.lock.report_signals.union( self.lock.ignore_signals );
 
-                    if self.lock.catch_signals {
-                        // Ctrl-C is always intercepted ( unless we're catching no signals ).
-                        // By default, lineread handles it by clearing the current input state.
+                    if self.lock.catch_signals
+                    {
                         signals.insert( Signal::Interrupt );
                     }
 
                     let block_signals = !self.lock.catch_signals;
-
                     self.lock.term.prepare( block_signals, signals )
                 }
             }
 
-            fn read_next_raw( &self ) -> bool {
-                match self.lock.state {
+            fn read_next_raw( &self ) -> bool
+            {
+                match self.lock.state
+                {
                     InputState::QuotedInsert( _ ) => true,
                     _ => false
                 }
             }
-
             /// Sets the input buffer to the given string.
-            ///
-            /// This method internally acquires the `Interface` write lock.
-            ///
-            /// # Notes
-            ///
-            /// To prevent invalidating the cursor, this method sets the cursor
-            /// position to the end of the new buffer.
-            pub fn set_buffer( &mut self, buf:&str ) -> io::Result<()> {
-                if self.lock.is_active()
+            pub fn set_buffer( &mut self, buf:&str ) -> io::Result<()>
             {
-                    self.prompter().set_buffer( buf )
-                } else {
+                if self.lock.is_active() { self.prompter().set_buffer( buf ) }
+                
+                else
+                {
                     self.iface.lock_write_data().set_buffer( buf );
                     Ok( () )
                 }
             }
-
             /// Sets the cursor position in the input buffer.
-            ///
-            /// This method internally acquires the `Interface` write lock.
-            ///
-            /// # Panics
-            ///
-            /// If the given position is out of bounds or not on a `char` boundary.
-            pub fn set_cursor( &mut self, pos: usize ) -> io::Result<()> {
-                if self.lock.is_active()
+            pub fn set_cursor( &mut self, pos: usize ) -> io::Result<()>
             {
-                    self.prompter().set_cursor( pos )
-                } else {
+                if self.lock.is_active() { self.prompter().set_cursor( pos ) }
+                else
+                {
                     self.iface.lock_write_data().set_cursor( pos );
                     Ok( () )
                 }
             }
-
             /// Sets the prompt that will be displayed when `read_line` is called.
-            ///
-            /// This method internally acquires the `Interface` write lock.
-            ///
-            /// # Notes
-            ///
-            /// If `prompt` contains any terminal escape sequences ( e.g. color codes ),
-            /// such escape sequences should be immediately preceded by the character
-            /// `'\x01'` and immediately followed by the character `'\x02'`.
-            pub fn set_prompt( &mut self, prompt:&str ) -> io::Result<()> {
-                self.prompter().set_prompt( prompt )
-            }
-
+            pub fn set_prompt( &mut self, prompt:&str ) -> io::Result<()> { self.prompter().set_prompt( prompt ) }
             /// Adds a line to history.
-            ///
-            /// This method internally acquires the `Interface` write lock.
-            ///
-            /// If a `read_line` call is in progress, this method has no effect.
             pub fn add_history( &self, line: String )
             {
                 if !self.lock.is_active()
-            {
-                    if let Ok( mut lock ) = self.iface.lock_write()
-            {
-                        lock.add_history( line );
-                    }
+                {
+                    if let Ok( mut lock ) = self.iface.lock_write() { lock.add_history( line ); }
                 }
             }
-
             /// Adds a line to history, unless it is identical to the most recent entry.
-            ///
-            /// This method internally acquires the `Interface` write lock.
-            ///
-            /// If a `read_line` call is in progress, this method has no effect.
             pub fn add_history_unique( &self, line: String )
             {
                 if !self.lock.is_active()
-            {
-                    if let Ok( mut lock ) = self.iface.lock_write()
-            {
-                        lock.add_history_unique( line );
-                    }
+                {
+                    if let Ok( mut lock ) = self.iface.lock_write() { lock.add_history_unique( line ); }
                 }
             }
-
             /// Removes all history entries.
-            ///
-            /// This method internally acquires the `Interface` write lock.
-            ///
-            /// If a `read_line` call is in progress, this method has no effect.
             pub fn clear_history( &self )
             {
                 if !self.lock.is_active()
-            {
-                    if let Ok( mut lock ) = self.iface.lock_write()
-            {
-                        lock.clear_history();
-                    }
+                {
+                    if let Ok( mut lock ) = self.iface.lock_write() { lock.clear_history(); }
                 }
             }
-
             /// Removes the history entry at the given index.
-            ///
-            /// This method internally acquires the `Interface` write lock.
-            ///
-            /// If the index is out of bounds, this method has no effect.
-            ///
-            /// If a `read_line` call is in progress, this method has no effect.
             pub fn remove_history( &self, idx: usize )
             {
                 if !self.lock.is_active()
-            {
-                    if let Ok( mut lock ) = self.iface.lock_write()
-            {
-                        lock.remove_history( idx );
-                    }
+                {
+                    if let Ok( mut lock ) = self.iface.lock_write() { lock.remove_history( idx ); }
                 }
             }
-
             /// Sets the maximum number of history entries.
-            ///
-            /// This method internally acquires the `Interface` write lock.
-            ///
-            /// If `n` is less than the current number of history entries,
-            /// the oldest entries are truncated to meet the given requirement.
-            ///
-            /// If a `read_line` call is in progress, this method has no effect.
             pub fn set_history_size( &self, n: usize )
             {
                 if !self.lock.is_active()
-            {
-                    if let Ok( mut lock ) = self.iface.lock_write()
-            {
-                        lock.set_history_size( n );
-                    }
+                {
+                    if let Ok( mut lock ) = self.iface.lock_write() { lock.set_history_size( n ); }
                 }
             }
-
             /// Truncates history to the only the most recent `n` entries.
-            ///
-            /// This method internally acquires the `Interface` write lock.
-            ///
-            /// If a `read_line` call is in progress, this method has no effect.
             pub fn truncate_history( &self, n: usize )
             {
                 if !self.lock.is_active()
-            {
-                    if let Ok( mut lock ) = self.iface.lock_write()
-            {
-                        lock.truncate_history( n );
-                    }
+                {
+                    if let Ok( mut lock ) = self.iface.lock_write() { lock.truncate_history( n ); }
                 }
             }
-
             /// Returns the application name
-            pub fn application( &self ) -> &str {
-                &self.lock.application
-            }
-
+            pub fn application( &self ) -> &str { &self.lock.application }
             /// Sets the application name
-            pub fn set_application<T>( &mut self, application:T )
-                    where T: Into<Cow<'static, str>> {
-                self.lock.application = application.into();
-            }
-
+            pub fn set_application<T>( &mut self, application:T ) where
+            T: Into<Cow<'static, str>>
+            { self.lock.application = application.into(); }
             /// Returns a reference to the current completer instance.
-            pub fn completer( &self ) -> &Arc<dyn Completer<Term>> {
-                &self.lock.completer
-            }
-
+            pub fn completer( &self ) -> &Arc<dyn Completer<Term>> { &self.lock.completer }
             /// Replaces the current completer, returning the previous instance.
-            pub fn set_completer( &mut self, completer: Arc<dyn Completer<Term>> )
-                    -> Arc<dyn Completer<Term>> {
-                replace( &mut self.lock.completer, completer )
-            }
-
-            /// Returns the value of the named variable or `None`
-            /// if no such variable exists.
-            pub fn get_variable( &self, name:&str ) -> Option<Variable> {
-                self.lock.get_variable( name )
-            }
-
-            /// Sets the value of the named variable and returns the previous
-            /// value.
-            ///
-            /// If `name` does not refer to a variable or the `value` is not
-            /// a valid value for the variable, `None` is returned.
-            pub fn set_variable( &mut self, name:&str, value:&str ) -> Option<Variable> {
-                self.lock.set_variable( name, value )
-            }
-
+            pub fn set_completer( &mut self, completer: Arc<dyn Completer<Term>> ) -> Arc<dyn Completer<Term>>
+            { replace( &mut self.lock.completer, completer ) }
+            /// Returns the value of the named variable or `None` if no such variable exists.
+            pub fn get_variable( &self, name:&str ) -> Option<Variable> { self.lock.get_variable( name ) }
+            /// Sets the value of the named variable and returns the previous value.
+            pub fn set_variable( &mut self, name:&str, value:&str ) -> Option<Variable>
+            { self.lock.set_variable( name, value ) }
             /// Returns an iterator over stored variables.
-            pub fn variables( &self ) -> VariableIter {
-                self.lock.variables.iter()
-            }
-
-            /// Returns whether to "blink" matching opening parenthesis character
+            pub fn variables( &self ) -> VariableIter { self.lock.variables.iter() }
+            /// Returns whether to "blink" matching opening parenthesis character 
             /// when a closing parenthesis character is entered.
-            ///
-            /// The default value is `false`.
-            pub fn blink_matching_paren( &self ) -> bool {
-                self.lock.blink_matching_paren
-            }
-
+            pub fn blink_matching_paren( &self ) -> bool { self.lock.blink_matching_paren }
             /// Sets the `blink-matching-paren` variable.
-            pub fn set_blink_matching_paren( &mut self, set:bool )
-            {
-                self.lock.blink_matching_paren = set;
-            }
-
+            pub fn set_blink_matching_paren( &mut self, set:bool ) { self.lock.blink_matching_paren = set; }
             /// Returns whether `lineread` will catch certain signals.
-            pub fn catch_signals( &self ) -> bool {
-                self.lock.catch_signals
-            }
-
+            pub fn catch_signals( &self ) -> bool { self.lock.catch_signals }
             /// Sets whether `lineread` will catch certain signals.
-            ///
-            /// This setting is `true` by default. It can be disabled to allow the
-            /// host program to handle signals itself.
-            pub fn set_catch_signals( &mut self, enabled:bool )
-            {
-                self.lock.catch_signals = enabled;
-            }
-
+            pub fn set_catch_signals( &mut self, enabled:bool ) { self.lock.catch_signals = enabled; }
             /// Returns whether the given `Signal` is ignored.
-            pub fn ignore_signal( &self, signal: Signal ) -> bool {
-                self.lock.ignore_signals.contains( signal )
-            }
-
+            pub fn ignore_signal( &self, signal: Signal ) -> bool { self.lock.ignore_signals.contains( signal ) }
             /// Sets whether the given `Signal` will be ignored.
             pub fn set_ignore_signal( &mut self, signal: Signal, set:bool )
             {
-                if set {
+                if set
+                {
                     self.lock.ignore_signals.insert( signal );
                     self.lock.report_signals.remove( signal );
-                } else {
-                    self.lock.ignore_signals.remove( signal );
                 }
+                else { self.lock.ignore_signals.remove( signal ); }
             }
-
             /// Returns whether the given `Signal` is to be reported.
-            pub fn report_signal( &self, signal: Signal ) -> bool {
-                self.lock.report_signals.contains( signal )
-            }
-
+            pub fn report_signal( &self, signal: Signal ) -> bool { self.lock.report_signals.contains( signal ) }
             /// Sets whether to report the given `Signal`.
-            ///
-            /// When a reported signal is received via the terminal, it will be returned
-            /// from `Interface::read_line` as `Ok( Signal( signal ) )`.
             pub fn set_report_signal( &mut self, signal: Signal, set:bool )
             {
-                if set {
+                if set
+                {
                     self.lock.report_signals.insert( signal );
                     self.lock.ignore_signals.remove( signal );
-                } else {
-                    self.lock.report_signals.remove( signal );
                 }
+                else { self.lock.report_signals.remove( signal ); }
             }
-
             /// Returns whether Tab completion is disabled.
-            ///
-            /// The default value is `false`.
-            pub fn disable_completion( &self ) -> bool {
-                self.lock.disable_completion
-            }
-
+            pub fn disable_completion( &self ) -> bool { self.lock.disable_completion }
             /// Sets the `disable-completion` variable.
-            pub fn set_disable_completion( &mut self, disable:bool )
-            {
-                self.lock.disable_completion = disable;
-            }
-
-            /// When certain control characters are pressed, a character sequence
-            /// equivalent to this character will be echoed.
-            ///
-            /// The default value is `true`.
-            pub fn echo_control_characters( &self ) -> bool {
-                self.lock.echo_control_characters
-            }
-
+            pub fn set_disable_completion( &mut self, disable:bool ) { self.lock.disable_completion = disable; }
+            /// When certain control characters are pressed, 
+            /// a character sequence equivalent to this character will be echoed.
+            pub fn echo_control_characters( &self ) -> bool { self.lock.echo_control_characters }
             /// Sets the `echo-control-characters` variable.
-            pub fn set_echo_control_characters( &mut self, echo:bool )
-            {
-                self.lock.echo_control_characters = echo;
-            }
-
+            pub fn set_echo_control_characters( &mut self, echo:bool ) { self.lock.echo_control_characters = echo; }
             /// Returns the character, if any, that is appended to a successful completion.
-            pub fn completion_append_character( &self ) -> Option<char> {
-                self.lock.completion_append_character
-            }
-
+            pub fn completion_append_character( &self ) -> Option<char> { self.lock.completion_append_character }
             /// Sets the character, if any, that is appended to a successful completion.
             pub fn set_completion_append_character( &mut self, ch:Option<char> )
-            {
-                self.lock.completion_append_character = ch;
-            }
-
+            { self.lock.completion_append_character = ch; }
             /// Returns the width of completion listing display.
-            ///
-            /// If this value is greater than the terminal width, terminal width is used
-            /// instead.
-            ///
-            /// The default value is equal to `usize::max_value()`.
-            pub fn completion_display_width( &self ) -> usize {
-                self.lock.completion_display_width
-            }
-
+            pub fn completion_display_width( &self ) -> usize { self.lock.completion_display_width }
             /// Sets the `completion-display-width` variable.
-            pub fn set_completion_display_width( &mut self, n: usize )
-            {
-                self.lock.completion_display_width = n;
-            }
-
-            /// Returns the minimum number of completion items that require user
-            /// confirmation before listing.
-            ///
-            /// The default value is `100`.
-            pub fn completion_query_items( &self ) -> usize {
-                self.lock.completion_query_items
-            }
-
+            pub fn set_completion_display_width( &mut self, n: usize ) { self.lock.completion_display_width = n; }
+            /// Returns the minimum number of completion items that require user confirmation before listing.
+            pub fn completion_query_items( &self ) -> usize { self.lock.completion_query_items }
             /// Sets the `completion-query-items` variable.
-            pub fn set_completion_query_items( &mut self, n: usize )
-            {
-                self.lock.completion_query_items = n;
-            }
-
-            /// Returns the timeout to wait for further user input when an ambiguous
-            /// sequence has been entered. If the value is `None`, wait is indefinite.
-            ///
-            /// The default value 500 milliseconds.
-            pub fn keyseq_timeout( &self ) -> Option<Duration> {
-                self.lock.keyseq_timeout
-            }
-
+            pub fn set_completion_query_items( &mut self, n: usize ) { self.lock.completion_query_items = n; }
+            /// Returns the timeout to wait for further user input when an ambiguous sequence has been entered. 
+            pub fn keyseq_timeout( &self ) -> Option<Duration> { self.lock.keyseq_timeout }
             /// Sets the `keyseq-timeout` variable.
-            pub fn set_keyseq_timeout( &mut self, timeout:Option<Duration> )
-            {
-                self.lock.keyseq_timeout = timeout;
-            }
-
+            pub fn set_keyseq_timeout( &mut self, timeout:Option<Duration> ) { self.lock.keyseq_timeout = timeout; }
             /// Returns whether to list possible completions one page at a time.
-            ///
-            /// The default value is `true`.
-            pub fn page_completions( &self ) -> bool {
-                self.lock.page_completions
-            }
-
+            pub fn page_completions( &self ) -> bool { self.lock.page_completions }
             /// Sets the `page-completions` variable.
-            pub fn set_page_completions( &mut self, set:bool )
-            {
-                self.lock.page_completions = set;
-            }
-
-            /// Returns whether to list completions horizontally, rather than down
-            /// the screen.
-            ///
-            /// The default value is `false`.
-            pub fn print_completions_horizontally( &self ) -> bool {
-                self.lock.print_completions_horizontally
-            }
-
+            pub fn set_page_completions( &mut self, set:bool ) { self.lock.page_completions = set; }
+            /// Returns whether to list completions horizontally, rather than down the screen.
+            pub fn print_completions_horizontally( &self ) -> bool { self.lock.print_completions_horizontally }
             /// Sets the `print-completions-horizontally` variable.
             pub fn set_print_completions_horizontally( &mut self, set:bool )
-            {
-                self.lock.print_completions_horizontally = set;
-            }
-
+            { self.lock.print_completions_horizontally = set; }
             /// Returns the set of characters that delimit strings.
-            pub fn string_chars( &self ) -> &str {
-                &self.lock.string_chars
-            }
-
+            pub fn string_chars( &self ) -> &str { &self.lock.string_chars }
             /// Sets the set of characters that delimit strings.
-            pub fn set_string_chars<T>( &mut self, chars:T )
-                    where T: Into<Cow<'static, str>> {
-                self.lock.string_chars = chars.into();
-            }
-
+            pub fn set_string_chars<T>( &mut self, chars:T ) where 
+            T: Into<Cow<'static, str>>
+            { self.lock.string_chars = chars.into(); }
             /// Returns the set of characters that indicate a word break.
-            pub fn word_break_chars( &self ) -> &str {
-                &self.lock.word_break
-            }
-
+            pub fn word_break_chars( &self ) -> &str { &self.lock.word_break }
             /// Sets the set of characters that indicate a word break.
-            pub fn set_word_break_chars<T>( &mut self, chars:T )
-                    where T: Into<Cow<'static, str>> {
-                self.lock.word_break = chars.into();
-            }
-
+            pub fn set_word_break_chars<T>( &mut self, chars:T ) where
+            T: Into<Cow<'static, str>>
+            { self.lock.word_break = chars.into(); }
             /// Returns an iterator over bound sequences
-            pub fn bindings( &self ) -> BindingIter {
-                self.lock.bindings()
-            }
-
+            pub fn bindings( &self ) -> BindingIter { self.lock.bindings() }
             /// Binds a sequence to a command.
-            ///
-            /// Returns the previously bound command.
-            pub fn bind_sequence<T>( &mut self, seq:T, cmd: Command ) -> Option<Command>
-                    where T: Into<Cow<'static, str>> {
-                self.lock.bind_sequence( seq, cmd )
-            }
-
-            /// Binds a sequence to a command, if and only if the given sequence
-            /// is not already bound to a command.
-            ///
-            /// Returns `true` if a new binding was created.
-            pub fn bind_sequence_if_unbound<T>( &mut self, seq:T, cmd: Command ) -> bool
-                    where T: Into<Cow<'static, str>> {
-                self.lock.bind_sequence_if_unbound( seq, cmd )
-            }
-
+            pub fn bind_sequence<T>( &mut self, seq:T, cmd: Command ) -> Option<Command> where 
+            T: Into<Cow<'static, str>>
+            { self.lock.bind_sequence( seq, cmd ) }
+            /// Binds a sequence to a command, if and only if the given sequence is not already bound to a command.
+            pub fn bind_sequence_if_unbound<T>( &mut self, seq:T, cmd: Command ) -> bool where 
+            T: Into<Cow<'static, str>> 
+            { self.lock.bind_sequence_if_unbound( seq, cmd ) }
             /// Removes a binding for the given sequence.
-            ///
-            /// Returns the previously bound command.
-            pub fn unbind_sequence( &mut self, seq:&str ) -> Option<Command> {
-                self.lock.unbind_sequence( seq )
-            }
-
+            pub fn unbind_sequence( &mut self, seq:&str ) -> Option<Command> { self.lock.unbind_sequence( seq ) }
             /// Defines a named function to which sequences may be bound.
-            ///
-            /// The name should consist of lowercase ASCII letters and numbers,
-            /// containing no spaces, with words separated by hyphens. However,
-            /// this is not a requirement.
-            ///
-            /// Returns the function previously defined with the same name.
-            pub fn define_function<T>( &mut self, name:T, cmd: Arc<dyn Function<Term>> )
-                    -> Option<Arc<dyn Function<Term>>> where T: Into<Cow<'static, str>> {
-                self.lock.define_function( name, cmd )
-            }
-
+            pub fn define_function<T>( &mut self, name:T, cmd: Arc<dyn Function<Term>> ) -> 
+            Option<Arc<dyn Function<Term>>> where 
+            T: Into<Cow<'static, str>>
+            { self.lock.define_function( name, cmd ) }
             /// Removes a function defined with the given name.
-            ///
-            /// Returns the defined function.
-            pub fn remove_function( &mut self, name:&str ) -> Option<Arc<dyn Function<Term>>> {
-                self.lock.remove_function( name )
-            }
+            pub fn remove_function( &mut self, name:&str ) -> Option<Arc<dyn Function<Term>>> 
+            { self.lock.remove_function( name ) }
 
             pub fn evaluate_directives( &mut self, term:&Term, dirs: Vec<Directive> )
-            {
-                self.lock.data.evaluate_directives( term, dirs )
-            }
+            { self.lock.data.evaluate_directives( term, dirs ) }
 
             pub fn evaluate_directive( &mut self, term:&Term, dir: Directive )
+            { self.lock.data.evaluate_directive( term, dir ) }
+
+            fn prompter<'b>( &'b mut self ) -> Prompter<'b, 'a, Term>
             {
-                self.lock.data.evaluate_directive( term, dir )
-            }
-
-            fn prompter<'b>( &'b mut self ) -> Prompter<'b, 'a, Term> {
-                Prompter::new( 
+                Prompter::new
+                (
                     &mut self.lock,
-                    self.iface.lock_write().expect( "Failed to acquire write lock" ) )
+                    self.iface.lock_write().expect( "Failed to acquire write lock" )
+                )
             }
+            
+            fn handle_resize( &mut self, size:Size ) -> io::Result<()> { self.prompter().handle_resize( size ) }
 
-            fn handle_resize( &mut self, size:Size ) -> io::Result<()> {
-                self.prompter().handle_resize( size )
-            }
-
-            fn handle_signal( &mut self, sig: Signal ) -> io::Result<()> {
-                self.prompter().handle_signal( sig )
-            }
+            fn handle_signal( &mut self, sig: Signal ) -> io::Result<()> { self.prompter().handle_signal( sig ) }
         }
 
         impl<'a, Term: 'a + Terminals> ReadLock<'a, Term> 
         {
-            pub fn new( term: Box<dyn TerminalReader<Term> + 'a>, data: MutexGuard<'a, Read<Term>> )
-                    -> ReadLock<'a, Term> {
-                ReadLock{term, data}
-            }
+            pub fn new( term: Box<dyn TerminalReader<Term> + 'a>, data: MutexGuard<'a, Read<Term>> ) -> 
+            ReadLock<'a, Term>
+            { ReadLock{term, data} }
             /// Reads the next character of input.
-            pub fn read_char( &mut self ) -> io::Result<Option<char>> {
-                if let Some( ch ) = self.macro_pop()
+            pub fn read_char( &mut self ) -> io::Result<Option<char>>
             {
-                    Ok( Some( ch ) )
-                } else if let Some( ch ) = self.decode_input()? {
-                    Ok( Some( ch ) )
-                } else {
-                    Ok( None )
-                }
+                if let Some( ch ) = self.macro_pop() { Ok( Some( ch ) ) }
+                else if let Some( ch ) = self.decode_input()? { Ok( Some( ch ) ) }
+                else { Ok( None ) }
             }
 
-            fn read_input( &mut self ) -> io::Result<()> {
-                match self.term.read( &mut self.data.input_buffer )? {
+            fn read_input( &mut self ) -> io::Result<()>
+            {
+                match self.term.read( &mut self.data.input_buffer )?
+                {
                     RawRead::Bytes( _ ) => (),
-                    RawRead::Resize( new_size ) => {
-                        self.last_resize = Some( new_size );
-                    }
-                    RawRead::Signal( sig ) => {
-                        self.last_signal = Some( sig );
-                    }
+                    RawRead::Resize( new_size ) => { self.last_resize = Some( new_size ); }
+                    RawRead::Signal( sig ) => { self.last_signal = Some( sig ); }
                 }
 
                 Ok( () )
             }
 
-            fn is_input_available( &self ) -> bool {
-                !self.data.macro_buffer.is_empty() || match self.peek_input()
+            fn is_input_available( &self ) -> bool
             {
+                !self.data.macro_buffer.is_empty() || match self.peek_input()
+                {
                     Ok( Some( _ ) ) | Err( _ ) => true,
                     Ok( None ) => false
                 }
             }
 
-            fn macro_pop( &mut self ) -> Option<char> {
-                if self.data.macro_buffer.is_empty()
+            fn macro_pop( &mut self ) -> Option<char>
             {
-                    None
-                } else {
-                    Some( self.data.macro_buffer.remove( 0 ) )
-                }
+                if self.data.macro_buffer.is_empty() { None }
+                else { Some( self.data.macro_buffer.remove( 0 ) ) }
             }
 
-            fn decode_input( &mut self ) -> io::Result<Option<char>> {
+            fn decode_input( &mut self ) -> io::Result<Option<char>>
+            {
                 let res = self.peek_input();
 
-                if let Ok( Some( ch ) ) = res {
-                    self.data.input_buffer.drain( ..ch.len_utf8() );
-                }
+                if let Ok( Some( ch ) ) = res { self.data.input_buffer.drain( ..ch.len_utf8() ); }
 
                 res
             }
 
-            fn peek_input( &self ) -> io::Result<Option<char>> {
-                if self.data.input_buffer.is_empty()
+            fn peek_input( &self ) -> io::Result<Option<char>>
             {
-                    Ok( None )
-                } else {
-                    first_char( &self.data.input_buffer )
-                }
+                if self.data.input_buffer.is_empty() { Ok( None ) }
+                else { first_char( &self.data.input_buffer ) }
             }
 
             pub fn reset_data( &mut self )
@@ -4957,74 +5437,61 @@ pub mod io
             }
         }
 
-        impl<'a, Term: 'a + Terminals> Deref for ReadLock<'a, Term> {
+        impl<'a, Term: 'a + Terminals> Deref for ReadLock<'a, Term>
+        {
             type Target = Read<Term>;
-
-            fn deref( &self ) -> &Read<Term> {
-                &self.data
-            }
+            fn deref( &self ) -> &Read<Term> { &self.data }
         }
 
-        impl<'a, Term: 'a + Terminals> DerefMut for ReadLock<'a, Term> {
-            fn deref_mut( &mut self ) -> &mut Read<Term> {
-                &mut self.data
-            }
+        impl<'a, Term: 'a + Terminals> DerefMut for ReadLock<'a, Term>
+        {
+            fn deref_mut( &mut self ) -> &mut Read<Term> { &mut self.data }
         }
 
-        impl<Term: Terminals> Deref for Read<Term> {
+        impl<Term: Terminals> Deref for Read<Term>
+        {
             type Target = Variables;
-
-            fn deref( &self ) -> &Variables {
-                &self.variables
-            }
+            fn deref( &self ) -> &Variables { &self.variables }
         }
 
-        impl<Term: Terminals> DerefMut for Read<Term> {
-            fn deref_mut( &mut self ) -> &mut Variables {
-                &mut self.variables
-            }
+        impl<Term: Terminals> DerefMut for Read<Term>
+        {
+            fn deref_mut( &mut self ) -> &mut Variables { &mut self.variables }
         }
 
-        impl<Term: Terminals> Read<Term> {
-            pub fn new( term:&Term, application: Cow<'static, str> ) -> Read<Term> {
-                let mut r = Read{
+        impl<Term: Terminals> Read<Term>
+        {
+            pub fn new( term:&Term, application: Cow<'static, str> ) -> Read<Term>
+            {
+                let mut r = Read
+                {
                     application,
-
                     bindings: default_bindings(),
                     functions: HashMap::new(),
-
                     input_buffer: Vec::new(),
                     macro_buffer: String::new(),
-
                     sequence: String::new(),
                     input_accepted: false,
-
                     overwrite_mode: false,
                     overwritten_append: 0,
                     overwritten_chars: String::new(),
-
                     completer: Arc::new( DummyCompleter ),
                     completion_append_character: Some( ' ' ),
                     completions: None,
                     completion_index: 0,
                     completion_start: 0,
                     completion_prefix: 0,
-
                     string_chars: STRING_CHARS.into(),
                     word_break: WORD_BREAK_CHARS.into(),
-
                     last_cmd: Category::Other,
                     last_yank: None,
                     kill_ring: VecDeque::with_capacity( MAX_KILLS ),
-
                     catch_signals: true,
                     ignore_signals: SignalSet::new(),
                     report_signals: SignalSet::new(),
                     last_resize: None,
                     last_signal: None,
-
                     variables: Variables::default(),
-
                     state: InputState::Inactive,
                     max_wait_duration: None,
                 };
@@ -5033,29 +5500,20 @@ pub mod io
                 r
             }
 
-            pub fn bindings( &self ) -> BindingIter {
-                BindingIter( self.bindings.sequences().iter() )
-            }
+            pub fn bindings( &self ) -> BindingIter { BindingIter( self.bindings.sequences().iter() ) }
 
-            pub fn variables( &self ) -> VariableIter {
-                self.variables.iter()
-            }
+            pub fn variables( &self ) -> VariableIter { self.variables.iter() }
 
-            fn take_resize( &mut self ) -> Option<Size> {
-                self.last_resize.take()
-            }
+            fn take_resize( &mut self ) -> Option<Size> { self.last_resize.take() }
 
-            fn take_signal( &mut self ) -> Option<Signal> {
-                self.last_signal.take()
-            }
+            fn take_signal( &mut self ) -> Option<Signal> { self.last_signal.take() }
 
-            pub fn queue_input( &mut self, seq:&str )
+            pub fn queue_input( &mut self, seq:&str ) { self.macro_buffer.insert_str( 0, seq ); }
+
+            pub fn is_active( &self ) -> bool
             {
-                self.macro_buffer.insert_str( 0, seq );
-            }
-
-            pub fn is_active( &self ) -> bool {
-                match self.state {
+                match self.state
+                {
                     InputState::Inactive => false,
                     _ => true
                 }
@@ -5069,66 +5527,60 @@ pub mod io
                 self.overwritten_append = 0;
                 self.overwritten_chars.clear();
                 self.sequence.clear();
-
                 self.completions = None;
-
                 self.last_cmd = Category::Other;
                 self.last_yank = None;
-
                 self.last_resize = None;
                 self.last_signal = None;
             }
 
-            pub fn bind_sequence<T>( &mut self, seq:T, cmd: Command ) -> Option<Command>
-                    where T: Into<Cow<'static, str>> {
-                self.bindings.insert( seq.into(), cmd )
-            }
+            pub fn bind_sequence<T>( &mut self, seq:T, cmd: Command ) -> Option<Command> where 
+            T: Into<Cow<'static, str>>
+            { self.bindings.insert( seq.into(), cmd ) }
 
-            pub fn bind_sequence_if_unbound<T>( &mut self, seq:T, cmd: Command ) -> bool
-                    where T: Into<Cow<'static, str>> {
-
-                match self.bindings.entry( seq.into() )
+            pub fn bind_sequence_if_unbound<T>( &mut self, seq:T, cmd: Command ) -> bool where
+            T: Into<Cow<'static, str>>
             {
+                match self.bindings.entry( seq.into() )
+                {
                     Entry::Occupied( _ ) => false,
-                    Entry::Vacant( ent ) => {
+                    Entry::Vacant( ent ) =>
+                    {
                         ent.insert( cmd );
                         true
                     }
                 }
             }
 
-            pub fn unbind_sequence( &mut self, seq:&str ) -> Option<Command> {
-                self.bindings.remove( seq )
-                    .map( |( _, cmd )| cmd )
+            pub fn unbind_sequence( &mut self, seq:&str ) -> Option<Command>
+            {
+                self.bindings.remove( seq ).map( |( _, cmd )| cmd )
             }
 
-            pub fn define_function<T>( &mut self, name:T, cmd: Arc<dyn Function<Term>> )
-                    -> Option<Arc<dyn Function<Term>>> where T: Into<Cow<'static, str>> {
-                self.functions.insert( name.into(), cmd )
-            }
+            pub fn define_function<T>( &mut self, name:T, cmd: Arc<dyn Function<Term>> ) -> 
+            Option<Arc<dyn Function<Term>>> where 
+            T: Into<Cow<'static, str>>
+            { self.functions.insert( name.into(), cmd ) }
 
-            pub fn remove_function( &mut self, name:&str ) -> Option<Arc<dyn Function<Term>>> {
-                self.functions.remove( name )
-            }
+            pub fn remove_function( &mut self, name:&str ) -> Option<Arc<dyn Function<Term>>>
+            { self.functions.remove( name ) }
 
             fn read_init( &mut self, term:&Term )
             {
-                if let Some( path ) = env_init_file()
-            {
-                    // If `INPUTRC` is present, even if invalid, parse nothing else.
-                    // Thus, an empty `INPUTRC` will inhibit loading configuration.
-                    self.read_init_file_if_exists( term, Some( path ) );
-                } else {
-                    if !self.read_init_file_if_exists( term, user_init_file() )
-            {
-                        self.read_init_file_if_exists( term, system_init_file() );
-                    }
+                if let Some( path ) = env_init_file() { self.read_init_file_if_exists( term, Some( path ) );  }
+                else
+                {
+                    if !self.read_init_file_if_exists( term, user_init_file() ) 
+                    { self.read_init_file_if_exists( term, system_init_file() ); }
                 }
             }
 
-            fn read_init_file_if_exists( &mut self, term:&Term, path:Option<PathBuf> ) -> bool {
-                match path {
-                    Some( ref path ) if path.exists() => {
+            fn read_init_file_if_exists( &mut self, term:&Term, path:Option<PathBuf> ) -> bool
+            {
+                match path
+                {
+                    Some( ref path ) if path.exists() =>
+                    {
                         self.read_init_file( term, path );
                         true
                     }
@@ -5138,45 +5590,40 @@ pub mod io
 
             fn read_init_file( &mut self, term:&Term, path:&Path )
             {
-                if let Some( dirs ) = parse_file( path )
-            {
-                    self.evaluate_directives( term, dirs );
-                }
+                if let Some( dirs ) = parse_file( path ) { self.evaluate_directives( term, dirs ); }
             }
-
             /// Evaluates a series of configuration directives.
             pub fn evaluate_directives( &mut self, term:&Term, dirs: Vec<Directive> )
             {
-                for dir in dirs {
+                for dir in dirs
+                {
                     self.evaluate_directive( term, dir );
                 }
             }
-
             /// Evaluates a single configuration directive.
             pub fn evaluate_directive( &mut self, term:&Term, dir: Directive )
             {
-                match dir {
-                    Directive::Bind( seq, cmd ) => {
-                        self.bind_sequence( seq, cmd );
-                    }
-                    Directive::Conditional{name, value, then_group, else_group} => {
+                match dir 
+                {
+                    Directive::Bind( seq, cmd ) => { self.bind_sequence( seq, cmd ); }
+                    
+                    Directive::Conditional{name, value, then_group, else_group} =>
+                    {
                         let name = name.as_ref().map( |s| &s[..] );
 
-                        if self.eval_condition( term, name, &value )
-            {
-                            self.evaluate_directives( term, then_group );
-                        } else {
-                            self.evaluate_directives( term, else_group );
-                        }
+                        if self.eval_condition( term, name, &value ) { self.evaluate_directives( term, then_group ); }
+
+                        else { self.evaluate_directives( term, else_group ); }
                     }
-                    Directive::SetVariable( name, value ) => {
-                        self.set_variable( &name, &value );
-                    }
+
+                    Directive::SetVariable( name, value ) => { self.set_variable( &name, &value ); }
                 }
             }
 
-            fn eval_condition( &self, term:&Term, name:Option<&str>, value:&str ) -> bool {
-                match name {
+            fn eval_condition( &self, term:&Term, name:Option<&str>, value:&str ) -> bool
+            {
+                match name
+                {
                     None => self.application == value,
                     Some( "lib" ) => value == "lineread",
                     Some( "mode" ) => value == "emacs",
@@ -5185,120 +5632,103 @@ pub mod io
                 }
             }
 
-            fn term_matches( &self, term:&Term, value:&str ) -> bool {
-                match_name( term.name(), value )
-            }
+            fn term_matches( &self, term:&Term, value:&str ) -> bool { match_name( term.name(), value ) }
         }
-
         /// Iterator over `Reader` bindings
         pub struct BindingIter<'a>( slice::Iter<'a, ( Cow<'static, str>, Command )> );
 
         impl<'a> ExactSizeIterator for BindingIter<'a> {}
 
-        impl<'a> Iterator for BindingIter<'a> {
+        impl<'a> Iterator for BindingIter<'a>
+        {
             type Item = ( &'a str, &'a Command );
 
-            #[inline] fn next( &mut self ) -> Option<Self::Item> {
-                self.0.next().map( |&( ref s, ref cmd )| ( &s[..], cmd ) )
-            }
+            #[inline] fn next( &mut self ) -> Option<Self::Item>
+            { self.0.next().map( |&( ref s, ref cmd )| ( &s[..], cmd ) ) }
 
-            #[inline] fn nth( &mut self, n: usize ) -> Option<Self::Item> {
-                self.0.nth( n ).map( |&( ref s, ref cmd )| ( &s[..], cmd ) )
-            }
+            #[inline] fn nth( &mut self, n: usize ) -> Option<Self::Item>
+            { self.0.nth( n ).map( |&( ref s, ref cmd )| ( &s[..], cmd ) ) }
 
-            #[inline] fn size_hint( &self ) -> ( usize, Option<usize> )
-            {
-                self.0.size_hint()
-            }
+            #[inline] fn size_hint( &self ) -> ( usize, Option<usize> ) { self.0.size_hint() }
         }
 
-        impl<'a> DoubleEndedIterator for BindingIter<'a> {
-            #[inline] fn next_back( &mut self ) -> Option<Self::Item> {
-                self.0.next_back().map( |&( ref s, ref cmd )| ( &s[..], cmd ) )
-            }
+        impl<'a> DoubleEndedIterator for BindingIter<'a>
+        {
+            #[inline] fn next_back( &mut self ) -> Option<Self::Item>
+            { self.0.next_back().map( |&( ref s, ref cmd )| ( &s[..], cmd ) ) }
         }
 
-        fn default_bindings() -> SequenceMap<Cow<'static, str>, Command> {
+        fn default_bindings() -> SequenceMap<Cow<'static, str>, Command>
+        {
             use crate::command::Command::*;
 
-            SequenceMap::from( vec![
-                // Carriage return and line feed
+            SequenceMap::from( vec!
+            [
                 ( "\r".into(), AcceptLine ),
                 ( "\n".into(), AcceptLine ),
-
-                // Possible sequences for arrow keys, Home, End
                 ( "\x1b[A".into(), PreviousHistory ),
                 ( "\x1b[B".into(), NextHistory ),
                 ( "\x1b[C".into(), ForwardChar ),
                 ( "\x1b[D".into(), BackwardChar ),
                 ( "\x1b[H".into(), BeginningOfLine ),
                 ( "\x1b[F".into(), EndOfLine ),
-
-                // More possible sequences for arrow keys, Home, End
                 ( "\x1bOA".into(), PreviousHistory ),
                 ( "\x1bOB".into(), NextHistory ),
                 ( "\x1bOC".into(), ForwardChar ),
                 ( "\x1bOD".into(), BackwardChar ),
                 ( "\x1bOH".into(), BeginningOfLine ),
                 ( "\x1bOF".into(), EndOfLine ),
-
-                // Possible sequences for Insert, Delete
                 ( "\x1b[2~".into(), OverwriteMode ),
                 ( "\x1b[3~".into(), DeleteChar ),
-
-                // Basic commands
-                ( "\x01"    .into(), BeginningOfLine ),           // Ctrl-A
-                ( "\x02"    .into(), BackwardChar ),              // Ctrl-B
-                ( "\x04"    .into(), DeleteChar ),                // Ctrl-D
-                ( "\x05"    .into(), EndOfLine ),                 // Ctrl-E
-                ( "\x06"    .into(), ForwardChar ),               // Ctrl-F
-                ( "\x07"    .into(), Abort ),                     // Ctrl-G
-                ( "\x08"    .into(), BackwardDeleteChar ),        // Ctrl-H
-                ( "\x0b"    .into(), KillLine ),                  // Ctrl-K
-                ( "\x0c"    .into(), ClearScreen ),               // Ctrl-L
-                ( "\x0e"    .into(), NextHistory ),               // Ctrl-N
-                ( "\x10"    .into(), PreviousHistory ),           // Ctrl-P
-                ( "\x12"    .into(), ReverseSearchHistory ),      // Ctrl-R
-                ( "\x14"    .into(), TransposeChars ),            // Ctrl-T
-                ( "\x15"    .into(), BackwardKillLine ),          // Ctrl-U
-                ( "\x16"    .into(), QuotedInsert ),              // Ctrl-V
-                ( "\x17"    .into(), UnixWordRubout ),            // Ctrl-W
-                ( "\x19"    .into(), Yank ),                      // Ctrl-Y
-                ( "\x1d"    .into(), CharacterSearch ),           // Ctrl-]
-                ( "\x7f"    .into(), BackwardDeleteChar ),        // Rubout
-                ( "\x1b\x08".into(), BackwardKillWord ),          // Escape, Ctrl-H
-                ( "\x1b\x1d".into(), CharacterSearchBackward ),   // Escape, Ctrl-]
-                ( "\x1b\x7f".into(), BackwardKillWord ),          // Escape, Rubout
-                ( "\x1bb"   .into(), BackwardWord ),              // Escape, b
-                ( "\x1bd"   .into(), KillWord ),                  // Escape, d
-                ( "\x1bf"   .into(), ForwardWord ),               // Escape, f
-                ( "\x1bt"   .into(), TransposeWords ),            // Escape, t
-                ( "\x1by"   .into(), YankPop ),                   // Escape, y
-                ( "\x1b#"   .into(), InsertComment ),             // Escape, #
-                ( "\x1b<"   .into(), BeginningOfHistory ),        // Escape, <
-                ( "\x1b>"   .into(), EndOfHistory ),              // Escape, >
-
-                // Completion commands
-                ( "\t"   .into(), Complete ),             // Tab
-                ( "\x1b?".into(), PossibleCompletions ),  // Escape, ?
-                ( "\x1b*".into(), InsertCompletions ),    // Escape, *
-
-                // Digit commands
-                ( "\x1b-".into(), DigitArgument ),    // Escape, -
-                ( "\x1b0".into(), DigitArgument ),    // Escape, 0
-                ( "\x1b1".into(), DigitArgument ),    // Escape, 1
-                ( "\x1b2".into(), DigitArgument ),    // Escape, 2
-                ( "\x1b3".into(), DigitArgument ),    // Escape, 3
-                ( "\x1b4".into(), DigitArgument ),    // Escape, 4
-                ( "\x1b5".into(), DigitArgument ),    // Escape, 5
-                ( "\x1b6".into(), DigitArgument ),    // Escape, 6
-                ( "\x1b7".into(), DigitArgument ),    // Escape, 7
-                ( "\x1b8".into(), DigitArgument ),    // Escape, 8
-                ( "\x1b9".into(), DigitArgument ),    // Escape, 9
+                ( "\x01"    .into(), BeginningOfLine ),
+                ( "\x02"    .into(), BackwardChar ),   
+                ( "\x04"    .into(), DeleteChar ),     
+                ( "\x05"    .into(), EndOfLine ),      
+                ( "\x06"    .into(), ForwardChar ),    
+                ( "\x07"    .into(), Abort ),          
+                ( "\x08"    .into(), BackwardDeleteChar ),
+                ( "\x0b"    .into(), KillLine ),       
+                ( "\x0c"    .into(), ClearScreen ),    
+                ( "\x0e"    .into(), NextHistory ),    
+                ( "\x10"    .into(), PreviousHistory ),
+                ( "\x12"    .into(), ReverseSearchHistory ),
+                ( "\x14"    .into(), TransposeChars ), 
+                ( "\x15"    .into(), BackwardKillLine ),
+                ( "\x16"    .into(), QuotedInsert ),   
+                ( "\x17"    .into(), UnixWordRubout ), 
+                ( "\x19"    .into(), Yank ),           
+                ( "\x1d"    .into(), CharacterSearch ),
+                ( "\x7f"    .into(), BackwardDeleteChar ),
+                ( "\x1b\x08".into(), BackwardKillWord ),
+                ( "\x1b\x1d".into(), CharacterSearchBackward ),
+                ( "\x1b\x7f".into(), BackwardKillWord )
+                ( "\x1bb"   .into(), BackwardWord ),   
+                ( "\x1bd"   .into(), KillWord ),       
+                ( "\x1bf"   .into(), ForwardWord ),    
+                ( "\x1bt"   .into(), TransposeWords ), 
+                ( "\x1by"   .into(), YankPop ),        
+                ( "\x1b#"   .into(), InsertComment ),  
+                ( "\x1b<"   .into(), BeginningOfHistory ),
+                ( "\x1b>"   .into(), EndOfHistory ),
+                ( "\t"   .into(), Complete ),
+                ( "\x1b?".into(), PossibleCompletions ),
+                ( "\x1b*".into(), InsertCompletions ),
+                ( "\x1b-".into(), DigitArgument ),
+                ( "\x1b0".into(), DigitArgument ),
+                ( "\x1b1".into(), DigitArgument ),
+                ( "\x1b2".into(), DigitArgument ),
+                ( "\x1b3".into(), DigitArgument ),
+                ( "\x1b4".into(), DigitArgument ),
+                ( "\x1b5".into(), DigitArgument ),
+                ( "\x1b6".into(), DigitArgument ),
+                ( "\x1b7".into(), DigitArgument ),
+                ( "\x1b8".into(), DigitArgument ),
+                ( "\x1b9".into(), DigitArgument ),
             ] )
         }
 
-        fn limit_duration( dur:Option<Duration>, max:Option<Duration> ) -> Option<Duration> {
+        fn limit_duration( dur:Option<Duration>, max:Option<Duration> ) -> Option<Duration>
+        {
             match ( dur, max )
             {
                 ( dur, None ) | ( None, dur ) => dur,
@@ -5308,9 +5738,7 @@ pub mod io
         /// Reads a file and returns its contents in a string.
         pub fn read_file_str( fname: &str ) -> io::Result<String>
         {
-            // Open a file in read-only mode
             let mut file = File::open( fname )?;
-
             let mut contents = String::new();
             let _ = file.read_to_string( &mut contents )?;
 
@@ -6738,12 +7166,6 @@ pub mod marker
 pub mod mem
 {
     pub use std::mem::{ * };
-}
-/*
-terminfo v0.9.0*/
-pub mod metadata
-{
-    
 }
 /// Networking primitives for TCP/UDP communication.
 pub mod net
@@ -19251,6 +19673,739 @@ pub mod parsers
             }
         }
     }
+    /*
+    terminfo v0.9.0::parsers */
+    pub mod metadata
+    {
+        use ::
+        {
+            borrow::{ Cow },
+            *,
+        };
+        /*
+        use nom::branch::alt;
+        use nom::character::streaming::char;
+        use nom::character::{is_digit, streaming::line_ending as eol};
+        use nom::combinator::eof;
+        use nom::IResult;
+        */
+
+        /*
+        pub fn ws(input: &[u8]) -> IResult<&[u8], char> {
+            alt((char(' '), char('\t')))(input)
+        }
+
+        pub fn end(input: &[u8]) -> IResult<&[u8], &[u8]> {
+            alt((eof, eol))(input)
+        }
+        */
+
+        #[inline] pub fn number(i: &[u8]) -> i32
+        {
+            let mut n: i32 = 0;
+
+            for &ch in i
+            {
+                let d = (ch as i32).wrapping_sub(b'0' as i32);
+                if d <= 9 { n = n.saturating_mul(10).saturating_add(d); }
+            }
+
+            n
+        }
+
+        pub fn unescape(i: &[u8]) -> Cow<[u8]>
+        {
+            unsafe
+            {
+                fn escape<I: Iterator<Item = u8>>(output: &mut Vec<u8>, iter: &mut I)
+                {
+                    match iter.next()
+                    {
+                        None => (),
+                        Some(b'a') => output.push(0x07),
+                        Some(b'b') => output.push(0x08),
+                        Some(b'E') | Some(b'e') => output.push(0x1B),
+                        Some(b'f') => output.push(0x0C),
+                        Some(b'l') | Some(b'n') => output.push(b'\n'),
+                        Some(b'r') => output.push(b'\r'),
+                        Some(b's') => output.push(b' '),
+                        Some(b't') => output.push(b'\t'),
+                        Some(b'^') => output.push(b'^'),
+                        Some(b'\\') => output.push(b'\\'),
+                        Some(b',') => output.push(b','),
+                        Some(b':') => output.push(b':'),
+                        Some(b'0') => output.push(0x00),
+                        Some(a) if is_digit(a) => match (iter.next(), iter.next())
+                        {
+                            (Some(b), Some(c)) if is_digit(b) && is_digit(c) =>
+                            {
+                                if let Ok(number) = u8::from_str_radix( str::from_utf8_unchecked(&[a, b, c]), 8 )
+                                { output.push(number); }
+                                
+                                else
+                                { output.extend(&[a, b, c]); }
+                            }
+
+                            (Some(b), None) => output.extend(&[b'\\', a, b]),
+
+                            (None, None) => output.extend(&[b'\\', a]),
+
+                            _ => unreachable!(),
+                        },
+
+                        Some(ch) => output.extend(&[b'\\', ch]),
+                    }
+                }
+
+                fn control<I: Iterator<Item = u8>>(output: &mut Vec<u8>, iter: &mut I)
+                {
+                    match iter.next()
+                    {
+                        None => (),
+                        Some(ch) if ch.is_ascii_uppercase() => output.push(ch - b'A' + 1),
+                        Some(ch) if ch.is_ascii_lowercase() => output.push(ch - b'a' + 1),
+                        Some(ch) => output.extend(&[b'^', ch]),
+                    }
+                }
+
+                let mut chars = i.iter().cloned();
+                let mut offset = 0;
+
+                while let Some(ch) = chars.next()
+                {
+                    if ch == b'\\' || ch == b'^'
+                    {
+                        let mut output = i[..offset].to_vec();
+
+                        match ch
+                        {
+                            b'\\' => escape(&mut output, &mut chars),
+                            b'^' => control(&mut output, &mut chars),
+                            _ => unreachable!(),
+                        }
+
+                        while let Some(ch) = chars.next()
+                        {
+                            match ch
+                            {
+                                b'\\' => escape(&mut output, &mut chars),
+                                b'^' => control(&mut output, &mut chars),
+                                ch => output.push(ch),
+                            }
+                        }
+
+                        return Cow::Owned(output);
+                    }
+
+                    offset += 1;
+                }
+
+                Cow::Borrowed(i)
+            }
+        }
+
+        pub mod compiled
+        {
+            use ::
+            {
+                *,
+            };
+            /*
+            use nom::branch::alt;
+            use nom::bytes::streaming::{tag, take, take_until};
+            use nom::combinator::{complete, cond, map, map_opt, map_parser, opt};
+            use nom::multi::count;
+            use nom::number::streaming::{le_i16, le_i32};
+            use nom::IResult;
+            use std::str;
+
+            use terminfo::capability::Value;
+            use terminfo::names; aka terminal::metadata
+            */
+
+            #[derive(Eq, PartialEq, Clone, Debug)]
+            pub struct Database<'a> {
+                names: &'a [u8],
+                standard: Standard<'a>,
+                extended: Option<Extended<'a>>,
+            }
+
+            impl<'a> From<Database<'a>> for crate::Database {
+                fn from(source: Database<'a>) -> Self {
+                    let mut names = source
+                        .names
+                        .split(|&c| c == b'|')
+                        .map(|s| unsafe { str::from_utf8_unchecked(s) })
+                        .map(|s| s.trim())
+                        .collect::<Vec<_>>();
+
+                    let mut database = crate::Database::new();
+
+                    database.name(names.remove(0));
+                    names.pop().map(|name| database.description(name));
+                    database.aliases(names);
+
+                    for (index, _) in source.standard.booleans.iter().enumerate().filter(|&(_, &value)| value) {
+                        if let Some(&name) = names::BOOLEAN.get(&(index as u16)) {
+                            database.raw(name, Value::True);
+                        }
+                    }
+
+                    for (index, &value) in source.standard.numbers.iter().enumerate().filter(|&(_, &n)| n >= 0)
+                    {
+                        if let Some(&name) = names::NUMBER.get(&(index as u16)) {
+                            database.raw(name, Value::Number(value));
+                        }
+                    }
+
+                    for (index, &offset) in source.standard.strings.iter().enumerate().filter(|&(_, &n)| n >= 0)
+                    {
+                        if let Some(&name) = names::STRING.get(&(index as u16)) {
+                            let string = &source.standard.table[offset as usize..];
+                            let edge = string.iter().position(|&c| c == 0).unwrap();
+
+                            database.raw(name, Value::String(Vec::from(&string[..edge])));
+                        }
+                    }
+
+                    if let Some(extended) = source.extended {
+                        let names = extended
+                            .table
+                            .split(|&c| c == 0)
+                            .skip(extended.strings.iter().cloned().filter(|&n| n >= 0).count())
+                            .map(|s| unsafe { str::from_utf8_unchecked(s) })
+                            .collect::<Vec<_>>();
+
+                        for (index, _) in extended.booleans.iter().enumerate().filter(|&(_, &value)| value) {
+                            database.raw(names[index], Value::True);
+                        }
+
+                        for (index, &value) in extended.numbers.iter().enumerate().filter(|&(_, &n)| n >= 0) {
+                            database.raw(names[extended.booleans.len() + index], Value::Number(value));
+                        }
+
+                        for (index, &offset) in extended.strings.iter().enumerate().filter(|&(_, &n)| n >= 0) {
+                            let string = &extended.table[offset as usize..];
+                            let edge = string.iter().position(|&c| c == 0).unwrap();
+
+                            database.raw(
+                                names[extended.booleans.len() + extended.numbers.len() + index],
+                                Value::String(Vec::from(&string[..edge])),
+                            );
+                        }
+                    }
+
+                    database.build().unwrap()
+                }
+            }
+
+            #[derive(Eq, PartialEq, Clone, Debug)]
+            pub struct Standard<'a> {
+                booleans: Vec<bool>,
+                numbers: Vec<i32>,
+                strings: Vec<i32>,
+                table: &'a [u8],
+            }
+
+            #[derive(Eq, PartialEq, Clone, Debug)]
+            pub struct Extended<'a> {
+                booleans: Vec<bool>,
+                numbers: Vec<i32>,
+                strings: Vec<i32>,
+                names: Vec<i32>,
+                table: &'a [u8],
+            }
+
+            fn bit_size(magic: &[u8]) -> usize {
+                match magic[1] {
+                    0x01 => 16,
+                    0x02 => 32,
+
+                    _ => unreachable!("unknown magic number"),
+                }
+            }
+
+            pub fn parse(input: &[u8]) -> IResult<&[u8], Database> {
+                let (input, magic) = alt((tag([0x1A, 0x01]), tag([0x1E, 0x02])))(input)?;
+
+                let (input, name_size) = size(input)?;
+                let (input, bool_count) = size(input)?;
+                let (input, num_count) = size(input)?;
+                let (input, string_count) = size(input)?;
+                let (input, table_size) = size(input)?;
+
+                let (input, names) = map_parser(take(name_size), take_until("\x00"))(input)?;
+
+                let (input, booleans) = count(boolean, bool_count)(input)?;
+
+                let (input, _) = cond((name_size + bool_count) % 2 != 0, take(1_usize))(input)?;
+
+                let (input, numbers) = count(|input| capability(input, bit_size(magic)), num_count)(input)?;
+
+                let (input, strings) = count(|input| capability(input, 16), string_count)(input)?;
+
+                let (input, table) = take(table_size)(input)?;
+
+                let (input, extended) = opt(complete(|input| {
+                    let (input, _) = cond(table_size % 2 != 0, take(1_usize))(input)?;
+
+                    let (input, ext_bool_count) = size(input)?;
+                    let (input, ext_num_count) = size(input)?;
+                    let (input, ext_string_count) = size(input)?;
+                    let (input, _ext_offset_count) = size(input)?;
+                    let (input, ext_table_size) = size(input)?;
+
+                    let (input, booleans) = count(boolean, ext_bool_count)(input)?;
+
+                    let (input, _) = cond(ext_bool_count % 2 != 0, take(1_usize))(input)?;
+
+                    let (input, numbers) =
+                        count(|input| capability(input, bit_size(magic)), ext_num_count)(input)?;
+
+                    let (input, strings) = count(|input| capability(input, 16), ext_string_count)(input)?;
+
+                    let (input, names) = count(
+                        |input| capability(input, 16),
+                        ext_bool_count + ext_num_count + ext_string_count,
+                    )(input)?;
+
+                    let (input, table) = take(ext_table_size)(input)?;
+
+                    Ok((input, Extended { booleans, numbers, strings, names, table }))
+                }))(input)?;
+
+                Ok((
+                    input,
+                    Database { names, standard: Standard { booleans, numbers, strings, table }, extended },
+                ))
+            }
+
+            fn boolean(input: &[u8]) -> IResult<&[u8], bool> {
+                alt((map(tag([0]), |_| false), map(tag([1]), |_| true)))(input)
+            }
+
+            fn size(input: &[u8]) -> IResult<&[u8], usize> {
+                map_opt(le_i16, |n| match n {
+                    -1 => Some(0),
+                    n if n >= 0 => Some(n as usize),
+                    _ => None,
+                })(input)
+            }
+
+            fn capability(input: &[u8], bits: usize) -> IResult<&[u8], i32> {
+                alt((
+                    map_opt(
+                        cond(bits == 16, map_opt(le_i16, |n| if n >= -2 { Some(n as i32) } else { None })),
+                        |o| o,
+                    ),
+                    map_opt(cond(bits == 32, map_opt(le_i32, |n| if n >= -2 { Some(n) } else { None })), |o| o),
+                ))(input)
+            }
+
+        }
+
+        pub mod expansion
+        {
+            use ::
+            {
+                *,
+            };
+            /*
+            use terminfo::parser::util::number;
+            //
+            // NOM NOT INCLUDED; REWRITE LIBRARY WITHOUT ITS USE
+            //
+            use nom::branch::alt;
+            use nom::bytes::complete;
+            use nom::bytes::streaming::{tag, take, take_while};
+            use nom::character::is_digit;
+            use nom::character::streaming::one_of;
+            use nom::combinator::{map, opt, value};
+            use nom::error::{make_error, ErrorKind};
+            use nom::IResult;
+            */
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub enum Item<'a> {
+                String(&'a [u8]),
+                Constant(Constant),
+                Variable(Variable),
+                Operation(Operation),
+                Conditional(Conditional),
+                Print(Print),
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub enum Constant {
+                Character(u8),
+                Integer(i32),
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub enum Variable {
+                Length,
+                Push(u8),
+                Set(bool, u8),
+                Get(bool, u8),
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub enum Operation {
+                Increment,
+                Unary(Unary),
+                Binary(Binary),
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub enum Unary {
+                Not,
+                NOT,
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub enum Binary {
+                Add,
+                Subtract,
+                Multiply,
+                Divide,
+                Remainder,
+
+                AND,
+                OR,
+                XOR,
+
+                And,
+                Or,
+
+                Equal,
+                Greater,
+                Lesser,
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub enum Conditional {
+                If,
+                Then,
+                Else,
+                End,
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub struct Print 
+            {
+                pub flags: Flags,
+                pub format: Format,
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub enum Format 
+            {
+                Chr,
+                Uni,
+                Str,
+                Dec,
+                Oct,
+                Hex,
+                HEX,
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Default, Debug)]
+            pub struct Flags
+            {
+                pub width: usize,
+                pub precision: usize,
+                pub alternate: bool,
+                pub left: bool,
+                pub sign: bool,
+                pub space: bool,
+            }
+            /*
+            pub fn parse(input: &[u8]) -> IResult<&[u8], Item> {
+                alt((expansion, string))(input)
+            }
+
+            fn string(input: &[u8]) -> IResult<&[u8], Item> {
+                map(complete::take_till(|b| b == b'%'), Item::String)(input)
+            }
+
+            fn expansion(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, _) = tag("%")(input)?;
+                let (input, item) = alt((percent, constant, variable, operation, conditional, print))(input)?;
+
+                Ok((input, item))
+            }
+
+            fn percent(input: &[u8]) -> IResult<&[u8], Item> {
+                value(Item::String(b"%"), tag("%"))(input)
+            }
+
+            fn constant(input: &[u8]) -> IResult<&[u8], Item> {
+                alt((constant_char, constant_integer))(input)
+            }
+
+            fn constant_char(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, _) = tag("'")(input)?;
+                let (input, ch) = take(1_usize)(input)?;
+                let (input, _) = tag("'")(input)?;
+
+                Ok((input, Item::Constant(Constant::Character(ch[0]))))
+            }
+
+            fn constant_integer(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, _) = tag("{")(input)?;
+                let (input, digit) = take_while(is_digit)(input)?;
+                let (input, _) = tag("}")(input)?;
+
+                Ok((input, Item::Constant(Constant::Integer(number(digit)))))
+            }
+
+            fn variable(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, c) = take(1_usize)(input)?;
+                match c {
+                    b"l" => Ok((input, Item::Variable(Variable::Length))),
+
+                    b"p" => map(one_of("123456789"), |n| Item::Variable(Variable::Push(n as u8 - b'1')))(input),
+
+                    b"P" => alt((
+                        map(one_of("abcdefghijklmnopqrstuvwxyz"), |n| {
+                            Item::Variable(Variable::Set(true, n as u8 - b'a'))
+                        }),
+                        map(one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ"), |n| {
+                            Item::Variable(Variable::Set(false, n as u8 - b'A'))
+                        }),
+                    ))(input),
+
+                    b"g" => alt((
+                        map(one_of("abcdefghijklmnopqrstuvwxyz"), |n| {
+                            Item::Variable(Variable::Get(true, n as u8 - b'a'))
+                        }),
+                        map(one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ"), |n| {
+                            Item::Variable(Variable::Get(false, n as u8 - b'A'))
+                        }),
+                    ))(input),
+
+                    _ => Err(nom::Err::Error(make_error(input, ErrorKind::Switch))),
+                }
+            }
+
+            fn operation(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, c) = take(1_usize)(input)?;
+                match c {
+                    b"+" => Ok((input, Item::Operation(Operation::Binary(Binary::Add)))),
+                    b"-" => Ok((input, Item::Operation(Operation::Binary(Binary::Subtract)))),
+                    b"*" => Ok((input, Item::Operation(Operation::Binary(Binary::Multiply)))),
+                    b"/" => Ok((input, Item::Operation(Operation::Binary(Binary::Divide)))),
+                    b"m" => Ok((input, Item::Operation(Operation::Binary(Binary::Remainder)))),
+                    b"i" => Ok((input, Item::Operation(Operation::Increment))),
+
+                    b"&" => Ok((input, Item::Operation(Operation::Binary(Binary::AND)))),
+                    b"|" => Ok((input, Item::Operation(Operation::Binary(Binary::OR)))),
+                    b"^" => Ok((input, Item::Operation(Operation::Binary(Binary::XOR)))),
+                    b"~" => Ok((input, Item::Operation(Operation::Unary(Unary::NOT)))),
+
+                    b"A" => Ok((input, Item::Operation(Operation::Binary(Binary::And)))),
+                    b"O" => Ok((input, Item::Operation(Operation::Binary(Binary::Or)))),
+                    b"!" => Ok((input, Item::Operation(Operation::Unary(Unary::Not)))),
+
+                    b"=" => Ok((input, Item::Operation(Operation::Binary(Binary::Equal)))),
+                    b">" => Ok((input, Item::Operation(Operation::Binary(Binary::Greater)))),
+                    b"<" => Ok((input, Item::Operation(Operation::Binary(Binary::Lesser)))),
+
+                    _ => Err(nom::Err::Error(make_error(input, ErrorKind::Switch))),
+                }
+            }
+
+            fn conditional(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, c) = take(1_usize)(input)?;
+                match c {
+                    b"?" => Ok((input, Item::Conditional(Conditional::If))),
+                    b"t" => Ok((input, Item::Conditional(Conditional::Then))),
+                    b"e" => Ok((input, Item::Conditional(Conditional::Else))),
+                    b";" => Ok((input, Item::Conditional(Conditional::End))),
+
+                    _ => Err(nom::Err::Error(make_error(input, ErrorKind::Switch))),
+                }
+            }
+
+            fn print(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, _) = opt(tag(":"))(input)?;
+
+                let (input, flags) = take_while(is_flag)(input)?;
+                let (input, width) = opt(take_while(is_digit))(input)?;
+                let (input, precision) = opt(|input| {
+                    let (input, _) = tag(".")(input)?;
+                    let (input, amount) = take_while(is_digit)(input)?;
+
+                    Ok((input, amount))
+                })(input)?;
+
+                let (input, format) = one_of("doxXsc")(input)?;
+
+                Ok((
+                    input,
+                    Item::Print(Print {
+                        flags: Flags {
+                            width: number(width.unwrap_or(b"0")) as usize,
+                            precision: number(precision.unwrap_or(b"0")) as usize,
+
+                            alternate: flags.contains(&b'#'),
+                            left: flags.contains(&b'-'),
+                            sign: flags.contains(&b'+'),
+                            space: flags.contains(&b' '),
+                        },
+
+                        format: match format {
+                            'd' => Format::Dec,
+                            'o' => Format::Oct,
+                            'x' => Format::Hex,
+                            'X' => Format::HEX,
+                            's' => Format::Str,
+                            'c' => Format::Chr,
+                            'u' => Format::Uni,
+                            _ => unreachable!(),
+                        },
+                    }),
+                ))
+            }
+            */
+            fn is_flag(i: u8) -> bool {
+                i == b' ' || i == b'-' || i == b'+' || i == b'#'
+            }
+
+        }
+
+        pub mod source
+        {
+            use ::
+            {
+                borrow::{ Cow },
+                *,
+            };
+            /*
+            use terminfo::parser::util::unescape;
+            use terminfo::parser::util::{end, is_eol, is_ws, ws};
+            use terminfo::parser::util::{is_printable_no_comma, is_printable_no_control, is_printable_no_pipe};
+            //
+            // Nom not included; Rewrite without its use.
+            //
+            use nom::branch::alt;
+            use nom::bytes::streaming::{tag, take, take_until, take_while};
+            use nom::character::{is_digit, streaming::line_ending as eol};
+            use nom::combinator::{complete, map, map_res, opt};
+            use nom::error::{make_error, ErrorKind};
+            use nom::sequence::terminated;
+            use nom::IResult;
+            use std::borrow::Cow;
+            use std::str;
+            */
+            #[derive(Eq, PartialEq, Clone, Debug)]
+            pub enum Item<'a>
+            {
+                Comment(&'a str),
+                Definition { name: &'a str, aliases: Vec<&'a str>, description: &'a str },
+                True(&'a str),
+                Number(&'a str, i16),
+                String(&'a str, Cow<'a, [u8]>),
+                Disable(&'a str),
+            }
+            /*
+            //
+            // Nom not included; Rewrite without its use.
+            //
+            pub fn parse(input: &[u8]) -> IResult<&[u8], Item> {
+                alt((comment, definition, disable, entry))(input)
+            }
+
+            fn comment(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, _) = tag("#")(input)?;
+                let (input, content) = map_res(terminated(take_until("\n"), tag("\n")), str::from_utf8)(input)?;
+                let (input, _) = opt(complete(take_while(is::eol)))(input)?;
+
+                Ok((input, Item::Comment(content.trim())))
+            }
+
+            fn definition(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, name) =
+                    map(take_while(is::printable_no_pipe), |n| unsafe { str::from_utf8_unchecked(n) })(input)?;
+
+                let (input, _) = tag("|")(input)?;
+
+                let (input, content) =
+                    map(take_while(is::printable_no_comma), |n| unsafe { str::from_utf8_unchecked(n) })(input)?;
+
+                let (input, _) = tag(",")(input)?;
+
+                let (input, _) = take_while(is_ws)(input)?;
+
+                let (input, _) = eol(input)?;
+                let (input, _) = opt(complete(take_while(is_eol)))(input)?;
+
+                Ok((input, {
+                    let mut aliases = content.split(|c| c == '|').map(|n| n.trim()).collect::<Vec<_>>();
+
+                    Item::Definition { name, description: aliases.pop().unwrap(), aliases }
+                }))
+            }
+
+            fn disable(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, _) = ws(input)?;
+                let (input, _) = take_while(is_ws)(input)?;
+                let (input, _) = tag("@")(input)?;
+
+                let (input, name) =
+                    map(take_while(is_printable_no_control), |n| unsafe { str::from_utf8_unchecked(n) })(
+                        input,
+                    )?;
+
+                let (input, _) = tag(",")(input)?;
+                let (input, _) = take_while(is_ws)(input)?;
+                let (input, _) = end(input)?;
+                let (input, _) = opt(complete(take_while(is_eol)))(input)?;
+
+                Ok((input, Item::Disable(name)))
+            }
+
+            fn entry(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, _) = ws(input)?;
+                let (input, _) = take_while(is_ws)(input)?;
+
+                let (input, name) =
+                    map(take_while(is_printable_no_control), |n| unsafe { str::from_utf8_unchecked(n) })(
+                        input,
+                    )?;
+
+                let (input, c) = take(1_usize)(input)?;
+                let (input, value) = match c {
+                    b"," => (input, Item::True(name)),
+
+                    b"#" => {
+                        let (input, value) =
+                            map(take_while(is_digit), |n| unsafe { str::from_utf8_unchecked(n) })(input)?;
+
+                        let (input, _) = tag(",")(input)?;
+
+                        (input, Item::Number(name, value.parse().unwrap()))
+                    }
+
+                    b"=" => {
+                        let (input, value) = take_while(is_printable_no_comma)(input)?;
+
+                        let (input, _) = tag(",")(input)?;
+
+                        (input, Item::String(name, unescape(value)))
+                    }
+
+                    _ => Err(nom::Err::Error(make_error(input, ErrorKind::Switch)))?,
+                };
+
+                let (input, _) = take_while(is_ws)(input)?;
+                let (input, _) = end(input)?;
+                let (input, _) = opt(complete(take_while(is_eol)))(input)?;
+
+                Ok((input, value))
+            }
+            */
+        }
+    }
 }
 /// Cross-platform path manipulation.
 pub mod path
@@ -19496,7 +20651,7 @@ pub mod primitive
         }
     }
 
-    impl fmt::Debug for WaitStatus 
+    impl ::fmt::Debug for WaitStatus 
     {
         fn fmt( &self, f: &mut fmt::Formatter<'_> ) -> fmt::Result {
             let mut formatter = f.debug_struct( "WaitStatus" );
@@ -20281,7 +21436,7 @@ pub mod process
     }
     /*
     fn proc_has_terminal(...) -> bool */
-    fn has_terminal() -> bool
+    pub fn has_terminal() -> bool
     {
         unsafe
         {
@@ -22240,6 +23395,7 @@ pub mod system
         sync::{ LockResult, PoisonError, TryLockError, TryLockResult },
         *,
     };
+    
     #[macro_use] mod buffer
     {
         /*
@@ -22842,7 +23998,7 @@ pub mod system
 
     #[macro_use] pub mod macros
     {
-
+        use ::{};
     }
     
     pub mod screen
@@ -23077,6 +24233,94 @@ pub mod system
         use crate::priv_util::{map_lock_result, map_try_lock_result};
         use crate::sys;
         */
+
+        /// Represents a color attribute applied to text foreground or background.
+        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+        pub enum Color
+        {
+            /// Black
+            Black,
+            /// Blue
+            Blue,
+            /// Cyan
+            Cyan,
+            /// Green
+            Green,
+            /// Magenta
+            Magenta,
+            /// Red
+            Red,
+            /// White
+            White,
+            /// Yellow
+            Yellow,
+        }
+
+        bitflags!
+        {
+            /// Represents a set of style attributes applied to text.
+            #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
+            pub struct Style: u8
+            {
+                /// Bold
+                const BOLD      = 1 << 0;
+                /// Italic
+                const ITALIC    = 1 << 1;
+                /// Reverse; foreground and background color swapped
+                const REVERSE   = 1 << 2;
+                /// Underline
+                const UNDERLINE = 1 << 3;
+            }
+        }
+        /// Represents a terminal output theme.
+        #[derive(Copy, Clone, Debug, Default)]
+        pub struct Theme
+        {
+            /// Foreground color
+            pub fg: Option<Color>,
+            /// Background color
+            pub bg: Option<Color>,
+            /// Style
+            pub style: Style,
+        }
+
+        impl Theme
+        {
+            /// Creates a new theme with given values.
+            pub fn new<F,B,S>(fg: F, bg: B, style: S) -> Theme where
+            F: Into<Option<Color>>,
+            B: Into<Option<Color>>,
+            S: Into<Option<Style>>
+            {
+                Theme
+                {
+                    fg: fg.into(),
+                    bg: bg.into(),
+                    style: style.into().unwrap_or_default(),
+                }
+            }
+            /// Sets the foreground color on the given Theme and returns the new.
+            pub fn fg<F>(mut self, fg: F) -> Theme where 
+            F: Into<Option<Color>>
+            {
+                self.fg = fg.into();
+                self
+            }
+            /// Sets the background color on the given Theme and returns the new.
+            pub fn bg<B>(mut self, bg: B) -> Theme where 
+            B: Into<Option<Color>> 
+            {
+                self.bg = bg.into();
+                self
+            }
+            /// Sets the style on the given Theme and returns the new.
+            pub fn style<S>(mut self, style: S) -> Theme where 
+            S: Into<Option<Style>>
+            {
+                self.style = style.into().unwrap_or_default();
+                self
+            }
+        }
         /// Represents a keyboard key press event
         #[derive(Copy, Clone, Debug, Eq, PartialEq)]
         pub enum Key
@@ -23297,6 +24541,243 @@ pub mod system
             { self.checked_area().unwrap_or_else( || panic!("overflow in Size::area {:?}", self)) }
             /// Returns the total number of cells in a terminal of the given size.
             #[inline] pub fn checked_area(&self) -> Option<usize> { self.lines.checked_mul(self.columns) }
+        }
+    }
+
+    pub mod variable
+    {
+        //! Contains types associated with user-configurable variables
+        use ::
+        {
+            borrow::{ Cow },
+            mem::{ replace },
+            time::{ Duration },
+            *,
+        };
+
+        macro_rules! define_variables
+        {
+            ( $( $field:ident : $ty:ty => ( $name:expr , $conv:ident ,
+                    |$gr:ident| $getter:expr , |$sr:ident, $v:ident| $setter:expr ) , )+ ) => {
+                static VARIABLE_NAMES: &[&str] = &[ $( $name ),+ ];
+
+                pub(crate) struct Variables {
+                    $( pub $field : $ty ),*
+                }
+
+                impl Variables {
+                    pub fn get_variable(&self, name: &str) -> Option<Variable> {
+                        match name {
+                            $( $name => {
+                                let $gr = self;
+                                Some(Variable::from($getter))
+                            } )+
+                            _ => None
+                        }
+                    }
+
+                    pub fn set_variable(&mut self, name: &str, value: &str)
+                            -> Option<Variable> {
+                        match name {
+                            $( $name => {
+                                if let Some($v) = $conv(value) {
+                                    let $sr = self;
+                                    Some(Variable::from($setter))
+                                } else {
+                                    None
+                                }
+                            } )+
+                            _ => None
+                        }
+                    }
+
+                    pub fn iter(&self) -> VariableIter {
+                        VariableIter{vars: self, n: 0}
+                    }
+                }
+
+                impl<'a> Iterator for VariableIter<'a> {
+                    type Item = (&'static str, Variable);
+
+                    fn next(&mut self) -> Option<Self::Item> {
+                        let res = match VARIABLE_NAMES.get(self.n).cloned() {
+                            $( Some($name) => ($name, {
+                                let $gr = self.vars;
+                                Variable::from($getter)
+                            }) , )+
+                            _ => return None
+                        };
+
+                        self.n += 1;
+                        Some(res)
+                    }
+                }
+            }
+        }
+        /// Default `keyseq_timeout`, in milliseconds
+        pub const KEYSEQ_TIMEOUT_MS: u64 = 500;
+        /// Iterator over `Reader` variable values
+        #[derive(Clone)]
+        pub struct VariableIter<'a>
+        {
+            vars: &'a Variables,
+            n: usize,
+        }
+        /// Represents a `Reader` variable of a given type
+        #[derive(Clone, Debug)]
+        pub enum Variable
+        {
+            /// Boolean variable
+            Boolean(bool),
+            /// Integer variable
+            Integer(i32),
+            /// String variable
+            String(Cow<'static, str>),
+        }
+
+        impl From<bool> for Variable
+        {
+            fn from(b: bool) -> Variable { Variable::Boolean(b) }
+        }
+
+        impl From<i32> for Variable
+        {
+            fn from(i: i32) -> Variable { Variable::Integer(i) }
+        }
+
+        impl From<&'static str> for Variable 
+        {
+            fn from(s: &'static str) -> Variable { Variable::String(s.into()) }
+        }
+
+        impl From<Cow<'static, str>> for Variable 
+        {
+            fn from(s: Cow<'static, str>) -> Variable { Variable::String(s) }
+        }
+
+        impl From<String> for Variable 
+        {
+            fn from(s: String) -> Variable { Variable::String(s.into()) }
+        }
+
+        impl fmt::Display for Variable 
+        {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+            {
+                match *self
+                {
+                    Variable::Boolean(b) => f.write_str(if b { "on" } else { "off" }),
+                    Variable::Integer(n) => fmt::Display::fmt(&n, f),
+                    Variable::String(ref s) => fmt::Display::fmt(&s[..], f),
+                }
+            }
+        }
+
+        define_variables!{
+            blink_matching_paren: bool => ("blink-matching-paren", parse_bool,
+                |r| r.blink_matching_paren,
+                |r, v| replace(&mut r.blink_matching_paren, v)),
+            comment_begin: Cow<'static, str> => ("comment-begin", parse_string,
+                |r| r.comment_begin.clone(),
+                |r, v| replace(&mut r.comment_begin, v.into())),
+            completion_display_width: usize => ("completion-display-width", parse_usize,
+                |r| usize_as_i32(r.completion_display_width),
+                |r, v| usize_as_i32(replace(&mut r.completion_display_width, v))),
+            completion_query_items: usize => ("completion-query-items", parse_usize,
+                |r| usize_as_i32(r.completion_query_items),
+                |r, v| usize_as_i32(replace(&mut r.completion_query_items, v))),
+            disable_completion: bool => ("disable-completion", parse_bool,
+                |r| r.disable_completion,
+                |r, v| replace(&mut r.disable_completion, v)),
+            echo_control_characters: bool => ("echo-control-characters", parse_bool,
+                |r| r.echo_control_characters,
+                |r, v| replace(&mut r.echo_control_characters, v)),
+            keyseq_timeout: Option<Duration> => ("keyseq-timeout", parse_duration,
+                |r| as_millis(r.keyseq_timeout),
+                |r, v| as_millis(replace(&mut r.keyseq_timeout, v))),
+            page_completions: bool => ("page-completions", parse_bool,
+                |r| r.page_completions,
+                |r, v| replace(&mut r.page_completions, v)),
+            print_completions_horizontally: bool => ("print-completions-horizontally", parse_bool,
+                |r| r.print_completions_horizontally,
+                |r, v| replace(&mut r.print_completions_horizontally, v)),
+        }
+
+        impl Default for Variables
+        {
+            fn default() -> Variables
+            {
+                Variables
+                {
+                    blink_matching_paren: false,
+                    comment_begin: "#".into(),
+                    completion_display_width: usize::max_value(),
+                    completion_query_items: 100,
+                    disable_completion: false,
+                    echo_control_characters: true,
+                    keyseq_timeout: Some(Duration::from_millis(KEYSEQ_TIMEOUT_MS)),
+                    page_completions: true,
+                    print_completions_horizontally: false,
+                }
+            }
+        }
+
+        fn parse_bool(s: &str) -> Option<bool>
+        {
+            match s
+            {
+                "0" => Some(false),
+                "1" => Some(true),
+                s if s.eq_ignore_ascii_case("off") => Some(false),
+                s if s.eq_ignore_ascii_case("on") => Some(true),
+                _ => None
+            }
+        }
+
+        fn parse_string(s: &str) -> Option<String> { Some(s.to_owned()) }
+
+        fn as_millis(timeout: Option<Duration>) -> i32
+        {
+            match timeout
+            {
+                Some(t) =>
+                {
+                    let s = (t.as_secs() * 1_000) as i32;
+                    let ms = (t.subsec_nanos() / 1_000_000) as i32;
+
+                    s + ms
+                }
+                None => -1
+            }
+        }
+
+        fn parse_duration(s: &str) -> Option<Option<Duration>> 
+        {
+            match s.parse::<i32>() 
+            {
+                Ok(n) if n <= 0 => Some(None),
+                Ok(n) => Some(Some(Duration::from_millis(n as u64))),
+                Err(_) => Some(None)
+            }
+        }
+
+        fn usize_as_i32(u: usize) -> i32 
+        {
+            match u 
+            {
+                u if u > i32::max_value() as usize => -1,
+                u => u as i32
+            }
+        }
+
+        fn parse_usize(s: &str) -> Option<usize> 
+        {
+            match s.parse::<i32>() 
+            {
+                Ok(n) if n < 0 => Some(usize::max_value()),
+                Ok(n) => Some(n as usize),
+                Err(_) => None
+            }
         }
     }
 
@@ -24756,19 +26237,13 @@ pub mod system
                 io::Error::new(io::ErrorKind::Other,
                     format!("operation not supported: {}", op))
             }
-
-            #[cfg(target_pointer_width = "64")]
+            
             fn to_u32(u: usize) -> u32 {
                 if u > u32::max_value() as usize {
                     u32::max_value()
                 } else {
                     u as u32
                 }
-            }
-
-            #[cfg(any(target_pointer_width = "16", target_pointer_width = "32"))]
-            fn to_u32(u: usize) -> u32 {
-                u as u32
             }
         }
 
@@ -25076,6 +26551,10 @@ pub mod system
         {
             use ::
             {
+                system::
+                {
+                    signal::{ Signal, SignalSet },
+                },
                 *,
             };
 
@@ -25157,7 +26636,6 @@ pub mod system
             };
 
             use crate::priv_util::{map_lock_result, map_try_lock_result};
-            use crate::signal::{Signal, SignalSet};
 
             use crate::terminal::{
                 Color, Cursor, CursorMode, Event, Key, PrepareConfig, Size, Style, Theme,
@@ -25294,10 +26772,7 @@ pub mod system
                 pub fn enter_screen(&self) -> io::Result<HANDLE> {
                     self.lock_writer().enter_screen()
                 }
-
-                // This method is unsafe because the validity of `old_handle` cannot be
-                // verified. The caller must guarantee that it is the same `HANDLE`
-                // previously returned by `enter_screen`.
+                
                 pub unsafe fn exit_screen(&self, old_handle: HANDLE) -> io::Result<()> {
                     self.lock_writer().exit_screen(old_handle)
                 }
@@ -25424,9 +26899,6 @@ pub mod system
                 }
 
                 pub fn prepare(&mut self, config: PrepareConfig) -> io::Result<PrepareState> {
-                    // The write lock is acquired here for consistency, though it is not used
-                    // in the Windows implementation. This is done to ensure that a user will
-                    // not write and test Windows code that then causes a deadlock on Unix.
                     let mut writer = self.term.lock_writer();
                     self.prepare_with_lock(&mut writer, config)
                 }
@@ -25441,37 +26913,30 @@ pub mod system
                     };
 
                     let mut in_mode = old_in_mode;
-
-                    // Necessary to modify certain flags
+                    
                     in_mode |= ENABLE_EXTENDED_FLAGS;
-
-                    // Disable echoing input to console
+                    
                     in_mode &= !ENABLE_ECHO_INPUT;
-                    // Disable waiting for newline before input can be read
+                    
                     in_mode &= !ENABLE_LINE_INPUT;
-
-                    // Enable or disable processing Ctrl-C as interrupt
+                    
                     if config.block_signals {
                         in_mode &= !ENABLE_PROCESSED_INPUT;
                     } else {
                         in_mode |= ENABLE_PROCESSED_INPUT;
                     }
-
-                    // Enable or disable mouse events
+                    
                     if config.enable_mouse {
                         self.reader.always_track_motion = config.always_track_motion;
                         in_mode |= ENABLE_MOUSE_INPUT;
                     } else {
                         in_mode &= !ENABLE_MOUSE_INPUT;
                     }
-
-                    // Disable text editing using mouse
+                    
                     in_mode &= !ENABLE_QUICK_EDIT_MODE;
-
-                    // Enable window size events
+                    
                     in_mode |= ENABLE_WINDOW_INPUT;
-
-                    // Disable escape sequences in input
+                    
                     in_mode &= !ENABLE_VIRTUAL_TERMINAL_INPUT;
 
                     unsafe {
@@ -25602,7 +27067,6 @@ pub mod system
                         let mouse = unsafe { event.Event.MouseEvent() };
 
                         let input = if mouse.dwEventFlags & wincon::MOUSE_WHEELED != 0 {
-                            // The high word of `dwButtonState` indicates wheel direction
                             let direction = (mouse.dwButtonState >> 16) as i16;
 
                             if direction > 0 {
@@ -25668,8 +27132,6 @@ pub mod system
                         ptr::null_mut()) })?;
 
                     if let Err(e) = unsafe { setup_screen(handle, size) } {
-                        // If setup fails, close the screen buffer handle,
-                        // but preserve the original error
                         let _ = unsafe { close_handle(handle) };
                         return Err(e);
                     }
@@ -25677,8 +27139,7 @@ pub mod system
                     let old_handle = self.swap_out_handle(handle);
 
                     let mut out_mode = unsafe { console_mode(handle)? };
-
-                    // Disable wrapping when cursor passes last column
+                    
                     out_mode &= !(ENABLE_WRAP_AT_EOL_OUTPUT | DISABLE_NEWLINE_AUTO_RETURN);
 
                     unsafe { set_console_mode(handle, out_mode)?; }
@@ -25708,19 +27169,15 @@ pub mod system
                     let win_height = (info.srWindow.Bottom - info.srWindow.Top) + 1;
 
                     if win_height == info.dwSize.Y {
-                        // Window and screen buffer are the same size. Just erase everything.
                         self.clear_area(
                             COORD{X: 0, Y: 0},
                             info.dwSize.X as DWORD * info.dwSize.Y as DWORD)?;
                     } else {
-                        // Distance we can move down
                         let max = info.dwSize.Y - (info.srWindow.Bottom + 1);
-                        // Distance we want to move down
                         let dist = (info.dwCursorPosition.Y + 1) - info.srWindow.Top;
 
                         let down = dist.min(max);
-
-                        // If there's room to move the window down, do it
+                        
                         if down > 0 {
                             info.srWindow.Top += down as SHORT;
                             info.srWindow.Bottom += down as SHORT;
@@ -25732,8 +27189,6 @@ pub mod system
                         }
 
                         let clear = info.srWindow.Bottom - info.dwCursorPosition.Y;
-
-                        // If we need to move some text, do that, too
                         if clear < win_height {
                             let dist = (win_height - clear) as SHORT;
 
@@ -25762,8 +27217,7 @@ pub mod system
                                 &fill) })?;
                         }
                     }
-
-                    // Finally, move the cursor to the window origin
+                    
                     self.move_abs(COORD{
                         X: info.srWindow.Left,
                         Y: info.srWindow.Top,
@@ -25887,8 +27341,7 @@ pub mod system
                 pub fn set_theme(&mut self, theme: Theme) -> io::Result<()> {
                     self.set_attributes(theme.fg, theme.bg, theme.style)
                 }
-
-                // Clears any previous attributes
+                
                 pub fn set_attributes(&mut self,
                         fg: Option<Color>, bg: Option<Color>, style: Style) -> io::Result<()> {
                     if self.writer.fg != fg || self.writer.bg != bg || self.writer.style != style {
@@ -26010,9 +27463,6 @@ pub mod system
                 }
             }
 
-            // NOTE: Drop is not implemented for TerminalWriteGuard
-            // because `flush` on Windows is a no-op.
-
             fn as_millis(timeout: Option<Duration>) -> DWORD {
                 match timeout {
                     Some(t) => {
@@ -26055,7 +27505,6 @@ pub mod system
                 let mut code = 0;
 
                 if style.contains(Style::BOLD) {
-                    // Closest available approximation for bold text
                     code |= wincon::FOREGROUND_INTENSITY as WORD;
                 }
 
@@ -26108,8 +27557,7 @@ pub mod system
             unsafe fn set_console_mode(handle: HANDLE, mode: DWORD) -> io::Result<()> {
                 result_bool(SetConsoleMode(handle, mode))
             }
-
-            // Perform remaining screen buffer setup
+            
             unsafe fn setup_screen(handle: HANDLE, size: Size) -> io::Result<()> {
                 result_bool(SetConsoleScreenBufferSize(handle, size_to_coord(size)))?;
                 result_bool(SetConsoleActiveScreenBuffer(handle))
@@ -26119,11 +27567,9 @@ pub mod system
                 let old_out_mode = console_mode(handle)?;
 
                 let mut out_mode = old_out_mode;
-
-                // Enable interpreting escape sequences in output
+                
                 out_mode |= ENABLE_PROCESSED_OUTPUT;
-
-                // Enable wrapping when cursor passes last column
+                
                 out_mode |= ENABLE_WRAP_AT_EOL_OUTPUT;
 
                 set_console_mode(handle, out_mode)?;
@@ -26348,9 +27794,7 @@ pub mod system
             }
 
             static CATCH_SIGNALS: AtomicUsize = AtomicUsize::new(0);
-
-            // `CTRL_C_EVENT` has a value of 0, so we cannot use 0 as a default value.
-            // Instead, !0 indicates no signal has been received.
+            
             static LAST_SIGNAL: AtomicUsize = AtomicUsize::new(!0);
 
             fn catch_signals(set: SignalSet) {
@@ -26789,26 +28233,1950 @@ pub mod terminal
     use ::
     {
         borrow::{ Cow },
+        ffi::{ Function },
         fmt::{ columns },
         fs::{ File, OpenOptions },
-        io::{ self, BufRead, BufReader, BufWriter, Read as _, Seek, SeekFrom, Write as _, },
+        io::
+        { 
+            self, BufRead, BufReader, BufWriter, Read as _, Seek, SeekFrom, Write as _,
+            reader::{ Read, Reader, ReadLock, ReadResult },
+            writer::{ Write, Writer, WriteLock },
+        },
         path::{ Path },
+        primitive::{ Command },
         sync::{ Arc, Mutex, MutexGuard },
         time::{ Duration },
         *,
     };
     /*
-    use crate::command::Command;
-    use crate::complete::Completer;
-    use crate::function::Function;
-    use crate::inputrc::Directive;
-    use crate::reader::{Read, Reader, ReadLock, ReadResult};
-    use crate::terminal::{DefaultTerminal, Signal, Terminal};
-    use crate::variables::Variable;
-    use crate::writer::{Write, Writer, WriteLock};
+    use linefeed::command::Command;
+    use linefeed::complete::Completer;
+    use linefeed::function::Function;
+    use linefeed::inputrc::Directive;
+    use linefeed::variables::Variable;
     */
     /// ANSI color codes wrapped with \x01 and \x02 for lineread
     pub const GREEN:&str = "\x01\x1b[0;32m\x02";
+    /// Metadata Database
+    pub mod metadata
+    {
+        use ::
+        {
+            *,
+        };
+        /*
+        use std::env;
+        use std::fs::File;
+        use std::io::{BufWriter, Write};
+        use std::path::Path;
+        */
+        
+        pub const BOOLEAN: &[&str] = &
+        [
+            "auto_left_margin", "auto_right_margin", "no_esc_ctlc", "ceol_standout_glitch", "eat_newline_glitch",
+            "erase_overstrike", "generic_type", "hard_copy", "has_meta_key", "has_status_line", "insert_null_glitch",
+            "memory_above", "memory_below", "move_insert_mode", "move_standout_mode", "over_strike",
+            "status_line_esc_ok", "dest_tabs_magic_smso", "tilde_glitch", "transparent_underline", "xon_xoff",
+            "needs_xon_xoff", "prtr_silent", "hard_cursor", "non_rev_rmcup", "no_pad_char", "non_dest_scroll_region",
+            "can_change", "back_color_erase", "hue_lightness_saturation", "col_addr_glitch", "cr_cancels_micro_mode",
+            "has_print_wheel", "row_addr_glitch", "semi_auto_right_margin", "cpi_changes_res", "lpi_changes_res",
+            "backspaces_with_bs", "crt_no_scrolling", "no_correctly_working_cr", "gnu_has_meta_key",
+            "linefeed_is_newline", "has_hardware_tabs", "return_does_clr_eol"
+        ];
+
+        pub const NUMBER: &[&str] = &
+        [
+            "columns", "init_tabs", "lines", "lines_of_memory", "magic_cookie_glitch", "padding_baud_rate", 
+            "virtual_terminal", "width_status_line", "num_labels", "label_height", "label_width", "max_attributes",
+            "maximum_windows", "max_colors", "max_pairs", "no_color_video", "buffer_capacity", "dot_vert_spacing",
+            "dot_horz_spacing", "max_micro_address", "max_micro_jump", "micro_col_size", "micro_line_size",
+            "number_of_pins", "output_res_char", "output_res_line", "output_res_horz_inch", "output_res_vert_inch",
+            "print_rate", "wide_char_size", "buttons", "bit_image_entwining", "bit_image_type",
+            "magic_cookie_glitch_ul", "carriage_return_delay", "new_line_delay", "backspace_delay",
+            "horizontal_tab_delay", "number_of_function_keys"
+        ];
+
+        pub const STRING: &[&str] = &
+        [
+            "back_tab", "bell", "carriage_return", "change_scroll_region", "clear_all_tabs", "clear_screen", "clr_eol",
+            "clr_eos", "column_address", "command_character", "cursor_address", "cursor_down", "cursor_home", 
+            "cursor_invisible", "cursor_left", "cursor_mem_address", "cursor_normal", "cursor_right", "cursor_to_ll",
+            "cursor_up", "cursor_visible", "delete_character", "delete_line", "dis_status_line", "down_half_line",
+            "enter_alt_charset_mode", "enter_blink_mode", "enter_bold_mode", "enter_ca_mode", "enter_delete_mode",
+            "enter_dim_mode", "enter_insert_mode", "enter_secure_mode", "enter_protected_mode", "enter_reverse_mode",
+            "enter_standout_mode", "enter_underline_mode", "erase_chars", "exit_alt_charset_mode",
+            "exit_attribute_mode", "exit_ca_mode", "exit_delete_mode", "exit_insert_mode", "exit_standout_mode",
+            "exit_underline_mode", "flash_screen", "form_feed", "from_status_line", "init_1string", "init_2string",
+            "init_3string", "init_file", "insert_character", "insert_line", "insert_padding", "key_backspace",
+            "key_catab", "key_clear", "key_ctab", "key_dc", "key_dl", "key_down", "key_eic", "key_eol", "key_eos",
+            "key_f0", "key_f1", "key_f10", "key_f2", "key_f3", "key_f4", "key_f5", "key_f6", "key_f7", "key_f8",
+            "key_f9", "key_home", "key_ic", "key_il", "key_left", "key_ll", "key_npage", "key_ppage", "key_right",
+            "key_sf", "key_sr", "key_stab", "key_up", "keypad_local", "keypad_xmit", "lab_f0", "lab_f1", "lab_f10",
+            "lab_f2", "lab_f3", "lab_f4", "lab_f5", "lab_f6", "lab_f7", "lab_f8", "lab_f9", "meta_off", "meta_on",
+            "newline", "pad_char", "parm_dch", "parm_delete_line", "parm_down_cursor", "parm_ich", "parm_index",
+            "parm_insert_line", "parm_left_cursor", "parm_right_cursor", "parm_rindex", "parm_up_cursor", "pkey_key",
+            "pkey_local", "pkey_xmit", "print_screen", "prtr_off", "prtr_on", "repeat_char", "reset_1string",
+            "reset_2string", "reset_3string", "reset_file", "restore_cursor", "row_address", "save_cursor",
+            "scroll_forward", "scroll_reverse", "set_attributes", "set_tab", "set_window", "tab", "to_status_line",
+            "underline_char", "up_half_line", "init_prog", "key_a1", "key_a3", "key_b2", "key_c1", "key_c3",
+            "prtr_non", "char_padding", "acs_chars", "plab_norm", "key_btab", "enter_xon_mode", "exit_xon_mode",
+            "enter_am_mode", "exit_am_mode", "xon_character", "xoff_character", "ena_acs", "label_on", "label_off",
+            "key_beg", "key_cancel",
+            "key_close", "key_command", "key_copy", "key_create", "key_end", "key_enter", "key_exit",
+            "key_find", "key_help", "key_mark", "key_message", "key_move", "key_next", "key_open",
+            "key_options", "key_previous", "key_print", "key_redo", "key_reference", "key_refresh",
+            "key_replace", "key_restart", "key_resume", "key_save", "key_suspend", "key_undo", "key_sbeg",
+            "key_scancel", "key_scommand", "key_scopy", "key_screate", "key_sdc", "key_sdl", "key_select",
+            "key_send", "key_seol", "key_sexit", "key_sfind", "key_shelp", "key_shome", "key_sic",
+            "key_sleft", "key_smessage", "key_smove", "key_snext", "key_soptions", "key_sprevious",
+            "key_sprint", "key_sredo", "key_sreplace", "key_sright", "key_srsume", "key_ssave",
+            "key_ssuspend", "key_sundo", "req_for_input", "key_f11", "key_f12", "key_f13", "key_f14",
+            "key_f15", "key_f16", "key_f17", "key_f18", "key_f19", "key_f20", "key_f21", "key_f22",
+            "key_f23", "key_f24", "key_f25", "key_f26", "key_f27", "key_f28", "key_f29", "key_f30",
+            "key_f31", "key_f32", "key_f33", "key_f34", "key_f35", "key_f36", "key_f37", "key_f38",
+            "key_f39", "key_f40", "key_f41", "key_f42", "key_f43", "key_f44", "key_f45", "key_f46",
+            "key_f47", "key_f48", "key_f49", "key_f50", "key_f51", "key_f52", "key_f53", "key_f54",
+            "key_f55", "key_f56", "key_f57", "key_f58", "key_f59", "key_f60", "key_f61", "key_f62",
+            "key_f63", "clr_bol", "clear_margins", "set_left_margin", "set_right_margin", "label_format",
+            "set_clock", "display_clock", "remove_clock", "create_window", "goto_window", "hangup",
+            "dial_phone", "quick_dial", "tone", "pulse", "flash_hook", "fixed_pause", "wait_tone", "user0",
+            "user1", "user2", "user3", "user4", "user5", "user6", "user7", "user8", "user9", "orig_pair",
+            "orig_colors", "initialize_color", "initialize_pair", "set_color_pair", "set_foreground",
+            "set_background", "change_char_pitch", "change_line_pitch", "change_res_horz",
+            "change_res_vert", "define_char", "enter_doublewide_mode", "enter_draft_quality",
+            "enter_italics_mode", "enter_leftward_mode", "enter_micro_mode", "enter_near_letter_quality",
+            "enter_normal_quality", "enter_shadow_mode", "enter_subscript_mode", "enter_superscript_mode",
+            "enter_upward_mode", "exit_doublewide_mode", "exit_italics_mode", "exit_leftward_mode",
+            "exit_micro_mode", "exit_shadow_mode", "exit_subscript_mode", "exit_superscript_mode",
+            "exit_upward_mode", "micro_column_address", "micro_down", "micro_left", "micro_right",
+            "micro_row_address", "micro_up", "order_of_pins", "parm_down_micro", "parm_left_micro",
+            "parm_right_micro", "parm_up_micro", "select_char_set", "set_bottom_margin",
+            "set_bottom_margin_parm", "set_left_margin_parm", "set_right_margin_parm", "set_top_margin",
+            "set_top_margin_parm", "start_bit_image", "start_char_set_def", "stop_bit_image",
+            "stop_char_set_def", "subscript_characters", "superscript_characters", "these_cause_cr",
+            "zero_motion", "char_set_names", "key_mouse", "mouse_info", "req_mouse_pos", "get_mouse",
+            "set_a_foreground", "set_a_background", "pkey_plab", "device_type", "code_set_init",
+            "set0_des_seq", "set1_des_seq", "set2_des_seq", "set3_des_seq", "set_lr_margin",
+            "set_tb_margin", "bit_image_repeat", "bit_image_newline", "bit_image_carriage_return",
+            "color_names", "define_bit_image_region", "end_bit_image_region", "set_color_band",
+            "set_page_length", "display_pc_char", "enter_pc_charset_mode", "exit_pc_charset_mode",
+            "enter_scancode_mode", "exit_scancode_mode", "pc_term_options", "scancode_escape",
+            "alt_scancode_esc", "enter_horizontal_hl_mode", "enter_left_hl_mode", "enter_low_hl_mode",
+            "enter_right_hl_mode", "enter_top_hl_mode", "enter_vertical_hl_mode", "set_a_attributes",
+            "set_pglen_inch", "termcap_init2", "termcap_reset", "linefeed_if_not_lf",
+            "backspace_if_not_bs", "other_non_function_keys", "arrow_key_map", "acs_ulcorner",
+            "acs_llcorner", "acs_urcorner", "acs_lrcorner", "acs_ltee", "acs_rtee", "acs_btee", "acs_ttee",
+            "acs_hline", "acs_vline", "acs_plus", "memory_lock", "memory_unlock", "box_chars_1"
+        ];
+
+        pub const TERMINFO: &[(&str, &str)] = &
+        [
+            ("auto_left_margin", "bw"),
+            ("auto_right_margin", "am"),
+            ("back_color_erase", "bce"),
+            ("can_change", "ccc"),
+            ("ceol_standout_glitch", "xhp"),
+            ("col_addr_glitch", "xhpa"),
+            ("cpi_changes_res", "cpix"),
+            ("cr_cancels_micro_mode", "crxm"),
+            ("dest_tabs_magic_smso", "xt"),
+            ("eat_newline_glitch", "xenl"),
+            ("erase_overstrike", "eo"),
+            ("generic_type", "gn"),
+            ("hard_copy", "hc"),
+            ("hard_cursor", "chts"),
+            ("has_meta_key", "km"),
+            ("has_print_wheel", "daisy"),
+            ("has_status_line", "hs"),
+            ("hue_lightness_saturation", "hls"),
+            ("insert_null_glitch", "in"),
+            ("lpi_changes_res", "lpix"),
+            ("memory_above", "da"),
+            ("memory_below", "db"),
+            ("move_insert_mode", "mir"),
+            ("move_standout_mode", "msgr"),
+            ("needs_xon_xoff", "nxon"),
+            ("no_esc_ctlc", "xsb"),
+            ("no_pad_char", "npc"),
+            ("non_dest_scroll_region", "ndscr"),
+            ("non_rev_rmcup", "nrrmc"),
+            ("over_strike", "os"),
+            ("prtr_silent", "mc5i"),
+            ("row_addr_glitch", "xvpa"),
+            ("semi_auto_right_margin", "sam"),
+            ("status_line_esc_ok", "eslok"),
+            ("tilde_glitch", "hz"),
+            ("transparent_underline", "ul"),
+            ("xon_xoff", "xon"),
+            ("bit_image_entwining", "bitwin"),
+            ("bit_image_type", "bitype"),
+            ("buffer_capacity", "bufsz"),
+            ("buttons", "btns"),
+            ("columns", "cols"),
+            ("dot_horz_spacing", "spinh"),
+            ("dot_vert_spacing", "spinv"),
+            ("init_tabs", "it"),
+            ("label_height", "lh"),
+            ("label_width", "lw"),
+            ("lines", "lines"),
+            ("lines_of_memory", "lm"),
+            ("max_attributes", "ma"),
+            ("magic_cookie_glitch", "xmc"),
+            ("max_colors", "colors"),
+            ("max_micro_address", "maddr"),
+            ("max_micro_jump", "mjump"),
+            ("max_pairs", "pairs"),
+            ("maximum_windows", "wnum"),
+            ("micro_col_size", "mcs"),
+            ("micro_line_size", "mls"),
+            ("no_color_video", "ncv"),
+            ("num_labels", "nlab"),
+            ("number_of_pins", "npins"),
+            ("output_res_char", "orc"),
+            ("output_res_line", "orl"),
+            ("output_res_horz_inch", "orhi"),
+            ("output_res_vert_inch", "orvi"),
+            ("padding_baud_rate", "pb"),
+            ("print_rate", "cps"),
+            ("virtual_terminal", "vt"),
+            ("wide_char_size", "widcs"),
+            ("width_status_line", "wsl"),
+            ("acs_chars", "acsc"),
+            ("alt_scancode_esc", "scesa"),
+            ("back_tab", "cbt"),
+            ("bell", "bel"),
+            ("bit_image_carriage_return", "bicr"),
+            ("bit_image_newline", "binel"),
+            ("bit_image_repeat", "birep"),
+            ("carriage_return", "cr"),
+            ("change_char_pitch", "cpi"),
+            ("change_line_pitch", "lpi"),
+            ("change_res_horz", "chr"),
+            ("change_res_vert", "cvr"),
+            ("change_scroll_region", "csr"),
+            ("char_padding", "rmp"),
+            ("char_set_names", "csnm"),
+            ("clear_all_tabs", "tbc"),
+            ("clear_margins", "mgc"),
+            ("clear_screen", "clear"),
+            ("clr_bol", "el1"),
+            ("clr_eol", "el"),
+            ("clr_eos", "ed"),
+            ("code_set_init", "csin"),
+            ("color_names", "colornm"),
+            ("column_address", "hpa"),
+            ("command_character", "cmdch"),
+            ("create_window", "cwin"),
+            ("cursor_address", "cup"),
+            ("cursor_down", "cud1"),
+            ("cursor_home", "home"),
+            ("cursor_invisible", "civis"),
+            ("cursor_left", "cub1"),
+            ("cursor_mem_address", "mrcup"),
+            ("cursor_normal", "cnorm"),
+            ("cursor_right", "cuf1"),
+            ("cursor_to_ll", "ll"),
+            ("cursor_up", "cuu1"),
+            ("cursor_visible", "cvvis"),
+            ("define_bit_image_region", "defbi"),
+            ("define_char", "defc"),
+            ("delete_character", "dch1"),
+            ("delete_line", "dl1"),
+            ("device_type", "devt"),
+            ("dial_phone", "dial"),
+            ("dis_status_line", "dsl"),
+            ("display_clock", "dclk"),
+            ("display_pc_char", "dispc"),
+            ("down_half_line", "hd"),
+            ("ena_acs", "enacs"),
+            ("end_bit_image_region", "endbi"),
+            ("enter_alt_charset_mode", "smacs"),
+            ("enter_am_mode", "smam"),
+            ("enter_blink_mode", "blink"),
+            ("enter_bold_mode", "bold"),
+            ("enter_ca_mode", "smcup"),
+            ("enter_delete_mode", "smdc"),
+            ("enter_dim_mode", "dim"),
+            ("enter_doublewide_mode", "swidm"),
+            ("enter_draft_quality", "sdrfq"),
+            ("enter_horizontal_hl_mode", "ehhlm"),
+            ("enter_insert_mode", "smir"),
+            ("enter_italics_mode", "sitm"),
+            ("enter_left_hl_mode", "elhlm"),
+            ("enter_leftward_mode", "slm"),
+            ("enter_low_hl_mode", "elohlm"),
+            ("enter_micro_mode", "smicm"),
+            ("enter_near_letter_quality", "snlq"),
+            ("enter_normal_quality", "snrmq"),
+            ("enter_pc_charset_mode", "smpch"),
+            ("enter_protected_mode", "prot"),
+            ("enter_reverse_mode", "rev"),
+            ("enter_right_hl_mode", "erhlm"),
+            ("enter_scancode_mode", "smsc"),
+            ("enter_secure_mode", "invis"),
+            ("enter_shadow_mode", "sshm"),
+            ("enter_standout_mode", "smso"),
+            ("enter_subscript_mode", "ssubm"),
+            ("enter_superscript_mode", "ssupm"),
+            ("enter_top_hl_mode", "ethlm"),
+            ("enter_underline_mode", "smul"),
+            ("enter_upward_mode", "sum"),
+            ("enter_vertical_hl_mode", "evhlm"),
+            ("enter_xon_mode", "smxon"),
+            ("erase_chars", "ech"),
+            ("exit_alt_charset_mode", "rmacs"),
+            ("exit_am_mode", "rmam"),
+            ("exit_attribute_mode", "sgr0"),
+            ("exit_ca_mode", "rmcup"),
+            ("exit_delete_mode", "rmdc"),
+            ("exit_doublewide_mode", "rwidm"),
+            ("exit_insert_mode", "rmir"),
+            ("exit_italics_mode", "ritm"),
+            ("exit_leftward_mode", "rlm"),
+            ("exit_micro_mode", "rmicm"),
+            ("exit_pc_charset_mode", "rmpch"),
+            ("exit_scancode_mode", "rmsc"),
+            ("exit_shadow_mode", "rshm"),
+            ("exit_standout_mode", "rmso"),
+            ("exit_subscript_mode", "rsubm"),
+            ("exit_superscript_mode", "rsupm"),
+            ("exit_underline_mode", "rmul"),
+            ("exit_upward_mode", "rum"),
+            ("exit_xon_mode", "rmxon"),
+            ("fixed_pause", "pause"),
+            ("flash_hook", "hook"),
+            ("flash_screen", "flash"),
+            ("form_feed", "ff"),
+            ("from_status_line", "fsl"),
+            ("get_mouse", "getm"),
+            ("goto_window", "wingo"),
+            ("hangup", "hup"),
+            ("init_1string", "is1"),
+            ("init_2string", "is2"),
+            ("init_3string", "is3"),
+            ("init_file", "if"),
+            ("init_prog", "iprog"),
+            ("initialize_color", "initc"),
+            ("initialize_pair", "initp"),
+            ("insert_character", "ich1"),
+            ("insert_line", "il1"),
+            ("insert_padding", "ip"),
+            ("key_a1", "ka1"),
+            ("key_a3", "ka3"),
+            ("key_b2", "kb2"),
+            ("key_backspace", "kbs"),
+            ("key_beg", "kbeg"),
+            ("key_btab", "kcbt"),
+            ("key_c1", "kc1"),
+            ("key_c3", "kc3"),
+            ("key_cancel", "kcan"),
+            ("key_catab", "ktbc"),
+            ("key_clear", "kclr"),
+            ("key_close", "kclo"),
+            ("key_command", "kcmd"),
+            ("key_copy", "kcpy"),
+            ("key_create", "kcrt"),
+            ("key_ctab", "kctab"),
+            ("key_dc", "kdch1"),
+            ("key_dl", "kdl1"),
+            ("key_down", "kcud1"),
+            ("key_eic", "krmir"),
+            ("key_end", "kend"),
+            ("key_enter", "kent"),
+            ("key_eol", "kel"),
+            ("key_eos", "ked"),
+            ("key_exit", "kext"),
+            ("key_f0", "kf0"),
+            ("key_f1", "kf1"),
+            ("key_f62", "kf62"),
+            ("key_f63", "kf63"),
+            ("key_find", "kfnd"),
+            ("key_help", "khlp"),
+            ("key_home", "khome"),
+            ("key_ic", "kich1"),
+            ("key_il", "kil1"),
+            ("key_left", "kcub1"),
+            ("key_ll", "kll"),
+            ("key_mark", "kmrk"),
+            ("key_message", "kmsg"),
+            ("key_mouse", "kmous"),
+            ("key_move", "kmov"),
+            ("key_next", "knxt"),
+            ("key_npage", "knp"),
+            ("key_open", "kopn"),
+            ("key_options", "kopt"),
+            ("key_ppage", "kpp"),
+            ("key_previous", "kprv"),
+            ("key_print", "kprt"),
+            ("key_redo", "krdo"),
+            ("key_reference", "kref"),
+            ("key_refresh", "krfr"),
+            ("key_replace", "krpl"),
+            ("key_restart", "krst"),
+            ("key_resume", "kres"),
+            ("key_right", "kcuf1"),
+            ("key_save", "ksav"),
+            ("key_sbeg", "kBEG"),
+            ("key_scancel", "kCAN"),
+            ("key_scommand", "kCMD"),
+            ("key_scopy", "kCPY"),
+            ("key_screate", "kCRT"),
+            ("key_sdc", "kDC"),
+            ("key_sdl", "kDL"),
+            ("key_select", "kslt"),
+            ("key_send", "kEND"),
+            ("key_seol", "kEOL"),
+            ("key_sexit", "kEXT"),
+            ("key_sf", "kind"),
+            ("key_sfind", "kFND"),
+            ("key_shelp", "kHLP"),
+            ("key_shome", "kHOM"),
+            ("key_sic", "kIC"),
+            ("key_sleft", "kLFT"),
+            ("key_smessage", "kMSG"),
+            ("key_smove", "kMOV"),
+            ("key_snext", "kNXT"),
+            ("key_soptions", "kOPT"),
+            ("key_sprevious", "kPRV"),
+            ("key_sprint", "kPRT"),
+            ("key_sr", "kri"),
+            ("key_sredo", "kRDO"),
+            ("key_sreplace", "kRPL"),
+            ("key_sright", "kRIT"),
+            ("key_srsume", "kRES"),
+            ("key_ssave", "kSAV"),
+            ("key_ssuspend", "kSPD"),
+            ("key_stab", "khts"),
+            ("key_sundo", "kUND"),
+            ("key_suspend", "kspd"),
+            ("key_undo", "kund"),
+            ("key_up", "kcuu1"),
+            ("keypad_local", "rmkx"),
+            ("keypad_xmit", "smkx"),
+            ("lab_f0", "lf0"),
+            ("lab_f1", "lf1"),
+            ("lab_f2", "lf2"),
+            ("lab_f3", "lf3"),
+            ("lab_f4", "lf4"),
+            ("lab_f5", "lf5"),
+            ("lab_f6", "lf6"),
+            ("lab_f7", "lf7"),
+            ("lab_f8", "lf8"),
+            ("lab_f9", "lf9"),
+            ("lab_f10", "lf10"),
+            ("label_format", "fln"),
+            ("label_off", "rmln"),
+            ("label_on", "smln"),
+            ("meta_off", "rmm"),
+            ("meta_on", "smm"),
+            ("micro_column_address", "mhpa"),
+            ("micro_down", "mcud1"),
+            ("micro_left", "mcub1"),
+            ("micro_right", "mcuf1"),
+            ("micro_row_address", "mvpa"),
+            ("micro_up", "mcuu1"),
+            ("mouse_info", "minfo"),
+            ("newline", "nel"),
+            ("order_of_pins", "porder"),
+            ("orig_colors", "oc"),
+            ("orig_pair", "op"),
+            ("pad_char", "pad"),
+            ("parm_dch", "dch"),
+            ("parm_delete_line", "dl"),
+            ("parm_down_cursor", "cud"),
+            ("parm_down_micro", "mcud"),
+            ("parm_ich", "ich"),
+            ("parm_index", "indn"),
+            ("parm_insert_line", "il"),
+            ("parm_left_cursor", "cub"),
+            ("parm_left_micro", "mcub"),
+            ("parm_right_cursor", "cuf"),
+            ("parm_right_micro", "mcuf"),
+            ("parm_rindex", "rin"),
+            ("parm_up_cursor", "cuu"),
+            ("parm_up_micro", "mcuu"),
+            ("pc_term_options", "pctrm"),
+            ("pkey_key", "pfkey"),
+            ("pkey_local", "pfloc"),
+            ("pkey_plab", "pfxl"),
+            ("pkey_xmit", "pfx"),
+            ("plab_norm", "pln"),
+            ("print_screen", "mc0"),
+            ("prtr_non", "mc5p"),
+            ("prtr_off", "mc4"),
+            ("prtr_on", "mc5"),
+            ("pulse", "pulse"),
+            ("quick_dial", "qdial"),
+            ("remove_clock", "rmclk"),
+            ("repeat_char", "rep"),
+            ("req_for_input", "rfi"),
+            ("req_mouse_pos", "reqmp"),
+            ("reset_1string", "rs1"),
+            ("reset_2string", "rs2"),
+            ("reset_3string", "rs3"),
+            ("reset_file", "rf"),
+            ("restore_cursor", "rc"),
+            ("row_address", "vpa"),
+            ("save_cursor", "sc"),
+            ("scancode_escape", "scesc"),
+            ("scroll_forward", "ind"),
+            ("scroll_reverse", "ri"),
+            ("select_char_set", "scs"),
+            ("set0_des_seq", "s0ds"),
+            ("set1_des_seq", "s1ds"),
+            ("set2_des_seq", "s2ds"),
+            ("set3_des_seq", "s3ds"),
+            ("set_a_attributes", "sgr1"),
+            ("set_a_background", "setab"),
+            ("set_a_foreground", "setaf"),
+            ("set_attributes", "sgr"),
+            ("set_background", "setb"),
+            ("set_bottom_margin", "smgb"),
+            ("set_bottom_margin_parm", "smgbp"),
+            ("set_clock", "sclk"),
+            ("set_color_band", "setcolor"),
+            ("set_color_pair", "scp"),
+            ("set_foreground", "setf"),
+            ("set_left_margin", "smgl"),
+            ("set_left_margin_parm", "smglp"),
+            ("set_lr_margin", "smglr"),
+            ("set_page_length", "slines"),
+            ("set_pglen_inch", "slength"),
+            ("set_right_margin", "smgr"),
+            ("set_right_margin_parm", "smgrp"),
+            ("set_tab", "hts"),
+            ("set_tb_margin", "smgtb"),
+            ("set_top_margin", "smgt"),
+            ("set_top_margin_parm", "smgtp"),
+            ("set_window", "wind"),
+            ("start_bit_image", "sbim"),
+            ("start_char_set_def", "scsd"),
+            ("stop_bit_image", "rbim"),
+            ("stop_char_set_def", "rcsd"),
+            ("subscript_characters", "subcs"),
+            ("superscript_characters", "supcs"),
+            ("tab", "ht"),
+            ("these_cause_cr", "docr"),
+            ("to_status_line", "tsl"),
+            ("tone", "tone"),
+            ("user0", "u0"),
+            ("user1", "u1"),
+            ("user2", "u2"),
+            ("user3", "u3"),
+            ("user4", "u4"),
+            ("user5", "u5"),
+            ("user6", "u6"),
+            ("user7", "u7"),
+            ("user8", "u8"),
+            ("user9", "u9"),
+            ("underline_char", "uc"),
+            ("up_half_line", "hu"),
+            ("wait_tone", "wait"),
+            ("xoff_character", "xoffc"),
+            ("xon_character", "xonc"),
+            ("zero_motion", "zerom"),
+        ];
+
+        pub const TERMCAP: &[(&str, &str)] = &
+        [
+            // Boolean names.
+            ("auto_left_margin", "bw"),
+            ("auto_right_margin", "am"),
+            ("back_color_erase", "ut"),
+            ("can_change", "cc"),
+            ("ceol_standout_glitch", "xs"),
+            ("col_addr_glitch", "YA"),
+            ("cpi_changes_res", "YF"),
+            ("cr_cancels_micro_mode", "YB"),
+            ("dest_tabs_magic_smso", "xt"),
+            ("eat_newline_glitch", "xn"),
+            ("erase_overstrike", "eo"),
+            ("generic_type", "gn"),
+            ("hard_copy", "hc"),
+            ("hard_cursor", "HC"),
+            ("has_meta_key", "km"),
+            ("has_print_wheel", "YC"),
+            ("has_status_line", "hs"),
+            ("hue_lightness_saturation", "hl"),
+            ("insert_null_glitch", "in"),
+            ("lpi_changes_res", "YG"),
+            ("memory_above", "da"),
+            ("memory_below", "db"),
+            ("move_insert_mode", "mi"),
+            ("move_standout_mode", "ms"),
+            ("needs_xon_xoff", "nx"),
+            ("no_esc_ctlc", "xb"),
+            ("no_pad_char", "NP"),
+            ("non_dest_scroll_region", "ND"),
+            ("non_rev_rmcup", "NR"),
+            ("over_strike", "os"),
+            ("prtr_silent", "5i"),
+            ("row_addr_glitch", "YD"),
+            ("semi_auto_right_margin", "YE"),
+            ("status_line_esc_ok", "es"),
+            ("tilde_glitch", "hz"),
+            ("transparent_underline", "ul"),
+            ("xon_xoff", "xo"),
+            ("bit_image_entwining", "Yo"),
+            ("bit_image_type", "Yp"),
+            ("buffer_capacity", "Ya"),
+            ("buttons", "BT"),
+            ("columns", "co"),
+            ("dot_horz_spacing", "Yc"),
+            ("dot_vert_spacing", "Yb"),
+            ("init_tabs", "it"),
+            ("label_height", "lh"),
+            ("label_width", "lw"),
+            ("lines", "li"),
+            ("lines_of_memory", "lm"),
+            ("max_attributes", "ma"),
+            ("magic_cookie_glitch", "sg"),
+            ("max_colors", "Co"),
+            ("max_micro_address", "Yd"),
+            ("max_micro_jump", "Ye"),
+            ("max_pairs", "pa"),
+            ("maximum_windows", "MW"),
+            ("micro_col_size", "Yf"),
+            ("micro_line_size", "Yg"),
+            ("no_color_video", "NC"),
+            ("num_labels", "Nl"),
+            ("number_of_pins", "Yh"),
+            ("output_res_char", "Yi"),
+            ("output_res_line", "Yj"),
+            ("output_res_horz_inch", "Yk"),
+            ("output_res_vert_inch", "Yl"),
+            ("padding_baud_rate", "pb"),
+            ("print_rate", "Ym"),
+            ("virtual_terminal", "vt"),
+            ("wide_char_size", "Yn"),
+            ("width_status_line", "ws"),
+            ("acs_chars", "ac"),
+            ("alt_scancode_esc", "S8"),
+            ("back_tab", "bt"),
+            ("bell", "bl"),
+            ("bit_image_carriage_return", "Yv"),
+            ("bit_image_newline", "Zz"),
+            ("bit_image_repeat", "Xy"),
+            ("carriage_return", "cr"),
+            ("change_char_pitch", "ZA"),
+            ("change_line_pitch", "ZB"),
+            ("change_res_horz", "ZC"),
+            ("change_res_vert", "ZD"),
+            ("change_scroll_region", "cs"),
+            ("char_padding", "rP"),
+            ("char_set_names", "Zy"),
+            ("clear_all_tabs", "ct"),
+            ("clear_margins", "MC"),
+            ("clear_screen", "cl"),
+            ("clr_bol", "cb"),
+            ("clr_eol", "ce"),
+            ("clr_eos", "cd"),
+            ("code_set_init", "ci"),
+            ("color_names", "Yw"),
+            ("column_address", "ch"),
+            ("command_character", "CC"),
+            ("cursor_address", "cm"),
+            ("cursor_down", "do"),
+            ("cursor_home", "ho"),
+            ("cursor_invisible", "vi"),
+            ("cursor_left", "le"),
+            ("cursor_mem_address", "CM"),
+            ("cursor_normal", "ve"),
+            ("cursor_right", "nd"),
+            ("cursor_to_ll", "ll"),
+            ("cursor_up", "up"),
+            ("cursor_visible", "vs"),
+            ("define_bit_image_region", "Yx"),
+            ("define_char", "ZE"),
+            ("delete_character", "dc"),
+            ("delete_line", "dl"),
+            ("device_type", "dv"),
+            ("dial_phone", "DI"),
+            ("dis_status_line", "ds"),
+            ("display_clock", "DK"),
+            ("display_pc_char", "S1"),
+            ("down_half_line", "hd"),
+            ("ena_acs", "eA"),
+            ("end_bit_image_region", "Yy"),
+            ("enter_alt_charset_mode", "as"),
+            ("enter_am_mode", "SA"),
+            ("enter_blink_mode", "mb"),
+            ("enter_bold_mode", "md"),
+            ("enter_ca_mode", "ti"),
+            ("enter_delete_mode", "dm"),
+            ("enter_dim_mode", "mh"),
+            ("enter_doublewide_mode", "ZF"),
+            ("enter_draft_quality", "ZG"),
+            ("enter_insert_mode", "im"),
+            ("enter_italics_mode", "ZH"),
+            ("enter_leftward_mode", "ZI"),
+            ("enter_micro_mode", "ZJ"),
+            ("enter_near_letter_quality", "ZK"),
+            ("enter_normal_quality", "ZL"),
+            ("enter_pc_charset_mode", "S2"),
+            ("enter_protected_mode", "mp"),
+            ("enter_reverse_mode", "mr"),
+            ("enter_scancode_mode", "S4"),
+            ("enter_secure_mode", "mk"),
+            ("enter_shadow_mode", "ZM"),
+            ("enter_standout_mode", "so"),
+            ("enter_subscript_mode", "ZN"),
+            ("enter_superscript_mode", "ZO"),
+            ("enter_underline_mode", "us"),
+            ("enter_upward_mode", "ZP"),
+            ("enter_xon_mode", "SX"),
+            ("erase_chars", "ec"),
+            ("exit_alt_charset_mode", "ae"),
+            ("exit_am_mode", "RA"),
+            ("exit_attribute_mode", "me"),
+            ("exit_ca_mode", "te"),
+            ("exit_delete_mode", "ed"),
+            ("exit_doublewide_mode", "ZQ"),
+            ("exit_insert_mode", "ei"),
+            ("exit_italics_mode", "ZR"),
+            ("exit_leftward_mode", "ZS"),
+            ("exit_micro_mode", "ZT"),
+            ("exit_pc_charset_mode", "S3"),
+            ("exit_scancode_mode", "S5"),
+            ("exit_shadow_mode", "ZU"),
+            ("exit_standout_mode", "se"),
+            ("exit_subscript_mode", "ZV"),
+            ("exit_superscript_mode", "ZW"),
+            ("exit_underline_mode", "ue"),
+            ("exit_upward_mode", "ZX"),
+            ("exit_xon_mode", "RX"),
+            ("fixed_pause", "PA"),
+            ("flash_hook", "fh"),
+            ("flash_screen", "vb"),
+            ("form_feed", "ff"),
+            ("from_status_line", "fs"),
+            ("get_mouse", "Gm"),
+            ("goto_window", "WG"),
+            ("hangup", "HU"),
+            ("init_1string", "i1"),
+            ("init_2string", "is"),
+            ("init_3string", "i3"),
+            ("init_file", "if"),
+            ("init_prog", "iP"),
+            ("initialize_color", "Ic"),
+            ("initialize_pair", "Ip"),
+            ("insert_character", "ic"),
+            ("insert_line", "al"),
+            ("insert_padding", "ip"),
+            ("key_a1", "K1"),
+            ("key_a3", "K3"),
+            ("key_b2", "K2"),
+            ("key_backspace", "kb"),
+            ("key_btab", "kB"),
+            ("key_c1", "K4"),
+            ("key_c3", "K5"),
+            ("key_catab", "ka"),
+            ("key_clear", "kC"),
+            ("key_ctab", "kt"),
+            ("key_dc", "kD"),
+            ("key_dl", "kL"),
+            ("key_down", "kd"),
+            ("key_eic", "kM"),
+            ("key_eol", "kE"),
+            ("key_eos", "kS"),
+            ("key_f0", "k0"),
+            ("key_f1", "k1"),
+            ("key_f62", "Fq"),
+            ("key_f63", "Fr"),
+            ("key_help", "%1"),
+            ("key_home", "kh"),
+            ("key_ic", "kI"),
+            ("key_il", "kA"),
+            ("key_left", "kl"),
+            ("key_ll", "kH"),
+            ("key_mark", "%2"),
+            ("key_message", "%3"),
+            ("key_mouse", "Km"),
+            ("key_move", "%4"),
+            ("key_next", "%5"),
+            ("key_npage", "kN"),
+            ("key_open", "%6"),
+            ("key_options", "%7"),
+            ("key_ppage", "kP"),
+            ("key_previous", "%8"),
+            ("key_print", "%9"),
+            ("key_redo", "%0"),
+            ("key_reference", "&1"),
+            ("key_refresh", "&2"),
+            ("key_replace", "&3"),
+            ("key_restart", "&4"),
+            ("key_resume", "&5"),
+            ("key_right", "kr"),
+            ("key_save", "&6"),
+            ("key_sbeg", "&9"),
+            ("key_scancel", "&0"),
+            ("key_scommand", "*1"),
+            ("key_scopy", "*2"),
+            ("key_screate", "*3"),
+            ("key_sdc", "*4"),
+            ("key_sdl", "*5"),
+            ("key_select", "*6"),
+            ("key_send", "*7"),
+            ("key_seol", "*8"),
+            ("key_sexit", "*9"),
+            ("key_sf", "kF"),
+            ("key_sfind", "*0"),
+            ("key_shelp", "#1"),
+            ("key_shome", "#2"),
+            ("key_sic", "#3"),
+            ("key_sleft", "#4"),
+            ("key_smessage", "%a"),
+            ("key_smove", "%b"),
+            ("key_snext", "%c"),
+            ("key_soptions", "%d"),
+            ("key_sprevious", "%e"),
+            ("key_sprint", "%f"),
+            ("key_sr", "kR"),
+            ("key_sredo", "%g"),
+            ("key_sreplace", "%h"),
+            ("key_sright", "%i"),
+            ("key_srsume", "%j"),
+            ("key_ssave", "!1"),
+            ("key_ssuspend", "!2"),
+            ("key_stab", "kT"),
+            ("key_sundo", "!3"),
+            ("key_suspend", "&7"),
+            ("key_undo", "&8"),
+            ("key_up", "ku"),
+            ("keypad_local", "ke"),
+            ("keypad_xmit", "ks"),
+            ("lab_f0", "l0"),
+            ("lab_f1", "l1"),
+            ("lab_f2", "l2"),
+            ("lab_f3", "l3"),
+            ("lab_f4", "l4"),
+            ("lab_f5", "l5"),
+            ("lab_f6", "l6"),
+            ("lab_f7", "l7"),
+            ("lab_f8", "l8"),
+            ("lab_f9", "l9"),
+            ("lab_f10", "la"),
+            ("label_format", "Lf"),
+            ("label_off", "LF"),
+            ("label_on", "LO"),
+            ("meta_off", "mo"),
+            ("meta_on", "mm"),
+            ("micro_column_address", "ZY"),
+            ("micro_down", "ZZ"),
+            ("micro_left", "Za"),
+            ("micro_right", "Zb"),
+            ("micro_row_address", "Zc"),
+            ("micro_up", "Zd"),
+            ("mouse_info", "Mi"),
+            ("newline", "nw"),
+            ("order_of_pins", "Ze"),
+            ("orig_colors", "oc"),
+            ("orig_pair", "op"),
+            ("pad_char", "pc"),
+            ("parm_dch", "DC"),
+            ("parm_delete_line", "DL"),
+            ("parm_down_cursor", "DO"),
+            ("parm_down_micro", "Zf"),
+            ("parm_ich", "IC"),
+            ("parm_index", "SF"),
+            ("parm_insert_line", "AL"),
+            ("parm_left_cursor", "LE"),
+            ("parm_left_micro", "Zg"),
+            ("parm_right_cursor", "RI"),
+            ("parm_right_micro", "Zh"),
+            ("parm_rindex", "SR"),
+            ("parm_up_cursor", "UP"),
+            ("parm_up_micro", "Zi"),
+            ("pc_term_options", "S6"),
+            ("pkey_key", "pk"),
+            ("pkey_local", "pl"),
+            ("pkey_plab", "xl"),
+            ("pkey_xmit", "px"),
+            ("plab_norm", "pn"),
+            ("print_screen", "ps"),
+            ("prtr_non", "pO"),
+            ("prtr_off", "pf"),
+            ("prtr_on", "po"),
+            ("pulse", "PU"),
+            ("quick_dial", "QD"),
+            ("remove_clock", "RC"),
+            ("repeat_char", "rp"),
+            ("req_for_input", "RF"),
+            ("req_mouse_pos", "RQ"),
+            ("reset_1string", "r1"),
+            ("reset_2string", "r2"),
+            ("reset_3string", "r3"),
+            ("reset_file", "rf"),
+            ("restore_cursor", "rc"),
+            ("row_address", "cv"),
+            ("save_cursor", "sc"),
+            ("scancode_escape", "S7"),
+            ("scroll_forward", "sf"),
+            ("scroll_reverse", "sr"),
+            ("select_char_set", "Zj"),
+            ("set0_des_seq", "s0"),
+            ("set1_des_seq", "s1"),
+            ("set2_des_seq", "s2"),
+            ("set3_des_seq", "s3"),
+            ("set_a_background", "AB"),
+            ("set_a_foreground", "AF"),
+            ("set_attributes", "sa"),
+            ("set_background", "Sb"),
+            ("set_bottom_margin", "Zk"),
+            ("set_bottom_margin_parm", "Zl"),
+            ("set_clock", "SC"),
+            ("set_color_band", "Yz"),
+            ("set_color_pair", "sp"),
+            ("set_foreground", "Sf"),
+            ("set_left_margin", "ML"),
+            ("set_left_margin_parm", "Zm"),
+            ("set_page_length", "YZ"),
+            ("set_pglen_inch", "YI"),
+            ("set_right_margin", "MR"),
+            ("set_right_margin_parm", "Zn"),
+            ("set_tab", "st"),
+            ("set_tb_margin", "MT"),
+            ("set_top_margin", "Zo"),
+            ("set_top_margin_parm", "Zp"),
+            ("set_window", "wi"),
+            ("start_bit_image", "Zq"),
+            ("start_char_set_def", "Zr"),
+            ("stop_bit_image", "Zs"),
+            ("stop_char_set_def", "Zt"),
+            ("subscript_characters", "Zu"),
+            ("superscript_characters", "Zv"),
+            ("tab", "ta"),
+            ("these_cause_cr", "Zw"),
+            ("to_status_line", "ts"),
+            ("tone", "TO"),
+            ("user0", "u0"),
+            ("user1", "u1"),
+            ("user2", "u2"),
+            ("user3", "u3"),
+            ("user4", "u4"),
+            ("user5", "u5"),
+            ("user6", "u6"),
+            ("user7", "u7"),
+            ("user8", "u8"),
+            ("user9", "u9"),
+            ("underline_char", "uc"),
+            ("up_half_line", "hu"),
+            ("wait_tone", "WA"),
+            ("xoff_character", "XF"),
+            ("xon_character", "XN"),
+            ("zero_motion", "Zx"),
+        ];
+        /*
+        fn main() 
+        {
+            let path = Path::new(&env::var("OUT_DIR").unwrap()).join("names.rs");
+            let mut file = BufWriter::new(File::create(&path).unwrap());
+
+            write!(&mut file, "pub static BOOLEAN: ::phf::Map<u16, &'static str> = ").unwrap();
+            let mut builder = phf_codegen::Map::new();
+            for (index, name) in BOOLEAN.iter().enumerate() {
+                builder.entry(index as u16, &format!("\"{}\"", name));
+            }
+            write!(&mut file, "{}", builder.build()).unwrap();
+            writeln!(&mut file, ";").unwrap();
+
+            let keys = BOOLEAN.iter().map(|n| format!("\"{}\"", n)).collect::<Vec<_>>();
+            write!(&mut file, "pub static BOOLEAN_INDEX: ::phf::Map<&'static str, u16> = ").unwrap();
+            let mut builder = phf_codegen::Map::<&str>::new();
+            for (index, name) in keys.iter().enumerate() {
+                builder.entry(name, &index.to_string());
+            }
+            write!(&mut file, "{}", builder.build()).unwrap();
+            writeln!(&mut file, ";").unwrap();
+
+            write!(&mut file, "pub static NUMBER: ::phf::Map<u16, &'static str> = ").unwrap();
+            let mut builder = phf_codegen::Map::new();
+            for (index, name) in NUMBER.iter().enumerate() {
+                builder.entry(index as u16, &format!("\"{}\"", name));
+            }
+            write!(&mut file, "{}", builder.build()).unwrap();
+            writeln!(&mut file, ";").unwrap();
+
+            let keys = NUMBER.iter().map(|n| format!("\"{}\"", n)).collect::<Vec<_>>();
+            write!(&mut file, "pub static NUMBER_INDEX: ::phf::Map<&'static str, u16> = ").unwrap();
+            let mut builder = phf_codegen::Map::<&str>::new();
+            for (index, name) in keys.iter().enumerate() {
+                builder.entry(name, &index.to_string());
+            }
+            write!(&mut file, "{}", builder.build()).unwrap();
+            writeln!(&mut file, ";").unwrap();
+
+            write!(&mut file, "pub static STRING: ::phf::Map<u16, &'static str> = ").unwrap();
+            let mut builder = phf_codegen::Map::new();
+            for (index, name) in STRING.iter().enumerate() {
+                builder.entry(index as u16, &format!("\"{}\"", name));
+            }
+            write!(&mut file, "{}", builder.build()).unwrap();
+            writeln!(&mut file, ";").unwrap();
+
+            let keys = STRING.iter().map(|n| format!("\"{}\"", n)).collect::<Vec<_>>();
+            write!(&mut file, "pub static STRING_INDEX: ::phf::Map<&'static str, u16> = ").unwrap();
+            let mut builder = phf_codegen::Map::<&str>::new();
+            for (index, name) in keys.iter().enumerate() {
+                builder.entry(name, &index.to_string());
+            }
+            write!(&mut file, "{}", builder.build()).unwrap();
+            writeln!(&mut file, ";").unwrap();
+
+            write!(&mut file, "pub static TERMINFO: ::phf::Map<&'static str, &'static str> = ").unwrap();
+            let mut builder = phf_codegen::Map::new();
+            for &(name, value) in TERMINFO {
+                builder.entry(name, &format!("\"{}\"", value));
+            }
+            write!(&mut file, "{}", builder.build()).unwrap();
+            writeln!(&mut file, ";").unwrap();
+
+            write!(&mut file, "pub static TERMCAP: ::phf::Map<&'static str, &'static str> = ").unwrap();
+            let mut builder = phf_codegen::Map::new();
+            for &(name, value) in TERMCAP {
+                builder.entry(name, &format!("\"{}\"", value));
+            }
+            write!(&mut file, "{}", builder.build()).unwrap();
+            writeln!(&mut file, ";").unwrap();
+
+            write!(&mut file, "pub static ALIASES: ::phf::Map<&'static str, &'static str> = ").unwrap();
+            let mut builder = phf_codegen::Map::new();
+            for &(value, name) in TERMINFO {
+                builder.entry(name, &format!("\"{}\"", value));
+            }
+            for &(value, name) in TERMCAP {
+                if !TERMINFO.iter().any(|entry| name == entry.1) {
+                    builder.entry(name, &format!("\"{}\"", value));
+                }
+            }
+            write!(&mut file, "{}", builder.build()).unwrap();
+            writeln!(&mut file, ";").unwrap();
+        }
+        */
+    }
+    /// Metadata Capabilities
+    pub mod capabilities
+    {
+        /// Metadata Capabilities
+        use ::
+        {
+            borrow::{ Cow },
+            error::metadata::{ self as error },
+            expand::{ Context, Expand, Parameter },
+            io::{ Write },
+            *,
+        };
+
+        macro_rules! from 
+        {
+            (number $ty:ty) => {
+                impl From<$ty> for Value {
+                    fn from(value: $ty) -> Self {
+                        Value::Number(value as i32)
+                    }
+                }
+            };
+
+            (string ref $ty:ty) => {
+                impl<'a> From<&'a $ty> for Value {
+                    fn from(value: &'a $ty) -> Self {
+                        Value::String(value.into())
+                    }
+                }
+            };
+
+            (string $ty:ty) => {
+                impl From<$ty> for Value {
+                    fn from(value: $ty) -> Self {
+                        Value::String(value.into())
+                    }
+                }
+            };
+        }
+
+        macro_rules! define 
+        {
+            (boolean $ident:ident => $capability:expr) => (
+                #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+                pub struct $ident(pub bool);
+
+                impl<'a> Capability<'a> for $ident {
+                    #[inline]
+                    fn name() -> &'static str {
+                        $capability
+                    }
+
+                    #[inline]
+                    fn from(value: Option<&Value>) -> Option<Self> {
+                        if let Some(&Value::True) = value {
+                            Some($ident(true))
+                        }
+                        else {
+                            Some($ident(false))
+                        }
+                    }
+
+                    #[inline]
+                    fn into(self) -> Option<Value> {
+                        if self.0 {
+                            Some(Value::True)
+                        }
+                        else {
+                            None
+                        }
+                    }
+                }
+
+                impl From<$ident> for bool {
+                    fn from(cap: $ident) -> Self {
+                        cap.0
+                    }
+                }
+            );
+
+            (number $ident:ident => $capability:expr) => (
+                #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+                pub struct $ident(pub i32);
+
+                impl<'a> Capability<'a> for $ident {
+                    #[inline]
+                    fn name() -> &'static str {
+                        $capability
+                    }
+
+                    #[inline]
+                    fn from(value: Option<&Value>) -> Option<Self> {
+                        if let Some(&Value::Number(value)) = value {
+                            Some($ident(value))
+                        }
+                        else {
+                            None
+                        }
+                    }
+
+                    #[inline]
+                    fn into(self) -> Option<Value> {
+                        Some(Value::Number(self.0))
+                    }
+                }
+
+                impl From<$ident> for i32 {
+                    fn from(cap: $ident) -> Self {
+                        cap.0
+                    }
+                }
+            );
+
+            (string define $ident:ident => $capability:expr) => (
+                #[derive(Eq, PartialEq, Clone, Debug)]
+                pub struct $ident<'a>(Cow<'a, [u8]>);
+
+                impl<'a> Capability<'a> for $ident<'a> {
+                    #[inline]
+                    fn name() -> &'static str {
+                        $capability
+                    }
+
+                    #[inline]
+                    fn from(value: Option<&'a Value>) -> Option<$ident<'a>> {
+                        if let Some(&Value::String(ref value)) = value {
+                            Some($ident(Cow::Borrowed(value)))
+                        }
+                        else {
+                            None
+                        }
+                    }
+
+                    #[inline]
+                    fn into(self) -> Option<Value> {
+                        Some(Value::String(match self.0 {
+                            Cow::Borrowed(value) =>
+                                value.into(),
+
+                            Cow::Owned(value) =>
+                                value
+                        }))
+                    }
+                }
+
+                impl<'a, T: AsRef<&'a [u8]>> From<T> for $ident<'a> {
+                    #[inline]
+                    fn from(value: T) -> Self {
+                        $ident(Cow::Borrowed(value.as_ref()))
+                    }
+                }
+
+                impl<'a> AsRef<[u8]> for $ident<'a> {
+                    #[inline]
+                    fn as_ref(&self) -> &[u8] {
+                        &self.0
+                    }
+                }
+
+                impl<'a> $ident<'a> {
+                    /// Begin expanding the capability.
+                    #[inline]
+                    pub fn expand(&self) -> Expansion<$ident> {
+                        Expansion {
+                            string:  self,
+                            params:  Default::default(),
+                            context: None,
+                        }
+                    }
+                }
+            );
+
+            (string $ident:ident => $capability:expr) => (
+                define!(string define $ident => $capability);
+            );
+
+            (string $ident:ident => $capability:expr; $($rest:tt)+) => (
+                define!(string define $ident => $capability);
+                define!(string parameters $ident; $($rest)+);
+                define!(string builder $ident; 0, $($rest)+, );
+            );
+
+            (string parameters $ident:ident; $($name:ident : $ty:ty),+) => (
+                impl<'a> Expansion<'a, $ident<'a>> {
+                    /// Pass all expansion parameters at once.
+                    #[allow(unused_assignments)]
+                    #[inline]
+                    // https://github.com/meh/rust-terminfo/issues/28
+                    #[allow(clippy::too_many_arguments)]
+                    pub fn parameters(mut self, $($name: $ty),*) -> Self {
+                        let mut index = 0;
+
+                        $({
+                            self.params[index]  = $name.into();
+                            index              += 1;
+                        })*;
+
+                        self
+                    }
+                }
+            );
+
+            (string builder $ident:ident; $index:expr, ) => ();
+
+            (string builder $ident:ident; $index:expr, $name:ident : u8, $($rest:tt)*) => (
+                define!(string builder direct $ident; $index, $name : u8);
+                define!(string builder $ident; $index + 1, $($rest)*);
+            );
+
+            (string builder $ident:ident; $index:expr, $name:ident : i8, $($rest:tt)*) => (
+                define!(string builder direct $ident; $index, $name : i8);
+                define!(string builder $ident; $index + 1, $($rest)*);
+            );
+
+            (string builder $ident:ident; $index:expr, $name:ident : u16, $($rest:tt)*) => (
+                define!(string builder direct $ident; $index, $name : u16);
+                define!(string builder $ident; $index + 1, $($rest)*);
+            );
+
+            (string builder $ident:ident; $index:expr, $name:ident : i16 $($rest:tt)*) => (
+                define!(string builder direct $ident; $index, $name : i16);
+                define!(string builder $ident; $index + 1, $($rest)*);
+            );
+
+            (string builder $ident:ident; $index:expr, $name:ident : u32, $($rest:tt)*) => (
+                define!(string builder direct $ident; $index, $name : u32);
+                define!(string builder $ident; $index + 1, $($rest)*);
+            );
+
+            (string builder $ident:ident; $index:expr, $name:ident : i32, $($rest:tt)*) => (
+                define!(string builder direct $ident; $index, $name : i32);
+                define!(string builder $ident; $index + 1, $($rest)*);
+            );
+
+            (string builder $ident:ident; $index:expr, $name:ident : $ty:ty, $($rest:tt)*) => (
+                define!(string builder into $ident; $index, $name : $ty);
+                define!(string builder $ident; $index + 1, $($rest)*);
+            );
+
+            (string builder direct $ident:ident; $index:expr, $name:ident : $ty:ty) => (
+                impl<'a> Expansion<'a, $ident<'a>> {
+                    /// Set the given parameter.
+                    #[inline]
+                    pub fn $name(mut self, value: $ty) -> Self {
+                        self.params[$index] = value.into();
+                        self
+                    }
+                }
+            );
+
+            (string builder into $ident:ident; $index:expr, $name:ident : $ty:ty) => (
+                impl<'a> Expansion<'a, $ident<'a>> {
+                    /// Set the given parameter.
+                    #[inline]
+                    pub fn $name<T: Into<$ty>>(mut self, value: T) -> Self {
+                        self.params[$index] = value.into().into();
+                        self
+                    }
+                }
+            );
+        }
+        /// A trait for any object that will represent a terminal capability.
+        pub trait Capability<'a>: Sized
+        {
+            /// Returns the name of the capability in its long form.
+            fn name() -> &'static str;
+            /// Parse the capability from its raw value.
+            fn from(value: Option<&'a Value>) -> Option<Self>;
+            /// Convert the capability into its raw value.
+            fn into(self) -> Option<Value>;
+        }
+        /// Possible value types for capabilities.
+        #[derive(Eq, PartialEq, Clone, Debug)]
+        pub enum Value 
+        {
+            /// A boolean.
+            True,
+            /// A number.
+            Number(i32),
+            /// An ASCII string requiring expansion.
+            String(Vec<u8>),
+        }
+        /// Expansion helper struct.
+        #[derive(Debug)]
+        pub struct Expansion<'a, T: 'a + AsRef<[u8]>> 
+        {
+            string: &'a T,
+            params: [Parameter; 9],
+            context: Option<&'a mut Context>,
+        }
+
+        impl<'a, T: AsRef<[u8]>> Expansion<'a, T> 
+        {
+            /// Expand using the given context.
+            pub fn with<'c: 'a>(mut self, context: &'c mut Context) -> Self {
+                self.context = Some(context);
+                self
+            }
+
+            /// Expand to the given output.
+            pub fn to<W: Write>(self, output: W) -> error::Result<()> {
+                self.string.as_ref().expand(
+                    output,
+                    &self.params,
+                    self.context.unwrap_or(&mut Default::default()),
+                )
+            }
+
+            /// Expand into a vector.
+            pub fn to_vec(self) -> error::Result<Vec<u8>> {
+                let mut result = Vec::with_capacity(self.string.as_ref().len());
+                self.to(&mut result)?;
+                Ok(result)
+            }
+        }
+
+        impl From<()> for Value 
+        {
+            fn from(_: ()) -> Self {
+                Value::True
+            }
+        }
+
+        from!(number u8);
+        from!(number i8);
+        from!(number u16);
+        from!(number i16);
+        from!(number u32);
+        from!(number i32);
+
+        from!(string String);
+        from!(string ref str);
+        from!(string Vec<u8>);
+        from!(string ref [u8]);
+
+        define!(boolean AutoLeftMargin => "auto_left_margin");
+        define!(boolean AutoRightMargin => "auto_right_margin");
+        define!(boolean NoEscCtlc => "no_esc_ctlc");
+        define!(boolean CeolStandoutGlitch => "ceol_standout_glitch");
+        define!(boolean EatNewlineGlitch => "eat_newline_glitch");
+        define!(boolean EraseOverstrike => "erase_overstrike");
+        define!(boolean GenericType => "generic_type");
+        define!(boolean HardCopy => "hard_copy");
+        define!(boolean HasMetaKey => "has_meta_key");
+        define!(boolean HasStatusLine => "has_status_line");
+        define!(boolean InsertNullGlitch => "insert_null_glitch");
+        define!(boolean MemoryAbove => "memory_above");
+        define!(boolean MemoryBelow => "memory_below");
+        define!(boolean MoveInsertMode => "move_insert_mode");
+        define!(boolean MoveStandoutMode => "move_standout_mode");
+        define!(boolean OverStrike => "over_strike");
+        define!(boolean StatusLineEscOk => "status_line_esc_ok");
+        define!(boolean DestTabsMagicSmso => "dest_tabs_magic_smso");
+        define!(boolean TildeGlitch => "tilde_glitch");
+        define!(boolean TransparentUnderline => "transparent_underline");
+        define!(boolean XonXoff => "xon_xoff");
+        define!(boolean NeedsXonXoff => "needs_xon_xoff");
+        define!(boolean PrtrSilent => "prtr_silent");
+        define!(boolean HardCursor => "hard_cursor");
+        define!(boolean NonRevRmcup => "non_rev_rmcup");
+        define!(boolean NoPadChar => "no_pad_char");
+        define!(boolean NonDestScrollRegion => "non_dest_scroll_region");
+        define!(boolean CanChange => "can_change");
+        define!(boolean BackColorErase => "back_color_erase");
+        define!(boolean HueLightnessSaturation => "hue_lightness_saturation");
+        define!(boolean ColAddrGlitch => "col_addr_glitch");
+        define!(boolean CrCancelsMicroMode => "cr_cancels_micro_mode");
+        define!(boolean HasPrintWheel => "has_print_wheel");
+        define!(boolean RowAddrGlitch => "row_addr_glitch");
+        define!(boolean SemiAutoRightMargin => "semi_auto_right_margin");
+        define!(boolean CpiChangesRes => "cpi_changes_res");
+        define!(boolean LpiChangesRes => "lpi_changes_res");
+        define!(boolean BackspacesWithBs => "backspaces_with_bs");
+        define!(boolean CrtNoScrolling => "crt_no_scrolling");
+        define!(boolean NoCorrectlyWorkingCr => "no_correctly_working_cr");
+        define!(boolean GnuHasMetaKey => "gnu_has_meta_key");
+        define!(boolean LinefeedIsNewline => "linefeed_is_newline");
+        define!(boolean HasHardwareTabs => "has_hardware_tabs");
+        define!(boolean ReturnDoesClrEol => "return_does_clr_eol");
+
+        define!(number Columns => "columns");
+        define!(number InitTabs => "init_tabs");
+        define!(number Lines => "lines");
+        define!(number LinesOfMemory => "lines_of_memory");
+        define!(number MagicCookieGlitch => "magic_cookie_glitch");
+        define!(number PaddingBaudRate => "padding_baud_rate");
+        define!(number VirtualTerminal => "virtual_terminal");
+        define!(number WidthStatusLine => "width_status_line");
+        define!(number NumLabels => "num_labels");
+        define!(number LabelHeight => "label_height");
+        define!(number LabelWidth => "label_width");
+        define!(number MaxAttributes => "max_attributes");
+        define!(number MaximumWindows => "maximum_windows");
+        define!(number MaxColors => "max_colors");
+        define!(number MaxPairs => "max_pairs");
+        define!(number NoColorVideo => "no_color_video");
+        define!(number BufferCapacity => "buffer_capacity");
+        define!(number DotVertSpacing => "dot_vert_spacing");
+        define!(number DotHorzSpacing => "dot_horz_spacing");
+        define!(number MaxMicroAddress => "max_micro_address");
+        define!(number MaxMicroJump => "max_micro_jump");
+        define!(number MicroColSize => "micro_col_size");
+        define!(number MicroLineSize => "micro_line_size");
+        define!(number NumberOfPins => "number_of_pins");
+        define!(number OutputResChar => "output_res_char");
+        define!(number OutputResLine => "output_res_line");
+        define!(number OutputResHorzInch => "output_res_horz_inch");
+        define!(number OutputResVertInch => "output_res_vert_inch");
+        define!(number PrintRate => "print_rate");
+        define!(number WideCharSize => "wide_char_size");
+        define!(number Buttons => "buttons");
+        define!(number BitImageEntwining => "bit_image_entwining");
+        define!(number BitImageType => "bit_image_type");
+        define!(number MagicCookieGlitchUl => "magic_cookie_glitch_ul");
+        define!(number CarriageReturnDelay => "carriage_return_delay");
+        define!(number NewLineDelay => "new_line_delay");
+        define!(number BackspaceDelay => "backspace_delay");
+        define!(number HorizontalTabDelay => "horizontal_tab_delay");
+        define!(number NumberOfFunctionKeys => "number_of_function_keys");
+
+        define!(string BackTab => "back_tab");
+        define!(string Bell => "bell");
+        define!(string CarriageReturn => "carriage_return");
+        define!(string ClearAllTabs => "clear_all_tabs");
+        define!(string ClearScreen => "clear_screen");
+        define!(string ClrEol => "clr_eol");
+        define!(string ClrEos => "clr_eos");
+        define!(string CommandCharacter => "command_character");
+        define!(string CursorDown => "cursor_down");
+        define!(string CursorHome => "cursor_home");
+        define!(string CursorInvisible => "cursor_invisible");
+        define!(string CursorLeft => "cursor_left");
+        define!(string CursorMemAddress => "cursor_mem_address");
+        define!(string CursorNormal => "cursor_normal");
+        define!(string CursorRight => "cursor_right");
+        define!(string CursorToLl => "cursor_to_ll");
+        define!(string CursorUp => "cursor_up");
+        define!(string CursorVisible => "cursor_visible");
+        define!(string DeleteCharacter => "delete_character");
+        define!(string DeleteLine => "delete_line");
+        define!(string DisStatusLine => "dis_status_line");
+        define!(string DownHalfLine => "down_half_line");
+        define!(string EnterAltCharsetMode => "enter_alt_charset_mode");
+        define!(string EnterBlinkMode => "enter_blink_mode");
+        define!(string EnterBoldMode => "enter_bold_mode");
+        define!(string EnterCaMode => "enter_ca_mode");
+        define!(string EnterDeleteMode => "enter_delete_mode");
+        define!(string EnterDimMode => "enter_dim_mode");
+        define!(string EnterInsertMode => "enter_insert_mode");
+        define!(string EnterSecureMode => "enter_secure_mode");
+        define!(string EnterProtectedMode => "enter_protected_mode");
+        define!(string EnterReverseMode => "enter_reverse_mode");
+        define!(string EnterStandoutMode => "enter_standout_mode");
+        define!(string EnterUnderlineMode => "enter_underline_mode");
+        define!(string ExitAltCharsetMode => "exit_alt_charset_mode");
+        define!(string ExitAttributeMode => "exit_attribute_mode");
+        define!(string ExitCaMode => "exit_ca_mode");
+        define!(string ExitDeleteMode => "exit_delete_mode");
+        define!(string ExitInsertMode => "exit_insert_mode");
+        define!(string ExitStandoutMode => "exit_standout_mode");
+        define!(string ExitUnderlineMode => "exit_underline_mode");
+        define!(string FlashScreen => "flash_screen");
+        define!(string FormFeed => "form_feed");
+        define!(string FromStatusLine => "from_status_line");
+        define!(string Init1String => "init_1string");
+        define!(string Init2String => "init_2string");
+        define!(string Init3String => "init_3string");
+        define!(string InitFile => "init_file");
+        define!(string InsertCharacter => "insert_character");
+        define!(string InsertLine => "insert_line");
+        define!(string InsertPadding => "insert_padding");
+        define!(string KeyBackspace => "key_backspace");
+        define!(string KeyCATab => "key_catab");
+        define!(string KeyClear => "key_clear");
+        define!(string KeyCTab => "key_ctab");
+        define!(string KeyDc => "key_dc");
+        define!(string KeyDl => "key_dl");
+        define!(string KeyDown => "key_down");
+        define!(string KeyEic => "key_eic");
+        define!(string KeyEol => "key_eol");
+        define!(string KeyEos => "key_eos");
+        define!(string KeyF0 => "key_f0");
+        define!(string KeyF1 => "key_f1");
+        define!(string KeyF10 => "key_f10");
+        define!(string KeyF2 => "key_f2");
+        define!(string KeyF3 => "key_f3");
+        define!(string KeyF4 => "key_f4");
+        define!(string KeyF5 => "key_f5");
+        define!(string KeyF6 => "key_f6");
+        define!(string KeyF7 => "key_f7");
+        define!(string KeyF8 => "key_f8");
+        define!(string KeyF9 => "key_f9");
+        define!(string KeyHome => "key_home");
+        define!(string KeyIc => "key_ic");
+        define!(string KeyIl => "key_il");
+        define!(string KeyLeft => "key_left");
+        define!(string KeyLl => "key_ll");
+        define!(string KeyNPage => "key_npage");
+        define!(string KeyPPage => "key_ppage");
+        define!(string KeyRight => "key_right");
+        define!(string KeySf => "key_sf");
+        define!(string KeySr => "key_sr");
+        define!(string KeySTab => "key_stab");
+        define!(string KeyUp => "key_up");
+        define!(string KeypadLocal => "keypad_local");
+        define!(string KeypadXmit => "keypad_xmit");
+        define!(string LabF0 => "lab_f0");
+        define!(string LabF1 => "lab_f1");
+        define!(string LabF10 => "lab_f10");
+        define!(string LabF2 => "lab_f2");
+        define!(string LabF3 => "lab_f3");
+        define!(string LabF4 => "lab_f4");
+        define!(string LabF5 => "lab_f5");
+        define!(string LabF6 => "lab_f6");
+        define!(string LabF7 => "lab_f7");
+        define!(string LabF8 => "lab_f8");
+        define!(string LabF9 => "lab_f9");
+        define!(string MetaOff => "meta_off");
+        define!(string MetaOn => "meta_on");
+        define!(string Newline => "newline");
+        define!(string PadChar => "pad_char");
+        define!(string PKeyKey => "pkey_key");
+        define!(string PKeyLocal => "pkey_local");
+        define!(string PKeyXmit => "pkey_xmit");
+        define!(string PrintScreen => "print_screen");
+        define!(string PrtrOff => "prtr_off");
+        define!(string PrtrOn => "prtr_on");
+        define!(string RepeatChar => "repeat_char");
+        define!(string Reset1String => "reset_1string");
+        define!(string Reset2String => "reset_2string");
+        define!(string Reset3String => "reset_3string");
+        define!(string ResetFile => "reset_file");
+        define!(string RestoreCursor => "restore_cursor");
+        define!(string SaveCursor => "save_cursor");
+        define!(string ScrollForward => "scroll_forward");
+        define!(string ScrollReverse => "scroll_reverse");
+        define!(string SetTab => "set_tab");
+        define!(string SetWindow => "set_window");
+        define!(string Tab => "tab");
+        define!(string ToStatusLine => "to_status_line");
+        define!(string UnderlineChar => "underline_char");
+        define!(string UpHalfLine => "up_half_line");
+        define!(string InitProg => "init_prog");
+        define!(string KeyA1 => "key_a1");
+        define!(string KeyA3 => "key_a3");
+        define!(string KeyB2 => "key_b2");
+        define!(string KeyC1 => "key_c1");
+        define!(string KeyC3 => "key_c3");
+        define!(string PrtrNon => "prtr_non");
+        define!(string CharPadding => "char_padding");
+        define!(string AcsChars => "acs_chars");
+        define!(string PlabNorm => "plab_norm");
+        define!(string KeyBTab => "key_btab");
+        define!(string EnterXonMode => "enter_xon_mode");
+        define!(string ExitXonMode => "exit_xon_mode");
+        define!(string EnterAmMode => "enter_am_mode");
+        define!(string ExitAmMode => "exit_am_mode");
+        define!(string XonCharacter => "xon_character");
+        define!(string XoffCharacter => "xoff_character");
+        define!(string EnaAcs => "ena_acs");
+        define!(string LabelOn => "label_on");
+        define!(string LabelOff => "label_off");
+        define!(string KeyBeg => "key_beg");
+        define!(string KeyCancel => "key_cancel");
+        define!(string KeyClose => "key_close");
+        define!(string KeyCommand => "key_command");
+        define!(string KeyCopy => "key_copy");
+        define!(string KeyCreate => "key_create");
+        define!(string KeyEnd => "key_end");
+        define!(string KeyEnter => "key_enter");
+        define!(string KeyExit => "key_exit");
+        define!(string KeyFind => "key_find");
+        define!(string KeyHelp => "key_help");
+        define!(string KeyMark => "key_mark");
+        define!(string KeyMessage => "key_message");
+        define!(string KeyMove => "key_move");
+        define!(string KeyNext => "key_next");
+        define!(string KeyOpen => "key_open");
+        define!(string KeyOptions => "key_options");
+        define!(string KeyPrevious => "key_previous");
+        define!(string KeyPrint => "key_print");
+        define!(string KeyRedo => "key_redo");
+        define!(string KeyReference => "key_reference");
+        define!(string KeyRefresh => "key_refresh");
+        define!(string KeyReplace => "key_replace");
+        define!(string KeyRestart => "key_restart");
+        define!(string KeyResume => "key_resume");
+        define!(string KeySave => "key_save");
+        define!(string KeySuspend => "key_suspend");
+        define!(string KeyUndo => "key_undo");
+        define!(string KeySBeg => "key_sbeg");
+        define!(string KeySCancel => "key_scancel");
+        define!(string KeySCommand => "key_scommand");
+        define!(string KeySCopy => "key_scopy");
+        define!(string KeySCreate => "key_screate");
+        define!(string KeySDc => "key_sdc");
+        define!(string KeySDl => "key_sdl");
+        define!(string KeySelect => "key_select");
+        define!(string KeySEnd => "key_send");
+        define!(string KeySEol => "key_seol");
+        define!(string KeySExit => "key_sexit");
+        define!(string KeySFind => "key_sfind");
+        define!(string KeySHelp => "key_shelp");
+        define!(string KeySHome => "key_shome");
+        define!(string KeySIc => "key_sic");
+        define!(string KeySLeft => "key_sleft");
+        define!(string KeySMessage => "key_smessage");
+        define!(string KeySMove => "key_smove");
+        define!(string KeySNext => "key_snext");
+        define!(string KeySOptions => "key_soptions");
+        define!(string KeySPrevious => "key_sprevious");
+        define!(string KeySPrint => "key_sprint");
+        define!(string KeySRedo => "key_sredo");
+        define!(string KeySReplace => "key_sreplace");
+        define!(string KeySRight => "key_sright");
+        define!(string KeySRsume => "key_srsume");
+        define!(string KeySSave => "key_ssave");
+        define!(string KeySSuspend => "key_ssuspend");
+        define!(string KeySUndo => "key_sundo");
+        define!(string ReqForInput => "req_for_input");
+        define!(string KeyF11 => "key_f11");
+        define!(string KeyF12 => "key_f12");
+        define!(string KeyF13 => "key_f13");
+        define!(string KeyF14 => "key_f14");
+        define!(string KeyF15 => "key_f15");
+        define!(string KeyF16 => "key_f16");
+        define!(string KeyF17 => "key_f17");
+        define!(string KeyF18 => "key_f18");
+        define!(string KeyF19 => "key_f19");
+        define!(string KeyF20 => "key_f20");
+        define!(string KeyF21 => "key_f21");
+        define!(string KeyF22 => "key_f22");
+        define!(string KeyF23 => "key_f23");
+        define!(string KeyF24 => "key_f24");
+        define!(string KeyF25 => "key_f25");
+        define!(string KeyF26 => "key_f26");
+        define!(string KeyF27 => "key_f27");
+        define!(string KeyF28 => "key_f28");
+        define!(string KeyF29 => "key_f29");
+        define!(string KeyF30 => "key_f30");
+        define!(string KeyF31 => "key_f31");
+        define!(string KeyF32 => "key_f32");
+        define!(string KeyF33 => "key_f33");
+        define!(string KeyF34 => "key_f34");
+        define!(string KeyF35 => "key_f35");
+        define!(string KeyF36 => "key_f36");
+        define!(string KeyF37 => "key_f37");
+        define!(string KeyF38 => "key_f38");
+        define!(string KeyF39 => "key_f39");
+        define!(string KeyF40 => "key_f40");
+        define!(string KeyF41 => "key_f41");
+        define!(string KeyF42 => "key_f42");
+        define!(string KeyF43 => "key_f43");
+        define!(string KeyF44 => "key_f44");
+        define!(string KeyF45 => "key_f45");
+        define!(string KeyF46 => "key_f46");
+        define!(string KeyF47 => "key_f47");
+        define!(string KeyF48 => "key_f48");
+        define!(string KeyF49 => "key_f49");
+        define!(string KeyF50 => "key_f50");
+        define!(string KeyF51 => "key_f51");
+        define!(string KeyF52 => "key_f52");
+        define!(string KeyF53 => "key_f53");
+        define!(string KeyF54 => "key_f54");
+        define!(string KeyF55 => "key_f55");
+        define!(string KeyF56 => "key_f56");
+        define!(string KeyF57 => "key_f57");
+        define!(string KeyF58 => "key_f58");
+        define!(string KeyF59 => "key_f59");
+        define!(string KeyF60 => "key_f60");
+        define!(string KeyF61 => "key_f61");
+        define!(string KeyF62 => "key_f62");
+        define!(string KeyF63 => "key_f63");
+        define!(string ClrBol => "clr_bol");
+        define!(string ClearMargins => "clear_margins");
+        define!(string SetLeftMargin => "set_left_margin");
+        define!(string SetRightMargin => "set_right_margin");
+        define!(string LabelFormat => "label_format");
+        define!(string SetClock => "set_clock");
+        define!(string DisplayClock => "display_clock");
+        define!(string RemoveClock => "remove_clock");
+        define!(string CreateWindow => "create_window");
+        define!(string GotoWindow => "goto_window");
+        define!(string Hangup => "hangup");
+        define!(string DialPhone => "dial_phone");
+        define!(string QuickDial => "quick_dial");
+        define!(string Tone => "tone");
+        define!(string Pulse => "pulse");
+        define!(string FlashHook => "flash_hook");
+        define!(string FixedPause => "fixed_pause");
+        define!(string WaitTone => "wait_tone");
+        define!(string User0 => "user0");
+        define!(string User1 => "user1");
+        define!(string User2 => "user2");
+        define!(string User3 => "user3");
+        define!(string User4 => "user4");
+        define!(string User5 => "user5");
+        define!(string User6 => "user6");
+        define!(string User7 => "user7");
+        define!(string User8 => "user8");
+        define!(string User9 => "user9");
+        define!(string OrigPair => "orig_pair");
+        define!(string OrigColors => "orig_colors");
+        define!(string InitializeColor => "initialize_color");
+        define!(string InitializePair => "initialize_pair");
+        define!(string SetColorPair => "set_color_pair");
+        define!(string ChangeCharPitch => "change_char_pitch");
+        define!(string ChangeLinePitch => "change_line_pitch");
+        define!(string ChangeResHorz => "change_res_horz");
+        define!(string ChangeResVert => "change_res_vert");
+        define!(string DefineChar => "define_char");
+        define!(string EnterDoublewideMode => "enter_doublewide_mode");
+        define!(string EnterDraftQuality => "enter_draft_quality");
+        define!(string EnterItalicsMode => "enter_italics_mode");
+        define!(string EnterLeftwardMode => "enter_leftward_mode");
+        define!(string EnterMicroMode => "enter_micro_mode");
+        define!(string EnterNearLetterQuality => "enter_near_letter_quality");
+        define!(string EnterNormalQuality => "enter_normal_quality");
+        define!(string EnterShadowMode => "enter_shadow_mode");
+        define!(string EnterSubscriptMode => "enter_subscript_mode");
+        define!(string EnterSuperscriptMode => "enter_superscript_mode");
+        define!(string EnterUpwardMode => "enter_upward_mode");
+        define!(string ExitDoublewideMode => "exit_doublewide_mode");
+        define!(string ExitItalicsMode => "exit_italics_mode");
+        define!(string ExitLeftwardMode => "exit_leftward_mode");
+        define!(string ExitMicroMode => "exit_micro_mode");
+        define!(string ExitShadowMode => "exit_shadow_mode");
+        define!(string ExitSubscriptMode => "exit_subscript_mode");
+        define!(string ExitSuperscriptMode => "exit_superscript_mode");
+        define!(string ExitUpwardMode => "exit_upward_mode");
+        define!(string MicroColumnAddress => "micro_column_address");
+        define!(string MicroDown => "micro_down");
+        define!(string MicroLeft => "micro_left");
+        define!(string MicroRight => "micro_right");
+        define!(string MicroRowAddress => "micro_row_address");
+        define!(string MicroUp => "micro_up");
+        define!(string OrderOfPins => "order_of_pins");
+        define!(string SelectCharSet => "select_char_set");
+        define!(string SetBottomMargin => "set_bottom_margin");
+        define!(string SetBottomMarginParm => "set_bottom_margin_parm");
+        define!(string SetLeftMarginParm => "set_left_margin_parm");
+        define!(string SetRightMarginParm => "set_right_margin_parm");
+        define!(string SetTopMargin => "set_top_margin");
+        define!(string SetTopMarginParm => "set_top_margin_parm");
+        define!(string StartBitImage => "start_bit_image");
+        define!(string StartCharSetDef => "start_char_set_def");
+        define!(string StopBitImage => "stop_bit_image");
+        define!(string StopCharSetDef => "stop_char_set_def");
+        define!(string SubscriptCharacters => "subscript_characters");
+        define!(string SuperscriptCharacters => "superscript_characters");
+        define!(string TheseCauseCr => "these_cause_cr");
+        define!(string ZeroMotion => "zero_motion");
+        define!(string CharSetNames => "char_set_names");
+        define!(string KeyMouse => "key_mouse");
+        define!(string MouseInfo => "mouse_info");
+        define!(string ReqMousePos => "req_mouse_pos");
+        define!(string GetMouse => "get_mouse");
+        define!(string PkeyPlab => "pkey_plab");
+        define!(string DeviceType => "device_type");
+        define!(string CodeSetInit => "code_set_init");
+        define!(string Set0DesSeq => "set0_des_seq");
+        define!(string Set1DesSeq => "set1_des_seq");
+        define!(string Set2DesSeq => "set2_des_seq");
+        define!(string Set3DesSeq => "set3_des_seq");
+        define!(string SetLrMargin => "set_lr_margin");
+        define!(string SetTbMargin => "set_tb_margin");
+        define!(string BitImageRepeat => "bit_image_repeat");
+        define!(string BitImageNewline => "bit_image_newline");
+        define!(string BitImageCarriageReturn => "bit_image_carriage_return");
+        define!(string ColorNames => "color_names");
+        define!(string DefineBitImageRegion => "define_bit_image_region");
+        define!(string EndBitImageRegion => "end_bit_image_region");
+        define!(string SetColorBand => "set_color_band");
+        define!(string SetPageLength => "set_page_length");
+        define!(string DisplayPcChar => "display_pc_char");
+        define!(string EnterPcCharsetMode => "enter_pc_charset_mode");
+        define!(string ExitPcCharsetMode => "exit_pc_charset_mode");
+        define!(string EnterScancodeMode => "enter_scancode_mode");
+        define!(string ExitScancodeMode => "exit_scancode_mode");
+        define!(string PcTermOptions => "pc_term_options");
+        define!(string ScancodeEscape => "scancode_escape");
+        define!(string AltScancodeEsc => "alt_scancode_esc");
+        define!(string EnterHorizontalHlMode => "enter_horizontal_hl_mode");
+        define!(string EnterLeftHlMode => "enter_left_hl_mode");
+        define!(string EnterLowHlMode => "enter_low_hl_mode");
+        define!(string EnterRightHlMode => "enter_right_hl_mode");
+        define!(string EnterTopHlMode => "enter_top_hl_mode");
+        define!(string EnterVerticalHlMode => "enter_vertical_hl_mode");
+        define!(string SetAAttributes => "set_a_attributes");
+        define!(string SetPglenInch => "set_pglen_inch");
+        define!(string TermcapInit2 => "termcap_init2");
+        define!(string TermcapReset => "termcap_reset");
+        define!(string LinefeedIfNotLf => "linefeed_if_not_lf");
+        define!(string BackspaceIfNotBs => "backspace_if_not_bs");
+        define!(string OtherNonFunctionKeys => "other_non_function_keys");
+        define!(string ArrowKeyMap => "arrow_key_map");
+        define!(string AcsULcorner => "acs_ulcorner");
+        define!(string AcsLLcorner => "acs_llcorner");
+        define!(string AcsURcorner => "acs_urcorner");
+        define!(string AcsLRcorner => "acs_lrcorner");
+        define!(string AcsLTee => "acs_ltee");
+        define!(string AcsRTee => "acs_rtee");
+        define!(string AcsBTee => "acs_btee");
+        define!(string AcsTTee => "acs_ttee");
+        define!(string AcsHLine => "acs_hline");
+        define!(string AcsVLine => "acs_vline");
+        define!(string AcsPlus => "acs_plus");
+        define!(string MemoryLock => "memory_lock");
+        define!(string MemoryUnlock => "memory_unlock");
+        define!(string BoxChars1 => "box_chars_1");
+
+        define!(string ChangeScrollRegion => "change_scroll_region";
+            top:    u32,
+            bottom: u32);
+
+        define!(string ColumnAddress => "column_address";
+            x: u32);
+
+        define!(string CursorAddress => "cursor_address";
+            y: u32,
+            x: u32);
+
+        define!(string EraseChars => "erase_chars";
+            count: u32);
+
+        define!(string ParmDch => "parm_dch";
+            count: u32);
+
+        define!(string ParmDeleteLine => "parm_delete_line";
+            count: u32);
+
+        define!(string ParmDownCursor => "parm_down_cursor";
+            count: u32);
+
+        define!(string ParmIch => "parm_ich";
+            count: u32);
+
+        define!(string ParmIndex => "parm_index";
+            count: u32);
+
+        define!(string ParmInsertLine => "parm_insert_line";
+            count: u32);
+
+        define!(string ParmLeftCursor => "parm_left_cursor";
+            count: u32);
+
+        define!(string ParmRightCursor => "parm_right_cursor";
+            count: u32);
+
+        define!(string ParmRindex => "parm_rindex";
+            count: u32);
+
+        define!(string ParmUpCursor => "parm_up_cursor";
+            count: u32);
+
+        define!(string ParmDownMicro => "parm_down_micro";
+            count: u32);
+
+        define!(string ParmLeftMicro => "parm_left_micro";
+            count: u32);
+
+        define!(string ParmRightMicro => "parm_right_micro";
+            count: u32);
+
+        define!(string ParmUpMicro => "parm_up_micro";
+            count: u32);
+
+        define!(string RowAddress => "row_address";
+            y: u32);
+
+        define!(string SetAttributes => "set_attributes";
+            standout:    bool,
+            underline:   bool,
+            reverse:     bool,
+            blink:       bool,
+            dim:         bool,
+            bold:        bool,
+            invisible:   bool,
+            protected:   bool,
+            alt_charset: bool);
+
+        define!(string SetAForeground => "set_a_foreground";
+            color: u8);
+
+        define!(string SetABackground => "set_a_background";
+            color: u8);
+
+        define!(string SetForeground => "set_foreground";
+            color: u8);
+
+        define!(string SetBackground => "set_background";
+            color: u8);
+            
+        define!(boolean XTermTitle => "XT");
+        define!(boolean BrightAttribute => "AX");
+        define!(boolean XTermMouse => "XM");
+        
+        define!(boolean TrueColor => "Tc");
+
+        define!(string SetClipboard => "Ms";
+            selection: String,
+            content:   Vec<u8>);
+
+        define!(string SetCursorStyle => "Ss";
+            kind: u8);
+
+        define!(string ResetCursorStyle => "Se");
+        
+        define!(string SetTrueColorForeground => "8f";
+            r: u8,
+            g: u8,
+            b: u8);
+
+        define!(string SetTrueColorBackground => "8b";
+            r: u8,
+            g: u8,
+            b: u8);
+
+        define!(string ResetCursorColor => "Cr");
+
+        define!(string SetCursorColor => "Cs";
+            color: String);
+    }
     /// CLI completions
     pub mod completers
     {
@@ -27924,38 +31292,39 @@ pub mod terminal
     {
         use ::
         {
-            mem::replace,
-            ops::Range,
-            sync::Arc,
-            time::Instant,
+            io::
+            {
+                reader::{ BindingIter, InputState, ReadLock, ReadResult },
+                writer::{ BLINK_DURATION, display_str, Digit, Display, HistoryIter, PromptType, Writer, WriteLock },
+            },
+            mem::{ replace },
+            ops::{ Range },
+            sync::{ Arc },
+            terminal::{ CursorMode, Signal, Size, Terminals },
+            time::{ Instant },
             *,
         };
         /*
-        use mortal::FindResult;
+            use mortal::FindResult;
 
-        use crate::chars::{is_ctrl, is_printable, DELETE, EOF};
-        use crate::command::{Category, Command};
-        use crate::complete::Completion;
-        use crate::function::Function;
-        use crate::reader::{BindingIter, InputState, ReadLock, ReadResult};
-        use crate::table::{format_columns, Line, Table};
-        use crate::terminal::{CursorMode, Signal, Size, Terminal};
-        use crate::util::{
-            get_open_paren, find_matching_paren, first_word,
-            longest_common_prefix, repeat_char,
-            back_n_words, forward_n_words,
-            backward_char, forward_char, backward_word, forward_word,
-            word_start, word_end, RangeArgument,
-        };
-        use crate::variables::VariableIter;
-        use crate::writer::{
-            BLINK_DURATION, display_str,
-            Digit, Display, HistoryIter, PromptType, Writer, WriteLock,
-        };
+            use linefeed::chars::{is_ctrl, is_printable, DELETE, EOF};
+            use linefeed::command::{Category, Command};
+            use linefeed::complete::Completion;
+            use linefeed::function::Function;
+            use linefeed::table::{format_columns, Line, Table};
+            use linefeed::terminal::{CursorMode, Signal, Size, Terminal};
+            use linefeed::util::{
+                get_open_paren, find_matching_paren, first_word,
+                longest_common_prefix, repeat_char,
+                back_n_words, forward_n_words,
+                backward_char, forward_char, backward_word, forward_word,
+                word_start, word_end, RangeArgument,
+            };
+            use linefeed::variables::VariableIter;
 
-        use self::main::get_prompt_string;
-        use self::main::render_prompt;
-        pub use self::multilines::EnterFunction;
+            use self::main::get_prompt_string;
+            use self::main::render_prompt;
+            pub use self::multilines::EnterFunction;
         */
         /// Provides access to the current state of input while a `read_line` call is in progress.
         pub struct Prompter<'a, 'b: 'a, Term: 'b + Terminals>
@@ -29857,6 +33226,10 @@ pub mod time
     pub mod c
     {
         pub use ::timed::{ * };
+        use ::
+        {
+            fmt, 
+        };
 
         #[derive( Debug, PartialEq, Eq )]
         pub struct DateTime
@@ -29912,13 +33285,12 @@ pub mod time
             }
         }
     }
-
 }
 /// A contiguous growable array type with heap-allocated contents, written Vec<T>.
 pub mod vec
 {
-    pub use smallvec::{ * };
     pub use std::vec::{ * };
+    //pub use smallvec::{ Drain as SmallDrain, IntoIter as SmallIntoIter, * };
 }
 
 pub unsafe fn domain()
@@ -30093,4 +33465,4 @@ fn main()
     }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 30096
+// 33468
