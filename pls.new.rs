@@ -7,16 +7,18 @@
 #![allow
 ( 
     dead_code,
+    deprecated,
     non_camel_case_types,
     unknown_lints,
     unreachable_patterns,
     unused_imports,
     unused_macros,
-    unused_variables,
- )]
+    unused_variables
+)]
 
 #[macro_use] extern crate bitflags;
 #[macro_use] extern crate lazy_static;
+#[macro_use] extern crate winapi;
 /*
 */
 extern crate fnv;
@@ -641,7 +643,7 @@ pub mod char
                 '\'' => res.push_str( r"\'"),
                 '"' => res.push_str( r#"\""#),
                 
-                ch if is_ctrl( ch ) =>
+                ch if is::ctrl( ch ) =>
                 {
                     res.push_str( r"\C-" );
                     res.push( unctrl_lower( ch ) );
@@ -1896,21 +1898,19 @@ pub mod database
     {
         use ::
         {
+            collections::{ HashMap },
             error::metadata::{ self as error, Error },
+            fnv::{ FnvHasher },
+            fs::{ self, File },
+            hash::{ BuildHasherDefault },
+            io::{ Read },
+            path::{ Path, PathBuf },
             *,
         };
         /*
-        use fnv::FnvHasher;
-        use std::collections::HashMap;
-        use std::env;
-        use std::fs::{self, File};
-        use std::hash::BuildHasherDefault;
-        use std::io::Read;
-        use std::path::{Path, PathBuf};
-
-        use crate::capability::{Capability, Value};
-        use crate::names;
-        use crate::parser::compiled;
+        use terminfo::capability::{Capability, Value};
+        use terminfo::names;
+        use terminfo::parser::compiled;
         */
         /// A capability database.
         #[derive(Eq, PartialEq, Clone, Debug)]
@@ -2237,13 +2237,6 @@ pub mod env
 /// Expansions
 pub mod expand
 {
-    /*
-    use std::char;
-    use std::io::{BufWriter, Write};
-
-    use crate::error;
-    use crate::parser::expansion::*;
-    */
     use ::
     {
         borrow::{ Cow },
@@ -2252,6 +2245,7 @@ pub mod expand
         io::{ BufWriter, ErrorKind, Write },
         os::unix::fs::PermissionsExt,
         parsers::metadata::expansion::*,
+        primitive::{ Tokens },
         regex::{ Regex },
         shell::{ env_in_token, Shell },
         *,
@@ -2284,8 +2278,8 @@ pub mod expand
         };
     }
     /*
-    fn expand_alias( sh:&Shell, tokens:&mut types::Tokens ) */
-    pub fn alias( sh:&Shell, tokens:&mut types::Tokens )
+    fn expand_alias( sh:&Shell, tokens:&mut Tokens ) */
+    pub fn alias( sh:&Shell, tokens:&mut Tokens )
     {
         let mut idx: usize = 0;
         let mut buff = Vec::new();
@@ -2373,8 +2367,8 @@ pub mod expand
         s
     }
     /*
-    pub fn expand_glob( tokens:&mut types::Tokens )  */
-    pub fn glob( tokens:&mut types::Tokens ) 
+    pub fn expand_glob( tokens:&mut Tokens )  */
+    pub fn glob( tokens:&mut Tokens ) 
     {
         let mut idx: usize = 0;
         let mut buff = Vec::new();
@@ -2455,7 +2449,7 @@ pub mod expand
         }
     }
 
-    fn expand_one_env( sh:&Shell, token:&str ) -> String 
+    pub fn expand_one_env( sh:&Shell, token:&str ) -> String 
     {
         unsafe
         {
@@ -2493,8 +2487,8 @@ pub mod expand
         }
     }
     /*
-    expand_brace( tokens:&mut types::Tokens ) */
-    fn brace( tokens:&mut types::Tokens )
+    expand_brace( tokens:&mut Tokens ) */
+    pub fn brace( tokens:&mut Tokens )
     {
         let mut idx: usize = 0;
         let mut buff = Vec::new();
@@ -2529,8 +2523,8 @@ pub mod expand
         }
     }
     /*
-    expand_brace_range( tokens:&mut types::Tokens ) */
-    pub fn brace_range( tokens:&mut types::Tokens )
+    expand_brace_range( tokens:&mut Tokens ) */
+    pub fn brace_range( tokens:&mut Tokens )
     {
         let re;
 
@@ -2627,8 +2621,8 @@ pub mod expand
         }
     }
     /*
-    fn expand_home( tokens:&mut types::Tokens ) */
-    pub fn home( tokens:&mut types::Tokens )
+    fn expand_home( tokens:&mut Tokens ) */
+    pub fn home( tokens:&mut Tokens )
     {
         let mut idx: usize = 0;
         let mut buff = Vec::new();
@@ -2658,8 +2652,8 @@ pub mod expand
         }
     }
     /*
-    pub fn expand_env( sh:&Shell, tokens:&mut types::Tokens ) */
-    pub fn env( sh:&Shell, tokens:&mut types::Tokens )
+    pub fn expand_env( sh:&Shell, tokens:&mut Tokens ) */
+    pub fn env( sh:&Shell, tokens:&mut Tokens )
     {
         let mut idx: usize = 0;
         let mut buff = Vec::new();
@@ -2770,7 +2764,6 @@ pub mod expand
     from!(string ref str);
     from!(string Vec<u8>);
     from!(string ref [u8]);
-
     /// The expansion context.
     #[derive(Eq, PartialEq, Default, Debug)]
     pub struct Context 
@@ -4714,6 +4707,10 @@ pub mod is
     #[inline(always)] pub fn eol(ch: u8) -> bool
     { unsafe { ASCII.get_unchecked(ch as usize) & EOL == EOL } }
     /*
+    is_printable( ... ) -> bool */
+    /// Returns whether the character is printable.
+    pub fn printable(c: char) -> bool { c == '\t' || c == '\n' || !(c == '\0' || ctrl(c)) }
+    /*
     is_printable_no_pipe( ... ) -> bool */
     #[inline(always)] pub fn printable_no_pipe(ch: u8) -> bool
     { unsafe { ASCII.get_unchecked(ch as usize) & (PRINT | PIPE) == PRINT } }
@@ -4898,6 +4895,15 @@ pub mod is
         if !re_contains(line, r"[0-9]+") { return false; }
         if !re_contains(line, r"\+|\-|\*|/|\^") { return false; }
         contains(line, r"^[ 0-9\.\(\)\+\-\*/\^]+[\.0-9 \)]$")
+    }
+    /*
+    is_command( ... ) -> bool */
+    fn command( word: &str ) -> bool
+    {
+        if is::builtin(word) { return true; }
+        if let Ok(aliases) = ALIASES.lock() { if aliases.contains(word) { return true; } }
+        if let Ok(commands) = AVAILABLE_COMMANDS.lock() { if commands.contains(word) { return true; } }
+        false
     }
 }
 /// Traits, helpers, and type definitions for core I/O functionality.
@@ -5756,6 +5762,10 @@ pub mod io
             iter::{ repeat, Skip },
             ops::{ Deref, DerefMut, Range },
             sync::{ MutexGuard },
+            system::
+            {
+                CursorMode,
+            },
             terminal::{ Size, Terminals },
             time::{ Duration, Instant },
             *,
@@ -5770,10 +5780,8 @@ pub mod io
         use crate::chars::{is_ctrl, unctrl, ESCAPE, RUBOUT};
         use crate::reader::{START_INVISIBLE, END_INVISIBLE};
         use crate::terminal::{CursorMode, Size, Terminal, TerminalWriter};
-        use crate::util::{
-            backward_char, forward_char, backward_search_char, forward_search_char,
-            filter_visible, is_combining_mark, is_wide, RangeArgument,
-        };
+        use crate::util::
+        { backward_char, forward_char, backward_search_char, forward_search_char, filter_visible, is_combining_mark, is_wide, RangeArgument };
         */
         /// Duration to wait for input when "blinking"
         pub const BLINK_DURATION: Duration = Duration::from_millis( 500 );
@@ -6274,41 +6282,49 @@ pub mod io
                 self.show_search_match( next_match )
             }
 
-            fn search_history_backward( &self, s:&str, include_cur:bool )
-                    -> Option<( Option<usize>, usize )> {
+            fn search_history_backward( &self, s:&str, include_cur:bool ) -> Option<( Option<usize>, usize )>
+            {
                 let mut idx = self.history_index;
                 let mut pos = Some( self.cursor );
 
-                if include_cur && !self.search_failed {
-                    if let Some( p ) = pos {
+                if include_cur && !self.search_failed
+                {
+                    if let Some( p ) = pos 
+                    {
                         if self.get_history( idx ).is_char_boundary( p + s.len() )
-            {
+                        {
                             pos = Some( p + s.len() );
                         }
                     }
                 }
-
-                loop {
+                
+                loop
+                {
                     let line = self.get_history( idx );
 
                     match line[..pos.unwrap_or( line.len() )].rfind( s )
-            {
-                        Some( found ) => {
+                    {
+                        Some( found ) =>
+                        {
                             pos = Some( found );
                             break;
                         }
-                        None => {
-                            match idx {
+
+                        None =>
+                        {
+                            match idx
+                            {
                                 Some( 0 ) => return None,
-                                Some( n ) => {
+                                Some( n ) =>
+                                {
                                     idx = Some( n - 1 );
                                     pos = None;
                                 }
-                                None => {
-                                    if self.history.is_empty()
-            {
-                                        return None;
-                                    } else {
+                                None =>
+                                {
+                                    if self.history.is_empty() { return None; }                                    
+                                    else
+                                    {
                                         idx = Some( self.history.len() - 1 );
                                         pos = None;
                                     }
@@ -6321,38 +6337,36 @@ pub mod io
                 pos.map( |pos| ( idx, pos ) )
             }
 
-            fn search_history_forward( &self, s:&str, include_cur:bool )
-                    -> Option<( Option<usize>, usize )> {
+            fn search_history_forward( &self, s:&str, include_cur:bool ) -> Option<( Option<usize>, usize )>
+            {
                 let mut idx = self.history_index;
                 let mut pos = Some( self.cursor );
 
-                if !include_cur {
-                    if let Some( p ) = pos {
-                        pos = Some( forward_char( 1, self.get_history( idx ), p ) );
-                    }
-                }
+                if !include_cur
+                { if let Some( p ) = pos { pos = Some( forward_char( 1, self.get_history( idx ), p ) ); } }
 
-                loop {
+                loop
+                {
                     let line = self.get_history( idx );
 
                     match line[pos.unwrap_or( 0 )..].find( s )
-            {
-                        Some( found ) => {
+                    {
+                        Some( found ) =>
+                        {
                             pos = pos.map( |n| n + found ).or( Some( found ) );
                             break;
                         }
-                        None => {
-                            if let Some( n ) = idx {
-                                if n + 1 == self.history.len()
-            {
-                                    idx = None;
-                                } else {
-                                    idx = Some( n + 1 );
-                                }
+                        
+                        None =>
+                        {
+                            if let Some( n ) = idx
+                            {
+                                if n + 1 == self.history.len() { idx = None; }
+                                else { idx = Some( n + 1 ); }
                                 pos = None;
-                            } else {
-                                return None;
                             }
+
+                            else { return None; }
                         }
                     }
                 }
@@ -6389,12 +6403,10 @@ pub mod io
             pub fn remove_history( &mut self, n: usize )
             {
                 if n < self.history.len()
-            {
+                {
                     let first_new = self.history.len() - self.history_new_entries;
 
-                    if n >= first_new {
-                        self.history_new_entries -= 1;
-                    }
+                    if n >= first_new { self.history_new_entries -= 1; }
 
                     self.history.remove( n );
                 }
@@ -6410,29 +6422,24 @@ pub mod io
                 }
             }
 
-            pub fn next_history( &mut self, n: usize ) -> io::Result<()> {
-                if let Some( old ) = self.history_index {
+            pub fn next_history( &mut self, n: usize ) -> io::Result<()>
+            {
+                if let Some( old ) = self.history_index
+                {
                     let new = old.saturating_add( n );
 
-                    if new >= self.history.len()
-            {
-                        self.select_history_entry( None )?;
-                    } else {
-                        self.select_history_entry( Some( new ) )?;
-                    }
+                    if new >= self.history.len() { self.select_history_entry( None )?; }
+                    else { self.select_history_entry( Some( new ) )?; }
                 }
-
                 Ok( () )
             }
 
-            pub fn prev_history( &mut self, n: usize ) -> io::Result<()> {
-                if !self.history.is_empty() && self.history_index != Some( 0 )
+            pub fn prev_history( &mut self, n: usize ) -> io::Result<()>
             {
-                    let new = if let Some( old ) = self.history_index {
-                        old.saturating_sub( n )
-                    } else {
-                        self.history.len().saturating_sub( n )
-                    };
+                if !self.history.is_empty() && self.history_index != Some( 0 )
+                {
+                    let new = if let Some( old ) = self.history_index { old.saturating_sub( n ) }
+                    else { self.history.len().saturating_sub( n ) };
 
                     self.select_history_entry( Some( new ) )?;
                 }
@@ -6483,8 +6490,9 @@ pub mod io
                 }
             }
 
-            pub fn backward_char( &mut self, n: usize ) -> io::Result<()> {
-                let pos = backward_char( n, &self.buffer, self.cursor );
+            pub fn backward_char( &mut self, n: usize ) -> io::Result<()> 
+            {
+                let pos = char::backward( n, &self.buffer, self.cursor );
                 self.move_to( pos )
             }
 
@@ -6502,38 +6510,29 @@ pub mod io
                 Ok( () )
             }
 
-            pub fn forward_search_char( &mut self, n:usize, ch: char ) -> io::Result<()> {
-                if let Some( pos ) = forward_search_char( n, &self.buffer, self.cursor, ch )
+            pub fn forward_search_char( &mut self, n:usize, ch: char ) -> io::Result<()>
             {
-                    self.move_to( pos )?;
-                }
-
+                if let Some( pos ) = forward_search_char( n, &self.buffer, self.cursor, ch ){ self.move_to( pos )?; }
                 Ok( () )
             }
-
-            /// Deletes a range from the buffer; the cursor is moved to the end
-            /// of the given range.
-            pub fn delete_range<R: RangeArgument<usize>>( &mut self, range: R ) -> io::Result<()> {
+            /// Deletes a range from the buffer; the cursor is moved to the end of the given range.
+            pub fn delete_range<R: RangeArgument<usize>>( &mut self, range: R ) -> io::Result<()>
+            {
                 let start = range.start().cloned().unwrap_or( 0 );
                 let end = range.end().cloned().unwrap_or_else( || self.buffer.len() );
-
                 self.move_to( start )?;
-
                 let _ = self.buffer.drain( start..end );
-
                 self.draw_buffer( start )?;
                 self.term.clear_to_screen_end()?;
                 let len = self.buffer.len();
                 self.move_from( len )?;
-
                 Ok( () )
             }
 
-            pub fn insert_str( &mut self, s:&str ) -> io::Result<()> {
-                // If the string insertion moves a combining character,
-                // we must redraw starting from the character before the cursor.
-                let moves_combining = match self.buffer[self.cursor..].chars().next()
+            pub fn insert_str( &mut self, s:&str ) -> io::Result<()>
             {
+                let moves_combining = match self.buffer[self.cursor..].chars().next()
+                {
                     Some( ch ) if is_combining_mark( ch ) => true,
                     _ => false
                 };
@@ -6541,39 +6540,29 @@ pub mod io
                 let cursor = self.cursor;
                 self.buffer.insert_str( cursor, s );
 
-                if moves_combining && cursor != 0 {
+                if moves_combining && cursor != 0
+                {
                     let pos = backward_char( 1, &self.buffer, self.cursor );
-                    // Move without updating the cursor
                     let ( lines, cols ) = self.move_delta( cursor, pos, &self.buffer );
                     self.move_rel( lines, cols )?;
                     self.draw_buffer( pos )?;
-                } else {
-                    self.draw_buffer( cursor )?;
                 }
+                else { self.draw_buffer( cursor )?; }
 
                 self.cursor += s.len();
-
                 let len = self.buffer.len();
                 self.move_from( len )
             }
 
-            pub fn transpose_range( &mut self, src: Range<usize>, dest: Range<usize> )
-                    -> io::Result<()> {
-                // Ranges must not overlap
+            pub fn transpose_range( &mut self, src: Range<usize>, dest: Range<usize> ) -> io::Result<()>
+            {
+                
                 assert!( src.end <= dest.start || src.start >= dest.end );
+                
+                let final_cur = if src.start < dest.start { dest.end }
+                else { dest.start + ( src.end - src.start ) };
 
-                // Final cursor position
-                let final_cur = if src.start < dest.start {
-                    dest.end
-                } else {
-                    dest.start + ( src.end - src.start )
-                };
-
-                let ( left, right ) = if src.start < dest.start {
-                    ( src, dest )
-                } else {
-                    ( dest, src )
-                };
+                let ( left, right ) = if src.start < dest.start { ( src, dest ) } else { ( dest, src ) };
 
                 self.move_to( left.start )?;
 
@@ -6624,9 +6613,10 @@ pub mod io
             {
                 let prompt_len = self.prompt_suffix_length();
 
-                match self.prompt_type {
-                    PromptType::CompleteIntro( _ ) |
-                    PromptType::CompleteMore => {
+                match self.prompt_type
+                {
+                    PromptType::CompleteIntro( _ ) | PromptType::CompleteMore => 
+                    {
                         let width = self.screen_size.columns;
                         ( prompt_len / width, prompt_len % width )
                     }
@@ -6646,28 +6636,25 @@ pub mod io
                 ( n / width, n % width )
             }
 
-            pub fn clear_screen( &mut self ) -> io::Result<()> {
+            pub fn clear_screen( &mut self ) -> io::Result<()>
+            {
                 self.term.clear_screen()?;
                 self.draw_prompt()?;
-
                 Ok( () )
             }
 
-            pub fn clear_to_screen_end( &mut self ) -> io::Result<()> {
-                self.term.clear_to_screen_end()
-            }
-
+            pub fn clear_to_screen_end( &mut self ) -> io::Result<()> { self.term.clear_to_screen_end() }
             /// Draws a new buffer on the screen. Cursor position is assumed to be `0`.
-            pub fn new_buffer( &mut self ) -> io::Result<()> {
+            pub fn new_buffer( &mut self ) -> io::Result<()>
+            {
                 self.draw_buffer( 0 )?;
                 self.cursor = self.buffer.len();
-
                 self.term.clear_to_screen_end()?;
-
                 Ok( () )
             }
 
-            pub fn clear_full_prompt( &mut self ) -> io::Result<()> {
+            pub fn clear_full_prompt( &mut self ) -> io::Result<()>
+            {
                 let prefix_lines = self.prompt_prefix_len / self.screen_size.columns;
                 let ( line, _ ) = self.line_col( self.cursor );
                 self.term.move_up( prefix_lines + line )?;
@@ -6675,22 +6662,24 @@ pub mod io
                 self.term.clear_to_screen_end()
             }
 
-            pub fn clear_prompt( &mut self ) -> io::Result<()> {
+            pub fn clear_prompt( &mut self ) -> io::Result<()>
+            {
                 let ( line, _ ) = self.line_col( self.cursor );
-
                 self.term.move_up( line )?;
                 self.term.move_to_first_column()?;
                 self.term.clear_to_screen_end()
             }
-
             /// Move back to true cursor position from some other position
-            pub fn move_from( &mut self, pos: usize ) -> io::Result<()> {
+            pub fn move_from( &mut self, pos: usize ) -> io::Result<()>
+            {
                 let ( lines, cols ) = self.move_delta( pos, self.cursor, &self.buffer );
                 self.move_rel( lines, cols )
             }
 
-            pub fn move_to( &mut self, pos: usize ) -> io::Result<()> {
-                if pos != self.cursor {
+            pub fn move_to( &mut self, pos: usize ) -> io::Result<()>
+            {
+                if pos != self.cursor
+                {
                     let ( lines, cols ) = self.move_delta( self.cursor, pos, &self.buffer );
                     self.move_rel( lines, cols )?;
                     self.cursor = pos;
@@ -6699,51 +6688,38 @@ pub mod io
                 Ok( () )
             }
 
-            pub fn move_to_end( &mut self ) -> io::Result<()> {
+            pub fn move_to_end( &mut self ) -> io::Result<()>
+            {
                 let pos = self.buffer.len();
                 self.move_to( pos )
             }
-
-            pub fn move_right( &mut self, n: usize ) -> io::Result<()> {
-                self.term.move_right( n )
-            }
-
-            /// Moves from `old` to `new` cursor position, using the given buffer
-            /// as current input.
+            pub fn move_right( &mut self, n: usize ) -> io::Result<()> { self.term.move_right( n ) }
+            /// Moves from `old` to `new` cursor position, using the given buffer as current input.
             fn move_delta( &self, old:usize, new:usize, buf:&str ) -> ( isize, isize )
             {
                 let prompt_len = self.prompt_suffix_length();
                 let ( old_line, old_col ) = self.line_col_with( old, buf, prompt_len );
                 let ( new_line, new_col ) = self.line_col_with( new, buf, prompt_len );
-
-                ( new_line as isize - old_line as isize,
-                new_col as isize - old_col as isize )
+                ( new_line as isize - old_line as isize, new_col as isize - old_col as isize )
             }
 
-            fn move_rel( &mut self, lines: isize, cols: isize ) -> io::Result<()> {
-                if lines > 0 {
-                    self.term.move_down( lines as usize )?;
-                } else if lines < 0 {
-                    self.term.move_up( ( -lines ) as usize )?;
-                }
+            fn move_rel( &mut self, lines: isize, cols: isize ) -> io::Result<()>
+            {
+                if lines > 0 { self.term.move_down( lines as usize )?; }
+                else if lines < 0 { self.term.move_up( ( -lines ) as usize )?; }
 
-                if cols > 0 {
-                    self.term.move_right( cols as usize )?;
-                } else if cols < 0 {
-                    self.term.move_left( ( -cols ) as usize )?;
-                }
+                if cols > 0 { self.term.move_right( cols as usize )?; }
+                else if cols < 0 { self.term.move_left( ( -cols ) as usize )?; }
 
                 Ok( () )
             }
 
-            pub fn reset_data( &mut self )
-            {
-                self.data.reset_data();
-            }
+            pub fn reset_data( &mut self ) { self.data.reset_data(); }
 
             pub fn set_digit_from_char( &mut self, ch: char )
             {
-                let digit = match ch {
+                let digit = match ch
+                {
                     '-' => Digit::NegNone,
                     '0' ..= '9' => Digit::from( ch ),
                     _ => Digit::None
@@ -7116,7 +7092,7 @@ pub mod io
                 ESCAPE if style.allow_escape => DisplaySequence::Char( ch ),
                 '\0' => DisplaySequence::Escape( '@' ),
                 RUBOUT => DisplaySequence::Escape( '?' ),
-                ch if is_ctrl( ch ) => DisplaySequence::Escape( unctrl( ch ) ),
+                ch if is::ctrl( ch ) => DisplaySequence::Escape( unctrl( ch ) ),
                 ch => DisplaySequence::Char( ch )
             }
         }
@@ -7156,6 +7132,7 @@ pub mod io
 pub mod iter
 {
     pub use std::iter::{ * };
+    
 }
 /// Primitive traits and types representing basic properties of types.
 pub mod marker
@@ -8471,8 +8448,7 @@ pub mod num
                 pub type BigDigit = u32;
                 pub type BigDigit = u64;
             );
-
-            /// A [`DoubleBigDigit`] is the internal type used to do the computations.
+            
             cfg_digit!
             (
                 pub type DoubleBigDigit = u64;
@@ -15102,10 +15078,6 @@ pub mod num
                 }
                 /// Rounds down to nearest multiple of argument.
                 #[inline] fn prev_multiple_of( &self, other: &Self ) -> Self { self - self.mod_floor( other) }
-
-                fn dec( &mut self ) { *self -= 1u32; }
-
-                fn inc( &mut self ) { *self += 1u32; }
             }
 
             #[inline] fn fixpoint<F>( mut x: BigUint, max_bits: u64, f: F ) -> BigUint where
@@ -15505,20 +15477,10 @@ pub mod num
                         self.normalize();
                     }
                 }
-            }
+                
+                pub fn dec( &mut self ) { *self -= 1u32; }
 
-            impl traits::FromBytes for BigUint
-            {
-                type Bytes = [u8];
-                fn from_be_bytes( bytes: &Self::Bytes ) -> Self { Self::from_bytes_be( bytes ) }
-                fn from_le_bytes( bytes: &Self::Bytes ) -> Self { Self::from_bytes_le( bytes ) }
-            }
-
-            impl traits::ToBytes for BigUint
-            {
-                type Bytes = Vec<u8>;
-                fn to_be_bytes( &self ) -> Self::Bytes { self.to_bytes_be() }
-                fn to_le_bytes( &self ) -> Self::Bytes { self.to_bytes_le() }
+                pub fn inc( &mut self ) { *self += 1u32; }
             }
 
             pub trait IntDigits
@@ -17216,6 +17178,32 @@ pub mod num
 pub mod ops
 {
     pub use std::ops::{ * };
+    /// Implemented for built-in range types
+    pub trait RangeArgument<T>
+    {
+        /// Returns the start of range, if present.
+        fn start(&self) -> Option<&T> { None }
+        /// Returns the end of range, if present.
+        fn end(&self) -> Option<&T> { None }
+    }
+
+    impl<T> RangeArgument<T> for Range<T>
+    {
+        fn start(&self) -> Option<&T> { Some(&self.start) }
+        fn end(&self) -> Option<&T> { Some(&self.end) }
+    }
+
+    impl<T> RangeArgument<T> for RangeFrom<T>
+    {
+        fn start(&self) -> Option<&T> { Some(&self.start) }
+    }
+
+    impl<T> RangeArgument<T> for RangeTo<T>
+    {
+        fn end(&self) -> Option<&T> { Some(&self.end) }
+    }
+
+    impl<T> RangeArgument<T> for RangeFull {}
 }
 /// Optional values.
 pub mod option
@@ -17225,7 +17213,1910 @@ pub mod option
 /// OS-specific functionality.
 pub mod os
 {
+    
     pub use std::os::{ * };
+    pub mod windows
+    {
+        //! Platform-specific extensions to `std` for Windows.
+        use ::
+        {
+            *,
+        };
+
+        pub mod ffi
+        {
+            //! Windows-specific extensions to primitives in the [`std::ffi`] module.
+            use ::
+            {
+                *,
+            };
+            
+            //!
+            //! # Overview
+            //!
+            //! For historical reasons, the Windows API uses a form of potentially
+            //! ill-formed UTF-16 encoding for strings. Specifically, the 16-bit
+            //! code units in Windows strings may contain [isolated surrogate code
+            //! points which are not paired together][ill-formed-utf-16]. The
+            //! Unicode standard requires that surrogate code points (those in the
+            //! range U+D800 to U+DFFF) always be *paired*, because in the UTF-16
+            //! encoding a *surrogate code unit pair* is used to encode a single
+            //! character. For compatibility with code that does not enforce
+            //! these pairings, Windows does not enforce them, either.
+            //!
+            //! While it is not always possible to convert such a string losslessly into
+            //! a valid UTF-16 string (or even UTF-8), it is often desirable to be
+            //! able to round-trip such a string from and to Windows APIs
+            //! losslessly. For example, some Rust code may be "bridging" some
+            //! Windows APIs together, just passing `WCHAR` strings among those
+            //! APIs without ever really looking into the strings.
+            //!
+            //! If Rust code *does* need to look into those strings, it can
+            //! convert them to valid UTF-8, possibly lossily, by substituting
+            //! invalid sequences with [`U+FFFD REPLACEMENT CHARACTER`][U+FFFD], as is
+            //! conventionally done in other Rust APIs that deal with string
+            //! encodings.
+            //!
+            //! # `OsStringExt` and `OsStrExt`
+            //!
+            //! [`OsString`] is the Rust wrapper for owned strings in the
+            //! preferred representation of the operating system. On Windows,
+            //! this struct gets augmented with an implementation of the
+            //! [`OsStringExt`] trait, which has an [`OsStringExt::from_wide`] method. This
+            //! lets you create an [`OsString`] from a `&[u16]` slice; presumably
+            //! you get such a slice out of a `WCHAR` Windows API.
+            //!
+            //! Similarly, [`OsStr`] is the Rust wrapper for borrowed strings from
+            //! preferred representation of the operating system. On Windows, the
+            //! [`OsStrExt`] trait provides the [`OsStrExt::encode_wide`] method, which
+            //! outputs an [`EncodeWide`] iterator. You can [`collect`] this
+            //! iterator, for example, to obtain a `Vec<u16>`; you can later get a
+            //! pointer to this vector's contents and feed it to Windows APIs.
+            //!
+            //! These traits, along with [`OsString`] and [`OsStr`], work in
+            //! conjunction so that it is possible to **round-trip** strings from
+            //! Windows and back, with no loss of data, even if the strings are
+            //! ill-formed UTF-16.
+            //!
+            //! [ill-formed-utf-16]: https://simonsapin.github.io/wtf-8/#ill-formed-utf-16
+            //! [`collect`]: crate::iter::Iterator::collect
+            //! [U+FFFD]: crate::char::REPLACEMENT_CHARACTER
+            //! [`std::ffi`]: crate::ffi
+
+            
+
+            use crate::ffi::{OsStr, OsString};
+            use crate::sealed::Sealed;
+            use crate::sys::os_str::Buf;
+            
+            pub use crate::sys_common::wtf8::EncodeWide;
+            use crate::sys_common::wtf8::Wtf8Buf;
+            use crate::sys_common::{AsInner, FromInner};
+
+            /// Windows-specific extensions to [`OsString`].
+            ///
+            /// This trait is sealed: it cannot be implemented outside the standard library.
+            /// This is so that future additional methods are not breaking changes.
+            
+            pub trait OsStringExt: Sealed {
+                /// Creates an `OsString` from a potentially ill-formed UTF-16 slice of
+                /// 16-bit code units.
+                ///
+                /// This is lossless: calling [`OsStrExt::encode_wide`] on the resulting string
+                /// will always return the original code units.
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// use std::ffi::OsString;
+                /// use std::os::windows::prelude::*;
+                ///
+                /// // UTF-16 encoding for "Unicode".
+                /// let source = [0x0055, 0x006E, 0x0069, 0x0063, 0x006F, 0x0064, 0x0065];
+                ///
+                /// let string = OsString::from_wide(&source[..]);
+                /// ```
+                
+                fn from_wide(wide: &[u16]) -> Self;
+            }
+
+            
+            impl OsStringExt for OsString {
+                fn from_wide(wide: &[u16]) -> OsString {
+                    FromInner::from_inner(Buf { inner: Wtf8Buf::from_wide(wide) })
+                }
+            }
+
+            /// Windows-specific extensions to [`OsStr`].
+            ///
+            /// This trait is sealed: it cannot be implemented outside the standard library.
+            /// This is so that future additional methods are not breaking changes.
+            
+            pub trait OsStrExt: Sealed {
+                /// Re-encodes an `OsStr` as a wide character sequence, i.e., potentially
+                /// ill-formed UTF-16.
+                ///
+                /// This is lossless: calling [`OsStringExt::from_wide`] and then
+                /// `encode_wide` on the result will yield the original code units.
+                /// Note that the encoding does not add a final null terminator.
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// use std::ffi::OsString;
+                /// use std::os::windows::prelude::*;
+                ///
+                /// // UTF-16 encoding for "Unicode".
+                /// let source = [0x0055, 0x006E, 0x0069, 0x0063, 0x006F, 0x0064, 0x0065];
+                ///
+                /// let string = OsString::from_wide(&source[..]);
+                ///
+                /// let result: Vec<u16> = string.encode_wide().collect();
+                /// assert_eq!(&source[..], &result[..]);
+                /// ```
+                
+                fn encode_wide(&self) -> EncodeWide<'_>;
+            }
+
+            
+            impl OsStrExt for OsStr {
+                #[inline] fn encode_wide(&self) -> EncodeWide<'_> {
+                    self.as_inner().inner.encode_wide()
+                }
+            }
+        }
+
+        pub mod fs
+        {
+            use ::
+            {
+                *,
+            };
+
+            //! Windows-specific extensions to primitives in the [`std::fs`] module.
+            //!
+            //! [`std::fs`]: crate::fs
+
+            
+
+            use crate::fs::{self, Metadata, OpenOptions};
+            use crate::path::Path;
+            use crate::sealed::Sealed;
+            use crate::sys_common::{AsInner, AsInnerMut, IntoInner};
+            use crate::time::SystemTime;
+            use crate::{io, sys};
+
+            /// Windows-specific extensions to [`fs::File`].
+            
+            pub trait FileExt
+            {
+                /// Seeks to a given position and reads a number of bytes.
+                fn seek_read(&self, buf: &mut [u8], offset: u64) -> io::Result<usize>;
+
+                /// Seeks to a given position and writes a number of bytes.
+                fn seek_write(&self, buf: &[u8], offset: u64) -> io::Result<usize>;
+            }
+
+            
+            impl FileExt for fs::File {
+                fn seek_read(&self, buf: &mut [u8], offset: u64) -> io::Result<usize> {
+                    self.as_inner().read_at(buf, offset)
+                }
+
+                fn seek_write(&self, buf: &[u8], offset: u64) -> io::Result<usize> {
+                    self.as_inner().write_at(buf, offset)
+                }
+            }
+
+            /// Windows-specific extensions to [`fs::OpenOptions`].
+            
+            pub trait OpenOptionsExt {
+                /// Overrides the `dwDesiredAccess` argument to the call to [`CreateFile`]
+                /// with the specified value.
+                fn access_mode(&mut self, access: u32) -> &mut Self;
+
+                /// Overrides the `dwShareMode` argument to the call to [`CreateFile`] with
+                /// the specified value.
+                fn share_mode(&mut self, val: u32) -> &mut Self;
+
+                /// Sets extra flags for the `dwFileFlags` argument to the call to
+                /// [`CreateFile2`] to the specified value (or combines it with
+                /// `attributes` and `security_qos_flags` to set the `dwFlagsAndAttributes`
+                /// for [`CreateFile`]).
+                fn custom_flags(&mut self, flags: u32) -> &mut Self;
+
+                /// Sets the `dwFileAttributes` argument to the call to [`CreateFile2`] to
+                /// the specified value (or combines it with `custom_flags` and
+                /// `security_qos_flags` to set the `dwFlagsAndAttributes` for
+                /// [`CreateFile`]).
+                fn attributes(&mut self, val: u32) -> &mut Self;
+
+                /// Sets the `dwSecurityQosFlags` argument to the call to [`CreateFile2`] to
+                /// the specified value (or combines it with `custom_flags` and `attributes`
+                /// to set the `dwFlagsAndAttributes` for [`CreateFile`]).
+                fn security_qos_flags(&mut self, flags: u32) -> &mut Self;
+            }
+
+            
+            impl OpenOptionsExt for OpenOptions {
+                fn access_mode(&mut self, access: u32) -> &mut OpenOptions {
+                    self.as_inner_mut().access_mode(access);
+                    self
+                }
+
+                fn share_mode(&mut self, share: u32) -> &mut OpenOptions {
+                    self.as_inner_mut().share_mode(share);
+                    self
+                }
+
+                fn custom_flags(&mut self, flags: u32) -> &mut OpenOptions {
+                    self.as_inner_mut().custom_flags(flags);
+                    self
+                }
+
+                fn attributes(&mut self, attributes: u32) -> &mut OpenOptions {
+                    self.as_inner_mut().attributes(attributes);
+                    self
+                }
+
+                fn security_qos_flags(&mut self, flags: u32) -> &mut OpenOptions {
+                    self.as_inner_mut().security_qos_flags(flags);
+                    self
+                }
+            }
+
+            /// Windows-specific extensions to [`fs::Metadata`].
+            pub trait MetadataExt {
+                /// Returns the value of the `dwFileAttributes` field of this metadata.
+                fn file_attributes(&self) -> u32;
+
+                /// Returns the value of the `ftCreationTime` field of this metadata.
+                fn creation_time(&self) -> u64;
+
+                /// Returns the value of the `ftLastAccessTime` field of this metadata.
+                fn last_access_time(&self) -> u64;
+
+                /// Returns the value of the `ftLastWriteTime` field of this metadata.
+                fn last_write_time(&self) -> u64;
+
+                /// Returns the value of the `nFileSize` fields of this
+                /// metadata.
+                fn file_size(&self) -> u64;
+
+                /// Returns the value of the `dwVolumeSerialNumber` field of this
+                /// metadata.
+                fn volume_serial_number(&self) -> Option<u32>;
+
+                /// Returns the value of the `nNumberOfLinks` field of this
+                /// metadata.
+                fn number_of_links(&self) -> Option<u32>;
+
+                /// Returns the value of the `nFileIndex` fields of this
+                /// metadata.
+                fn file_index(&self) -> Option<u64>;
+
+                /// Returns the value of the `ChangeTime` fields of this metadata.
+                fn change_time(&self) -> Option<u64>;
+            }
+
+            
+            impl MetadataExt for Metadata {
+                fn file_attributes(&self) -> u32 {
+                    self.as_inner().attrs()
+                }
+                fn creation_time(&self) -> u64 {
+                    self.as_inner().created_u64()
+                }
+                fn last_access_time(&self) -> u64 {
+                    self.as_inner().accessed_u64()
+                }
+                fn last_write_time(&self) -> u64 {
+                    self.as_inner().modified_u64()
+                }
+                fn file_size(&self) -> u64 {
+                    self.as_inner().size()
+                }
+                fn volume_serial_number(&self) -> Option<u32> {
+                    self.as_inner().volume_serial_number()
+                }
+                fn number_of_links(&self) -> Option<u32> {
+                    self.as_inner().number_of_links()
+                }
+                fn file_index(&self) -> Option<u64> {
+                    self.as_inner().file_index()
+                }
+                fn change_time(&self) -> Option<u64> {
+                    self.as_inner().changed_u64()
+                }
+            }
+
+            /// Windows-specific extensions to [`fs::FileType`].
+            pub trait FileTypeExt: Sealed {
+                /// Returns `true` if this file type is a symbolic link that is also a directory.
+                
+                fn is_symlink_dir(&self) -> bool;
+                /// Returns `true` if this file type is a symbolic link that is also a file.
+                
+                fn is_symlink_file(&self) -> bool;
+            }
+
+            
+            impl Sealed for fs::FileType {}
+
+            
+            impl FileTypeExt for fs::FileType {
+                fn is_symlink_dir(&self) -> bool {
+                    self.as_inner().is_symlink_dir()
+                }
+                fn is_symlink_file(&self) -> bool {
+                    self.as_inner().is_symlink_file()
+                }
+            }
+
+            /// Windows-specific extensions to [`fs::FileTimes`].
+            
+            pub trait FileTimesExt: Sealed {
+                /// Set the creation time of a file.
+                
+                fn set_created(self, t: SystemTime) -> Self;
+            }
+
+            
+            impl FileTimesExt for fs::FileTimes {
+                fn set_created(mut self, t: SystemTime) -> Self {
+                    self.as_inner_mut().set_created(t.into_inner());
+                    self
+                }
+            }
+
+            /// Creates a new symlink to a non-directory file on the filesystem.
+            ///
+            /// The `link` path will be a file symbolic link pointing to the `original`
+            /// path.
+            ///
+            /// The `original` path should not be a directory or a symlink to a directory,
+            /// otherwise the symlink will be broken. Use [`symlink_dir`] for directories.
+            ///
+            /// This function currently corresponds to [`CreateSymbolicLinkW`][CreateSymbolicLinkW].
+            /// Note that this [may change in the future][changes].
+            ///
+            /// [CreateSymbolicLinkW]: https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createsymboliclinkw
+            /// [changes]: io#platform-specific-behavior
+            ///
+            /// # Examples
+            ///
+            /// ```no_run
+            /// use std::os::windows::fs;
+            ///
+            /// fn main() -> std::io::Result<()> {
+            ///     fs::symlink_file("a.txt", "b.txt")?;
+            ///     Ok(())
+            /// }
+            /// ```
+            ///
+            /// # Limitations
+            ///
+            /// Windows treats symlink creation as a [privileged action][symlink-security],
+            /// therefore this function is likely to fail unless the user makes changes to
+            /// their system to permit symlink creation. Users can try enabling Developer
+            /// Mode, granting the `SeCreateSymbolicLinkPrivilege` privilege, or running
+            /// the process as an administrator.
+            ///
+            /// [symlink-security]: https://docs.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/create-symbolic-links
+            
+            pub fn symlink_file<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()> {
+                sys::fs::symlink_inner(original.as_ref(), link.as_ref(), false)
+            }
+
+            /// Creates a new symlink to a directory on the filesystem.
+            ///
+            /// The `link` path will be a directory symbolic link pointing to the `original`
+            /// path.
+            ///
+            /// The `original` path must be a directory or a symlink to a directory,
+            /// otherwise the symlink will be broken. Use [`symlink_file`] for other files.
+            ///
+            /// This function currently corresponds to [`CreateSymbolicLinkW`][CreateSymbolicLinkW].
+            /// Note that this [may change in the future][changes].
+            ///
+            /// [CreateSymbolicLinkW]: https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createsymboliclinkw
+            /// [changes]: io#platform-specific-behavior
+            ///
+            /// # Examples
+            ///
+            /// ```no_run
+            /// use std::os::windows::fs;
+            ///
+            /// fn main() -> std::io::Result<()> {
+            ///     fs::symlink_dir("a", "b")?;
+            ///     Ok(())
+            /// }
+            /// ```
+            ///
+            /// # Limitations
+            ///
+            /// Windows treats symlink creation as a [privileged action][symlink-security],
+            /// therefore this function is likely to fail unless the user makes changes to
+            /// their system to permit symlink creation. Users can try enabling Developer
+            /// Mode, granting the `SeCreateSymbolicLinkPrivilege` privilege, or running
+            /// the process as an administrator.
+            ///
+            /// [symlink-security]: https://docs.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/create-symbolic-links
+            
+            pub fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()> {
+                sys::fs::symlink_inner(original.as_ref(), link.as_ref(), true)
+            }
+
+            /// Creates a junction point.
+            ///
+            /// The `link` path will be a directory junction pointing to the original path.
+            /// If `link` is a relative path then it will be made absolute prior to creating the junction point.
+            /// The `original` path must be a directory or a link to a directory, otherwise the junction point will be broken.
+            ///
+            /// If either path is not a local file path then this will fail.
+            
+            pub fn junction_point<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()> {
+                sys::fs::junction_point(original.as_ref(), link.as_ref())
+            }
+        }
+
+        pub mod io
+        {
+            use ::
+            {
+                *,
+            };
+
+            mod handle
+            {
+                //! Owned and borrowed OS handles.
+                use ::
+                {
+                    marker::{ PhantomData },
+                    mem::{ ManuallyDrop },
+                    system::{ common::{ AsInner, FromInner, IntoInner }, cvt },
+                    *,
+                };                
+                use super::raw::{AsRawHandle, FromRawHandle, IntoRawHandle, RawHandle};
+                /// A borrowed handle.
+                #[repr(transparent)] #[derive(Copy, Clone)]
+                pub struct BorrowedHandle<'handle>
+                {
+                    handle: RawHandle,
+                    _phantom: PhantomData<&'handle OwnedHandle>,
+                }
+                /// An owned handle.
+                #[repr(transparent)]
+                pub struct OwnedHandle
+                {
+                    handle: RawHandle,
+                }
+                /// FFI type for handles in return values or out parameters, 
+                /// where `NULL` is used as a sentry value to indicate errors, such as in the return value of `CreateThread`.
+                #[repr(transparent)] #[derive(Debug)]
+                pub struct HandleOrNull(RawHandle);
+                /// FFI type for handles in return values or out parameters, 
+                /// where `INVALID_HANDLE_VALUE` is used as a sentry value to indicate errors, 
+                /// such as in the return value of `CreateFileW`.
+                #[repr(transparent)] #[derive(Debug)]
+                pub struct HandleOrInvalid(RawHandle);
+                // The Windows [`HANDLE`] type may be transferred across and shared between thread boundaries.
+                unsafe impl Send for OwnedHandle {}
+                unsafe impl Send for HandleOrNull {}
+                unsafe impl Send for HandleOrInvalid {}
+                unsafe impl Send for BorrowedHandle<'_> {}
+                unsafe impl Sync for OwnedHandle {}
+                unsafe impl Sync for HandleOrNull {}
+                unsafe impl Sync for HandleOrInvalid {}
+                unsafe impl Sync for BorrowedHandle<'_> {}
+
+                impl BorrowedHandle<'_>
+                {
+                    /// Returns a `BorrowedHandle` holding the given raw handle.
+                    #[inline] pub const unsafe fn borrow_raw(handle: RawHandle) -> Self
+                    { Self { handle, _phantom: PhantomData } }
+                }
+                
+                impl TryFrom<HandleOrNull> for OwnedHandle
+                {
+                    type Error = NullHandleError;
+                    #[inline] fn try_from(handle_or_null: HandleOrNull) -> Result<Self, NullHandleError>
+                    {
+                        let handle_or_null = ManuallyDrop::new(handle_or_null);
+                        
+                        if handle_or_null.is_valid() { Ok(unsafe { OwnedHandle::from_raw_handle(handle_or_null.0)})}
+                        else { Err(NullHandleError(())) }
+                    }
+                }
+                
+                impl Drop for HandleOrNull
+                {
+                    #[inline] fn drop(&mut self)
+                    {
+                        unsafe
+                        {
+                            if self.is_valid() { let _ = os::windows::ctypes::CloseHandle(self.0); }
+                        }
+                    }
+                }
+
+                impl OwnedHandle
+                {
+                    /// Creates a new `OwnedHandle` instance that shares 
+                    /// the same underlying object as the existing `OwnedHandle` instance.
+                    pub fn try_clone(&self) -> ::io::Result<Self> { self.as_handle().try_clone_to_owned() }
+                }
+
+                impl BorrowedHandle<'_> {
+                    /// Creates a new `OwnedHandle` instance that shares the same underlying
+                    /// object as the existing `BorrowedHandle` instance.
+                    pub fn try_clone_to_owned(&self) -> crate::io::Result<OwnedHandle>
+                    {
+                        self.duplicate(0, false, system::ctypes::DUPLICATE_SAME_ACCESS)
+                    }
+
+                    pub fn duplicate( &self, access: u32, inherit: bool, options: u32 ) -> io::Result<OwnedHandle>
+                    {
+                        let handle = self.as_raw_handle();
+                        
+                        if handle.is_null() {
+                            return unsafe { Ok(OwnedHandle::from_raw_handle(handle)) };
+                        }
+
+                        let mut ret = ptr::null_mut();
+                        cvt(unsafe {
+                            let cur_proc = os::windows::ctypes::GetCurrentProcess();
+                            os::windows::ctypes::DuplicateHandle(
+                                cur_proc,
+                                handle,
+                                cur_proc,
+                                &mut ret,
+                                access,
+                                inherit as os::windows::ctypes::BOOL,
+                                options,
+                            )
+                        })?;
+                        unsafe { Ok(OwnedHandle::from_raw_handle(ret)) }
+                    }
+                }
+                
+                impl TryFrom<HandleOrInvalid> for OwnedHandle {
+                    type Error = InvalidHandleError;
+
+                    #[inline] fn try_from(handle_or_invalid: HandleOrInvalid) -> Result<Self, InvalidHandleError> {
+                        let handle_or_invalid = ManuallyDrop::new(handle_or_invalid);
+                        if handle_or_invalid.is_valid() {
+                            Ok(unsafe { OwnedHandle::from_raw_handle(handle_or_invalid.0) })
+                        } else {
+                            Err(InvalidHandleError(()))
+                        }
+                    }
+                }
+                
+                impl Drop for HandleOrInvalid {
+                    #[inline] fn drop(&mut self) {
+                        if self.is_valid() {
+                            unsafe {
+                                let _ = os::windows::ctypes::CloseHandle(self.0);
+                            }
+                        }
+                    }
+                }
+                /// This is the error type used by [`HandleOrNull`]
+                /// when attempting to convert into a handle, to indicate that the value is null.
+                #[derive(Debug, Clone, PartialEq, Eq)]
+                pub struct NullHandleError(());
+                
+                impl fmt::Display for NullHandleError
+                {
+                    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+                        "A HandleOrNull could not be converted to a handle because it was null".fmt(fmt)
+                    }
+                }
+                
+                impl crate::error::Error for NullHandleError {}
+
+                /// This is the error type used by [`HandleOrInvalid`]
+                /// when attempting to convert into a handle, to indicate that the value is `INVALID_HANDLE_VALUE`.
+                #[derive(Debug, Clone, PartialEq, Eq)]
+                pub struct InvalidHandleError(());
+                
+                impl fmt::Display for InvalidHandleError
+                {
+                    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+                        "A HandleOrInvalid could not be converted to a handle because it was INVALID_HANDLE_VALUE"
+                            .fmt(fmt)
+                    }
+                }
+                
+                impl crate::error::Error for InvalidHandleError {}
+                
+                impl AsRawHandle for BorrowedHandle<'_> {
+                    #[inline] fn as_raw_handle(&self) -> RawHandle {
+                        self.handle
+                    }
+                }
+                
+                impl AsRawHandle for OwnedHandle {
+                    #[inline] fn as_raw_handle(&self) -> RawHandle {
+                        self.handle
+                    }
+                }
+                
+                impl IntoRawHandle for OwnedHandle {
+                    #[inline] fn into_raw_handle(self) -> RawHandle {
+                        ManuallyDrop::new(self).handle
+                    }
+                }
+                
+                impl FromRawHandle for OwnedHandle {
+                    #[inline] unsafe fn from_raw_handle(handle: RawHandle) -> Self {
+                        Self { handle }
+                    }
+                }
+
+                impl HandleOrNull {
+                    /// Constructs a new instance of `Self` from the given `RawHandle` returned
+                    /// from a Windows API that uses null to indicate failure, such as
+                    /// `CreateThread`.
+                    #[inline] pub unsafe fn from_raw_handle(handle: RawHandle) -> Self {
+                        Self(handle)
+                    }
+
+                    fn is_valid(&self) -> bool {
+                        !self.0.is_null()
+                    }
+                }
+
+                impl HandleOrInvalid {
+                    /// Constructs a new instance of `Self` from the given `RawHandle` returned
+                    /// from a Windows API that uses `INVALID_HANDLE_VALUE` to indicate
+                    /// failure, such as `CreateFileW`.
+                    #[inline] pub unsafe fn from_raw_handle(handle: RawHandle) -> Self {
+                        Self(handle)
+                    }
+
+                    fn is_valid(&self) -> bool {
+                        self.0 != ::os::windows::ctypes::INVALID_HANDLE_VALUE
+                    }
+                }
+                
+                impl Drop for OwnedHandle {
+                    #[inline] fn drop(&mut self) {
+                        unsafe {
+                            let _ = ::os::windows::ctypes::CloseHandle(self.handle);
+                        }
+                    }
+                }
+                
+                impl fmt::Debug for BorrowedHandle<'_> {
+                    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                        f.debug_struct("BorrowedHandle").field("handle", &self.handle).finish()
+                    }
+                }
+                
+                impl fmt::Debug for OwnedHandle {
+                    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                        f.debug_struct("OwnedHandle").field("handle", &self.handle).finish()
+                    }
+                }
+
+                macro_rules! impl_is_terminal
+                {
+                    ($($t:ty),*$(,)?) => {$(
+                        impl crate::sealed::Sealed for $t {}
+                        
+                        impl crate::io::IsTerminal for $t {
+                            #[inline]
+                            fn is_terminal(&self) -> bool {
+                                ::system::api::io::is_terminal(self)
+                            }
+                        }
+                    )*}
+                }
+
+                impl_is_terminal!(BorrowedHandle<'_>, OwnedHandle);
+
+                /// A trait to borrow the handle from an underlying object.                
+                pub trait AsHandle {
+                    /// Borrows the handle.
+                    fn as_handle(&self) -> BorrowedHandle<'_>;
+                }
+                
+                impl<T: AsHandle + ?Sized> AsHandle for &T {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
+                        T::as_handle(self)
+                    }
+                }
+                
+                impl<T: AsHandle + ?Sized> AsHandle for &mut T {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
+                        T::as_handle(self)
+                    }
+                }
+                /// This impl allows implementing traits that require `AsHandle` on Arc.
+                impl<T: AsHandle + ?Sized> AsHandle for ::sync::Arc<T> {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
+                        (**self).as_handle()
+                    }
+                }
+                impl<T: AsHandle + ?Sized> AsHandle for ::rc::Rc<T> {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
+                        (**self).as_handle()
+                    }
+                }
+                
+                impl<T: AsHandle + ?Sized> AsHandle for ::rc::UniqueRc<T> {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
+                        (**self).as_handle()
+                    }
+                }
+                impl<T: AsHandle + ?Sized> AsHandle for Box<T> {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
+                        (**self).as_handle()
+                    }
+                }
+                
+                impl AsHandle for BorrowedHandle<'_> {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
+                        *self
+                    }
+                }
+                
+                impl AsHandle for OwnedHandle {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
+                        // Safety: `OwnedHandle` and `BorrowedHandle` have the same validity
+                        // invariants, and the `BorrowedHandle` is bounded by the lifetime
+                        // of `&self`.
+                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
+                    }
+                }
+                
+                impl AsHandle for fs::File {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
+                        self.as_inner().as_handle()
+                    }
+                }
+                
+                impl From<fs::File> for OwnedHandle {
+                    /// Takes ownership of a [`File`](fs::File)'s underlying file handle.
+                    #[inline] fn from(file: fs::File) -> OwnedHandle {
+                        file.into_inner().into_inner().into_inner()
+                    }
+                }
+                
+                impl From<OwnedHandle> for fs::File {
+                    /// Returns a [`File`](fs::File) that takes ownership of the given handle.
+                    #[inline] fn from(owned: OwnedHandle) -> Self {
+                        Self::from_inner(FromInner::from_inner(FromInner::from_inner(owned)))
+                    }
+                }
+                
+                impl AsHandle for ::io::Stdin {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
+                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
+                    }
+                }
+                
+                impl<'a> AsHandle for ::io::StdinLock<'a> {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
+                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
+                    }
+                }
+                
+                impl AsHandle for ::io::Stdout {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
+                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
+                    }
+                }
+                
+                impl<'a> AsHandle for ::io::StdoutLock<'a> {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
+                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
+                    }
+                }
+                
+                impl AsHandle for ::io::Stderr {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
+                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
+                    }
+                }
+                
+                impl<'a> AsHandle for ::io::StderrLock<'a> {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
+                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
+                    }
+                }
+                
+                impl AsHandle for ::process::ChildStdin {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
+                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
+                    }
+                }
+                
+                impl From<::process::ChildStdin> for OwnedHandle {
+                    /// Takes ownership of a [`ChildStdin`](crate::process::ChildStdin)'s file handle.
+                    #[inline] fn from(child_stdin: ::process::ChildStdin) -> OwnedHandle {
+                        unsafe { OwnedHandle::from_raw_handle(child_stdin.into_raw_handle()) }
+                    }
+                }
+                
+                impl AsHandle for ::process::ChildStdout {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
+                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
+                    }
+                }
+                
+                impl From<::process::ChildStdout> for OwnedHandle {
+                    /// Takes ownership of a [`ChildStdout`](crate::process::ChildStdout)'s file handle.
+                    #[inline] fn from(child_stdout: ::process::ChildStdout) -> OwnedHandle {
+                        unsafe { OwnedHandle::from_raw_handle(child_stdout.into_raw_handle()) }
+                    }
+                }
+                
+                impl AsHandle for ::process::ChildStderr {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
+                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
+                    }
+                }
+                
+                impl From<::process::ChildStderr> for OwnedHandle {
+                    /// Takes ownership of a [`ChildStderr`](crate::process::ChildStderr)'s file handle.
+                    #[inline] fn from(child_stderr: ::process::ChildStderr) -> OwnedHandle {
+                        unsafe { OwnedHandle::from_raw_handle(child_stderr.into_raw_handle()) }
+                    }
+                }
+                
+                impl<T> AsHandle for ::thread::JoinHandle<T> {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
+                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
+                    }
+                }
+                
+                impl<T> From<::thread::JoinHandle<T>> for OwnedHandle {
+                    #[inline] fn from(join_handle: ::thread::JoinHandle<T>) -> OwnedHandle {
+                        join_handle.into_inner().into_handle().into_inner()
+                    }
+                }
+                impl AsHandle for io::PipeReader {
+                    fn as_handle(&self) -> BorrowedHandle<'_> {
+                        self.0.as_handle()
+                    }
+                }
+                impl From<io::PipeReader> for OwnedHandle {
+                    fn from(pipe: io::PipeReader) -> Self {
+                        pipe.into_inner().into_inner()
+                    }
+                }
+                impl AsHandle for io::PipeWriter {
+                    fn as_handle(&self) -> BorrowedHandle<'_> {
+                        self.0.as_handle()
+                    }
+                }
+                impl From<io::PipeWriter> for OwnedHandle {
+                    fn from(pipe: io::PipeWriter) -> Self {
+                        pipe.into_inner().into_inner()
+                    }
+                }
+                impl From<OwnedHandle> for io::PipeReader {
+                    fn from(owned_handle: OwnedHandle) -> Self {
+                        Self::from_inner(FromInner::from_inner(owned_handle))
+                    }
+                }
+                impl From<OwnedHandle> for io::PipeWriter {
+                    fn from(owned_handle: OwnedHandle) -> Self {
+                        Self::from_inner(FromInner::from_inner(owned_handle))
+                    }
+                }
+            } pub use self::handle::*;
+
+            mod raw
+            {
+                //! Windows-specific extensions to general I/O primitives.
+                use ::
+                {
+                    os::windows::
+                    {
+                        ctypes::{ self },
+                        io::{AsHandle, AsSocket},
+                        io::{OwnedHandle, OwnedSocket},
+                        raw::{ self },
+                    },
+                    system::common::{AsInner, FromInner, IntoInner},
+                    *,
+                };
+                /// Raw HANDLEs.
+                pub type RawHandle = raw::HANDLE;
+                /// Raw SOCKETs.
+                pub type RawSocket = raw::SOCKET;
+                /// Extracts raw handles.
+                pub trait AsRawHandle
+                {
+                    /// Extracts the raw handle.
+                    fn as_raw_handle(&self) -> RawHandle;
+                }
+                /// Constructs I/O objects from raw handles.
+                pub trait FromRawHandle
+                {
+                    /// Constructs a new I/O object from the specified raw handle.
+                    unsafe fn from_raw_handle(handle: RawHandle) -> Self;
+                }
+                /// A trait to express the ability to consume an object and acquire ownership of its raw `HANDLE`.
+                pub trait IntoRawHandle
+                {
+                    /// Consumes this object, returning the raw underlying handle.
+                    #[must_use = "losing the raw handle may leak resources"]
+                    fn into_raw_handle(self) -> RawHandle;
+                }
+                
+                impl AsRawHandle for fs::File
+                {
+                    #[inline] fn as_raw_handle(&self) -> RawHandle {
+                        self.as_inner().as_raw_handle() as RawHandle
+                    }
+                }
+                
+                impl AsRawHandle for io::Stdin
+                {
+                    fn as_raw_handle(&self) -> RawHandle 
+                    { stdio_handle(unsafe { ctypes::GetStdHandle( ctypes::STD_INPUT_HANDLE) as RawHandle }) }
+                }
+                
+                impl AsRawHandle for io::Stdout
+                {
+                    fn as_raw_handle(&self) -> RawHandle
+                    {
+                        stdio_handle(unsafe { ctypes::GetStdHandle( ctypes::STD_OUTPUT_HANDLE ) as RawHandle })
+                    }
+                }
+                
+                impl AsRawHandle for io::Stderr
+                {
+                    fn as_raw_handle(&self) -> RawHandle
+                    { stdio_handle(unsafe { ctypes::GetStdHandle( ctypes::STD_ERROR_HANDLE) as RawHandle }) }
+                }
+                
+                impl<'a> AsRawHandle for io::StdinLock<'a>
+                {
+                    fn as_raw_handle(&self) -> RawHandle 
+                    { stdio_handle(unsafe { ctypes::GetStdHandle( ctypes::STD_INPUT_HANDLE) as RawHandle }) }
+                }
+                
+                impl<'a> AsRawHandle for io::StdoutLock<'a>
+                {
+                    fn as_raw_handle(&self) -> RawHandle
+                    { stdio_handle(unsafe { ctypes::GetStdHandle( ctypes::STD_OUTPUT_HANDLE) as RawHandle }) }
+                }
+                
+                impl<'a> AsRawHandle for io::StderrLock<'a>
+                {
+                    fn as_raw_handle(&self) -> RawHandle
+                    {
+                        stdio_handle
+                        (
+                            unsafe
+                            {
+                                ctypes::GetStdHandle( ctypes::STD_ERROR_HANDLE ) as RawHandle 
+                            }
+                        )
+                    }
+                }
+                
+                fn stdio_handle(raw: RawHandle) -> RawHandle
+                { if raw == ctypes::INVALID_HANDLE_VALUE { ptr::null_mut() } else { raw } }
+                
+                impl FromRawHandle for fs::File
+                {
+                    #[inline] unsafe fn from_raw_handle(handle: RawHandle) -> fs::File 
+                    {
+                        unsafe 
+                        {
+                            let handle = handle as ctypes::HANDLE;
+                            fs::File::from_inner( system::fs::File::from_inner(FromInner::from_inner( OwnedHandle::from_raw_handle(handle))))
+                        }
+                    }
+                }
+                
+                impl IntoRawHandle for fs::File
+                {
+                    #[inline] fn into_raw_handle(self) -> RawHandle { self.into_inner().into_raw_handle() as *mut _ }
+                }
+                /// Extracts raw sockets.                
+                pub trait AsRawSocket
+                {
+                    /// Extracts the raw socket.
+                    fn as_raw_socket(&self) -> RawSocket;
+                }
+                /// Creates I/O objects from raw sockets.
+                pub trait FromRawSocket
+                {
+                    /// Constructs a new I/O object from the specified raw socket.
+                    unsafe fn from_raw_socket(sock: RawSocket) -> Self;
+                }
+                /// A trait to express the ability to consume an object and acquire ownership of its raw `SOCKET`.
+                pub trait IntoRawSocket
+                {
+                    /// Consumes this object, returning the raw underlying socket.
+                    #[must_use = "losing the raw socket may leak resources"]
+                    fn into_raw_socket(self) -> RawSocket;
+                }
+                
+                impl AsRawSocket for net::TcpStream 
+                {
+                    #[inline] fn as_raw_socket(&self) -> RawSocket { self.as_inner().socket().as_raw_socket() }
+                }
+                
+                impl AsRawSocket for net::TcpListener 
+                {
+                    #[inline] fn as_raw_socket(&self) -> RawSocket { self.as_inner().socket().as_raw_socket() }
+                }
+                
+                impl AsRawSocket for net::UdpSocket 
+                {
+                    #[inline] fn as_raw_socket(&self) -> RawSocket { self.as_inner().socket().as_raw_socket() }
+                }
+                
+                impl FromRawSocket for net::TcpStream
+                {
+                    #[inline] unsafe fn from_raw_socket(sock: RawSocket) -> net::TcpStream
+                    {
+                        unsafe
+                        {
+                            let sock = system::net::Socket::from_inner(OwnedSocket::from_raw_socket(sock));
+                            net::TcpStream::from_inner(system::net::TcpStream::from_inner(sock))
+                        }
+                    }
+                }
+
+                impl FromRawSocket for net::TcpListener
+                {
+                    #[inline] unsafe fn from_raw_socket(sock: RawSocket) -> net::TcpListener
+                    {
+                        unsafe
+                        {
+                            let sock = system::net::Socket::from_inner(OwnedSocket::from_raw_socket(sock));
+                            net::TcpListener::from_inner(system::net::TcpListener::from_inner(sock))
+                        }
+                    }
+                }
+
+                impl FromRawSocket for net::UdpSocket
+                {
+                    #[inline] unsafe fn from_raw_socket(sock: RawSocket) -> net::UdpSocket
+                    {
+                        unsafe
+                        {
+                            let sock = system::net::Socket::from_inner(OwnedSocket::from_raw_socket(sock));
+                            net::UdpSocket::from_inner(system::net::UdpSocket::from_inner(sock))
+                        }
+                    }
+                }
+                
+                impl IntoRawSocket for net::TcpStream
+                {
+                    #[inline] fn into_raw_socket(self) -> RawSocket { self.into_inner().into_socket().into_inner().into_raw_socket() }
+                }
+                
+                impl IntoRawSocket for net::TcpListener
+                {
+                    #[inline] fn into_raw_socket(self) -> RawSocket { self.into_inner().into_socket().into_inner().into_raw_socket() }
+                }
+                
+                impl IntoRawSocket for net::UdpSocket
+                {
+                    #[inline] fn into_raw_socket(self) -> RawSocket { self.into_inner().into_socket().into_inner().into_raw_socket() }
+                }
+                
+                impl AsRawHandle for io::PipeReader 
+                {
+                    fn as_raw_handle(&self) -> RawHandle { self.0.as_raw_handle() }
+                }
+                
+                impl FromRawHandle for io::PipeReader 
+                {
+                    unsafe fn from_raw_handle(raw_handle: RawHandle) -> Self { unsafe { Self::from_inner(FromRawHandle::from_raw_handle(raw_handle)) } }
+                }
+                
+                impl IntoRawHandle for io::PipeReader 
+                {
+                    fn into_raw_handle(self) -> RawHandle { self.0.into_raw_handle() }
+                }
+                
+                impl AsRawHandle for io::PipeWriter
+                 
+                 {
+                    fn as_raw_handle(&self) -> RawHandle { self.0.as_raw_handle() }
+                }
+                
+                impl FromRawHandle for io::PipeWriter
+                {
+                    unsafe fn from_raw_handle(raw_handle: RawHandle) -> Self
+                    { unsafe { Self::from_inner(FromRawHandle::from_raw_handle(raw_handle)) } }
+                }
+                
+                impl IntoRawHandle for io::PipeWriter
+                {
+                    fn into_raw_handle(self) -> RawHandle { self.0.into_raw_handle() }
+                }
+            } pub use self::raw::*;
+
+            mod socket
+            {
+                //! Owned and borrowed OS sockets.
+                use ::
+                {
+                    marker::{ PhantomData },
+                    mem::{self, ManuallyDrop},
+                    system::{ cvt },
+                    *,
+                };
+                use super::raw::{AsRawSocket, FromRawSocket, IntoRawSocket, RawSocket};
+                
+                type ValidRawSocket = num::niche_types::NotAllOnes<RawSocket>;
+                /// A borrowed socket.
+                #[repr(transparent)] #[derive(Copy, Clone)]
+                pub struct BorrowedSocket<'socket>
+                {
+                    socket: ValidRawSocket,
+                    _phantom: PhantomData<&'socket OwnedSocket>,
+                }
+                /// An owned socket.
+                #[repr(transparent)]
+                pub struct OwnedSocket
+                {
+                    socket: ValidRawSocket,
+                }
+
+                impl BorrowedSocket<'_>
+                {
+                    /// Returns a `BorrowedSocket` holding the given raw socket.
+                    #[inline] #[track_caller]
+                    pub const unsafe fn borrow_raw(socket: RawSocket) -> Self
+                    {
+                        Self { socket: ValidRawSocket::new(socket).expect("socket != -1"), _phantom: PhantomData }
+                    }
+                }
+
+                impl OwnedSocket
+                {
+                    /// Creates a new `OwnedSocket` instance that shares
+                    /// the same underlying object as the existing `OwnedSocket` instance.
+                    pub fn try_clone(&self) -> io::Result<Self>
+                    {
+                        self.as_socket().try_clone_to_owned()
+                    }
+                    
+                    pub(crate) fn set_no_inherit(&self) -> io::Result<()>
+                    {
+                        Err(io::const_error!(io::ErrorKind::Unsupported, "unavailable on UWP"))
+                    }
+                }
+
+                impl BorrowedSocket<'_>
+                {
+                    /// Creates a new `OwnedSocket` instance that shares the same underlying
+                    /// object as the existing `BorrowedSocket` instance.
+                    pub fn try_clone_to_owned(&self) -> io::Result<OwnedSocket>
+                    {
+                        unsafe
+                        {   
+                            let mut info = mem::zeroed::<system::api::WSAPROTOCOL_INFOW>();
+                            let result = system::api::WSADuplicateSocketW
+                            (
+                                self.as_raw_socket() as system::api::SOCKET,
+                                system::api::GetCurrentProcessId(),
+                                &mut info,
+                            );
+
+                            system::net::::net::cvt(result)?;
+                            let socket = system::api::WSASocketW
+                            (
+                                info.iAddressFamily,
+                                info.iSocketType,
+                                info.iProtocol,
+                                &info,
+                                0,
+                                system::api::WSA_FLAG_OVERLAPPED | system::api::WSA_FLAG_NO_HANDLE_INHERIT,
+                            );
+
+                            if socket != system::api::INVALID_SOCKET { Ok(OwnedSocket::from_raw_socket(socket as RawSocket)) } 
+                            
+                            else
+                            {
+                                let error = unsafe { system::api::WSAGetLastError() };
+
+                                if error != system::api::WSAEPROTOTYPE && error != system::api::WSAEINVAL
+                                {
+                                    return Err(io::Error::from_raw_os_error(error));
+                                }
+
+                                let socket = system::api::WSASocketW
+                                (
+                                    info.iAddressFamily,
+                                    info.iSocketType,
+                                    info.iProtocol,
+                                    &info,
+                                    0,
+                                    system::api::WSA_FLAG_OVERLAPPED,
+                                );
+
+                                if socket == system::api::INVALID_SOCKET { return Err(last_error()); }
+
+                                let socket = OwnedSocket::from_raw_socket(socket as RawSocket);
+                                socket.set_no_inherit()?;
+                                Ok(socket)
+                            }
+
+                        }
+                    }
+                }
+
+                /// Returns the last error from the Windows socket interface.
+                fn last_error() -> io::Error
+                {
+                    io::Error::from_raw_os_error(unsafe { system::api::WSAGetLastError() })
+                }
+                
+                impl AsRawSocket for BorrowedSocket<'_> {
+                    #[inline] fn as_raw_socket(&self) -> RawSocket {
+                        self.socket.as_inner()
+                    }
+                }
+                
+                impl AsRawSocket for OwnedSocket {
+                    #[inline] fn as_raw_socket(&self) -> RawSocket {
+                        self.socket.as_inner()
+                    }
+                }
+                
+                impl IntoRawSocket for OwnedSocket {
+                    #[inline] fn into_raw_socket(self) -> RawSocket {
+                        ManuallyDrop::new(self).socket.as_inner()
+                    }
+                }
+                
+                impl FromRawSocket for OwnedSocket {
+                    #[inline]
+                    #[track_caller]
+                    unsafe fn from_raw_socket(socket: RawSocket) -> Self {
+                        Self { socket: ValidRawSocket::new(socket).expect("socket != -1") }
+                    }
+                }
+                
+                impl Drop for OwnedSocket {
+                    #[inline] fn drop(&mut self) {
+                        unsafe {
+                            let _ = system::api::closesocket(self.socket.as_inner() as system::api::SOCKET);
+                        }
+                    }
+                }
+                
+                impl fmt::Debug for BorrowedSocket<'_> {
+                    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                        f.debug_struct("BorrowedSocket").field("socket", &self.socket).finish()
+                    }
+                }
+                
+                impl fmt::Debug for OwnedSocket {
+                    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                        f.debug_struct("OwnedSocket").field("socket", &self.socket).finish()
+                    }
+                }
+
+                /// A trait to borrow the socket from an underlying object.
+                
+                pub trait AsSocket {
+                    /// Borrows the socket.
+                    
+                    fn as_socket(&self) -> BorrowedSocket<'_>;
+                }
+
+                
+                impl<T: AsSocket> AsSocket for &T {
+                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> {
+                        T::as_socket(self)
+                    }
+                }
+
+                
+                impl<T: AsSocket> AsSocket for &mut T {
+                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> {
+                        T::as_socket(self)
+                    }
+                }
+
+                
+                /// This impl allows implementing traits that require `AsSocket` on Arc.
+                impl<T: AsSocket> AsSocket for crate::sync::Arc<T> {
+                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> {
+                        (**self).as_socket()
+                    }
+                }
+
+                
+                impl<T: AsSocket> AsSocket for crate::rc::Rc<T> {
+                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> {
+                        (**self).as_socket()
+                    }
+                }
+                
+                impl<T: AsSocket + ?Sized> AsSocket for crate::rc::UniqueRc<T> {
+                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> {
+                        (**self).as_socket()
+                    }
+                }
+
+                
+                impl<T: AsSocket> AsSocket for Box<T> {
+                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> {
+                        (**self).as_socket()
+                    }
+                }
+                
+                impl AsSocket for BorrowedSocket<'_> {
+                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> {
+                        *self
+                    }
+                }
+                
+                impl AsSocket for OwnedSocket {
+                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> {
+                        // Safety: `OwnedSocket` and `BorrowedSocket` have the same validity
+                        // invariants, and the `BorrowedSocket` is bounded by the lifetime
+                        // of `&self`.
+                        unsafe { BorrowedSocket::borrow_raw(self.as_raw_socket()) }
+                    }
+                }
+                
+                impl AsSocket for crate::net::TcpStream {
+                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> {
+                        unsafe { BorrowedSocket::borrow_raw(self.as_raw_socket()) }
+                    }
+                }
+                
+                impl From<crate::net::TcpStream> for OwnedSocket {
+                    /// Takes ownership of a [`TcpStream`](crate::net::TcpStream)'s socket.
+                    #[inline] fn from(tcp_stream: crate::net::TcpStream) -> OwnedSocket {
+                        unsafe { OwnedSocket::from_raw_socket(tcp_stream.into_raw_socket()) }
+                    }
+                }
+                
+                impl From<OwnedSocket> for crate::net::TcpStream {
+                    #[inline] fn from(owned: OwnedSocket) -> Self {
+                        unsafe { Self::from_raw_socket(owned.into_raw_socket()) }
+                    }
+                }
+                
+                impl AsSocket for crate::net::TcpListener {
+                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> {
+                        unsafe { BorrowedSocket::borrow_raw(self.as_raw_socket()) }
+                    }
+                }
+                
+                impl From<crate::net::TcpListener> for OwnedSocket {
+                    /// Takes ownership of a [`TcpListener`](crate::net::TcpListener)'s socket.
+                    #[inline] fn from(tcp_listener: crate::net::TcpListener) -> OwnedSocket {
+                        unsafe { OwnedSocket::from_raw_socket(tcp_listener.into_raw_socket()) }
+                    }
+                }
+                
+                impl From<OwnedSocket> for crate::net::TcpListener {
+                    #[inline] fn from(owned: OwnedSocket) -> Self {
+                        unsafe { Self::from_raw_socket(owned.into_raw_socket()) }
+                    }
+                }
+                
+                impl AsSocket for crate::net::UdpSocket {
+                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> {
+                        unsafe { BorrowedSocket::borrow_raw(self.as_raw_socket()) }
+                    }
+                }
+                
+                impl From<crate::net::UdpSocket> for OwnedSocket
+                {
+                    /// Takes ownership of a [`UdpSocket`](crate::net::UdpSocket)'s underlying socket.
+                    #[inline] fn from(udp_socket: crate::net::UdpSocket) -> OwnedSocket
+                    { unsafe { OwnedSocket::from_raw_socket(udp_socket.into_raw_socket()) } }
+                }
+                
+                impl From<OwnedSocket> for crate::net::UdpSocket
+                {
+                    #[inline] fn from(owned: OwnedSocket) -> Self
+                    { unsafe { Self::from_raw_socket(owned.into_raw_socket()) } }
+                }
+            } pub use self::socket::*;
+        }
+
+        pub mod process
+        {
+            //! Windows-specific extensions to primitives in the [`std::process`] module.
+            use ::
+            {
+                ffi::{ OsStr, c_void },
+                mem::{ MaybeUninit },
+                os::windows::io::
+                { 
+                    AsHandle, AsRawHandle, BorrowedHandle, FromRawHandle, IntoRawHandle, OwnedHandle, RawHandle
+                },
+                system::common::{ AsInner, AsInnerMut, FromInner, IntoInner },
+                *,
+            };
+            
+            impl FromRawHandle for process::Stdio
+            {
+                unsafe fn from_raw_handle(handle: RawHandle) -> process::Stdio 
+                {
+                    let handle = unsafe { handle::Handle::from_raw_handle(handle as *mut _) };
+                    let io = process::Stdio::Handle(handle);
+                    process::Stdio::from_inner(io)
+                }
+            }
+
+            
+            impl From<OwnedHandle> for process::Stdio {
+                /// Takes ownership of a handle and returns a process::Stdio that can attach a stream to it.
+                fn from(handle: OwnedHandle) -> process::Stdio
+                {
+                    let handle = handle::Handle::from_inner(handle);
+                    let io = process::Stdio::Handle(handle);
+                    process::Stdio::from_inner(io)
+                }
+            }
+
+            
+            impl AsRawHandle for process::Child {
+                #[inline] fn as_raw_handle(&self) -> RawHandle {
+                    self.as_inner().handle().as_raw_handle() as *mut _
+                }
+            }
+
+            
+            impl AsHandle for process::Child {
+                #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
+                    self.as_inner().handle().as_handle()
+                }
+            }
+
+            
+            impl IntoRawHandle for process::Child {
+                fn into_raw_handle(self) -> RawHandle {
+                    self.into_inner().into_handle().into_raw_handle() as *mut _
+                }
+            }
+
+            
+            impl From<process::Child> for OwnedHandle {
+                /// Takes ownership of a [`Child`](process::Child)'s process handle.
+                fn from(child: process::Child) -> OwnedHandle {
+                    child.into_inner().into_handle().into_inner()
+                }
+            }
+
+            
+            impl AsRawHandle for process::ChildStdin {
+                #[inline] fn as_raw_handle(&self) -> RawHandle {
+                    self.as_inner().handle().as_raw_handle() as *mut _
+                }
+            }
+
+            
+            impl AsRawHandle for process::ChildStdout {
+                #[inline] fn as_raw_handle(&self) -> RawHandle {
+                    self.as_inner().handle().as_raw_handle() as *mut _
+                }
+            }
+
+            
+            impl AsRawHandle for process::ChildStderr {
+                #[inline] fn as_raw_handle(&self) -> RawHandle {
+                    self.as_inner().handle().as_raw_handle() as *mut _
+                }
+            }
+
+            
+            impl IntoRawHandle for process::ChildStdin {
+                fn into_raw_handle(self) -> RawHandle {
+                    self.into_inner().into_handle().into_raw_handle() as *mut _
+                }
+            }
+
+            
+            impl IntoRawHandle for process::ChildStdout {
+                fn into_raw_handle(self) -> RawHandle {
+                    self.into_inner().into_handle().into_raw_handle() as *mut _
+                }
+            }
+
+            
+            impl IntoRawHandle for process::ChildStderr {
+                fn into_raw_handle(self) -> RawHandle {
+                    self.into_inner().into_handle().into_raw_handle() as *mut _
+                }
+            }
+            /// Creates a `ChildStdin` from the provided `OwnedHandle`.
+            impl From<OwnedHandle> for process::ChildStdin {
+                fn from(handle: OwnedHandle) -> process::ChildStdin {
+                    let handle = sys::handle::Handle::from_inner(handle);
+                    let pipe = sys::pipe::AnonPipe::from_inner(handle);
+                    process::ChildStdin::from_inner(pipe)
+                }
+            }
+            /// Creates a `ChildStdout` from the provided `OwnedHandle`.
+            impl From<OwnedHandle> for process::ChildStdout {
+                fn from(handle: OwnedHandle) -> process::ChildStdout {
+                    let handle = sys::handle::Handle::from_inner(handle);
+                    let pipe = sys::pipe::AnonPipe::from_inner(handle);
+                    process::ChildStdout::from_inner(pipe)
+                }
+            }
+
+            /// Creates a `ChildStderr` from the provided `OwnedHandle`.
+            impl From<OwnedHandle> for process::ChildStderr {
+                fn from(handle: OwnedHandle) -> process::ChildStderr {
+                    let handle = sys::handle::Handle::from_inner(handle);
+                    let pipe = sys::pipe::AnonPipe::from_inner(handle);
+                    process::ChildStderr::from_inner(pipe)
+                }
+            }
+
+            /// Windows-specific extensions to [`process::ExitStatus`].
+            
+            pub trait ExitStatusExt: Sealed {
+                /// Creates a new `ExitStatus` from the raw underlying `u32` return value of a process.
+                fn from_raw(raw: u32) -> Self;
+            }
+
+            
+            impl ExitStatusExt for process::ExitStatus {
+                fn from_raw(raw: u32) -> Self {
+                    process::ExitStatus::from_inner(From::from(raw))
+                }
+            }
+
+            /// Windows-specific extensions to the [`process::Command`] builder.
+            
+            pub trait CommandExt: Sealed {
+                /// Sets the [process creation flags][1] to be passed to `CreateProcess`.
+                
+                fn creation_flags(&mut self, flags: u32) -> &mut process::Command;
+
+                /// Sets the field `wShowWindow` of [STARTUPINFO][1] that is passed to `CreateProcess`.
+                
+                fn show_window(&mut self, cmd_show: u16) -> &mut process::Command;
+
+                /// Forces all arguments to be wrapped in quote (`"`) characters.
+                ///
+                /// This is useful for passing arguments to [MSYS2/Cygwin][1] based
+                /// executables: these programs will expand unquoted arguments containing
+                /// wildcard characters (`?` and `*`) by searching for any file paths
+                /// matching the wildcard pattern.
+                ///
+                /// Adding quotes has no effect when passing arguments to programs
+                /// that use [msvcrt][2]. This includes programs built with both
+                /// MinGW and MSVC.
+                ///
+                /// [1]: <https://github.com/msys2/MSYS2-packages/issues/2176>
+                /// [2]: <https://msdn.microsoft.com/en-us/library/17w5ykft.aspx>
+                
+                fn force_quotes(&mut self, enabled: bool) -> &mut process::Command;
+
+                /// Append literal text to the command line without any quoting or escaping.
+                ///
+                /// This is useful for passing arguments to applications that don't follow
+                /// the standard C run-time escaping rules, such as `cmd.exe /c`.
+                ///
+                /// # Batch files
+                ///
+                /// Note the `cmd /c` command line has slightly different escaping rules than batch files
+                /// themselves. If possible, it may be better to write complex arguments to a temporary
+                /// `.bat` file, with appropriate escaping, and simply run that using:
+                ///
+                /// ```no_run
+                /// # use std::process::Command;
+                /// # let temp_bat_file = "";
+                /// # #[allow(unused)]
+                /// let output = Command::new("cmd").args(["/c", &format!("\"{temp_bat_file}\"")]).output();
+                /// ```
+                ///
+                /// # Example
+                ///
+                /// Run a batch script using both trusted and untrusted arguments.
+                ///
+                /// ```no_run
+                /// #[cfg(windows)]
+                /// // `my_script_path` is a path to known bat file.
+                /// // `user_name` is an untrusted name given by the user.
+                /// fn run_script(
+                ///     my_script_path: &str,
+                ///     user_name: &str,
+                /// ) -> Result<std::process::Output, std::io::Error> {
+                ///     use std::io::{Error, ErrorKind};
+                ///     use std::os::windows::process::CommandExt;
+                ///     use std::process::Command;
+                ///
+                ///     // Create the command line, making sure to quote the script path.
+                ///     // This assumes the fixed arguments have been tested to work with the script we're using.
+                ///     let mut cmd_args = format!(r#""{my_script_path}" "--features=[a,b,c]""#);
+                ///
+                ///     // Make sure the user name is safe. In particular we need to be
+                ///     // cautious of ascii symbols that cmd may interpret specially.
+                ///     // Here we only allow alphanumeric characters.
+                ///     if !user_name.chars().all(|c| c.is_alphanumeric()) {
+                ///         return Err(Error::new(ErrorKind::InvalidInput, "invalid user name"));
+                ///     }
+                ///
+                ///     // now we have validated the user name, let's add that too.
+                ///     cmd_args.push_str(" --user ");
+                ///     cmd_args.push_str(user_name);
+                ///
+                ///     // call cmd.exe and return the output
+                ///     Command::new("cmd.exe")
+                ///         .arg("/c")
+                ///         // surround the entire command in an extra pair of quotes, as required by cmd.exe.
+                ///         .raw_arg(&format!("\"{cmd_args}\""))
+                ///         .output()
+                /// }
+                /// ````
+                
+                fn raw_arg<S: AsRef<OsStr>>(&mut self, text_to_append_as_is: S) -> &mut process::Command;
+
+                /// When [`process::Command`] creates pipes, request that our side is always async.
+                fn async_pipes(&mut self, always_async: bool) -> &mut process::Command;
+
+                /// Executes the command as a child process with the given
+                /// [`ProcThreadAttributeList`], returning a handle to it.
+                fn spawn_with_attributes(
+                    &mut self,
+                    attribute_list: &ProcThreadAttributeList<'_>,
+                ) -> io::Result<process::Child>;
+            }
+
+            
+            impl CommandExt for process::Command {
+                fn creation_flags(&mut self, flags: u32) -> &mut process::Command {
+                    self.as_inner_mut().creation_flags(flags);
+                    self
+                }
+
+                fn show_window(&mut self, cmd_show: u16) -> &mut process::Command {
+                    self.as_inner_mut().show_window(Some(cmd_show));
+                    self
+                }
+
+                fn force_quotes(&mut self, enabled: bool) -> &mut process::Command {
+                    self.as_inner_mut().force_quotes(enabled);
+                    self
+                }
+
+                fn raw_arg<S: AsRef<OsStr>>(&mut self, raw_text: S) -> &mut process::Command {
+                    self.as_inner_mut().raw_arg(raw_text.as_ref());
+                    self
+                }
+
+                fn async_pipes(&mut self, always_async: bool) -> &mut process::Command {
+                    let _ = always_async;
+                    self
+                }
+
+                fn spawn_with_attributes(
+                    &mut self,
+                    attribute_list: &ProcThreadAttributeList<'_>,
+                ) -> io::Result<process::Child> {
+                    self.as_inner_mut()
+                        .spawn_with_attributes(sys::process::Stdio::Inherit, true, Some(attribute_list))
+                        .map(process::Child::from_inner)
+                }
+            }
+
+            
+            pub trait ChildExt: Sealed {
+                /// Extracts the main thread raw handle, without taking ownership
+                
+                fn main_thread_handle(&self) -> BorrowedHandle<'_>;
+            }
+
+            
+            impl ChildExt for process::Child {
+                fn main_thread_handle(&self) -> BorrowedHandle<'_> {
+                    self.handle.main_thread_handle()
+                }
+            }
+
+            /// Windows-specific extensions to [`process::ExitCode`].
+            pub trait ExitCodeExt: Sealed {
+                /// Creates a new `ExitCode` from the raw underlying `u32` return value of a process.
+                
+                fn from_raw(raw: u32) -> Self;
+            }
+
+            
+            impl ExitCodeExt for process::ExitCode {
+                fn from_raw(raw: u32) -> Self {
+                    process::ExitCode::from_inner(From::from(raw))
+                }
+            }
+
+            /// A wrapper around windows [`ProcThreadAttributeList`][1].
+            ///
+            /// [1]: <https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-initializeprocthreadattributelist>
+            #[derive(Debug)]
+            
+            pub struct ProcThreadAttributeList<'a> {
+                attribute_list: Box<[MaybeUninit<u8>]>,
+                _lifetime_marker: marker::PhantomData<&'a ()>,
+            }
+
+            
+            impl<'a> ProcThreadAttributeList<'a> {
+                /// Creates a new builder for constructing a [`ProcThreadAttributeList`].
+                pub fn build() -> ProcThreadAttributeListBuilder<'a> {
+                    ProcThreadAttributeListBuilder::new()
+                }
+
+                /// Returns a pointer to the underling attribute list.
+                #[doc(hidden)]
+                pub fn as_ptr(&self) -> *const MaybeUninit<u8> {
+                    self.attribute_list.as_ptr()
+                }
+            }
+
+            
+            impl<'a> Drop for ProcThreadAttributeList<'a>
+            {
+                /// Deletes the attribute list.
+                fn drop(&mut self) {
+                    let lp_attribute_list = self.attribute_list.as_mut_ptr().cast::<c_void>();
+                    unsafe { system::api::DeleteProcThreadAttributeList(lp_attribute_list) }
+                }
+            }
+            /// Builder for constructing a [`ProcThreadAttributeList`].
+            #[derive(Clone, Debug)]
+            pub struct ProcThreadAttributeListBuilder<'a> {
+                attributes: alloc::collections::BTreeMap<usize, ProcThreadAttributeValue>,
+                _lifetime_marker: marker::PhantomData<&'a ()>,
+            }
+
+            
+            impl<'a> ProcThreadAttributeListBuilder<'a>
+            {
+                fn new() -> Self {
+                    ProcThreadAttributeListBuilder {
+                        attributes: alloc::collections::BTreeMap::new(),
+                        _lifetime_marker: marker::PhantomData,
+                    }
+                }
+
+                /// Sets an attribute on the attribute list.
+                pub fn attribute<T>(self, attribute: usize, value: &'a T) -> Self {
+                    unsafe {
+                        self.raw_attribute(attribute, ptr::addr_of!(*value).cast::<c_void>(), size_of::<T>())
+                    }
+                }
+
+                /// Sets a raw attribute on the attribute list.
+                pub unsafe fn raw_attribute<T>(
+                    mut self,
+                    attribute: usize,
+                    value_ptr: *const T,
+                    value_size: usize,
+                ) -> Self {
+                    self.attributes.insert(
+                        attribute,
+                        ProcThreadAttributeValue { ptr: value_ptr.cast::<c_void>(), size: value_size },
+                    );
+                    self
+                }
+
+                /// Finalizes the construction of the `ProcThreadAttributeList`.
+                pub fn finish(&self) -> io::Result<ProcThreadAttributeList<'a>>
+                {
+                    let mut required_size = 0;
+                    let Ok(attribute_count) = self.attributes.len().try_into() else {
+                        return Err(io::const_error!(
+                            io::ErrorKind::InvalidInput,
+                            "maximum number of ProcThreadAttributes exceeded",
+                        ));
+                    };
+                    unsafe {
+                        system::api::InitializeProcThreadAttributeList(
+                            ptr::null_mut(),
+                            attribute_count,
+                            0,
+                            &mut required_size,
+                        )
+                    };
+
+                    let mut attribute_list = vec![MaybeUninit::uninit(); required_size].into_boxed_slice();
+                    
+                    sys::cvt(unsafe {
+                        system::api::InitializeProcThreadAttributeList(
+                            attribute_list.as_mut_ptr().cast::<c_void>(),
+                            attribute_count,
+                            0,
+                            &mut required_size,
+                        )
+                    })?;
+                    
+                    for (&attribute, value) in self.attributes.iter().take(attribute_count as usize) {
+                        sys::cvt(unsafe 
+                        {
+                            system::api::UpdateProcThreadAttribute(
+                                attribute_list.as_mut_ptr().cast::<c_void>(),
+                                0,
+                                attribute,
+                                value.ptr,
+                                value.size,
+                                ptr::null_mut(),
+                                ptr::null_mut(),
+                            )
+                        })?;
+                    }
+
+                    Ok(ProcThreadAttributeList { attribute_list, _lifetime_marker: marker::PhantomData })
+                }
+            }
+            /// Wrapper around the value data to be used as a Process Thread Attribute.
+            #[derive(Clone, Debug)]
+            struct ProcThreadAttributeValue
+            {
+                ptr: *const c_void,
+                size: usize,
+            }
+        }
+
+        pub mod raw
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod thread
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod ctypes
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod shared
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod um
+        {
+            use ::
+            {
+                *,
+            };
+        }
+        /// A prelude for conveniently writing platform-specific code.
+        pub mod prelude
+        {
+            pub use super::ffi::{OsStrExt, OsStringExt};
+            pub use super::fs::FileExt;
+            pub use super::fs::{MetadataExt, OpenOptionsExt};
+            pub use super::io::
+            {
+                AsHandle, AsSocket, BorrowedHandle, BorrowedSocket, FromRawHandle, FromRawSocket,
+                HandleOrInvalid, IntoRawHandle, IntoRawSocket, OwnedHandle, OwnedSocket,
+            };
+            pub use super::io::{AsRawHandle, AsRawSocket, RawHandle, RawSocket};
+        }
+    }
 }
 /// Panic support in the standard library.
 pub mod panic
@@ -19445,15 +21336,17 @@ pub mod parsers
             col: usize,
         ) -> ParseResult<Value>
         {
-
+            use self::Type::{ * };
             let t = val.get_type();
             let ret = match op
             {
-                '+' => match t {
+                '+' => match t
+                {
                     Int | Frac => val,
                     _ => return parse_err( stream.file(), UnaryOperatorError( t, op, line, col ) ),
                 },
-                '-' => match t {
+                '-' => match t
+                {
                     Int => ( -val.get_int().unwrap() ).into(),
                     Frac => ( -val.get_frac().unwrap() ).into(),
                     _ => return parse_err( stream.file(), UnaryOperatorError( t, op, line, col ) ),
@@ -20478,7 +22371,7 @@ pub mod primitive
         num::
         {
             big::{ BigInt },
-            rational:{ BigRational },
+            rational::{ BigRational },
             traits::{ ToPrimitive }, // Sloppy
         },
         parsers::
@@ -20487,7 +22380,6 @@ pub mod primitive
             line::{ tokens_to_redirections },
             over::{ format::Format },
         },
-        primitive::{ Type, Value },
         regex::{ Regex },
     };
     /*
@@ -21503,6 +23395,48 @@ pub mod regex
         let result = re.replace_all( text, ptn_to );
         result.to_string()
     }
+
+    pub fn first_word(buf: &str, word_break: &str) -> Option<usize>
+    {
+        let mut chars = buf.char_indices();
+
+        drop_while(&mut chars, |(_, ch)| word_break.contains(ch));
+
+        chars.next().map(|(idx, _)| idx)
+    }
+    
+    pub fn get_open_paren(ch: char) -> Option<char>
+    {
+        match ch
+        {
+            ')' => Some('('),
+            ']' => Some('['),
+            '}' => Some('{'),
+            _ => None
+        }
+    }
+
+    pub fn find_matching_paren(s: &str, quotes: &str, open: char, close: char) -> Option<usize>
+    {
+        let mut chars = s.char_indices().rev();
+        let mut level = 0;
+        let mut string_delim = None;
+
+        while let Some((ind, ch)) = chars.next()
+        {
+            if string_delim == Some(ch) { string_delim = None; }
+            else if quotes.contains(ch) { string_delim = Some(ch); }
+            else if string_delim.is_none() && ch == close { level += 1; }
+            
+            else if string_delim.is_none() && ch == open
+            {
+                level -= 1;
+                if level == 0 { return Some(ind); }
+            }
+        }
+
+        None
+    }
 }
 /// Error handling with the Result type.
 pub mod result
@@ -21633,6 +23567,14 @@ pub mod scripts
         status
     }
 }
+mod sealed
+{
+    /// This trait being unreachable from outside the crate
+    /// prevents outside implementations of our extension traits.
+    /// This allows adding more trait methods in the future.
+    pub trait Sealed {}
+}
+
 /// Shell
 pub mod shell
 {
@@ -22071,7 +24013,7 @@ pub mod shell
         !regex::contains( token, &ptn_env )
     }
 
-    fn do_command_substitution_for_dollar( sh:&mut Shell, tokens:&mut types::Tokens )
+    fn do_command_substitution_for_dollar( sh:&mut Shell, tokens:&mut Tokens )
             {
         let mut idx: usize = 0;
         let mut buff: HashMap<usize, String> = HashMap::new();
@@ -22148,7 +24090,7 @@ pub mod shell
         }
     }
 
-    fn do_command_substitution_for_dot( sh:&mut Shell, tokens:&mut types::Tokens )
+    fn do_command_substitution_for_dot( sh:&mut Shell, tokens:&mut Tokens )
             {
         let mut idx: usize = 0;
         let mut buff: HashMap<usize, String> = HashMap::new();
@@ -22256,20 +24198,20 @@ pub mod shell
         }
     }
 
-    pub fn do_expansion( sh:&mut Shell, tokens:&mut types::Tokens )
+    pub fn do_expansion( sh:&mut Shell, tokens:&mut Tokens )
     {
         let line = parsers::line::tokens_to_line( tokens );
         if is::arithmetic( &line ) { return; }
 
         if tokens.len() >= 2 && tokens[0].1 == "export" && tokens[1].1.starts_with( "PROMPT=" ) { return; }
 
-        expand_alias( sh, tokens );
-        expand_home( tokens );
-        expand_env( sh, tokens );
-        expand_brace( tokens );
-        expand_glob( tokens );
+        expand::alias( sh, tokens );
+        expand::home( tokens );
+        expand::env( sh, tokens );
+        expand::brace( tokens );
+        expand::glob( tokens );
         do_command_substitution( sh, tokens );
-        expand_brace_range( tokens );
+        expand::brace_range( tokens );
     }
 
     pub fn trim_multiline_prompts( line:&str ) -> String
@@ -22279,7 +24221,7 @@ pub mod shell
         regex::replace_all( &line_new, r"( ?P<NEWLINE>\n )>> ", "$NEWLINE" )
     }
 
-    fn do_command_substitution( sh:&mut Shell, tokens:&mut types::Tokens )
+    fn do_command_substitution( sh:&mut Shell, tokens:&mut Tokens )
     {
         do_command_substitution_for_dot( sh, tokens );
         do_command_substitution_for_dollar( sh, tokens );
@@ -23361,33 +25303,7 @@ pub mod system
 {
     //! Mortal v.0.2.4 
     /*
-    MORTAL
-    #[macro_use] extern crate bitflags;
-    extern crate smallstr;
-    extern crate unicode_normalization;
-    extern crate unicode_width;
-
-    #[cfg(unix)] extern crate libc;
-    #[cfg(unix)] extern crate nix;
-    #[cfg(unix)] extern crate terminfo;
-
     #[cfg(windows)] extern crate winapi;
-
-    pub use mortal::screen::{Screen, ScreenReadGuard, ScreenWriteGuard};
-    pub use mortal::sequence::{FindResult, SequenceMap};
-    pub use mortal::signal::{Signal, SignalSet};
-    pub use mortal::terminal::{
-        Color, Cursor, CursorMode, Size, Style, Theme,
-        Event, Key, MouseEvent, MouseInput, MouseButton, ModifierState,
-        PrepareConfig, PrepareState,
-        Terminal, TerminalReadGuard, TerminalWriteGuard,
-    };
-
-        use std::sync::{LockResult, PoisonError, TryLockError, TryLockResult};
-
-        use mortal::screen::{Screen, ScreenReadGuard};
-        use mortal::terminal::{Terminal, TerminalReadGuard};
-        use mortal::util::char_width;
     */
     use ::
     {
@@ -23999,16 +25915,301 @@ pub mod system
     {
         use ::{};
     }
+
+    pub mod prepare
+    {
+        use ::
+        {
+            system::{ api, SignalSet },
+            *,
+        };
+        /// Configures a [`Terminal`] or [`Screen`] instance to read special input.
+        #[derive(Copy, Clone, Debug)]
+        pub struct PrepareConfig
+        {
+            /// Whether to block signals that result from user input.
+            pub block_signals: bool,
+            /// Whether to enable control flow characters.
+            pub enable_control_flow: bool,
+            /// If `true`, the terminal will be configured to generate events from function keys.
+            pub enable_keypad: bool,
+            /// If `true`, the terminal will be configured to generate events for
+            /// mouse input, if supported, and `read_event` may return `Event::Mouse(_)`.
+            pub enable_mouse: bool,
+            /// If `true`, mouse motion events will always be reported.
+            /// If `false`, such events will only be reported while at least one mouse button is pressed.
+            pub always_track_motion: bool,
+            /// For each signal in the set, 
+            /// a signal handler will intercept the signal and report it by returning an `Event::Signal(_)` value.
+            pub report_signals: SignalSet,
+        }
+
+        impl Default for PrepareConfig
+        {
+            fn default() -> PrepareConfig
+            {
+                PrepareConfig
+                {
+                    block_signals: true,
+                    enable_control_flow: false,
+                    enable_keypad: true,
+                    enable_mouse: false,
+                    always_track_motion: false,
+                    report_signals: SignalSet::new(),
+                }
+            }
+        }
+
+        /// Represents a previous device state of a [`Terminal`].
+        #[must_use = "the result of `terminal.prepare()` should be passed to \
+            `terminal.restore()` to restore terminal to its original state"]
+        pub struct PrepareState( api::PrepareState );
+
+    }
     
     pub mod screen
     {
+        //! Provides a drawable buffer on terminal devices.
+        use ::
+        {
+            sync::{ LockResult, TryLockResult },
+            system::
+            {
+                terminal::{ Color, Cursor, CursorMode, Event, Size, Style, Theme },
+                api, map_lock_result, map_try_lock_result
+            },
+            time::{ Duration },
+            *,
+        };
+        /*
+        use crate::priv_util::{map_lock_result, map_try_lock_result};
+        use crate::sys;
+        */
+        /// Provides operations on an underlying terminal device in screen mode.
+        pub struct Screen(api::Screen);
+        /// Holds an exclusive lock for read operations on a `Screen`.
+        pub struct ScreenReadGuard<'a>(api::ScreenReadGuard<'a>);
+        /// Holds an exclusive lock for write operations on a `Screen`.
+        pub struct ScreenWriteGuard<'a>(api::ScreenWriteGuard<'a>);
 
-    }
-    
-    pub mod sequence
-    {
+        impl Screen
+        {
+            /// Opens a new screen interface on `stdout`.
+            pub fn new(config: PrepareConfig) -> io::Result<Screen> { api::Screen::stdout(config).map(Screen) }
+            /// Opens a new screen interface on `stderr`.
+            pub fn stderr(config: PrepareConfig) -> io::Result<Screen> { api::Screen::stderr(config).map(Screen) }
+            /// Begins a new screen session using the given `Terminal` instance.
+            pub fn with_terminal(term: Terminal, config: PrepareConfig) -> io::Result<Screen> { api::Screen::new(term.0, config).map(Screen) }
+            /// Returns the name of the terminal.
+            #[inline] pub fn name(&self) -> &str { self.0.name() }
+            /// Attempts to acquire an exclusive lock on terminal read operations.
+            #[inline] pub fn lock_read(&self) -> LockResult<ScreenReadGuard> { map_lock_result(self.0.lock_read(), ScreenReadGuard) }
+            /// Attempts to acquire an exclusive lock on terminal write operations.
+            #[inline] pub fn lock_write(&self) -> LockResult<ScreenWriteGuard> { map_lock_result(self.0.lock_write(), ScreenWriteGuard) }
+            /// Attempts to acquire an exclusive lock on terminal read operations.
+            #[inline] pub fn try_lock_read(&self) -> TryLockResult<ScreenReadGuard> { map_try_lock_result(self.0.try_lock_read(), ScreenReadGuard) }
+            /// Attempts to acquire an exclusive lock on terminal write operations.
+            #[inline] pub fn try_lock_write(&self) -> TryLockResult<ScreenWriteGuard> { map_try_lock_result(self.0.try_lock_write(), ScreenWriteGuard) }
+        }
+        /// # Locking
+        /// The following methods internally acquire the read lock.
+        impl Screen
+        {
+            /// Waits for an event from the terminal.
+            pub fn wait_event(&self, timeout: Option<Duration>) -> io::Result<bool> { self.0.wait_event(timeout) }
+            /// Reads an event from the terminal.
+            pub fn read_event(&self, timeout: Option<Duration>) -> io::Result<Option<Event>>
+            { self.0.read_event(timeout) }
+        }
+        /// # Locking
+        /// The following methods internally acquire the write lock.
+        impl Screen
+        {
+            /// Returns the current size of the terminal screen.
+            #[inline] pub fn size(&self) -> Size { self.0.size() }
+            /// Returns the current cursor position.
+            #[inline] pub fn cursor(&self) -> Cursor { self.0.cursor() }
+            /// Sets the cursor position.
+            #[inline] pub fn set_cursor<C: Into<Cursor>>(&self, pos: C) { self.0.set_cursor(pos.into()); }
+            /// Moves the cursor to the given column on the next line.
+            #[inline] pub fn next_line(&self, column: usize) { self.0.next_line(column); }
+            /// Set the current cursor mode.
+            pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> { self.0.set_cursor_mode(mode) }
+            /// Clears the internal screen buffer.
+            pub fn clear_screen(&self) { self.0.clear_screen(); }
+            /// Adds a set of `Style` flags to the current style setting.
+            #[inline] pub fn add_style(&self, style: Style) { self.0.add_style(style); }
+            /// Removes a set of `Style` flags to the current style setting.
+            #[inline] pub fn remove_style(&self, style: Style) { self.0.remove_style(style); }
+            /// Sets the current style setting to the given set of flags.
+            #[inline] pub fn set_style<S: Into<Option<Style>>>(&self, style: S) { self.0.set_style(style.into().unwrap_or_default()); }
+            /// Sets or removes foreground text color.
+            #[inline] pub fn set_fg<C: Into<Option<Color>>>(&self, fg: C) { self.0.set_fg(fg.into()); }
+            /// Sets or removes background text color.
+            #[inline] pub fn set_bg<C: Into<Option<Color>>>(&self, bg: C) { self.0.set_bg(bg.into()); }
+            /// Sets all attributes for the screen.
+            #[inline] pub fn set_theme(&self, theme: Theme) { self.0.set_theme(theme) }
+            /// Removes color and style attributes.
+            #[inline] pub fn clear_attributes(&self) { self.0.clear_attributes(); }
+            /// Adds bold to the current style setting.
+            #[inline] pub fn bold(&self) { self.add_style(Style::BOLD); }
+            /// Adds italic to the current style setting.
+            #[inline] pub fn italic(&self) { self.add_style(Style::ITALIC); }
+            /// Adds underline to the current style setting.
+            #[inline] pub fn underline(&self) { self.add_style(Style::UNDERLINE); }
+            /// Adds reverse to the current style setting.
+            #[inline] pub fn reverse(&self) { self.add_style(Style::REVERSE); }
+            /// Renders the internal buffer to the terminal screen.
+            pub fn refresh(&self) -> io::Result<()> { self.0.refresh() }
+            /// Writes text at the given position within the screen buffer.
+            pub fn write_at<C>(&self, position: C, text: &str) where 
+            C: Into<Cursor>
+            { self.0.write_at(position.into(), text); }
+            /// Writes text with the given attributes at the current cursor position.
+            pub fn write_styled<F, B, S>(&self, fg: F, bg: B, style: S, text: &str) where
+            F: Into<Option<Color>>,
+            B: Into<Option<Color>>,
+            S: Into<Option<Style>>
+            { self.0.write_styled(fg.into(), bg.into(), style.into().unwrap_or_default(), text); }
+            /// Writes text with the given attributes at the given position within the screen buffer.
+            pub fn write_styled_at<C, F, B, S>(&self, position: C, fg: F, bg: B, style: S, text: &str) where
+            C: Into<Cursor>,
+            F: Into<Option<Color>>,
+            B: Into<Option<Color>>,
+            S: Into<Option<Style>>
+            {
+                self.0.write_styled_at(position.into(), fg.into(), bg.into(), style.into().unwrap_or_default(), text);
+            }
+            /// Writes a single character at the cursor position using the current style and color settings.
+            pub fn write_char(&self, ch: char) { self.0.write_char(ch); }
+            /// Writes a string at the cursor position using the current style and color settings.
+            pub fn write_str(&self, s: &str) { self.0.write_str(s); }
+            /// Writes formatted text at the cursor position using the current style and color settings.
+            pub fn write_fmt(&self, args: fmt::Arguments)
+            {
+                let s = args.to_string();
+                self.write_str(&s) 
+            }
 
-    }
+            pub fn borrow_term_write_guard(&self) -> ScreenWriteGuard { self.lock_write().unwrap() }
+        }
+
+        impl<'a> ScreenReadGuard<'a>
+        {
+            /// Waits for an event from the terminal.
+            pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool>
+            { self.0.wait_event(timeout) }
+            /// Reads an event from the terminal.
+            pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> 
+            { self.0.read_event(timeout) }
+        }
+
+        impl<'a> ScreenWriteGuard<'a>
+        {
+            /// Returns the current size of the terminal screen.
+            #[inline] pub fn size(&self) -> Size { self.0.size() }
+            /// Sets the cursor position.
+            #[inline] pub fn cursor(&self) -> Cursor { self.0.cursor() }
+            /// Moves the cursor to the given column on the next line.
+            #[inline] pub fn set_cursor<C: Into<Cursor>>(&mut self, pos: C) { self.0.set_cursor(pos.into()); }
+            /// Set the current cursor mode.
+            #[inline] pub fn next_line(&mut self, column: usize) { self.0.next_line(column); }
+            /// Set the current cursor mode.
+            pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> { self.0.set_cursor_mode(mode) }
+            /// Adds a set of `Style` flags to the current style setting.
+            pub fn clear_screen(&mut self) { self.0.clear_screen(); }
+            /// Removes a set of `Style` flags to the current style setting.
+            /// Adds a set of `Style` flags to the current style setting.
+            #[inline] pub fn add_style(&mut self, style: Style) { self.0.add_style(style) }
+            /// Sets the current style setting to the given set of flags.
+            #[inline] pub fn remove_style(&mut self, style: Style) { self.0.remove_style(style) }
+            /// Sets or removes foreground text color.
+            #[inline] pub fn set_style<S: Into<Option<Style>>>(&mut self, style: S) { self.0.set_style(style.into().unwrap_or_default()) }
+            /// Sets or removes background text color.
+            #[inline] pub fn set_fg<C: Into<Option<Color>>>(&mut self, fg: C) { self.0.set_fg(fg.into()) }
+            /// Removes color and style attributes.
+            #[inline] pub fn set_bg<C: Into<Option<Color>>>(&mut self, bg: C) { self.0.set_bg(bg.into()) }
+            /// Sets all attributes for the screen.
+            #[inline] pub fn set_theme(&mut self, theme: Theme) { self.0.set_theme(theme) }
+            /// Adds bold to the current style setting.
+            #[inline] pub fn clear_attributes(&mut self) { self.0.clear_attributes() }
+            /// Adds bold to the current style setting.
+            #[inline] pub fn bold(&mut self) { self.add_style(Style::BOLD) }
+            /// Adds italic to the current style setting.
+            #[inline] pub fn italic(&mut self) { self.add_style(Style::ITALIC); }
+            /// Adds underline to the current style setting.
+            #[inline] pub fn underline(&mut self) { self.add_style(Style::UNDERLINE) }
+            /// Adds reverse to the current style setting.
+            #[inline] pub fn reverse(&mut self) { self.add_style(Style::REVERSE) }
+            /// Renders the internal buffer to the terminal screen.
+            pub fn refresh(&mut self) -> io::Result<()> { self.0.refresh() }
+            /// Writes text at the given position within the screen buffer.
+            pub fn write_at<C>(&mut self, position: C, text: &str) where
+            C: Into<Cursor> 
+            { self.0.write_at(position.into(), text) }
+            /// Writes text with the given attributes at the current cursor position.
+            pub fn write_styled<F, B, S>(&mut self, fg: F, bg: B, style: S, text: &str) where
+            F: Into<Option<Color>>,
+            B: Into<Option<Color>>,
+            S: Into<Option<Style>>
+            { self.0.write_styled(fg.into(), bg.into(), style.into().unwrap_or_default(), text) }
+            /// Writes text with the given attributes at the given position within the screen buffer.
+            pub fn write_styled_at<C, F, B, S>(&mut self, position: C, fg: F, bg: B, style: S, text: &str) where
+            C: Into<Cursor>,
+            F: Into<Option<Color>>,
+            B: Into<Option<Color>>,
+            S: Into<Option<Style>>,
+            { self.0.write_styled_at(position.into(), fg.into(), bg.into(), style.into().unwrap_or_default(), text) }
+            /// Writes a single character at the cursor position using the current style and color settings.
+            pub fn write_char(&mut self, ch: char) { self.0.write_char(ch) }
+            /// Writes a string at the cursor position using the current style and color settings.
+            pub fn write_str(&mut self, s: &str) { self.0.write_str(s) }
+            /// Writes formatted text at the cursor position using the current style and color settings.
+            pub fn write_fmt(&mut self, args: fmt::Arguments)
+            {
+                let s = args.to_string();
+                self.write_str(&s)
+            }
+            
+            pub fn borrow_term_write_guard(&mut self) -> &mut Self { self }
+        }
+
+        #[cfg(unix)]
+        impl system::api::TerminalExt for Screen
+        {
+            fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>>
+            { self.0.read_raw(buf, timeout) }
+        }
+
+        #[cfg(unix)]
+        impl<'a> system::api::TerminalExt for ScreenReadGuard<'a>
+        {
+            fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>>
+            { self.0.read_raw(buf, timeout) }
+        }
+
+        #[cfg(windows)]
+        impl system::api::TerminalExt for Screen
+        {
+            fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>>
+            { self.0.read_raw(buf, timeout) }
+
+            fn read_raw_event(&mut self, events: &mut [::winapi::um::wincon::INPUT_RECORD], timeout: Option<Duration>) ->
+            io::Result<Option<Event>>
+            { self.0.read_raw_event(events, timeout) }
+        }
+
+        #[cfg(windows)]
+        impl<'a> system::api::TerminalExt for ScreenReadGuard<'a>
+        {
+            fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>>
+            { self.0.read_raw(buf, timeout) }
+
+            fn read_raw_event(&mut self, events: &mut [::winapi::um::wincon::INPUT_RECORD], timeout: Option<Duration>) ->
+            io::Result<Option<Event>> 
+            { self.0.read_raw_event(events, timeout) }
+        }
+    } pub use self::screen::{ Screen, ScreenReadGuard, ScreenWriteGuard };
     
     pub mod signal
     {
@@ -24100,7 +26301,6 @@ pub mod system
 
             fn not(self) -> SignalSet { !SignalSet::from(self) }
         }
-
         /// Represents a set of `Signal` values
         #[derive(Copy, Clone, Default, Eq, PartialEq)]
         pub struct SignalSet(u8);
@@ -24210,7 +26410,7 @@ pub mod system
         impl_mut_op!{ BitOrAssign, bitor_assign, union }
         impl_mut_op!{ BitXorAssign, bitxor_assign, symmetric_difference }
         impl_mut_op!{ SubAssign, sub_assign, difference }
-    }
+    } pub use self::signal::{ Signal, SignalSet };
     
     pub mod terminal
     {
@@ -24542,6 +26742,10 @@ pub mod system
             #[inline] pub fn checked_area(&self) -> Option<usize> { self.lines.checked_mul(self.columns) }
         }
     }
+    pub use self::terminal::
+    { 
+        Color, Cursor, CursorMode, Size, Style, Theme, Event, Key, Mouse, MouseInput, MouseButton, ModifierState
+    };
 
     pub mod variable
     {
@@ -24817,72 +27021,58 @@ pub mod system
         {
             use ::
             {
+                collections::{ FindResult, SequenceMap },
+                convert::{ TryFrom },
+                fs::{ File },
+                libc::{ ioctl, c_int, c_ushort, termios, STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, TIOCGWINSZ },
+                mem::{ replace, zeroed },
+                nix::
+                {
+                    errno::{ Errno },
+                    sys::
+                    {
+                        signal::{ sigaction, SaFlags, SigAction, SigHandler, Signal as NixSignal, SigSet, },
+                        termios::{ tcgetattr, tcsetattr, SetArg, InputFlags, LocalFlags, },
+                        time::{ TimeVal, TimeValLike },
+                    },
+                    unistd::{ read, write },
+                },
+                os::unix::io::{ FromRawFd, IntoRawFd, RawFd },
+                path::{ Path },
+                str::{ from_utf8, SmallString },
+                sync::
+                {
+                    atomic::{ AtomicUsize, Ordering },
+                    LockResult, Mutex, MutexGuard, TryLockResult,
+                },
+                system::
+                {
+                    signal::{ Signal, SignalSet },
+                    terminal::{ Color, Cursor, CursorMode, Event, Key, Size, Style, Theme, MouseButton, Mouse, MouseInput, ModifierState },
+                },
                 *,
             };
             /*
-            use std::convert::TryFrom;
-            use std::fs::File;
-            use std::io;
-            use std::mem::{replace, zeroed};
-            use std::os::unix::io::{FromRawFd, IntoRawFd, RawFd};
-            use std::path::Path;
-            use std::str::from_utf8;
-            use std::sync::atomic::{AtomicUsize, Ordering};
-            use std::sync::{LockResult, Mutex, MutexGuard, TryLockResult};
-            use std::time::Duration;
-
-            use libc::{
-                ioctl,
-                c_int, c_ushort, termios,
-                STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, TIOCGWINSZ,
-            };
-
-            use nix::errno::Errno;
-            use nix::sys::select::{select, FdSet};
-            use nix::sys::signal::{
-                sigaction,
-                SaFlags, SigAction, SigHandler, Signal as NixSignal, SigSet,
-            };
-            use nix::sys::termios::{
-                tcgetattr, tcsetattr,
-                SetArg, InputFlags, LocalFlags,
-            };
-            use nix::sys::time::{TimeVal, TimeValLike};
-            use nix::unistd::{read, write};
-
-            use smallstr::SmallString;
-
             use terminfo::{self, capability as cap, Database};
             use terminfo::capability::Expansion;
             use terminfo::expand::Context;
-
-            use crate::priv_util::{map_lock_result, map_try_lock_result};
-            use crate::sequence::{FindResult, SequenceMap};
-            use crate::signal::{Signal, SignalSet};
-            use crate::terminal::{
-                Color, Cursor, CursorMode, Event, Key, PrepareConfig, Size, Style, Theme,
-                MouseButton, MouseEvent, MouseInput, ModifierState,
-            };
-            use crate::util::prefixes;
             */
+            pub const OUT_BUFFER_SIZE: usize = 8192;
+            pub const XTERM_ENABLE_MOUSE: &str = "\x1b[?1006h\x1b[?1002h";
+            pub const XTERM_DISABLE_MOUSE: &str = "\x1b[?1006l\x1b[?1002l";
+            pub const XTERM_ENABLE_MOUSE_MOTION: &str = "\x1b[?1003h";
+            pub const XTERM_DISABLE_MOUSE_MOTION: &str = "\x1b[?1003l";
+            pub const XTERM_MOUSE_INTRO: &str = "\x1b[<";
+            pub const XTERM_SHIFT_MASK: u32 = 0x04;
+            pub const XTERM_META_MASK: u32  = 0x08;
+            pub const XTERM_CTRL_MASK: u32  = 0x10;
+            pub const XTERM_MODIFIER_MASK: u32 = XTERM_SHIFT_MASK | XTERM_META_MASK | XTERM_CTRL_MASK;
 
-            const OUT_BUFFER_SIZE: usize = 8192;
-
-            const XTERM_ENABLE_MOUSE: &str = "\x1b[?1006h\x1b[?1002h";
-            const XTERM_DISABLE_MOUSE: &str = "\x1b[?1006l\x1b[?1002l";
-            const XTERM_ENABLE_MOUSE_MOTION: &str = "\x1b[?1003h";
-            const XTERM_DISABLE_MOUSE_MOTION: &str = "\x1b[?1003l";
-            const XTERM_MOUSE_INTRO: &str = "\x1b[<";
-
-            const XTERM_SHIFT_MASK: u32 = 0x04;
-            const XTERM_META_MASK: u32  = 0x08;
-            const XTERM_CTRL_MASK: u32  = 0x10;
-            const XTERM_MODIFIER_MASK: u32 = XTERM_SHIFT_MASK | XTERM_META_MASK | XTERM_CTRL_MASK;
-
-            type SeqMap = SequenceMap<SmallString<[u8; 8]>, SeqData>;
+            pub type SeqMap = SequenceMap<SmallString<[u8; 8]>, SeqData>;
 
             #[derive(Copy, Clone)]
-            enum SeqData {
+            enum SeqData
+            {
                 XTermMouse,
                 Key(Key),
             }
@@ -26075,7 +28265,7 @@ pub mod system
                 Ok(Some((res, n)))
             }
 
-            fn parse_mouse_data(mut buf: &[u8]) -> Option<(MouseEvent, usize)> {
+            fn parse_mouse_data(mut buf: &[u8]) -> Option<(Mouse, usize)> {
                 let orig_len = buf.len();
 
                 let (mut input, end) = parse_integer(&mut buf)?;
@@ -26125,7 +28315,7 @@ pub mod system
                     column: (column - 1) as usize,
                 };
 
-                Some((MouseEvent{
+                Some((Mouse{
                     position,
                     input,
                     modifiers: mods,
@@ -26550,13 +28740,22 @@ pub mod system
         {
             use ::
             {
+                ffi::{ OsStr },
+                mem::{ replace, zeroed },
+                os::windows::ffi::{ OsStrExt },
+                sync::{ atomic::{AtomicUsize, Ordering}, LockResult, Mutex, MutexGuard, TryLockResult },
                 system::
                 {
+                    prepare::{ PrepareConfig },
+                    terminal::
+                    { 
+                        Color, Cursor, CursorMode, Event, Key, Size, Style, Theme, MouseButton, Mouse, MouseInput, 
+                        ModifierState
+                    },
                     signal::{ Signal, SignalSet },
                 },
                 *,
             };
-
             /*
             use std::char;
             use std::ffi::OsStr;
@@ -26567,79 +28766,131 @@ pub mod system
             use std::sync::atomic::{AtomicUsize, Ordering};
             use std::sync::{LockResult, Mutex, MutexGuard, TryLockResult};
             use std::time::Duration;
+            */
+            pub mod ctypes
+            {
+                use ::
+                {
+                    winapi::{ ctypes },
+                    *,
+                };
+            }
+            
+            pub mod shared
+            {
+                use ::
+                {
+                    *,
+                };
 
-            use winapi::ctypes::c_int;
-            use winapi::shared::winerror::{
-                WAIT_TIMEOUT,
-            };
-            use winapi::shared::minwindef::{
-                FALSE, TRUE,
-                BOOL, DWORD, WORD,
-            };
-            use winapi::shared::ntdef::{
-                CHAR, SHORT, VOID, WCHAR, HANDLE,
-            };
-            use winapi::um::consoleapi::{
-                SetConsoleCtrlHandler,
-                GetConsoleMode,
-                ReadConsoleW,
-                ReadConsoleInputW,
-                WriteConsoleW,
-                SetConsoleMode,
-            };
-            use winapi::um::handleapi::{
-                CloseHandle,
-            };
-            use winapi::um::processenv::{
-                GetStdHandle,
-            };
-            use winapi::um::synchapi::{
-                WaitForSingleObject,
-            };
-            use winapi::um::winbase::{
-                INFINITE,
-                STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE,
-                WAIT_FAILED, WAIT_OBJECT_0,
-            };
-            use winapi::um::wincon::{
-                self,
-                CreateConsoleScreenBuffer,
-                WriteConsoleInputW,
-                FillConsoleOutputAttribute,
-                FillConsoleOutputCharacterA,
-                ScrollConsoleScreenBufferW,
-                SetConsoleActiveScreenBuffer,
-                SetConsoleCursorInfo,
-                SetConsoleCursorPosition,
-                SetConsoleScreenBufferSize,
-                GetConsoleScreenBufferInfo,
-                SetConsoleTextAttribute,
-                SetConsoleWindowInfo,
-                CHAR_INFO, CHAR_INFO_Char, CONSOLE_CURSOR_INFO, CONSOLE_SCREEN_BUFFER_INFO,
-                COORD, SMALL_RECT,
-                CONSOLE_TEXTMODE_BUFFER,
-                INPUT_RECORD,
-                CTRL_BREAK_EVENT, CTRL_C_EVENT,
-                ENABLE_ECHO_INPUT, ENABLE_LINE_INPUT, ENABLE_MOUSE_INPUT,
-                ENABLE_EXTENDED_FLAGS, ENABLE_QUICK_EDIT_MODE, ENABLE_WINDOW_INPUT,
-                DISABLE_NEWLINE_AUTO_RETURN,
-                ENABLE_VIRTUAL_TERMINAL_INPUT,
-                ENABLE_PROCESSED_INPUT,
-                ENABLE_PROCESSED_OUTPUT, ENABLE_WRAP_AT_EOL_OUTPUT,
-                KEY_EVENT, MOUSE_EVENT, WINDOW_BUFFER_SIZE_EVENT,
-            };
-            use winapi::um::winuser;
-            use winapi::um::winnt::{
-                GENERIC_READ, GENERIC_WRITE,
-                FILE_SHARE_READ, FILE_SHARE_WRITE,
-            };
+                pub mod winerror
+                {
+                    use ::
+                    {
+                        winapi::shared::winerror::{ * },
+                        *,
+                    };
+                }
 
-            use crate::priv_util::{map_lock_result, map_try_lock_result};
+                pub mod minwindef
+                {
+                    use ::
+                    {
+                         winapi::shared::minwindef::{ * },
+                        *,
+                    };
+                }
 
-            use crate::terminal::{
-                Color, Cursor, CursorMode, Event, Key, PrepareConfig, Size, Style, Theme,
-                MouseButton, MouseEvent, MouseInput, ModifierState,
-            };
+                pub mod ntdef
+                {
+                    use ::
+                    {
+                         winapi::shared::ntdef::{ * },
+                        *,
+                    };
+                }
+            }
+            
+            pub mod um
+            {
+                use ::
+                {
+                    *,
+                };
+
+                pub mod consoleapi
+                {
+                    use ::
+                    {
+                        winapi::um::consoleapi::{ * },
+                        *,
+                    };
+                }
+
+                pub mod handleapi
+                {
+                    use ::
+                    {
+                        winapi::um::handleapi::{ * },
+                        *,
+                    };
+                }
+
+                pub mod processenv
+                {
+                    use ::
+                    {
+                        winapi::um::processenv::{ * },
+                        *,
+                    };
+                }
+
+                pub mod synchapi
+                {
+                    use ::
+                    {
+                        winapi::um::synchapi::{ * },
+                        *,
+                    };
+                }
+
+                pub mod winbase
+                {
+                    use ::
+                    {
+                        winapi::um::winbase::{ * },
+                        *,
+                    };
+                }
+
+                pub mod wincon
+                {
+                    use ::
+                    {
+                        winapi::um::wincon::{ * },
+                        *,
+                    };
+                }
+
+                pub mod winuser
+                {
+                    use ::
+                    {
+                        winapi::um::winuser::{ * },
+                        *,
+                    };
+                }
+
+                pub mod winnt
+                {
+                    use ::
+                    {
+                        winapi::um::winnt::{ * },
+                        *,
+                    };
+                }
+            }
+            /*
             use crate::util::unctrl_lower;
             */
             pub struct Terminal {
@@ -26676,7 +28927,7 @@ pub mod system
             }
 
             pub struct PrepareState {
-                old_in_mode: DWORD,
+                old_in_mode: u32,
                 clear_handler: bool,
             }
 
@@ -27061,9 +29312,9 @@ pub mod system
                     Ok(Some(Event::Raw(n as usize)))
                 }
 
-                fn mouse_event(&mut self, event: &INPUT_RECORD) -> Option<MouseEvent> {
+                fn mouse_event(&mut self, event: &INPUT_RECORD) -> Option<Mouse> {
                     if event.EventType == MOUSE_EVENT {
-                        let mouse = unsafe { event.Event.MouseEvent() };
+                        let mouse = unsafe { event.Event.Mouse() };
 
                         let input = if mouse.dwEventFlags & wincon::MOUSE_WHEELED != 0 {
                             let direction = (mouse.dwButtonState >> 16) as i16;
@@ -27104,7 +29355,7 @@ pub mod system
                             mods |= ModifierState::SHIFT;
                         }
 
-                        Some(MouseEvent{
+                        Some(Mouse{
                             position,
                             input,
                             modifiers: mods,
@@ -27820,10 +30071,8 @@ pub mod system
 
                         LAST_SIGNAL.store(ctrl_type as usize, Ordering::Relaxed);
 
-                        if let Ok(handle) = result_handle(
-                                GetStdHandle(STD_INPUT_HANDLE)) {
-                            // Wake up the `WaitForSingleObject` call by
-                            // generating a key up event, which will be ignored.
+                        if let Ok(handle) = result_handle( GetStdHandle(STD_INPUT_HANDLE))
+                        {
                             let input = INPUT_RECORD{
                                 EventType: KEY_EVENT,
                                 // KEY_EVENT { bKeyDown: FALSE, ... }
@@ -28156,6 +30405,7 @@ pub mod system
     }
     #[cfg( unix )] pub use self::unix as api;
     #[cfg( windows )] pub use self::windows as api;
+    pub use self::api::{ Terminal, TerminalReadGuard, TerminalWriteGuard };
     /// Private trait used to prevent external crates from implementing extension traits
     pub trait Private {}
 
@@ -29300,13 +31550,11 @@ pub mod terminal
                 pub struct $ident(pub bool);
 
                 impl<'a> Capability<'a> for $ident {
-                    #[inline]
-                    fn name() -> &'static str {
+                    #[inline] fn name() -> &'static str {
                         $capability
                     }
 
-                    #[inline]
-                    fn from(value: Option<&Value>) -> Option<Self> {
+                    #[inline] fn from(value: Option<&Value>) -> Option<Self> {
                         if let Some(&Value::True) = value {
                             Some($ident(true))
                         }
@@ -29315,8 +31563,7 @@ pub mod terminal
                         }
                     }
 
-                    #[inline]
-                    fn into(self) -> Option<Value> {
+                    #[inline] fn into(self) -> Option<Value> {
                         if self.0 {
                             Some(Value::True)
                         }
@@ -29338,13 +31585,11 @@ pub mod terminal
                 pub struct $ident(pub i32);
 
                 impl<'a> Capability<'a> for $ident {
-                    #[inline]
-                    fn name() -> &'static str {
+                    #[inline] fn name() -> &'static str {
                         $capability
                     }
 
-                    #[inline]
-                    fn from(value: Option<&Value>) -> Option<Self> {
+                    #[inline] fn from(value: Option<&Value>) -> Option<Self> {
                         if let Some(&Value::Number(value)) = value {
                             Some($ident(value))
                         }
@@ -29353,8 +31598,7 @@ pub mod terminal
                         }
                     }
 
-                    #[inline]
-                    fn into(self) -> Option<Value> {
+                    #[inline] fn into(self) -> Option<Value> {
                         Some(Value::Number(self.0))
                     }
                 }
@@ -29371,13 +31615,11 @@ pub mod terminal
                 pub struct $ident<'a>(Cow<'a, [u8]>);
 
                 impl<'a> Capability<'a> for $ident<'a> {
-                    #[inline]
-                    fn name() -> &'static str {
+                    #[inline] fn name() -> &'static str {
                         $capability
                     }
 
-                    #[inline]
-                    fn from(value: Option<&'a Value>) -> Option<$ident<'a>> {
+                    #[inline] fn from(value: Option<&'a Value>) -> Option<$ident<'a>> {
                         if let Some(&Value::String(ref value)) = value {
                             Some($ident(Cow::Borrowed(value)))
                         }
@@ -29386,8 +31628,7 @@ pub mod terminal
                         }
                     }
 
-                    #[inline]
-                    fn into(self) -> Option<Value> {
+                    #[inline] fn into(self) -> Option<Value> {
                         Some(Value::String(match self.0 {
                             Cow::Borrowed(value) =>
                                 value.into(),
@@ -29399,15 +31640,13 @@ pub mod terminal
                 }
 
                 impl<'a, T: AsRef<&'a [u8]>> From<T> for $ident<'a> {
-                    #[inline]
-                    fn from(value: T) -> Self {
+                    #[inline] fn from(value: T) -> Self {
                         $ident(Cow::Borrowed(value.as_ref()))
                     }
                 }
 
                 impl<'a> AsRef<[u8]> for $ident<'a> {
-                    #[inline]
-                    fn as_ref(&self) -> &[u8] {
+                    #[inline] fn as_ref(&self) -> &[u8] {
                         &self.0
                     }
                 }
@@ -30914,15 +33153,13 @@ pub mod terminal
                     
                     else if met_paren
                     {
-                        if is_prefix_char( c ) { prefix.push( c ); }
-
-                        else if is_suffix_char( c ) { suffix.push( c ); }
-
+                        if is::prefix_char( c ) { prefix.push( c ); }
+                        else if is::suffix_char( c ) { suffix.push( c ); }
                         else { token.push( c ); }
                         continue;
                     }
 
-                    else if is_prompt_item_char( c, &token )
+                    else if is::prompt_item_char( c, &token )
                     {
                         token.push( c );
                         continue;
@@ -31291,6 +33528,7 @@ pub mod terminal
     {
         use ::
         {
+            collections::{ FindResult },
             io::
             {
                 reader::{ BindingIter, InputState, ReadLock, ReadResult },
@@ -31301,15 +33539,14 @@ pub mod terminal
             sync::{ Arc },
             system::
             {
-                terminal::{ CursorMode, Signal, Size, Terminal },    
+                signal::{ Signal },
+                terminal::{ CursorMode, Size, Terminal },    
             },
             terminal::{ Terminals },
             time::{ Instant },
             *,
         };
         /*
-            use mortal::FindResult;
-
             use linefeed::chars::{is_ctrl, is_printable, DELETE, EOF};
             use linefeed::command::{Category, Command};
             use linefeed::complete::Completion;
@@ -31473,7 +33710,7 @@ pub mod terminal
                             self.abort_search_history()?;
                         }
 
-                        else if is_ctrl( ch )
+                        else if is::ctrl( ch )
                         {
                             self.end_search_history()?;
                             self.read.macro_buffer.insert( 0, ch );
@@ -31658,7 +33895,7 @@ pub mod terminal
 
                 self.read.sequence.clear();
 
-                if is_printable( first )
+                if is::printable( first )
                 {
                     let n = self.write.input_arg.to_i32();
                     self.execute_command( Command::SelfInsert, n, first )?;
@@ -31705,7 +33942,7 @@ pub mod terminal
                     Complete => 
                     {
                         if !self.read.disable_completion { self.complete_word()?; }
-                        else if is_printable( ch )
+                        else if is::printable( ch )
                         { self.execute_command( SelfInsert, n, ch )?; }
                     }
 
@@ -31948,20 +34185,20 @@ pub mod terminal
                     EndOfLine => self.write.move_to_end()?,
                     BackwardDeleteChar =>
                     {
-                        if n > 0 {
-                            if self.read.overwrite_mode {
-                                self.overwrite_back( n as usize )?;
-                            } else {
-                                let pos = backward_char( n as usize,
-                                    &self.write.buffer, self.write.cursor );
+                        if n > 0
+                        {
+                            if self.read.overwrite_mode { self.overwrite_back( n as usize )?; }
+                            else
+                            {
+                                let pos = char::backward( n as usize, &self.write.buffer, self.write.cursor );
                                 let r = pos..self.write.cursor;
                                 self.delete_range( r )?;
                             }
                         }
+
                         else if n < 0
                         {
-                            let pos = char::forward
-                            ( ( -n ) as usize, &self.write.buffer, self.write.cursor );
+                            let pos = char::forward(( -n ) as usize, &self.write.buffer, self.write.cursor );
                             let r = self.write.cursor..pos;
                             self.delete_range( r )?;
                         }
@@ -31978,7 +34215,7 @@ pub mod terminal
 
                         else if n < 0
                         {
-                            let pos = backward_char( n as usize, &self.write.buffer, self.write.cursor );
+                            let pos = char::backward( n as usize, &self.write.buffer, self.write.cursor );
                             let r = pos..self.write.cursor;
                             self.delete_range( r )?;
                         }
@@ -33296,7 +35533,7 @@ pub mod vec
     pub mod small
     {
         pub use smallvec::{ Drain as SmallDrain, IntoIter as SmallIntoIter, * };
-    } pub use self::{ Array, SmallVec };
+    } pub use self::small::{ Array, SmallVec };
 }
 
 pub unsafe fn domain()
@@ -33471,4 +35708,4 @@ fn main()
     }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 33474
+// 35711
