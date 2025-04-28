@@ -3339,7 +3339,7 @@ pub mod error
             {
                 unsafe
                 {
-                    str::from_utf8_unchecked( &output[..output_len] )
+                    str::from_utf8_unchecked( &output[..output_len] );
                     let mut output_len = 0;
                     for c in char::decode_utf16( input.iter().copied().take_while( |&x| x != 0 ) )
                     .map( |x| x.unwrap_or( REPLACEMENT_CHARACTER ) )
@@ -7287,30 +7287,30 @@ pub mod now
                         for i in 0..idx_cmd - 1
                         {
                             let fds = pipes[i];
-                            libs::close( fds.0 );
-                            libs::close( fds.1 );
+                            process::close( fds.0 );
+                            process::close( fds.1 );
                         }
                     }
                     
                     for i in idx_cmd + 1..pipes_count
                     {
                         let fds = pipes[i];
-                        libs::close( fds.0 );
-                        libs::close( fds.1 );
+                        process::close( fds.0 );
+                        process::close( fds.1 );
                     }
                     
                     if idx_cmd < pipes_count
                     {
                         if let Some( fds ) = fds_capture_stdout
                         {
-                            libs::close( fds.0 );
-                            libs::close( fds.1 );
+                            process::close( fds.0 );
+                            process::close( fds.1 );
                         }
 
                         if let Some( fds ) = fds_capture_stderr
                         {
-                            libs::close( fds.0 );
-                            libs::close( fds.1 );
+                            process::close( fds.0 );
+                            process::close( fds.1 );
                         }
                     }
 
@@ -7326,16 +7326,16 @@ pub mod now
                     {
                         let fds_prev = pipes[idx_cmd - 1];
                         libs::dup2( fds_prev.0, 0 );
-                        libs::close( fds_prev.0 );
-                        libs::close( fds_prev.1 );
+                        process::close( fds_prev.0 );
+                        process::close( fds_prev.1 );
                     }
                     
                     if idx_cmd < pipes_count
                     {
                         let fds = pipes[idx_cmd];
                         libs::dup2( fds.1, 1 );
-                        libs::close( fds.1 );
-                        libs::close( fds.0 );
+                        process::close( fds.1 );
+                        process::close( fds.0 );
                     }
 
                     if cmd.has_redirect_from()
@@ -7346,7 +7346,7 @@ pub mod now
                             if fd == -1 { process::exit( 1 ); }
 
                             libs::dup2( fd, 0 );
-                            libs::close( fd );
+                            process::close( fd );
                         }
                     }
 
@@ -7354,9 +7354,9 @@ pub mod now
                     {
                         if let Some( fds ) = fds_stdin
                         {
-                            libs::close( fds.1 );
+                            process::close( fds.1 );
                             libs::dup2( fds.0, 0 );
-                            libs::close( fds.0 );
+                            process::close( fds.0 );
                         }
                     }
 
@@ -7449,9 +7449,9 @@ pub mod now
                         {
                             if let Some( fds ) = fds_capture_stdout
                             {
-                                libs::close( fds.0 );
+                                process::close( fds.0 );
                                 libs::dup2( fds.1, 1 );
-                                libs::close( fds.1 );
+                                process::close( fds.1 );
                             }
                         }
 
@@ -7459,9 +7459,9 @@ pub mod now
                         {
                             if let Some( fds ) = fds_capture_stderr
                             {
-                                libs::close( fds.0 );
+                                process::close( fds.0 );
                                 libs::dup2( fds.1, 2 );
-                                libs::close( fds.1 );
+                                process::close( fds.1 );
                             }
                         }
                     }
@@ -7550,7 +7550,7 @@ pub mod now
                             {
                                 unsafe
                                 {
-                                    libs::close( fds.0 );
+                                    process::close( fds.0 );
 
                                     let mut f = File::from_raw_fd( fds.1 );
                                     
@@ -7573,13 +7573,13 @@ pub mod now
                     if idx_cmd < pipes_count
                     {
                         let fds = pipes[idx_cmd];
-                        libs::close( fds.1 );
+                        process::close( fds.1 );
                     }
                     
                     if idx_cmd > 0
                     {
                         let fds = pipes[idx_cmd - 1];
-                        libs::close( fds.0 );
+                        process::close( fds.0 );
                     }
 
                     if idx_cmd == pipes_count && options.capture_output
@@ -7589,7 +7589,7 @@ pub mod now
 
                         if let Some( fds ) = fds_capture_stdout
                         {
-                            libs::close( fds.1 );
+                            process::close( fds.1 );
 
                             let mut f = File::from_raw_fd( fds.0 );
                             match f.read_to_string( &mut s_out )
@@ -7601,7 +7601,7 @@ pub mod now
                         
                         if let Some( fds ) = fds_capture_stderr
                         {
-                            libs::close( fds.1 );
+                            process::close( fds.1 );
                             let mut f_err = File::from_raw_fd( fds.0 );
                             match f_err.read_to_string( &mut s_err )
                             {
@@ -7683,8 +7683,8 @@ pub mod now
             {
                 for fds in pipes
                 {
-                    libs::close( fds.0 );
-                    libs::close( fds.1 );
+                    process::close( fds.0 );
+                    process::close( fds.1 );
                 }
                 
                 return ( false, CommandResult::error() );
@@ -7732,8 +7732,8 @@ pub mod now
                     {
                         if let Some( fds ) = fds_capture_stdout
                         {
-                            libs::close( fds.0 );
-                            libs::close( fds.1 );
+                            process::close( fds.0 );
+                            process::close( fds.1 );
                         }
 
                         println_stderr!( "cicada: pipeline3: {}", e );
@@ -20472,29 +20472,27 @@ pub mod primitive
         collections::{ HashMap, HashSet },
         database::
         {
-            arrays, objects, INDENT_STEP
+            arrays, objects, tuples, INDENT_STEP
         },
         error::over::{ OverError, OverResult },
+        num::
+        {
+            big::{ BigInt },
+            rational:{ BigRational },
+            traits::{ ToPrimitive }, // Sloppy
+        },
         parsers::
         {
             self,
             line::{ tokens_to_redirections },
             over::{ format::Format },
         },
+        primitive::{ Type, Value },
         regex::{ Regex },
     };
     /*
-    
-    use crate::parse::format::Format;
-    use crate::tup;
-    use crate::types::Type;
-    use crate::{OverResult, INDENT_STEP};
-    use num_int::BigInt;
-    use num_rational::BigRational;
-    use num_traits::ToPrimitive;
-    use std::fmt;
+        use crate::{ INDENT_STEP };
     */
-
     macro_rules! get_fn
     {
         ( $doc:expr, $name:tt, $type:ty, $variant:ident ) =>
@@ -21122,9 +21120,9 @@ pub mod primitive
 
     impl Eq for Type {}
 
-    impl fmt::Display for Type
+    impl ::fmt::Display for Type
     {
-        fn fmt( &self, f: &mut fmt::Formatter ) -> fmt::Result
+        fn fmt( &self, f: &mut ::fmt::Formatter ) -> ::fmt::Result
         {
             use self::Type::*;
 
@@ -21271,9 +21269,9 @@ pub mod primitive
         }
     }
 
-    impl fmt::Display for Value
+    impl ::fmt::Display for Value
     {
-        fn fmt( &self, f: &mut fmt::Formatter ) -> fmt::Result
+        fn fmt( &self, f: &mut ::fmt::Formatter ) -> ::fmt::Result
         { write!( f, "{}", self.format( true, INDENT_STEP ) ) }
     }
     
@@ -21346,15 +21344,16 @@ pub mod primitive
     impl_from!( BigRational, Frac );
     impl_from!( char, Char );
     impl_from!( String, Str );
-    impl_from!( arr::Arr, Arr );
-    impl_from!( tup::Tup, Tup );
-    impl_from!( obj::Obj, Obj );
+    impl_from!( arrays::Arr, Arr );
+    impl_from!( tuples::Tup, Tup );
+    impl_from!( objects::Obj, Obj );
 
     fn split_tokens_by_pipes( tokens: &[Token] ) -> Vec<Tokens>
     {
         let mut cmd = Vec::new();
         let mut cmds = Vec::new();
-        for token in tokens {
+        for token in tokens
+        {
             let sep = &token.0;
             let value = &token.1;
             if sep.is_empty() && value == "|" {
@@ -21382,7 +21381,7 @@ pub mod primitive
         
         for ( sep, text ) in tokens.iter()
         {
-            if !sep.is_empty() || !regex::contains( text, r"^( [a-zA-Z0-9_]+ )=( .* )$" ) { break; }
+            if !sep.is_empty() || !contains( text, r"^( [a-zA-Z0-9_]+ )=( .* )$" ) { break; }
 
             for cap in re.captures_iter( text )
             {
@@ -31300,7 +31299,11 @@ pub mod terminal
             mem::{ replace },
             ops::{ Range },
             sync::{ Arc },
-            terminal::{ CursorMode, Signal, Size, Terminals },
+            system::
+            {
+                terminal::{ CursorMode, Signal, Size, Terminal },    
+            },
+            terminal::{ Terminals },
             time::{ Instant },
             *,
         };
@@ -31312,14 +31315,14 @@ pub mod terminal
             use linefeed::complete::Completion;
             use linefeed::function::Function;
             use linefeed::table::{format_columns, Line, Table};
-            use linefeed::terminal::{CursorMode, Signal, Size, Terminal};
-            use linefeed::util::{
-                get_open_paren, find_matching_paren, first_word,
-                longest_common_prefix, repeat_char,
-                back_n_words, forward_n_words,
-                backward_char, forward_char, backward_word, forward_word,
-                word_start, word_end, RangeArgument,
+
+            use linefeed::util::
+            {
+                get_open_paren, find_matching_paren, first_word, longest_common_prefix, repeat_char, back_n_words,
+                forward_n_words, backward_char, forward_char, backward_word, forward_word, word_start, word_end,
+                RangeArgument,
             };
+
             use linefeed::variables::VariableIter;
 
             use self::main::get_prompt_string;
@@ -33290,7 +33293,10 @@ pub mod time
 pub mod vec
 {
     pub use std::vec::{ * };
-    //pub use smallvec::{ Drain as SmallDrain, IntoIter as SmallIntoIter, * };
+    pub mod small
+    {
+        pub use smallvec::{ Drain as SmallDrain, IntoIter as SmallIntoIter, * };
+    } pub use self::{ Array, SmallVec };
 }
 
 pub unsafe fn domain()
@@ -33465,4 +33471,4 @@ fn main()
     }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 33468
+// 33474
