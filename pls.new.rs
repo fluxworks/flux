@@ -98,7 +98,7 @@ extern crate unicode_width;
     {
         ( $fmt:expr ) =>
         ( 
-            match writeln!( &mut $crate::io::stderr(), $fmt )
+            match writeln!( &mut ::io::stderr(), $fmt )
             {
                 Ok( _ ) => {}
                 Err( e ) => println!( "write to stderr failed: {:?}", e )
@@ -107,7 +107,7 @@ extern crate unicode_width;
 
         ( $fmt:expr, $( $arg:tt )* ) =>
         ( 
-            match writeln!( &mut $crate::io::stderr(), $fmt, $( $arg )* )
+            match writeln!( &mut $::io::stderr(), $fmt, $( $arg )* )
             {
                 Ok( _ ) => {}
                 Err( e ) => println!( "write to stderr failed: {:?}", e )
@@ -17228,189 +17228,79 @@ pub mod os
             //! Windows-specific extensions to primitives in the [`std::ffi`] module.
             use ::
             {
+                ffi::{OsStr, OsString},
+                sealed::Sealed,
+                system::
+                {
+
+                    common::wtf8::EncodeWide,
+                    common::wtf8::Wtf8Buf,
+                    common::{AsInner, FromInner},
+                    os_str::{ Buf },
+                },
                 *,
             };
-            
-            //!
-            //! # Overview
-            //!
-            //! For historical reasons, the Windows API uses a form of potentially
-            //! ill-formed UTF-16 encoding for strings. Specifically, the 16-bit
-            //! code units in Windows strings may contain [isolated surrogate code
-            //! points which are not paired together][ill-formed-utf-16]. The
-            //! Unicode standard requires that surrogate code points (those in the
-            //! range U+D800 to U+DFFF) always be *paired*, because in the UTF-16
-            //! encoding a *surrogate code unit pair* is used to encode a single
-            //! character. For compatibility with code that does not enforce
-            //! these pairings, Windows does not enforce them, either.
-            //!
-            //! While it is not always possible to convert such a string losslessly into
-            //! a valid UTF-16 string (or even UTF-8), it is often desirable to be
-            //! able to round-trip such a string from and to Windows APIs
-            //! losslessly. For example, some Rust code may be "bridging" some
-            //! Windows APIs together, just passing `WCHAR` strings among those
-            //! APIs without ever really looking into the strings.
-            //!
-            //! If Rust code *does* need to look into those strings, it can
-            //! convert them to valid UTF-8, possibly lossily, by substituting
-            //! invalid sequences with [`U+FFFD REPLACEMENT CHARACTER`][U+FFFD], as is
-            //! conventionally done in other Rust APIs that deal with string
-            //! encodings.
-            //!
-            //! # `OsStringExt` and `OsStrExt`
-            //!
-            //! [`OsString`] is the Rust wrapper for owned strings in the
-            //! preferred representation of the operating system. On Windows,
-            //! this struct gets augmented with an implementation of the
-            //! [`OsStringExt`] trait, which has an [`OsStringExt::from_wide`] method. This
-            //! lets you create an [`OsString`] from a `&[u16]` slice; presumably
-            //! you get such a slice out of a `WCHAR` Windows API.
-            //!
-            //! Similarly, [`OsStr`] is the Rust wrapper for borrowed strings from
-            //! preferred representation of the operating system. On Windows, the
-            //! [`OsStrExt`] trait provides the [`OsStrExt::encode_wide`] method, which
-            //! outputs an [`EncodeWide`] iterator. You can [`collect`] this
-            //! iterator, for example, to obtain a `Vec<u16>`; you can later get a
-            //! pointer to this vector's contents and feed it to Windows APIs.
-            //!
-            //! These traits, along with [`OsString`] and [`OsStr`], work in
-            //! conjunction so that it is possible to **round-trip** strings from
-            //! Windows and back, with no loss of data, even if the strings are
-            //! ill-formed UTF-16.
-            //!
-            //! [ill-formed-utf-16]: https://simonsapin.github.io/wtf-8/#ill-formed-utf-16
-            //! [`collect`]: crate::iter::Iterator::collect
-            //! [U+FFFD]: crate::char::REPLACEMENT_CHARACTER
-            //! [`std::ffi`]: crate::ffi
-
-            
-
-            use crate::ffi::{OsStr, OsString};
-            use crate::sealed::Sealed;
-            use crate::sys::os_str::Buf;
-            
-            pub use crate::sys_common::wtf8::EncodeWide;
-            use crate::sys_common::wtf8::Wtf8Buf;
-            use crate::sys_common::{AsInner, FromInner};
-
             /// Windows-specific extensions to [`OsString`].
-            ///
-            /// This trait is sealed: it cannot be implemented outside the standard library.
-            /// This is so that future additional methods are not breaking changes.
-            
-            pub trait OsStringExt: Sealed {
-                /// Creates an `OsString` from a potentially ill-formed UTF-16 slice of
-                /// 16-bit code units.
-                ///
-                /// This is lossless: calling [`OsStrExt::encode_wide`] on the resulting string
-                /// will always return the original code units.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use std::ffi::OsString;
-                /// use std::os::windows::prelude::*;
-                ///
-                /// // UTF-16 encoding for "Unicode".
-                /// let source = [0x0055, 0x006E, 0x0069, 0x0063, 0x006F, 0x0064, 0x0065];
-                ///
-                /// let string = OsString::from_wide(&source[..]);
-                /// ```
-                
+            pub trait OsStringExt: Sealed
+            {
+                /// Creates an `OsString` from a potentially ill-formed UTF-16 slice of 16-bit code units.
                 fn from_wide(wide: &[u16]) -> Self;
             }
-
             
-            impl OsStringExt for OsString {
-                fn from_wide(wide: &[u16]) -> OsString {
-                    FromInner::from_inner(Buf { inner: Wtf8Buf::from_wide(wide) })
-                }
+            impl OsStringExt for OsString
+            {
+                fn from_wide(wide: &[u16]) -> OsString
+                { FromInner::from_inner(Buf { inner: Wtf8Buf::from_wide(wide) }) }
             }
 
             /// Windows-specific extensions to [`OsStr`].
-            ///
-            /// This trait is sealed: it cannot be implemented outside the standard library.
-            /// This is so that future additional methods are not breaking changes.
-            
-            pub trait OsStrExt: Sealed {
-                /// Re-encodes an `OsStr` as a wide character sequence, i.e., potentially
-                /// ill-formed UTF-16.
-                ///
-                /// This is lossless: calling [`OsStringExt::from_wide`] and then
-                /// `encode_wide` on the result will yield the original code units.
-                /// Note that the encoding does not add a final null terminator.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use std::ffi::OsString;
-                /// use std::os::windows::prelude::*;
-                ///
-                /// // UTF-16 encoding for "Unicode".
-                /// let source = [0x0055, 0x006E, 0x0069, 0x0063, 0x006F, 0x0064, 0x0065];
-                ///
-                /// let string = OsString::from_wide(&source[..]);
-                ///
-                /// let result: Vec<u16> = string.encode_wide().collect();
-                /// assert_eq!(&source[..], &result[..]);
-                /// ```
-                
+            pub trait OsStrExt: Sealed
+            {
+                /// Re-encodes an `OsStr` as a wide character sequence, i.e., potentially ill-formed UTF-16.
                 fn encode_wide(&self) -> EncodeWide<'_>;
             }
-
             
-            impl OsStrExt for OsStr {
-                #[inline] fn encode_wide(&self) -> EncodeWide<'_> {
-                    self.as_inner().inner.encode_wide()
-                }
+            impl OsStrExt for OsStr
+            {
+                #[inline] fn encode_wide(&self) -> EncodeWide<'_> { self.as_inner().inner.encode_wide() }
             }
         }
 
         pub mod fs
         {
+            //! Windows-specific extensions to primitives in the [`std::fs`] module.
             use ::
             {
+                fs::{ self, Metadata, OpenOptions },
+                path::{ Path },
+                sealed::{ Sealed },
+                system::
+                {
+                    common::{ AsInner, AsInnerMut, IntoInner },
+                },
+                time::SystemTime,
                 *,
             };
-
-            //! Windows-specific extensions to primitives in the [`std::fs`] module.
-            //!
-            //! [`std::fs`]: crate::fs
-
-            
-
-            use crate::fs::{self, Metadata, OpenOptions};
-            use crate::path::Path;
-            use crate::sealed::Sealed;
-            use crate::sys_common::{AsInner, AsInnerMut, IntoInner};
-            use crate::time::SystemTime;
-            use crate::{io, sys};
-
             /// Windows-specific extensions to [`fs::File`].
-            
             pub trait FileExt
             {
                 /// Seeks to a given position and reads a number of bytes.
                 fn seek_read(&self, buf: &mut [u8], offset: u64) -> io::Result<usize>;
-
                 /// Seeks to a given position and writes a number of bytes.
                 fn seek_write(&self, buf: &[u8], offset: u64) -> io::Result<usize>;
             }
-
             
-            impl FileExt for fs::File {
-                fn seek_read(&self, buf: &mut [u8], offset: u64) -> io::Result<usize> {
-                    self.as_inner().read_at(buf, offset)
-                }
+            impl FileExt for fs::File
+            {
+                fn seek_read(&self, buf: &mut [u8], offset: u64) -> io::Result<usize>
+                { self.as_inner().read_at(buf, offset) }
 
-                fn seek_write(&self, buf: &[u8], offset: u64) -> io::Result<usize> {
-                    self.as_inner().write_at(buf, offset)
-                }
+                fn seek_write(&self, buf: &[u8], offset: u64) -> io::Result<usize>
+                { self.as_inner().write_at(buf, offset) }
             }
-
             /// Windows-specific extensions to [`fs::OpenOptions`].
-            
-            pub trait OpenOptionsExt {
+            pub trait OpenOptionsExt
+            {
                 /// Overrides the `dwDesiredAccess` argument to the call to [`CreateFile`]
                 /// with the specified value.
                 fn access_mode(&mut self, access: u32) -> &mut Self;
@@ -17418,89 +17308,80 @@ pub mod os
                 /// Overrides the `dwShareMode` argument to the call to [`CreateFile`] with
                 /// the specified value.
                 fn share_mode(&mut self, val: u32) -> &mut Self;
-
                 /// Sets extra flags for the `dwFileFlags` argument to the call to
                 /// [`CreateFile2`] to the specified value (or combines it with
                 /// `attributes` and `security_qos_flags` to set the `dwFlagsAndAttributes`
                 /// for [`CreateFile`]).
                 fn custom_flags(&mut self, flags: u32) -> &mut Self;
-
                 /// Sets the `dwFileAttributes` argument to the call to [`CreateFile2`] to
                 /// the specified value (or combines it with `custom_flags` and
                 /// `security_qos_flags` to set the `dwFlagsAndAttributes` for
                 /// [`CreateFile`]).
                 fn attributes(&mut self, val: u32) -> &mut Self;
-
                 /// Sets the `dwSecurityQosFlags` argument to the call to [`CreateFile2`] to
                 /// the specified value (or combines it with `custom_flags` and `attributes`
                 /// to set the `dwFlagsAndAttributes` for [`CreateFile`]).
                 fn security_qos_flags(&mut self, flags: u32) -> &mut Self;
             }
-
             
-            impl OpenOptionsExt for OpenOptions {
-                fn access_mode(&mut self, access: u32) -> &mut OpenOptions {
+            impl OpenOptionsExt for OpenOptions
+            {
+                fn access_mode(&mut self, access: u32) -> &mut OpenOptions 
+                {
                     self.as_inner_mut().access_mode(access);
                     self
                 }
 
-                fn share_mode(&mut self, share: u32) -> &mut OpenOptions {
+                fn share_mode(&mut self, share: u32) -> &mut OpenOptions 
+                {
                     self.as_inner_mut().share_mode(share);
                     self
                 }
 
-                fn custom_flags(&mut self, flags: u32) -> &mut OpenOptions {
+                fn custom_flags(&mut self, flags: u32) -> &mut OpenOptions 
+                {
                     self.as_inner_mut().custom_flags(flags);
                     self
                 }
 
-                fn attributes(&mut self, attributes: u32) -> &mut OpenOptions {
+                fn attributes(&mut self, attributes: u32) -> &mut OpenOptions 
+                {
                     self.as_inner_mut().attributes(attributes);
                     self
                 }
 
-                fn security_qos_flags(&mut self, flags: u32) -> &mut OpenOptions {
+                fn security_qos_flags(&mut self, flags: u32) -> &mut OpenOptions 
+                {
                     self.as_inner_mut().security_qos_flags(flags);
                     self
                 }
             }
 
             /// Windows-specific extensions to [`fs::Metadata`].
-            pub trait MetadataExt {
+            pub trait MetadataExt
+            {
                 /// Returns the value of the `dwFileAttributes` field of this metadata.
                 fn file_attributes(&self) -> u32;
-
                 /// Returns the value of the `ftCreationTime` field of this metadata.
                 fn creation_time(&self) -> u64;
-
                 /// Returns the value of the `ftLastAccessTime` field of this metadata.
                 fn last_access_time(&self) -> u64;
-
                 /// Returns the value of the `ftLastWriteTime` field of this metadata.
                 fn last_write_time(&self) -> u64;
-
-                /// Returns the value of the `nFileSize` fields of this
-                /// metadata.
+                /// Returns the value of the `nFileSize` fields of this metadata.
                 fn file_size(&self) -> u64;
-
-                /// Returns the value of the `dwVolumeSerialNumber` field of this
-                /// metadata.
+                /// Returns the value of the `dwVolumeSerialNumber` field of this metadata.
                 fn volume_serial_number(&self) -> Option<u32>;
-
-                /// Returns the value of the `nNumberOfLinks` field of this
-                /// metadata.
+                /// Returns the value of the `nNumberOfLinks` field of this metadata.
                 fn number_of_links(&self) -> Option<u32>;
-
-                /// Returns the value of the `nFileIndex` fields of this
-                /// metadata.
+                /// Returns the value of the `nFileIndex` fields of this metadata.
                 fn file_index(&self) -> Option<u64>;
-
                 /// Returns the value of the `ChangeTime` fields of this metadata.
                 fn change_time(&self) -> Option<u64>;
             }
-
             
-            impl MetadataExt for Metadata {
+            impl MetadataExt for Metadata
+            {
                 fn file_attributes(&self) -> u32 {
                     self.as_inner().attrs()
                 }
@@ -17531,131 +17412,49 @@ pub mod os
             }
 
             /// Windows-specific extensions to [`fs::FileType`].
-            pub trait FileTypeExt: Sealed {
+            pub trait FileTypeExt: Sealed
+            {
                 /// Returns `true` if this file type is a symbolic link that is also a directory.
-                
                 fn is_symlink_dir(&self) -> bool;
                 /// Returns `true` if this file type is a symbolic link that is also a file.
-                
                 fn is_symlink_file(&self) -> bool;
             }
-
             
             impl Sealed for fs::FileType {}
-
             
-            impl FileTypeExt for fs::FileType {
-                fn is_symlink_dir(&self) -> bool {
-                    self.as_inner().is_symlink_dir()
-                }
-                fn is_symlink_file(&self) -> bool {
-                    self.as_inner().is_symlink_file()
-                }
+            impl FileTypeExt for fs::FileType
+            {
+                fn is_symlink_dir(&self) -> bool { self.as_inner().is_symlink_dir() }
+
+                fn is_symlink_file(&self) -> bool { self.as_inner().is_symlink_file() }
             }
-
             /// Windows-specific extensions to [`fs::FileTimes`].
-            
-            pub trait FileTimesExt: Sealed {
+            pub trait FileTimesExt: Sealed
+            {
                 /// Set the creation time of a file.
-                
                 fn set_created(self, t: SystemTime) -> Self;
             }
-
             
-            impl FileTimesExt for fs::FileTimes {
+            impl FileTimesExt for fs::FileTimes
+            {
                 fn set_created(mut self, t: SystemTime) -> Self {
                     self.as_inner_mut().set_created(t.into_inner());
                     self
                 }
             }
-
             /// Creates a new symlink to a non-directory file on the filesystem.
-            ///
-            /// The `link` path will be a file symbolic link pointing to the `original`
-            /// path.
-            ///
-            /// The `original` path should not be a directory or a symlink to a directory,
-            /// otherwise the symlink will be broken. Use [`symlink_dir`] for directories.
-            ///
-            /// This function currently corresponds to [`CreateSymbolicLinkW`][CreateSymbolicLinkW].
-            /// Note that this [may change in the future][changes].
-            ///
-            /// [CreateSymbolicLinkW]: https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createsymboliclinkw
-            /// [changes]: io#platform-specific-behavior
-            ///
-            /// # Examples
-            ///
-            /// ```no_run
-            /// use std::os::windows::fs;
-            ///
-            /// fn main() -> std::io::Result<()> {
-            ///     fs::symlink_file("a.txt", "b.txt")?;
-            ///     Ok(())
-            /// }
-            /// ```
-            ///
-            /// # Limitations
-            ///
-            /// Windows treats symlink creation as a [privileged action][symlink-security],
-            /// therefore this function is likely to fail unless the user makes changes to
-            /// their system to permit symlink creation. Users can try enabling Developer
-            /// Mode, granting the `SeCreateSymbolicLinkPrivilege` privilege, or running
-            /// the process as an administrator.
-            ///
-            /// [symlink-security]: https://docs.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/create-symbolic-links
-            
-            pub fn symlink_file<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()> {
+            pub fn symlink_file<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()>
+            {
                 sys::fs::symlink_inner(original.as_ref(), link.as_ref(), false)
             }
-
             /// Creates a new symlink to a directory on the filesystem.
-            ///
-            /// The `link` path will be a directory symbolic link pointing to the `original`
-            /// path.
-            ///
-            /// The `original` path must be a directory or a symlink to a directory,
-            /// otherwise the symlink will be broken. Use [`symlink_file`] for other files.
-            ///
-            /// This function currently corresponds to [`CreateSymbolicLinkW`][CreateSymbolicLinkW].
-            /// Note that this [may change in the future][changes].
-            ///
-            /// [CreateSymbolicLinkW]: https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createsymboliclinkw
-            /// [changes]: io#platform-specific-behavior
-            ///
-            /// # Examples
-            ///
-            /// ```no_run
-            /// use std::os::windows::fs;
-            ///
-            /// fn main() -> std::io::Result<()> {
-            ///     fs::symlink_dir("a", "b")?;
-            ///     Ok(())
-            /// }
-            /// ```
-            ///
-            /// # Limitations
-            ///
-            /// Windows treats symlink creation as a [privileged action][symlink-security],
-            /// therefore this function is likely to fail unless the user makes changes to
-            /// their system to permit symlink creation. Users can try enabling Developer
-            /// Mode, granting the `SeCreateSymbolicLinkPrivilege` privilege, or running
-            /// the process as an administrator.
-            ///
-            /// [symlink-security]: https://docs.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/create-symbolic-links
-            
-            pub fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()> {
+            pub fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()>
+            {
                 sys::fs::symlink_inner(original.as_ref(), link.as_ref(), true)
             }
-
             /// Creates a junction point.
-            ///
-            /// The `link` path will be a directory junction pointing to the original path.
-            /// If `link` is a relative path then it will be made absolute prior to creating the junction point.
-            /// The `original` path must be a directory or a link to a directory, otherwise the junction point will be broken.
-            ///
-            /// If either path is not a local file path then this will fail.
-            
-            pub fn junction_point<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()> {
+            pub fn junction_point<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()>
+            {
                 sys::fs::junction_point(original.as_ref(), link.as_ref())
             }
         }
@@ -17666,1402 +17465,14 @@ pub mod os
             {
                 *,
             };
-
-            mod handle
-            {
-                //! Owned and borrowed OS handles.
-                use ::
-                {
-                    marker::{ PhantomData },
-                    mem::{ ManuallyDrop },
-                    system::{ common::{ AsInner, FromInner, IntoInner }, cvt },
-                    *,
-                };                
-                use super::raw::{AsRawHandle, FromRawHandle, IntoRawHandle, RawHandle};
-                /// A borrowed handle.
-                #[repr(transparent)] #[derive(Copy, Clone)]
-                pub struct BorrowedHandle<'handle>
-                {
-                    handle: RawHandle,
-                    _phantom: PhantomData<&'handle OwnedHandle>,
-                }
-                /// An owned handle.
-                #[repr(transparent)]
-                pub struct OwnedHandle
-                {
-                    handle: RawHandle,
-                }
-                /// FFI type for handles in return values or out parameters, 
-                /// where `NULL` is used as a sentry value to indicate errors, such as in the return value of `CreateThread`.
-                #[repr(transparent)] #[derive(Debug)]
-                pub struct HandleOrNull(RawHandle);
-                /// FFI type for handles in return values or out parameters, 
-                /// where `INVALID_HANDLE_VALUE` is used as a sentry value to indicate errors, 
-                /// such as in the return value of `CreateFileW`.
-                #[repr(transparent)] #[derive(Debug)]
-                pub struct HandleOrInvalid(RawHandle);
-                // The Windows [`HANDLE`] type may be transferred across and shared between thread boundaries.
-                unsafe impl Send for OwnedHandle {}
-                unsafe impl Send for HandleOrNull {}
-                unsafe impl Send for HandleOrInvalid {}
-                unsafe impl Send for BorrowedHandle<'_> {}
-                unsafe impl Sync for OwnedHandle {}
-                unsafe impl Sync for HandleOrNull {}
-                unsafe impl Sync for HandleOrInvalid {}
-                unsafe impl Sync for BorrowedHandle<'_> {}
-
-                impl BorrowedHandle<'_>
-                {
-                    /// Returns a `BorrowedHandle` holding the given raw handle.
-                    #[inline] pub const unsafe fn borrow_raw(handle: RawHandle) -> Self
-                    { Self { handle, _phantom: PhantomData } }
-                }
-                
-                impl TryFrom<HandleOrNull> for OwnedHandle
-                {
-                    type Error = NullHandleError;
-                    #[inline] fn try_from(handle_or_null: HandleOrNull) -> Result<Self, NullHandleError>
-                    {
-                        let handle_or_null = ManuallyDrop::new(handle_or_null);
-                        
-                        if handle_or_null.is_valid() { Ok(unsafe { OwnedHandle::from_raw_handle(handle_or_null.0)})}
-                        else { Err(NullHandleError(())) }
-                    }
-                }
-                
-                impl Drop for HandleOrNull
-                {
-                    #[inline] fn drop(&mut self)
-                    {
-                        unsafe
-                        {
-                            if self.is_valid() { let _ = os::windows::ctypes::CloseHandle(self.0); }
-                        }
-                    }
-                }
-
-                impl OwnedHandle
-                {
-                    /// Creates a new `OwnedHandle` instance that shares 
-                    /// the same underlying object as the existing `OwnedHandle` instance.
-                    pub fn try_clone(&self) -> ::io::Result<Self> { self.as_handle().try_clone_to_owned() }
-                }
-
-                impl BorrowedHandle<'_> {
-                    /// Creates a new `OwnedHandle` instance that shares the same underlying
-                    /// object as the existing `BorrowedHandle` instance.
-                    pub fn try_clone_to_owned(&self) -> crate::io::Result<OwnedHandle>
-                    {
-                        self.duplicate(0, false, system::ctypes::DUPLICATE_SAME_ACCESS)
-                    }
-
-                    pub fn duplicate( &self, access: u32, inherit: bool, options: u32 ) -> io::Result<OwnedHandle>
-                    {
-                        let handle = self.as_raw_handle();
-                        
-                        if handle.is_null() {
-                            return unsafe { Ok(OwnedHandle::from_raw_handle(handle)) };
-                        }
-
-                        let mut ret = ptr::null_mut();
-                        cvt(unsafe {
-                            let cur_proc = os::windows::ctypes::GetCurrentProcess();
-                            os::windows::ctypes::DuplicateHandle(
-                                cur_proc,
-                                handle,
-                                cur_proc,
-                                &mut ret,
-                                access,
-                                inherit as os::windows::ctypes::BOOL,
-                                options,
-                            )
-                        })?;
-                        unsafe { Ok(OwnedHandle::from_raw_handle(ret)) }
-                    }
-                }
-                
-                impl TryFrom<HandleOrInvalid> for OwnedHandle {
-                    type Error = InvalidHandleError;
-
-                    #[inline] fn try_from(handle_or_invalid: HandleOrInvalid) -> Result<Self, InvalidHandleError> {
-                        let handle_or_invalid = ManuallyDrop::new(handle_or_invalid);
-                        if handle_or_invalid.is_valid() {
-                            Ok(unsafe { OwnedHandle::from_raw_handle(handle_or_invalid.0) })
-                        } else {
-                            Err(InvalidHandleError(()))
-                        }
-                    }
-                }
-                
-                impl Drop for HandleOrInvalid {
-                    #[inline] fn drop(&mut self) {
-                        if self.is_valid() {
-                            unsafe {
-                                let _ = os::windows::ctypes::CloseHandle(self.0);
-                            }
-                        }
-                    }
-                }
-                /// This is the error type used by [`HandleOrNull`]
-                /// when attempting to convert into a handle, to indicate that the value is null.
-                #[derive(Debug, Clone, PartialEq, Eq)]
-                pub struct NullHandleError(());
-                
-                impl fmt::Display for NullHandleError
-                {
-                    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-                        "A HandleOrNull could not be converted to a handle because it was null".fmt(fmt)
-                    }
-                }
-                
-                impl crate::error::Error for NullHandleError {}
-
-                /// This is the error type used by [`HandleOrInvalid`]
-                /// when attempting to convert into a handle, to indicate that the value is `INVALID_HANDLE_VALUE`.
-                #[derive(Debug, Clone, PartialEq, Eq)]
-                pub struct InvalidHandleError(());
-                
-                impl fmt::Display for InvalidHandleError
-                {
-                    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-                        "A HandleOrInvalid could not be converted to a handle because it was INVALID_HANDLE_VALUE"
-                            .fmt(fmt)
-                    }
-                }
-                
-                impl crate::error::Error for InvalidHandleError {}
-                
-                impl AsRawHandle for BorrowedHandle<'_> {
-                    #[inline] fn as_raw_handle(&self) -> RawHandle {
-                        self.handle
-                    }
-                }
-                
-                impl AsRawHandle for OwnedHandle {
-                    #[inline] fn as_raw_handle(&self) -> RawHandle {
-                        self.handle
-                    }
-                }
-                
-                impl IntoRawHandle for OwnedHandle {
-                    #[inline] fn into_raw_handle(self) -> RawHandle {
-                        ManuallyDrop::new(self).handle
-                    }
-                }
-                
-                impl FromRawHandle for OwnedHandle {
-                    #[inline] unsafe fn from_raw_handle(handle: RawHandle) -> Self {
-                        Self { handle }
-                    }
-                }
-
-                impl HandleOrNull {
-                    /// Constructs a new instance of `Self` from the given `RawHandle` returned
-                    /// from a Windows API that uses null to indicate failure, such as
-                    /// `CreateThread`.
-                    #[inline] pub unsafe fn from_raw_handle(handle: RawHandle) -> Self {
-                        Self(handle)
-                    }
-
-                    fn is_valid(&self) -> bool {
-                        !self.0.is_null()
-                    }
-                }
-
-                impl HandleOrInvalid {
-                    /// Constructs a new instance of `Self` from the given `RawHandle` returned
-                    /// from a Windows API that uses `INVALID_HANDLE_VALUE` to indicate
-                    /// failure, such as `CreateFileW`.
-                    #[inline] pub unsafe fn from_raw_handle(handle: RawHandle) -> Self {
-                        Self(handle)
-                    }
-
-                    fn is_valid(&self) -> bool {
-                        self.0 != ::os::windows::ctypes::INVALID_HANDLE_VALUE
-                    }
-                }
-                
-                impl Drop for OwnedHandle {
-                    #[inline] fn drop(&mut self) {
-                        unsafe {
-                            let _ = ::os::windows::ctypes::CloseHandle(self.handle);
-                        }
-                    }
-                }
-                
-                impl fmt::Debug for BorrowedHandle<'_> {
-                    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                        f.debug_struct("BorrowedHandle").field("handle", &self.handle).finish()
-                    }
-                }
-                
-                impl fmt::Debug for OwnedHandle {
-                    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                        f.debug_struct("OwnedHandle").field("handle", &self.handle).finish()
-                    }
-                }
-
-                macro_rules! impl_is_terminal
-                {
-                    ($($t:ty),*$(,)?) => {$(
-                        impl crate::sealed::Sealed for $t {}
-                        
-                        impl crate::io::IsTerminal for $t {
-                            #[inline]
-                            fn is_terminal(&self) -> bool {
-                                ::system::api::io::is_terminal(self)
-                            }
-                        }
-                    )*}
-                }
-
-                impl_is_terminal!(BorrowedHandle<'_>, OwnedHandle);
-
-                /// A trait to borrow the handle from an underlying object.                
-                pub trait AsHandle {
-                    /// Borrows the handle.
-                    fn as_handle(&self) -> BorrowedHandle<'_>;
-                }
-                
-                impl<T: AsHandle + ?Sized> AsHandle for &T {
-                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
-                        T::as_handle(self)
-                    }
-                }
-                
-                impl<T: AsHandle + ?Sized> AsHandle for &mut T {
-                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
-                        T::as_handle(self)
-                    }
-                }
-                /// This impl allows implementing traits that require `AsHandle` on Arc.
-                impl<T: AsHandle + ?Sized> AsHandle for ::sync::Arc<T> {
-                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
-                        (**self).as_handle()
-                    }
-                }
-                impl<T: AsHandle + ?Sized> AsHandle for ::rc::Rc<T> {
-                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
-                        (**self).as_handle()
-                    }
-                }
-                
-                impl<T: AsHandle + ?Sized> AsHandle for ::rc::UniqueRc<T> {
-                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
-                        (**self).as_handle()
-                    }
-                }
-                impl<T: AsHandle + ?Sized> AsHandle for Box<T> {
-                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
-                        (**self).as_handle()
-                    }
-                }
-                
-                impl AsHandle for BorrowedHandle<'_> {
-                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
-                        *self
-                    }
-                }
-                
-                impl AsHandle for OwnedHandle {
-                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
-                        // Safety: `OwnedHandle` and `BorrowedHandle` have the same validity
-                        // invariants, and the `BorrowedHandle` is bounded by the lifetime
-                        // of `&self`.
-                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
-                    }
-                }
-                
-                impl AsHandle for fs::File {
-                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
-                        self.as_inner().as_handle()
-                    }
-                }
-                
-                impl From<fs::File> for OwnedHandle {
-                    /// Takes ownership of a [`File`](fs::File)'s underlying file handle.
-                    #[inline] fn from(file: fs::File) -> OwnedHandle {
-                        file.into_inner().into_inner().into_inner()
-                    }
-                }
-                
-                impl From<OwnedHandle> for fs::File {
-                    /// Returns a [`File`](fs::File) that takes ownership of the given handle.
-                    #[inline] fn from(owned: OwnedHandle) -> Self {
-                        Self::from_inner(FromInner::from_inner(FromInner::from_inner(owned)))
-                    }
-                }
-                
-                impl AsHandle for ::io::Stdin {
-                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
-                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
-                    }
-                }
-                
-                impl<'a> AsHandle for ::io::StdinLock<'a> {
-                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
-                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
-                    }
-                }
-                
-                impl AsHandle for ::io::Stdout {
-                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
-                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
-                    }
-                }
-                
-                impl<'a> AsHandle for ::io::StdoutLock<'a> {
-                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
-                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
-                    }
-                }
-                
-                impl AsHandle for ::io::Stderr {
-                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
-                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
-                    }
-                }
-                
-                impl<'a> AsHandle for ::io::StderrLock<'a> {
-                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
-                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
-                    }
-                }
-                
-                impl AsHandle for ::process::ChildStdin {
-                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
-                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
-                    }
-                }
-                
-                impl From<::process::ChildStdin> for OwnedHandle {
-                    /// Takes ownership of a [`ChildStdin`](crate::process::ChildStdin)'s file handle.
-                    #[inline] fn from(child_stdin: ::process::ChildStdin) -> OwnedHandle {
-                        unsafe { OwnedHandle::from_raw_handle(child_stdin.into_raw_handle()) }
-                    }
-                }
-                
-                impl AsHandle for ::process::ChildStdout {
-                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
-                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
-                    }
-                }
-                
-                impl From<::process::ChildStdout> for OwnedHandle {
-                    /// Takes ownership of a [`ChildStdout`](crate::process::ChildStdout)'s file handle.
-                    #[inline] fn from(child_stdout: ::process::ChildStdout) -> OwnedHandle {
-                        unsafe { OwnedHandle::from_raw_handle(child_stdout.into_raw_handle()) }
-                    }
-                }
-                
-                impl AsHandle for ::process::ChildStderr {
-                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
-                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
-                    }
-                }
-                
-                impl From<::process::ChildStderr> for OwnedHandle {
-                    /// Takes ownership of a [`ChildStderr`](crate::process::ChildStderr)'s file handle.
-                    #[inline] fn from(child_stderr: ::process::ChildStderr) -> OwnedHandle {
-                        unsafe { OwnedHandle::from_raw_handle(child_stderr.into_raw_handle()) }
-                    }
-                }
-                
-                impl<T> AsHandle for ::thread::JoinHandle<T> {
-                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
-                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
-                    }
-                }
-                
-                impl<T> From<::thread::JoinHandle<T>> for OwnedHandle {
-                    #[inline] fn from(join_handle: ::thread::JoinHandle<T>) -> OwnedHandle {
-                        join_handle.into_inner().into_handle().into_inner()
-                    }
-                }
-                impl AsHandle for io::PipeReader {
-                    fn as_handle(&self) -> BorrowedHandle<'_> {
-                        self.0.as_handle()
-                    }
-                }
-                impl From<io::PipeReader> for OwnedHandle {
-                    fn from(pipe: io::PipeReader) -> Self {
-                        pipe.into_inner().into_inner()
-                    }
-                }
-                impl AsHandle for io::PipeWriter {
-                    fn as_handle(&self) -> BorrowedHandle<'_> {
-                        self.0.as_handle()
-                    }
-                }
-                impl From<io::PipeWriter> for OwnedHandle {
-                    fn from(pipe: io::PipeWriter) -> Self {
-                        pipe.into_inner().into_inner()
-                    }
-                }
-                impl From<OwnedHandle> for io::PipeReader {
-                    fn from(owned_handle: OwnedHandle) -> Self {
-                        Self::from_inner(FromInner::from_inner(owned_handle))
-                    }
-                }
-                impl From<OwnedHandle> for io::PipeWriter {
-                    fn from(owned_handle: OwnedHandle) -> Self {
-                        Self::from_inner(FromInner::from_inner(owned_handle))
-                    }
-                }
-            } pub use self::handle::*;
-
-            mod raw
-            {
-                //! Windows-specific extensions to general I/O primitives.
-                use ::
-                {
-                    os::windows::
-                    {
-                        ctypes::{ self },
-                        io::{AsHandle, AsSocket},
-                        io::{OwnedHandle, OwnedSocket},
-                        raw::{ self },
-                    },
-                    system::common::{AsInner, FromInner, IntoInner},
-                    *,
-                };
-                /// Raw HANDLEs.
-                pub type RawHandle = raw::HANDLE;
-                /// Raw SOCKETs.
-                pub type RawSocket = raw::SOCKET;
-                /// Extracts raw handles.
-                pub trait AsRawHandle
-                {
-                    /// Extracts the raw handle.
-                    fn as_raw_handle(&self) -> RawHandle;
-                }
-                /// Constructs I/O objects from raw handles.
-                pub trait FromRawHandle
-                {
-                    /// Constructs a new I/O object from the specified raw handle.
-                    unsafe fn from_raw_handle(handle: RawHandle) -> Self;
-                }
-                /// A trait to express the ability to consume an object and acquire ownership of its raw `HANDLE`.
-                pub trait IntoRawHandle
-                {
-                    /// Consumes this object, returning the raw underlying handle.
-                    #[must_use = "losing the raw handle may leak resources"]
-                    fn into_raw_handle(self) -> RawHandle;
-                }
-                
-                impl AsRawHandle for fs::File
-                {
-                    #[inline] fn as_raw_handle(&self) -> RawHandle {
-                        self.as_inner().as_raw_handle() as RawHandle
-                    }
-                }
-                
-                impl AsRawHandle for io::Stdin
-                {
-                    fn as_raw_handle(&self) -> RawHandle 
-                    { stdio_handle(unsafe { ctypes::GetStdHandle( ctypes::STD_INPUT_HANDLE) as RawHandle }) }
-                }
-                
-                impl AsRawHandle for io::Stdout
-                {
-                    fn as_raw_handle(&self) -> RawHandle
-                    {
-                        stdio_handle(unsafe { ctypes::GetStdHandle( ctypes::STD_OUTPUT_HANDLE ) as RawHandle })
-                    }
-                }
-                
-                impl AsRawHandle for io::Stderr
-                {
-                    fn as_raw_handle(&self) -> RawHandle
-                    { stdio_handle(unsafe { ctypes::GetStdHandle( ctypes::STD_ERROR_HANDLE) as RawHandle }) }
-                }
-                
-                impl<'a> AsRawHandle for io::StdinLock<'a>
-                {
-                    fn as_raw_handle(&self) -> RawHandle 
-                    { stdio_handle(unsafe { ctypes::GetStdHandle( ctypes::STD_INPUT_HANDLE) as RawHandle }) }
-                }
-                
-                impl<'a> AsRawHandle for io::StdoutLock<'a>
-                {
-                    fn as_raw_handle(&self) -> RawHandle
-                    { stdio_handle(unsafe { ctypes::GetStdHandle( ctypes::STD_OUTPUT_HANDLE) as RawHandle }) }
-                }
-                
-                impl<'a> AsRawHandle for io::StderrLock<'a>
-                {
-                    fn as_raw_handle(&self) -> RawHandle
-                    {
-                        stdio_handle
-                        (
-                            unsafe
-                            {
-                                ctypes::GetStdHandle( ctypes::STD_ERROR_HANDLE ) as RawHandle 
-                            }
-                        )
-                    }
-                }
-                
-                fn stdio_handle(raw: RawHandle) -> RawHandle
-                { if raw == ctypes::INVALID_HANDLE_VALUE { ptr::null_mut() } else { raw } }
-                
-                impl FromRawHandle for fs::File
-                {
-                    #[inline] unsafe fn from_raw_handle(handle: RawHandle) -> fs::File 
-                    {
-                        unsafe 
-                        {
-                            let handle = handle as ctypes::HANDLE;
-                            fs::File::from_inner( system::fs::File::from_inner(FromInner::from_inner( OwnedHandle::from_raw_handle(handle))))
-                        }
-                    }
-                }
-                
-                impl IntoRawHandle for fs::File
-                {
-                    #[inline] fn into_raw_handle(self) -> RawHandle { self.into_inner().into_raw_handle() as *mut _ }
-                }
-                /// Extracts raw sockets.                
-                pub trait AsRawSocket
-                {
-                    /// Extracts the raw socket.
-                    fn as_raw_socket(&self) -> RawSocket;
-                }
-                /// Creates I/O objects from raw sockets.
-                pub trait FromRawSocket
-                {
-                    /// Constructs a new I/O object from the specified raw socket.
-                    unsafe fn from_raw_socket(sock: RawSocket) -> Self;
-                }
-                /// A trait to express the ability to consume an object and acquire ownership of its raw `SOCKET`.
-                pub trait IntoRawSocket
-                {
-                    /// Consumes this object, returning the raw underlying socket.
-                    #[must_use = "losing the raw socket may leak resources"]
-                    fn into_raw_socket(self) -> RawSocket;
-                }
-                
-                impl AsRawSocket for net::TcpStream 
-                {
-                    #[inline] fn as_raw_socket(&self) -> RawSocket { self.as_inner().socket().as_raw_socket() }
-                }
-                
-                impl AsRawSocket for net::TcpListener 
-                {
-                    #[inline] fn as_raw_socket(&self) -> RawSocket { self.as_inner().socket().as_raw_socket() }
-                }
-                
-                impl AsRawSocket for net::UdpSocket 
-                {
-                    #[inline] fn as_raw_socket(&self) -> RawSocket { self.as_inner().socket().as_raw_socket() }
-                }
-                
-                impl FromRawSocket for net::TcpStream
-                {
-                    #[inline] unsafe fn from_raw_socket(sock: RawSocket) -> net::TcpStream
-                    {
-                        unsafe
-                        {
-                            let sock = system::net::Socket::from_inner(OwnedSocket::from_raw_socket(sock));
-                            net::TcpStream::from_inner(system::net::TcpStream::from_inner(sock))
-                        }
-                    }
-                }
-
-                impl FromRawSocket for net::TcpListener
-                {
-                    #[inline] unsafe fn from_raw_socket(sock: RawSocket) -> net::TcpListener
-                    {
-                        unsafe
-                        {
-                            let sock = system::net::Socket::from_inner(OwnedSocket::from_raw_socket(sock));
-                            net::TcpListener::from_inner(system::net::TcpListener::from_inner(sock))
-                        }
-                    }
-                }
-
-                impl FromRawSocket for net::UdpSocket
-                {
-                    #[inline] unsafe fn from_raw_socket(sock: RawSocket) -> net::UdpSocket
-                    {
-                        unsafe
-                        {
-                            let sock = system::net::Socket::from_inner(OwnedSocket::from_raw_socket(sock));
-                            net::UdpSocket::from_inner(system::net::UdpSocket::from_inner(sock))
-                        }
-                    }
-                }
-                
-                impl IntoRawSocket for net::TcpStream
-                {
-                    #[inline] fn into_raw_socket(self) -> RawSocket { self.into_inner().into_socket().into_inner().into_raw_socket() }
-                }
-                
-                impl IntoRawSocket for net::TcpListener
-                {
-                    #[inline] fn into_raw_socket(self) -> RawSocket { self.into_inner().into_socket().into_inner().into_raw_socket() }
-                }
-                
-                impl IntoRawSocket for net::UdpSocket
-                {
-                    #[inline] fn into_raw_socket(self) -> RawSocket { self.into_inner().into_socket().into_inner().into_raw_socket() }
-                }
-                
-                impl AsRawHandle for io::PipeReader 
-                {
-                    fn as_raw_handle(&self) -> RawHandle { self.0.as_raw_handle() }
-                }
-                
-                impl FromRawHandle for io::PipeReader 
-                {
-                    unsafe fn from_raw_handle(raw_handle: RawHandle) -> Self { unsafe { Self::from_inner(FromRawHandle::from_raw_handle(raw_handle)) } }
-                }
-                
-                impl IntoRawHandle for io::PipeReader 
-                {
-                    fn into_raw_handle(self) -> RawHandle { self.0.into_raw_handle() }
-                }
-                
-                impl AsRawHandle for io::PipeWriter
-                 
-                 {
-                    fn as_raw_handle(&self) -> RawHandle { self.0.as_raw_handle() }
-                }
-                
-                impl FromRawHandle for io::PipeWriter
-                {
-                    unsafe fn from_raw_handle(raw_handle: RawHandle) -> Self
-                    { unsafe { Self::from_inner(FromRawHandle::from_raw_handle(raw_handle)) } }
-                }
-                
-                impl IntoRawHandle for io::PipeWriter
-                {
-                    fn into_raw_handle(self) -> RawHandle { self.0.into_raw_handle() }
-                }
-            } pub use self::raw::*;
-
-            mod socket
-            {
-                //! Owned and borrowed OS sockets.
-                use ::
-                {
-                    marker::{ PhantomData },
-                    mem::{self, ManuallyDrop},
-                    system::{ cvt },
-                    *,
-                };
-                use super::raw::{AsRawSocket, FromRawSocket, IntoRawSocket, RawSocket};
-                
-                type ValidRawSocket = num::niche_types::NotAllOnes<RawSocket>;
-                /// A borrowed socket.
-                #[repr(transparent)] #[derive(Copy, Clone)]
-                pub struct BorrowedSocket<'socket>
-                {
-                    socket: ValidRawSocket,
-                    _phantom: PhantomData<&'socket OwnedSocket>,
-                }
-                /// An owned socket.
-                #[repr(transparent)]
-                pub struct OwnedSocket
-                {
-                    socket: ValidRawSocket,
-                }
-
-                impl BorrowedSocket<'_>
-                {
-                    /// Returns a `BorrowedSocket` holding the given raw socket.
-                    #[inline] #[track_caller]
-                    pub const unsafe fn borrow_raw(socket: RawSocket) -> Self
-                    {
-                        Self { socket: ValidRawSocket::new(socket).expect("socket != -1"), _phantom: PhantomData }
-                    }
-                }
-
-                impl OwnedSocket
-                {
-                    /// Creates a new `OwnedSocket` instance that shares
-                    /// the same underlying object as the existing `OwnedSocket` instance.
-                    pub fn try_clone(&self) -> io::Result<Self>
-                    {
-                        self.as_socket().try_clone_to_owned()
-                    }
-                    
-                    pub(crate) fn set_no_inherit(&self) -> io::Result<()>
-                    {
-                        Err(io::const_error!(io::ErrorKind::Unsupported, "unavailable on UWP"))
-                    }
-                }
-
-                impl BorrowedSocket<'_>
-                {
-                    /// Creates a new `OwnedSocket` instance that shares the same underlying
-                    /// object as the existing `BorrowedSocket` instance.
-                    pub fn try_clone_to_owned(&self) -> io::Result<OwnedSocket>
-                    {
-                        unsafe
-                        {   
-                            let mut info = mem::zeroed::<system::api::WSAPROTOCOL_INFOW>();
-                            let result = system::api::WSADuplicateSocketW
-                            (
-                                self.as_raw_socket() as system::api::SOCKET,
-                                system::api::GetCurrentProcessId(),
-                                &mut info,
-                            );
-
-                            system::net::::net::cvt(result)?;
-                            let socket = system::api::WSASocketW
-                            (
-                                info.iAddressFamily,
-                                info.iSocketType,
-                                info.iProtocol,
-                                &info,
-                                0,
-                                system::api::WSA_FLAG_OVERLAPPED | system::api::WSA_FLAG_NO_HANDLE_INHERIT,
-                            );
-
-                            if socket != system::api::INVALID_SOCKET { Ok(OwnedSocket::from_raw_socket(socket as RawSocket)) } 
-                            
-                            else
-                            {
-                                let error = unsafe { system::api::WSAGetLastError() };
-
-                                if error != system::api::WSAEPROTOTYPE && error != system::api::WSAEINVAL
-                                {
-                                    return Err(io::Error::from_raw_os_error(error));
-                                }
-
-                                let socket = system::api::WSASocketW
-                                (
-                                    info.iAddressFamily,
-                                    info.iSocketType,
-                                    info.iProtocol,
-                                    &info,
-                                    0,
-                                    system::api::WSA_FLAG_OVERLAPPED,
-                                );
-
-                                if socket == system::api::INVALID_SOCKET { return Err(last_error()); }
-
-                                let socket = OwnedSocket::from_raw_socket(socket as RawSocket);
-                                socket.set_no_inherit()?;
-                                Ok(socket)
-                            }
-
-                        }
-                    }
-                }
-
-                /// Returns the last error from the Windows socket interface.
-                fn last_error() -> io::Error
-                {
-                    io::Error::from_raw_os_error(unsafe { system::api::WSAGetLastError() })
-                }
-                
-                impl AsRawSocket for BorrowedSocket<'_> {
-                    #[inline] fn as_raw_socket(&self) -> RawSocket {
-                        self.socket.as_inner()
-                    }
-                }
-                
-                impl AsRawSocket for OwnedSocket {
-                    #[inline] fn as_raw_socket(&self) -> RawSocket {
-                        self.socket.as_inner()
-                    }
-                }
-                
-                impl IntoRawSocket for OwnedSocket {
-                    #[inline] fn into_raw_socket(self) -> RawSocket {
-                        ManuallyDrop::new(self).socket.as_inner()
-                    }
-                }
-                
-                impl FromRawSocket for OwnedSocket {
-                    #[inline]
-                    #[track_caller]
-                    unsafe fn from_raw_socket(socket: RawSocket) -> Self {
-                        Self { socket: ValidRawSocket::new(socket).expect("socket != -1") }
-                    }
-                }
-                
-                impl Drop for OwnedSocket {
-                    #[inline] fn drop(&mut self) {
-                        unsafe {
-                            let _ = system::api::closesocket(self.socket.as_inner() as system::api::SOCKET);
-                        }
-                    }
-                }
-                
-                impl fmt::Debug for BorrowedSocket<'_> {
-                    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                        f.debug_struct("BorrowedSocket").field("socket", &self.socket).finish()
-                    }
-                }
-                
-                impl fmt::Debug for OwnedSocket {
-                    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                        f.debug_struct("OwnedSocket").field("socket", &self.socket).finish()
-                    }
-                }
-
-                /// A trait to borrow the socket from an underlying object.
-                
-                pub trait AsSocket {
-                    /// Borrows the socket.
-                    
-                    fn as_socket(&self) -> BorrowedSocket<'_>;
-                }
-
-                
-                impl<T: AsSocket> AsSocket for &T {
-                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> {
-                        T::as_socket(self)
-                    }
-                }
-
-                
-                impl<T: AsSocket> AsSocket for &mut T {
-                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> {
-                        T::as_socket(self)
-                    }
-                }
-
-                
-                /// This impl allows implementing traits that require `AsSocket` on Arc.
-                impl<T: AsSocket> AsSocket for crate::sync::Arc<T> {
-                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> {
-                        (**self).as_socket()
-                    }
-                }
-
-                
-                impl<T: AsSocket> AsSocket for crate::rc::Rc<T> {
-                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> {
-                        (**self).as_socket()
-                    }
-                }
-                
-                impl<T: AsSocket + ?Sized> AsSocket for crate::rc::UniqueRc<T> {
-                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> {
-                        (**self).as_socket()
-                    }
-                }
-
-                
-                impl<T: AsSocket> AsSocket for Box<T> {
-                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> {
-                        (**self).as_socket()
-                    }
-                }
-                
-                impl AsSocket for BorrowedSocket<'_> {
-                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> {
-                        *self
-                    }
-                }
-                
-                impl AsSocket for OwnedSocket {
-                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> {
-                        // Safety: `OwnedSocket` and `BorrowedSocket` have the same validity
-                        // invariants, and the `BorrowedSocket` is bounded by the lifetime
-                        // of `&self`.
-                        unsafe { BorrowedSocket::borrow_raw(self.as_raw_socket()) }
-                    }
-                }
-                
-                impl AsSocket for crate::net::TcpStream {
-                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> {
-                        unsafe { BorrowedSocket::borrow_raw(self.as_raw_socket()) }
-                    }
-                }
-                
-                impl From<crate::net::TcpStream> for OwnedSocket {
-                    /// Takes ownership of a [`TcpStream`](crate::net::TcpStream)'s socket.
-                    #[inline] fn from(tcp_stream: crate::net::TcpStream) -> OwnedSocket {
-                        unsafe { OwnedSocket::from_raw_socket(tcp_stream.into_raw_socket()) }
-                    }
-                }
-                
-                impl From<OwnedSocket> for crate::net::TcpStream {
-                    #[inline] fn from(owned: OwnedSocket) -> Self {
-                        unsafe { Self::from_raw_socket(owned.into_raw_socket()) }
-                    }
-                }
-                
-                impl AsSocket for crate::net::TcpListener {
-                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> {
-                        unsafe { BorrowedSocket::borrow_raw(self.as_raw_socket()) }
-                    }
-                }
-                
-                impl From<crate::net::TcpListener> for OwnedSocket {
-                    /// Takes ownership of a [`TcpListener`](crate::net::TcpListener)'s socket.
-                    #[inline] fn from(tcp_listener: crate::net::TcpListener) -> OwnedSocket {
-                        unsafe { OwnedSocket::from_raw_socket(tcp_listener.into_raw_socket()) }
-                    }
-                }
-                
-                impl From<OwnedSocket> for crate::net::TcpListener {
-                    #[inline] fn from(owned: OwnedSocket) -> Self {
-                        unsafe { Self::from_raw_socket(owned.into_raw_socket()) }
-                    }
-                }
-                
-                impl AsSocket for crate::net::UdpSocket {
-                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> {
-                        unsafe { BorrowedSocket::borrow_raw(self.as_raw_socket()) }
-                    }
-                }
-                
-                impl From<crate::net::UdpSocket> for OwnedSocket
-                {
-                    /// Takes ownership of a [`UdpSocket`](crate::net::UdpSocket)'s underlying socket.
-                    #[inline] fn from(udp_socket: crate::net::UdpSocket) -> OwnedSocket
-                    { unsafe { OwnedSocket::from_raw_socket(udp_socket.into_raw_socket()) } }
-                }
-                
-                impl From<OwnedSocket> for crate::net::UdpSocket
-                {
-                    #[inline] fn from(owned: OwnedSocket) -> Self
-                    { unsafe { Self::from_raw_socket(owned.into_raw_socket()) } }
-                }
-            } pub use self::socket::*;
         }
 
         pub mod process
         {
-            //! Windows-specific extensions to primitives in the [`std::process`] module.
             use ::
             {
-                ffi::{ OsStr, c_void },
-                mem::{ MaybeUninit },
-                os::windows::io::
-                { 
-                    AsHandle, AsRawHandle, BorrowedHandle, FromRawHandle, IntoRawHandle, OwnedHandle, RawHandle
-                },
-                system::common::{ AsInner, AsInnerMut, FromInner, IntoInner },
                 *,
             };
-            
-            impl FromRawHandle for process::Stdio
-            {
-                unsafe fn from_raw_handle(handle: RawHandle) -> process::Stdio 
-                {
-                    let handle = unsafe { handle::Handle::from_raw_handle(handle as *mut _) };
-                    let io = process::Stdio::Handle(handle);
-                    process::Stdio::from_inner(io)
-                }
-            }
-
-            
-            impl From<OwnedHandle> for process::Stdio {
-                /// Takes ownership of a handle and returns a process::Stdio that can attach a stream to it.
-                fn from(handle: OwnedHandle) -> process::Stdio
-                {
-                    let handle = handle::Handle::from_inner(handle);
-                    let io = process::Stdio::Handle(handle);
-                    process::Stdio::from_inner(io)
-                }
-            }
-
-            
-            impl AsRawHandle for process::Child {
-                #[inline] fn as_raw_handle(&self) -> RawHandle {
-                    self.as_inner().handle().as_raw_handle() as *mut _
-                }
-            }
-
-            
-            impl AsHandle for process::Child {
-                #[inline] fn as_handle(&self) -> BorrowedHandle<'_> {
-                    self.as_inner().handle().as_handle()
-                }
-            }
-
-            
-            impl IntoRawHandle for process::Child {
-                fn into_raw_handle(self) -> RawHandle {
-                    self.into_inner().into_handle().into_raw_handle() as *mut _
-                }
-            }
-
-            
-            impl From<process::Child> for OwnedHandle {
-                /// Takes ownership of a [`Child`](process::Child)'s process handle.
-                fn from(child: process::Child) -> OwnedHandle {
-                    child.into_inner().into_handle().into_inner()
-                }
-            }
-
-            
-            impl AsRawHandle for process::ChildStdin {
-                #[inline] fn as_raw_handle(&self) -> RawHandle {
-                    self.as_inner().handle().as_raw_handle() as *mut _
-                }
-            }
-
-            
-            impl AsRawHandle for process::ChildStdout {
-                #[inline] fn as_raw_handle(&self) -> RawHandle {
-                    self.as_inner().handle().as_raw_handle() as *mut _
-                }
-            }
-
-            
-            impl AsRawHandle for process::ChildStderr {
-                #[inline] fn as_raw_handle(&self) -> RawHandle {
-                    self.as_inner().handle().as_raw_handle() as *mut _
-                }
-            }
-
-            
-            impl IntoRawHandle for process::ChildStdin {
-                fn into_raw_handle(self) -> RawHandle {
-                    self.into_inner().into_handle().into_raw_handle() as *mut _
-                }
-            }
-
-            
-            impl IntoRawHandle for process::ChildStdout {
-                fn into_raw_handle(self) -> RawHandle {
-                    self.into_inner().into_handle().into_raw_handle() as *mut _
-                }
-            }
-
-            
-            impl IntoRawHandle for process::ChildStderr {
-                fn into_raw_handle(self) -> RawHandle {
-                    self.into_inner().into_handle().into_raw_handle() as *mut _
-                }
-            }
-            /// Creates a `ChildStdin` from the provided `OwnedHandle`.
-            impl From<OwnedHandle> for process::ChildStdin {
-                fn from(handle: OwnedHandle) -> process::ChildStdin {
-                    let handle = sys::handle::Handle::from_inner(handle);
-                    let pipe = sys::pipe::AnonPipe::from_inner(handle);
-                    process::ChildStdin::from_inner(pipe)
-                }
-            }
-            /// Creates a `ChildStdout` from the provided `OwnedHandle`.
-            impl From<OwnedHandle> for process::ChildStdout {
-                fn from(handle: OwnedHandle) -> process::ChildStdout {
-                    let handle = sys::handle::Handle::from_inner(handle);
-                    let pipe = sys::pipe::AnonPipe::from_inner(handle);
-                    process::ChildStdout::from_inner(pipe)
-                }
-            }
-
-            /// Creates a `ChildStderr` from the provided `OwnedHandle`.
-            impl From<OwnedHandle> for process::ChildStderr {
-                fn from(handle: OwnedHandle) -> process::ChildStderr {
-                    let handle = sys::handle::Handle::from_inner(handle);
-                    let pipe = sys::pipe::AnonPipe::from_inner(handle);
-                    process::ChildStderr::from_inner(pipe)
-                }
-            }
-
-            /// Windows-specific extensions to [`process::ExitStatus`].
-            
-            pub trait ExitStatusExt: Sealed {
-                /// Creates a new `ExitStatus` from the raw underlying `u32` return value of a process.
-                fn from_raw(raw: u32) -> Self;
-            }
-
-            
-            impl ExitStatusExt for process::ExitStatus {
-                fn from_raw(raw: u32) -> Self {
-                    process::ExitStatus::from_inner(From::from(raw))
-                }
-            }
-
-            /// Windows-specific extensions to the [`process::Command`] builder.
-            
-            pub trait CommandExt: Sealed {
-                /// Sets the [process creation flags][1] to be passed to `CreateProcess`.
-                
-                fn creation_flags(&mut self, flags: u32) -> &mut process::Command;
-
-                /// Sets the field `wShowWindow` of [STARTUPINFO][1] that is passed to `CreateProcess`.
-                
-                fn show_window(&mut self, cmd_show: u16) -> &mut process::Command;
-
-                /// Forces all arguments to be wrapped in quote (`"`) characters.
-                ///
-                /// This is useful for passing arguments to [MSYS2/Cygwin][1] based
-                /// executables: these programs will expand unquoted arguments containing
-                /// wildcard characters (`?` and `*`) by searching for any file paths
-                /// matching the wildcard pattern.
-                ///
-                /// Adding quotes has no effect when passing arguments to programs
-                /// that use [msvcrt][2]. This includes programs built with both
-                /// MinGW and MSVC.
-                ///
-                /// [1]: <https://github.com/msys2/MSYS2-packages/issues/2176>
-                /// [2]: <https://msdn.microsoft.com/en-us/library/17w5ykft.aspx>
-                
-                fn force_quotes(&mut self, enabled: bool) -> &mut process::Command;
-
-                /// Append literal text to the command line without any quoting or escaping.
-                ///
-                /// This is useful for passing arguments to applications that don't follow
-                /// the standard C run-time escaping rules, such as `cmd.exe /c`.
-                ///
-                /// # Batch files
-                ///
-                /// Note the `cmd /c` command line has slightly different escaping rules than batch files
-                /// themselves. If possible, it may be better to write complex arguments to a temporary
-                /// `.bat` file, with appropriate escaping, and simply run that using:
-                ///
-                /// ```no_run
-                /// # use std::process::Command;
-                /// # let temp_bat_file = "";
-                /// # #[allow(unused)]
-                /// let output = Command::new("cmd").args(["/c", &format!("\"{temp_bat_file}\"")]).output();
-                /// ```
-                ///
-                /// # Example
-                ///
-                /// Run a batch script using both trusted and untrusted arguments.
-                ///
-                /// ```no_run
-                /// #[cfg(windows)]
-                /// // `my_script_path` is a path to known bat file.
-                /// // `user_name` is an untrusted name given by the user.
-                /// fn run_script(
-                ///     my_script_path: &str,
-                ///     user_name: &str,
-                /// ) -> Result<std::process::Output, std::io::Error> {
-                ///     use std::io::{Error, ErrorKind};
-                ///     use std::os::windows::process::CommandExt;
-                ///     use std::process::Command;
-                ///
-                ///     // Create the command line, making sure to quote the script path.
-                ///     // This assumes the fixed arguments have been tested to work with the script we're using.
-                ///     let mut cmd_args = format!(r#""{my_script_path}" "--features=[a,b,c]""#);
-                ///
-                ///     // Make sure the user name is safe. In particular we need to be
-                ///     // cautious of ascii symbols that cmd may interpret specially.
-                ///     // Here we only allow alphanumeric characters.
-                ///     if !user_name.chars().all(|c| c.is_alphanumeric()) {
-                ///         return Err(Error::new(ErrorKind::InvalidInput, "invalid user name"));
-                ///     }
-                ///
-                ///     // now we have validated the user name, let's add that too.
-                ///     cmd_args.push_str(" --user ");
-                ///     cmd_args.push_str(user_name);
-                ///
-                ///     // call cmd.exe and return the output
-                ///     Command::new("cmd.exe")
-                ///         .arg("/c")
-                ///         // surround the entire command in an extra pair of quotes, as required by cmd.exe.
-                ///         .raw_arg(&format!("\"{cmd_args}\""))
-                ///         .output()
-                /// }
-                /// ````
-                
-                fn raw_arg<S: AsRef<OsStr>>(&mut self, text_to_append_as_is: S) -> &mut process::Command;
-
-                /// When [`process::Command`] creates pipes, request that our side is always async.
-                fn async_pipes(&mut self, always_async: bool) -> &mut process::Command;
-
-                /// Executes the command as a child process with the given
-                /// [`ProcThreadAttributeList`], returning a handle to it.
-                fn spawn_with_attributes(
-                    &mut self,
-                    attribute_list: &ProcThreadAttributeList<'_>,
-                ) -> io::Result<process::Child>;
-            }
-
-            
-            impl CommandExt for process::Command {
-                fn creation_flags(&mut self, flags: u32) -> &mut process::Command {
-                    self.as_inner_mut().creation_flags(flags);
-                    self
-                }
-
-                fn show_window(&mut self, cmd_show: u16) -> &mut process::Command {
-                    self.as_inner_mut().show_window(Some(cmd_show));
-                    self
-                }
-
-                fn force_quotes(&mut self, enabled: bool) -> &mut process::Command {
-                    self.as_inner_mut().force_quotes(enabled);
-                    self
-                }
-
-                fn raw_arg<S: AsRef<OsStr>>(&mut self, raw_text: S) -> &mut process::Command {
-                    self.as_inner_mut().raw_arg(raw_text.as_ref());
-                    self
-                }
-
-                fn async_pipes(&mut self, always_async: bool) -> &mut process::Command {
-                    let _ = always_async;
-                    self
-                }
-
-                fn spawn_with_attributes(
-                    &mut self,
-                    attribute_list: &ProcThreadAttributeList<'_>,
-                ) -> io::Result<process::Child> {
-                    self.as_inner_mut()
-                        .spawn_with_attributes(sys::process::Stdio::Inherit, true, Some(attribute_list))
-                        .map(process::Child::from_inner)
-                }
-            }
-
-            
-            pub trait ChildExt: Sealed {
-                /// Extracts the main thread raw handle, without taking ownership
-                
-                fn main_thread_handle(&self) -> BorrowedHandle<'_>;
-            }
-
-            
-            impl ChildExt for process::Child {
-                fn main_thread_handle(&self) -> BorrowedHandle<'_> {
-                    self.handle.main_thread_handle()
-                }
-            }
-
-            /// Windows-specific extensions to [`process::ExitCode`].
-            pub trait ExitCodeExt: Sealed {
-                /// Creates a new `ExitCode` from the raw underlying `u32` return value of a process.
-                
-                fn from_raw(raw: u32) -> Self;
-            }
-
-            
-            impl ExitCodeExt for process::ExitCode {
-                fn from_raw(raw: u32) -> Self {
-                    process::ExitCode::from_inner(From::from(raw))
-                }
-            }
-
-            /// A wrapper around windows [`ProcThreadAttributeList`][1].
-            ///
-            /// [1]: <https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-initializeprocthreadattributelist>
-            #[derive(Debug)]
-            
-            pub struct ProcThreadAttributeList<'a> {
-                attribute_list: Box<[MaybeUninit<u8>]>,
-                _lifetime_marker: marker::PhantomData<&'a ()>,
-            }
-
-            
-            impl<'a> ProcThreadAttributeList<'a> {
-                /// Creates a new builder for constructing a [`ProcThreadAttributeList`].
-                pub fn build() -> ProcThreadAttributeListBuilder<'a> {
-                    ProcThreadAttributeListBuilder::new()
-                }
-
-                /// Returns a pointer to the underling attribute list.
-                #[doc(hidden)]
-                pub fn as_ptr(&self) -> *const MaybeUninit<u8> {
-                    self.attribute_list.as_ptr()
-                }
-            }
-
-            
-            impl<'a> Drop for ProcThreadAttributeList<'a>
-            {
-                /// Deletes the attribute list.
-                fn drop(&mut self) {
-                    let lp_attribute_list = self.attribute_list.as_mut_ptr().cast::<c_void>();
-                    unsafe { system::api::DeleteProcThreadAttributeList(lp_attribute_list) }
-                }
-            }
-            /// Builder for constructing a [`ProcThreadAttributeList`].
-            #[derive(Clone, Debug)]
-            pub struct ProcThreadAttributeListBuilder<'a> {
-                attributes: alloc::collections::BTreeMap<usize, ProcThreadAttributeValue>,
-                _lifetime_marker: marker::PhantomData<&'a ()>,
-            }
-
-            
-            impl<'a> ProcThreadAttributeListBuilder<'a>
-            {
-                fn new() -> Self {
-                    ProcThreadAttributeListBuilder {
-                        attributes: alloc::collections::BTreeMap::new(),
-                        _lifetime_marker: marker::PhantomData,
-                    }
-                }
-
-                /// Sets an attribute on the attribute list.
-                pub fn attribute<T>(self, attribute: usize, value: &'a T) -> Self {
-                    unsafe {
-                        self.raw_attribute(attribute, ptr::addr_of!(*value).cast::<c_void>(), size_of::<T>())
-                    }
-                }
-
-                /// Sets a raw attribute on the attribute list.
-                pub unsafe fn raw_attribute<T>(
-                    mut self,
-                    attribute: usize,
-                    value_ptr: *const T,
-                    value_size: usize,
-                ) -> Self {
-                    self.attributes.insert(
-                        attribute,
-                        ProcThreadAttributeValue { ptr: value_ptr.cast::<c_void>(), size: value_size },
-                    );
-                    self
-                }
-
-                /// Finalizes the construction of the `ProcThreadAttributeList`.
-                pub fn finish(&self) -> io::Result<ProcThreadAttributeList<'a>>
-                {
-                    let mut required_size = 0;
-                    let Ok(attribute_count) = self.attributes.len().try_into() else {
-                        return Err(io::const_error!(
-                            io::ErrorKind::InvalidInput,
-                            "maximum number of ProcThreadAttributes exceeded",
-                        ));
-                    };
-                    unsafe {
-                        system::api::InitializeProcThreadAttributeList(
-                            ptr::null_mut(),
-                            attribute_count,
-                            0,
-                            &mut required_size,
-                        )
-                    };
-
-                    let mut attribute_list = vec![MaybeUninit::uninit(); required_size].into_boxed_slice();
-                    
-                    sys::cvt(unsafe {
-                        system::api::InitializeProcThreadAttributeList(
-                            attribute_list.as_mut_ptr().cast::<c_void>(),
-                            attribute_count,
-                            0,
-                            &mut required_size,
-                        )
-                    })?;
-                    
-                    for (&attribute, value) in self.attributes.iter().take(attribute_count as usize) {
-                        sys::cvt(unsafe 
-                        {
-                            system::api::UpdateProcThreadAttribute(
-                                attribute_list.as_mut_ptr().cast::<c_void>(),
-                                0,
-                                attribute,
-                                value.ptr,
-                                value.size,
-                                ptr::null_mut(),
-                                ptr::null_mut(),
-                            )
-                        })?;
-                    }
-
-                    Ok(ProcThreadAttributeList { attribute_list, _lifetime_marker: marker::PhantomData })
-                }
-            }
-            /// Wrapper around the value data to be used as a Process Thread Attribute.
-            #[derive(Clone, Debug)]
-            struct ProcThreadAttributeValue
-            {
-                ptr: *const c_void,
-                size: usize,
-            }
         }
 
         pub mod raw
@@ -19078,43 +17489,6 @@ pub mod os
             {
                 *,
             };
-        }
-
-        pub mod ctypes
-        {
-            use ::
-            {
-                *,
-            };
-        }
-
-        pub mod shared
-        {
-            use ::
-            {
-                *,
-            };
-        }
-
-        pub mod um
-        {
-            use ::
-            {
-                *,
-            };
-        }
-        /// A prelude for conveniently writing platform-specific code.
-        pub mod prelude
-        {
-            pub use super::ffi::{OsStrExt, OsStringExt};
-            pub use super::fs::FileExt;
-            pub use super::fs::{MetadataExt, OpenOptionsExt};
-            pub use super::io::
-            {
-                AsHandle, AsSocket, BorrowedHandle, BorrowedSocket, FromRawHandle, FromRawSocket,
-                HandleOrInvalid, IntoRawHandle, IntoRawSocket, OwnedHandle, OwnedSocket,
-            };
-            pub use super::io::{AsRawHandle, AsRawSocket, RawHandle, RawSocket};
         }
     }
 }
@@ -25916,6 +24290,1070 @@ pub mod system
         use ::{};
     }
 
+    pub mod common
+    {
+        //! Platform-independent platform abstraction
+        use ::
+        {
+            *,
+        };
+        
+        pub mod process
+        {
+            use ::
+            {
+                collections::BTreeMap,
+                ffi::{OsStr, OsString},
+                sys::pipe::read2,
+                sys::process::{EnvKey, ExitStatus, Process, StdioPipes},
+                *,
+            };
+            
+            #[derive(Clone, Default)]
+            pub struct CommandEnv
+            {
+                clear: bool,
+                saw_path: bool,
+                vars: BTreeMap<EnvKey, Option<OsString>>,
+            }
+
+            impl fmt::Debug for CommandEnv
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    let mut debug_command_env = f.debug_struct("CommandEnv");
+                    debug_command_env.field("clear", &self.clear).field("vars", &self.vars);
+                    debug_command_env.finish()
+                }
+            }
+
+            impl CommandEnv
+            {
+                pub fn capture(&self) -> BTreeMap<EnvKey, OsString>
+                {
+                    let mut result = BTreeMap::<EnvKey, OsString>::new();
+                    if !self.clear {
+                        for (k, v) in env::vars_os() {
+                            result.insert(k.into(), v);
+                        }
+                    }
+                    for (k, maybe_v) in &self.vars {
+                        if let &Some(ref v) = maybe_v {
+                            result.insert(k.clone(), v.clone());
+                        } else {
+                            result.remove(k);
+                        }
+                    }
+                    result
+                }
+
+                pub fn is_unchanged(&self) -> bool { !self.clear && self.vars.is_empty() }
+
+                pub fn capture_if_changed(&self) -> Option<BTreeMap<EnvKey, OsString>>
+                {
+                    if self.is_unchanged() { None } else { Some(self.capture()) }
+                }
+                
+                pub fn set(&mut self, key: &OsStr, value: &OsStr)
+                {
+                    let key = EnvKey::from(key);
+                    self.maybe_saw_path(&key);
+                    self.vars.insert(key, Some(value.to_owned()));
+                }
+
+                pub fn remove(&mut self, key: &OsStr)
+                {
+                    let key = EnvKey::from(key);
+                    self.maybe_saw_path(&key);
+
+                    if self.clear { self.vars.remove(&key); }
+                    else { self.vars.insert(key, None); }
+                }
+
+                pub fn clear(&mut self)
+                {
+                    self.clear = true;
+                    self.vars.clear();
+                }
+
+                pub fn does_clear(&self) -> bool { self.clear }
+
+                pub fn have_changed_path(&self) -> bool { self.saw_path || self.clear }
+
+                pub fn iter(&self) -> CommandEnvs<'_>
+                {
+                    let iter = self.vars.iter();
+                    CommandEnvs { iter }
+                }
+
+                fn maybe_saw_path(&mut self, key: &EnvKey)
+                {
+                    if !self.saw_path && key == "PATH" { self.saw_path = true; }
+                }
+            }
+            /// An iterator over the command environment variables.
+            #[must_use = "iterators are lazy and do nothing unless consumed"]
+            #[derive(Debug)]
+            pub struct CommandEnvs<'a>
+            {
+                iter: ::collections::btree_map::Iter<'a, EnvKey, Option<OsString>>,
+            }
+            
+            impl<'a> Iterator for CommandEnvs<'a>
+            {
+                type Item = (&'a OsStr, Option<&'a OsStr>);
+                fn next(&mut self) -> Option<Self::Item>
+                { self.iter.next().map(|(key, value)| (key.as_ref(), value.as_deref())) }
+                fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
+            }
+            
+            impl<'a> ExactSizeIterator for CommandEnvs<'a>
+            {
+                fn len(&self) -> usize { self.iter.len() }
+                fn is_empty(&self) -> bool { self.iter.is_empty() }
+            }
+
+            pub fn wait_with_output( mut process: Process, mut pipes: StdioPipes ) -> 
+            io::Result<(ExitStatus, Vec<u8>, Vec<u8>)>
+            {
+                drop(pipes.stdin.take());
+
+                let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+                match (pipes.stdout.take(), pipes.stderr.take()) {
+                    (None, None) => {}
+                    (Some(out), None) => {
+                        let res = out.read_to_end(&mut stdout);
+                        res.unwrap();
+                    }
+                    (None, Some(err)) => {
+                        let res = err.read_to_end(&mut stderr);
+                        res.unwrap();
+                    }
+                    (Some(out), Some(err)) => {
+                        let res = read2(out, &mut stdout, err, &mut stderr);
+                        res.unwrap();
+                    }
+                }
+
+                let status = process.wait()?;
+                Ok((status, stdout, stderr))
+            }
+        }
+
+        pub mod wstr
+        {
+            //! This module contains constructs to work with 16-bit characters (UCS-2 or UTF-16)
+            use ::
+            {
+                marker::PhantomData,
+                num::NonZero,
+                ptr::NonNull,
+                *,
+            };
+            /// A safe iterator over a LPWSTR.
+            pub struct WStrUnits<'a>
+            {
+                lpwstr: NonNull<u16>,
+                lifetime: PhantomData<&'a [u16]>,
+            }
+
+            impl WStrUnits<'_>
+            {
+                /// Creates the iterator. Returns `None` if `lpwstr` is null.
+                pub unsafe fn new(lpwstr: *const u16) -> Option<Self>
+                {
+                    Some(Self { lpwstr: NonNull::new(lpwstr as _)?, lifetime: PhantomData })
+                }
+
+                pub fn peek(&self) -> Option<NonZero<u16>>
+                {
+                    unsafe { NonZero::new(*self.lpwstr.as_ptr()) }
+                }
+                /// Advance the iterator while `predicate` returns true.
+                pub fn advance_while<P: FnMut(NonZero<u16>) ->
+                bool>(&mut self, mut predicate: P) -> usize
+                {
+                    let mut counter = 0;
+                    while let Some(w) = self.peek()
+                    {
+                        if !predicate(w) {
+                            break;
+                        }
+                        counter += 1;
+                        self.next();
+                    }
+                    counter
+                }
+            }
+
+            impl Iterator for WStrUnits<'_>
+            {
+                type Item = NonZero<u16>;
+                fn next(&mut self) -> Option<Self::Item>
+                {
+                    unsafe
+                    {
+                        let next = self.peek()?;
+                        self.lpwstr = NonNull::new_unchecked(self.lpwstr.as_ptr().add(1));
+                        Some(next)
+                    }
+                }
+            }
+        }
+
+        pub mod wtf8
+        {
+            //! Implementation of [the WTF-8 encoding](https://simonsapin.github.io/wtf-8/).
+            use ::
+            {
+                char::{MAX_LEN_UTF8, MAX_LEN_UTF16, encode_utf8_raw, encode_utf16_raw},
+                clone::CloneToUninit,
+                str::next_code_point,
+                borrow::Cow,
+                collections::TryReserveError,
+                hash::{Hash, Hasher},
+                iter::FusedIterator,
+                rc::Rc,
+                sync::Arc,
+                system::common::AsInner,
+                *,
+            };
+            pub const UTF8_REPLACEMENT_CHARACTER: &str = "\u{FFFD}";
+            /// A Unicode code point: from U+0000 to U+10FFFF.
+            #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy)]
+            pub struct CodePoint
+            {
+                value: u32,
+            }
+            /// Format the code point as `U+` followed by four to six hexadecimal digits.
+            impl fmt::Debug for CodePoint
+            {
+                #[inline] fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result
+                { write!(formatter, "U+{:04X}", self.value) }
+            }
+
+            impl CodePoint
+            {
+                /// Unsafely creates a new `CodePoint` without checking the value.
+                #[inline] pub unsafe fn from_u32_unchecked(value: u32) -> CodePoint
+                { CodePoint { value } }
+                /// Creates a new `CodePoint` if the value is a valid code point.
+                #[inline] pub fn from_u32(value: u32) -> Option<CodePoint>
+                {
+                    match value 
+                    {
+                        0..=0x10FFFF => Some(CodePoint { value }),
+                        _ => None,
+                    }
+                }
+                /// Creates a new `CodePoint` from a `char`.
+                #[inline] pub fn from_char(value: char) -> CodePoint 
+                { CodePoint { value: value as u32 } }
+                /// Returns the numeric value of the code point.
+                #[inline] pub fn to_u32(&self) -> u32 { self.value }
+                /// Returns the numeric value of the code point if it is a leading surrogate.
+                #[inline] pub fn to_lead_surrogate(&self) -> Option<u16>
+                {
+                    match self.value
+                    {
+                        lead @ 0xD800..=0xDBFF => Some(lead as u16),
+                        _ => None,
+                    }
+                }
+                /// Returns the numeric value of the code point if it is a trailing surrogate.
+                #[inline] pub fn to_trail_surrogate(&self) -> Option<u16>
+                {
+                    match self.value
+                    {
+                        trail @ 0xDC00..=0xDFFF => Some(trail as u16),
+                        _ => None,
+                    }
+                }
+                /// Optionally returns a Unicode scalar value for the code point.
+                #[inline] pub fn to_char(&self) -> Option<char>
+                {
+                    match self.value
+                    {
+                        0xD800..=0xDFFF => None,
+                        _ => Some(unsafe { char::from_u32_unchecked(self.value) }),
+                    }
+                }
+                /// Returns a Unicode scalar value for the code point.
+                #[inline] pub fn to_char_lossy(&self) -> char
+                { self.to_char().unwrap_or('\u{FFFD}') }
+            }
+            /// An owned, growable string of well-formed WTF-8 data.
+            #[derive(Eq, PartialEq, Ord, PartialOrd, Clone)]
+            pub struct Wtf8Buf
+            {
+                bytes: Vec<u8>,
+                is_known_utf8: bool,
+            }
+
+            impl ops::Deref for Wtf8Buf
+            {
+                type Target = Wtf8;
+                fn deref(&self) -> &Wtf8 { self.as_slice() }
+            }
+
+            impl ops::DerefMut for Wtf8Buf 
+            {
+                fn deref_mut(&mut self) -> &mut Wtf8 { self.as_mut_slice() }
+            }
+            /// Formats the string in double quotes, with characters escaped according to
+            /// [`char::escape_debug`] and unpaired surrogates represented as `\u{xxxx}`,
+            /// where each `x` is a hexadecimal digit.
+            impl fmt::Debug for Wtf8Buf
+            {
+                #[inline] fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result
+                { fmt::Debug::fmt(&**self, formatter) }
+            }
+            /// Formats the string with unpaired surrogates substituted 
+            /// with the replacement character, U+FFFD.
+            impl fmt::Display for Wtf8Buf
+            {
+                fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    if let Some(s) = self.as_known_utf8() { fmt::Display::fmt(s, formatter) }
+                    else { fmt::Display::fmt(&**self, formatter) }
+                }
+            }
+
+            impl Wtf8Buf
+            {
+                /// Creates a new, empty WTF-8 string.
+                #[inline] pub fn new() -> Wtf8Buf
+                { Wtf8Buf { bytes: Vec::new(), is_known_utf8: true } }
+                /// Creates a new, empty WTF-8 string with pre-allocated capacity for `capacity` bytes.
+                #[inline] pub fn with_capacity(capacity: usize) -> Wtf8Buf
+                { Wtf8Buf { bytes: Vec::with_capacity(capacity), is_known_utf8: true } }
+                /// Creates a WTF-8 string from a WTF-8 byte vec.
+                #[inline] pub unsafe fn from_bytes_unchecked(value: Vec<u8>) -> Wtf8Buf
+                { Wtf8Buf { bytes: value, is_known_utf8: false } }
+                /// Creates a WTF-8 string from a UTF-8 `String`.
+                #[inline] pub fn from_string(string: String) -> Wtf8Buf
+                { Wtf8Buf { bytes: string.into_bytes(), is_known_utf8: true } }
+                /// Creates a WTF-8 string from a UTF-8 `&str` slice.
+                #[inline] pub fn from_str(s: &str) -> Wtf8Buf
+                { Wtf8Buf { bytes: s.as_bytes().to_vec(), is_known_utf8: true } }
+
+                pub fn clear(&mut self)
+                {
+                    self.bytes.clear();
+                    self.is_known_utf8 = true;
+                }
+                /// Creates a WTF-8 string from a potentially ill-formed UTF-16 slice of 16-bit
+                /// code units.
+                pub fn from_wide(v: &[u16]) -> Wtf8Buf
+                {
+                    let mut string = Wtf8Buf::with_capacity(v.len());
+                    for item in char::decode_utf16(v.iter().cloned())
+                    {
+                        match item
+                        {
+                            Ok(ch) => string.push_char(ch),
+                            Err(surrogate) =>
+                            {
+                                let surrogate = surrogate.unpaired_surrogate();
+                                // Surrogates are known to be in the code point range.
+                                let code_point = unsafe { CodePoint::from_u32_unchecked(surrogate as u32) };
+                                // The string will now contain an unpaired surrogate.
+                                string.is_known_utf8 = false;
+                                // Skip the WTF-8 concatenation check,
+                                // surrogate pairs are already decoded by decode_utf16
+                                string.push_code_point_unchecked(code_point);
+                            }
+                        }
+                    }
+                    string
+                }
+                /// Appends the given `char` to the end of this string.
+                fn push_code_point_unchecked(&mut self, code_point: CodePoint)
+                {
+                    let mut bytes = [0; MAX_LEN_UTF8];
+                    let bytes = encode_utf8_raw(code_point.value, &mut bytes);
+                    self.bytes.extend_from_slice(bytes)
+                }
+
+                #[inline] pub fn as_slice(&self) -> &Wtf8
+                { unsafe { Wtf8::from_bytes_unchecked(&self.bytes) } }
+
+                #[inline] pub fn as_mut_slice(&mut self) -> &mut Wtf8
+                { unsafe { Wtf8::from_mut_bytes_unchecked(&mut self.bytes) } }
+                /// Converts the string to UTF-8 without validation, 
+                /// if it was created from valid UTF-8.
+                #[inline] fn as_known_utf8(&self) -> Option<&str>
+                {
+                    if self.is_known_utf8
+                    { Some(unsafe { str::from_utf8_unchecked(self.as_bytes()) }) }
+                    else { None }
+                }
+                /// Reserves capacity for at least `additional` more bytes to be inserted
+                /// in the given `Wtf8Buf`.
+                #[inline] pub fn reserve(&mut self, additional: usize)
+                { self.bytes.reserve(additional) }
+                /// Tries to reserve capacity for at least `additional` more bytes to be
+                /// inserted in the given `Wtf8Buf`.
+                #[inline] pub fn try_reserve(&mut self, additional: usize) -> 
+                Result<(), TryReserveError>
+                { self.bytes.try_reserve(additional) }
+
+                #[inline] pub fn reserve_exact(&mut self, additional: usize)
+                { self.bytes.reserve_exact(additional) }
+                /// Tries to reserve the minimum capacity for exactly `additional` more
+                /// bytes to be inserted in the given `Wtf8Buf`.
+                #[inline] pub fn try_reserve_exact(&mut self, additional: usize) -> 
+                Result<(), TryReserveError>
+                { self.bytes.try_reserve_exact(additional) }
+
+                #[inline] pub fn shrink_to_fit(&mut self) { self.bytes.shrink_to_fit() }
+
+                #[inline] pub fn shrink_to(&mut self, min_capacity: usize)
+                { self.bytes.shrink_to(min_capacity) }
+
+                #[inline] pub fn leak<'a>(self) -> &'a mut Wtf8
+                { unsafe { Wtf8::from_mut_bytes_unchecked(self.bytes.leak()) } }
+                /// Returns the number of bytes that this string buffer can hold 
+                /// without reallocating.
+                #[inline] pub fn capacity(&self) -> usize { self.bytes.capacity() }
+                /// Append a UTF-8 slice at the end of the string.
+                #[inline] pub fn push_str(&mut self, other: &str)
+                { self.bytes.extend_from_slice(other.as_bytes()) }
+
+                /// Append a WTF-8 slice at the end of the string.
+                #[inline] pub fn push_wtf8(&mut self, other: &Wtf8)
+                {
+                    match ((&*self).final_lead_surrogate(), other.initial_trail_surrogate())
+                    {
+                        (Some(lead), Some(trail)) =>
+                        {
+                            let len_without_lead_surrogate = self.len() - 3;
+                            self.bytes.truncate(len_without_lead_surrogate);
+                            let other_without_trail_surrogate = &other.bytes[3..];
+                            self.bytes.reserve(4 + other_without_trail_surrogate.len());
+                            self.push_char(decode_surrogate_pair(lead, trail));
+                            self.bytes.extend_from_slice(other_without_trail_surrogate);
+                        }
+                        _ =>
+                        {
+                            if self.is_known_utf8 && other.next_surrogate(0).is_some()
+                            { self.is_known_utf8 = false; }
+
+                            self.bytes.extend_from_slice(&other.bytes);
+                        }
+                    }
+                }
+                /// Append a Unicode scalar value at the end of the string.
+                #[inline] pub fn push_char(&mut self, c: char)
+                { self.push_code_point_unchecked(CodePoint::from_char(c)) }
+                /// Append a code point at the end of the string.
+                #[inline] pub fn push(&mut self, code_point: CodePoint)
+                {
+                    if let Some(trail) = code_point.to_trail_surrogate()
+                    {
+                        if let Some(lead) = (&*self).final_lead_surrogate()
+                        {
+                            let len_without_lead_surrogate = self.len() - 3;
+                            self.bytes.truncate(len_without_lead_surrogate);
+                            self.push_char(decode_surrogate_pair(lead, trail));
+                            return;
+                        }
+                        
+                        self.is_known_utf8 = false;
+                    }
+                    else if code_point.to_lead_surrogate().is_some()
+                    { self.is_known_utf8 = false; }
+                    
+                    self.push_code_point_unchecked(code_point)
+                }
+                /// Shortens a string to the specified length.
+                #[inline] pub fn truncate(&mut self, new_len: usize)
+                {
+                    assert!(is_code_point_boundary(self, new_len));
+                    self.bytes.truncate(new_len)
+                }
+                /// Consumes the WTF-8 string and tries to convert it to a vec of bytes.
+                #[inline] pub fn into_bytes(self) -> Vec<u8> { self.bytes }
+                /// Consumes the WTF-8 string and tries to convert it to UTF-8.
+                pub fn into_string(self) -> Result<String, Wtf8Buf>
+                {
+                    if self.is_known_utf8 || self.next_surrogate(0).is_none()
+                    { Ok(unsafe { String::from_utf8_unchecked(self.bytes) }) }
+                    else { Err(self) }
+                }
+                /// Consumes the WTF-8 string and converts it lossily to UTF-8.
+                pub fn into_string_lossy(mut self) -> String
+                {
+                    if !self.is_known_utf8
+                    {
+                        let mut pos = 0;
+                        while let Some((surrogate_pos, _)) = self.next_surrogate(pos)
+                        {
+                            pos = surrogate_pos + 3;
+                            self.bytes[surrogate_pos..pos]
+                            .copy_from_slice(UTF8_REPLACEMENT_CHARACTER.as_bytes());
+                        }
+                    }
+                    unsafe { String::from_utf8_unchecked(self.bytes) }
+                }
+                /// Converts this `Wtf8Buf` into a boxed `Wtf8`.
+                #[inline] pub fn into_box(self) -> Box<Wtf8>
+                {
+                    unsafe { mem::transmute(self.bytes.into_boxed_slice()) }
+                }
+                /// Converts a `Box<Wtf8>` into a `Wtf8Buf`.
+                pub fn from_box(boxed: Box<Wtf8>) -> Wtf8Buf
+                {
+                    let bytes: Box<[u8]> = unsafe { mem::transmute(boxed) };
+                    Wtf8Buf { bytes: bytes.into_vec(), is_known_utf8: false }
+                }
+                /// Provides plumbing to core `Vec::extend_from_slice`.
+                #[inline] pub fn extend_from_slice(&mut self, other: &[u8])
+                {
+                    self.bytes.extend_from_slice(other);
+                    self.is_known_utf8 = false;
+                }
+            }
+            /// Creates a new WTF-8 string from an iterator of code points.
+            impl FromIterator<CodePoint> for Wtf8Buf
+            {
+                fn from_iter<T: IntoIterator<Item = CodePoint>>(iter: T) -> Wtf8Buf
+                {
+                    let mut string = Wtf8Buf::new();
+                    string.extend(iter);
+                    string
+                }
+            }
+            /// Append code points from an iterator to the string.
+            impl Extend<CodePoint> for Wtf8Buf
+            {
+                fn extend<T: IntoIterator<Item = CodePoint>>(&mut self, iter: T)
+                {
+                    let iterator = iter.into_iter();
+                    let (low, _high) = iterator.size_hint();
+                    self.bytes.reserve(low);
+                    iterator.for_each(move |code_point| self.push(code_point));
+                }
+
+                #[inline] fn extend_one(&mut self, code_point: CodePoint)
+                { self.push(code_point); }
+
+                #[inline] fn extend_reserve(&mut self, additional: usize)
+                { self.bytes.reserve(additional); }
+            }
+            /// A borrowed slice of well-formed WTF-8 data.
+            #[repr(transparent)] #[derive(Eq, Ord, PartialEq, PartialOrd)]
+            pub struct Wtf8
+            {
+                bytes: [u8],
+            }
+
+            impl AsInner<[u8]> for Wtf8
+            {
+                #[inline] fn as_inner(&self) -> &[u8] { &self.bytes }
+            }
+            /// Formats the string in double quotes, with characters escaped according to
+            /// [`char::escape_debug`] and unpaired surrogates represented as `\u{xxxx}`,
+            /// where each `x` is a hexadecimal digit.
+            impl fmt::Debug for Wtf8
+            {
+                fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    fn write_str_escaped(f: &mut fmt::Formatter<'_>, s: &str) -> fmt::Result
+                    {
+                        use ::fmt::Write;
+                        for c in s.chars().flat_map(|c| c.escape_debug())
+                        {
+                            f.write_char(c)?
+                        }
+
+                        Ok(())
+                    }
+
+                    formatter.write_str("\"")?;
+                    let mut pos = 0;
+
+                    while let Some((surrogate_pos, surrogate)) = self.next_surrogate(pos)
+                    {
+                        write_str_escaped(formatter, unsafe {
+                            str::from_utf8_unchecked(&self.bytes[pos..surrogate_pos])
+                        })?;
+                        write!(formatter, "\\u{{{:x}}}", surrogate)?;
+                        pos = surrogate_pos + 3;
+                    }
+
+                    write_str_escaped(formatter, unsafe { str::from_utf8_unchecked(&self.bytes[pos..]) })?;
+                    formatter.write_str("\"")
+                }
+            }
+            /// Formats the string with unpaired surrogates substituted with the replacement
+            /// character, U+FFFD.
+            impl fmt::Display for Wtf8
+            {
+                fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    let wtf8_bytes = &self.bytes;
+                    let mut pos = 0;
+                    loop
+                    {
+                        match self.next_surrogate(pos)
+                        {
+                            Some((surrogate_pos, _)) =>
+                            {
+                                formatter.write_str(unsafe
+                                {
+                                    str::from_utf8_unchecked(&wtf8_bytes[pos..surrogate_pos])
+                                })?;
+                                formatter.write_str(UTF8_REPLACEMENT_CHARACTER)?;
+                                pos = surrogate_pos + 3;
+                            }
+
+                            None =>
+                            {
+                                let s = unsafe { str::from_utf8_unchecked(&wtf8_bytes[pos..]) };
+                                if pos == 0 { return s.fmt(formatter) } else { return formatter.write_str(s) }
+                            }
+                        }
+                    }
+                }
+            }
+
+            impl Wtf8
+            {
+                /// Creates a WTF-8 slice from a UTF-8 `&str` slice.
+                #[inline] pub fn from_str(value: &str) -> &Wtf8
+                {
+                    unsafe { Wtf8::from_bytes_unchecked(value.as_bytes()) }
+                }
+                /// Creates a WTF-8 slice from a WTF-8 byte slice.
+                #[inline] pub unsafe fn from_bytes_unchecked(value: &[u8]) -> &Wtf8
+                {
+                    unsafe { &*(value as *const [u8] as *const Wtf8) }
+                }
+                /// Creates a mutable WTF-8 slice from a mutable WTF-8 byte slice.
+                #[inline] unsafe fn from_mut_bytes_unchecked(value: &mut [u8]) -> &mut Wtf8
+                {
+                    unsafe { &mut *(value as *mut [u8] as *mut Wtf8) }
+                }
+                /// Returns the length, in WTF-8 bytes.
+                #[inline] pub fn len(&self) -> usize { self.bytes.len() }
+                #[inline] pub fn is_empty(&self) -> bool { self.bytes.is_empty() }
+                /// Returns the code point at `position` if it is in the ASCII range,
+                /// or `b'\xFF'` otherwise.
+                #[inline] pub fn ascii_byte_at(&self, position: usize) -> u8
+                {
+                    match self.bytes[position]
+                    {
+                        ascii_byte @ 0x00..=0x7F => ascii_byte,
+                        _ => 0xFF,
+                    }
+                }
+                /// Returns an iterator for the string’s code points.
+                #[inline] pub fn code_points(&self) -> Wtf8CodePoints<'_>
+                { Wtf8CodePoints { bytes: self.bytes.iter() } }
+                /// Access raw bytes of WTF-8 data
+                #[inline] pub fn as_bytes(&self) -> &[u8] { &self.bytes }
+                /// Tries to convert the string to UTF-8 and return a `&str` slice.
+                #[inline] pub fn as_str(&self) -> Result<&str, str::Utf8Error>
+                { str::from_utf8(&self.bytes) }
+                /// Creates an owned `Wtf8Buf` from a borrowed `Wtf8`.
+                pub fn to_owned(&self) -> Wtf8Buf
+                {
+                    Wtf8Buf { bytes: self.bytes.to_vec(), is_known_utf8: false }
+                }
+                /// Lossily converts the string to UTF-8.
+                pub fn to_string_lossy(&self) -> Cow<'_, str>
+                {
+                    let Some((surrogate_pos, _)) = self.next_surrogate(0) 
+                    else { return Cow::Borrowed(unsafe { str::from_utf8_unchecked(&self.bytes) }); };
+                    let wtf8_bytes = &self.bytes;
+                    let mut utf8_bytes = Vec::with_capacity(self.len());
+                    utf8_bytes.extend_from_slice(&wtf8_bytes[..surrogate_pos]);
+                    utf8_bytes.extend_from_slice(UTF8_REPLACEMENT_CHARACTER.as_bytes());
+                    let mut pos = surrogate_pos + 3;
+                    loop
+                    {
+                        match self.next_surrogate(pos)
+                        {
+                            Some((surrogate_pos, _)) =>
+                            {
+                                utf8_bytes.extend_from_slice(&wtf8_bytes[pos..surrogate_pos]);
+                                utf8_bytes.extend_from_slice(UTF8_REPLACEMENT_CHARACTER.as_bytes());
+                                pos = surrogate_pos + 3;
+                            }
+
+                            None =>
+                            {
+                                utf8_bytes.extend_from_slice(&wtf8_bytes[pos..]);
+                                return Cow::Owned(unsafe { String::from_utf8_unchecked(utf8_bytes) });
+                            }
+                        }
+                    }
+                }
+                /// Converts the WTF-8 string to potentially ill-formed UTF-16
+                /// and return an iterator of 16-bit code units.
+                #[inline] pub fn encode_wide(&self) -> EncodeWide<'_>
+                {
+                    EncodeWide { code_points: self.code_points(), extra: 0 }
+                }
+
+                #[inline] fn next_surrogate(&self, mut pos: usize) -> Option<(usize, u16)>
+                {
+                    let mut iter = self.bytes[pos..].iter();
+                    loop
+                    {
+                        let b = *iter.next()?;
+                        if b < 0x80 { pos += 1; }
+                        else if b < 0xE0
+                        {
+                            iter.next();
+                            pos += 2;
+                        }
+                        else if b == 0xED
+                        {
+                            match (iter.next(), iter.next())
+                            {
+                                (Some(&b2), Some(&b3)) if b2 >= 0xA0 =>
+                                {
+                                    return Some((pos, decode_surrogate(b2, b3)));
+                                }
+                                _ => pos += 3,
+                            }
+                        }
+                        else if b < 0xF0
+                        {
+                            iter.next();
+                            iter.next();
+                            pos += 3;
+                        }
+                        else
+                        {
+                            iter.next();
+                            iter.next();
+                            iter.next();
+                            pos += 4;
+                        }
+                    }
+                }
+
+                #[inline] fn final_lead_surrogate(&self) -> Option<u16>
+                {
+                    match self.bytes
+                    {
+                        [.., 0xED, b2 @ 0xA0..=0xAF, b3] => Some(decode_surrogate(b2, b3)),
+                        _ => None,
+                    }
+                }
+
+                #[inline] fn initial_trail_surrogate(&self) -> Option<u16>
+                {
+                    match self.bytes
+                    {
+                        [0xED, b2 @ 0xB0..=0xBF, b3, ..] => Some(decode_surrogate(b2, b3)),
+                        _ => None,
+                    }
+                }
+
+                pub fn clone_into(&self, buf: &mut Wtf8Buf)
+                {
+                    buf.is_known_utf8 = false;
+                    self.bytes.clone_into(&mut buf.bytes);
+                }
+                /// Boxes this `Wtf8`.
+                #[inline] pub fn into_box(&self) -> Box<Wtf8>
+                {
+                    let boxed: Box<[u8]> = self.bytes.into();
+                    unsafe { mem::transmute(boxed) }
+                }
+                /// Creates a boxed, empty `Wtf8`.
+                pub fn empty_box() -> Box<Wtf8>
+                {
+                    let boxed: Box<[u8]> = Default::default();
+                    unsafe { mem::transmute(boxed) }
+                }
+
+                #[inline] pub fn into_arc(&self) -> Arc<Wtf8>
+                {
+                    let arc: Arc<[u8]> = Arc::from(&self.bytes);
+                    unsafe { Arc::from_raw(Arc::into_raw(arc) as *const Wtf8) }
+                }
+
+                #[inline] pub fn into_rc(&self) -> Rc<Wtf8>
+                {
+                    let rc: Rc<[u8]> = Rc::from(&self.bytes);
+                    unsafe { Rc::from_raw(Rc::into_raw(rc) as *const Wtf8) }
+                }
+
+                #[inline] pub fn make_ascii_lowercase(&mut self) { self.bytes.make_ascii_lowercase() }
+
+                #[inline] pub fn make_ascii_uppercase(&mut self) { self.bytes.make_ascii_uppercase() }
+
+                #[inline] pub fn to_ascii_lowercase(&self) -> Wtf8Buf { Wtf8Buf { bytes: self.bytes.to_ascii_lowercase(), is_known_utf8: false } }
+
+                #[inline] pub fn to_ascii_uppercase(&self) -> Wtf8Buf { Wtf8Buf { bytes: self.bytes.to_ascii_uppercase(), is_known_utf8: false } }
+
+                #[inline] pub fn is_ascii(&self) -> bool { self.bytes.is_ascii() }
+
+                #[inline] pub fn eq_ignore_ascii_case(&self, other: &Self) -> bool { self.bytes.eq_ignore_ascii_case(&other.bytes) }
+            }
+            /// Returns a slice of the given string for the byte range \[`begin`..`end`).
+            impl ops::Index<ops::Range<usize>> for Wtf8
+            {
+                type Output = Wtf8;
+
+                #[inline] fn index(&self, range: ops::Range<usize>) -> &Wtf8
+                {
+                    if range.start <= range.end
+                        && is_code_point_boundary(self, range.start)
+                        && is_code_point_boundary(self, range.end)
+                    {
+                        unsafe { slice_unchecked(self, range.start, range.end) }
+                    } else {
+                        slice_error_fail(self, range.start, range.end)
+                    }
+                }
+            }
+            /// Returns a slice of the given string from byte `begin` to its end.
+            impl ops::Index<ops::RangeFrom<usize>> for Wtf8
+            {
+                type Output = Wtf8;
+                #[inline] fn index(&self, range: ops::RangeFrom<usize>) -> &Wtf8
+                {
+                    if is_code_point_boundary(self, range.start)
+                    { unsafe { slice_unchecked(self, range.start, self.len()) } }
+
+                    else { slice_error_fail(self, range.start, self.len()) }
+                }
+            }
+            /// Returns a slice of the given string from its beginning to byte `end`.
+            impl ops::Index<ops::RangeTo<usize>> for Wtf8
+            {
+                type Output = Wtf8;
+                #[inline] fn index(&self, range: ops::RangeTo<usize>) -> &Wtf8
+                {
+                    if is_code_point_boundary(self, range.end) {
+                        unsafe { slice_unchecked(self, 0, range.end) }
+                    } else {
+                        slice_error_fail(self, 0, range.end)
+                    }
+                }
+            }
+
+            impl ops::Index<ops::RangeFull> for Wtf8
+            {
+                type Output = Wtf8;
+                #[inline] fn index(&self, _range: ops::RangeFull) -> &Wtf8 { self }
+            }
+
+            #[inline] fn decode_surrogate(second_byte: u8, third_byte: u8) -> u16
+            { 0xD800 | (second_byte as u16 & 0x3F) << 6 | third_byte as u16 & 0x3F }
+
+            #[inline] fn decode_surrogate_pair(lead: u16, trail: u16) -> char
+            {
+                let code_point = 0x10000 + ((((lead - 0xD800) as u32) << 10) | (trail - 0xDC00) as u32);
+                unsafe { char::from_u32_unchecked(code_point) }
+            }
+            
+            #[inline] pub fn is_code_point_boundary(slice: &Wtf8, index: usize) -> bool
+            {
+                if index == 0 { return true; }
+
+                match slice.bytes.get(index)
+                {
+                    None => index == slice.len(),
+                    Some(&b) => (b as i8) >= -0x40,
+                }
+            }
+            /// Verify that `index` is at the edge of either a valid UTF-8 codepoint
+            /// (i.e. a codepoint that's not a surrogate) or of the whole string.
+            #[inline] #[track_caller] pub fn check_utf8_boundary(slice: &Wtf8, index: usize)
+            {
+                if index == 0 { return; }
+
+                match slice.bytes.get(index)
+                {
+                    Some(0xED) => (),
+                    Some(&b) if (b as i8) >= -0x40 => return,
+                    Some(_) => panic!("byte index {index} is not a codepoint boundary"),
+                    None if index == slice.len() => return,
+                    None => panic!("byte index {index} is out of bounds"),
+                }
+                
+                if slice.bytes[index + 1] >= 0xA0
+                {
+                    if index >= 3 
+                    && slice.bytes[index - 3] == 0xED
+                    && slice.bytes[index - 2] >= 0xA0
+                    {
+                        panic!("byte index {index} lies between surrogate codepoints");
+                    }
+                }
+            }
+            
+            #[inline] pub unsafe fn slice_unchecked(s: &Wtf8, begin: usize, end: usize) -> &Wtf8
+            {
+                unsafe
+                {
+                    let len = end - begin;
+                    let start = s.as_bytes().as_ptr().add(begin);
+                    Wtf8::from_bytes_unchecked(slice::from_raw_parts(start, len))
+                }
+            }
+            
+            #[inline(never)] pub fn slice_error_fail(s: &Wtf8, begin: usize, end: usize) -> !
+            {
+                assert!(begin <= end);
+                panic!("index {begin} and/or {end} in `{s:?}` do not lie on character boundary");
+            }
+
+            /// Iterator for the code points of a WTF-8 string.
+            #[derive(Clone)]
+            pub struct Wtf8CodePoints<'a>
+            {
+                bytes: slice::Iter<'a, u8>,
+            }
+
+            impl Iterator for Wtf8CodePoints<'_>
+            {
+                type Item = CodePoint;
+
+                #[inline] fn next(&mut self) -> Option<CodePoint>
+                {
+                    unsafe { next_code_point(&mut self.bytes).map(|c| CodePoint { value: c }) }
+                }
+
+                #[inline] fn size_hint(&self) -> (usize, Option<usize>)
+                {
+                    let len = self.bytes.len();
+                    (len.saturating_add(3) / 4, Some(len))
+                }
+            }
+            /// Generates a wide character sequence for potentially ill-formed UTF-16.
+            #[derive(Clone)]
+            pub struct EncodeWide<'a>
+            {
+                code_points: Wtf8CodePoints<'a>,
+                extra: u16,
+            }
+            
+            impl Iterator for EncodeWide<'_>
+            {
+                type Item = u16;
+                #[inline] fn next(&mut self) -> Option<u16>
+                {
+                    if self.extra != 0
+                    {
+                        let tmp = self.extra;
+                        self.extra = 0;
+                        return Some(tmp);
+                    }
+
+                    let mut buf = [0; MAX_LEN_UTF16];
+                    self.code_points.next().map(|code_point|
+                    {
+                        let n = encode_utf16_raw(code_point.value, &mut buf).len();
+                        if n == 2 { self.extra = buf[1]; }
+                        buf[0]
+                    })
+                }
+
+                #[inline] fn size_hint(&self) -> (usize, Option<usize>)
+                {
+                    let (low, high) = self.code_points.size_hint();
+                    let ext = (self.extra != 0) as usize;
+                    (low + ext, high.and_then(|n| n.checked_mul(2)).and_then(|n| n.checked_add(ext)))
+                }
+            }
+            
+            impl FusedIterator for EncodeWide<'_> {}
+
+            impl Hash for CodePoint
+            {
+                #[inline] fn hash<H: Hasher>(&self, state: &mut H) { self.value.hash(state) }
+            }
+
+            impl Hash for Wtf8Buf
+            {
+                #[inline] fn hash<H: Hasher>(&self, state: &mut H)
+                {
+                    state.write(&self.bytes);
+                    0xfeu8.hash(state)
+                }
+            }
+
+            impl Hash for Wtf8
+            {
+                #[inline] fn hash<H: Hasher>(&self, state: &mut H)
+                {
+                    state.write(&self.bytes);
+                    0xfeu8.hash(state)
+                }
+            }
+            
+            unsafe impl CloneToUninit for Wtf8
+            {
+                #[inline]
+                unsafe fn clone_to_uninit(&self, dst: *mut u8)
+                {
+                    unsafe { self.bytes.clone_to_uninit(dst) }
+                }
+            }
+        }
+        /// A trait for viewing representations from std types
+        pub trait AsInner<Inner: ?Sized>
+        {
+            fn as_inner(&self) -> &Inner;
+        }
+        /// A trait for viewing representations from std types
+        pub trait AsInnerMut<Inner: ?Sized>
+        {
+            fn as_inner_mut(&mut self) -> &mut Inner;
+        }
+        /// A trait for extracting representations from std types
+        pub trait IntoInner<Inner>
+        {
+            fn into_inner(self) -> Inner;
+        }
+        /// A trait for creating std types from internal representations
+        pub trait FromInner<Inner>
+        {
+            fn from_inner(inner: Inner) -> Self;
+        }
+        
+        pub fn mul_div_u64(value: u64, numer: u64, denom: u64) -> u64
+        {
+            let q = value / denom;
+            let r = value % denom;
+            q * numer + r * numer / denom
+        }
+
+        pub fn ignore_notfound<T>(result: ::io::Result<T>) -> ::io::Result<()>
+        {
+            match result
+            {
+                Err(err) if err.kind() == ::io::ErrorKind::NotFound => Ok(()),
+                Ok(_) => Ok(()),
+                Err(err) => Err(err),
+            }
+        }
+    }
+
+    pub mod pipe
+    {
+        use ::
+        {
+            *,
+        };
+    }
+
+    pub mod process
+    {
+        use ::
+        {
+            *,
+        };
+    }
+
     pub mod prepare
     {
         use ::
@@ -26986,9 +26424,14 @@ pub mod system
 
     pub mod unix
     {
-        pub use self::screen::{ Screen, ScreenReadGuard, ScreenWriteGuard };
-        pub use self::terminal::{ PrepareState, Terminal, TerminalReadGuard, TerminalWriteGuard };
-        
+        macro_rules! impl_is_minus_one
+        {
+            ($($t:ident)*) => ($(impl IsMinusOne for $t
+            {
+                fn is_minus_one(&self) -> bool { *self == -1 }
+            })*)
+        }
+
         pub mod ext
         {
             //! Unix extension trait
@@ -28434,7 +27877,7 @@ pub mod system
                     u as u32
                 }
             }
-        }
+        } pub use self::terminal::{ PrepareState, Terminal, TerminalReadGuard, TerminalWriteGuard };
 
         mod screen
         {
@@ -28688,6 +28131,35 @@ pub mod system
                     self.clear_screen = true;
                 }
             }
+        } pub use self::screen::{ Screen, ScreenReadGuard, ScreenWriteGuard };
+
+        use ::io::ErrorKind;
+
+        #[doc(hidden)]
+        pub trait IsMinusOne {
+            fn is_minus_one(&self) -> bool;
+        }
+
+        impl_is_minus_one! { i8 i16 i32 i64 isize }
+
+        pub fn cvt<T: IsMinusOne>(t: T) -> ::io::Result<T>
+        {
+            if t.is_minus_one() { Err(::io::Error::last_os_error()) }
+            else { Ok(t) }
+        }
+
+        pub fn cvt_r<T, F>(mut f: F) -> ::io::Result<T> where 
+        T: IsMinusOne,
+        F: FnMut() -> T
+        {
+            loop
+            {
+                match cvt(f())
+                {
+                    Err(ref e) if e.kind() == ErrorKind::Interrupted => {}
+                    other => return other,
+                }
+            }
         }
     }
 
@@ -28696,6 +28168,14 @@ pub mod system
         pub use self::screen::{ Screen, ScreenReadGuard, ScreenWriteGuard, };
 
         pub use self::terminal::{ PrepareState, Terminal, TerminalReadGuard, TerminalWriteGuard, };
+
+        macro_rules! impl_is_zero
+        {
+            ($($t:ident)*) => ($(impl IsZero for $t
+            {
+                fn is_zero(&self) -> bool { *self == 0 }
+            })*)
+        }
 
         pub mod ext
         {
@@ -30401,7 +29881,19 @@ pub mod system
                 }
             }
         }
-    
+        
+        pub trait IsZero
+        {
+            fn is_zero(&self) -> bool;
+        }
+
+        impl_is_zero! { i8 i16 i32 i64 isize u8 u16 u32 u64 usize }
+
+        pub fn cvt<I: IsZero>(i: I) -> ::io::Result<I>
+        {
+            if i.is_zero() { Err( ::io::Error::last_os_error() ) }
+            else { Ok(i) }
+        }
     }
     #[cfg( unix )] pub use self::unix as api;
     #[cfg( windows )] pub use self::windows as api;
@@ -30470,7 +29962,12 @@ pub mod system
             Err(TryLockError::Poisoned(PoisonError::new( f(a.into_inner(), b.into_inner())))),
         }
     }
-}
+
+    pub fn cvt<T: IsMinusOne>(t: T) -> io::Result<T>
+    {
+        if t.is_minus_one() { Err(last_error()) } else { Ok(t) }
+    }
+} pub use self::system as sys;
 /// Types and Traits for working with asynchronous tasks.
 pub mod task
 {
@@ -35708,4 +35205,4 @@ fn main()
     }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 35711
+// 35208
