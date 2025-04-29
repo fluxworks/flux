@@ -3,7 +3,10 @@
 ( 
     tool_lints,
  )]
-
+/*
+    #![allow(nonstandard_style)]
+    #![allow(unsafe_op_in_unsafe_fn)]
+*/
 #![allow
 ( 
     dead_code,
@@ -18,7 +21,6 @@
 
 #[macro_use] extern crate bitflags;
 #[macro_use] extern crate lazy_static;
-#[macro_use] extern crate winapi;
 /*
 */
 extern crate fnv;
@@ -107,7 +109,7 @@ extern crate unicode_width;
 
         ( $fmt:expr, $( $arg:tt )* ) =>
         ( 
-            match writeln!( &mut $::io::stderr(), $fmt, $( $arg )* )
+            match writeln!( &mut ::io::stderr(), $fmt, $( $arg )* )
             {
                 Ok( _ ) => {}
                 Err( e ) => println!( "write to stderr failed: {:?}", e )
@@ -3894,7 +3896,7 @@ pub mod ffi
         *,
     };    
     /*
-    use crate::terminal::Terminals;    
+    use ::terminal::Terminals;    
     use std::io;
     use lineread::{ Terminal};
     */
@@ -4392,8 +4394,8 @@ pub mod history
     use rusqlite::Connection as Conn;
     use rusqlite::Error::SqliteFailure;
 
-    use crate::shell;
-    use crate::tools;
+    use ::shell;
+    use ::tools;
     */
     fn init_db( hfile:&str, htable:&str )
     {
@@ -4935,17 +4937,17 @@ pub mod io
             *,
         };
         /*
-        use crate::complete::{Completer, Completion, DummyCompleter};
-        use crate::inputrc::{parse_file, Directive};
-        use crate::interface::Interface;
-        use crate::prompter::Prompter;
-        use crate::sys::path::{env_init_file, system_init_file, user_init_file};
-        use crate::terminal::{
+        use ::complete::{Completer, Completion, DummyCompleter};
+        use ::inputrc::{parse_file, Directive};
+        use ::interface::Interface;
+        use ::prompter::Prompter;
+        use ::sys::path::{env_init_file, system_init_file, user_init_file};
+        use ::terminal::{
             RawRead, Signal, SignalSet, Size,
             Terminal, TerminalReader,
         };
-        use crate::util::{first_char, match_name};
-        use crate::variables::{Variable, Variables, VariableIter};
+        use ::util::{first_char, match_name};
+        use ::variables::{Variable, Variables, VariableIter};
         */
         /// Default set of string characters
         pub const STRING_CHARS:&str = "\"'";
@@ -5666,7 +5668,7 @@ pub mod io
 
         fn default_bindings() -> SequenceMap<Cow<'static, str>, Command>
         {
-            use crate::command::Command::*;
+            use ::command::Command::*;
 
             SequenceMap::from( vec!
             [
@@ -5777,10 +5779,10 @@ pub mod io
         use std::mem::swap;
         use std::sync::MutexGuard;
 
-        use crate::chars::{is_ctrl, unctrl, ESCAPE, RUBOUT};
-        use crate::reader::{START_INVISIBLE, END_INVISIBLE};
-        use crate::terminal::{CursorMode, Size, Terminal, TerminalWriter};
-        use crate::util::
+        use ::chars::{is_ctrl, unctrl, ESCAPE, RUBOUT};
+        use ::reader::{START_INVISIBLE, END_INVISIBLE};
+        use ::terminal::{CursorMode, Size, Terminal, TerminalWriter};
+        use ::util::
         { backward_char, forward_char, backward_search_char, forward_search_char, filter_visible, is_combining_mark, is_wide, RangeArgument };
         */
         /// Duration to wait for input when "blinking"
@@ -17213,7 +17215,7 @@ pub mod option
 /// OS-specific functionality.
 pub mod os
 {
-    
+    //! OS-specific functionality.
     pub use std::os::{ * };
     pub mod windows
     {
@@ -17356,7 +17358,6 @@ pub mod os
                     self
                 }
             }
-
             /// Windows-specific extensions to [`fs::Metadata`].
             pub trait MetadataExt
             {
@@ -17410,7 +17411,6 @@ pub mod os
                     self.as_inner().changed_u64()
                 }
             }
-
             /// Windows-specific extensions to [`fs::FileType`].
             pub trait FileTypeExt: Sealed
             {
@@ -20757,7 +20757,7 @@ pub mod primitive
         regex::{ Regex },
     };
     /*
-        use crate::{ INDENT_STEP };
+        use ::{ INDENT_STEP };
     */
     macro_rules! get_fn
     {
@@ -21967,11 +21967,11 @@ pub mod shell
     use regex::Regex;
     use uuid::Uuid;
 
-    use crate::core;
-    use crate::libs;
-    use crate::parsers;
-    use crate::tools;
-    use crate::types::{self, CommandLine};
+    use ::core;
+    use ::libs;
+    use ::parsers;
+    use ::tools;
+    use ::types::{self, CommandLine};
     */
     #[derive( Debug, Clone )]
     pub struct Shell
@@ -22988,10 +22988,10 @@ pub mod str
     use std::sync::MutexGuard;
     use std::time::{Duration, Instant};
 
-    use crate::chars::{is_ctrl, unctrl, ESCAPE, RUBOUT};
-    use crate::reader::{START_INVISIBLE, END_INVISIBLE};
-    use crate::terminal::{CursorMode, Size, Terminal, TerminalWriter};
-    use crate::util::{
+    use ::chars::{is_ctrl, unctrl, ESCAPE, RUBOUT};
+    use ::reader::{START_INVISIBLE, END_INVISIBLE};
+    use ::terminal::{CursorMode, Size, Terminal, TerminalWriter};
+    use ::util::{
         backward_char, forward_char, backward_search_char, forward_search_char,
         filter_visible, is_combining_mark, is_wide, RangeArgument,
     };
@@ -25338,6 +25338,2626 @@ pub mod system
         }
     }
 
+    pub mod fs
+    {
+        use ::
+        {
+            path::{ Path, PathBuf },
+            *,
+        };
+
+        pub mod common
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        mod unix
+        {
+            use ::
+            {
+                ffi::{CStr, OsStr, OsString},
+                fmt::{self, Write as _},
+                io::{self, BorrowedCursor, Error, IoSlice, IoSliceMut, SeekFrom},
+                libc::{dirent64, fstat64, ftruncate64, lseek64, lstat64, off64_t, open64, stat64},
+                os::unix::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd},
+                os::unix::prelude::*,
+                path::{Path, PathBuf},
+                sync::Arc,
+                sys::common::small_c_string::run_path_with_cstr,
+                sys::fd::FileDesc,
+                sys::time::SystemTime,
+                sys::{cvt, cvt_r},
+                sys::common::{AsInner, AsInnerMut, FromInner, IntoInner},
+                *,
+            };
+            pub use ::sys::fs::common::exists;
+            
+            pub struct File(FileDesc);
+            
+            #[derive(Clone)]
+            pub struct FileAttr
+            {
+                stat: stat64,
+            }
+            
+            struct InnerReadDir
+            {
+                dirp: Dir,
+                root: PathBuf,
+            }
+
+            pub struct ReadDir
+            {
+                inner: Arc<InnerReadDir>,
+                end_of_stream: bool,
+            }
+
+            impl ReadDir
+            {
+                fn new(inner: InnerReadDir) -> Self
+                {
+                    Self { inner: Arc::new(inner), end_of_stream: false }
+                }
+            }
+
+            struct Dir(*mut libc::DIR);
+
+            unsafe impl Send for Dir {}
+            unsafe impl Sync for Dir {}
+            
+            pub struct DirEntry 
+            {
+                dir: Arc<InnerReadDir>,
+                entry: dirent64,
+            }
+
+            #[derive(Clone)]
+            pub struct OpenOptions {
+                read: bool,
+                write: bool,
+                append: bool,
+                truncate: bool,
+                create: bool,
+                create_new: bool,
+                custom_flags: i32,
+                mode: mode_t,
+            }
+
+            #[derive(Clone, PartialEq, Eq)]
+            pub struct FilePermissions {
+                mode: mode_t,
+            }
+
+            #[derive(Copy, Clone, Debug, Default)]
+            pub struct FileTimes {
+                accessed: Option<SystemTime>,
+                modified: Option<SystemTime>,
+                #[cfg(target_vendor = "apple")]
+                created: Option<SystemTime>,
+            }
+
+            #[derive(Copy, Clone, Eq)]
+            pub struct FileType {
+                mode: mode_t,
+            }
+
+            impl PartialEq for FileType {
+                fn eq(&self, other: &Self) -> bool {
+                    self.masked() == other.masked()
+                }
+            }
+
+            impl core::hash::Hash for FileType {
+                fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+                    self.masked().hash(state);
+                }
+            }
+
+            pub struct DirBuilder {
+                mode: mode_t,
+            }
+
+            #[derive(Copy, Clone)]
+            struct Mode(mode_t);
+            
+            impl FileAttr
+            {
+                fn from_stat64(stat: stat64) -> Self { Self { stat } }
+            }
+
+            impl FileAttr
+            {
+                pub fn size(&self) -> u64 {
+                    self.stat.st_size as u64
+                }
+                pub fn perm(&self) -> FilePermissions {
+                    FilePermissions { mode: (self.stat.st_mode as mode_t) }
+                }
+
+                pub fn file_type(&self) -> FileType {
+                    FileType { mode: self.stat.st_mode as mode_t }
+                }
+            }
+            
+            impl FileAttr
+            {   
+                pub fn modified(&self) -> io::Result<SystemTime> 
+                {
+                    SystemTime::new(self.stat.st_mtime as i64, self.stat.st_mtime_nsec as i64)
+                }
+                
+                pub fn accessed(&self) -> io::Result<SystemTime>
+                {
+                    SystemTime::new(self.stat.st_atime as i64, self.stat.st_atime_nsec as i64)
+                }
+                
+                pub fn created(&self) -> io::Result<SystemTime>
+                {
+                    SystemTime::new(self.stat.st_birthtime as i64, self.stat.st_birthtime_nsec as i64)
+                }
+            }
+
+            impl AsInner<stat64> for FileAttr 
+            {
+                #[inline]
+                fn as_inner(&self) -> &stat64 {
+                    &self.stat
+                }
+            }
+
+            impl FilePermissions 
+            {
+                pub fn readonly(&self) -> bool {
+                    // check if any class (owner, group, others) has write permission
+                    self.mode & 0o222 == 0
+                }
+
+                pub fn set_readonly(&mut self, readonly: bool) {
+                    if readonly {
+                        // remove write permission for all classes; equivalent to `chmod a-w <file>`
+                        self.mode &= !0o222;
+                    } else {
+                        // add write permission for all classes; equivalent to `chmod a+w <file>`
+                        self.mode |= 0o222;
+                    }
+                }
+                pub fn mode(&self) -> u32 {
+                    self.mode as u32
+                }
+            }
+
+            impl FileTimes 
+            {
+                pub fn set_accessed(&mut self, t: SystemTime) {
+                    self.accessed = Some(t);
+                }
+
+                pub fn set_modified(&mut self, t: SystemTime) {
+                    self.modified = Some(t);
+                }
+            }
+
+            impl FileType
+            {
+                pub fn is_dir(&self) -> bool {
+                    self.is(libc::S_IFDIR)
+                }
+                pub fn is_file(&self) -> bool {
+                    self.is(libc::S_IFREG)
+                }
+                pub fn is_symlink(&self) -> bool {
+                    self.is(libc::S_IFLNK)
+                }
+
+                pub fn is(&self, mode: mode_t) -> bool {
+                    self.masked() == mode
+                }
+
+                fn masked(&self) -> mode_t {
+                    self.mode & libc::S_IFMT
+                }
+            }
+
+            impl fmt::Debug for FileType 
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    let FileType { mode } = self;
+                    f.debug_struct("FileType").field("mode", &Mode(*mode)).finish()
+                }
+            }
+
+            impl FromInner<u32> for FilePermissions 
+            {
+                fn from_inner(mode: u32) -> FilePermissions {
+                    FilePermissions { mode: mode as mode_t }
+                }
+            }
+
+            impl fmt::Debug for FilePermissions
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    let FilePermissions { mode } = self;
+                    f.debug_struct("FilePermissions").field("mode", &Mode(*mode)).finish()
+                }
+            }
+
+            impl fmt::Debug for ReadDir
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    fmt::Debug::fmt(&*self.inner.root, f)
+                }
+            }
+
+            impl Iterator for ReadDir
+            {
+                type Item = io::Result<DirEntry>;
+                fn next(&mut self) -> Option<io::Result<DirEntry>>
+                {
+                    unsafe
+                    {
+                        if self.end_of_stream {
+                            return None;
+                        }
+                        let mut ret = DirEntry { entry: mem::zeroed(), dir: Arc::clone(&self.inner) };
+                        let mut entry_ptr = ptr::null_mut();
+                        loop {
+                            let err = readdir64_r(self.inner.dirp.0, &mut ret.entry, &mut entry_ptr);
+                            if err != 0 {
+                                if entry_ptr.is_null() {
+                                    self.end_of_stream = true;
+                                }
+                                return Some(Err(Error::from_raw_os_error(err)));
+                            }
+                            if entry_ptr.is_null() {
+                                return None;
+                            }
+                            if ret.name_bytes() != b"." && ret.name_bytes() != b".." {
+                                return Some(Ok(ret));
+                            }
+                        }
+                    }
+                }
+            }
+            /// Aborts the process if a file desceriptor is not open, if debug asserts are enabled.
+            #[inline] pub fn debug_assert_fd_is_open(fd: RawFd)
+            {
+                use ::error::errno;
+                
+                if core::ub_checks::check_library_ub()
+                {
+                    if unsafe { libc::fcntl(fd, libc::F_GETFD) } == -1 && errno() == libc::EBADF
+                    {
+                        rtabort!("IO Safety violation: owned file descriptor already closed");
+                    }
+                }
+            }
+
+            impl Drop for Dir
+            {
+                fn drop(&mut self)
+                {
+                    let fd = unsafe { libc::dirfd(self.0) };
+                    debug_assert_fd_is_open(fd);
+                    let r = unsafe { libc::closedir(self.0) };
+                    assert!
+                    (
+                        r == 0 || ::io::Error::last_os_error().is_interrupted(),
+                        "unexpected error during closedir: {:?}",
+                        ::io::Error::last_os_error()
+                    );
+                }
+            }
+
+            impl DirEntry
+            {
+                pub fn path(&self) -> PathBuf {
+                    self.dir.root.join(self.file_name_os_str())
+                }
+
+                pub fn file_name(&self) -> OsString {
+                    self.file_name_os_str().to_os_string()
+                }
+                
+                pub fn metadata(&self) -> io::Result<FileAttr> 
+                {
+                    let fd = cvt(unsafe { dirfd(self.dir.dirp.0) })?;
+                    let name = self.name_cstr().as_ptr();
+                    let mut stat: stat64 = unsafe { mem::zeroed() };
+                    cvt(unsafe { fstatat64(fd, name, &mut stat, libc::AT_SYMLINK_NOFOLLOW) })?;
+                    Ok(FileAttr::from_stat64(stat))
+                }
+                
+                pub fn file_type(&self) -> io::Result<FileType> {
+                    match self.entry.d_type {
+                        libc::DT_CHR => Ok(FileType { mode: libc::S_IFCHR }),
+                        libc::DT_FIFO => Ok(FileType { mode: libc::S_IFIFO }),
+                        libc::DT_LNK => Ok(FileType { mode: libc::S_IFLNK }),
+                        libc::DT_REG => Ok(FileType { mode: libc::S_IFREG }),
+                        libc::DT_SOCK => Ok(FileType { mode: libc::S_IFSOCK }),
+                        libc::DT_DIR => Ok(FileType { mode: libc::S_IFDIR }),
+                        libc::DT_BLK => Ok(FileType { mode: libc::S_IFBLK }),
+                        _ => self.metadata().map(|m| m.file_type()),
+                    }
+                }
+                
+                pub fn ino(&self) -> u64 {
+                    self.entry.d_fileno as u64
+                }
+                
+                fn name_bytes(&self) -> &[u8] {
+                    use ::slice;
+                    unsafe {
+                        slice::from_raw_parts(
+                            self.entry.d_name.as_ptr() as *const u8,
+                            self.entry.d_namlen as usize,
+                        )
+                    }
+                }
+
+                fn name_cstr(&self) -> &CStr {
+                    &self.name
+                }
+
+                pub fn file_name_os_str(&self) -> &OsStr {
+                    OsStr::from_bytes(self.name_bytes())
+                }
+            }
+
+            impl OpenOptions
+            {
+                pub fn new() -> OpenOptions
+                {
+                    OpenOptions {
+                        // generic
+                        read: false,
+                        write: false,
+                        append: false,
+                        truncate: false,
+                        create: false,
+                        create_new: false,
+                        // system-specific
+                        custom_flags: 0,
+                        mode: 0o666,
+                    }
+                }
+
+                pub fn read(&mut self, read: bool) { self.read = read; }
+                pub fn write(&mut self, write: bool) { self.write = write; }
+                pub fn append(&mut self, append: bool) { self.append = append; }
+                pub fn truncate(&mut self, truncate: bool) { self.truncate = truncate; }
+                pub fn create(&mut self, create: bool) { self.create = create; }
+                pub fn create_new(&mut self, create_new: bool) { self.create_new = create_new; }
+                pub fn custom_flags(&mut self, flags: i32) { self.custom_flags = flags; }
+                pub fn mode(&mut self, mode: u32) { self.mode = mode as mode_t; }
+
+                fn get_access_mode(&self) -> io::Result<c_int>
+                {
+                    match (self.read, self.write, self.append)
+                    {
+                        (true, false, false) => Ok(libc::O_RDONLY),
+                        (false, true, false) => Ok(libc::O_WRONLY),
+                        (true, true, false) => Ok(libc::O_RDWR),
+                        (false, _, true) => Ok(libc::O_WRONLY | libc::O_APPEND),
+                        (true, _, true) => Ok(libc::O_RDWR | libc::O_APPEND),
+                        (false, false, false) => Err(Error::from_raw_os_error(libc::EINVAL)),
+                    }
+                }
+
+                fn get_creation_mode(&self) -> io::Result<c_int> {
+                    match (self.write, self.append) {
+                        (true, false) => {}
+                        (false, false) => {
+                            if self.truncate || self.create || self.create_new {
+                                return Err(Error::from_raw_os_error(libc::EINVAL));
+                            }
+                        }
+                        (_, true) => {
+                            if self.truncate && !self.create_new {
+                                return Err(Error::from_raw_os_error(libc::EINVAL));
+                            }
+                        }
+                    }
+
+                    Ok(match (self.create, self.truncate, self.create_new) {
+                        (false, false, false) => 0,
+                        (true, false, false) => libc::O_CREAT,
+                        (false, true, false) => libc::O_TRUNC,
+                        (true, true, false) => libc::O_CREAT | libc::O_TRUNC,
+                        (_, _, true) => libc::O_CREAT | libc::O_EXCL,
+                    })
+                }
+            }
+
+            impl fmt::Debug for OpenOptions
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    let OpenOptions { read, write, append, truncate, create, create_new, custom_flags, mode } = self;
+                    f.debug_struct("OpenOptions")
+                    .field("read", read)
+                    .field("write", write)
+                    .field("append", append)
+                    .field("truncate", truncate)
+                    .field("create", create)
+                    .field("create_new", create_new)
+                    .field("custom_flags", custom_flags)
+                    .field("mode", &Mode(*mode))
+                    .finish()
+                }
+            }
+
+            impl File
+            {
+                pub fn open(path: &Path, opts: &OpenOptions) -> io::Result<File> {
+                    run_path_with_cstr(path, &|path| File::open_c(path, opts))
+                }
+
+                pub fn open_c(path: &CStr, opts: &OpenOptions) -> io::Result<File> {
+                    let flags = libc::O_CLOEXEC
+                        | opts.get_access_mode()?
+                        | opts.get_creation_mode()?
+                        | (opts.custom_flags as c_int & !libc::O_ACCMODE);
+                        
+                    let fd = cvt_r(|| unsafe { open64(path.as_ptr(), flags, opts.mode as c_int) })?;
+                    Ok(File(unsafe { FileDesc::from_raw_fd(fd) }))
+                }
+
+                pub fn file_attr(&self) -> io::Result<FileAttr> {
+                    let fd = self.as_raw_fd();
+                    let mut stat: stat64 = unsafe { mem::zeroed() };
+                    cvt(unsafe { fstat64(fd, &mut stat) })?;
+                    Ok(FileAttr::from_stat64(stat))
+                }
+
+                pub fn fsync(&self) -> io::Result<()> {
+                    cvt_r(|| unsafe { os_fsync(self.as_raw_fd()) })?;
+                    return Ok(());
+                    
+                    unsafe fn os_fsync(fd: c_int) -> c_int {
+                        libc::fsync(fd)
+                    }
+                }
+
+                pub fn datasync(&self) -> io::Result<()>
+                {
+                    cvt_r(|| unsafe { os_datasync(self.as_raw_fd()) })?;
+                    return Ok(());
+                    
+                    unsafe fn os_datasync(fd: c_int) -> c_int {
+                        libc::fdatasync(fd)
+                    }
+                }
+                
+                pub fn lock(&self) -> io::Result<()> {
+                    Err(io::const_error!(io::ErrorKind::Unsupported, "lock() not supported"))
+                }
+                
+                pub fn lock_shared(&self) -> io::Result<()> {
+                    Err(io::const_error!(io::ErrorKind::Unsupported, "lock_shared() not supported"))
+                }
+                
+                pub fn try_lock(&self) -> io::Result<bool> {
+                    Err(io::const_error!(io::ErrorKind::Unsupported, "try_lock() not supported"))
+                }
+                
+                pub fn try_lock_shared(&self) -> io::Result<bool> {
+                    Err(io::const_error!(io::ErrorKind::Unsupported, "try_lock_shared() not supported"))
+                }
+                
+                pub fn unlock(&self) -> io::Result<()> {
+                    Err(io::const_error!(io::ErrorKind::Unsupported, "unlock() not supported"))
+                }
+
+                pub fn truncate(&self, size: u64) -> io::Result<()> {
+                    let size: off64_t =
+                        size.try_into().map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+                    cvt_r(|| unsafe { ftruncate64(self.as_raw_fd(), size) }).map(drop)
+                }
+
+                pub fn read(&self, buf: &mut [u8]) -> io::Result<usize> { self.0.read(buf) }
+
+                pub fn read_vectored(&self, bufs: &mut [IoSliceMut<'_>]) -> io::Result<usize> { self.0.read_vectored(bufs) }
+
+                #[inline] pub fn is_read_vectored(&self) -> bool { self.0.is_read_vectored() }
+
+                pub fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<usize> { self.0.read_at(buf, offset) }
+
+                pub fn read_buf(&self, cursor: BorrowedCursor<'_>) -> io::Result<()> { self.0.read_buf(cursor) }
+
+                pub fn read_vectored_at(&self, bufs: &mut [IoSliceMut<'_>], offset: u64) -> io::Result<usize> { self.0.read_vectored_at(bufs, offset) }
+
+                pub fn write(&self, buf: &[u8]) -> io::Result<usize> { self.0.write(buf) }
+
+                pub fn write_vectored(&self, bufs: &[IoSlice<'_>]) -> io::Result<usize> { self.0.write_vectored(bufs) }
+
+                #[inline] pub fn is_write_vectored(&self) -> bool { self.0.is_write_vectored() }
+
+                pub fn write_at(&self, buf: &[u8], offset: u64) -> io::Result<usize> { self.0.write_at(buf, offset) }
+
+                pub fn write_vectored_at(&self, bufs: &[IoSlice<'_>], offset: u64) -> io::Result<usize> { self.0.write_vectored_at(bufs, offset) }
+
+                #[inline] pub fn flush(&self) -> io::Result<()> { Ok(()) }
+
+                pub fn seek(&self, pos: SeekFrom) -> io::Result<u64> {
+                    let (whence, pos) = match pos 
+                    {
+                        SeekFrom::Start(off) => (libc::SEEK_SET, off as i64),
+                        SeekFrom::End(off) => (libc::SEEK_END, off),
+                        SeekFrom::Current(off) => (libc::SEEK_CUR, off),
+                    };
+                    let n = cvt(unsafe { lseek64(self.as_raw_fd(), pos as off64_t, whence) })?;
+                    Ok(n as u64)
+                }
+
+                pub fn tell(&self) -> io::Result<u64> { self.seek(SeekFrom::Current(0)) }
+
+                pub fn duplicate(&self) -> io::Result<File> { self.0.duplicate().map(File) }
+
+                pub fn set_permissions(&self, perm: FilePermissions) -> io::Result<()> 
+                {
+                    cvt_r(|| unsafe { libc::fchmod(self.as_raw_fd(), perm.mode) })?;
+                    Ok(())
+                }
+
+                pub fn set_times(&self, times: FileTimes) -> io::Result<()> 
+                {
+                    let times = [to_timespec(times.accessed)?, to_timespec(times.modified)?];
+                    cvt(unsafe { libc::futimens(self.as_raw_fd(), times.as_ptr()) })?;
+                    Ok(())
+                }
+            }
+
+            impl DirBuilder
+            {
+                pub fn new() -> DirBuilder { DirBuilder { mode: 0o777 } }
+
+                pub fn mkdir(&self, p: &Path) -> io::Result<()>
+                { run_path_with_cstr(p, &|p| cvt(unsafe { libc::mkdir(p.as_ptr(), self.mode) }).map(|_| ())) }
+
+                pub fn set_mode(&mut self, mode: u32) { self.mode = mode as mode_t; }
+            }
+
+            impl fmt::Debug for DirBuilder
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    let DirBuilder { mode } = self;
+                    f.debug_struct("DirBuilder").field("mode", &Mode(*mode)).finish()
+                }
+            }
+
+            impl AsInner<FileDesc> for File
+            {
+                #[inline] fn as_inner(&self) -> &FileDesc { &self.0 }
+            }
+
+            impl AsInnerMut<FileDesc> for File
+            {
+                #[inline] fn as_inner_mut(&mut self) -> &mut FileDesc { &mut self.0 }
+            }
+
+            impl IntoInner<FileDesc> for File 
+            {
+                fn into_inner(self) -> FileDesc { self.0 }
+            }
+
+            impl FromInner<FileDesc> for File 
+            {
+                fn from_inner(file_desc: FileDesc) -> Self { Self(file_desc) }
+            }
+
+            impl AsFd for File
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_> { self.0.as_fd() }
+            }
+
+            impl AsRawFd for File
+            {
+                #[inline] fn as_raw_fd(&self) -> RawFd { self.0.as_raw_fd() }
+            }
+
+            impl IntoRawFd for File 
+            {
+                fn into_raw_fd(self) -> RawFd { self.0.into_raw_fd() }
+            }
+
+            impl FromRawFd for File 
+            {
+                unsafe fn from_raw_fd(raw_fd: RawFd) -> Self { Self(FromRawFd::from_raw_fd(raw_fd)) }
+            }
+
+            impl fmt::Debug for File 
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    
+                    fn get_path(_fd: c_int) -> Option<PathBuf> {
+                        None
+                    }
+
+                    fn get_mode(fd: c_int) -> Option<(bool, bool)> {
+                        let mode = unsafe { libc::fcntl(fd, libc::F_GETFL) };
+                        if mode == -1 {
+                            return None;
+                        }
+                        match mode & libc::O_ACCMODE {
+                            libc::O_RDONLY => Some((true, false)),
+                            libc::O_RDWR => Some((true, true)),
+                            libc::O_WRONLY => Some((false, true)),
+                            _ => None,
+                        }
+                    }
+
+                    let fd = self.as_raw_fd();
+                    let mut b = f.debug_struct("File");
+                    b.field("fd", &fd);
+                    if let Some(path) = get_path(fd) {
+                        b.field("path", &path);
+                    }
+                    if let Some((read, write)) = get_mode(fd) {
+                        b.field("read", &read).field("write", &write);
+                    }
+                    b.finish()
+                }
+            }
+            
+            impl fmt::Debug for Mode 
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    let Self(mode) = *self;
+                    write!(f, "0o{mode:06o}")?;
+
+                    let entry_type = match mode & libc::S_IFMT {
+                        libc::S_IFDIR => 'd',
+                        libc::S_IFBLK => 'b',
+                        libc::S_IFCHR => 'c',
+                        libc::S_IFLNK => 'l',
+                        libc::S_IFIFO => 'p',
+                        libc::S_IFREG => '-',
+                        _ => return Ok(()),
+                    };
+
+                    f.write_str(" (")?;
+                    f.write_char(entry_type)?;
+                    
+                    f.write_char(if mode & libc::S_IRUSR != 0 { 'r' } else { '-' })?;
+                    f.write_char(if mode & libc::S_IWUSR != 0 { 'w' } else { '-' })?;
+                    let owner_executable = mode & libc::S_IXUSR != 0;
+                    let setuid = mode as c_int & libc::S_ISUID as c_int != 0;
+                    f.write_char(match (owner_executable, setuid) {
+                        (true, true) => 's',  
+                        (false, true) => 'S', 
+                        (true, false) => 'x', 
+                        (false, false) => '-',
+                    })?;
+                    
+                    f.write_char(if mode & libc::S_IRGRP != 0 { 'r' } else { '-' })?;
+                    f.write_char(if mode & libc::S_IWGRP != 0 { 'w' } else { '-' })?;
+                    let group_executable = mode & libc::S_IXGRP != 0;
+                    let setgid = mode as c_int & libc::S_ISGID as c_int != 0;
+                    f.write_char(match (group_executable, setgid) {
+                        (true, true) => 's', 
+                        (false, true) => 'S', 
+                        (true, false) => 'x', 
+                        (false, false) => '-',
+                    })?;
+                    
+                    f.write_char(if mode & libc::S_IROTH != 0 { 'r' } else { '-' })?;
+                    f.write_char(if mode & libc::S_IWOTH != 0 { 'w' } else { '-' })?;
+                    let other_executable = mode & libc::S_IXOTH != 0;
+                    let sticky = mode as c_int & libc::S_ISVTX as c_int != 0;
+                    f.write_char(match (entry_type, other_executable, sticky) {
+                        ('d', true, true) => 't',  
+                        ('d', false, true) => 'T', 
+                        (_, true, _) => 'x',       
+                        (_, false, _) => '-',
+                    })?;
+
+                    f.write_char(')')
+                }
+            }
+
+            pub fn readdir(path: &Path) -> io::Result<ReadDir>
+            {
+                let ptr = run_path_with_cstr(path, &|p| unsafe { Ok(libc::opendir(p.as_ptr())) })?;
+                if ptr.is_null() {
+                    Err(Error::last_os_error())
+                } else {
+                    let root = path.to_path_buf();
+                    let inner = InnerReadDir { dirp: Dir(ptr), root };
+                    Ok(ReadDir::new(inner))
+                }
+            }
+
+            pub fn unlink(p: &CStr) -> io::Result<()>
+            {
+                cvt(unsafe { libc::unlink(p.as_ptr()) }).map(|_| ())
+            }
+
+            pub fn rename(old: &CStr, new: &CStr) -> io::Result<()>
+            {
+                cvt(unsafe { libc::rename(old.as_ptr(), new.as_ptr()) }).map(|_| ())
+            }
+
+            pub fn set_perm(p: &CStr, perm: FilePermissions) -> io::Result<()>
+            {
+                cvt_r(|| unsafe { libc::chmod(p.as_ptr(), perm.mode) }).map(|_| ())
+            }
+
+            pub fn rmdir(p: &CStr) -> io::Result<()>
+            {
+                cvt(unsafe { libc::rmdir(p.as_ptr()) }).map(|_| ())
+            }
+
+            pub fn readlink(c_path: &CStr) -> io::Result<PathBuf> 
+            {
+                let p = c_path.as_ptr();
+
+                let mut buf = Vec::with_capacity(256);
+
+                loop {
+                    let buf_read =
+                        cvt(unsafe { libc::readlink(p, buf.as_mut_ptr() as *mut _, buf.capacity()) })? as usize;
+
+                    unsafe {
+                        buf.set_len(buf_read);
+                    }
+
+                    if buf_read != buf.capacity() {
+                        buf.shrink_to_fit();
+
+                        return Ok(PathBuf::from(OsString::from_vec(buf)));
+                    }
+                    
+                    buf.reserve(1);
+                }
+            }
+
+            pub fn symlink(original: &CStr, link: &CStr) -> io::Result<()>
+            {
+                cvt(unsafe { libc::symlink(original.as_ptr(), link.as_ptr()) }).map(|_| ())
+            }
+
+            pub fn link(original: &CStr, link: &CStr) -> io::Result<()>
+            {
+                cvt(unsafe { libc::linkat(libc::AT_FDCWD, original.as_ptr(), libc::AT_FDCWD, link.as_ptr(), 0) })?;
+                Ok(())
+            }
+
+            pub fn stat(p: &CStr) -> io::Result<FileAttr>
+            {
+                let mut stat: stat64 = unsafe { mem::zeroed() };
+                cvt(unsafe { stat64(p.as_ptr(), &mut stat) })?;
+                Ok(FileAttr::from_stat64(stat))
+            }
+
+            pub fn lstat(p: &CStr) -> io::Result<FileAttr>
+            {
+                let mut stat: stat64 = unsafe { mem::zeroed() };
+                cvt(unsafe { lstat64(p.as_ptr(), &mut stat) })?;
+                Ok(FileAttr::from_stat64(stat))
+            }
+
+            pub fn canonicalize(path: &CStr) -> io::Result<PathBuf>
+            {
+                let r = unsafe { libc::realpath(path.as_ptr(), ptr::null_mut()) };
+                if r.is_null() {
+                    return Err(io::Error::last_os_error());
+                }
+                Ok(PathBuf::from(OsString::from_vec(unsafe {
+                    let buf = CStr::from_ptr(r).to_bytes().to_vec();
+                    libc::free(r as *mut _);
+                    buf
+                })))
+            }
+
+            pub fn open_from(from: &Path) -> io::Result<(::fs::File, ::fs::Metadata)>
+            {
+                use ::fs::File;
+                use ::sys::fs::common::NOT_FILE_ERROR;
+
+                let reader = File::open(from)?;
+                let metadata = reader.metadata()?;
+                if !metadata.is_file() {
+                    return Err(NOT_FILE_ERROR);
+                }
+                Ok((reader, metadata))
+            }
+            
+            pub fn open_to_and_set_permissions( to: &Path, reader_metadata: &::fs::Metadata ) -> 
+            io::Result<(::fs::File, ::fs::Metadata)> 
+            {
+                use ::fs::OpenOptions;
+                use ::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+
+                let perm = reader_metadata.permissions();
+                let writer = OpenOptions::new()
+                .mode(perm.mode())
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(to)?;
+
+                let writer_metadata = writer.metadata()?;
+                
+                if writer_metadata.is_file() {
+                    writer.set_permissions(perm)?;
+                }
+                Ok((writer, writer_metadata))
+            }
+
+            mod cfm
+            {
+                use ::fs::{File, Metadata};
+                use ::io::{BorrowedCursor, IoSlice, IoSliceMut, Read, Result, Write};
+
+                #[allow(dead_code)]
+                pub struct CachedFileMetadata(pub File, pub Metadata);
+
+                impl Read for CachedFileMetadata 
+                {
+                    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+                        self.0.read(buf)
+                    }
+                    fn read_vectored(&mut self, bufs: &mut [IoSliceMut<'_>]) -> Result<usize> {
+                        self.0.read_vectored(bufs)
+                    }
+                    fn read_buf(&mut self, cursor: BorrowedCursor<'_>) -> Result<()> {
+                        self.0.read_buf(cursor)
+                    }
+                    #[inline]
+                    fn is_read_vectored(&self) -> bool {
+                        self.0.is_read_vectored()
+                    }
+                    fn read_to_end(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
+                        self.0.read_to_end(buf)
+                    }
+                    fn read_to_string(&mut self, buf: &mut String) -> Result<usize> {
+                        self.0.read_to_string(buf)
+                    }
+                }
+
+                impl Write for CachedFileMetadata 
+                {
+                    fn write(&mut self, buf: &[u8]) -> Result<usize> {
+                        self.0.write(buf)
+                    }
+                    fn write_vectored(&mut self, bufs: &[IoSlice<'_>]) -> Result<usize> {
+                        self.0.write_vectored(bufs)
+                    }
+                    #[inline]
+                    fn is_write_vectored(&self) -> bool {
+                        self.0.is_write_vectored()
+                    }
+                    #[inline]
+                    fn flush(&mut self) -> Result<()> {
+                        self.0.flush()
+                    }
+                }
+            }
+            
+            pub fn copy(from: &Path, to: &Path) -> io::Result<u64>
+            {
+                let (reader, reader_metadata) = open_from(from)?;
+                let (writer, writer_metadata) = open_to_and_set_permissions(to, &reader_metadata)?;
+
+                io::copy(
+                    &mut cfm::CachedFileMetadata(reader, reader_metadata),
+                    &mut cfm::CachedFileMetadata(writer, writer_metadata),
+                )
+            }
+            
+            pub fn chown(path: &Path, uid: u32, gid: u32) -> io::Result<()>
+            {
+                run_path_with_cstr(path, &|path| {
+                    cvt(unsafe { libc::chown(path.as_ptr(), uid as libc::uid_t, gid as libc::gid_t) })
+                        .map(|_| ())
+                })
+            }
+
+            pub fn fchown(fd: c_int, uid: u32, gid: u32) -> io::Result<()>
+            {
+                cvt(unsafe { libc::fchown(fd, uid as libc::uid_t, gid as libc::gid_t) })?;
+                Ok(())
+            }
+            
+            pub fn lchown(path: &Path, uid: u32, gid: u32) -> io::Result<()>
+            {
+                run_path_with_cstr(path, &|path| {
+                    cvt(unsafe { libc::lchown(path.as_ptr(), uid as libc::uid_t, gid as libc::gid_t) })
+                        .map(|_| ())
+                })
+            }
+            
+            pub fn chroot(dir: &Path) -> io::Result<()>
+            {
+                run_path_with_cstr(dir, &|dir| cvt(unsafe { libc::chroot(dir.as_ptr()) }).map(|_| ()))
+            }
+            
+            pub fn mkfifo(path: &Path, mode: u32) -> io::Result<()>
+            {
+                run_path_with_cstr(path, &|path| {
+                    cvt(unsafe { libc::mkfifo(path.as_ptr(), mode.try_into().unwrap()) }).map(|_| ())
+                })
+            }
+            
+            mod remove_dir_impl
+            {
+                use libc::{fdopendir, openat, unlinkat};
+
+                use super::{Dir, DirEntry, InnerReadDir, ReadDir, lstat};
+                use ::ffi::CStr;
+                use ::io;
+                use ::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd};
+                use ::os::unix::prelude::{OwnedFd, RawFd};
+                use ::path::{Path, PathBuf};
+                use ::sys::common::small_c_string::run_path_with_cstr;
+                use ::sys::{cvt, cvt_r};
+                use ::sys::common::ignore_notfound;
+
+                pub fn openat_nofollow_dironly(parent_fd: Option<RawFd>, p: &CStr) -> io::Result<OwnedFd> 
+                {
+                    let fd = cvt_r(|| unsafe
+                    {
+                        openat
+                        (
+                            parent_fd.unwrap_or(libc::AT_FDCWD),
+                            p.as_ptr(),
+                            libc::O_CLOEXEC | libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_DIRECTORY,
+                        )
+                    })?;
+                    
+                    Ok(unsafe { OwnedFd::from_raw_fd(fd) })
+                }
+
+                pub fn fdreaddir(dir_fd: OwnedFd) -> io::Result<(ReadDir, RawFd)>
+                {
+                    let ptr = unsafe { fdopendir(dir_fd.as_raw_fd()) };
+                    if ptr.is_null() { return Err(io::Error::last_os_error()); }
+                    let dirp = Dir(ptr);
+                    let new_parent_fd = dir_fd.into_raw_fd();
+                    let dummy_root = PathBuf::new();
+                    let inner = InnerReadDir { dirp, root: dummy_root };
+                    Ok((ReadDir::new(inner), new_parent_fd))
+                }
+                
+                pub fn is_dir(ent: &DirEntry) -> Option<bool>
+                {
+                    match ent.entry.d_type
+                    {
+                        libc::DT_UNKNOWN => None,
+                        libc::DT_DIR => Some(true),
+                        _ => Some(false),
+                    }
+                }
+
+                pub fn is_enoent(result: &io::Result<()>) -> bool
+                {
+                    if let Err(err) = result && matches!(err.raw_os_error(), Some(libc::ENOENT)) { true }
+                    else { false }
+                }
+
+                pub fn remove_dir_all_recursive(parent_fd: Option<RawFd>, path: &CStr) -> io::Result<()>
+                {
+                    unsafe
+                    {
+                        let fd = match openat_nofollow_dironly(parent_fd, &path)
+                        {
+                            Err(err) if matches!(err.raw_os_error(), Some(libc::ENOTDIR | libc::ELOOP)) =>
+                            {
+                                return match parent_fd
+                                {
+                                    Some(parent_fd) =>
+                                    { cvt(unsafe { unlinkat(parent_fd, path.as_ptr(), 0) }).map(drop) }
+                                    
+                                    None => Err(err),
+                                };
+                            }
+
+                            result => result?,
+                        };
+                        
+                        let (dir, fd) = fdreaddir(fd)?;
+                        
+                        for child in dir
+                        {
+                            let child = child?;
+                            let child_name = child.name_cstr();
+                            let result: io::Result<()> = match is_dir(&child)
+                            {
+                                Some(true) =>
+                                {
+                                    remove_dir_all_recursive(Some(fd), child_name)?;
+                                }
+                                
+                                Some(false) =>
+                                {
+                                    cvt(unsafe { unlinkat(fd, child_name.as_ptr(), 0) })?;
+                                }
+                                
+                                None =>
+                                {
+                                    remove_dir_all_recursive(Some(fd), child_name)?;
+                                }
+                            };
+                            if result.is_err() && !is_enoent(&result) {
+                                return result;
+                            }
+                        }
+                        
+                        ignore_notfound(cvt(
+                        unsafe
+                        {
+                            unlinkat(parent_fd.unwrap_or(libc::AT_FDCWD), path.as_ptr(), libc::AT_REMOVEDIR) 
+                        }))?;
+
+                        Ok(())
+                    }
+                }
+
+                pub fn remove_dir_all_modern(p: &CStr) -> io::Result<()>
+                {
+                    let attr = lstat(p)?;
+
+                    if attr.file_type().is_symlink() { super::unlink(p) }
+                    else { remove_dir_all_recursive(None, &p) }
+                }
+
+                pub fn remove_dir_all(p: &Path) -> io::Result<()>
+                { run_path_with_cstr(p, &remove_dir_all_modern) }
+            } pub use self::remove_dir_impl::remove_dir_all;
+        }
+
+        mod windows
+        {
+            use ::
+            {
+                alloc::{Layout, alloc, dealloc},
+                borrow::Cow,
+                ffi::{OsStr, OsString, c_void},
+                io::{self, BorrowedCursor, Error, IoSlice, IoSliceMut, SeekFrom},
+                mem::{self, MaybeUninit, offset_of},
+                os::windows::io::{AsHandle, BorrowedHandle},
+                os::windows::prelude::*,
+                path::{Path, PathBuf},
+                sync::Arc,
+                sys::handle::Handle,
+                sys::pal::api::{self, WinError, set_file_information_by_handle},
+                sys::pal::{IoResult, fill_utf16_buf, to_u16s, truncate_utf16_at_nul},
+                sys::path::{WCStr, maybe_verbatim},
+                sys::time::SystemTime,
+                sys::{Align8, c, cvt},
+                sys::common::{AsInner, FromInner, IntoInner},
+                *,
+            };
+            
+            mod remove_dir_all
+            {
+                //! The Windows implementation of std::fs::remove_dir_all.
+                use ::
+                {
+                    sync::atomic::{Atomic, AtomicU32, Ordering},
+                    sys::c,
+                    sys::pal::api::WinError,
+                    *,
+                };
+                /// The maximum number of times to spin when waiting for deletes to complete.
+                pub const MAX_RETRIES: usize = 50;
+                /// A wrapper around a raw NtOpenFile call.
+                unsafe fn nt_open_file
+                ( access: u32, object_attribute: &c::OBJECT_ATTRIBUTES, share: u32, options: u32 ) 
+                -> Result<File, WinError>
+                {
+                    unsafe
+                    {
+                        let mut handle = ptr::null_mut();
+                        let mut io_status = c::IO_STATUS_BLOCK::PENDING;
+                        let status = c::NtOpenFile
+                        (
+                            &mut handle, 
+                            access, 
+                            object_attribute, 
+                            &mut io_status, 
+                            share, 
+                            options
+                        );
+
+                        if c::nt_success(status) { Ok(File::from_raw_handle(handle)) }
+                        else
+                        {
+                            let win_error = if status == c::STATUS_DELETE_PENDING { WinError::DELETE_PENDING }
+                            else { WinError::new(c::RtlNtStatusToDosError(status)) };
+                            Err(win_error)
+                        }
+                    }
+                }
+                /// Open the file `path` in the directory `parent`, requesting the given `access` rights.
+                fn open_link_no_reparse
+                (
+                    parent: &File,
+                    path: &[u16],
+                    access: u32,
+                    options: u32,
+                ) -> Result<Option<File>, WinError>
+                {
+                    unsafe
+                    {
+                        static ATTRIBUTES: Atomic<u32> = AtomicU32::new(c::OBJ_DONT_REPARSE);
+                        let result = 
+                        {
+                            let mut path_str = c::UNICODE_STRING::from_ref(path);
+                            let mut object = c::OBJECT_ATTRIBUTES
+                            {
+                                ObjectName: &mut path_str,
+                                RootDirectory: parent.as_raw_handle(),
+                                Attributes: ATTRIBUTES.load(Ordering::Relaxed),
+                                ..c::OBJECT_ATTRIBUTES::with_length()
+                            };
+                            let share = c::FILE_SHARE_DELETE | c::FILE_SHARE_READ | c::FILE_SHARE_WRITE;
+                            let options = c::FILE_OPEN_REPARSE_POINT | options;
+                            let result = nt_open_file(access, &object, share, options);
+                            
+                            if matches!(result, Err(WinError::INVALID_PARAMETER))
+                            && ATTRIBUTES.load(Ordering::Relaxed) == c::OBJ_DONT_REPARSE
+                            {
+                                ATTRIBUTES.store(0, Ordering::Relaxed);
+                                object.Attributes = 0;
+                                nt_open_file(access, &object, share, options)
+                            } 
+                            else { result }
+                        };
+                        
+                        match result
+                        {
+                            Ok(f) => Ok(Some(f)),
+                            Err
+                            (
+                                WinError::FILE_NOT_FOUND
+                                | WinError::PATH_NOT_FOUND
+                                | WinError::BAD_NETPATH
+                                | WinError::BAD_NET_NAME
+                                | WinError::DELETE_PENDING,
+                            ) => Ok(None),
+                            Err(e) => Err(e),
+                        }
+                    }
+                }
+
+                fn open_dir(parent: &File, name: &[u16]) -> Result<Option<File>, WinError>
+                {
+                    open_link_no_reparse
+                    (
+                        parent,
+                        name,
+                        c::SYNCHRONIZE | c::FILE_LIST_DIRECTORY,
+                        c::FILE_SYNCHRONOUS_IO_NONALERT,
+                    )
+                }
+
+                fn delete(parent: &File, name: &[u16]) -> Result<(), WinError>
+                {
+                    match open_link_no_reparse(parent, name, c::DELETE, 0)
+                    {
+                        Ok(Some(f)) => f.delete(),
+                        Ok(None) => Ok(()),
+                        Err(e) => Err(e),
+                    }
+                }
+                /// A simple retry loop that keeps running `f` 
+                /// while it fails with the given error code or until `MAX_RETRIES` is reached.
+                fn retry<T: PartialEq>( mut f: impl FnMut() -> Result<T, WinError>, ignore: WinError ) -> 
+                Result<T, WinError>
+                {
+                    let mut i = MAX_RETRIES;
+                    loop
+                    {
+                        i -= 1;
+                        if i == 0 { return f(); }
+                        else
+                        {
+                            let result = f();
+                            if result != Err(ignore) { return result; }
+                        }
+                        thread::yield_now();
+                    }
+                }
+
+                pub fn remove_dir_all_iterative(dir: File) -> Result<(), WinError>
+                {
+                    let mut buffer = DirBuff::new();
+                    let mut dirlist = vec![dir];
+                    let mut restart = true;
+                    'outer: while let Some(dir) = dirlist.pop()
+                    {
+                        let more_data = dir.fill_dir_buff(&mut buffer, restart)?;
+                        for (name, is_directory) in buffer.iter()
+                        {
+                            if is_directory
+                            {
+                                let Some(subdir) = open_dir(&dir, &name)? else { continue };
+                                dirlist.push(dir);
+                                dirlist.push(subdir);
+                                continue 'outer;
+                            }
+                            else { retry(|| delete(&dir, &name), WinError::SHARING_VIOLATION)?; }
+                        }
+                        
+                        if more_data
+                        {
+                            dirlist.push(dir);
+                            restart = false;
+                        }
+
+                        else
+                        {
+                            retry(|| delete(&dir, &[]), WinError::DIR_NOT_EMPTY)?;
+                            restart = true;
+                        }
+                    }
+                    Ok(())
+                }
+            } use remove_dir_all::remove_dir_all_iterative;
+
+            pub struct File
+            {
+                handle: Handle,
+            }
+
+            #[derive(Clone)]
+            pub struct FileAttr
+            {
+                attributes: u32,
+                creation_time: c::FILETIME,
+                last_access_time: c::FILETIME,
+                last_write_time: c::FILETIME,
+                change_time: Option<c::FILETIME>,
+                file_size: u64,
+                reparse_tag: u32,
+                volume_serial_number: Option<u32>,
+                number_of_links: Option<u32>,
+                file_index: Option<u64>,
+            }
+
+            #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+            pub struct FileType
+            {
+                is_directory: bool,
+                is_symlink: bool,
+            }
+
+            pub struct ReadDir
+            {
+                handle: Option<FindNextFileHandle>,
+                root: Arc<PathBuf>,
+                first: Option<c::WIN32_FIND_DATAW>,
+            }
+
+            struct FindNextFileHandle(c::HANDLE);
+
+            unsafe impl Send for FindNextFileHandle {}
+            unsafe impl Sync for FindNextFileHandle {}
+
+            pub struct DirEntry
+            {
+                root: Arc<PathBuf>,
+                data: c::WIN32_FIND_DATAW,
+            }
+
+            unsafe impl Send for OpenOptions {}
+            unsafe impl Sync for OpenOptions {}
+
+            #[derive(Clone, Debug)]
+            pub struct OpenOptions
+            {
+                read: bool,
+                write: bool,
+                append: bool,
+                truncate: bool,
+                create: bool,
+                create_new: bool,
+                custom_flags: u32,
+                access_mode: Option<u32>,
+                attributes: u32,
+                share_mode: u32,
+                security_qos_flags: u32,
+                security_attributes: *mut c::SECURITY_ATTRIBUTES,
+            }
+
+            #[derive(Clone, PartialEq, Eq, Debug)]
+            pub struct FilePermissions
+            {
+                attrs: u32,
+            }
+
+            #[derive(Copy, Clone, Debug, Default)]
+            pub struct FileTimes
+            {
+                accessed: Option<c::FILETIME>,
+                modified: Option<c::FILETIME>,
+                created: Option<c::FILETIME>,
+            }
+
+            impl fmt::Debug for c::FILETIME
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    let time = ((self.dwHighDateTime as u64) << 32) | self.dwLowDateTime as u64;
+                    f.debug_tuple("FILETIME").field(&time).finish()
+                }
+            }
+
+            #[derive(Debug)]
+            pub struct DirBuilder;
+
+            impl fmt::Debug for ReadDir
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    fmt::Debug::fmt(&*self.root, f)
+                }
+            }
+
+            impl Iterator for ReadDir
+            {
+                type Item = io::Result<DirEntry>;
+                fn next(&mut self) -> Option<io::Result<DirEntry>>
+                {
+                    unsafe
+                    {
+                        let Some(handle) = self.handle.as_ref() 
+                        else { return None; };
+
+                        if let Some(first) = self.first.take()
+                        {
+                            if let Some(e) = DirEntry::new(&self.root, &first) { return Some(Ok(e)); }
+                        }
+                        
+                        let mut wfd = mem::zeroed();
+
+                        loop
+                        {
+                            if c::FindNextFileW(handle.0, &mut wfd) == 0
+                            {
+                                match api::get_last_error()
+                                {
+                                    WinError::NO_MORE_FILES => return None,
+                                    WinError { code } => { return Some(Err(Error::from_raw_os_error(code as i32))); }
+                                }
+                            }
+                            
+                            if let Some(e) = DirEntry::new(&self.root, &wfd) { return Some(Ok(e)); }
+                        }
+                    }
+                }
+            }
+
+            impl Drop for FindNextFileHandle
+            {
+                fn drop(&mut self)
+                {
+                    let r = unsafe { c::FindClose(self.0) };
+                    debug_assert!(r != 0);
+                }
+            }
+
+            impl DirEntry
+            {
+                fn new(root: &Arc<PathBuf>, wfd: &c::WIN32_FIND_DATAW) -> Option<DirEntry>
+                {
+                    match &wfd.cFileName[0..3]
+                    {
+                        &[46, 0, ..] | &[46, 46, 0, ..] => return None,
+                        _ => {}
+                    }
+
+                    Some(DirEntry { root: root.clone(), data: *wfd })
+                }
+
+                pub fn path(&self) -> PathBuf { self.root.join(self.file_name()) }
+
+                pub fn file_name(&self) -> OsString
+                {
+                    let filename = truncate_utf16_at_nul(&self.data.cFileName);
+                    OsString::from_wide(filename)
+                }
+
+                pub fn file_type(&self) -> io::Result<FileType>
+                {
+                    Ok(FileType::new
+                    (
+                        self.data.dwFileAttributes,
+                        self.data.dwReserved0,
+                    ))
+                }
+
+                pub fn metadata(&self) -> io::Result<FileAttr> { Ok(self.data.into()) }
+            }
+
+            impl OpenOptions
+            {
+                pub fn new() -> OpenOptions
+                {
+                    OpenOptions
+                    {
+                        read: false,
+                        write: false,
+                        append: false,
+                        truncate: false,
+                        create: false,
+                        create_new: false,
+                        custom_flags: 0,
+                        access_mode: None,
+                        share_mode: c::FILE_SHARE_READ | c::FILE_SHARE_WRITE | c::FILE_SHARE_DELETE,
+                        attributes: 0,
+                        security_qos_flags: 0,
+                        security_attributes: ptr::null_mut(),
+                    }
+                }
+
+                pub fn read(&mut self, read: bool) { self.read = read; }
+                pub fn write(&mut self, write: bool) { self.write = write; }
+                pub fn append(&mut self, append: bool) { self.append = append; }
+                pub fn truncate(&mut self, truncate: bool) { self.truncate = truncate; }
+                pub fn create(&mut self, create: bool) { self.create = create; }
+                pub fn create_new(&mut self, create_new: bool) { self.create_new = create_new; }
+                pub fn custom_flags(&mut self, flags: u32) { self.custom_flags = flags; }
+                pub fn access_mode(&mut self, access_mode: u32) { self.access_mode = Some(access_mode); }
+                pub fn share_mode(&mut self, share_mode: u32) { self.share_mode = share_mode; }
+                pub fn attributes(&mut self, attrs: u32) { self.attributes = attrs; } pub fn security_qos_flags(&mut self, flags: u32) { self.security_qos_flags = flags | c::SECURITY_SQOS_PRESENT; }
+                pub fn security_attributes(&mut self, attrs: *mut c::SECURITY_ATTRIBUTES) { self.security_attributes = attrs; }
+
+                pub fn get_access_mode(&self) -> io::Result<u32>
+                {
+                    match (self.read, self.write, self.append, self.access_mode)
+                    {
+                        (.., Some(mode)) => Ok(mode),
+                        (true, false, false, None) => Ok(c::GENERIC_READ),
+                        (false, true, false, None) => Ok(c::GENERIC_WRITE),
+                        (true, true, false, None) => Ok(c::GENERIC_READ | c::GENERIC_WRITE),
+                        (false, _, true, None) => Ok(c::FILE_GENERIC_WRITE & !c::FILE_WRITE_DATA),
+                        
+                        (true, _, true, None) => 
+                        { Ok(c::GENERIC_READ | (c::FILE_GENERIC_WRITE & !c::FILE_WRITE_DATA)) }
+
+                        (false, false, false, None) =>
+                        { Err(Error::from_raw_os_error(c::ERROR_INVALID_PARAMETER as i32)) }
+                    }
+                }
+
+                pub fn get_creation_mode(&self) -> io::Result<u32>
+                {
+                    match (self.write, self.append)
+                    {
+                        (true, false) => {}
+                        (false, false) =>
+                        {
+                            if self.truncate || self.create || self.create_new 
+                            { return Err(Error::from_raw_os_error(c::ERROR_INVALID_PARAMETER as i32)); }
+                        }
+                        
+                        (_, true) =>
+                        {
+                            if self.truncate && !self.create_new
+                            { return Err(Error::from_raw_os_error(c::ERROR_INVALID_PARAMETER as i32)); }
+                        }
+                    }
+
+                    Ok(match (self.create, self.truncate, self.create_new)
+                    {
+                        (false, false, false) => c::OPEN_EXISTING,
+                        (true, false, false) => c::OPEN_ALWAYS,
+                        (false, true, false) => c::TRUNCATE_EXISTING,
+                        (true, true, false) => c::OPEN_ALWAYS,
+                        (_, _, true) => c::CREATE_NEW,
+                    })
+                }
+
+                pub fn get_flags_and_attributes(&self) -> u32
+                {
+                    self.custom_flags
+                    | self.attributes
+                    | self.security_qos_flags
+                    | if self.create_new { c::FILE_FLAG_OPEN_REPARSE_POINT } 
+                    else { 0 }
+                }
+            }
+
+            impl File 
+            {
+                pub fn open(path: &Path, opts: &OpenOptions) -> io::Result<File>
+                {
+                    let path = maybe_verbatim(path)?;
+                    let path = unsafe { WCStr::from_wchars_with_null_unchecked(&path) };
+                    Self::open_native(&path, opts)
+                }
+
+                fn open_native(path: &WCStr, opts: &OpenOptions) -> io::Result<File>
+                {
+                    let creation = opts.get_creation_mode()?;
+                    let handle = unsafe 
+                    {
+                        c::CreateFileW(
+                            path.as_ptr(),
+                            opts.get_access_mode()?,
+                            opts.share_mode,
+                            opts.security_attributes,
+                            creation,
+                            opts.get_flags_and_attributes(),
+                            ptr::null_mut(),
+                        )
+                    };
+                    let handle = unsafe { HandleOrInvalid::from_raw_handle(handle) };
+                    if let Ok(handle) = OwnedHandle::try_from(handle)
+                    {
+                        if opts.truncate
+                        && creation == c::OPEN_ALWAYS
+                        && api::get_last_error() == WinError::ALREADY_EXISTS
+                        {
+                            let alloc = c::FILE_ALLOCATION_INFO { AllocationSize: 0 };
+                            set_file_information_by_handle(handle.as_raw_handle(), &alloc)
+                            .or_else(|_|
+                            {
+                                let eof = c::FILE_END_OF_FILE_INFO { EndOfFile: 0 };
+                                set_file_information_by_handle(handle.as_raw_handle(), &eof)
+                            }).io_result()?;
+                        }
+                        Ok(File { handle: Handle::from_inner(handle) })
+                    } else { Err(Error::last_os_error()) }
+                }
+
+                pub fn fsync(&self) -> io::Result<()>
+                {
+                    cvt(unsafe { c::FlushFileBuffers(self.handle.as_raw_handle()) })?;
+                    Ok(())
+                }
+
+                pub fn datasync(&self) -> io::Result<()> { self.fsync() }
+
+                pub fn acquire_lock(&self, flags: c::LOCK_FILE_FLAGS) -> io::Result<()>
+                {
+                    unsafe
+                    {
+                        let mut overlapped: c::OVERLAPPED = mem::zeroed();
+                        let event = c::CreateEventW(ptr::null_mut(), c::FALSE, c::FALSE, ptr::null());
+                        if event.is_null() {
+                            return Err(io::Error::last_os_error());
+                        }
+                        overlapped.hEvent = event;
+                        let lock_result = cvt(c::LockFileEx(
+                            self.handle.as_raw_handle(),
+                            flags,
+                            0,
+                            u32::MAX,
+                            u32::MAX,
+                            &mut overlapped,
+                        ));
+
+                        let final_result = match lock_result {
+                            Ok(_) => Ok(()),
+                            Err(err) => {
+                                if err.raw_os_error() == Some(c::ERROR_IO_PENDING as i32) {
+                                    let mut bytes_transferred = 0;
+                                    cvt(c::GetOverlappedResult(
+                                        self.handle.as_raw_handle(),
+                                        &mut overlapped,
+                                        &mut bytes_transferred,
+                                        c::TRUE,
+                                    ))
+                                    .map(|_| ())
+                                } else {
+                                    Err(err)
+                                }
+                            }
+                        };
+                        c::CloseHandle(overlapped.hEvent);
+                        final_result
+                    }
+                }
+
+                pub fn lock(&self) -> io::Result<()> { self.acquire_lock(c::LOCKFILE_EXCLUSIVE_LOCK) }
+
+                pub fn lock_shared(&self) -> io::Result<()> { self.acquire_lock(0) }
+
+                pub fn try_lock(&self) -> io::Result<bool>
+                {
+                    let result = cvt(unsafe {
+                        let mut overlapped = mem::zeroed();
+                        c::LockFileEx(
+                            self.handle.as_raw_handle(),
+                            c::LOCKFILE_EXCLUSIVE_LOCK | c::LOCKFILE_FAIL_IMMEDIATELY,
+                            0,
+                            u32::MAX,
+                            u32::MAX,
+                            &mut overlapped,
+                        )
+                    });
+
+                    match result {
+                        Ok(_) => Ok(true),
+                        Err(err)
+                            if err.raw_os_error() == Some(c::ERROR_IO_PENDING as i32)
+                                || err.raw_os_error() == Some(c::ERROR_LOCK_VIOLATION as i32) =>
+                        {
+                            Ok(false)
+                        }
+                        Err(err) => Err(err),
+                    }
+                }
+
+                pub fn try_lock_shared(&self) -> io::Result<bool>
+                {
+                    let result = cvt(unsafe {
+                        let mut overlapped = mem::zeroed();
+                        c::LockFileEx(
+                            self.handle.as_raw_handle(),
+                            c::LOCKFILE_FAIL_IMMEDIATELY,
+                            0,
+                            u32::MAX,
+                            u32::MAX,
+                            &mut overlapped,
+                        )
+                    });
+
+                    match result {
+                        Ok(_) => Ok(true),
+                        Err(err)
+                            if err.raw_os_error() == Some(c::ERROR_IO_PENDING as i32)
+                                || err.raw_os_error() == Some(c::ERROR_LOCK_VIOLATION as i32) =>
+                        {
+                            Ok(false)
+                        }
+                        Err(err) => Err(err),
+                    }
+                }
+
+                pub fn unlock(&self) -> io::Result<()>
+                {
+                    cvt(unsafe { c::UnlockFile(self.handle.as_raw_handle(), 0, 0, u32::MAX, u32::MAX) })?;
+                    let result =
+                        cvt(unsafe { c::UnlockFile(self.handle.as_raw_handle(), 0, 0, u32::MAX, u32::MAX) });
+                    match result {
+                        Ok(_) => Ok(()),
+                        Err(err) if err.raw_os_error() == Some(c::ERROR_NOT_LOCKED as i32) => Ok(()),
+                        Err(err) => Err(err),
+                    }
+                }
+
+                pub fn truncate(&self, size: u64) -> io::Result<()>
+                {
+                    let info = c::FILE_END_OF_FILE_INFO { EndOfFile: size as i64 };
+                    api::set_file_information_by_handle(self.handle.as_raw_handle(), &info).io_result()
+                }
+                
+                pub fn file_attr(&self) -> io::Result<FileAttr>
+                {
+                    unsafe
+                    {
+                        let mut info: c::FILE_BASIC_INFO = mem::zeroed();
+                        let size = size_of_val(&info);
+                        cvt(c::GetFileInformationByHandleEx(
+                            self.handle.as_raw_handle(),
+                            c::FileBasicInfo,
+                            (&raw mut info) as *mut c_void,
+                            size as u32,
+                        ))?;
+                        let mut attr = FileAttr {
+                            attributes: info.FileAttributes,
+                            creation_time: c::FILETIME {
+                                dwLowDateTime: info.CreationTime as u32,
+                                dwHighDateTime: (info.CreationTime >> 32) as u32,
+                            },
+                            last_access_time: c::FILETIME {
+                                dwLowDateTime: info.LastAccessTime as u32,
+                                dwHighDateTime: (info.LastAccessTime >> 32) as u32,
+                            },
+                            last_write_time: c::FILETIME {
+                                dwLowDateTime: info.LastWriteTime as u32,
+                                dwHighDateTime: (info.LastWriteTime >> 32) as u32,
+                            },
+                            change_time: Some(c::FILETIME {
+                                dwLowDateTime: info.ChangeTime as u32,
+                                dwHighDateTime: (info.ChangeTime >> 32) as u32,
+                            }),
+                            file_size: 0,
+                            reparse_tag: 0,
+                            volume_serial_number: None,
+                            number_of_links: None,
+                            file_index: None,
+                        };
+                        let mut info: c::FILE_STANDARD_INFO = mem::zeroed();
+                        let size = size_of_val(&info);
+                        cvt(c::GetFileInformationByHandleEx(
+                            self.handle.as_raw_handle(),
+                            c::FileStandardInfo,
+                            (&raw mut info) as *mut c_void,
+                            size as u32,
+                        ))?;
+                        attr.file_size = info.AllocationSize as u64;
+                        attr.number_of_links = Some(info.NumberOfLinks);
+                        if attr.attributes & c::FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+                            let mut attr_tag: c::FILE_ATTRIBUTE_TAG_INFO = mem::zeroed();
+                            cvt(c::GetFileInformationByHandleEx(
+                                self.handle.as_raw_handle(),
+                                c::FileAttributeTagInfo,
+                                (&raw mut attr_tag).cast(),
+                                size_of::<c::FILE_ATTRIBUTE_TAG_INFO>().try_into().unwrap(),
+                            ))?;
+                            if attr_tag.FileAttributes & c::FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+                                attr.reparse_tag = attr_tag.ReparseTag;
+                            }
+                        }
+                        Ok(attr)
+                    }
+                }
+
+                pub fn read(&self, buf: &mut [u8]) -> io::Result<usize> { self.handle.read(buf) }
+
+                pub fn read_vectored(&self, bufs: &mut [IoSliceMut<'_>]) -> io::Result<usize> { self.handle.read_vectored(bufs) }
+
+                #[inline] pub fn is_read_vectored(&self) -> bool { self.handle.is_read_vectored() }
+
+                pub fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<usize> { self.handle.read_at(buf, offset) }
+
+                pub fn read_buf(&self, cursor: BorrowedCursor<'_>) -> io::Result<()> { self.handle.read_buf(cursor) }
+
+                pub fn write(&self, buf: &[u8]) -> io::Result<usize> { self.handle.write(buf) }
+
+                pub fn write_vectored(&self, bufs: &[IoSlice<'_>]) -> io::Result<usize> { self.handle.write_vectored(bufs) }
+
+                #[inline] pub fn is_write_vectored(&self) -> bool { self.handle.is_write_vectored() }
+
+                pub fn write_at(&self, buf: &[u8], offset: u64) -> io::Result<usize> { self.handle.write_at(buf, offset) }
+
+                pub fn flush(&self) -> io::Result<()> { Ok(()) }
+
+                pub fn seek(&self, pos: SeekFrom) -> io::Result<u64>
+                {
+                    let (whence, pos) = match pos
+                    {
+                        SeekFrom::Start(n) => (c::FILE_BEGIN, n as i64),
+                        SeekFrom::End(n) => (c::FILE_END, n),
+                        SeekFrom::Current(n) => (c::FILE_CURRENT, n),
+                    };
+
+                    let pos = pos as i64;
+                    let mut newpos = 0;
+                    cvt(unsafe { c::SetFilePointerEx(self.handle.as_raw_handle(), pos, &mut newpos, whence) })?;
+                    Ok(newpos as u64)
+                }
+
+                pub fn tell(&self) -> io::Result<u64> { self.seek(SeekFrom::Current(0)) }
+
+                pub fn duplicate(&self) -> io::Result<File> { Ok(Self { handle: self.handle.try_clone()? }) }
+                
+                pub fn reparse_point( &self, space: &mut Align8<[MaybeUninit<u8>]> ) -> 
+                io::Result<(u32, *mut c::REPARSE_DATA_BUFFER)>
+                {
+                    unsafe
+                    {
+                        let mut bytes = 0;
+                        cvt({
+                            let len = space.0.len();
+                            c::DeviceIoControl(
+                                self.handle.as_raw_handle(),
+                                c::FSCTL_GET_REPARSE_POINT,
+                                ptr::null_mut(),
+                                0,
+                                space.0.as_mut_ptr().cast(),
+                                len as u32,
+                                &mut bytes,
+                                ptr::null_mut(),
+                            )
+                        })?;
+                        const _: () = assert!(align_of::<c::REPARSE_DATA_BUFFER>() <= 8);
+                        Ok((bytes, space.0.as_mut_ptr().cast::<c::REPARSE_DATA_BUFFER>()))
+                    }
+                }
+
+                pub fn readlink(&self) -> io::Result<PathBuf>
+                {
+                    let mut space =
+                        Align8([MaybeUninit::<u8>::uninit(); c::MAXIMUM_REPARSE_DATA_BUFFER_SIZE as usize]);
+                    let (_bytes, buf) = self.reparse_point(&mut space)?;
+                    unsafe {
+                        let (path_buffer, subst_off, subst_len, relative) = match (*buf).ReparseTag {
+                            c::IO_REPARSE_TAG_SYMLINK => {
+                                let info: *mut c::SYMBOLIC_LINK_REPARSE_BUFFER = (&raw mut (*buf).rest).cast();
+                                assert!(info.is_aligned());
+                                (
+                                    (&raw mut (*info).PathBuffer).cast::<u16>(),
+                                    (*info).SubstituteNameOffset / 2,
+                                    (*info).SubstituteNameLength / 2,
+                                    (*info).Flags & c::SYMLINK_FLAG_RELATIVE != 0,
+                                )
+                            }
+                            c::IO_REPARSE_TAG_MOUNT_POINT => {
+                                let info: *mut c::MOUNT_POINT_REPARSE_BUFFER = (&raw mut (*buf).rest).cast();
+                                assert!(info.is_aligned());
+                                (
+                                    (&raw mut (*info).PathBuffer).cast::<u16>(),
+                                    (*info).SubstituteNameOffset / 2,
+                                    (*info).SubstituteNameLength / 2,
+                                    false,
+                                )
+                            }
+                            _ => {
+                                return Err(io::const_error!(
+                                    io::ErrorKind::Uncategorized,
+                                    "Unsupported reparse point type",
+                                ));
+                            }
+                        };
+                        let subst_ptr = path_buffer.add(subst_off.into());
+                        let subst = slice::from_raw_parts_mut(subst_ptr, subst_len as usize);
+                        // Absolute paths start with an NT internal namespace prefix `\??\`
+                        // We should not let it leak through.
+                        if !relative && subst.starts_with(&[92u16, 63u16, 63u16, 92u16]) {
+                            // Turn `\??\` into `\\?\` (a verbatim path).
+                            subst[1] = b'\\' as u16;
+                            // Attempt to convert to a more user-friendly path.
+                            let user = crate::sys::args::from_wide_to_user_path(
+                                subst.iter().copied().chain([0]).collect(),
+                            )?;
+                            Ok(PathBuf::from(OsString::from_wide(user.strip_suffix(&[0]).unwrap_or(&user))))
+                        } else {
+                            Ok(PathBuf::from(OsString::from_wide(subst)))
+                        }
+                    }
+                }
+
+                pub fn set_permissions(&self, perm: FilePermissions) -> io::Result<()>
+                {
+                    let info = c::FILE_BASIC_INFO
+                    {
+                        CreationTime: 0,
+                        LastAccessTime: 0,
+                        LastWriteTime: 0,
+                        ChangeTime: 0,
+                        FileAttributes: perm.attrs,
+                    };
+                    api::set_file_information_by_handle(self.handle.as_raw_handle(), &info).io_result()
+                }
+
+                pub fn set_times(&self, times: FileTimes) -> io::Result<()>
+                {
+                    let is_zero = |t: c::FILETIME| t.dwLowDateTime == 0 && t.dwHighDateTime == 0;
+                    if times.accessed.map_or(false, is_zero)
+                        || times.modified.map_or(false, is_zero)
+                        || times.created.map_or(false, is_zero)
+                    {
+                        return Err(io::const_error!(
+                            io::ErrorKind::InvalidInput,
+                            "cannot set file timestamp to 0",
+                        ));
+                    }
+                    let is_max = |t: c::FILETIME| t.dwLowDateTime == u32::MAX && t.dwHighDateTime == u32::MAX;
+                    if times.accessed.map_or(false, is_max)
+                        || times.modified.map_or(false, is_max)
+                        || times.created.map_or(false, is_max)
+                    {
+                        return Err(io::const_error!(
+                            io::ErrorKind::InvalidInput,
+                            "cannot set file timestamp to 0xFFFF_FFFF_FFFF_FFFF",
+                        ));
+                    }
+                    cvt(unsafe {
+                        let created =
+                            times.created.as_ref().map(|a| a as *const c::FILETIME).unwrap_or(ptr::null());
+                        let accessed =
+                            times.accessed.as_ref().map(|a| a as *const c::FILETIME).unwrap_or(ptr::null());
+                        let modified =
+                            times.modified.as_ref().map(|a| a as *const c::FILETIME).unwrap_or(ptr::null());
+                        c::SetFileTime(self.as_raw_handle(), created, accessed, modified)
+                    })?;
+                    Ok(())
+                }
+                /// Gets only basic file information such as attributes and file times.
+                pub fn basic_info(&self) -> io::Result<c::FILE_BASIC_INFO>
+                {
+                    unsafe
+                    {
+                        let mut info: c::FILE_BASIC_INFO = mem::zeroed();
+                        let size = size_of_val(&info);
+                        cvt(c::GetFileInformationByHandleEx(
+                            self.handle.as_raw_handle(),
+                            c::FileBasicInfo,
+                            (&raw mut info) as *mut c_void,
+                            size as u32,
+                        ))?;
+                        Ok(info)
+                    }
+                }
+                /// Deletes the file, 
+                /// consuming the file handle to ensure the delete occurs as immediately as possible.
+                pub fn delete(self) -> Result<(), WinError>
+                {
+                    match self.posix_delete()
+                    {
+                        Err(WinError::INVALID_PARAMETER)
+                        | Err(WinError::NOT_SUPPORTED)
+                        | Err(WinError::INVALID_FUNCTION) => self.win32_delete(),
+                        result => result,
+                    }
+                }
+                /// Delete using POSIX semantics.
+                pub fn posix_delete(&self) -> Result<(), WinError>
+                {
+                    let info = c::FILE_DISPOSITION_INFO_EX
+                    {
+                        Flags: c::FILE_DISPOSITION_FLAG_DELETE
+                        | c::FILE_DISPOSITION_FLAG_POSIX_SEMANTICS
+                        | c::FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE,
+                    };
+                    api::set_file_information_by_handle(self.handle.as_raw_handle(), &info)
+                }
+
+                /// Delete a file using win32 semantics.
+                fn win32_delete(&self) -> Result<(), WinError>
+                {
+                    let info = c::FILE_DISPOSITION_INFO { DeleteFile: true };
+                    api::set_file_information_by_handle(self.handle.as_raw_handle(), &info)
+                }
+                /// Fill the given buffer with as many directory entries as will fit.
+                fn fill_dir_buff(&self, buffer: &mut DirBuff, restart: bool) -> Result<bool, WinError>
+                {
+                    let class =
+                        if restart { c::FileIdBothDirectoryRestartInfo } else { c::FileIdBothDirectoryInfo };
+
+                    unsafe {
+                        let result = c::GetFileInformationByHandleEx(
+                            self.as_raw_handle(),
+                            class,
+                            buffer.as_mut_ptr().cast(),
+                            buffer.capacity() as _,
+                        );
+                        if result == 0 {
+                            let err = api::get_last_error();
+                            if err.code == c::ERROR_NO_MORE_FILES { Ok(false) } else { Err(err) }
+                        } else {
+                            Ok(true)
+                        }
+                    }
+                }
+            }
+            /// A buffer for holding directory entries.
+            struct DirBuff
+            {
+                buffer: Box<Align8<[MaybeUninit<u8>; Self::BUFFER_SIZE]>>,
+            }
+
+            impl DirBuff
+            {
+                const BUFFER_SIZE: usize = 1024;
+                fn new() -> Self
+                {
+                    Self 
+                    {
+                        buffer: unsafe { Box::new_uninit().assume_init() },
+                    }
+                }
+
+                fn capacity(&self) -> usize { self.buffer.0.len() }
+
+                fn as_mut_ptr(&mut self) -> *mut u8 { self.buffer.0.as_mut_ptr().cast() }
+                /// Returns a `DirBuffIter`.
+                fn iter(&self) -> DirBuffIter<'_> { DirBuffIter::new(self) }
+            }
+
+            impl AsRef<[MaybeUninit<u8>]> for DirBuff
+            {
+                fn as_ref(&self) -> &[MaybeUninit<u8>] { &self.buffer.0 }
+            }
+            /// An iterator over entries stored in a `DirBuff`.
+            pub struct DirBuffIter<'a>
+            {
+                buffer: Option<&'a [MaybeUninit<u8>]>,
+                cursor: usize,
+            }
+
+            impl<'a> DirBuffIter<'a>
+            {
+                fn new(buffer: &'a DirBuff) -> Self { Self { buffer: Some(buffer.as_ref()), cursor: 0 } }
+            }
+            
+            impl<'a> Iterator for DirBuffIter<'a>
+            {
+                type Item = (Cow<'a, [u16]>, bool);
+                fn next(&mut self) -> Option<Self::Item>
+                {
+                    let buffer = &self.buffer?[self.cursor..];
+                    let (name, is_directory, next_entry) = unsafe
+                    {
+                        let info = buffer.as_ptr().cast::<c::FILE_ID_BOTH_DIR_INFO>();
+                        let next_entry = (&raw const (*info).NextEntryOffset).read_unaligned() as usize;
+                        let length = (&raw const (*info).FileNameLength).read_unaligned() as usize;
+                        let attrs = (&raw const (*info).FileAttributes).read_unaligned();
+                        let name = from_maybe_unaligned(
+                            (&raw const (*info).FileName).cast::<u16>(),
+                            length / size_of::<u16>(),
+                        );
+                        let is_directory = (attrs & c::FILE_ATTRIBUTE_DIRECTORY) != 0;
+
+                        (name, is_directory, next_entry)
+                    };
+
+                    if next_entry == 0 {
+                        self.buffer = None
+                    } else {
+                        self.cursor += next_entry
+                    }
+                    
+                    const DOT: u16 = b'.' as u16;
+                    match &name[..]
+                    {
+                        [DOT] | [DOT, DOT] => self.next(),
+                        _ => Some((name, is_directory)),
+                    }
+                }
+            }
+
+            unsafe fn from_maybe_unaligned<'a>(p: *const u16, len: usize) -> Cow<'a, [u16]>
+            {
+                unsafe
+                {
+                    if p.is_aligned() { Cow::Borrowed( ::slice::from_raw_parts(p, len)) }
+                    else { Cow::Owned((0..len).map(|i| p.add(i).read_unaligned()).collect()) }
+                }
+            }
+
+            impl AsInner<Handle> for File
+            {
+                #[inline] fn as_inner(&self) -> &Handle { &self.handle }
+            }
+
+            impl IntoInner<Handle> for File 
+            {
+                fn into_inner(self) -> Handle { self.handle }
+            }
+
+            impl FromInner<Handle> for File 
+            {
+                fn from_inner(handle: Handle) -> File { File { handle } }
+            }
+
+            impl AsHandle for File 
+            {
+                fn as_handle(&self) -> BorrowedHandle<'_> { self.as_inner().as_handle() }
+            }
+
+            impl AsRawHandle for File
+            {
+                fn as_raw_handle(&self) -> RawHandle { self.as_inner().as_raw_handle() }
+            }
+
+            impl IntoRawHandle for File
+            {
+                fn into_raw_handle(self) -> RawHandle
+                {
+                    self.into_inner().into_raw_handle()
+                }
+            }
+
+            impl FromRawHandle for File 
+            {
+                unsafe fn from_raw_handle(raw_handle: RawHandle) -> Self
+                {
+                    unsafe
+                    {
+                        Self { handle: FromInner::from_inner(FromRawHandle::from_raw_handle(raw_handle)) }
+                    }
+                }
+            }
+
+            impl fmt::Debug for File
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    let mut b = f.debug_struct("File");
+                    b.field("handle", &self.handle.as_raw_handle());
+                    if let Ok(path) = get_path(self) {
+                        b.field("path", &path);
+                    }
+                    b.finish()
+                }
+            }
+
+            impl FileAttr
+            {
+                pub fn size(&self) -> u64 { self.file_size }
+                pub fn perm(&self) -> FilePermissions { FilePermissions { attrs: self.attributes } }
+                pub fn attrs(&self) -> u32 { self.attributes }
+                pub fn file_type(&self) -> FileType { FileType::new(self.attributes, self.reparse_tag) }
+                pub fn modified(&self) -> io::Result<SystemTime> { Ok(SystemTime::from(self.last_write_time)) }
+                pub fn accessed(&self) -> io::Result<SystemTime> { Ok(SystemTime::from(self.last_access_time)) }
+                pub fn created(&self) -> io::Result<SystemTime> { Ok(SystemTime::from(self.creation_time)) }
+                pub fn modified_u64(&self) -> u64 { to_u64(&self.last_write_time) }
+                pub fn accessed_u64(&self) -> u64 { to_u64(&self.last_access_time) }
+                pub fn created_u64(&self) -> u64 { to_u64(&self.creation_time) }
+                pub fn changed_u64(&self) -> Option<u64> { self.change_time.as_ref().map(|c| to_u64(c)) }
+                pub fn volume_serial_number(&self) -> Option<u32> { self.volume_serial_number }
+                pub fn number_of_links(&self) -> Option<u32> { self.number_of_links }
+                pub fn file_index(&self) -> Option<u64> { self.file_index }            
+            }
+
+            impl From<c::WIN32_FIND_DATAW> for FileAttr
+            {
+                fn from(wfd: c::WIN32_FIND_DATAW) -> Self
+                {
+                    FileAttr
+                    {
+                        attributes: wfd.dwFileAttributes,
+                        creation_time: wfd.ftCreationTime,
+                        last_access_time: wfd.ftLastAccessTime,
+                        last_write_time: wfd.ftLastWriteTime,
+                        change_time: None,
+                        file_size: ((wfd.nFileSizeHigh as u64) << 32) | (wfd.nFileSizeLow as u64),
+                        reparse_tag: if wfd.dwFileAttributes & c::FILE_ATTRIBUTE_REPARSE_POINT != 0 
+                        {
+                            wfd.dwReserved0
+                        } else {
+                            0
+                        },
+                        volume_serial_number: None,
+                        number_of_links: None,
+                        file_index: None,
+                    }
+                }
+            }
+
+            pub fn to_u64(ft: &c::FILETIME) -> u64 
+            { (ft.dwLowDateTime as u64) | ((ft.dwHighDateTime as u64) << 32) }
+
+            impl FilePermissions
+            {
+                pub fn readonly(&self) -> bool { self.attrs & c::FILE_ATTRIBUTE_READONLY != 0 }
+
+                pub fn set_readonly(&mut self, readonly: bool)
+                {
+                    if readonly { self.attrs |= c::FILE_ATTRIBUTE_READONLY; }
+                    else { self.attrs &= !c::FILE_ATTRIBUTE_READONLY; }
+                }
+            }
+
+            impl FileTimes
+            {
+                pub fn set_accessed(&mut self, t: SystemTime) { self.accessed = Some(t.into_inner()); }
+                pub fn set_modified(&mut self, t: SystemTime) { self.modified = Some(t.into_inner()); }
+                pub fn set_created(&mut self, t: SystemTime) { self.created = Some(t.into_inner()); }
+            }
+
+            impl FileType
+            {
+                fn new(attributes: u32, reparse_tag: u32) -> FileType
+                {
+                    let is_directory = attributes & c::FILE_ATTRIBUTE_DIRECTORY != 0;
+                    let is_symlink =
+                    {
+                        let is_reparse_point = attributes & c::FILE_ATTRIBUTE_REPARSE_POINT != 0;
+                        let is_reparse_tag_name_surrogate = reparse_tag & 0x20000000 != 0;
+                        is_reparse_point && is_reparse_tag_name_surrogate
+                    };
+                    FileType { is_directory, is_symlink }
+                }
+                pub fn is_dir(&self) -> bool { !self.is_symlink && self.is_directory }
+                pub fn is_file(&self) -> bool { !self.is_symlink && !self.is_directory }
+                pub fn is_symlink(&self) -> bool { self.is_symlink }
+                pub fn is_symlink_dir(&self) -> bool { self.is_symlink && self.is_directory }
+                pub fn is_symlink_file(&self) -> bool { self.is_symlink && !self.is_directory }
+            }
+
+            impl DirBuilder
+            {
+                pub fn new() -> DirBuilder { DirBuilder }
+
+                pub fn mkdir(&self, p: &Path) -> io::Result<()>
+                {
+                    let p = maybe_verbatim(p)?;
+                    cvt(unsafe { c::CreateDirectoryW(p.as_ptr(), ptr::null_mut()) })?;
+                    Ok(())
+                }
+            }
+
+            pub fn readdir(p: &Path) -> io::Result<ReadDir>
+            {
+                unsafe
+                {
+                    if p.as_os_str().is_empty()
+                    { return Err(io::Error::from_raw_os_error(c::ERROR_PATH_NOT_FOUND as i32)); }
+
+                    let root = p.to_path_buf();
+                    let star = p.join("*");
+                    let path = maybe_verbatim(&star)?;
+                    let mut wfd: c::WIN32_FIND_DATAW = mem::zeroed();
+                    let find_handle = c::FindFirstFileExW
+                    (
+                        path.as_ptr(),
+                        c::FindExInfoBasic,
+                        &mut wfd as *mut _ as _,
+                        c::FindExSearchNameMatch,
+                        ptr::null(),
+                        0,
+                    );
+
+                    if find_handle != c::INVALID_HANDLE_VALUE
+                    {
+                        Ok(ReadDir
+                        {
+                            handle: Some(FindNextFileHandle(find_handle)),
+                            root: Arc::new(root),
+                            first: Some(wfd),
+                        })
+                    }
+                    else 
+                    {
+                        let last_error = api::get_last_error();
+                        if last_error == WinError::FILE_NOT_FOUND {
+                            return Ok(ReadDir { handle: None, root: Arc::new(root), first: None });
+                        }
+                        
+                        Err(Error::from_raw_os_error(last_error.code as i32))
+                    }
+                }
+            }
+
+            pub fn unlink(path: &WCStr) -> io::Result<()>
+            {
+                if unsafe { c::DeleteFileW(path.as_ptr()) } == 0
+                {
+                    let err = api::get_last_error();
+                    if err == WinError::ACCESS_DENIED {
+                        let mut opts = OpenOptions::new();
+                        opts.access_mode(c::DELETE);
+                        opts.custom_flags(c::FILE_FLAG_OPEN_REPARSE_POINT);
+                        if let Ok(f) = File::open_native(&path, &opts) {
+                            if f.posix_delete().is_ok() {
+                                return Ok(());
+                            }
+                        }
+                    }
+                    Err(io::Error::from_raw_os_error(err.code as i32))
+                } else {
+                    Ok(())
+                }
+            }
+
+            pub fn rename(old: &WCStr, new: &WCStr) -> io::Result<()>
+            {
+                if unsafe { c::MoveFileExW(old.as_ptr(), new.as_ptr(), c::MOVEFILE_REPLACE_EXISTING) } == 0
+                {
+                    let err = api::get_last_error();
+                    
+                    if err == WinError::ACCESS_DENIED
+                    {
+                        let mut opts = OpenOptions::new();
+                        opts.access_mode(c::DELETE);
+                        opts.custom_flags(c::FILE_FLAG_OPEN_REPARSE_POINT | c::FILE_FLAG_BACKUP_SEMANTICS);
+                        let Ok(f) = File::open_native(&old, &opts) else { return Err(err).io_result() };
+                        
+                        let Ok(new_len_without_nul_in_bytes): Result<u32, _> =
+                            ((new.count_bytes() - 1) * 2).try_into()
+                        else {
+                            return Err(err).io_result();
+                        };
+                        let offset: u32 = offset_of!(c::FILE_RENAME_INFO, FileName).try_into().unwrap();
+                        let struct_size = offset + new_len_without_nul_in_bytes + 2;
+                        let layout = Layout::from_size_align(struct_size as usize, align_of::<c::FILE_RENAME_INFO>())
+                        .unwrap();
+                                
+                        let file_rename_info;
+                        unsafe {
+                            file_rename_info = alloc(layout).cast::<c::FILE_RENAME_INFO>();
+                            if file_rename_info.is_null() {
+                                return Err(io::ErrorKind::OutOfMemory.into());
+                            }
+
+                            (&raw mut (*file_rename_info).Anonymous).write(c::FILE_RENAME_INFO_0 {
+                                Flags: c::FILE_RENAME_FLAG_REPLACE_IF_EXISTS
+                                    | c::FILE_RENAME_FLAG_POSIX_SEMANTICS,
+                            });
+
+                            (&raw mut (*file_rename_info).RootDirectory).write(ptr::null_mut());
+                            (&raw mut (*file_rename_info).FileNameLength).write(new_len_without_nul_in_bytes);
+
+                            new.as_ptr().copy_to_nonoverlapping(
+                                (&raw mut (*file_rename_info).FileName).cast::<u16>(),
+                                new.count_bytes(),
+                            );
+                        }
+
+                        let result = unsafe {
+                            c::SetFileInformationByHandle(
+                                f.as_raw_handle(),
+                                c::FileRenameInfoEx,
+                                file_rename_info.cast::<c_void>(),
+                                struct_size,
+                            )
+                        };
+                        unsafe { dealloc(file_rename_info.cast::<u8>(), layout) };
+                        if result == 0 {
+                            if api::get_last_error() == WinError::DIR_NOT_EMPTY {
+                                return Err(WinError::DIR_NOT_EMPTY).io_result();
+                            } else {
+                                return Err(err).io_result();
+                            }
+                        }
+                    } else {
+                        return Err(err).io_result();
+                    }
+                }
+                Ok(())
+            }
+
+            pub fn rmdir(p: &WCStr) -> io::Result<()>
+            {
+                cvt(unsafe { c::RemoveDirectoryW(p.as_ptr()) })?;
+                Ok(())
+            }
+
+            pub fn remove_dir_all(path: &WCStr) -> io::Result<()>
+            {
+                let mut opts = OpenOptions::new();
+                opts.access_mode(c::FILE_LIST_DIRECTORY);
+                opts.custom_flags(c::FILE_FLAG_BACKUP_SEMANTICS | c::FILE_FLAG_OPEN_REPARSE_POINT);
+                let file = File::open_native(path, &opts)?;
+                
+                if (file.basic_info()?.FileAttributes & c::FILE_ATTRIBUTE_DIRECTORY) == 0
+                { return Err(io::Error::from_raw_os_error(c::ERROR_DIRECTORY as _)); }
+                
+                remove_dir_all_iterative(file).io_result()
+            }
+
+            pub fn readlink(path: &WCStr) -> io::Result<PathBuf>
+            {
+                let mut opts = OpenOptions::new();
+                opts.access_mode(0);
+                opts.custom_flags(c::FILE_FLAG_OPEN_REPARSE_POINT | c::FILE_FLAG_BACKUP_SEMANTICS);
+                let file = File::open_native(&path, &opts)?;
+                file.readlink()
+            }
+
+            pub fn symlink(original: &Path, link: &Path) -> io::Result<()> { symlink_inner(original, link, false) }
+
+            pub fn symlink_inner(original: &Path, link: &Path, dir: bool) -> io::Result<()>
+            {
+                let original = to_u16s(original)?;
+                let link = maybe_verbatim(link)?;
+                let flags = if dir { c::SYMBOLIC_LINK_FLAG_DIRECTORY } else { 0 };
+                
+                let result = cvt(unsafe
+                {
+                    c::CreateSymbolicLinkW(
+                        link.as_ptr(),
+                        original.as_ptr(),
+                        flags | c::SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE,
+                    ) as c::BOOL
+                });
+
+                if let Err(err) = result
+                {
+                    if err.raw_os_error() == Some(c::ERROR_INVALID_PARAMETER as i32)
+                    {
+                        cvt(unsafe {
+                            c::CreateSymbolicLinkW(link.as_ptr(), original.as_ptr(), flags) as c::BOOL
+                        })?;
+                    } else {
+                        return Err(err);
+                    }
+                }
+
+                Ok(())
+            }
+            
+            pub fn link(original: &WCStr, link: &WCStr) -> io::Result<()>
+            {
+                cvt(unsafe { c::CreateHardLinkW(link.as_ptr(), original.as_ptr(), ptr::null_mut()) })?;
+                Ok(())
+            }
+
+            pub fn stat(path: &WCStr) -> io::Result<FileAttr>
+            {
+                match metadata(path, ReparsePoint::Follow)
+                {
+                    Err(err) if err.raw_os_error() == Some(c::ERROR_CANT_ACCESS_FILE as i32) => {
+                        if let Ok(attrs) = lstat(path) {
+                            if !attrs.file_type().is_symlink() {
+                                return Ok(attrs);
+                            }
+                        }
+                        Err(err)
+                    }
+                    result => result,
+                }
+            }
+
+            pub fn lstat(path: &WCStr) -> io::Result<FileAttr> { metadata(path, ReparsePoint::Open) }
+
+            #[repr(u32)] #[derive(Clone, Copy, PartialEq, Eq)]
+            pub enum ReparsePoint
+            {
+                Follow = 0,
+                Open = c::FILE_FLAG_OPEN_REPARSE_POINT,
+            }
+
+            impl ReparsePoint
+            {
+                fn as_flag(self) -> u32 { self as u32 }
+            }
+
+            pub fn metadata(path: &WCStr, reparse: ReparsePoint) -> io::Result<FileAttr>
+            {
+                let mut opts = OpenOptions::new();
+                opts.access_mode(0);
+                opts.custom_flags(c::FILE_FLAG_BACKUP_SEMANTICS | reparse.as_flag());
+                
+                match File::open_native(&path, &opts)
+                {
+                    Ok(file) => file.file_attr(),
+                    Err(e) if 
+                    [
+                        Some(c::ERROR_SHARING_VIOLATION as _), 
+                        Some(c::ERROR_ACCESS_DENIED as _)
+                    ].contains(&e.raw_os_error()) =>
+                    {
+                        unsafe {
+                            let mut wfd: c::WIN32_FIND_DATAW = mem::zeroed();
+                            let handle = c::FindFirstFileExW(
+                                path.as_ptr(),
+                                c::FindExInfoBasic,
+                                &mut wfd as *mut _ as _,
+                                c::FindExSearchNameMatch,
+                                ptr::null(),
+                                0,
+                            );
+
+                            if handle == c::INVALID_HANDLE_VALUE
+                            {
+                                Err(e)
+                            }
+                            
+                            else
+                            {
+                                c::FindClose(handle);
+                                
+                                let attrs = FileAttr::from(wfd);
+                                if reparse == ReparsePoint::Follow && attrs.file_type().is_symlink() {
+                                    Err(e)
+                                } else {
+                                    Ok(attrs)
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => Err(e),
+                }
+            }
+
+            pub fn set_perm(p: &WCStr, perm: FilePermissions) -> io::Result<()>
+            {
+                unsafe {
+                    cvt(c::SetFileAttributesW(p.as_ptr(), perm.attrs))?;
+                    Ok(())
+                }
+            }
+
+            pub fn get_path(f: &File) -> io::Result<PathBuf> 
+            {
+                fill_utf16_buf(
+                    |buf, sz| unsafe {
+                        c::GetFinalPathNameByHandleW(f.handle.as_raw_handle(), buf, sz, c::VOLUME_NAME_DOS)
+                    },
+                    |buf| PathBuf::from(OsString::from_wide(buf)),
+                )
+            }
+
+            pub fn canonicalize(p: &WCStr) -> io::Result<PathBuf>
+            {
+                let mut opts = OpenOptions::new();
+                opts.access_mode(0);
+                opts.custom_flags(c::FILE_FLAG_BACKUP_SEMANTICS);
+                let f = File::open_native(p, &opts)?;
+                get_path(&f)
+            }
+
+            pub fn copy(from: &WCStr, to: &WCStr) -> io::Result<u64>
+            {
+                unsafe extern "system" fn callback(
+                    _TotalFileSize: i64,
+                    _TotalBytesTransferred: i64,
+                    _StreamSize: i64,
+                    StreamBytesTransferred: i64,
+                    dwStreamNumber: u32,
+                    _dwCallbackReason: u32,
+                    _hSourceFile: c::HANDLE,
+                    _hDestinationFile: c::HANDLE,
+                    lpData: *const c_void,
+                ) -> u32 {
+                    unsafe {
+                        if dwStreamNumber == 1 {
+                            *(lpData as *mut i64) = StreamBytesTransferred;
+                        }
+                        c::PROGRESS_CONTINUE
+                    }
+                }
+                let mut size = 0i64;
+                cvt(unsafe {
+                    c::CopyFileExW(
+                        from.as_ptr(),
+                        to.as_ptr(),
+                        Some(callback),
+                        (&raw mut size) as *mut _,
+                        ptr::null_mut(),
+                        0,
+                    )
+                })?;
+                Ok(size as u64)
+            }
+        }
+
+        mod uefi
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        #[cfg( unix )] pub use self::unix::{ * };
+        #[cfg( windows )] pub use self::windows::{ * };
+        #[cfg(target_os = "uefi")]  pub use self::uefi::{ * };
+
+        pub fn read_dir(path: &Path) -> io::Result<ReadDir> { imp::readdir(path) }
+
+        pub fn remove_file(path: &Path) -> io::Result<()> { with_native_path(path, &imp::unlink) }
+
+        pub fn rename(old: &Path, new: &Path) -> io::Result<()>
+        { with_native_path(old, &|old| with_native_path(new, &|new| imp::rename(old, new))) }
+
+        pub fn remove_dir(path: &Path) -> io::Result<()> { with_native_path(path, &imp::rmdir) }
+
+        pub fn remove_dir_all(path: &Path) -> io::Result<()>
+        {
+            #[cfg(not(windows))] return imp::remove_dir_all(path);
+            #[cfg(windows)] with_native_path(path, &imp::remove_dir_all)
+        }
+
+        pub fn read_link(path: &Path) -> io::Result<PathBuf> { with_native_path(path, &imp::readlink) }
+
+        pub fn symlink(original: &Path, link: &Path) -> io::Result<()>
+        {
+            #[cfg(windows)] 
+            return imp::symlink(original, link);
+
+            #[cfg(not(windows))] 
+            with_native_path(original, &|original| { with_native_path(link, &|link| imp::symlink(original, link)) })
+        }
+
+        pub fn hard_link(original: &Path, link: &Path) -> io::Result<()>
+        { with_native_path(original, &|original| { with_native_path(link, &|link| imp::link(original, link))})}
+
+        pub fn metadata(path: &Path) -> io::Result<FileAttr> { with_native_path(path, &imp::stat) }
+
+        pub fn symlink_metadata(path: &Path) -> io::Result<FileAttr> { with_native_path(path, &imp::lstat) }
+
+        pub fn set_permissions(path: &Path, perm: FilePermissions) -> io::Result<()>
+        { with_native_path(path, &|path| imp::set_perm(path, perm.clone())) }
+
+        pub fn canonicalize(path: &Path) -> io::Result<PathBuf> { with_native_path(path, &imp::canonicalize) }
+
+        pub fn copy(from: &Path, to: &Path) -> io::Result<u64>
+        {
+            #[cfg(not(windows))] return imp::copy(from, to);
+            #[cfg(windows)] with_native_path(from, &|from| with_native_path(to, &|to| imp::copy(from, to)))
+        }
+
+        pub fn exists(path: &Path) -> io::Result<bool>
+        {
+            #[cfg(not(windows))] return imp::exists(path);
+            #[cfg(windows)] with_native_path(path, &imp::exists)
+        }
+    }
+
     pub mod pipe
     {
         use ::
@@ -25420,8 +28040,8 @@ pub mod system
             *,
         };
         /*
-        use crate::priv_util::{map_lock_result, map_try_lock_result};
-        use crate::sys;
+        use ::priv_util::{map_lock_result, map_try_lock_result};
+        use ::sys;
         */
         /// Provides operations on an underlying terminal device in screen mode.
         pub struct Screen(api::Screen);
@@ -25867,8 +28487,8 @@ pub mod system
         use std::sync::{LockResult, TryLockResult};
         use std::time::Duration;
 
-        use crate::priv_util::{map_lock_result, map_try_lock_result};
-        use crate::sys;
+        use ::priv_util::{map_lock_result, map_try_lock_result};
+        use ::sys;
         */
 
         /// Represents a color attribute applied to text foreground or background.
@@ -26443,7 +29063,7 @@ pub mod system
                 *,
             };
             /*
-            use crate::terminal::Event;
+            use ::terminal::Event;
             */
             /// Implements Unix-only extensions for terminal interfaces.
             pub trait OpenTerminalExt: Sized + Private
@@ -27890,13 +30510,13 @@ pub mod system
             use std::sync::{LockResult, Mutex, MutexGuard, TryLockResult};
             use std::time::Duration;
 
-            use crate::buffer::ScreenBuffer;
-            use crate::priv_util::{
+            use ::buffer::ScreenBuffer;
+            use ::priv_util::{
                 map_lock_result, map_try_lock_result,
                 map2_lock_result, map2_try_lock_result,
             };
-            use crate::sys::{Terminal, TerminalReadGuard, TerminalWriteGuard, PrepareState};
-            use crate::terminal::{Color, Cursor, CursorMode, Event, Size, Style, PrepareConfig};
+            use ::sys::{Terminal, TerminalReadGuard, TerminalWriteGuard, PrepareState};
+            use ::terminal::{Color, Cursor, CursorMode, Event, Size, Style, PrepareConfig};
             */
             pub struct Screen {
                 term: Terminal,
@@ -28190,8 +30810,8 @@ pub mod system
 
             use winapi::um::wincon::INPUT_RECORD;
 
-            use crate::priv_util::Private;
-            use crate::terminal::Event;
+            use ::priv_util::Private;
+            use ::terminal::Event;
             */
             /// Implements Windows-only extensions for terminal interfaces.
             pub trait TerminalExt: Private
@@ -28371,7 +30991,7 @@ pub mod system
                 }
             }
             /*
-            use crate::util::unctrl_lower;
+            use ::util::unctrl_lower;
             */
             pub struct Terminal {
                 in_handle: HANDLE,
@@ -29606,16 +32226,16 @@ pub mod system
             use winapi::shared::ntdef::HANDLE;
             use winapi::um::wincon::INPUT_RECORD;
 
-            use crate::buffer::ScreenBuffer;
-            use crate::priv_util::{
+            use ::buffer::ScreenBuffer;
+            use ::priv_util::{
                 map_lock_result, map_try_lock_result,
                 map2_lock_result, map2_try_lock_result,
             };
-            use crate::sys::terminal::{
+            use ::sys::terminal::{
                 size_event, PrepareState,
                 Terminal, TerminalReadGuard, TerminalWriteGuard,
             };
-            use crate::terminal::{Color, Cursor, CursorMode, Event, PrepareConfig, Size, Style};
+            use ::terminal::{Color, Cursor, CursorMode, Event, PrepareConfig, Size, Style};
             */
             pub struct Screen {
                 term: Terminal,
@@ -33418,7 +36038,7 @@ pub mod terminal
 
             fn execute_command( &mut self, cmd: Command, n: i32, ch: char ) -> io::Result<()>
             {
-                use crate::command::Command::*;
+                use ::command::Command::*;
 
                 let mut category = cmd.category();
 
@@ -35205,4 +37825,4 @@ fn main()
     }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 35208
+// 37828
