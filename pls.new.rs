@@ -495,12 +495,12 @@ pub mod char
     };
     /// The maximum number of bytes required to [encode](char::encode_utf8) a `char` to
     /// UTF-8 encoding.
-    #[unstable(feature = "char_max_len", issue = "121714")]
+    
     pub const MAX_LEN_UTF8: usize = char::MAX_LEN_UTF8;
 
     /// The maximum number of two-byte units required to [encode](char::encode_utf16) a `char`
     /// to UTF-16 encoding.
-    #[unstable(feature = "char_max_len", issue = "121714")]
+    
     pub const MAX_LEN_UTF16: usize = char::MAX_LEN_UTF16;
     pub const CTRL_MASK: u8 = 0x1f;
     pub const UNCTRL_BIT: u8 = 0x40;    
@@ -4901,11 +4901,11 @@ pub mod is
     /*
     is_value_end_char( ... ) -> bool */
     /// Returns true if this character signifies the legal end of a value.
-    pub fn value_end_char( ch: char ) -> bool { is_whitespace( ch ) || is_end_delimiter( ch ) || is_operator( ch ) }
+    pub fn value_end_char( ch: char ) -> bool { is::whitespace( ch ) || is::end_delimiter( ch ) || is::operator( ch ) }
     /*
     is_whitespace( ... ) -> bool */
     /// Returns true if the character is either whitespace or '#' ( start of a comment ).
-    pub fn whitespace( ch: char ) -> bool { ch.is_whitespace() || ch == '#' }
+    pub fn whitespace( ch: char ) -> bool { ch.is::whitespace() || ch == '#' }
     /*
     is_end_delimiter( ... ) -> bool */
     pub fn end_delimiter( ch: char ) -> bool
@@ -10176,7 +10176,6 @@ pub mod num
                     BigInt::from_biguint( other.sign, self / other.data)
                 }
             }
-
             
             impl Div<u128> for BigInt {
                 type Output = BigInt;
@@ -10193,7 +10192,6 @@ pub mod num
                     }
                 }
             }
-
             
             impl Div<BigInt> for u128 {
                 type Output = BigInt;
@@ -10277,7 +10275,6 @@ pub mod num
                     }
                 }
             }
-
             
             impl Div<i128> for BigInt {
                 type Output = BigInt;
@@ -10290,7 +10287,6 @@ pub mod num
                     }
                 }
             }
-
             
             impl DivAssign<i128> for BigInt {
                 #[inline] fn div_assign( &mut self, other: i128 ) {
@@ -10302,7 +10298,6 @@ pub mod num
                     }
                 }
             }
-
             
             impl Div<BigInt> for i128 {
                 type Output = BigInt;
@@ -10390,7 +10385,6 @@ pub mod num
                     BigInt::from_biguint( Plus, self % other.data)
                 }
             }
-
             
             impl Rem<u128> for BigInt {
                 type Output = BigInt;
@@ -10399,7 +10393,6 @@ pub mod num
                     BigInt::from_biguint( self.sign, self.data % other)
                 }
             }
-
             
             impl RemAssign<u128> for BigInt {
                 #[inline] fn rem_assign( &mut self, other: u128 ) {
@@ -10409,7 +10402,6 @@ pub mod num
                     }
                 }
             }
-
             
             impl Rem<BigInt> for u128 {
                 type Output = BigInt;
@@ -10491,7 +10483,6 @@ pub mod num
                     }
                 }
             }
-
             
             impl Rem<i128> for BigInt {
                 type Output = BigInt;
@@ -10756,7 +10747,6 @@ pub mod num
                     }
                 }
             }
-
             
             impl From<i128> for BigInt
             {
@@ -10796,7 +10786,6 @@ pub mod num
                     else { BigInt::zero() }
                 }
             }
-
             
             impl From<u128> for BigInt
             {
@@ -17311,286 +17300,6 @@ pub mod option
 {
     pub use std::option::{ * };
 }
-/// OS-specific functionality.
-pub mod os
-{
-    //! OS-specific functionality.
-    pub use std::os::{ * };
-    pub mod windows
-    {
-        //! Platform-specific extensions to `std` for Windows.
-        use ::
-        {
-            *,
-        };
-
-        pub mod ffi
-        {
-            //! Windows-specific extensions to primitives in the [`std::ffi`] module.
-            use ::
-            {
-                ffi::{OsStr, OsString},
-                sealed::Sealed,
-                system::
-                {
-
-                    common::wtf8::EncodeWide,
-                    common::wtf8::Wtf8Buf,
-                    common::{AsInner, FromInner},
-                    os_str::{ Buf },
-                },
-                *,
-            };
-            /// Windows-specific extensions to [`OsString`].
-            pub trait OsStringExt: Sealed
-            {
-                /// Creates an `OsString` from a potentially ill-formed UTF-16 slice of 16-bit code units.
-                fn from_wide(wide: &[u16]) -> Self;
-            }
-            
-            impl OsStringExt for OsString
-            {
-                fn from_wide(wide: &[u16]) -> OsString
-                { FromInner::from_inner(Buf { inner: Wtf8Buf::from_wide(wide) }) }
-            }
-
-            /// Windows-specific extensions to [`OsStr`].
-            pub trait OsStrExt: Sealed
-            {
-                /// Re-encodes an `OsStr` as a wide character sequence, i.e., potentially ill-formed UTF-16.
-                fn encode_wide(&self) -> EncodeWide<'_>;
-            }
-            
-            impl OsStrExt for OsStr
-            {
-                #[inline] fn encode_wide(&self) -> EncodeWide<'_> { self.as_inner().inner.encode_wide() }
-            }
-        }
-
-        pub mod fs
-        {
-            //! Windows-specific extensions to primitives in the [`std::fs`] module.
-            use ::
-            {
-                fs::{ self, Metadata, OpenOptions },
-                path::{ Path },
-                sealed::{ Sealed },
-                system::
-                {
-                    common::{ AsInner, AsInnerMut, IntoInner },
-                },
-                time::SystemTime,
-                *,
-            };
-            /// Windows-specific extensions to [`fs::File`].
-            pub trait FileExt
-            {
-                /// Seeks to a given position and reads a number of bytes.
-                fn seek_read(&self, buf: &mut [u8], offset: u64) -> io::Result<usize>;
-                /// Seeks to a given position and writes a number of bytes.
-                fn seek_write(&self, buf: &[u8], offset: u64) -> io::Result<usize>;
-            }
-            
-            impl FileExt for fs::File
-            {
-                fn seek_read(&self, buf: &mut [u8], offset: u64) -> io::Result<usize>
-                { self.as_inner().read_at(buf, offset) }
-
-                fn seek_write(&self, buf: &[u8], offset: u64) -> io::Result<usize>
-                { self.as_inner().write_at(buf, offset) }
-            }
-            /// Windows-specific extensions to [`fs::OpenOptions`].
-            pub trait OpenOptionsExt
-            {
-                /// Overrides the `dwDesiredAccess` argument to the call to [`CreateFile`]
-                /// with the specified value.
-                fn access_mode(&mut self, access: u32) -> &mut Self;
-
-                /// Overrides the `dwShareMode` argument to the call to [`CreateFile`] with
-                /// the specified value.
-                fn share_mode(&mut self, val: u32) -> &mut Self;
-                /// Sets extra flags for the `dwFileFlags` argument to the call to
-                /// [`CreateFile2`] to the specified value (or combines it with
-                /// `attributes` and `security_qos_flags` to set the `dwFlagsAndAttributes`
-                /// for [`CreateFile`]).
-                fn custom_flags(&mut self, flags: u32) -> &mut Self;
-                /// Sets the `dwFileAttributes` argument to the call to [`CreateFile2`] to
-                /// the specified value (or combines it with `custom_flags` and
-                /// `security_qos_flags` to set the `dwFlagsAndAttributes` for
-                /// [`CreateFile`]).
-                fn attributes(&mut self, val: u32) -> &mut Self;
-                /// Sets the `dwSecurityQosFlags` argument to the call to [`CreateFile2`] to
-                /// the specified value (or combines it with `custom_flags` and `attributes`
-                /// to set the `dwFlagsAndAttributes` for [`CreateFile`]).
-                fn security_qos_flags(&mut self, flags: u32) -> &mut Self;
-            }
-            
-            impl OpenOptionsExt for OpenOptions
-            {
-                fn access_mode(&mut self, access: u32) -> &mut OpenOptions 
-                {
-                    self.as_inner_mut().access_mode(access);
-                    self
-                }
-
-                fn share_mode(&mut self, share: u32) -> &mut OpenOptions 
-                {
-                    self.as_inner_mut().share_mode(share);
-                    self
-                }
-
-                fn custom_flags(&mut self, flags: u32) -> &mut OpenOptions 
-                {
-                    self.as_inner_mut().custom_flags(flags);
-                    self
-                }
-
-                fn attributes(&mut self, attributes: u32) -> &mut OpenOptions 
-                {
-                    self.as_inner_mut().attributes(attributes);
-                    self
-                }
-
-                fn security_qos_flags(&mut self, flags: u32) -> &mut OpenOptions 
-                {
-                    self.as_inner_mut().security_qos_flags(flags);
-                    self
-                }
-            }
-            /// Windows-specific extensions to [`fs::Metadata`].
-            pub trait MetadataExt
-            {
-                /// Returns the value of the `dwFileAttributes` field of this metadata.
-                fn file_attributes(&self) -> u32;
-                /// Returns the value of the `ftCreationTime` field of this metadata.
-                fn creation_time(&self) -> u64;
-                /// Returns the value of the `ftLastAccessTime` field of this metadata.
-                fn last_access_time(&self) -> u64;
-                /// Returns the value of the `ftLastWriteTime` field of this metadata.
-                fn last_write_time(&self) -> u64;
-                /// Returns the value of the `nFileSize` fields of this metadata.
-                fn file_size(&self) -> u64;
-                /// Returns the value of the `dwVolumeSerialNumber` field of this metadata.
-                fn volume_serial_number(&self) -> Option<u32>;
-                /// Returns the value of the `nNumberOfLinks` field of this metadata.
-                fn number_of_links(&self) -> Option<u32>;
-                /// Returns the value of the `nFileIndex` fields of this metadata.
-                fn file_index(&self) -> Option<u64>;
-                /// Returns the value of the `ChangeTime` fields of this metadata.
-                fn change_time(&self) -> Option<u64>;
-            }
-            
-            impl MetadataExt for Metadata
-            {
-                fn file_attributes(&self) -> u32 {
-                    self.as_inner().attrs()
-                }
-                fn creation_time(&self) -> u64 {
-                    self.as_inner().created_u64()
-                }
-                fn last_access_time(&self) -> u64 {
-                    self.as_inner().accessed_u64()
-                }
-                fn last_write_time(&self) -> u64 {
-                    self.as_inner().modified_u64()
-                }
-                fn file_size(&self) -> u64 {
-                    self.as_inner().size()
-                }
-                fn volume_serial_number(&self) -> Option<u32> {
-                    self.as_inner().volume_serial_number()
-                }
-                fn number_of_links(&self) -> Option<u32> {
-                    self.as_inner().number_of_links()
-                }
-                fn file_index(&self) -> Option<u64> {
-                    self.as_inner().file_index()
-                }
-                fn change_time(&self) -> Option<u64> {
-                    self.as_inner().changed_u64()
-                }
-            }
-            /// Windows-specific extensions to [`fs::FileType`].
-            pub trait FileTypeExt: Sealed
-            {
-                /// Returns `true` if this file type is a symbolic link that is also a directory.
-                fn is_symlink_dir(&self) -> bool;
-                /// Returns `true` if this file type is a symbolic link that is also a file.
-                fn is_symlink_file(&self) -> bool;
-            }
-            
-            impl Sealed for fs::FileType {}
-            
-            impl FileTypeExt for fs::FileType
-            {
-                fn is_symlink_dir(&self) -> bool { self.as_inner().is_symlink_dir() }
-
-                fn is_symlink_file(&self) -> bool { self.as_inner().is_symlink_file() }
-            }
-            /// Windows-specific extensions to [`fs::FileTimes`].
-            pub trait FileTimesExt: Sealed
-            {
-                /// Set the creation time of a file.
-                fn set_created(self, t: SystemTime) -> Self;
-            }
-            
-            impl FileTimesExt for fs::FileTimes
-            {
-                fn set_created(mut self, t: SystemTime) -> Self {
-                    self.as_inner_mut().set_created(t.into_inner());
-                    self
-                }
-            }
-            /// Creates a new symlink to a non-directory file on the filesystem.
-            pub fn symlink_file<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()>
-            {
-                sys::fs::symlink_inner(original.as_ref(), link.as_ref(), false)
-            }
-            /// Creates a new symlink to a directory on the filesystem.
-            pub fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()>
-            {
-                sys::fs::symlink_inner(original.as_ref(), link.as_ref(), true)
-            }
-            /// Creates a junction point.
-            pub fn junction_point<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()>
-            {
-                sys::fs::junction_point(original.as_ref(), link.as_ref())
-            }
-        }
-
-        pub mod io
-        {
-            use ::
-            {
-                *,
-            };
-        }
-
-        pub mod process
-        {
-            use ::
-            {
-                *,
-            };
-        }
-
-        pub mod raw
-        {
-            use ::
-            {
-                *,
-            };
-        }
-
-        pub mod thread
-        {
-            use ::
-            {
-                *,
-            };
-        }
-    }
-}
 /// Panic support in the standard library.
 pub mod panic
 {
@@ -20049,6 +19758,7 @@ pub mod parsers
             *,
         };
         /*
+        NOM NOT INCLUDED; IMPLEMENT WITHOUT IT
         use nom::branch::alt;
         use nom::character::streaming::char;
         use nom::character::{is_digit, streaming::line_ending as eol};
@@ -20196,7 +19906,7 @@ pub mod parsers
                 extended: Option<Extended<'a>>,
             }
 
-            impl<'a> From<Database<'a>> for crate::Database {
+            impl<'a> From<Database<'a>> for ::Database {
                 fn from(source: Database<'a>) -> Self {
                     let mut names = source
                         .names
@@ -20205,7 +19915,7 @@ pub mod parsers
                         .map(|s| s.trim())
                         .collect::<Vec<_>>();
 
-                    let mut database = crate::Database::new();
+                    let mut database = ::Database::new();
 
                     database.name(names.remove(0));
                     names.pop().map(|name| database.description(name));
@@ -20290,7 +20000,7 @@ pub mod parsers
                     _ => unreachable!("unknown magic number"),
                 }
             }
-
+            /*
             pub fn parse(input: &[u8]) -> IResult<&[u8], Database> {
                 let (input, magic) = alt((tag([0x1A, 0x01]), tag([0x1E, 0x02])))(input)?;
 
@@ -20367,6 +20077,7 @@ pub mod parsers
                     map_opt(cond(bits == 32, map_opt(le_i32, |n| if n >= -2 { Some(n) } else { None })), |o| o),
                 ))(input)
             }
+            */
 
         }
 
@@ -22052,6 +21763,7 @@ pub mod shell
     use ::
     {
         collections::{HashMap, HashSet},
+        primitive::{ Tokens, CommandLine },
         *,
     };
     /*
@@ -22485,61 +22197,59 @@ pub mod shell
     }
 
     fn do_command_substitution_for_dollar( sh:&mut Shell, tokens:&mut Tokens )
-            {
+    {
         let mut idx: usize = 0;
         let mut buff: HashMap<usize, String> = HashMap::new();
 
         for ( sep, token ) in tokens.iter()
-            {
-            if sep == "'" || sep == "\\" || !should_do_dollar_command_extension( token )
+        {
+            if sep == "'" || sep == "\\" || !is::dollar_command_extensible( token )
             {
                 idx += 1;
                 continue;
             }
 
             let mut line = token.to_string();
-            loop {
-                if !should_do_dollar_command_extension( &line )
+            loop
             {
-                    break;
-                }
+                if !is::dollar_command_extensible( &line ) { break; }
 
-                let ptn_cmd = r"\$\( ( .+ )\ )";
-                let cmd = match regex::find_first_group( ptn_cmd, &line )
-            {
-                    Some( x ) => x,
-                    None => {
-                        println_stderr!( "cicada: calculator: no first group" );
-                        return;
-                    }
-                };
-
-                let cmd_result = match CommandLine::from_line( &cmd, sh )
-            {
-                    Ok( c ) => {
-                        log!( "run subcmd dollar: {:?}", &cmd );
-                        let ( term_given, cr ) = core::run_pipeline( sh, &c, true, true, false );
-                        if term_given {
-                            unsafe {
-                                let gid = libc::getpgid( 0 );
-                                give_terminal_to( gid );
-                            }
+                    let ptn_cmd = r"\$\( ( .+ )\ )";
+                    let cmd = match regex::find_first_group( ptn_cmd, &line )
+                {
+                        Some( x ) => x,
+                        None => {
+                            println_stderr!( "cicada: calculator: no first group" );
+                            return;
                         }
+                    };
 
-                        cr
-                    }
-                    Err( e ) => {
-                        println_stderr!( "cicada: {}", e );
-                        continue;
-                    }
-                };
+                    let cmd_result = match CommandLine::from_line( &cmd, sh )
+                {
+                        Ok( c ) => {
+                            log!( "run subcmd dollar: {:?}", &cmd );
+                            let ( term_given, cr ) = core::run_pipeline( sh, &c, true, true, false );
+                            if term_given {
+                                unsafe {
+                                    let gid = libc::getpgid( 0 );
+                                    give_terminal_to( gid );
+                                }
+                            }
 
-                let output_txt = cmd_result.stdout.trim();
+                            cr
+                        }
+                        Err( e ) => {
+                            println_stderr!( "cicada: {}", e );
+                            continue;
+                        }
+                    };
 
-                let ptn = r"( ?P<head>[^\$]* )\$\( .+\ )( ?P<tail>.* )";
-                let re;
-                if let Ok( x ) = Regex::new( ptn )
-            {
+                    let output_txt = cmd_result.stdout.trim();
+
+                    let ptn = r"( ?P<head>[^\$]* )\$\( .+\ )( ?P<tail>.* )";
+                    let re;
+                    if let Ok( x ) = Regex::new( ptn )
+                {
                     re = x;
                 } else {
                     return;
@@ -23789,621 +23499,7 @@ pub mod sync
 /// Provides System implementations
 pub mod system
 {
-    //! Mortal v.0.2.4 
-    /*
-    #[cfg(windows)] extern crate winapi;
-    */
-    use ::
-    {
-        sync::{ LockResult, PoisonError, TryLockError, TryLockResult },
-        *,
-    };
-    
-    #[macro_use] mod buffer
-    {
-        /*
-        use smallstr::SmallString;
-
-        use mortal::priv_util::is_visible;
-        use mortal::terminal::{Color, Cursor, Size, Style, Theme};
-        use mortal::util::{char_width, is_combining_mark};
-        */
-        use ::
-        {
-            mem::{ swap },
-            ops::{ Range },
-            str::{ SmallString },
-            *,
-        };
-        pub const TAB_STOP: usize = 8;
-
-        /// Generates buffer methods forwarded to a buffer contained in self.
-        macro_rules! forward_screen_buffer_methods
-        {
-            ( |$slf:ident| $field:expr ) =>
-            {
-                pub fn size(&self) -> ::system::terminal::Size 
-                {
-                    let $slf = self;
-                    $field.size()
-                }
-
-                pub fn cursor(&self) -> ::system::terminal::Cursor 
-                {
-                    let $slf = self;
-                    $field.cursor()
-                }
-
-                pub fn set_cursor(&self, pos: ::system::terminal::Cursor) 
-                {
-                    let $slf = self;
-                    $field.set_cursor(pos);
-                }
-
-                pub fn next_line(&self, column: usize) 
-                {
-                    let $slf = self;
-                    $field.next_line(column);
-                }
-
-                pub fn clear_screen(&self) 
-                {
-                    let $slf = self;
-                    $field.clear_screen();
-                }
-
-                pub fn clear_attributes(&self) 
-                {
-                    let $slf = self;
-                    $field.clear_attributes();
-                }
-
-                pub fn add_style(&self, style: ::system::terminal::Style) 
-                {
-                    let $slf = self;
-                    $field.add_style(style);
-                }
-
-                pub fn remove_style(&self, style: ::system::terminal::Style) 
-                {
-                    let $slf = self;
-                    $field.remove_style(style);
-                }
-
-                pub fn set_style(&self, style: ::system::terminal::Style) 
-                {
-                    let $slf = self;
-                    $field.set_style(style);
-                }
-
-                pub fn set_fg(&self, fg: Option<::system::terminal::Color>) 
-                {
-                    let $slf = self;
-                    $field.set_fg(fg);
-                }
-
-                pub fn set_bg(&self, bg: Option<::system::terminal::Color>) 
-                {
-                    let $slf = self;
-                    $field.set_bg(bg);
-                }
-
-                pub fn set_theme(&self, theme: ::system::terminal::Theme) 
-                {
-                    let $slf = self;
-                    $field.set_theme(theme)
-                }
-
-                pub fn write_char(&self, ch: char) 
-                {
-                    let $slf = self;
-                    let _ = $field.write_char(ch);
-                }
-
-                pub fn write_str(&self, s: &str) 
-                {
-                    let $slf = self;
-                    let _ = $field.write_str(s);
-                }
-
-                pub fn write_at(&self, pos: ::system::terminal::Cursor, text: &str) 
-                {
-                    let $slf = self;
-                    let _ = $field.write_at(pos, text);
-                }
-
-                pub fn write_styled
-                (
-                    &self,
-                    fg: Option<::system::terminal::Color>,
-                    bg: Option<::system::terminal::Color>,
-                    style: ::system::terminal::Style,
-                    text: &str
-                )
-                {
-                    let $slf = self;
-                    let _ = $field.write_styled(fg, bg, style, text);
-                }
-
-                pub fn write_styled_at
-                (
-                    &self,
-                    pos: ::system::terminal::Cursor,
-                    fg: Option<::system::terminal::Color>,
-                    bg: Option<::system::terminal::Color>,
-                    style: ::system::terminal::Style,
-                    text: &str
-                )
-                {
-                    let $slf = self;
-                    let _ = $field.write_styled_at(pos, fg, bg, style, text);
-                }
-            }
-        }
-        
-        macro_rules! forward_screen_buffer_mut_methods
-        {
-            ( |$slf:ident| $field:expr ) =>
-            {
-                pub fn size(&self) -> ::system::terminal::Size
-                {
-                    let $slf = self;
-                    $field.size()
-                }
-
-                pub fn cursor(&self) -> ::system::terminal::Cursor
-                {
-                    let $slf = self;
-                    $field.cursor()
-                }
-
-                pub fn set_cursor(&mut self, pos: ::system::terminal::Cursor)
-                {
-                    let $slf = self;
-                    $field.set_cursor(pos);
-                }
-
-                pub fn next_line(&mut self, column: usize)
-                {
-                    let $slf = self;
-                    $field.next_line(column);
-                }
-
-                pub fn clear_screen(&mut self)
-                {
-                    let $slf = self;
-                    $field.clear_screen();
-                }
-
-                pub fn clear_attributes(&mut self)
-                {
-                    let $slf = self;
-                    $field.clear_attributes();
-                }
-
-                pub fn add_style(&mut self, style: ::system::terminal::Style)
-                {
-                    let $slf = self;
-                    $field.add_style(style);
-                }
-
-                pub fn remove_style(&mut self, style: ::system::terminal::Style)
-                {
-                    let $slf = self;
-                    $field.remove_style(style);
-                }
-
-                pub fn set_style(&mut self, style: ::system::terminal::Style)
-                {
-                    let $slf = self;
-                    $field.set_style(style);
-                }
-
-                pub fn set_fg(&mut self, fg: Option<::system::terminal::Color>)
-                {
-                    let $slf = self;
-                    $field.set_fg(fg);
-                }
-
-                pub fn set_bg(&mut self, bg: Option<::system::terminal::Color>)
-                {
-                    let $slf = self;
-                    $field.set_bg(bg);
-                }
-
-                pub fn set_theme(&mut self, theme: ::system::terminal::Theme)
-                {
-                    let $slf = self;
-                    $field.set_theme(theme);
-                }
-
-                pub fn write_char(&mut self, ch: char)
-                {
-                    let $slf = self;
-                    let _ = $field.write_char(ch);
-                }
-
-                pub fn write_str(&mut self, s: &str)
-                {
-                    let $slf = self;
-                    let _ = $field.write_str(s);
-                }
-
-                pub fn write_at(&mut self, pos: ::system::terminal::Cursor, text: &str)
-                {
-                    let $slf = self;
-                    let _ = $field.write_at(pos, text);
-                }
-
-                pub fn write_styled
-                (
-                    &mut self,
-                    fg: Option<::system::terminal::Color>,
-                    bg: Option<::system::terminal::Color>,
-                    style: ::system::terminal::Style, 
-                    text: &str
-                )
-                {
-                    let $slf = self;
-                    let _ = $field.write_styled(fg, bg, style, text);
-                }
-
-                pub fn write_styled_at
-                (
-                    &mut self, 
-                    pos: ::system::terminal::Cursor,
-                    fg: Option<::system::terminal::Color>, 
-                    bg: Option<::system::terminal::Color>,
-                    style: ::system::terminal::Style, 
-                    text: &str
-                )
-                {
-                    let $slf = self;
-                    let _ = $field.write_styled_at(pos, fg, bg, style, text);
-                }
-            }
-        }
-
-        pub struct ScreenBuffer
-        {
-            buffer: Vec<Cell>,
-            back_buffer: Vec<Cell>,
-            size: Size,
-            cursor: Cursor,
-            fg: Option<Color>,
-            bg: Option<Color>,
-            style: Style,
-        }
-
-        impl ScreenBuffer
-        {
-            pub fn new(size: Size) -> ScreenBuffer
-            {
-                let area = size.area();
-
-                ScreenBuffer
-                {
-                    buffer: vec![Cell::default(); area],
-                    back_buffer: vec![Cell::default(); area],
-                    size: size,
-                    cursor: Cursor::default(),
-                    fg: None,
-                    bg: None,
-                    style: Style::empty(),
-                }
-            }
-
-            pub fn cursor(&self) -> Cursor { self.cursor }
-
-            pub fn size(&self) -> Size { self.size }
-
-            pub fn resize(&mut self, new_size: Size)
-            {
-                resize_buffer(&mut self.buffer, self.size, new_size);
-                new_buffer(&mut self.back_buffer, new_size);
-                self.size = new_size;
-            }
-
-            pub fn set_cursor(&mut self, pos: Cursor) { self.cursor = pos; }
-
-            pub fn next_line(&mut self, column: usize)
-            {
-                self.cursor.line += 1;
-                self.cursor.column = column;
-            }
-
-            pub fn clear_attributes(&mut self)
-            {
-                self.fg = None;
-                self.bg = None;
-                self.style = Style::empty();
-            }
-
-            pub fn add_style(&mut self, style: Style) { self.style |= style; }
-            pub fn remove_style(&mut self, style: Style) { self.style -= style; }
-            pub fn set_style(&mut self, style: Style) { self.style = style; }
-            pub fn set_fg(&mut self, fg: Option<Color>) { self.fg = fg; }
-            pub fn set_bg(&mut self, bg: Option<Color>) { self.bg = bg; }
-            pub fn set_theme(&mut self, theme: Theme)
-            {
-                self.set_fg(theme.fg);
-                self.set_bg(theme.bg);
-                self.set_style(theme.style);
-            }
-
-            pub fn clear_screen(&mut self)
-            {
-                for cell in &mut self.buffer
-                {
-                    *cell = Cell::default();
-                }
-            }
-
-            pub fn indices(&self) -> Range<usize> { 0..self.size.area() }
-            
-            pub fn next_cell(&mut self, indices: &mut Range<usize>) -> Option<(Cursor, Cell)>
-            {
-                while let Some(idx) = indices.next()
-                {
-                    let first = self.buffer[idx].first_char();
-                    let width = char_width(first).unwrap_or(0);
-                    
-                    if width == 2 { let _ = indices.next(); }
-
-                    if self.buffer[idx] != self.back_buffer[idx]
-                    {
-                        let cell = self.buffer[idx].clone();
-                        let line = idx / self.size.columns;
-                        let column = idx % self.size.columns;
-                        self.back_buffer[idx] = cell.clone();
-                        return Some((Cursor{line, column}, cell));
-                    }
-                }
-
-                None
-            }
-
-            pub fn write_char(&mut self, ch: char) -> Result<(), OutOfBounds>
-            {
-                if ch == '\t'
-                {
-                    self.try_cursor()?;
-                    let rem = self.size.columns - self.cursor.column;
-                    let n = rem.min(TAB_STOP - (self.cursor.column % TAB_STOP));
-
-                    for _ in 0..n 
-                    {
-                        self.write_char(' ')?;
-                    }
-                }
-                
-                else if ch == '\r'
-                {
-                    self.cursor.column = 0;
-                }
-                
-                else if ch == '\n'
-                {
-                    self.cursor.line += 1;
-                    self.cursor.column = 0;
-                }
-                
-                else if is_combining_mark(ch)
-                {
-                    if let Some(prev) = self.cursor.previous(self.size)
-                    {
-                        self.try_cursor_at(prev)?;
-                        self.cell_mut(prev).text.push(ch);
-                    }
-                }
-                
-                else if is_visible(ch)
-                {
-                    self.try_cursor()?;
-
-                    if let Some(prev) = self.cursor.previous(self.size)
-                    {
-                        let cell = self.cell_mut(prev);
-
-                        if cell.is_wide() { *cell = Cell::default(); }
-                    }
-
-                    let rem = self.size.columns - self.cursor.column;
-                    let width = char_width(ch).unwrap_or(0);
-                    
-                    if rem < width
-                    {
-                        self.try_cursor()?;
-                        let mut pos = self.cursor;
-
-                        for _ in 0..rem
-                        {
-                            self.set_cell(pos, ch);
-                            pos.column += 1;
-                        }
-
-                        self.cursor.column = 0;
-                        self.cursor.line += 1;
-                    }
-
-                    self.try_cursor()?;
-                    let mut pos = self.cursor;
-                    self.set_cell(pos, ch);
-
-                    for _ in 1..width
-                    {
-                        pos.column += 1;
-                        self.set_cell(pos, ' ');
-                    }
-
-                    self.cursor.column += width;
-
-                    if self.cursor.column >= self.size.columns
-                    {
-                        self.cursor.line += 1;
-                        self.cursor.column = 0;
-                    }
-                }
-
-                Ok(())
-            }
-
-            pub fn write_str(&mut self, s: &str) -> Result<(), OutOfBounds>
-            {
-                for ch in s.chars()
-                {
-                    self.write_char(ch)?;
-                }
-
-                Ok(())
-            }
-
-            pub fn write_at(&mut self, pos: Cursor, text: &str) -> Result<(), OutOfBounds>
-            {
-                self.try_cursor_at(pos)?;
-                self.cursor = pos;
-                self.write_str(text)
-            }
-
-            pub fn write_styled
-            (
-                &mut self,
-                fg: Option<Color>,
-                bg: Option<Color>,
-                style: Style,
-                text: &str
-            ) -> Result<(), OutOfBounds>
-            {
-                self.fg = fg;
-                self.bg = bg;
-                self.style = style;
-                self.write_str(text)?;
-                self.clear_attributes();
-                Ok(())
-            }
-
-            pub fn write_styled_at
-            (
-                &mut self, 
-                pos: Cursor, 
-                fg: Option<Color>, 
-                bg: Option<Color>, 
-                style: Style, 
-                text: &str
-            ) -> Result<(), OutOfBounds>
-            {
-                self.try_cursor_at(pos)?;
-                self.cursor = pos;
-                self.write_styled(fg, bg, style, text)
-            }
-
-            fn try_cursor(&self) -> Result<(), OutOfBounds> { self.try_cursor_at(self.cursor) }
-
-            fn try_cursor_at(&self, pos: Cursor) -> Result<(), OutOfBounds>
-            {
-                if pos.line >= self.size.lines || pos.column >= self.size.columns { Err(OutOfBounds(())) }
-                else { Ok(()) }
-            }
-            
-            fn cell_mut(&mut self, pos: Cursor) -> &mut Cell
-            {
-                let size = self.size;
-                &mut self.buffer[pos.as_index(size)]
-            }
-
-            fn set_cell(&mut self, pos: Cursor, ch: char)
-            {
-                let fg = self.fg;
-                let bg = self.bg;
-                let style = self.style;
-                let cell = self.cell_mut(pos);
-                cell.fg = fg;
-                cell.bg = bg;
-                cell.style = style;
-                cell.text = ch.into();
-            }
-        }
-
-        #[derive( Debug )]
-        pub struct OutOfBounds(());
-
-        #[derive(Clone, Debug, Eq, PartialEq)]
-        pub struct Cell
-        {
-            fg: Option<Color>,
-            bg: Option<Color>,
-            style: Style,
-            text: SmallString<[u8; 8]>,
-        }
-
-        impl Cell
-        {
-            fn new(fg: Option<Color>, bg: Option<Color>, style: Style, chr: char) -> Cell
-            {
-                Cell
-                {
-                    fg,
-                    bg,
-                    style,
-                    text: chr.into(),
-                }
-            }
-            fn invalid() -> Cell
-            {
-                Cell
-                {
-                    fg: None,
-                    bg: None,
-                    style: Style::empty(),
-                    text: SmallString::new(),
-                }
-            }
-            pub fn attrs(&self) -> (Option<Color>, Option<Color>, Style) { (self.fg, self.bg, self.style) }
-            pub fn text(&self) -> &str { &self.text }
-            fn first_char(&self) -> char { self.text.chars().next().expect("empty cell text") }
-            fn is_wide(&self) -> bool 
-            {
-                self.text.chars().next()
-                    .and_then(char_width).unwrap_or(0) == 2
-            }
-        }
-
-        impl Default for Cell
-        {
-            fn default() -> Cell { Cell::new(None, None, Style::empty(), ' ') }
-        }
-
-        fn resize_buffer(buf: &mut Vec<Cell>, old: Size, new: Size)
-        {
-            if old != new
-            {
-                let mut new_buf = vec![Cell::default(); new.area()];
-
-                if !buf.is_empty()
-                {
-                    let n_cols = old.columns.min(new.columns);
-
-                    for (old, new) in buf.chunks_mut(old.columns).zip(new_buf.chunks_mut(new.columns))
-                    {
-                        for i in 0..n_cols
-                        {
-                            swap(&mut new[i], &mut old[i]);
-                        }
-                    }
-                }
-
-                *buf = new_buf;
-            }
-        }
-
-        fn new_buffer(buf: &mut Vec<Cell>, new_size: Size) { *buf = vec![Cell::invalid(); new_size.area()]; }
-    }
-
-    #[macro_use] pub mod macros
-    {
-        use ::{};
-    }
-
+    /// Common System Wide Implementations
     pub mod common
     {
         //! Platform-independent platform abstraction
@@ -24411,71 +23507,43 @@ pub mod system
         {
             *,
         };
-
-        pub mod fs
+        /// A trait for viewing representations from std types
+        pub trait AsInner<Inner: ?Sized>
+        { 
+            fn as_inner(&self) -> &Inner;
+        }
+        /// A trait for viewing representations from std types
+        pub trait AsInnerMut<Inner: ?Sized>
         {
-            use ::
+            fn as_inner_mut(&mut self) -> &mut Inner;
+        }
+        /// A trait for extracting representations from std types
+        pub trait IntoInner<Inner>
+        {
+            fn into_inner(self) -> Inner;
+        }
+        /// A trait for creating std types from internal representations
+        pub trait FromInner<Inner>
+        {
+            fn from_inner(inner: Inner) -> Self;
+        }
+        /// Computes (value*numer)/denom without overflow, 
+        /// as long as both (numer*denom) and the overall result fit into i64 
+        /// (which is the case for our time conversions).
+        pub fn mul_div_u64(value: u64, numer: u64, denom: u64) -> u64
+        {
+            let q = value / denom;
+            let r = value % denom;
+            q * numer + r * numer / denom
+        }
+
+        pub fn ignore_notfound<T>(result: ::io::Result<T>) -> ::io::Result<()>
+        {
+            match result
             {
-                io::{ self, Error, ErrorKind },
-                path::{ Path },
-                sys::common::ignore_notfound,
-                *,
-            };
-            
-            pub const NOT_FILE_ERROR: Error = constant_error!(
-                ErrorKind::InvalidInput,
-                "the source path is neither a regular file nor a symlink to a regular file",
-            );
-
-            pub fn copy(from: &Path, to: &Path) -> io::Result<u64> {
-                let mut reader = fs::File::open(from)?;
-                let metadata = reader.metadata()?;
-
-                if !metadata.is_file() {
-                    return Err(NOT_FILE_ERROR);
-                }
-
-                let mut writer = fs::File::create(to)?;
-                let perm = metadata.permissions();
-
-                let ret = io::copy(&mut reader, &mut writer)?;
-                writer.set_permissions(perm)?;
-                Ok(ret)
-            }
-
-            pub fn remove_dir_all(path: &Path) -> io::Result<()> {
-                let filetype = fs::symlink_metadata(path)?.file_type();
-                if filetype.is_symlink() { fs::remove_file(path) } else { remove_dir_all_recursive(path) }
-            }
-
-            fn remove_dir_all_recursive(path: &Path) -> io::Result<()> 
-            {
-                for child in fs::read_dir(path)? 
-                {
-                    let result: io::Result<()> = 
-                    {
-                        let child = child?;
-                        if child.file_type()?.is_dir() {
-                            remove_dir_all_recursive(&child.path())?;
-                        } else {
-                            fs::remove_file(&child.path())?;
-                        }
-                    };
-                    
-                    if let Err(err) = &result && err.kind() != io::ErrorKind::NotFound
-                    {
-                        return result;
-                    }
-                }
-                ignore_notfound(fs::remove_dir(path))
-            }
-
-            pub fn exists(path: &Path) -> io::Result<bool> {
-                match fs::metadata(path) {
-                    Ok(_) => Ok(true),
-                    Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
-                    Err(error) => Err(error),
-                }
+                Err(err) if err.kind() == ::io::ErrorKind::NotFound => Ok(()),
+                Ok(_) => Ok(()),
+                Err(err) => Err(err),
             }
         }
         
@@ -24483,13 +23551,16 @@ pub mod system
         {
             use ::
             {
-                collections::BTreeMap,
-                ffi::{OsStr, OsString},
-                sys::pipe::read2,
-                sys::process::{EnvKey, ExitStatus, Process, StdioPipes},
+                collections::{ BTreeMap },
+                ffi::{ OsStr, OsString },
+                system::
+                {
+                    pipe::{ read2 },
+                    process::{ EnvKey, ExitStatus, Process, StdioPipes },
+                },
                 *,
             };
-            
+            /// Stores a set of changes to an environment
             #[derive(Clone, Default)]
             pub struct CommandEnv
             {
@@ -24510,18 +23581,23 @@ pub mod system
 
             impl CommandEnv
             {
+                /// Capture the current environment with these changes applied.
                 pub fn capture(&self) -> BTreeMap<EnvKey, OsString>
                 {
                     let mut result = BTreeMap::<EnvKey, OsString>::new();
                     if !self.clear {
-                        for (k, v) in env::vars_os() {
+                        for (k, v) in env::vars_os()
+                        {
                             result.insert(k.into(), v);
                         }
                     }
-                    for (k, maybe_v) in &self.vars {
-                        if let &Some(ref v) = maybe_v {
+                    for (k, maybe_v) in &self.vars
+                    {
+                        if let &Some(ref v) = maybe_v
+                        {
                             result.insert(k.clone(), v.clone());
-                        } else {
+                        } else
+                        {
                             result.remove(k);
                         }
                     }
@@ -24546,9 +23622,8 @@ pub mod system
                 {
                     let key = EnvKey::from(key);
                     self.maybe_saw_path(&key);
-
-                    if self.clear { self.vars.remove(&key); }
-                    else { self.vars.insert(key, None); }
+                    
+                    if self.clear { self.vars.remove(&key); } else { self.vars.insert(key, None); }
                 }
 
                 pub fn clear(&mut self)
@@ -24561,20 +23636,20 @@ pub mod system
 
                 pub fn have_changed_path(&self) -> bool { self.saw_path || self.clear }
 
+                fn maybe_saw_path(&mut self, key: &EnvKey)
+                {
+                    if !self.saw_path && key == "PATH" { self.saw_path = true; }
+                }
+
                 pub fn iter(&self) -> CommandEnvs<'_>
                 {
                     let iter = self.vars.iter();
                     CommandEnvs { iter }
                 }
-
-                fn maybe_saw_path(&mut self, key: &EnvKey)
-                {
-                    if !self.saw_path && key == "PATH" { self.saw_path = true; }
-                }
             }
             /// An iterator over the command environment variables.
             #[must_use = "iterators are lazy and do nothing unless consumed"]
-            #[derive( Debug )]
+            #[derive(Debug)]
             pub struct CommandEnvs<'a>
             {
                 iter: ::collections::btree_map::Iter<'a, EnvKey, Option<OsString>>,
@@ -24584,8 +23659,13 @@ pub mod system
             {
                 type Item = (&'a OsStr, Option<&'a OsStr>);
                 fn next(&mut self) -> Option<Self::Item>
-                { self.iter.next().map(|(key, value)| (key.as_ref(), value.as_deref())) }
-                fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
+                {
+                    self.iter.next().map(|(key, value)| (key.as_ref(), value.as_deref()))
+                }
+                fn size_hint(&self) -> (usize, Option<usize>)
+                {
+                    self.iter.size_hint()
+                }
             }
             
             impl<'a> ExactSizeIterator for CommandEnvs<'a>
@@ -24600,7 +23680,9 @@ pub mod system
                 drop(pipes.stdin.take());
 
                 let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
-                match (pipes.stdout.take(), pipes.stderr.take()) {
+                
+                match (pipes.stdout.take(), pipes.stderr.take())
+                {
                     (None, None) => {}
                     (Some(out), None) => {
                         let res = out.read_to_end(&mut stdout);
@@ -24623,10564 +23705,3903 @@ pub mod system
 
         pub mod wstr
         {
-            //! This module contains constructs to work with 16-bit characters (UCS-2 or UTF-16)
             use ::
             {
-                marker::PhantomData,
-                num::NonZero,
-                ptr::NonNull,
                 *,
-            };
-            /// A safe iterator over a LPWSTR.
-            pub struct WStrUnits<'a>
-            {
-                lpwstr: NonNull<u16>,
-                lifetime: PhantomData<&'a [u16]>,
-            }
-
-            impl WStrUnits<'_>
-            {
-                /// Creates the iterator. Returns `None` if `lpwstr` is null.
-                pub unsafe fn new(lpwstr: *const u16) -> Option<Self>
-                {
-                    Some(Self { lpwstr: NonNull::new(lpwstr as _)?, lifetime: PhantomData })
-                }
-
-                pub fn peek(&self) -> Option<NonZero<u16>>
-                {
-                    unsafe { NonZero::new(*self.lpwstr.as_ptr()) }
-                }
-                /// Advance the iterator while `predicate` returns true.
-                pub fn advance_while<P: FnMut(NonZero<u16>) ->
-                bool>(&mut self, mut predicate: P) -> usize
-                {
-                    let mut counter = 0;
-                    while let Some(w) = self.peek()
-                    {
-                        if !predicate(w) {
-                            break;
-                        }
-                        counter += 1;
-                        self.next();
-                    }
-                    counter
-                }
-            }
-
-            impl Iterator for WStrUnits<'_>
-            {
-                type Item = NonZero<u16>;
-                fn next(&mut self) -> Option<Self::Item>
-                {
-                    unsafe
-                    {
-                        let next = self.peek()?;
-                        self.lpwstr = NonNull::new_unchecked(self.lpwstr.as_ptr().add(1));
-                        Some(next)
-                    }
-                }
-            }
+            };  
         }
 
         pub mod wtf8
         {
-            //! Implementation of [the WTF-8 encoding](https://simonsapin.github.io/wtf-8/).
             use ::
             {
-                char::{MAX_LEN_UTF8, MAX_LEN_UTF16, encode_utf8_raw, encode_utf16_raw},
-                clone::CloneToUninit,
-                str::next_code_point,
-                borrow::Cow,
-                collections::TryReserveError,
-                hash::{Hash, Hasher},
-                iter::FusedIterator,
-                rc::Rc,
-                sync::Arc,
-                system::common::AsInner,
                 *,
-            };
-            pub const UTF8_REPLACEMENT_CHARACTER: &str = "\u{FFFD}";
-            /// A Unicode code point: from U+0000 to U+10FFFF.
-            #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy)]
-            pub struct CodePoint
-            {
-                value: u32,
-            }
-            /// Format the code point as `U+` followed by four to six hexadecimal digits.
-            impl fmt::Debug for CodePoint
-            {
-                #[inline] fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result
-                { write!(formatter, "U+{:04X}", self.value) }
-            }
-
-            impl CodePoint
-            {
-                /// Unsafely creates a new `CodePoint` without checking the value.
-                #[inline] pub unsafe fn from_u32_unchecked(value: u32) -> CodePoint
-                { CodePoint { value } }
-                /// Creates a new `CodePoint` if the value is a valid code point.
-                #[inline] pub fn from_u32(value: u32) -> Option<CodePoint>
-                {
-                    match value 
-                    {
-                        0..=0x10FFFF => Some(CodePoint { value }),
-                        _ => None,
-                    }
-                }
-                /// Creates a new `CodePoint` from a `char`.
-                #[inline] pub fn from_char(value: char) -> CodePoint 
-                { CodePoint { value: value as u32 } }
-                /// Returns the numeric value of the code point.
-                #[inline] pub fn to_u32(&self) -> u32 { self.value }
-                /// Returns the numeric value of the code point if it is a leading surrogate.
-                #[inline] pub fn to_lead_surrogate(&self) -> Option<u16>
-                {
-                    match self.value
-                    {
-                        lead @ 0xD800..=0xDBFF => Some(lead as u16),
-                        _ => None,
-                    }
-                }
-                /// Returns the numeric value of the code point if it is a trailing surrogate.
-                #[inline] pub fn to_trail_surrogate(&self) -> Option<u16>
-                {
-                    match self.value
-                    {
-                        trail @ 0xDC00..=0xDFFF => Some(trail as u16),
-                        _ => None,
-                    }
-                }
-                /// Optionally returns a Unicode scalar value for the code point.
-                #[inline] pub fn to_char(&self) -> Option<char>
-                {
-                    match self.value
-                    {
-                        0xD800..=0xDFFF => None,
-                        _ => Some(unsafe { char::from_u32_unchecked(self.value) }),
-                    }
-                }
-                /// Returns a Unicode scalar value for the code point.
-                #[inline] pub fn to_char_lossy(&self) -> char
-                { self.to_char().unwrap_or('\u{FFFD}') }
-            }
-            /// An owned, growable string of well-formed WTF-8 data.
-            #[derive(Eq, PartialEq, Ord, PartialOrd, Clone)]
-            pub struct Wtf8Buf
-            {
-                bytes: Vec<u8>,
-                is_known_utf8: bool,
-            }
-
-            impl ops::Deref for Wtf8Buf
-            {
-                type Target = Wtf8;
-                fn deref(&self) -> &Wtf8 { self.as_slice() }
-            }
-
-            impl ops::DerefMut for Wtf8Buf 
-            {
-                fn deref_mut(&mut self) -> &mut Wtf8 { self.as_mut_slice() }
-            }
-            /// Formats the string in double quotes, with characters escaped according to
-            /// [`char::escape_debug`] and unpaired surrogates represented as `\u{xxxx}`,
-            /// where each `x` is a hexadecimal digit.
-            impl fmt::Debug for Wtf8Buf
-            {
-                #[inline] fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result
-                { fmt::Debug::fmt(&**self, formatter) }
-            }
-            /// Formats the string with unpaired surrogates substituted 
-            /// with the replacement character, U+FFFD.
-            impl fmt::Display for Wtf8Buf
-            {
-                fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result
-                {
-                    if let Some(s) = self.as_known_utf8() { fmt::Display::fmt(s, formatter) }
-                    else { fmt::Display::fmt(&**self, formatter) }
-                }
-            }
-
-            impl Wtf8Buf
-            {
-                /// Creates a new, empty WTF-8 string.
-                #[inline] pub fn new() -> Wtf8Buf
-                { Wtf8Buf { bytes: Vec::new(), is_known_utf8: true } }
-                /// Creates a new, empty WTF-8 string with pre-allocated capacity for `capacity` bytes.
-                #[inline] pub fn with_capacity(capacity: usize) -> Wtf8Buf
-                { Wtf8Buf { bytes: Vec::with_capacity(capacity), is_known_utf8: true } }
-                /// Creates a WTF-8 string from a WTF-8 byte vec.
-                #[inline] pub unsafe fn from_bytes_unchecked(value: Vec<u8>) -> Wtf8Buf
-                { Wtf8Buf { bytes: value, is_known_utf8: false } }
-                /// Creates a WTF-8 string from a UTF-8 `String`.
-                #[inline] pub fn from_string(string: String) -> Wtf8Buf
-                { Wtf8Buf { bytes: string.into_bytes(), is_known_utf8: true } }
-                /// Creates a WTF-8 string from a UTF-8 `&str` slice.
-                #[inline] pub fn from_str(s: &str) -> Wtf8Buf
-                { Wtf8Buf { bytes: s.as_bytes().to_vec(), is_known_utf8: true } }
-
-                pub fn clear(&mut self)
-                {
-                    self.bytes.clear();
-                    self.is_known_utf8 = true;
-                }
-                /// Creates a WTF-8 string from a potentially ill-formed UTF-16 slice of 16-bit
-                /// code units.
-                pub fn from_wide(v: &[u16]) -> Wtf8Buf
-                {
-                    let mut string = Wtf8Buf::with_capacity(v.len());
-                    for item in char::decode_utf16(v.iter().cloned())
-                    {
-                        match item
-                        {
-                            Ok(ch) => string.push_char(ch),
-                            Err(surrogate) =>
-                            {
-                                let surrogate = surrogate.unpaired_surrogate();
-                                // Surrogates are known to be in the code point range.
-                                let code_point = unsafe { CodePoint::from_u32_unchecked(surrogate as u32) };
-                                // The string will now contain an unpaired surrogate.
-                                string.is_known_utf8 = false;
-                                // Skip the WTF-8 concatenation check,
-                                // surrogate pairs are already decoded by decode_utf16
-                                string.push_code_point_unchecked(code_point);
-                            }
-                        }
-                    }
-                    string
-                }
-                /// Appends the given `char` to the end of this string.
-                fn push_code_point_unchecked(&mut self, code_point: CodePoint)
-                {
-                    let mut bytes = [0; MAX_LEN_UTF8];
-                    let bytes = encode_utf8_raw(code_point.value, &mut bytes);
-                    self.bytes.extend_from_slice(bytes)
-                }
-
-                #[inline] pub fn as_slice(&self) -> &Wtf8
-                { unsafe { Wtf8::from_bytes_unchecked(&self.bytes) } }
-
-                #[inline] pub fn as_mut_slice(&mut self) -> &mut Wtf8
-                { unsafe { Wtf8::from_mut_bytes_unchecked(&mut self.bytes) } }
-                /// Converts the string to UTF-8 without validation, 
-                /// if it was created from valid UTF-8.
-                #[inline] fn as_known_utf8(&self) -> Option<&str>
-                {
-                    if self.is_known_utf8
-                    { Some(unsafe { str::from_utf8_unchecked(self.as_bytes()) }) }
-                    else { None }
-                }
-                /// Reserves capacity for at least `additional` more bytes to be inserted
-                /// in the given `Wtf8Buf`.
-                #[inline] pub fn reserve(&mut self, additional: usize)
-                { self.bytes.reserve(additional) }
-                /// Tries to reserve capacity for at least `additional` more bytes to be
-                /// inserted in the given `Wtf8Buf`.
-                #[inline] pub fn try_reserve(&mut self, additional: usize) -> 
-                Result<(), TryReserveError>
-                { self.bytes.try_reserve(additional) }
-
-                #[inline] pub fn reserve_exact(&mut self, additional: usize)
-                { self.bytes.reserve_exact(additional) }
-                /// Tries to reserve the minimum capacity for exactly `additional` more
-                /// bytes to be inserted in the given `Wtf8Buf`.
-                #[inline] pub fn try_reserve_exact(&mut self, additional: usize) -> 
-                Result<(), TryReserveError>
-                { self.bytes.try_reserve_exact(additional) }
-
-                #[inline] pub fn shrink_to_fit(&mut self) { self.bytes.shrink_to_fit() }
-
-                #[inline] pub fn shrink_to(&mut self, min_capacity: usize)
-                { self.bytes.shrink_to(min_capacity) }
-
-                #[inline] pub fn leak<'a>(self) -> &'a mut Wtf8
-                { unsafe { Wtf8::from_mut_bytes_unchecked(self.bytes.leak()) } }
-                /// Returns the number of bytes that this string buffer can hold 
-                /// without reallocating.
-                #[inline] pub fn capacity(&self) -> usize { self.bytes.capacity() }
-                /// Append a UTF-8 slice at the end of the string.
-                #[inline] pub fn push_str(&mut self, other: &str)
-                { self.bytes.extend_from_slice(other.as_bytes()) }
-
-                /// Append a WTF-8 slice at the end of the string.
-                #[inline] pub fn push_wtf8(&mut self, other: &Wtf8)
-                {
-                    match ((&*self).final_lead_surrogate(), other.initial_trail_surrogate())
-                    {
-                        (Some(lead), Some(trail)) =>
-                        {
-                            let len_without_lead_surrogate = self.len() - 3;
-                            self.bytes.truncate(len_without_lead_surrogate);
-                            let other_without_trail_surrogate = &other.bytes[3..];
-                            self.bytes.reserve(4 + other_without_trail_surrogate.len());
-                            self.push_char(decode_surrogate_pair(lead, trail));
-                            self.bytes.extend_from_slice(other_without_trail_surrogate);
-                        }
-                        _ =>
-                        {
-                            if self.is_known_utf8 && other.next_surrogate(0).is_some()
-                            { self.is_known_utf8 = false; }
-
-                            self.bytes.extend_from_slice(&other.bytes);
-                        }
-                    }
-                }
-                /// Append a Unicode scalar value at the end of the string.
-                #[inline] pub fn push_char(&mut self, c: char)
-                { self.push_code_point_unchecked(CodePoint::from_char(c)) }
-                /// Append a code point at the end of the string.
-                #[inline] pub fn push(&mut self, code_point: CodePoint)
-                {
-                    if let Some(trail) = code_point.to_trail_surrogate()
-                    {
-                        if let Some(lead) = (&*self).final_lead_surrogate()
-                        {
-                            let len_without_lead_surrogate = self.len() - 3;
-                            self.bytes.truncate(len_without_lead_surrogate);
-                            self.push_char(decode_surrogate_pair(lead, trail));
-                            return;
-                        }
-                        
-                        self.is_known_utf8 = false;
-                    }
-                    else if code_point.to_lead_surrogate().is_some()
-                    { self.is_known_utf8 = false; }
-                    
-                    self.push_code_point_unchecked(code_point)
-                }
-                /// Shortens a string to the specified length.
-                #[inline] pub fn truncate(&mut self, new_len: usize)
-                {
-                    assert!(is_code_point_boundary(self, new_len));
-                    self.bytes.truncate(new_len)
-                }
-                /// Consumes the WTF-8 string and tries to convert it to a vec of bytes.
-                #[inline] pub fn into_bytes(self) -> Vec<u8> { self.bytes }
-                /// Consumes the WTF-8 string and tries to convert it to UTF-8.
-                pub fn into_string(self) -> Result<String, Wtf8Buf>
-                {
-                    if self.is_known_utf8 || self.next_surrogate(0).is_none()
-                    { Ok(unsafe { String::from_utf8_unchecked(self.bytes) }) }
-                    else { Err(self) }
-                }
-                /// Consumes the WTF-8 string and converts it lossily to UTF-8.
-                pub fn into_string_lossy(mut self) -> String
-                {
-                    if !self.is_known_utf8
-                    {
-                        let mut pos = 0;
-                        while let Some((surrogate_pos, _)) = self.next_surrogate(pos)
-                        {
-                            pos = surrogate_pos + 3;
-                            self.bytes[surrogate_pos..pos]
-                            .copy_from_slice(UTF8_REPLACEMENT_CHARACTER.as_bytes());
-                        }
-                    }
-                    unsafe { String::from_utf8_unchecked(self.bytes) }
-                }
-                /// Converts this `Wtf8Buf` into a boxed `Wtf8`.
-                #[inline] pub fn into_box(self) -> Box<Wtf8>
-                {
-                    unsafe { mem::transmute(self.bytes.into_boxed_slice()) }
-                }
-                /// Converts a `Box<Wtf8>` into a `Wtf8Buf`.
-                pub fn from_box(boxed: Box<Wtf8>) -> Wtf8Buf
-                {
-                    let bytes: Box<[u8]> = unsafe { mem::transmute(boxed) };
-                    Wtf8Buf { bytes: bytes.into_vec(), is_known_utf8: false }
-                }
-                /// Provides plumbing to core `Vec::extend_from_slice`.
-                #[inline] pub fn extend_from_slice(&mut self, other: &[u8])
-                {
-                    self.bytes.extend_from_slice(other);
-                    self.is_known_utf8 = false;
-                }
-            }
-            /// Creates a new WTF-8 string from an iterator of code points.
-            impl FromIterator<CodePoint> for Wtf8Buf
-            {
-                fn from_iter<T: IntoIterator<Item = CodePoint>>(iter: T) -> Wtf8Buf
-                {
-                    let mut string = Wtf8Buf::new();
-                    string.extend(iter);
-                    string
-                }
-            }
-            /// Append code points from an iterator to the string.
-            impl Extend<CodePoint> for Wtf8Buf
-            {
-                fn extend<T: IntoIterator<Item = CodePoint>>(&mut self, iter: T)
-                {
-                    let iterator = iter.into_iter();
-                    let (low, _high) = iterator.size_hint();
-                    self.bytes.reserve(low);
-                    iterator.for_each(move |code_point| self.push(code_point));
-                }
-
-                #[inline] fn extend_one(&mut self, code_point: CodePoint)
-                { self.push(code_point); }
-
-                #[inline] fn extend_reserve(&mut self, additional: usize)
-                { self.bytes.reserve(additional); }
-            }
-            /// A borrowed slice of well-formed WTF-8 data.
-            #[repr(transparent)] #[derive(Eq, Ord, PartialEq, PartialOrd)]
-            pub struct Wtf8
-            {
-                bytes: [u8],
-            }
-
-            impl AsInner<[u8]> for Wtf8
-            {
-                #[inline] fn as_inner(&self) -> &[u8] { &self.bytes }
-            }
-            /// Formats the string in double quotes, with characters escaped according to
-            /// [`char::escape_debug`] and unpaired surrogates represented as `\u{xxxx}`,
-            /// where each `x` is a hexadecimal digit.
-            impl fmt::Debug for Wtf8
-            {
-                fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result
-                {
-                    fn write_str_escaped(f: &mut fmt::Formatter<'_>, s: &str) -> fmt::Result
-                    {
-                        use ::fmt::Write;
-                        for c in s.chars().flat_map(|c| c.escape_debug())
-                        {
-                            f.write_char(c)?
-                        }
-
-                        Ok(())
-                    }
-
-                    formatter.write_str("\"")?;
-                    let mut pos = 0;
-
-                    while let Some((surrogate_pos, surrogate)) = self.next_surrogate(pos)
-                    {
-                        write_str_escaped(formatter, unsafe {
-                            str::from_utf8_unchecked(&self.bytes[pos..surrogate_pos])
-                        })?;
-                        write!(formatter, "\\u{{{:x}}}", surrogate)?;
-                        pos = surrogate_pos + 3;
-                    }
-
-                    write_str_escaped(formatter, unsafe { str::from_utf8_unchecked(&self.bytes[pos..]) })?;
-                    formatter.write_str("\"")
-                }
-            }
-            /// Formats the string with unpaired surrogates substituted with the replacement
-            /// character, U+FFFD.
-            impl fmt::Display for Wtf8
-            {
-                fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result
-                {
-                    let wtf8_bytes = &self.bytes;
-                    let mut pos = 0;
-                    loop
-                    {
-                        match self.next_surrogate(pos)
-                        {
-                            Some((surrogate_pos, _)) =>
-                            {
-                                formatter.write_str(unsafe
-                                {
-                                    str::from_utf8_unchecked(&wtf8_bytes[pos..surrogate_pos])
-                                })?;
-                                formatter.write_str(UTF8_REPLACEMENT_CHARACTER)?;
-                                pos = surrogate_pos + 3;
-                            }
-
-                            None =>
-                            {
-                                let s = unsafe { str::from_utf8_unchecked(&wtf8_bytes[pos..]) };
-                                if pos == 0 { return s.fmt(formatter) } else { return formatter.write_str(s) }
-                            }
-                        }
-                    }
-                }
-            }
-
-            impl Wtf8
-            {
-                /// Creates a WTF-8 slice from a UTF-8 `&str` slice.
-                #[inline] pub fn from_str(value: &str) -> &Wtf8
-                {
-                    unsafe { Wtf8::from_bytes_unchecked(value.as_bytes()) }
-                }
-                /// Creates a WTF-8 slice from a WTF-8 byte slice.
-                #[inline] pub unsafe fn from_bytes_unchecked(value: &[u8]) -> &Wtf8
-                {
-                    unsafe { &*(value as *const [u8] as *const Wtf8) }
-                }
-                /// Creates a mutable WTF-8 slice from a mutable WTF-8 byte slice.
-                #[inline] unsafe fn from_mut_bytes_unchecked(value: &mut [u8]) -> &mut Wtf8
-                {
-                    unsafe { &mut *(value as *mut [u8] as *mut Wtf8) }
-                }
-                /// Returns the length, in WTF-8 bytes.
-                #[inline] pub fn len(&self) -> usize { self.bytes.len() }
-                #[inline] pub fn is_empty(&self) -> bool { self.bytes.is_empty() }
-                /// Returns the code point at `position` if it is in the ASCII range,
-                /// or `b'\xFF'` otherwise.
-                #[inline] pub fn ascii_byte_at(&self, position: usize) -> u8
-                {
-                    match self.bytes[position]
-                    {
-                        ascii_byte @ 0x00..=0x7F => ascii_byte,
-                        _ => 0xFF,
-                    }
-                }
-                /// Returns an iterator for the string’s code points.
-                #[inline] pub fn code_points(&self) -> Wtf8CodePoints<'_>
-                { Wtf8CodePoints { bytes: self.bytes.iter() } }
-                /// Access raw bytes of WTF-8 data
-                #[inline] pub fn as_bytes(&self) -> &[u8] { &self.bytes }
-                /// Tries to convert the string to UTF-8 and return a `&str` slice.
-                #[inline] pub fn as_str(&self) -> Result<&str, str::Utf8Error>
-                { str::from_utf8(&self.bytes) }
-                /// Creates an owned `Wtf8Buf` from a borrowed `Wtf8`.
-                pub fn to_owned(&self) -> Wtf8Buf
-                {
-                    Wtf8Buf { bytes: self.bytes.to_vec(), is_known_utf8: false }
-                }
-                /// Lossily converts the string to UTF-8.
-                pub fn to_string_lossy(&self) -> Cow<'_, str>
-                {
-                    let Some((surrogate_pos, _)) = self.next_surrogate(0) 
-                    else { return Cow::Borrowed(unsafe { str::from_utf8_unchecked(&self.bytes) }); };
-                    let wtf8_bytes = &self.bytes;
-                    let mut utf8_bytes = Vec::with_capacity(self.len());
-                    utf8_bytes.extend_from_slice(&wtf8_bytes[..surrogate_pos]);
-                    utf8_bytes.extend_from_slice(UTF8_REPLACEMENT_CHARACTER.as_bytes());
-                    let mut pos = surrogate_pos + 3;
-                    loop
-                    {
-                        match self.next_surrogate(pos)
-                        {
-                            Some((surrogate_pos, _)) =>
-                            {
-                                utf8_bytes.extend_from_slice(&wtf8_bytes[pos..surrogate_pos]);
-                                utf8_bytes.extend_from_slice(UTF8_REPLACEMENT_CHARACTER.as_bytes());
-                                pos = surrogate_pos + 3;
-                            }
-
-                            None =>
-                            {
-                                utf8_bytes.extend_from_slice(&wtf8_bytes[pos..]);
-                                return Cow::Owned(unsafe { String::from_utf8_unchecked(utf8_bytes) });
-                            }
-                        }
-                    }
-                }
-                /// Converts the WTF-8 string to potentially ill-formed UTF-16
-                /// and return an iterator of 16-bit code units.
-                #[inline] pub fn encode_wide(&self) -> EncodeWide<'_>
-                {
-                    EncodeWide { code_points: self.code_points(), extra: 0 }
-                }
-
-                #[inline] fn next_surrogate(&self, mut pos: usize) -> Option<(usize, u16)>
-                {
-                    let mut iter = self.bytes[pos..].iter();
-                    loop
-                    {
-                        let b = *iter.next()?;
-                        if b < 0x80 { pos += 1; }
-                        else if b < 0xE0
-                        {
-                            iter.next();
-                            pos += 2;
-                        }
-                        else if b == 0xED
-                        {
-                            match (iter.next(), iter.next())
-                            {
-                                (Some(&b2), Some(&b3)) if b2 >= 0xA0 =>
-                                {
-                                    return Some((pos, decode_surrogate(b2, b3)));
-                                }
-                                _ => pos += 3,
-                            }
-                        }
-                        else if b < 0xF0
-                        {
-                            iter.next();
-                            iter.next();
-                            pos += 3;
-                        }
-                        else
-                        {
-                            iter.next();
-                            iter.next();
-                            iter.next();
-                            pos += 4;
-                        }
-                    }
-                }
-
-                #[inline] fn final_lead_surrogate(&self) -> Option<u16>
-                {
-                    match self.bytes
-                    {
-                        [.., 0xED, b2 @ 0xA0..=0xAF, b3] => Some(decode_surrogate(b2, b3)),
-                        _ => None,
-                    }
-                }
-
-                #[inline] fn initial_trail_surrogate(&self) -> Option<u16>
-                {
-                    match self.bytes
-                    {
-                        [0xED, b2 @ 0xB0..=0xBF, b3, ..] => Some(decode_surrogate(b2, b3)),
-                        _ => None,
-                    }
-                }
-
-                pub fn clone_into(&self, buf: &mut Wtf8Buf)
-                {
-                    buf.is_known_utf8 = false;
-                    self.bytes.clone_into(&mut buf.bytes);
-                }
-                /// Boxes this `Wtf8`.
-                #[inline] pub fn into_box(&self) -> Box<Wtf8>
-                {
-                    let boxed: Box<[u8]> = self.bytes.into();
-                    unsafe { mem::transmute(boxed) }
-                }
-                /// Creates a boxed, empty `Wtf8`.
-                pub fn empty_box() -> Box<Wtf8>
-                {
-                    let boxed: Box<[u8]> = Default::default();
-                    unsafe { mem::transmute(boxed) }
-                }
-
-                #[inline] pub fn into_arc(&self) -> Arc<Wtf8>
-                {
-                    let arc: Arc<[u8]> = Arc::from(&self.bytes);
-                    unsafe { Arc::from_raw(Arc::into_raw(arc) as *const Wtf8) }
-                }
-
-                #[inline] pub fn into_rc(&self) -> Rc<Wtf8>
-                {
-                    let rc: Rc<[u8]> = Rc::from(&self.bytes);
-                    unsafe { Rc::from_raw(Rc::into_raw(rc) as *const Wtf8) }
-                }
-
-                #[inline] pub fn make_ascii_lowercase(&mut self) { self.bytes.make_ascii_lowercase() }
-
-                #[inline] pub fn make_ascii_uppercase(&mut self) { self.bytes.make_ascii_uppercase() }
-
-                #[inline] pub fn to_ascii_lowercase(&self) -> Wtf8Buf { Wtf8Buf { bytes: self.bytes.to_ascii_lowercase(), is_known_utf8: false } }
-
-                #[inline] pub fn to_ascii_uppercase(&self) -> Wtf8Buf { Wtf8Buf { bytes: self.bytes.to_ascii_uppercase(), is_known_utf8: false } }
-
-                #[inline] pub fn is_ascii(&self) -> bool { self.bytes.is_ascii() }
-
-                #[inline] pub fn eq_ignore_ascii_case(&self, other: &Self) -> bool { self.bytes.eq_ignore_ascii_case(&other.bytes) }
-            }
-            /// Returns a slice of the given string for the byte range \[`begin`..`end`).
-            impl ops::Index<ops::Range<usize>> for Wtf8
-            {
-                type Output = Wtf8;
-
-                #[inline] fn index(&self, range: ops::Range<usize>) -> &Wtf8
-                {
-                    if range.start <= range.end
-                        && is_code_point_boundary(self, range.start)
-                        && is_code_point_boundary(self, range.end)
-                    {
-                        unsafe { slice_unchecked(self, range.start, range.end) }
-                    } else {
-                        slice_error_fail(self, range.start, range.end)
-                    }
-                }
-            }
-            /// Returns a slice of the given string from byte `begin` to its end.
-            impl ops::Index<ops::RangeFrom<usize>> for Wtf8
-            {
-                type Output = Wtf8;
-                #[inline] fn index(&self, range: ops::RangeFrom<usize>) -> &Wtf8
-                {
-                    if is_code_point_boundary(self, range.start)
-                    { unsafe { slice_unchecked(self, range.start, self.len()) } }
-
-                    else { slice_error_fail(self, range.start, self.len()) }
-                }
-            }
-            /// Returns a slice of the given string from its beginning to byte `end`.
-            impl ops::Index<ops::RangeTo<usize>> for Wtf8
-            {
-                type Output = Wtf8;
-                #[inline] fn index(&self, range: ops::RangeTo<usize>) -> &Wtf8
-                {
-                    if is_code_point_boundary(self, range.end) {
-                        unsafe { slice_unchecked(self, 0, range.end) }
-                    } else {
-                        slice_error_fail(self, 0, range.end)
-                    }
-                }
-            }
-
-            impl ops::Index<ops::RangeFull> for Wtf8
-            {
-                type Output = Wtf8;
-                #[inline] fn index(&self, _range: ops::RangeFull) -> &Wtf8 { self }
-            }
-
-            #[inline] fn decode_surrogate(second_byte: u8, third_byte: u8) -> u16
-            { 0xD800 | (second_byte as u16 & 0x3F) << 6 | third_byte as u16 & 0x3F }
-
-            #[inline] fn decode_surrogate_pair(lead: u16, trail: u16) -> char
-            {
-                let code_point = 0x10000 + ((((lead - 0xD800) as u32) << 10) | (trail - 0xDC00) as u32);
-                unsafe { char::from_u32_unchecked(code_point) }
-            }
-            
-            #[inline] pub fn is_code_point_boundary(slice: &Wtf8, index: usize) -> bool
-            {
-                if index == 0 { return true; }
-
-                match slice.bytes.get(index)
-                {
-                    None => index == slice.len(),
-                    Some(&b) => (b as i8) >= -0x40,
-                }
-            }
-            /// Verify that `index` is at the edge of either a valid UTF-8 codepoint
-            /// (i.e. a codepoint that's not a surrogate) or of the whole string.
-            #[inline] #[track_caller] pub fn check_utf8_boundary(slice: &Wtf8, index: usize)
-            {
-                if index == 0 { return; }
-
-                match slice.bytes.get(index)
-                {
-                    Some(0xED) => (),
-                    Some(&b) if (b as i8) >= -0x40 => return,
-                    Some(_) => panic!("byte index {index} is not a codepoint boundary"),
-                    None if index == slice.len() => return,
-                    None => panic!("byte index {index} is out of bounds"),
-                }
-                
-                if slice.bytes[index + 1] >= 0xA0
-                {
-                    if index >= 3 
-                    && slice.bytes[index - 3] == 0xED
-                    && slice.bytes[index - 2] >= 0xA0
-                    {
-                        panic!("byte index {index} lies between surrogate codepoints");
-                    }
-                }
-            }
-            
-            #[inline] pub unsafe fn slice_unchecked(s: &Wtf8, begin: usize, end: usize) -> &Wtf8
-            {
-                unsafe
-                {
-                    let len = end - begin;
-                    let start = s.as_bytes().as_ptr().add(begin);
-                    Wtf8::from_bytes_unchecked(slice::from_raw_parts(start, len))
-                }
-            }
-            
-            #[inline(never)] pub fn slice_error_fail(s: &Wtf8, begin: usize, end: usize) -> !
-            {
-                assert!(begin <= end);
-                panic!("index {begin} and/or {end} in `{s:?}` do not lie on character boundary");
-            }
-
-            /// Iterator for the code points of a WTF-8 string.
-            #[derive(Clone)]
-            pub struct Wtf8CodePoints<'a>
-            {
-                bytes: slice::Iter<'a, u8>,
-            }
-
-            impl Iterator for Wtf8CodePoints<'_>
-            {
-                type Item = CodePoint;
-
-                #[inline] fn next(&mut self) -> Option<CodePoint>
-                {
-                    unsafe { next_code_point(&mut self.bytes).map(|c| CodePoint { value: c }) }
-                }
-
-                #[inline] fn size_hint(&self) -> (usize, Option<usize>)
-                {
-                    let len = self.bytes.len();
-                    (len.saturating_add(3) / 4, Some(len))
-                }
-            }
-            /// Generates a wide character sequence for potentially ill-formed UTF-16.
-            #[derive(Clone)]
-            pub struct EncodeWide<'a>
-            {
-                code_points: Wtf8CodePoints<'a>,
-                extra: u16,
-            }
-            
-            impl Iterator for EncodeWide<'_>
-            {
-                type Item = u16;
-                #[inline] fn next(&mut self) -> Option<u16>
-                {
-                    if self.extra != 0
-                    {
-                        let tmp = self.extra;
-                        self.extra = 0;
-                        return Some(tmp);
-                    }
-
-                    let mut buf = [0; MAX_LEN_UTF16];
-                    self.code_points.next().map(|code_point|
-                    {
-                        let n = encode_utf16_raw(code_point.value, &mut buf).len();
-                        if n == 2 { self.extra = buf[1]; }
-                        buf[0]
-                    })
-                }
-
-                #[inline] fn size_hint(&self) -> (usize, Option<usize>)
-                {
-                    let (low, high) = self.code_points.size_hint();
-                    let ext = (self.extra != 0) as usize;
-                    (low + ext, high.and_then(|n| n.checked_mul(2)).and_then(|n| n.checked_add(ext)))
-                }
-            }
-            
-            impl FusedIterator for EncodeWide<'_> {}
-
-            impl Hash for CodePoint
-            {
-                #[inline] fn hash<H: Hasher>(&self, state: &mut H) { self.value.hash(state) }
-            }
-
-            impl Hash for Wtf8Buf
-            {
-                #[inline] fn hash<H: Hasher>(&self, state: &mut H)
-                {
-                    state.write(&self.bytes);
-                    0xfeu8.hash(state)
-                }
-            }
-
-            impl Hash for Wtf8
-            {
-                #[inline] fn hash<H: Hasher>(&self, state: &mut H)
-                {
-                    state.write(&self.bytes);
-                    0xfeu8.hash(state)
-                }
-            }
-            
-            unsafe impl CloneToUninit for Wtf8
-            {
-                #[inline]
-                unsafe fn clone_to_uninit(&self, dst: *mut u8)
-                {
-                    unsafe { self.bytes.clone_to_uninit(dst) }
-                }
-            }
+            };  
         }
-
-        pub mod small_c_string
+        /// Used for Unsupported API
+        pub mod support
         {
             use ::
             {
-                ffi::{CStr, CString},
-                mem::MaybeUninit,
-                path::Path,
                 *,
-            };
-            
-            const MAX_STACK_ALLOCATION: usize = 384;
-
-            const NUL_ERR: io::Error = 
-            constant_error!(io::ErrorKind::InvalidInput, "file name contained an unexpected NUL byte");
-
-            #[inline] pub fn run_path_with_cstr<T>(path: &Path, f: &dyn Fn(&CStr) -> io::Result<T>) -> io::Result<T>
-            { run_with_cstr(path.as_os_str().as_encoded_bytes(), f) }
-
-            #[inline] pub fn run_with_cstr<T>(bytes: &[u8], f: &dyn Fn(&CStr) -> io::Result<T>) -> io::Result<T>
-            {
-                if bytes.len() >= MAX_STACK_ALLOCATION { run_with_cstr_allocating(bytes, f) }
-                else { unsafe { run_with_cstr_stack(bytes, f) } }
-            }
-            
-            pub unsafe fn run_with_cstr_stack<T> ( bytes: &[u8], f: &dyn Fn(&CStr) -> io::Result<T> ) -> 
-            io::Result<T>
-            {
-                unsafe
-                {
-                    let mut buf = MaybeUninit::<[u8; MAX_STACK_ALLOCATION]>::uninit();
-                    let buf_ptr = buf.as_mut_ptr() as *mut u8;
-                    ptr::copy_nonoverlapping(bytes.as_ptr(), buf_ptr, bytes.len());
-                    buf_ptr.add(bytes.len()).write(0);
-
-                    match CStr::from_bytes_with_nul(unsafe { slice::from_raw_parts(buf_ptr, bytes.len() + 1) })
-                    {
-                        Ok(s) => f(s),
-                        Err(_) => Err(NUL_ERR),
-                    }
-                }
-            }
-
-            #[cold] #[inline(never)] fn run_with_cstr_allocating<T>(bytes: &[u8], f: &dyn Fn(&CStr) -> io::Result<T>) 
-            -> io::Result<T> 
-            {
-                match CString::new(bytes)
-                {
-                    Ok(s) => f(&s),
-                    Err(_) => Err(NUL_ERR),
-                }
-            }
+            };  
         }
-
-        /// A trait for viewing representations from std types
-        pub trait AsInner<Inner: ?Sized>
-        {
-            fn as_inner(&self) -> &Inner;
-        }
-        /// A trait for viewing representations from std types
-        pub trait AsInnerMut<Inner: ?Sized>
-        {
-            fn as_inner_mut(&mut self) -> &mut Inner;
-        }
-        /// A trait for extracting representations from std types
-        pub trait IntoInner<Inner>
-        {
-            fn into_inner(self) -> Inner;
-        }
-        /// A trait for creating std types from internal representations
-        pub trait FromInner<Inner>
-        {
-            fn from_inner(inner: Inner) -> Self;
-        }
-        
-        pub fn mul_div_u64(value: u64, numer: u64, denom: u64) -> u64
-        {
-            let q = value / denom;
-            let r = value % denom;
-            q * numer + r * numer / denom
-        }
-
-        pub fn ignore_notfound<T>(result: ::io::Result<T>) -> ::io::Result<()>
-        {
-            match result
-            {
-                Err(err) if err.kind() == ::io::ErrorKind::NotFound => Ok(()),
-                Ok(_) => Ok(()),
-                Err(err) => Err(err),
-            }
-        }
-    }
-    
-    pub mod fd
+    } pub use self::common::{ support };
+    /// Common System Wide Implementations
+    pub mod uefi
     {
         use ::
         {
             *,
         };
-        
-        type ValidRawFd = ::num::niche_types::NotAllOnes<RawFd>;
-        
-        /// An owned file descriptor.
-        #[repr(transparent)] #[rustc_nonnull_optimization_guaranteed]
-        pub struct OwnedFd
-        {
-            fd: ValidRawFd,
-        }
-        #[derive(Debug)]
-        pub struct FileDesc(OwnedFd);
-    }
 
-    pub mod fs
-    {
-        use ::
-        {
-            path::{ Path, PathBuf },
-            *,
-        };
-
-        mod unix
+        pub mod api
         {
             use ::
             {
-                ffi::{CStr, OsStr, OsString},
-                fmt::{self, Write as _},
-                io::{self, BorrowedCursor, Error, IoSlice, IoSliceMut, SeekFrom},
-                libc::{dirent64, fstat64, ftruncate64, lseek64, lstat64, off64_t, open64, stat64},
-                os::unix::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd},
-                os::unix::prelude::*,
-                path::{Path, PathBuf},
-                sync::Arc,
-                sys::common::small_c_string::run_path_with_cstr,
-                sys::fd::FileDesc,
-                sys::time::SystemTime,
-                sys::{cvt, cvt_r},
-                sys::common::{AsInner, AsInnerMut, FromInner, IntoInner},
                 *,
             };
-            pub use ::sys::common::fs::exists;
-            
-            pub struct File(FileDesc);
-            
-            #[derive(Clone)]
-            pub struct FileAttr
+            // r-efi
+            pub mod base
             {
-                stat: stat64,
-            }
-            
-            struct InnerReadDir
-            {
-                dirp: Dir,
-                root: PathBuf,
-            }
-
-            pub struct ReadDir
-            {
-                inner: Arc<InnerReadDir>,
-                end_of_stream: bool,
-            }
-
-            impl ReadDir
-            {
-                fn new(inner: InnerReadDir) -> Self
-                {
-                    Self { inner: Arc::new(inner), end_of_stream: false }
-                }
-            }
-
-            struct Dir(*mut libc::DIR);
-
-            unsafe impl Send for Dir {}
-            unsafe impl Sync for Dir {}
-            
-            pub struct DirEntry 
-            {
-                dir: Arc<InnerReadDir>,
-                entry: dirent64,
-            }
-
-            #[derive(Clone)]
-            pub struct OpenOptions {
-                read: bool,
-                write: bool,
-                append: bool,
-                truncate: bool,
-                create: bool,
-                create_new: bool,
-                custom_flags: i32,
-                mode: mode_t,
-            }
-
-            #[derive(Clone, PartialEq, Eq)]
-            pub struct FilePermissions {
-                mode: mode_t,
-            }
-
-            #[derive(Copy, Clone, Debug, Default)]
-            pub struct FileTimes {
-                accessed: Option<SystemTime>,
-                modified: Option<SystemTime>,
-                #[cfg(target_vendor = "apple")]
-                created: Option<SystemTime>,
-            }
-
-            #[derive(Copy, Clone, Eq)]
-            pub struct FileType {
-                mode: mode_t,
-            }
-
-            impl PartialEq for FileType {
-                fn eq(&self, other: &Self) -> bool {
-                    self.masked() == other.masked()
-                }
-            }
-
-            impl ::hash::Hash for FileType {
-                fn hash<H: ::hash::Hasher>(&self, state: &mut H) {
-                    self.masked().hash(state);
-                }
-            }
-
-            pub struct DirBuilder {
-                mode: mode_t,
-            }
-
-            #[derive(Copy, Clone)]
-            struct Mode(mode_t);
-            
-            impl FileAttr
-            {
-                fn from_stat64(stat: stat64) -> Self { Self { stat } }
-            }
-
-            impl FileAttr
-            {
-                pub fn size(&self) -> u64 {
-                    self.stat.st_size as u64
-                }
-                pub fn perm(&self) -> FilePermissions {
-                    FilePermissions { mode: (self.stat.st_mode as mode_t) }
-                }
-
-                pub fn file_type(&self) -> FileType {
-                    FileType { mode: self.stat.st_mode as mode_t }
-                }
-            }
-            
-            impl FileAttr
-            {   
-                pub fn modified(&self) -> io::Result<SystemTime> 
-                {
-                    SystemTime::new(self.stat.st_mtime as i64, self.stat.st_mtime_nsec as i64)
-                }
-                
-                pub fn accessed(&self) -> io::Result<SystemTime>
-                {
-                    SystemTime::new(self.stat.st_atime as i64, self.stat.st_atime_nsec as i64)
-                }
-                
-                pub fn created(&self) -> io::Result<SystemTime>
-                {
-                    SystemTime::new(self.stat.st_birthtime as i64, self.stat.st_birthtime_nsec as i64)
-                }
-            }
-
-            impl AsInner<stat64> for FileAttr 
-            {
-                #[inline]
-                fn as_inner(&self) -> &stat64 {
-                    &self.stat
-                }
-            }
-
-            impl FilePermissions 
-            {
-                pub fn readonly(&self) -> bool {
-                    // check if any class (owner, group, others) has write permission
-                    self.mode & 0o222 == 0
-                }
-
-                pub fn set_readonly(&mut self, readonly: bool) {
-                    if readonly {
-                        // remove write permission for all classes; equivalent to `chmod a-w <file>`
-                        self.mode &= !0o222;
-                    } else {
-                        // add write permission for all classes; equivalent to `chmod a+w <file>`
-                        self.mode |= 0o222;
-                    }
-                }
-                pub fn mode(&self) -> u32 {
-                    self.mode as u32
-                }
-            }
-
-            impl FileTimes 
-            {
-                pub fn set_accessed(&mut self, t: SystemTime) {
-                    self.accessed = Some(t);
-                }
-
-                pub fn set_modified(&mut self, t: SystemTime) {
-                    self.modified = Some(t);
-                }
-            }
-
-            impl FileType
-            {
-                pub fn is_dir(&self) -> bool {
-                    self.is(libc::S_IFDIR)
-                }
-                pub fn is_file(&self) -> bool {
-                    self.is(libc::S_IFREG)
-                }
-                pub fn is_symlink(&self) -> bool {
-                    self.is(libc::S_IFLNK)
-                }
-
-                pub fn is(&self, mode: mode_t) -> bool {
-                    self.masked() == mode
-                }
-
-                fn masked(&self) -> mode_t {
-                    self.mode & libc::S_IFMT
-                }
-            }
-
-            impl fmt::Debug for FileType 
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                    let FileType { mode } = self;
-                    f.debug_struct("FileType").field("mode", &Mode(*mode)).finish()
-                }
-            }
-
-            impl FromInner<u32> for FilePermissions 
-            {
-                fn from_inner(mode: u32) -> FilePermissions {
-                    FilePermissions { mode: mode as mode_t }
-                }
-            }
-
-            impl fmt::Debug for FilePermissions
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                    let FilePermissions { mode } = self;
-                    f.debug_struct("FilePermissions").field("mode", &Mode(*mode)).finish()
-                }
-            }
-
-            impl fmt::Debug for ReadDir
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                    fmt::Debug::fmt(&*self.inner.root, f)
-                }
-            }
-
-            impl Iterator for ReadDir
-            {
-                type Item = io::Result<DirEntry>;
-                fn next(&mut self) -> Option<io::Result<DirEntry>>
-                {
-                    unsafe
-                    {
-                        if self.end_of_stream {
-                            return None;
-                        }
-                        let mut ret = DirEntry { entry: mem::zeroed(), dir: Arc::clone(&self.inner) };
-                        let mut entry_ptr = ptr::null_mut();
-                        loop {
-                            let err = readdir64_r(self.inner.dirp.0, &mut ret.entry, &mut entry_ptr);
-                            if err != 0 {
-                                if entry_ptr.is_null() {
-                                    self.end_of_stream = true;
-                                }
-                                return Some(Err(Error::from_raw_os_error(err)));
-                            }
-                            if entry_ptr.is_null() {
-                                return None;
-                            }
-                            if ret.name_bytes() != b"." && ret.name_bytes() != b".." {
-                                return Some(Ok(ret));
-                            }
-                        }
-                    }
-                }
-            }
-            /// Aborts the process if a file desceriptor is not open, if debug asserts are enabled.
-            #[inline] pub fn debug_assert_fd_is_open(fd: RawFd)
-            {
-                use ::error::errno;
-                
-                if core::ub_checks::check_library_ub()
-                {
-                    if unsafe { libc::fcntl(fd, libc::F_GETFD) } == -1 && errno() == libc::EBADF
-                    {
-                        rtabort!("IO Safety violation: owned file descriptor already closed");
-                    }
-                }
-            }
-
-            impl Drop for Dir
-            {
-                fn drop(&mut self)
-                {
-                    let fd = unsafe { libc::dirfd(self.0) };
-                    debug_assert_fd_is_open(fd);
-                    let r = unsafe { libc::closedir(self.0) };
-                    assert!
-                    (
-                        r == 0 || ::io::Error::last_os_error().is_interrupted(),
-                        "unexpected error during closedir: {:?}",
-                        ::io::Error::last_os_error()
-                    );
-                }
-            }
-
-            impl DirEntry
-            {
-                pub fn path(&self) -> PathBuf {
-                    self.dir.root.join(self.file_name_os_str())
-                }
-
-                pub fn file_name(&self) -> OsString {
-                    self.file_name_os_str().to_os_string()
-                }
-                
-                pub fn metadata(&self) -> io::Result<FileAttr> 
-                {
-                    let fd = cvt(unsafe { dirfd(self.dir.dirp.0) })?;
-                    let name = self.name_cstr().as_ptr();
-                    let mut stat: stat64 = unsafe { mem::zeroed() };
-                    cvt(unsafe { fstatat64(fd, name, &mut stat, libc::AT_SYMLINK_NOFOLLOW) })?;
-                    Ok(FileAttr::from_stat64(stat))
-                }
-                
-                pub fn file_type(&self) -> io::Result<FileType> {
-                    match self.entry.d_type {
-                        libc::DT_CHR => Ok(FileType { mode: libc::S_IFCHR }),
-                        libc::DT_FIFO => Ok(FileType { mode: libc::S_IFIFO }),
-                        libc::DT_LNK => Ok(FileType { mode: libc::S_IFLNK }),
-                        libc::DT_REG => Ok(FileType { mode: libc::S_IFREG }),
-                        libc::DT_SOCK => Ok(FileType { mode: libc::S_IFSOCK }),
-                        libc::DT_DIR => Ok(FileType { mode: libc::S_IFDIR }),
-                        libc::DT_BLK => Ok(FileType { mode: libc::S_IFBLK }),
-                        _ => self.metadata().map(|m| m.file_type()),
-                    }
-                }
-                
-                pub fn ino(&self) -> u64 {
-                    self.entry.d_fileno as u64
-                }
-                
-                fn name_bytes(&self) -> &[u8] {
-                    use ::slice;
-                    unsafe {
-                        slice::from_raw_parts(
-                            self.entry.d_name.as_ptr() as *const u8,
-                            self.entry.d_namlen as usize,
-                        )
-                    }
-                }
-
-                fn name_cstr(&self) -> &CStr {
-                    &self.name
-                }
-
-                pub fn file_name_os_str(&self) -> &OsStr {
-                    OsStr::from_bytes(self.name_bytes())
-                }
-            }
-
-            impl OpenOptions
-            {
-                pub fn new() -> OpenOptions
-                {
-                    OpenOptions {
-                        // generic
-                        read: false,
-                        write: false,
-                        append: false,
-                        truncate: false,
-                        create: false,
-                        create_new: false,
-                        // system-specific
-                        custom_flags: 0,
-                        mode: 0o666,
-                    }
-                }
-
-                pub fn read(&mut self, read: bool) { self.read = read; }
-                pub fn write(&mut self, write: bool) { self.write = write; }
-                pub fn append(&mut self, append: bool) { self.append = append; }
-                pub fn truncate(&mut self, truncate: bool) { self.truncate = truncate; }
-                pub fn create(&mut self, create: bool) { self.create = create; }
-                pub fn create_new(&mut self, create_new: bool) { self.create_new = create_new; }
-                pub fn custom_flags(&mut self, flags: i32) { self.custom_flags = flags; }
-                pub fn mode(&mut self, mode: u32) { self.mode = mode as mode_t; }
-
-                fn get_access_mode(&self) -> io::Result<c_int>
-                {
-                    match (self.read, self.write, self.append)
-                    {
-                        (true, false, false) => Ok(libc::O_RDONLY),
-                        (false, true, false) => Ok(libc::O_WRONLY),
-                        (true, true, false) => Ok(libc::O_RDWR),
-                        (false, _, true) => Ok(libc::O_WRONLY | libc::O_APPEND),
-                        (true, _, true) => Ok(libc::O_RDWR | libc::O_APPEND),
-                        (false, false, false) => Err(Error::from_raw_os_error(libc::EINVAL)),
-                    }
-                }
-
-                fn get_creation_mode(&self) -> io::Result<c_int> {
-                    match (self.write, self.append) {
-                        (true, false) => {}
-                        (false, false) => {
-                            if self.truncate || self.create || self.create_new {
-                                return Err(Error::from_raw_os_error(libc::EINVAL));
-                            }
-                        }
-                        (_, true) => {
-                            if self.truncate && !self.create_new {
-                                return Err(Error::from_raw_os_error(libc::EINVAL));
-                            }
-                        }
-                    }
-
-                    Ok(match (self.create, self.truncate, self.create_new) {
-                        (false, false, false) => 0,
-                        (true, false, false) => libc::O_CREAT,
-                        (false, true, false) => libc::O_TRUNC,
-                        (true, true, false) => libc::O_CREAT | libc::O_TRUNC,
-                        (_, _, true) => libc::O_CREAT | libc::O_EXCL,
-                    })
-                }
-            }
-
-            impl fmt::Debug for OpenOptions
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-                {
-                    let OpenOptions { read, write, append, truncate, create, create_new, custom_flags, mode } = self;
-                    f.debug_struct("OpenOptions")
-                    .field("read", read)
-                    .field("write", write)
-                    .field("append", append)
-                    .field("truncate", truncate)
-                    .field("create", create)
-                    .field("create_new", create_new)
-                    .field("custom_flags", custom_flags)
-                    .field("mode", &Mode(*mode))
-                    .finish()
-                }
-            }
-
-            impl File
-            {
-                pub fn open(path: &Path, opts: &OpenOptions) -> io::Result<File> {
-                    run_path_with_cstr(path, &|path| File::open_c(path, opts))
-                }
-
-                pub fn open_c(path: &CStr, opts: &OpenOptions) -> io::Result<File> {
-                    let flags = libc::O_CLOEXEC
-                        | opts.get_access_mode()?
-                        | opts.get_creation_mode()?
-                        | (opts.custom_flags as c_int & !libc::O_ACCMODE);
-                        
-                    let fd = cvt_r(|| unsafe { open64(path.as_ptr(), flags, opts.mode as c_int) })?;
-                    Ok(File(unsafe { FileDesc::from_raw_fd(fd) }))
-                }
-
-                pub fn file_attr(&self) -> io::Result<FileAttr> {
-                    let fd = self.as_raw_fd();
-                    let mut stat: stat64 = unsafe { mem::zeroed() };
-                    cvt(unsafe { fstat64(fd, &mut stat) })?;
-                    Ok(FileAttr::from_stat64(stat))
-                }
-
-                pub fn fsync(&self) -> io::Result<()> {
-                    cvt_r(|| unsafe { os_fsync(self.as_raw_fd()) })?;
-                    return Ok(());
-                    
-                    unsafe fn os_fsync(fd: c_int) -> c_int {
-                        libc::fsync(fd)
-                    }
-                }
-
-                pub fn datasync(&self) -> io::Result<()>
-                {
-                    cvt_r(|| unsafe { os_datasync(self.as_raw_fd()) })?;
-                    return Ok(());
-                    
-                    unsafe fn os_datasync(fd: c_int) -> c_int {
-                        libc::fdatasync(fd)
-                    }
-                }
-                
-                pub fn lock(&self) -> io::Result<()> {
-                    Err(constant_error!(io::ErrorKind::Unsupported, "lock() not supported"))
-                }
-                
-                pub fn lock_shared(&self) -> io::Result<()> {
-                    Err(constant_error!(io::ErrorKind::Unsupported, "lock_shared() not supported"))
-                }
-                
-                pub fn try_lock(&self) -> io::Result<bool> {
-                    Err(constant_error!(io::ErrorKind::Unsupported, "try_lock() not supported"))
-                }
-                
-                pub fn try_lock_shared(&self) -> io::Result<bool> {
-                    Err(constant_error!(io::ErrorKind::Unsupported, "try_lock_shared() not supported"))
-                }
-                
-                pub fn unlock(&self) -> io::Result<()> {
-                    Err(constant_error!(io::ErrorKind::Unsupported, "unlock() not supported"))
-                }
-
-                pub fn truncate(&self, size: u64) -> io::Result<()> {
-                    let size: off64_t =
-                        size.try_into().map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
-                    cvt_r(|| unsafe { ftruncate64(self.as_raw_fd(), size) }).map(drop)
-                }
-
-                pub fn read(&self, buf: &mut [u8]) -> io::Result<usize> { self.0.read(buf) }
-
-                pub fn read_vectored(&self, bufs: &mut [IoSliceMut<'_>]) -> io::Result<usize> { self.0.read_vectored(bufs) }
-
-                #[inline] pub fn is_read_vectored(&self) -> bool { self.0.is_read_vectored() }
-
-                pub fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<usize> { self.0.read_at(buf, offset) }
-
-                pub fn read_buf(&self, cursor: BorrowedCursor<'_>) -> io::Result<()> { self.0.read_buf(cursor) }
-
-                pub fn read_vectored_at(&self, bufs: &mut [IoSliceMut<'_>], offset: u64) -> io::Result<usize> { self.0.read_vectored_at(bufs, offset) }
-
-                pub fn write(&self, buf: &[u8]) -> io::Result<usize> { self.0.write(buf) }
-
-                pub fn write_vectored(&self, bufs: &[IoSlice<'_>]) -> io::Result<usize> { self.0.write_vectored(bufs) }
-
-                #[inline] pub fn is_write_vectored(&self) -> bool { self.0.is_write_vectored() }
-
-                pub fn write_at(&self, buf: &[u8], offset: u64) -> io::Result<usize> { self.0.write_at(buf, offset) }
-
-                pub fn write_vectored_at(&self, bufs: &[IoSlice<'_>], offset: u64) -> io::Result<usize> { self.0.write_vectored_at(bufs, offset) }
-
-                #[inline] pub fn flush(&self) -> io::Result<()> { Ok(()) }
-
-                pub fn seek(&self, pos: SeekFrom) -> io::Result<u64> {
-                    let (whence, pos) = match pos 
-                    {
-                        SeekFrom::Start(off) => (libc::SEEK_SET, off as i64),
-                        SeekFrom::End(off) => (libc::SEEK_END, off),
-                        SeekFrom::Current(off) => (libc::SEEK_CUR, off),
-                    };
-                    let n = cvt(unsafe { lseek64(self.as_raw_fd(), pos as off64_t, whence) })?;
-                    Ok(n as u64)
-                }
-
-                pub fn tell(&self) -> io::Result<u64> { self.seek(SeekFrom::Current(0)) }
-
-                pub fn duplicate(&self) -> io::Result<File> { self.0.duplicate().map(File) }
-
-                pub fn set_permissions(&self, perm: FilePermissions) -> io::Result<()> 
-                {
-                    cvt_r(|| unsafe { libc::fchmod(self.as_raw_fd(), perm.mode) })?;
-                    Ok(())
-                }
-
-                pub fn set_times(&self, times: FileTimes) -> io::Result<()> 
-                {
-                    let times = [to_timespec(times.accessed)?, to_timespec(times.modified)?];
-                    cvt(unsafe { libc::futimens(self.as_raw_fd(), times.as_ptr()) })?;
-                    Ok(())
-                }
-            }
-
-            impl DirBuilder
-            {
-                pub fn new() -> DirBuilder { DirBuilder { mode: 0o777 } }
-
-                pub fn mkdir(&self, p: &Path) -> io::Result<()>
-                { run_path_with_cstr(p, &|p| cvt(unsafe { libc::mkdir(p.as_ptr(), self.mode) }).map(|_| ())) }
-
-                pub fn set_mode(&mut self, mode: u32) { self.mode = mode as mode_t; }
-            }
-
-            impl fmt::Debug for DirBuilder
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-                {
-                    let DirBuilder { mode } = self;
-                    f.debug_struct("DirBuilder").field("mode", &Mode(*mode)).finish()
-                }
-            }
-
-            impl AsInner<FileDesc> for File
-            {
-                #[inline] fn as_inner(&self) -> &FileDesc { &self.0 }
-            }
-
-            impl AsInnerMut<FileDesc> for File
-            {
-                #[inline] fn as_inner_mut(&mut self) -> &mut FileDesc { &mut self.0 }
-            }
-
-            impl IntoInner<FileDesc> for File 
-            {
-                fn into_inner(self) -> FileDesc { self.0 }
-            }
-
-            impl FromInner<FileDesc> for File 
-            {
-                fn from_inner(file_desc: FileDesc) -> Self { Self(file_desc) }
-            }
-
-            impl AsFd for File
-            {
-                #[inline] fn as_fd(&self) -> BorrowedFd<'_> { self.0.as_fd() }
-            }
-
-            impl AsRawFd for File
-            {
-                #[inline] fn as_raw_fd(&self) -> RawFd { self.0.as_raw_fd() }
-            }
-
-            impl IntoRawFd for File 
-            {
-                fn into_raw_fd(self) -> RawFd { self.0.into_raw_fd() }
-            }
-
-            impl FromRawFd for File 
-            {
-                unsafe fn from_raw_fd(raw_fd: RawFd) -> Self { Self(FromRawFd::from_raw_fd(raw_fd)) }
-            }
-
-            impl fmt::Debug for File 
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                    
-                    fn get_path(_fd: c_int) -> Option<PathBuf> {
-                        None
-                    }
-
-                    fn get_mode(fd: c_int) -> Option<(bool, bool)> {
-                        let mode = unsafe { libc::fcntl(fd, libc::F_GETFL) };
-                        if mode == -1 {
-                            return None;
-                        }
-                        match mode & libc::O_ACCMODE {
-                            libc::O_RDONLY => Some((true, false)),
-                            libc::O_RDWR => Some((true, true)),
-                            libc::O_WRONLY => Some((false, true)),
-                            _ => None,
-                        }
-                    }
-
-                    let fd = self.as_raw_fd();
-                    let mut b = f.debug_struct("File");
-                    b.field("fd", &fd);
-                    if let Some(path) = get_path(fd) {
-                        b.field("path", &path);
-                    }
-                    if let Some((read, write)) = get_mode(fd) {
-                        b.field("read", &read).field("write", &write);
-                    }
-                    b.finish()
-                }
-            }
-            
-            impl fmt::Debug for Mode 
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                    let Self(mode) = *self;
-                    write!(f, "0o{mode:06o}")?;
-
-                    let entry_type = match mode & libc::S_IFMT {
-                        libc::S_IFDIR => 'd',
-                        libc::S_IFBLK => 'b',
-                        libc::S_IFCHR => 'c',
-                        libc::S_IFLNK => 'l',
-                        libc::S_IFIFO => 'p',
-                        libc::S_IFREG => '-',
-                        _ => return Ok(()),
-                    };
-
-                    f.write_str(" (")?;
-                    f.write_char(entry_type)?;
-                    
-                    f.write_char(if mode & libc::S_IRUSR != 0 { 'r' } else { '-' })?;
-                    f.write_char(if mode & libc::S_IWUSR != 0 { 'w' } else { '-' })?;
-                    let owner_executable = mode & libc::S_IXUSR != 0;
-                    let setuid = mode as c_int & libc::S_ISUID as c_int != 0;
-                    f.write_char(match (owner_executable, setuid) {
-                        (true, true) => 's',  
-                        (false, true) => 'S', 
-                        (true, false) => 'x', 
-                        (false, false) => '-',
-                    })?;
-                    
-                    f.write_char(if mode & libc::S_IRGRP != 0 { 'r' } else { '-' })?;
-                    f.write_char(if mode & libc::S_IWGRP != 0 { 'w' } else { '-' })?;
-                    let group_executable = mode & libc::S_IXGRP != 0;
-                    let setgid = mode as c_int & libc::S_ISGID as c_int != 0;
-                    f.write_char(match (group_executable, setgid) {
-                        (true, true) => 's', 
-                        (false, true) => 'S', 
-                        (true, false) => 'x', 
-                        (false, false) => '-',
-                    })?;
-                    
-                    f.write_char(if mode & libc::S_IROTH != 0 { 'r' } else { '-' })?;
-                    f.write_char(if mode & libc::S_IWOTH != 0 { 'w' } else { '-' })?;
-                    let other_executable = mode & libc::S_IXOTH != 0;
-                    let sticky = mode as c_int & libc::S_ISVTX as c_int != 0;
-                    f.write_char(match (entry_type, other_executable, sticky) {
-                        ('d', true, true) => 't',  
-                        ('d', false, true) => 'T', 
-                        (_, true, _) => 'x',       
-                        (_, false, _) => '-',
-                    })?;
-
-                    f.write_char(')')
-                }
-            }
-
-            pub fn readdir(path: &Path) -> io::Result<ReadDir>
-            {
-                let ptr = run_path_with_cstr(path, &|p| unsafe { Ok(libc::opendir(p.as_ptr())) })?;
-                if ptr.is_null() {
-                    Err(Error::last_os_error())
-                } else {
-                    let root = path.to_path_buf();
-                    let inner = InnerReadDir { dirp: Dir(ptr), root };
-                    Ok(ReadDir::new(inner))
-                }
-            }
-
-            pub fn unlink(p: &CStr) -> io::Result<()>
-            {
-                cvt(unsafe { libc::unlink(p.as_ptr()) }).map(|_| ())
-            }
-
-            pub fn rename(old: &CStr, new: &CStr) -> io::Result<()>
-            {
-                cvt(unsafe { libc::rename(old.as_ptr(), new.as_ptr()) }).map(|_| ())
-            }
-
-            pub fn set_perm(p: &CStr, perm: FilePermissions) -> io::Result<()>
-            {
-                cvt_r(|| unsafe { libc::chmod(p.as_ptr(), perm.mode) }).map(|_| ())
-            }
-
-            pub fn rmdir(p: &CStr) -> io::Result<()>
-            {
-                cvt(unsafe { libc::rmdir(p.as_ptr()) }).map(|_| ())
-            }
-
-            pub fn readlink(c_path: &CStr) -> io::Result<PathBuf> 
-            {
-                let p = c_path.as_ptr();
-
-                let mut buf = Vec::with_capacity(256);
-
-                loop {
-                    let buf_read =
-                        cvt(unsafe { libc::readlink(p, buf.as_mut_ptr() as *mut _, buf.capacity()) })? as usize;
-
-                    unsafe {
-                        buf.set_len(buf_read);
-                    }
-
-                    if buf_read != buf.capacity() {
-                        buf.shrink_to_fit();
-
-                        return Ok(PathBuf::from(OsString::from_vec(buf)));
-                    }
-                    
-                    buf.reserve(1);
-                }
-            }
-
-            pub fn symlink(original: &CStr, link: &CStr) -> io::Result<()>
-            {
-                cvt(unsafe { libc::symlink(original.as_ptr(), link.as_ptr()) }).map(|_| ())
-            }
-
-            pub fn link(original: &CStr, link: &CStr) -> io::Result<()>
-            {
-                cvt(unsafe { libc::linkat(libc::AT_FDCWD, original.as_ptr(), libc::AT_FDCWD, link.as_ptr(), 0) })?;
-                Ok(())
-            }
-
-            pub fn stat(p: &CStr) -> io::Result<FileAttr>
-            {
-                let mut stat: stat64 = unsafe { mem::zeroed() };
-                cvt(unsafe { stat64(p.as_ptr(), &mut stat) })?;
-                Ok(FileAttr::from_stat64(stat))
-            }
-
-            pub fn lstat(p: &CStr) -> io::Result<FileAttr>
-            {
-                let mut stat: stat64 = unsafe { mem::zeroed() };
-                cvt(unsafe { lstat64(p.as_ptr(), &mut stat) })?;
-                Ok(FileAttr::from_stat64(stat))
-            }
-
-            pub fn canonicalize(path: &CStr) -> io::Result<PathBuf>
-            {
-                let r = unsafe { libc::realpath(path.as_ptr(), ptr::null_mut()) };
-                if r.is_null() {
-                    return Err(io::Error::last_os_error());
-                }
-                Ok(PathBuf::from(OsString::from_vec(unsafe {
-                    let buf = CStr::from_ptr(r).to_bytes().to_vec();
-                    libc::free(r as *mut _);
-                    buf
-                })))
-            }
-
-            pub fn open_from(from: &Path) -> io::Result<(::fs::File, ::fs::Metadata)>
-            {
-                use ::fs::File;
-                use ::sys::fs::common::NOT_FILE_ERROR;
-
-                let reader = File::open(from)?;
-                let metadata = reader.metadata()?;
-                if !metadata.is_file() {
-                    return Err(NOT_FILE_ERROR);
-                }
-                Ok((reader, metadata))
-            }
-            
-            pub fn open_to_and_set_permissions( to: &Path, reader_metadata: &::fs::Metadata ) -> 
-            io::Result<(::fs::File, ::fs::Metadata)> 
-            {
-                use ::fs::OpenOptions;
-                use ::os::unix::fs::{OpenOptionsExt, PermissionsExt};
-
-                let perm = reader_metadata.permissions();
-                let writer = OpenOptions::new()
-                .mode(perm.mode())
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .open(to)?;
-
-                let writer_metadata = writer.metadata()?;
-                
-                if writer_metadata.is_file() {
-                    writer.set_permissions(perm)?;
-                }
-                Ok((writer, writer_metadata))
-            }
-
-            mod cfm
-            {
-                use ::fs::{File, Metadata};
-                use ::io::{BorrowedCursor, IoSlice, IoSliceMut, Read, Result, Write};
-
-                #[allow(dead_code)]
-                pub struct CachedFileMetadata(pub File, pub Metadata);
-
-                impl Read for CachedFileMetadata 
-                {
-                    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-                        self.0.read(buf)
-                    }
-                    fn read_vectored(&mut self, bufs: &mut [IoSliceMut<'_>]) -> Result<usize> {
-                        self.0.read_vectored(bufs)
-                    }
-                    fn read_buf(&mut self, cursor: BorrowedCursor<'_>) -> Result<()> {
-                        self.0.read_buf(cursor)
-                    }
-                    #[inline]
-                    fn is_read_vectored(&self) -> bool {
-                        self.0.is_read_vectored()
-                    }
-                    fn read_to_end(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
-                        self.0.read_to_end(buf)
-                    }
-                    fn read_to_string(&mut self, buf: &mut String) -> Result<usize> {
-                        self.0.read_to_string(buf)
-                    }
-                }
-
-                impl Write for CachedFileMetadata 
-                {
-                    fn write(&mut self, buf: &[u8]) -> Result<usize> {
-                        self.0.write(buf)
-                    }
-                    fn write_vectored(&mut self, bufs: &[IoSlice<'_>]) -> Result<usize> {
-                        self.0.write_vectored(bufs)
-                    }
-                    #[inline]
-                    fn is_write_vectored(&self) -> bool {
-                        self.0.is_write_vectored()
-                    }
-                    #[inline]
-                    fn flush(&mut self) -> Result<()> {
-                        self.0.flush()
-                    }
-                }
-            }
-            
-            pub fn copy(from: &Path, to: &Path) -> io::Result<u64>
-            {
-                let (reader, reader_metadata) = open_from(from)?;
-                let (writer, writer_metadata) = open_to_and_set_permissions(to, &reader_metadata)?;
-
-                io::copy(
-                    &mut cfm::CachedFileMetadata(reader, reader_metadata),
-                    &mut cfm::CachedFileMetadata(writer, writer_metadata),
-                )
-            }
-            
-            pub fn chown(path: &Path, uid: u32, gid: u32) -> io::Result<()>
-            {
-                run_path_with_cstr(path, &|path| {
-                    cvt(unsafe { libc::chown(path.as_ptr(), uid as libc::uid_t, gid as libc::gid_t) })
-                        .map(|_| ())
-                })
-            }
-
-            pub fn fchown(fd: c_int, uid: u32, gid: u32) -> io::Result<()>
-            {
-                cvt(unsafe { libc::fchown(fd, uid as libc::uid_t, gid as libc::gid_t) })?;
-                Ok(())
-            }
-            
-            pub fn lchown(path: &Path, uid: u32, gid: u32) -> io::Result<()>
-            {
-                run_path_with_cstr(path, &|path| {
-                    cvt(unsafe { libc::lchown(path.as_ptr(), uid as libc::uid_t, gid as libc::gid_t) })
-                        .map(|_| ())
-                })
-            }
-            
-            pub fn chroot(dir: &Path) -> io::Result<()>
-            {
-                run_path_with_cstr(dir, &|dir| cvt(unsafe { libc::chroot(dir.as_ptr()) }).map(|_| ()))
-            }
-            
-            pub fn mkfifo(path: &Path, mode: u32) -> io::Result<()>
-            {
-                run_path_with_cstr(path, &|path| {
-                    cvt(unsafe { libc::mkfifo(path.as_ptr(), mode.try_into().unwrap()) }).map(|_| ())
-                })
-            }
-            
-            mod remove_dir_impl
-            {
-                use libc::{fdopendir, openat, unlinkat};
-
-                use super::{Dir, DirEntry, InnerReadDir, ReadDir, lstat};
-                use ::ffi::CStr;
-                use ::io;
-                use ::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd};
-                use ::os::unix::prelude::{OwnedFd, RawFd};
-                use ::path::{Path, PathBuf};
-                use ::sys::common::small_c_string::run_path_with_cstr;
-                use ::sys::{cvt, cvt_r};
-                use ::sys::common::ignore_notfound;
-
-                pub fn openat_nofollow_dironly(parent_fd: Option<RawFd>, p: &CStr) -> io::Result<OwnedFd> 
-                {
-                    let fd = cvt_r(|| unsafe
-                    {
-                        openat
-                        (
-                            parent_fd.unwrap_or(libc::AT_FDCWD),
-                            p.as_ptr(),
-                            libc::O_CLOEXEC | libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_DIRECTORY,
-                        )
-                    })?;
-                    
-                    Ok(unsafe { OwnedFd::from_raw_fd(fd) })
-                }
-
-                pub fn fdreaddir(dir_fd: OwnedFd) -> io::Result<(ReadDir, RawFd)>
-                {
-                    let ptr = unsafe { fdopendir(dir_fd.as_raw_fd()) };
-                    if ptr.is_null() { return Err(io::Error::last_os_error()); }
-                    let dirp = Dir(ptr);
-                    let new_parent_fd = dir_fd.into_raw_fd();
-                    let dummy_root = PathBuf::new();
-                    let inner = InnerReadDir { dirp, root: dummy_root };
-                    Ok((ReadDir::new(inner), new_parent_fd))
-                }
-                
-                pub fn is_dir(ent: &DirEntry) -> Option<bool>
-                {
-                    match ent.entry.d_type
-                    {
-                        libc::DT_UNKNOWN => None,
-                        libc::DT_DIR => Some(true),
-                        _ => Some(false),
-                    }
-                }
-
-                pub fn is_enoent(result: &io::Result<()>) -> bool
-                {
-                    if let Err(err) = result && matches!(err.raw_os_error(), Some(libc::ENOENT)) { true }
-                    else { false }
-                }
-
-                pub fn remove_dir_all_recursive(parent_fd: Option<RawFd>, path: &CStr) -> io::Result<()>
-                {
-                    unsafe
-                    {
-                        let fd = match openat_nofollow_dironly(parent_fd, &path)
-                        {
-                            Err(err) if matches!(err.raw_os_error(), Some(libc::ENOTDIR | libc::ELOOP)) =>
-                            {
-                                return match parent_fd
-                                {
-                                    Some(parent_fd) =>
-                                    { cvt(unsafe { unlinkat(parent_fd, path.as_ptr(), 0) }).map(drop) }
-                                    
-                                    None => Err(err),
-                                };
-                            }
-
-                            result => result?,
-                        };
-                        
-                        let (dir, fd) = fdreaddir(fd)?;
-                        
-                        for child in dir
-                        {
-                            let child = child?;
-                            let child_name = child.name_cstr();
-                            let result: io::Result<()> = match is_dir(&child)
-                            {
-                                Some(true) =>
-                                {
-                                    remove_dir_all_recursive(Some(fd), child_name)?;
-                                }
-                                
-                                Some(false) =>
-                                {
-                                    cvt(unsafe { unlinkat(fd, child_name.as_ptr(), 0) })?;
-                                }
-                                
-                                None =>
-                                {
-                                    remove_dir_all_recursive(Some(fd), child_name)?;
-                                }
-                            };
-                            if result.is_err() && !is_enoent(&result) {
-                                return result;
-                            }
-                        }
-                        
-                        ignore_notfound(cvt(
-                        unsafe
-                        {
-                            unlinkat(parent_fd.unwrap_or(libc::AT_FDCWD), path.as_ptr(), libc::AT_REMOVEDIR) 
-                        }))?;
-
-                        Ok(())
-                    }
-                }
-
-                pub fn remove_dir_all_modern(p: &CStr) -> io::Result<()>
-                {
-                    let attr = lstat(p)?;
-
-                    if attr.file_type().is_symlink() { super::unlink(p) }
-                    else { remove_dir_all_recursive(None, &p) }
-                }
-
-                pub fn remove_dir_all(p: &Path) -> io::Result<()>
-                { run_path_with_cstr(p, &remove_dir_all_modern) }
-            } pub use self::remove_dir_impl::remove_dir_all;
-        }
-
-        mod windows
-        {
-            use ::
-            {
-                alloc::{Layout, alloc, dealloc},
-                borrow::Cow,
-                ffi::{OsStr, OsString, c_void},
-                io::{self, BorrowedCursor, Error, IoSlice, IoSliceMut, SeekFrom},
-                mem::{self, MaybeUninit, offset_of},
-                os::windows::io::{AsHandle, BorrowedHandle},
-                os::windows::prelude::*,
-                path::{Path, PathBuf},
-                sync::Arc,
-                sys::handle::Handle,
-                sys::pal::api::{self, WinError, set_file_information_by_handle},
-                sys::pal::{IoResult, fill_utf16_buf, to_u16s, truncate_utf16_at_nul},
-                sys::path::{WCStr, maybe_verbatim},
-                sys::time::SystemTime,
-                sys::{Align8, c, cvt},
-                sys::common::{AsInner, FromInner, IntoInner},
-                *,
-            };
-            
-            mod remove_dir_all
-            {
-                //! The Windows implementation of std::fs::remove_dir_all.
+                //! UEFI Base Environment
                 use ::
                 {
-                    sync::atomic::{Atomic, AtomicU32, Ordering},
-                    sys::c,
-                    sys::pal::api::WinError,
+                    cmp::{ Ordering },
+                    ffi::{ c_void },
+                    hash::{ Hash, Hasher },
                     *,
                 };
-                /// The maximum number of times to spin when waiting for deletes to complete.
-                pub const MAX_RETRIES: usize = 50;
-                /// A wrapper around a raw NtOpenFile call.
-                unsafe fn nt_open_file
-                ( access: u32, object_attribute: &c::OBJECT_ATTRIBUTES, share: u32, options: u32 ) 
-                -> Result<File, WinError>
-                {
-                    unsafe
-                    {
-                        let mut handle = ptr::null_mut();
-                        let mut io_status = c::IO_STATUS_BLOCK::PENDING;
-                        let status = c::NtOpenFile
-                        (
-                            &mut handle, 
-                            access, 
-                            object_attribute, 
-                            &mut io_status, 
-                            share, 
-                            options
-                        );
+                /// Boolean Type
+                #[repr(C)] #[derive(Clone, Copy, Debug)]
+                pub struct Boolean( u8 );
 
-                        if c::nt_success(status) { Ok(File::from_raw_handle(handle)) }
-                        else
+                impl Boolean
+                {
+                    /// Literal False
+                    pub const FALSE: Boolean = Boolean(0u8);
+                    /// Literal True
+                    pub const TRUE: Boolean = Boolean(1u8);
+                }
+
+                impl From<u8> for Boolean
+                {
+                    fn from(v: u8) -> Self  { Boolean(v) }
+                }
+
+                impl From<bool> for Boolean
+                {
+                    fn from(v: bool) -> Self 
+                    {
+                        match v
                         {
-                            let win_error = if status == c::STATUS_DELETE_PENDING { WinError::DELETE_PENDING }
-                            else { WinError::new(c::RtlNtStatusToDosError(status)) };
-                            Err(win_error)
+                            false => Boolean::FALSE,
+                            true => Boolean::TRUE,
                         }
                     }
                 }
-                /// Open the file `path` in the directory `parent`, requesting the given `access` rights.
-                fn open_link_no_reparse
-                (
-                    parent: &File,
-                    path: &[u16],
-                    access: u32,
-                    options: u32,
-                ) -> Result<Option<File>, WinError>
+
+                impl Default for Boolean
                 {
-                    unsafe
+                    fn default() -> Self  { Self::FALSE }
+                }
+
+                impl From<Boolean> for u8
+                {
+                    fn from(v: Boolean) -> Self 
                     {
-                        static ATTRIBUTES: Atomic<u32> = AtomicU32::new(c::OBJ_DONT_REPARSE);
-                        let result = 
+                        match v.0
                         {
-                            let mut path_str = c::UNICODE_STRING::from_ref(path);
-                            let mut object = c::OBJECT_ATTRIBUTES
-                            {
-                                ObjectName: &mut path_str,
-                                RootDirectory: parent.as_raw_handle(),
-                                Attributes: ATTRIBUTES.load(Ordering::Relaxed),
-                                ..c::OBJECT_ATTRIBUTES::with_length()
-                            };
-                            let share = c::FILE_SHARE_DELETE | c::FILE_SHARE_READ | c::FILE_SHARE_WRITE;
-                            let options = c::FILE_OPEN_REPARSE_POINT | options;
-                            let result = nt_open_file(access, &object, share, options);
-                            
-                            if matches!(result, Err(WinError::INVALID_PARAMETER))
-                            && ATTRIBUTES.load(Ordering::Relaxed) == c::OBJ_DONT_REPARSE
-                            {
-                                ATTRIBUTES.store(0, Ordering::Relaxed);
-                                object.Attributes = 0;
-                                nt_open_file(access, &object, share, options)
-                            } 
-                            else { result }
-                        };
-                        
-                        match result
+                            0 => 0,
+                            _ => 1,
+                        }
+                    }
+                }
+
+                impl From<Boolean> for bool
+                {
+                    fn from(v: Boolean) -> Self 
+                    {
+                        match v.0
                         {
-                            Ok(f) => Ok(Some(f)),
-                            Err
-                            (
-                                WinError::FILE_NOT_FOUND
-                                | WinError::PATH_NOT_FOUND
-                                | WinError::BAD_NETPATH
-                                | WinError::BAD_NET_NAME
-                                | WinError::DELETE_PENDING,
-                            ) => Ok(None),
-                            Err(e) => Err(e),
+                            0 => false,
+                            _ => true,
                         }
                     }
                 }
 
-                fn open_dir(parent: &File, name: &[u16]) -> Result<Option<File>, WinError>
+                impl Eq for Boolean {}
+
+                impl Hash for Boolean
                 {
-                    open_link_no_reparse
-                    (
-                        parent,
-                        name,
-                        c::SYNCHRONIZE | c::FILE_LIST_DIRECTORY,
-                        c::FILE_SYNCHRONOUS_IO_NONALERT,
-                    )
+                    fn hash<H: Hasher>(&self, state: &mut H) { bool::from(*self).hash(state) }
                 }
 
-                fn delete(parent: &File, name: &[u16]) -> Result<(), WinError>
+                impl Ord for Boolean
                 {
-                    match open_link_no_reparse(parent, name, c::DELETE, 0)
-                    {
-                        Ok(Some(f)) => f.delete(),
-                        Ok(None) => Ok(()),
-                        Err(e) => Err(e),
-                    }
+                    fn cmp(&self, other: &Boolean) -> Ordering { bool::from(*self).cmp(&(*other).into()) }
                 }
-                /// A simple retry loop that keeps running `f` 
-                /// while it fails with the given error code or until `MAX_RETRIES` is reached.
-                fn retry<T: PartialEq>( mut f: impl FnMut() -> Result<T, WinError>, ignore: WinError ) -> 
-                Result<T, WinError>
+
+                impl PartialEq for Boolean
                 {
-                    let mut i = MAX_RETRIES;
-                    loop
-                    {
-                        i -= 1;
-                        if i == 0 { return f(); }
-                        else
-                        {
-                            let result = f();
-                            if result != Err(ignore) { return result; }
-                        }
-                        thread::yield_now();
-                    }
+                    fn eq(&self, other: &Boolean) -> bool { bool::from(*self).eq(&(*other).into()) }
                 }
 
-                pub fn remove_dir_all_iterative(dir: File) -> Result<(), WinError>
+                impl PartialEq<bool> for Boolean
                 {
-                    let mut buffer = DirBuff::new();
-                    let mut dirlist = vec![dir];
-                    let mut restart = true;
-                    'outer: while let Some(dir) = dirlist.pop()
-                    {
-                        let more_data = dir.fill_dir_buff(&mut buffer, restart)?;
-                        for (name, is_directory) in buffer.iter()
-                        {
-                            if is_directory
-                            {
-                                let Some(subdir) = open_dir(&dir, &name)? else { continue };
-                                dirlist.push(dir);
-                                dirlist.push(subdir);
-                                continue 'outer;
-                            }
-                            else { retry(|| delete(&dir, &name), WinError::SHARING_VIOLATION)?; }
-                        }
-                        
-                        if more_data
-                        {
-                            dirlist.push(dir);
-                            restart = false;
-                        }
-
-                        else
-                        {
-                            retry(|| delete(&dir, &[]), WinError::DIR_NOT_EMPTY)?;
-                            restart = true;
-                        }
-                    }
-                    Ok(())
+                    fn eq(&self, other: &bool) -> bool { bool::from(*self).eq(other) }
                 }
-            } use self::remove_dir_all::remove_dir_all_iterative;
 
-            pub struct File
-            {
-                handle: Handle,
-            }
-
-            #[derive(Clone)]
-            pub struct FileAttr
-            {
-                attributes: u32,
-                creation_time: c::FILETIME,
-                last_access_time: c::FILETIME,
-                last_write_time: c::FILETIME,
-                change_time: Option<c::FILETIME>,
-                file_size: u64,
-                reparse_tag: u32,
-                volume_serial_number: Option<u32>,
-                number_of_links: Option<u32>,
-                file_index: Option<u64>,
-            }
-
-            #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-            pub struct FileType
-            {
-                is_directory: bool,
-                is_symlink: bool,
-            }
-
-            pub struct ReadDir
-            {
-                handle: Option<FindNextFileHandle>,
-                root: Arc<PathBuf>,
-                first: Option<c::WIN32_FIND_DATAW>,
-            }
-
-            struct FindNextFileHandle(c::HANDLE);
-
-            unsafe impl Send for FindNextFileHandle {}
-            unsafe impl Sync for FindNextFileHandle {}
-
-            pub struct DirEntry
-            {
-                root: Arc<PathBuf>,
-                data: c::WIN32_FIND_DATAW,
-            }
-
-            unsafe impl Send for OpenOptions {}
-            unsafe impl Sync for OpenOptions {}
-
-            #[derive(Clone, Debug)]
-            pub struct OpenOptions
-            {
-                read: bool,
-                write: bool,
-                append: bool,
-                truncate: bool,
-                create: bool,
-                create_new: bool,
-                custom_flags: u32,
-                access_mode: Option<u32>,
-                attributes: u32,
-                share_mode: u32,
-                security_qos_flags: u32,
-                security_attributes: *mut c::SECURITY_ATTRIBUTES,
-            }
-
-            #[derive(Clone, PartialEq, Eq, Debug)]
-            pub struct FilePermissions
-            {
-                attrs: u32,
-            }
-
-            #[derive(Copy, Clone, Debug, Default)]
-            pub struct FileTimes
-            {
-                accessed: Option<c::FILETIME>,
-                modified: Option<c::FILETIME>,
-                created: Option<c::FILETIME>,
-            }
-
-            impl fmt::Debug for c::FILETIME
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                impl PartialOrd for Boolean
                 {
-                    let time = ((self.dwHighDateTime as u64) << 32) | self.dwLowDateTime as u64;
-                    f.debug_tuple("FILETIME").field(&time).finish()
+                    fn partial_cmp(&self, other: &Boolean) -> Option<Ordering>
+                    { bool::from(*self).partial_cmp(&(*other).into()) }
+                }
+
+                impl PartialOrd<bool> for Boolean
+                {
+                    fn partial_cmp(&self, other: &bool) -> Option<Ordering>
+                    { bool::from(*self).partial_cmp(other) }
+                }
+                /// Single-byte Character Type.
+                pub type Char8 = u8;
+                /// Dual-byte Character Type.
+                pub type Char16 = u16;
+                /// Status Codes
+                #[repr(C)] #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd )]
+                pub struct Status( usize );
+                /// Object Handles
+                pub type Handle = *mut c_void;
+                /// Event Objects.
+                pub type Event = *mut c_void;
+                /// Globally Unique Identifiers.
+                #[repr(C, align(4))] #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd )]
+                pub struct Guid
+                {
+                    time_low: [u8; 4],
+                    time_mid: [u8; 2],
+                    time_hi_and_version: [u8; 2],
+                    clk_seq_hi_res: u8,
+                    clk_seq_low: u8,
+                    node: [u8; 6],
                 }
             }
 
-            #[derive( Debug )]
-            pub struct DirBuilder;
-
-            impl fmt::Debug for ReadDir
+            pub mod efi
             {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                use ::
                 {
-                    fmt::Debug::fmt(&*self.root, f)
-                }
+                    *,
+                };
             }
 
-            impl Iterator for ReadDir
-            {
-                type Item = io::Result<DirEntry>;
-                fn next(&mut self) -> Option<io::Result<DirEntry>>
-                {
-                    unsafe
-                    {
-                        let Some(handle) = self.handle.as_ref() 
-                        else { return None; };
-
-                        if let Some(first) = self.first.take()
-                        {
-                            if let Some(e) = DirEntry::new(&self.root, &first) { return Some(Ok(e)); }
-                        }
-                        
-                        let mut wfd = mem::zeroed();
-
-                        loop
-                        {
-                            if c::FindNextFileW(handle.0, &mut wfd) == 0
-                            {
-                                match api::get_last_error()
-                                {
-                                    WinError::NO_MORE_FILES => return None,
-                                    WinError { code } => { return Some(Err(Error::from_raw_os_error(code as i32))); }
-                                }
-                            }
-                            
-                            if let Some(e) = DirEntry::new(&self.root, &wfd) { return Some(Ok(e)); }
-                        }
-                    }
-                }
-            }
-
-            impl Drop for FindNextFileHandle
-            {
-                fn drop(&mut self)
-                {
-                    let r = unsafe { c::FindClose(self.0) };
-                    debug_assert!(r != 0);
-                }
-            }
-
-            impl DirEntry
-            {
-                fn new(root: &Arc<PathBuf>, wfd: &c::WIN32_FIND_DATAW) -> Option<DirEntry>
-                {
-                    match &wfd.cFileName[0..3]
-                    {
-                        &[46, 0, ..] | &[46, 46, 0, ..] => return None,
-                        _ => {}
-                    }
-
-                    Some(DirEntry { root: root.clone(), data: *wfd })
-                }
-
-                pub fn path(&self) -> PathBuf { self.root.join(self.file_name()) }
-
-                pub fn file_name(&self) -> OsString
-                {
-                    let filename = truncate_utf16_at_nul(&self.data.cFileName);
-                    OsString::from_wide(filename)
-                }
-
-                pub fn file_type(&self) -> io::Result<FileType>
-                {
-                    Ok(FileType::new
-                    (
-                        self.data.dwFileAttributes,
-                        self.data.dwReserved0,
-                    ))
-                }
-
-                pub fn metadata(&self) -> io::Result<FileAttr> { Ok(self.data.into()) }
-            }
-
-            impl OpenOptions
-            {
-                pub fn new() -> OpenOptions
-                {
-                    OpenOptions
-                    {
-                        read: false,
-                        write: false,
-                        append: false,
-                        truncate: false,
-                        create: false,
-                        create_new: false,
-                        custom_flags: 0,
-                        access_mode: None,
-                        share_mode: c::FILE_SHARE_READ | c::FILE_SHARE_WRITE | c::FILE_SHARE_DELETE,
-                        attributes: 0,
-                        security_qos_flags: 0,
-                        security_attributes: ptr::null_mut(),
-                    }
-                }
-
-                pub fn read(&mut self, read: bool) { self.read = read; }
-                pub fn write(&mut self, write: bool) { self.write = write; }
-                pub fn append(&mut self, append: bool) { self.append = append; }
-                pub fn truncate(&mut self, truncate: bool) { self.truncate = truncate; }
-                pub fn create(&mut self, create: bool) { self.create = create; }
-                pub fn create_new(&mut self, create_new: bool) { self.create_new = create_new; }
-                pub fn custom_flags(&mut self, flags: u32) { self.custom_flags = flags; }
-                pub fn access_mode(&mut self, access_mode: u32) { self.access_mode = Some(access_mode); }
-                pub fn share_mode(&mut self, share_mode: u32) { self.share_mode = share_mode; }
-                pub fn attributes(&mut self, attrs: u32) { self.attributes = attrs; } pub fn security_qos_flags(&mut self, flags: u32) { self.security_qos_flags = flags | c::SECURITY_SQOS_PRESENT; }
-                pub fn security_attributes(&mut self, attrs: *mut c::SECURITY_ATTRIBUTES) { self.security_attributes = attrs; }
-
-                pub fn get_access_mode(&self) -> io::Result<u32>
-                {
-                    match (self.read, self.write, self.append, self.access_mode)
-                    {
-                        (.., Some(mode)) => Ok(mode),
-                        (true, false, false, None) => Ok(c::GENERIC_READ),
-                        (false, true, false, None) => Ok(c::GENERIC_WRITE),
-                        (true, true, false, None) => Ok(c::GENERIC_READ | c::GENERIC_WRITE),
-                        (false, _, true, None) => Ok(c::FILE_GENERIC_WRITE & !c::FILE_WRITE_DATA),
-                        
-                        (true, _, true, None) => 
-                        { Ok(c::GENERIC_READ | (c::FILE_GENERIC_WRITE & !c::FILE_WRITE_DATA)) }
-
-                        (false, false, false, None) =>
-                        { Err(Error::from_raw_os_error(c::ERROR_INVALID_PARAMETER as i32)) }
-                    }
-                }
-
-                pub fn get_creation_mode(&self) -> io::Result<u32>
-                {
-                    match (self.write, self.append)
-                    {
-                        (true, false) => {}
-                        (false, false) =>
-                        {
-                            if self.truncate || self.create || self.create_new 
-                            { return Err(Error::from_raw_os_error(c::ERROR_INVALID_PARAMETER as i32)); }
-                        }
-                        
-                        (_, true) =>
-                        {
-                            if self.truncate && !self.create_new
-                            { return Err(Error::from_raw_os_error(c::ERROR_INVALID_PARAMETER as i32)); }
-                        }
-                    }
-
-                    Ok(match (self.create, self.truncate, self.create_new)
-                    {
-                        (false, false, false) => c::OPEN_EXISTING,
-                        (true, false, false) => c::OPEN_ALWAYS,
-                        (false, true, false) => c::TRUNCATE_EXISTING,
-                        (true, true, false) => c::OPEN_ALWAYS,
-                        (_, _, true) => c::CREATE_NEW,
-                    })
-                }
-
-                pub fn get_flags_and_attributes(&self) -> u32
-                {
-                    self.custom_flags
-                    | self.attributes
-                    | self.security_qos_flags
-                    | if self.create_new { c::FILE_FLAG_OPEN_REPARSE_POINT } 
-                    else { 0 }
-                }
-            }
-
-            impl File 
-            {
-                pub fn open(path: &Path, opts: &OpenOptions) -> io::Result<File>
-                {
-                    let path = maybe_verbatim(path)?;
-                    let path = unsafe { WCStr::from_wchars_with_null_unchecked(&path) };
-                    Self::open_native(&path, opts)
-                }
-
-                fn open_native(path: &WCStr, opts: &OpenOptions) -> io::Result<File>
-                {
-                    let creation = opts.get_creation_mode()?;
-                    let handle = unsafe 
-                    {
-                        c::CreateFileW(
-                            path.as_ptr(),
-                            opts.get_access_mode()?,
-                            opts.share_mode,
-                            opts.security_attributes,
-                            creation,
-                            opts.get_flags_and_attributes(),
-                            ptr::null_mut(),
-                        )
-                    };
-                    let handle = unsafe { HandleOrInvalid::from_raw_handle(handle) };
-                    if let Ok(handle) = OwnedHandle::try_from(handle)
-                    {
-                        if opts.truncate
-                        && creation == c::OPEN_ALWAYS
-                        && api::get_last_error() == WinError::ALREADY_EXISTS
-                        {
-                            let alloc = c::FILE_ALLOCATION_INFO { AllocationSize: 0 };
-                            set_file_information_by_handle(handle.as_raw_handle(), &alloc)
-                            .or_else(|_|
-                            {
-                                let eof = c::FILE_END_OF_FILE_INFO { EndOfFile: 0 };
-                                set_file_information_by_handle(handle.as_raw_handle(), &eof)
-                            }).io_result()?;
-                        }
-                        Ok(File { handle: Handle::from_inner(handle) })
-                    } else { Err(Error::last_os_error()) }
-                }
-
-                pub fn fsync(&self) -> io::Result<()>
-                {
-                    cvt(unsafe { c::FlushFileBuffers(self.handle.as_raw_handle()) })?;
-                    Ok(())
-                }
-
-                pub fn datasync(&self) -> io::Result<()> { self.fsync() }
-
-                pub fn acquire_lock(&self, flags: c::LOCK_FILE_FLAGS) -> io::Result<()>
-                {
-                    unsafe
-                    {
-                        let mut overlapped: c::OVERLAPPED = mem::zeroed();
-                        let event = c::CreateEventW(ptr::null_mut(), c::FALSE, c::FALSE, ptr::null());
-                        if event.is_null() {
-                            return Err(io::Error::last_os_error());
-                        }
-                        overlapped.hEvent = event;
-                        let lock_result = cvt(c::LockFileEx(
-                            self.handle.as_raw_handle(),
-                            flags,
-                            0,
-                            u32::MAX,
-                            u32::MAX,
-                            &mut overlapped,
-                        ));
-
-                        let final_result = match lock_result {
-                            Ok(_) => Ok(()),
-                            Err(err) => {
-                                if err.raw_os_error() == Some(c::ERROR_IO_PENDING as i32) {
-                                    let mut bytes_transferred = 0;
-                                    cvt(c::GetOverlappedResult(
-                                        self.handle.as_raw_handle(),
-                                        &mut overlapped,
-                                        &mut bytes_transferred,
-                                        c::TRUE,
-                                    ))
-                                    .map(|_| ())
-                                } else {
-                                    Err(err)
-                                }
-                            }
-                        };
-                        c::CloseHandle(overlapped.hEvent);
-                        final_result
-                    }
-                }
-
-                pub fn lock(&self) -> io::Result<()> { self.acquire_lock(c::LOCKFILE_EXCLUSIVE_LOCK) }
-
-                pub fn lock_shared(&self) -> io::Result<()> { self.acquire_lock(0) }
-
-                pub fn try_lock(&self) -> io::Result<bool>
-                {
-                    let result = cvt(unsafe {
-                        let mut overlapped = mem::zeroed();
-                        c::LockFileEx(
-                            self.handle.as_raw_handle(),
-                            c::LOCKFILE_EXCLUSIVE_LOCK | c::LOCKFILE_FAIL_IMMEDIATELY,
-                            0,
-                            u32::MAX,
-                            u32::MAX,
-                            &mut overlapped,
-                        )
-                    });
-
-                    match result {
-                        Ok(_) => Ok(true),
-                        Err(err)
-                            if err.raw_os_error() == Some(c::ERROR_IO_PENDING as i32)
-                                || err.raw_os_error() == Some(c::ERROR_LOCK_VIOLATION as i32) =>
-                        {
-                            Ok(false)
-                        }
-                        Err(err) => Err(err),
-                    }
-                }
-
-                pub fn try_lock_shared(&self) -> io::Result<bool>
-                {
-                    let result = cvt(unsafe {
-                        let mut overlapped = mem::zeroed();
-                        c::LockFileEx(
-                            self.handle.as_raw_handle(),
-                            c::LOCKFILE_FAIL_IMMEDIATELY,
-                            0,
-                            u32::MAX,
-                            u32::MAX,
-                            &mut overlapped,
-                        )
-                    });
-
-                    match result {
-                        Ok(_) => Ok(true),
-                        Err(err)
-                            if err.raw_os_error() == Some(c::ERROR_IO_PENDING as i32)
-                                || err.raw_os_error() == Some(c::ERROR_LOCK_VIOLATION as i32) =>
-                        {
-                            Ok(false)
-                        }
-                        Err(err) => Err(err),
-                    }
-                }
-
-                pub fn unlock(&self) -> io::Result<()>
-                {
-                    cvt(unsafe { c::UnlockFile(self.handle.as_raw_handle(), 0, 0, u32::MAX, u32::MAX) })?;
-                    let result =
-                        cvt(unsafe { c::UnlockFile(self.handle.as_raw_handle(), 0, 0, u32::MAX, u32::MAX) });
-                    match result {
-                        Ok(_) => Ok(()),
-                        Err(err) if err.raw_os_error() == Some(c::ERROR_NOT_LOCKED as i32) => Ok(()),
-                        Err(err) => Err(err),
-                    }
-                }
-
-                pub fn truncate(&self, size: u64) -> io::Result<()>
-                {
-                    let info = c::FILE_END_OF_FILE_INFO { EndOfFile: size as i64 };
-                    api::set_file_information_by_handle(self.handle.as_raw_handle(), &info).io_result()
-                }
-                
-                pub fn file_attr(&self) -> io::Result<FileAttr>
-                {
-                    unsafe
-                    {
-                        let mut info: c::FILE_BASIC_INFO = mem::zeroed();
-                        let size = size_of_val(&info);
-                        cvt(c::GetFileInformationByHandleEx(
-                            self.handle.as_raw_handle(),
-                            c::FileBasicInfo,
-                            (&raw mut info) as *mut c_void,
-                            size as u32,
-                        ))?;
-                        let mut attr = FileAttr {
-                            attributes: info.FileAttributes,
-                            creation_time: c::FILETIME {
-                                dwLowDateTime: info.CreationTime as u32,
-                                dwHighDateTime: (info.CreationTime >> 32) as u32,
-                            },
-                            last_access_time: c::FILETIME {
-                                dwLowDateTime: info.LastAccessTime as u32,
-                                dwHighDateTime: (info.LastAccessTime >> 32) as u32,
-                            },
-                            last_write_time: c::FILETIME {
-                                dwLowDateTime: info.LastWriteTime as u32,
-                                dwHighDateTime: (info.LastWriteTime >> 32) as u32,
-                            },
-                            change_time: Some(c::FILETIME {
-                                dwLowDateTime: info.ChangeTime as u32,
-                                dwHighDateTime: (info.ChangeTime >> 32) as u32,
-                            }),
-                            file_size: 0,
-                            reparse_tag: 0,
-                            volume_serial_number: None,
-                            number_of_links: None,
-                            file_index: None,
-                        };
-                        let mut info: c::FILE_STANDARD_INFO = mem::zeroed();
-                        let size = size_of_val(&info);
-                        cvt(c::GetFileInformationByHandleEx(
-                            self.handle.as_raw_handle(),
-                            c::FileStandardInfo,
-                            (&raw mut info) as *mut c_void,
-                            size as u32,
-                        ))?;
-                        attr.file_size = info.AllocationSize as u64;
-                        attr.number_of_links = Some(info.NumberOfLinks);
-                        if attr.attributes & c::FILE_ATTRIBUTE_REPARSE_POINT != 0 {
-                            let mut attr_tag: c::FILE_ATTRIBUTE_TAG_INFO = mem::zeroed();
-                            cvt(c::GetFileInformationByHandleEx(
-                                self.handle.as_raw_handle(),
-                                c::FileAttributeTagInfo,
-                                (&raw mut attr_tag).cast(),
-                                size_of::<c::FILE_ATTRIBUTE_TAG_INFO>().try_into().unwrap(),
-                            ))?;
-                            if attr_tag.FileAttributes & c::FILE_ATTRIBUTE_REPARSE_POINT != 0 {
-                                attr.reparse_tag = attr_tag.ReparseTag;
-                            }
-                        }
-                        Ok(attr)
-                    }
-                }
-
-                pub fn read(&self, buf: &mut [u8]) -> io::Result<usize> { self.handle.read(buf) }
-
-                pub fn read_vectored(&self, bufs: &mut [IoSliceMut<'_>]) -> io::Result<usize> { self.handle.read_vectored(bufs) }
-
-                #[inline] pub fn is_read_vectored(&self) -> bool { self.handle.is_read_vectored() }
-
-                pub fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<usize> { self.handle.read_at(buf, offset) }
-
-                pub fn read_buf(&self, cursor: BorrowedCursor<'_>) -> io::Result<()> { self.handle.read_buf(cursor) }
-
-                pub fn write(&self, buf: &[u8]) -> io::Result<usize> { self.handle.write(buf) }
-
-                pub fn write_vectored(&self, bufs: &[IoSlice<'_>]) -> io::Result<usize> { self.handle.write_vectored(bufs) }
-
-                #[inline] pub fn is_write_vectored(&self) -> bool { self.handle.is_write_vectored() }
-
-                pub fn write_at(&self, buf: &[u8], offset: u64) -> io::Result<usize> { self.handle.write_at(buf, offset) }
-
-                pub fn flush(&self) -> io::Result<()> { Ok(()) }
-
-                pub fn seek(&self, pos: SeekFrom) -> io::Result<u64>
-                {
-                    let (whence, pos) = match pos
-                    {
-                        SeekFrom::Start(n) => (c::FILE_BEGIN, n as i64),
-                        SeekFrom::End(n) => (c::FILE_END, n),
-                        SeekFrom::Current(n) => (c::FILE_CURRENT, n),
-                    };
-
-                    let pos = pos as i64;
-                    let mut newpos = 0;
-                    cvt(unsafe { c::SetFilePointerEx(self.handle.as_raw_handle(), pos, &mut newpos, whence) })?;
-                    Ok(newpos as u64)
-                }
-
-                pub fn tell(&self) -> io::Result<u64> { self.seek(SeekFrom::Current(0)) }
-
-                pub fn duplicate(&self) -> io::Result<File> { Ok(Self { handle: self.handle.try_clone()? }) }
-                
-                pub fn reparse_point( &self, space: &mut Align8<[MaybeUninit<u8>]> ) -> 
-                io::Result<(u32, *mut c::REPARSE_DATA_BUFFER)>
-                {
-                    unsafe
-                    {
-                        let mut bytes = 0;
-                        cvt({
-                            let len = space.0.len();
-                            c::DeviceIoControl(
-                                self.handle.as_raw_handle(),
-                                c::FSCTL_GET_REPARSE_POINT,
-                                ptr::null_mut(),
-                                0,
-                                space.0.as_mut_ptr().cast(),
-                                len as u32,
-                                &mut bytes,
-                                ptr::null_mut(),
-                            )
-                        })?;
-                        const _: () = assert!(align_of::<c::REPARSE_DATA_BUFFER>() <= 8);
-                        Ok((bytes, space.0.as_mut_ptr().cast::<c::REPARSE_DATA_BUFFER>()))
-                    }
-                }
-
-                pub fn readlink(&self) -> io::Result<PathBuf>
-                {
-                    let mut space =
-                        Align8([MaybeUninit::<u8>::uninit(); c::MAXIMUM_REPARSE_DATA_BUFFER_SIZE as usize]);
-                    let (_bytes, buf) = self.reparse_point(&mut space)?;
-                    unsafe {
-                        let (path_buffer, subst_off, subst_len, relative) = match (*buf).ReparseTag {
-                            c::IO_REPARSE_TAG_SYMLINK => {
-                                let info: *mut c::SYMBOLIC_LINK_REPARSE_BUFFER = (&raw mut (*buf).rest).cast();
-                                assert!(info.is_aligned());
-                                (
-                                    (&raw mut (*info).PathBuffer).cast::<u16>(),
-                                    (*info).SubstituteNameOffset / 2,
-                                    (*info).SubstituteNameLength / 2,
-                                    (*info).Flags & c::SYMLINK_FLAG_RELATIVE != 0,
-                                )
-                            }
-                            c::IO_REPARSE_TAG_MOUNT_POINT => {
-                                let info: *mut c::MOUNT_POINT_REPARSE_BUFFER = (&raw mut (*buf).rest).cast();
-                                assert!(info.is_aligned());
-                                (
-                                    (&raw mut (*info).PathBuffer).cast::<u16>(),
-                                    (*info).SubstituteNameOffset / 2,
-                                    (*info).SubstituteNameLength / 2,
-                                    false,
-                                )
-                            }
-                            _ => {
-                                return Err(constant_error!(
-                                    io::ErrorKind::Uncategorized,
-                                    "Unsupported reparse point type",
-                                ));
-                            }
-                        };
-                        let subst_ptr = path_buffer.add(subst_off.into());
-                        let subst = slice::from_raw_parts_mut(subst_ptr, subst_len as usize);
-                        // Absolute paths start with an NT internal namespace prefix `\??\`
-                        // We should not let it leak through.
-                        if !relative && subst.starts_with(&[92u16, 63u16, 63u16, 92u16]) {
-                            // Turn `\??\` into `\\?\` (a verbatim path).
-                            subst[1] = b'\\' as u16;
-                            // Attempt to convert to a more user-friendly path.
-                            let user = crate::sys::args::from_wide_to_user_path(
-                                subst.iter().copied().chain([0]).collect(),
-                            )?;
-                            Ok(PathBuf::from(OsString::from_wide(user.strip_suffix(&[0]).unwrap_or(&user))))
-                        } else {
-                            Ok(PathBuf::from(OsString::from_wide(subst)))
-                        }
-                    }
-                }
-
-                pub fn set_permissions(&self, perm: FilePermissions) -> io::Result<()>
-                {
-                    let info = c::FILE_BASIC_INFO
-                    {
-                        CreationTime: 0,
-                        LastAccessTime: 0,
-                        LastWriteTime: 0,
-                        ChangeTime: 0,
-                        FileAttributes: perm.attrs,
-                    };
-                    api::set_file_information_by_handle(self.handle.as_raw_handle(), &info).io_result()
-                }
-
-                pub fn set_times(&self, times: FileTimes) -> io::Result<()>
-                {
-                    let is_zero = |t: c::FILETIME| t.dwLowDateTime == 0 && t.dwHighDateTime == 0;
-                    if times.accessed.map_or(false, is_zero)
-                        || times.modified.map_or(false, is_zero)
-                        || times.created.map_or(false, is_zero)
-                    {
-                        return Err(constant_error!(
-                            io::ErrorKind::InvalidInput,
-                            "cannot set file timestamp to 0",
-                        ));
-                    }
-                    let is_max = |t: c::FILETIME| t.dwLowDateTime == u32::MAX && t.dwHighDateTime == u32::MAX;
-                    if times.accessed.map_or(false, is_max)
-                        || times.modified.map_or(false, is_max)
-                        || times.created.map_or(false, is_max)
-                    {
-                        return Err(constant_error!(
-                            io::ErrorKind::InvalidInput,
-                            "cannot set file timestamp to 0xFFFF_FFFF_FFFF_FFFF",
-                        ));
-                    }
-                    cvt(unsafe {
-                        let created =
-                            times.created.as_ref().map(|a| a as *const c::FILETIME).unwrap_or(ptr::null());
-                        let accessed =
-                            times.accessed.as_ref().map(|a| a as *const c::FILETIME).unwrap_or(ptr::null());
-                        let modified =
-                            times.modified.as_ref().map(|a| a as *const c::FILETIME).unwrap_or(ptr::null());
-                        c::SetFileTime(self.as_raw_handle(), created, accessed, modified)
-                    })?;
-                    Ok(())
-                }
-                /// Gets only basic file information such as attributes and file times.
-                pub fn basic_info(&self) -> io::Result<c::FILE_BASIC_INFO>
-                {
-                    unsafe
-                    {
-                        let mut info: c::FILE_BASIC_INFO = mem::zeroed();
-                        let size = size_of_val(&info);
-                        cvt(c::GetFileInformationByHandleEx(
-                            self.handle.as_raw_handle(),
-                            c::FileBasicInfo,
-                            (&raw mut info) as *mut c_void,
-                            size as u32,
-                        ))?;
-                        Ok(info)
-                    }
-                }
-                /// Deletes the file, 
-                /// consuming the file handle to ensure the delete occurs as immediately as possible.
-                pub fn delete(self) -> Result<(), WinError>
-                {
-                    match self.posix_delete()
-                    {
-                        Err(WinError::INVALID_PARAMETER)
-                        | Err(WinError::NOT_SUPPORTED)
-                        | Err(WinError::INVALID_FUNCTION) => self.win32_delete(),
-                        result => result,
-                    }
-                }
-                /// Delete using POSIX semantics.
-                pub fn posix_delete(&self) -> Result<(), WinError>
-                {
-                    let info = c::FILE_DISPOSITION_INFO_EX
-                    {
-                        Flags: c::FILE_DISPOSITION_FLAG_DELETE
-                        | c::FILE_DISPOSITION_FLAG_POSIX_SEMANTICS
-                        | c::FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE,
-                    };
-                    api::set_file_information_by_handle(self.handle.as_raw_handle(), &info)
-                }
-
-                /// Delete a file using win32 semantics.
-                fn win32_delete(&self) -> Result<(), WinError>
-                {
-                    let info = c::FILE_DISPOSITION_INFO { DeleteFile: true };
-                    api::set_file_information_by_handle(self.handle.as_raw_handle(), &info)
-                }
-                /// Fill the given buffer with as many directory entries as will fit.
-                fn fill_dir_buff(&self, buffer: &mut DirBuff, restart: bool) -> Result<bool, WinError>
-                {
-                    let class =
-                        if restart { c::FileIdBothDirectoryRestartInfo } else { c::FileIdBothDirectoryInfo };
-
-                    unsafe {
-                        let result = c::GetFileInformationByHandleEx(
-                            self.as_raw_handle(),
-                            class,
-                            buffer.as_mut_ptr().cast(),
-                            buffer.capacity() as _,
-                        );
-                        if result == 0 {
-                            let err = api::get_last_error();
-                            if err.code == c::ERROR_NO_MORE_FILES { Ok(false) } else { Err(err) }
-                        } else {
-                            Ok(true)
-                        }
-                    }
-                }
-            }
-            /// A buffer for holding directory entries.
-            struct DirBuff
-            {
-                buffer: Box<Align8<[MaybeUninit<u8>; Self::BUFFER_SIZE]>>,
-            }
-
-            impl DirBuff
-            {
-                const BUFFER_SIZE: usize = 1024;
-                fn new() -> Self
-                {
-                    Self 
-                    {
-                        buffer: unsafe { Box::new_uninit().assume_init() },
-                    }
-                }
-
-                fn capacity(&self) -> usize { self.buffer.0.len() }
-
-                fn as_mut_ptr(&mut self) -> *mut u8 { self.buffer.0.as_mut_ptr().cast() }
-                /// Returns a `DirBuffIter`.
-                fn iter(&self) -> DirBuffIter<'_> { DirBuffIter::new(self) }
-            }
-
-            impl AsRef<[MaybeUninit<u8>]> for DirBuff
-            {
-                fn as_ref(&self) -> &[MaybeUninit<u8>] { &self.buffer.0 }
-            }
-            /// An iterator over entries stored in a `DirBuff`.
-            pub struct DirBuffIter<'a>
-            {
-                buffer: Option<&'a [MaybeUninit<u8>]>,
-                cursor: usize,
-            }
-
-            impl<'a> DirBuffIter<'a>
-            {
-                fn new(buffer: &'a DirBuff) -> Self { Self { buffer: Some(buffer.as_ref()), cursor: 0 } }
-            }
-            
-            impl<'a> Iterator for DirBuffIter<'a>
-            {
-                type Item = (Cow<'a, [u16]>, bool);
-                fn next(&mut self) -> Option<Self::Item>
-                {
-                    let buffer = &self.buffer?[self.cursor..];
-                    let (name, is_directory, next_entry) = unsafe
-                    {
-                        let info = buffer.as_ptr().cast::<c::FILE_ID_BOTH_DIR_INFO>();
-                        let next_entry = (&raw const (*info).NextEntryOffset).read_unaligned() as usize;
-                        let length = (&raw const (*info).FileNameLength).read_unaligned() as usize;
-                        let attrs = (&raw const (*info).FileAttributes).read_unaligned();
-                        let name = from_maybe_unaligned(
-                            (&raw const (*info).FileName).cast::<u16>(),
-                            length / size_of::<u16>(),
-                        );
-                        let is_directory = (attrs & c::FILE_ATTRIBUTE_DIRECTORY) != 0;
-
-                        (name, is_directory, next_entry)
-                    };
-
-                    if next_entry == 0 {
-                        self.buffer = None
-                    } else {
-                        self.cursor += next_entry
-                    }
-                    
-                    const DOT: u16 = b'.' as u16;
-                    match &name[..]
-                    {
-                        [DOT] | [DOT, DOT] => self.next(),
-                        _ => Some((name, is_directory)),
-                    }
-                }
-            }
-
-            unsafe fn from_maybe_unaligned<'a>(p: *const u16, len: usize) -> Cow<'a, [u16]>
-            {
-                unsafe
-                {
-                    if p.is_aligned() { Cow::Borrowed( ::slice::from_raw_parts(p, len)) }
-                    else { Cow::Owned((0..len).map(|i| p.add(i).read_unaligned()).collect()) }
-                }
-            }
-
-            impl AsInner<Handle> for File
-            {
-                #[inline] fn as_inner(&self) -> &Handle { &self.handle }
-            }
-
-            impl IntoInner<Handle> for File 
-            {
-                fn into_inner(self) -> Handle { self.handle }
-            }
-
-            impl FromInner<Handle> for File 
-            {
-                fn from_inner(handle: Handle) -> File { File { handle } }
-            }
-
-            impl AsHandle for File 
-            {
-                fn as_handle(&self) -> BorrowedHandle<'_> { self.as_inner().as_handle() }
-            }
-
-            impl AsRawHandle for File
-            {
-                fn as_raw_handle(&self) -> RawHandle { self.as_inner().as_raw_handle() }
-            }
-
-            impl IntoRawHandle for File
-            {
-                fn into_raw_handle(self) -> RawHandle
-                {
-                    self.into_inner().into_raw_handle()
-                }
-            }
-
-            impl FromRawHandle for File 
-            {
-                unsafe fn from_raw_handle(raw_handle: RawHandle) -> Self
-                {
-                    unsafe
-                    {
-                        Self { handle: FromInner::from_inner(FromRawHandle::from_raw_handle(raw_handle)) }
-                    }
-                }
-            }
-
-            impl fmt::Debug for File
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-                {
-                    let mut b = f.debug_struct("File");
-                    b.field("handle", &self.handle.as_raw_handle());
-                    if let Ok(path) = get_path(self) {
-                        b.field("path", &path);
-                    }
-                    b.finish()
-                }
-            }
-
-            impl FileAttr
-            {
-                pub fn size(&self) -> u64 { self.file_size }
-                pub fn perm(&self) -> FilePermissions { FilePermissions { attrs: self.attributes } }
-                pub fn attrs(&self) -> u32 { self.attributes }
-                pub fn file_type(&self) -> FileType { FileType::new(self.attributes, self.reparse_tag) }
-                pub fn modified(&self) -> io::Result<SystemTime> { Ok(SystemTime::from(self.last_write_time)) }
-                pub fn accessed(&self) -> io::Result<SystemTime> { Ok(SystemTime::from(self.last_access_time)) }
-                pub fn created(&self) -> io::Result<SystemTime> { Ok(SystemTime::from(self.creation_time)) }
-                pub fn modified_u64(&self) -> u64 { to_u64(&self.last_write_time) }
-                pub fn accessed_u64(&self) -> u64 { to_u64(&self.last_access_time) }
-                pub fn created_u64(&self) -> u64 { to_u64(&self.creation_time) }
-                pub fn changed_u64(&self) -> Option<u64> { self.change_time.as_ref().map(|c| to_u64(c)) }
-                pub fn volume_serial_number(&self) -> Option<u32> { self.volume_serial_number }
-                pub fn number_of_links(&self) -> Option<u32> { self.number_of_links }
-                pub fn file_index(&self) -> Option<u64> { self.file_index }            
-            }
-
-            impl From<c::WIN32_FIND_DATAW> for FileAttr
-            {
-                fn from(wfd: c::WIN32_FIND_DATAW) -> Self
-                {
-                    FileAttr
-                    {
-                        attributes: wfd.dwFileAttributes,
-                        creation_time: wfd.ftCreationTime,
-                        last_access_time: wfd.ftLastAccessTime,
-                        last_write_time: wfd.ftLastWriteTime,
-                        change_time: None,
-                        file_size: ((wfd.nFileSizeHigh as u64) << 32) | (wfd.nFileSizeLow as u64),
-                        reparse_tag: if wfd.dwFileAttributes & c::FILE_ATTRIBUTE_REPARSE_POINT != 0 
-                        {
-                            wfd.dwReserved0
-                        } else {
-                            0
-                        },
-                        volume_serial_number: None,
-                        number_of_links: None,
-                        file_index: None,
-                    }
-                }
-            }
-
-            pub fn to_u64(ft: &c::FILETIME) -> u64 
-            { (ft.dwLowDateTime as u64) | ((ft.dwHighDateTime as u64) << 32) }
-
-            impl FilePermissions
-            {
-                pub fn readonly(&self) -> bool { self.attrs & c::FILE_ATTRIBUTE_READONLY != 0 }
-
-                pub fn set_readonly(&mut self, readonly: bool)
-                {
-                    if readonly { self.attrs |= c::FILE_ATTRIBUTE_READONLY; }
-                    else { self.attrs &= !c::FILE_ATTRIBUTE_READONLY; }
-                }
-            }
-
-            impl FileTimes
-            {
-                pub fn set_accessed(&mut self, t: SystemTime) { self.accessed = Some(t.into_inner()); }
-                pub fn set_modified(&mut self, t: SystemTime) { self.modified = Some(t.into_inner()); }
-                pub fn set_created(&mut self, t: SystemTime) { self.created = Some(t.into_inner()); }
-            }
-
-            impl FileType
-            {
-                fn new(attributes: u32, reparse_tag: u32) -> FileType
-                {
-                    let is_directory = attributes & c::FILE_ATTRIBUTE_DIRECTORY != 0;
-                    let is_symlink =
-                    {
-                        let is_reparse_point = attributes & c::FILE_ATTRIBUTE_REPARSE_POINT != 0;
-                        let is_reparse_tag_name_surrogate = reparse_tag & 0x20000000 != 0;
-                        is_reparse_point && is_reparse_tag_name_surrogate
-                    };
-                    FileType { is_directory, is_symlink }
-                }
-                pub fn is_dir(&self) -> bool { !self.is_symlink && self.is_directory }
-                pub fn is_file(&self) -> bool { !self.is_symlink && !self.is_directory }
-                pub fn is_symlink(&self) -> bool { self.is_symlink }
-                pub fn is_symlink_dir(&self) -> bool { self.is_symlink && self.is_directory }
-                pub fn is_symlink_file(&self) -> bool { self.is_symlink && !self.is_directory }
-            }
-
-            impl DirBuilder
-            {
-                pub fn new() -> DirBuilder { DirBuilder }
-
-                pub fn mkdir(&self, p: &Path) -> io::Result<()>
-                {
-                    let p = maybe_verbatim(p)?;
-                    cvt(unsafe { c::CreateDirectoryW(p.as_ptr(), ptr::null_mut()) })?;
-                    Ok(())
-                }
-            }
-
-            pub fn readdir(p: &Path) -> io::Result<ReadDir>
-            {
-                unsafe
-                {
-                    if p.as_os_str().is_empty()
-                    { return Err(io::Error::from_raw_os_error(c::ERROR_PATH_NOT_FOUND as i32)); }
-
-                    let root = p.to_path_buf();
-                    let star = p.join("*");
-                    let path = maybe_verbatim(&star)?;
-                    let mut wfd: c::WIN32_FIND_DATAW = mem::zeroed();
-                    let find_handle = c::FindFirstFileExW
-                    (
-                        path.as_ptr(),
-                        c::FindExInfoBasic,
-                        &mut wfd as *mut _ as _,
-                        c::FindExSearchNameMatch,
-                        ptr::null(),
-                        0,
-                    );
-
-                    if find_handle != c::INVALID_HANDLE_VALUE
-                    {
-                        Ok(ReadDir
-                        {
-                            handle: Some(FindNextFileHandle(find_handle)),
-                            root: Arc::new(root),
-                            first: Some(wfd),
-                        })
-                    }
-                    else 
-                    {
-                        let last_error = api::get_last_error();
-                        if last_error == WinError::FILE_NOT_FOUND {
-                            return Ok(ReadDir { handle: None, root: Arc::new(root), first: None });
-                        }
-                        
-                        Err(Error::from_raw_os_error(last_error.code as i32))
-                    }
-                }
-            }
-
-            pub fn unlink(path: &WCStr) -> io::Result<()>
-            {
-                if unsafe { c::DeleteFileW(path.as_ptr()) } == 0
-                {
-                    let err = api::get_last_error();
-                    if err == WinError::ACCESS_DENIED {
-                        let mut opts = OpenOptions::new();
-                        opts.access_mode(c::DELETE);
-                        opts.custom_flags(c::FILE_FLAG_OPEN_REPARSE_POINT);
-                        if let Ok(f) = File::open_native(&path, &opts) {
-                            if f.posix_delete().is_ok() {
-                                return Ok(());
-                            }
-                        }
-                    }
-                    Err(io::Error::from_raw_os_error(err.code as i32))
-                } else {
-                    Ok(())
-                }
-            }
-
-            pub fn rename(old: &WCStr, new: &WCStr) -> io::Result<()>
-            {
-                if unsafe { c::MoveFileExW(old.as_ptr(), new.as_ptr(), c::MOVEFILE_REPLACE_EXISTING) } == 0
-                {
-                    let err = api::get_last_error();
-                    
-                    if err == WinError::ACCESS_DENIED
-                    {
-                        let mut opts = OpenOptions::new();
-                        opts.access_mode(c::DELETE);
-                        opts.custom_flags(c::FILE_FLAG_OPEN_REPARSE_POINT | c::FILE_FLAG_BACKUP_SEMANTICS);
-                        let Ok(f) = File::open_native(&old, &opts) else { return Err(err).io_result() };
-                        
-                        let Ok(new_len_without_nul_in_bytes): Result<u32, _> =
-                            ((new.count_bytes() - 1) * 2).try_into()
-                        else {
-                            return Err(err).io_result();
-                        };
-                        let offset: u32 = offset_of!(c::FILE_RENAME_INFO, FileName).try_into().unwrap();
-                        let struct_size = offset + new_len_without_nul_in_bytes + 2;
-                        let layout = Layout::from_size_align(struct_size as usize, align_of::<c::FILE_RENAME_INFO>())
-                        .unwrap();
-                                
-                        let file_rename_info;
-                        unsafe {
-                            file_rename_info = alloc(layout).cast::<c::FILE_RENAME_INFO>();
-                            if file_rename_info.is_null() {
-                                return Err(io::ErrorKind::OutOfMemory.into());
-                            }
-
-                            (&raw mut (*file_rename_info).Anonymous).write(c::FILE_RENAME_INFO_0 {
-                                Flags: c::FILE_RENAME_FLAG_REPLACE_IF_EXISTS
-                                    | c::FILE_RENAME_FLAG_POSIX_SEMANTICS,
-                            });
-
-                            (&raw mut (*file_rename_info).RootDirectory).write(ptr::null_mut());
-                            (&raw mut (*file_rename_info).FileNameLength).write(new_len_without_nul_in_bytes);
-
-                            new.as_ptr().copy_to_nonoverlapping(
-                                (&raw mut (*file_rename_info).FileName).cast::<u16>(),
-                                new.count_bytes(),
-                            );
-                        }
-
-                        let result = unsafe {
-                            c::SetFileInformationByHandle(
-                                f.as_raw_handle(),
-                                c::FileRenameInfoEx,
-                                file_rename_info.cast::<c_void>(),
-                                struct_size,
-                            )
-                        };
-                        unsafe { dealloc(file_rename_info.cast::<u8>(), layout) };
-                        if result == 0 {
-                            if api::get_last_error() == WinError::DIR_NOT_EMPTY {
-                                return Err(WinError::DIR_NOT_EMPTY).io_result();
-                            } else {
-                                return Err(err).io_result();
-                            }
-                        }
-                    } else {
-                        return Err(err).io_result();
-                    }
-                }
-                Ok(())
-            }
-
-            pub fn rmdir(p: &WCStr) -> io::Result<()>
-            {
-                cvt(unsafe { c::RemoveDirectoryW(p.as_ptr()) })?;
-                Ok(())
-            }
-
-            pub fn remove_dir_all(path: &WCStr) -> io::Result<()>
-            {
-                let mut opts = OpenOptions::new();
-                opts.access_mode(c::FILE_LIST_DIRECTORY);
-                opts.custom_flags(c::FILE_FLAG_BACKUP_SEMANTICS | c::FILE_FLAG_OPEN_REPARSE_POINT);
-                let file = File::open_native(path, &opts)?;
-                
-                if (file.basic_info()?.FileAttributes & c::FILE_ATTRIBUTE_DIRECTORY) == 0
-                { return Err(io::Error::from_raw_os_error(c::ERROR_DIRECTORY as _)); }
-                
-                remove_dir_all_iterative(file).io_result()
-            }
-
-            pub fn readlink(path: &WCStr) -> io::Result<PathBuf>
-            {
-                let mut opts = OpenOptions::new();
-                opts.access_mode(0);
-                opts.custom_flags(c::FILE_FLAG_OPEN_REPARSE_POINT | c::FILE_FLAG_BACKUP_SEMANTICS);
-                let file = File::open_native(&path, &opts)?;
-                file.readlink()
-            }
-
-            pub fn symlink(original: &Path, link: &Path) -> io::Result<()> { symlink_inner(original, link, false) }
-
-            pub fn symlink_inner(original: &Path, link: &Path, dir: bool) -> io::Result<()>
-            {
-                let original = to_u16s(original)?;
-                let link = maybe_verbatim(link)?;
-                let flags = if dir { c::SYMBOLIC_LINK_FLAG_DIRECTORY } else { 0 };
-                
-                let result = cvt(unsafe
-                {
-                    c::CreateSymbolicLinkW(
-                        link.as_ptr(),
-                        original.as_ptr(),
-                        flags | c::SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE,
-                    ) as c::BOOL
-                });
-
-                if let Err(err) = result
-                {
-                    if err.raw_os_error() == Some(c::ERROR_INVALID_PARAMETER as i32)
-                    {
-                        cvt(unsafe {
-                            c::CreateSymbolicLinkW(link.as_ptr(), original.as_ptr(), flags) as c::BOOL
-                        })?;
-                    } else {
-                        return Err(err);
-                    }
-                }
-
-                Ok(())
-            }
-            
-            pub fn link(original: &WCStr, link: &WCStr) -> io::Result<()>
-            {
-                cvt(unsafe { c::CreateHardLinkW(link.as_ptr(), original.as_ptr(), ptr::null_mut()) })?;
-                Ok(())
-            }
-
-            pub fn stat(path: &WCStr) -> io::Result<FileAttr>
-            {
-                match metadata(path, ReparsePoint::Follow)
-                {
-                    Err(err) if err.raw_os_error() == Some(c::ERROR_CANT_ACCESS_FILE as i32) => {
-                        if let Ok(attrs) = lstat(path) {
-                            if !attrs.file_type().is_symlink() {
-                                return Ok(attrs);
-                            }
-                        }
-                        Err(err)
-                    }
-                    result => result,
-                }
-            }
-
-            pub fn lstat(path: &WCStr) -> io::Result<FileAttr> { metadata(path, ReparsePoint::Open) }
-
-            #[repr(u32)] #[derive(Clone, Copy, PartialEq, Eq)]
-            pub enum ReparsePoint
-            {
-                Follow = 0,
-                Open = c::FILE_FLAG_OPEN_REPARSE_POINT,
-            }
-
-            impl ReparsePoint
-            {
-                fn as_flag(self) -> u32 { self as u32 }
-            }
-
-            pub fn metadata(path: &WCStr, reparse: ReparsePoint) -> io::Result<FileAttr>
-            {
-                let mut opts = OpenOptions::new();
-                opts.access_mode(0);
-                opts.custom_flags(c::FILE_FLAG_BACKUP_SEMANTICS | reparse.as_flag());
-                
-                match File::open_native(&path, &opts)
-                {
-                    Ok(file) => file.file_attr(),
-                    Err(e) if 
-                    [
-                        Some(c::ERROR_SHARING_VIOLATION as _), 
-                        Some(c::ERROR_ACCESS_DENIED as _)
-                    ].contains(&e.raw_os_error()) =>
-                    {
-                        unsafe {
-                            let mut wfd: c::WIN32_FIND_DATAW = mem::zeroed();
-                            let handle = c::FindFirstFileExW(
-                                path.as_ptr(),
-                                c::FindExInfoBasic,
-                                &mut wfd as *mut _ as _,
-                                c::FindExSearchNameMatch,
-                                ptr::null(),
-                                0,
-                            );
-
-                            if handle == c::INVALID_HANDLE_VALUE
-                            {
-                                Err(e)
-                            }
-                            
-                            else
-                            {
-                                c::FindClose(handle);
-                                
-                                let attrs = FileAttr::from(wfd);
-                                if reparse == ReparsePoint::Follow && attrs.file_type().is_symlink() {
-                                    Err(e)
-                                } else {
-                                    Ok(attrs)
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => Err(e),
-                }
-            }
-
-            pub fn set_perm(p: &WCStr, perm: FilePermissions) -> io::Result<()>
-            {
-                unsafe {
-                    cvt(c::SetFileAttributesW(p.as_ptr(), perm.attrs))?;
-                    Ok(())
-                }
-            }
-
-            pub fn get_path(f: &File) -> io::Result<PathBuf> 
-            {
-                fill_utf16_buf(
-                    |buf, sz| unsafe {
-                        c::GetFinalPathNameByHandleW(f.handle.as_raw_handle(), buf, sz, c::VOLUME_NAME_DOS)
-                    },
-                    |buf| PathBuf::from(OsString::from_wide(buf)),
-                )
-            }
-
-            pub fn canonicalize(p: &WCStr) -> io::Result<PathBuf>
-            {
-                let mut opts = OpenOptions::new();
-                opts.access_mode(0);
-                opts.custom_flags(c::FILE_FLAG_BACKUP_SEMANTICS);
-                let f = File::open_native(p, &opts)?;
-                get_path(&f)
-            }
-
-            pub fn copy(from: &WCStr, to: &WCStr) -> io::Result<u64>
-            {
-                unsafe extern "system" fn callback(
-                    _TotalFileSize: i64,
-                    _TotalBytesTransferred: i64,
-                    _StreamSize: i64,
-                    StreamBytesTransferred: i64,
-                    dwStreamNumber: u32,
-                    _dwCallbackReason: u32,
-                    _hSourceFile: c::HANDLE,
-                    _hDestinationFile: c::HANDLE,
-                    lpData: *const c_void,
-                ) -> u32 {
-                    unsafe {
-                        if dwStreamNumber == 1 {
-                            *(lpData as *mut i64) = StreamBytesTransferred;
-                        }
-                        c::PROGRESS_CONTINUE
-                    }
-                }
-                let mut size = 0i64;
-                cvt(unsafe {
-                    c::CopyFileExW(
-                        from.as_ptr(),
-                        to.as_ptr(),
-                        Some(callback),
-                        (&raw mut size) as *mut _,
-                        ptr::null_mut(),
-                        0,
-                    )
-                })?;
-                Ok(size as u64)
-            }
-        }
-
-        mod uefi
-        {
-            
-            use ::
-            {
-                ffi::OsString,
-                hash::Hash,
-                io::{self, BorrowedCursor, IoSlice, IoSliceMut, SeekFrom},
-                path::{Path, PathBuf},
-                sys::time::SystemTime,
-                sys::unsupported,
-                *,
-            };
-            
             pub mod protocols
             {
-                use ::
+                pub mod loaded_image
                 {
-                    *,
-                };
-                pub mod base
-                {
-                    //! UEFI Base Environment
                     use ::
                     {
                         *,
                     };
-
-                    #[macro_export] macro_rules! eficall_abi
-                    {
-                        (($($prefix:tt)*),($($suffix:tt)*)) => { $($prefix)* extern "efiapi" $($suffix)* };
-                    }
-                    /// Annotate function with UEFI calling convention.
-                    #[macro_export] macro_rules! eficall
-                    {
-                        (@munch(($($prefix:tt)*),(pub $($suffix:tt)*))) => { eficall!{@munch(($($prefix)* pub),($($suffix)*))} };
-                        (@munch(($($prefix:tt)*),(unsafe $($suffix:tt)*))) => { eficall!{@munch(($($prefix)* unsafe),($($suffix)*))} };
-                        (@munch(($($prefix:tt)*),($($suffix:tt)*))) => { eficall_abi!{($($prefix)*),($($suffix)*)} };
-                        ($($arg:tt)*) => { eficall!{@munch((),($($arg)*))} };
-                    }
-                    /// Boolean Type.
-                    #[repr( C )] #[derive(Clone, Copy, Debug)]
-                    pub struct Boolean(u8);
-                    /// Single-byte Character Type.
-                    pub type Char8 = u8;
-                    /// Dual-byte Character Type.
-                    pub type Char16 = u16;
-                    /// Status Codes.
-                    #[repr( C )] #[derive( Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd )]
-                    pub struct Status(usize);
-                    /// Object Handles.
-                    pub type Handle = *mut ::ffi::c_void;
-                    /// Event Objects.
-                    pub type Event = *mut ::ffi::c_void;
-                    /// Logical Block Addresses.
-                    pub type Lba = u64;
-                    /// Thread Priority Levels.
-                    pub type Tpl = usize;
-                    /// Physical Memory Address.
-                    pub type PhysicalAddress = u64;
-                    /// Virtual Memory Address.
-                    pub type VirtualAddress = u64;
-                    /// Application Entry Point.
-                    pub type ImageEntryPoint = eficall! {fn(Handle, *mut crate::system::SystemTable) -> Status};
-                    /// Globally Unique Identifiers.
-                    #[repr( C, align(4) )]
-                    #[derive( Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd )]
-                    pub struct Guid
-                    {
-                        time_low: [u8; 4],
-                        time_mid: [u8; 2],
-                        time_hi_and_version: [u8; 2],
-                        clk_seq_hi_res: u8,
-                        clk_seq_low: u8,
-                        node: [u8; 6],
-                    }
-                    /// Network MAC Address.
-                    #[repr( C )] #[derive( Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd )]
-                    pub struct MacAddress
-                    {
-                        pub addr: [u8; 32],
-                    }
-                    /// IPv4 Address.
-                    #[repr( C )] #[derive( Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd )]
-                    pub struct Ipv4Address
-                    {
-                        pub addr: [u8; 4],
-                    }
-                    /// IPv6 Address.
-                    #[repr( C )] #[derive( Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd )]
-                    pub struct Ipv6Address
-                    {
-                        pub addr: [u8; 16],
-                    }
-                    /// IP Address.
-                    #[repr(C, align(4))] #[derive( Clone, Copy )]
-                    pub union IpAddress
-                    {
-                        pub addr: [u32; 4],
-                        pub v4: Ipv4Address,
-                        pub v6: Ipv6Address,
-                    }
-
-                    impl Boolean
-                    {
-                        /// Literal False
-                        pub const FALSE: Boolean = Boolean(0u8);
-                        /// Literal True
-                        pub const TRUE: Boolean = Boolean(1u8);
-                    }
-
-                    impl From<u8> for Boolean
-                    {
-                        fn from(v: u8) -> Self { Boolean(v) }
-                    }
-
-                    impl From<bool> for Boolean
-                    {
-                        fn from(v: bool) -> Self
-                        {
-                            match v
-                            {
-                                false => Boolean::FALSE,
-                                true => Boolean::TRUE,
-                            }
-                        }
-                    }
-
-                    impl Default for Boolean
-                    {
-                        fn default() -> Self { Self::FALSE }
-                    }
-
-                    impl From<Boolean> for u8
-                    {
-                        fn from(v: Boolean) -> Self
-                        {
-                            match v.0
-                            {
-                                0 => 0,
-                                _ => 1,
-                            }
-                        }
-                    }
-
-                    impl From<Boolean> for bool
-                    {
-                        fn from(v: Boolean) -> Self
-                        {
-                            match v.0
-                            {
-                                0 => false,
-                                _ => true,
-                            }
-                        }
-                    }
-
-                    impl Eq for Boolean {}
-
-                    impl ::hash::Hash for Boolean
-                    {
-                        fn hash<H: ::hash::Hasher>(&self, state: &mut H) { bool::from(*self).hash(state) }
-                    }
-
-                    impl Ord for Boolean
-                    {
-                        fn cmp(&self, other: &Boolean) -> ::cmp::Ordering { bool::from(*self).cmp(&(*other).into()) }
-                    }
-
-                    impl PartialEq for Boolean
-                    {
-                        fn eq(&self, other: &Boolean) -> bool { bool::from(*self).eq(&(*other).into()) }
-                    }
-
-                    impl PartialEq<bool> for Boolean
-                    {
-                        fn eq(&self, other: &bool) -> bool { bool::from(*self).eq(other) }
-                    }
-
-                    impl PartialOrd for Boolean
-                    {
-                        fn partial_cmp(&self, other: &Boolean) -> Option<::cmp::Ordering>
-                        { bool::from(*self).partial_cmp(&(*other).into()) }
-                    }
-
-                    impl PartialOrd<bool> for Boolean
-                    {
-                        fn partial_cmp(&self, other: &bool) -> Option<::cmp::Ordering>
-                        { bool::from(*self).partial_cmp(other) }
-                    }
-
-                    impl Status
-                    {
-                        pub const WIDTH: usize = 8usize * ::mem::size_of::<Status>();
-                        pub const MASK: usize = 0xc0 << (Status::WIDTH - 8);
-                        pub const ERROR_MASK: usize = 0x80 << (Status::WIDTH - 8);
-                        pub const WARNING_MASK: usize = 0x00 << (Status::WIDTH - 8);
-
-                        /// Success Code.
-                        pub const SUCCESS: Status = Status::from_usize(0);
-                        /// List of predefined error codes.
-                        pub const LOAD_ERROR: Status = Status::from_usize(1 | Status::ERROR_MASK);
-                        pub const INVALID_PARAMETER: Status = Status::from_usize(2 | Status::ERROR_MASK);
-                        pub const UNSUPPORTED: Status = Status::from_usize(3 | Status::ERROR_MASK);
-                        pub const BAD_BUFFER_SIZE: Status = Status::from_usize(4 | Status::ERROR_MASK);
-                        pub const BUFFER_TOO_SMALL: Status = Status::from_usize(5 | Status::ERROR_MASK);
-                        pub const NOT_READY: Status = Status::from_usize(6 | Status::ERROR_MASK);
-                        pub const DEVICE_ERROR: Status = Status::from_usize(7 | Status::ERROR_MASK);
-                        pub const WRITE_PROTECTED: Status = Status::from_usize(8 | Status::ERROR_MASK);
-                        pub const OUT_OF_RESOURCES: Status = Status::from_usize(9 | Status::ERROR_MASK);
-                        pub const VOLUME_CORRUPTED: Status = Status::from_usize(10 | Status::ERROR_MASK);
-                        pub const VOLUME_FULL: Status = Status::from_usize(11 | Status::ERROR_MASK);
-                        pub const NO_MEDIA: Status = Status::from_usize(12 | Status::ERROR_MASK);
-                        pub const MEDIA_CHANGED: Status = Status::from_usize(13 | Status::ERROR_MASK);
-                        pub const NOT_FOUND: Status = Status::from_usize(14 | Status::ERROR_MASK);
-                        pub const ACCESS_DENIED: Status = Status::from_usize(15 | Status::ERROR_MASK);
-                        pub const NO_RESPONSE: Status = Status::from_usize(16 | Status::ERROR_MASK);
-                        pub const NO_MAPPING: Status = Status::from_usize(17 | Status::ERROR_MASK);
-                        pub const TIMEOUT: Status = Status::from_usize(18 | Status::ERROR_MASK);
-                        pub const NOT_STARTED: Status = Status::from_usize(19 | Status::ERROR_MASK);
-                        pub const ALREADY_STARTED: Status = Status::from_usize(20 | Status::ERROR_MASK);
-                        pub const ABORTED: Status = Status::from_usize(21 | Status::ERROR_MASK);
-                        pub const ICMP_ERROR: Status = Status::from_usize(22 | Status::ERROR_MASK);
-                        pub const TFTP_ERROR: Status = Status::from_usize(23 | Status::ERROR_MASK);
-                        pub const PROTOCOL_ERROR: Status = Status::from_usize(24 | Status::ERROR_MASK);
-                        pub const INCOMPATIBLE_VERSION: Status = Status::from_usize(25 | Status::ERROR_MASK);
-                        pub const SECURITY_VIOLATION: Status = Status::from_usize(26 | Status::ERROR_MASK);
-                        pub const CRC_ERROR: Status = Status::from_usize(27 | Status::ERROR_MASK);
-                        pub const END_OF_MEDIA: Status = Status::from_usize(28 | Status::ERROR_MASK);
-                        pub const END_OF_FILE: Status = Status::from_usize(31 | Status::ERROR_MASK);
-                        pub const INVALID_LANGUAGE: Status = Status::from_usize(32 | Status::ERROR_MASK);
-                        pub const COMPROMISED_DATA: Status = Status::from_usize(33 | Status::ERROR_MASK);
-                        pub const IP_ADDRESS_CONFLICT: Status = Status::from_usize(34 | Status::ERROR_MASK);
-                        pub const HTTP_ERROR: Status = Status::from_usize(35 | Status::ERROR_MASK);
-                        /// Error Codes | UDP4
-                        pub const NETWORK_UNREACHABLE: Status = Status::from_usize(100 | Status::ERROR_MASK);
-                        pub const HOST_UNREACHABLE: Status = Status::from_usize(101 | Status::ERROR_MASK);
-                        pub const PROTOCOL_UNREACHABLE: Status = Status::from_usize(102 | Status::ERROR_MASK);
-                        pub const PORT_UNREACHABLE: Status = Status::from_usize(103 | Status::ERROR_MASK);
-                        /// Error Codes |  TCP4
-                        pub const CONNECTION_FIN: Status = Status::from_usize(104 | Status::ERROR_MASK);
-                        pub const CONNECTION_RESET: Status = Status::from_usize(105 | Status::ERROR_MASK);
-                        pub const CONNECTION_REFUSED: Status = Status::from_usize(106 | Status::ERROR_MASK);
-                        ///  Error Codes | Various
-                        pub const WARN_UNKNOWN_GLYPH: Status = Status::from_usize(1 | Status::WARNING_MASK);
-                        pub const WARN_DELETE_FAILURE: Status = Status::from_usize(2 | Status::WARNING_MASK);
-                        pub const WARN_WRITE_FAILURE: Status = Status::from_usize(3 | Status::WARNING_MASK);
-                        pub const WARN_BUFFER_TOO_SMALL: Status = Status::from_usize(4 | Status::WARNING_MASK);
-                        pub const WARN_STALE_DATA: Status = Status::from_usize(5 | Status::WARNING_MASK);
-                        pub const WARN_FILE_SYSTEM: Status = Status::from_usize(6 | Status::WARNING_MASK);
-                        pub const WARN_RESET_REQUIRED: Status = Status::from_usize(7 | Status::WARNING_MASK);
-                        /// Create Status Code from Integer.
-                        pub const fn from_usize(v: usize) -> Status { Status(v) }
-                        /// Return Underlying Integer Representation.
-                        pub const fn as_usize(&self) -> usize { self.0 }
-
-                        pub fn value(&self) -> usize { self.0 }
-
-                        pub fn mask(&self) -> usize { self.value() & Status::MASK }
-                        /// Check whether this is an error.
-                        pub fn is_error(&self) -> bool { self.mask() == Status::ERROR_MASK }
-                        /// Check whether this is a warning.
-                        pub fn is_warning(&self) -> bool { self.value() != 0 && self.mask() == Status::WARNING_MASK }
-                    }
-
-                    impl From<Status> for Result<Status, Status>
-                    {
-                        fn from(status: Status) -> Self
-                        {
-                            if status.is_error() { Err(status) }
-                            else { Ok(status) }
-                        }
-                    }
-
-                    impl Guid
-                    {
-                        pub const fn u32_to_bytes_le(num: u32) -> [u8; 4]
-                        {
-                            [
-                                num as u8,
-                                (num >> 8) as u8,
-                                (num >> 16) as u8,
-                                (num >> 24) as u8,
-                            ]
-                        }
-
-                        pub const fn u32_from_bytes_le(bytes: &[u8; 4]) -> u32
-                        {
-                            (bytes[0] as u32)
-                            | ((bytes[1] as u32) << 8)
-                            | ((bytes[2] as u32) << 16)
-                            | ((bytes[3] as u32) << 24)
-                        }
-
-                        pub const fn u16_to_bytes_le(num: u16) -> [u8; 2]
-                        {
-                            [num as u8, (num >> 8) as u8]
-                        }
-
-                        pub const fn u16_from_bytes_le(bytes: &[u8; 2]) -> u16
-                        {
-                            (bytes[0] as u16) | ((bytes[1] as u16) << 8)
-                        }
-
-                        /// Initialize a Guid from its individual fields.
-                        pub const fn from_fields
-                        (
-                            time_low: u32,
-                            time_mid: u16,
-                            time_hi_and_version: u16,
-                            clk_seq_hi_res: u8,
-                            clk_seq_low: u8,
-                            node: &[u8; 6],
-                        ) -> Guid
-                        {
-                            Guid
-                            {
-                                time_low: Self::u32_to_bytes_le(time_low),
-                                time_mid: Self::u16_to_bytes_le(time_mid),
-                                time_hi_and_version: Self::u16_to_bytes_le(time_hi_and_version),
-                                clk_seq_hi_res: clk_seq_hi_res,
-                                clk_seq_low: clk_seq_low,
-                                node: *node,
-                            }
-                        }
-                        /// Access a Guid as individual fields.
-                        pub const fn as_fields(&self) -> (u32, u16, u16, u8, u8, &[u8; 6])
-                        {
-                            (
-                                Self::u32_from_bytes_le(&self.time_low),
-                                Self::u16_from_bytes_le(&self.time_mid),
-                                Self::u16_from_bytes_le(&self.time_hi_and_version),
-                                self.clk_seq_hi_res,
-                                self.clk_seq_low,
-                                &self.node,
-                            )
-                        }
-                        /// Initialize a Guid from its byte representation.
-                        pub const fn from_bytes(bytes: &[u8; 16]) -> Self
-                        { unsafe { ::mem::transmute::<[u8; 16], Guid>(*bytes) } }
-                        /// Access a Guid as raw byte array.
-                        pub const fn as_bytes(&self) -> &[u8; 16]
-                        { unsafe { ::mem::transmute::<&Guid, &[u8; 16]>(self) } }
-                    }
                 }
 
-                pub mod system
+                pub mod simple_text_input
                 {
-                    //! UEFI System Integration
+                    //! Simple Text Input Protocol
                     use ::
                     {
+                        system::uefi::api::base::
+                        {
+                            Boolean, Char16, Event, Guid, Status
+                        },
                         *,
                     };
 
-                    pub const TIME_ADJUST_DAYLIGHT: u8 = 0x01u8;
-                    pub const TIME_IN_DAYLIGHT: u8 = 0x02u8;
-                    pub const UNSPECIFIED_TIMEZONE: i16 = 0x07ffi16;
-                    
-                    #[repr( C )] #[derive( Clone, Copy, Debug, Default )]
-                    pub struct Time
-                    {
-                        pub year: u16,
-                        pub month: u8,
-                        pub day: u8,
-                        pub hour: u8,
-                        pub minute: u8,
-                        pub second: u8,
-                        pub pad1: u8,
-                        pub nanosecond: u32,
-                        pub timezone: i16,
-                        pub daylight: u8,
-                        pub pad2: u8,
-                    }
-                }
-
-                pub mod file
-                {
-                    //! File Protocol
-                    use ::
-                    {
-                        *,
-                    };
-                    pub const REVISION: u64 = 0x0000_0000_0001_0000u64;
-                    pub const REVISION2: u64 = 0x0000_0000_0002_0000u64;
-                    pub const LATEST_REVISION: u64 = REVISION2;
-
-                    pub const MODE_READ: u64 = 0x0000000000000001u64;
-                    pub const MODE_WRITE: u64 = 0x0000000000000002u64;
-                    pub const MODE_CREATE: u64 = 0x8000000000000000u64;
-
-                    pub const READ_ONLY: u64 = 0x0000000000000001u64;
-                    pub const HIDDEN: u64 = 0x0000000000000002u64;
-                    pub const SYSTEM: u64 = 0x0000000000000004u64;
-                    pub const RESERVED: u64 = 0x0000000000000008u64;
-                    pub const DIRECTORY: u64 = 0x0000000000000010u64;
-                    pub const ARCHIVE: u64 = 0x0000000000000020u64;
-                    pub const VALID_ATTR: u64 = 0x0000000000000037u64;
-
-                    pub const INFO_ID: super::base::Guid = super::base::Guid::from_fields
+                    pub const PROTOCOL_GUID: Guid = Guid::from_fields
                     (
-                        0x09576e92,
-                        0x6d3f,
+                        0x387477c1,
+                        0x69c7,
                         0x11d2,
                         0x8e,
                         0x39,
                         &[0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b],
                     );
 
-                    pub const SYSTEM_INFO_ID: super::base::Guid = super::base::Guid::from_fields
-                    (
-                        0x09576e93,
-                        0x6d3f,
-                        0x11d2,
-                        0x8e,
-                        0x39,
-                        &[0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b],
-                    );
-
-                    pub const SYSTEM_VOLUME_LABEL_ID: super::base::Guid = super::base::Guid::from_fields
-                    (
-                        0xdb47d7d3,
-                        0xfe81,
-                        0x11d3,
-                        0x9a,
-                        0x35,
-                        &[0x00, 0x90, 0x27, 0x3f, 0xc1, 0x4d],
-                    );
-
-                    #[repr( C )] #[derive( Clone, Copy, Debug )]
-                    pub struct IoToken
+                    #[repr(C)] #[derive(Clone, Copy, Debug, Default)]
+                    pub struct InputKey
                     {
-                        pub event: super::base::Event,
-                        pub status: super::base::Status,
-                        pub buffer_size: usize,
-                        pub buffer: *mut ::ffi::c_void,
+                        pub scan_code: u16,
+                        pub unicode_char: Char16,
                     }
 
-                    #[repr( C )] #[derive( Clone, Copy, Debug )]
-                    pub struct Info<const N: usize = 0> 
+                    pub type ProtocolReset = eficall! {fn
+                    (
+                        *mut Protocol,
+                        Boolean,
+                    ) -> Status};
+
+                    pub type ProtocolReadKeyStroke = eficall! {fn
+                    (
+                        *mut Protocol,
+                        *mut InputKey,
+                    ) -> Status};
+
+                    #[repr(C)] pub struct Protocol
                     {
-                        pub size: u64,
-                        pub file_size: u64,
-                        pub physical_size: u64,
-                        pub create_time: super::system::Time,
-                        pub last_access_time: super::system::Time,
-                        pub modification_time: super::system::Time,
-                        pub attribute: u64,
-                        pub file_name: [super::base::Char16; N],
-                    }
-
-                    #[repr( C )] #[derive( Clone, Copy, Debug )]
-                    pub struct SystemInfo<const N: usize = 0>
-                    {
-                        pub size: u64,
-                        pub read_only: super::base::Boolean,
-                        pub volume_size: u64,
-                        pub free_space: u64,
-                        pub block_size: u32,
-                        pub volume_label: [super::base::Char16; N],
-                    }
-
-                    #[repr( C )] #[derive( Clone, Copy, Debug )]
-                    pub struct SystemVolumeLabel<const N: usize = 0>
-                    {
-                        pub volume_label: [super::base::Char16; N],
-                    }
-
-                    pub type ProtocolOpen = eficall! {fn
-                    (
-                        *mut Protocol,
-                        *mut *mut Protocol,
-                        *mut super::base::Char16,
-                        u64,
-                        u64,
-                    ) -> super::base::Status};
-
-                    pub type ProtocolClose = eficall! {fn
-                    (
-                        *mut Protocol,
-                    ) -> super::base::Status};
-
-                    pub type ProtocolDelete = eficall! {fn
-                    (
-                        *mut Protocol,
-                    ) -> super::base::Status};
-
-                    pub type ProtocolRead = eficall! {fn
-                    (
-                        *mut Protocol,
-                        *mut usize,
-                        *mut ::ffi::c_void,
-                    ) -> super::base::Status};
-
-                    pub type ProtocolWrite = eficall! {fn
-                    (
-                        *mut Protocol,
-                        *mut usize,
-                        *mut ::ffi::c_void,
-                    ) -> super::base::Status};
-
-                    pub type ProtocolGetPosition = eficall! {fn
-                    (
-                        *mut Protocol,
-                        *mut u64,
-                    ) -> super::base::Status};
-
-                    pub type ProtocolSetPosition = eficall! {fn
-                    (
-                        *mut Protocol,
-                        u64,
-                    ) -> super::base::Status};
-
-                    pub type ProtocolGetInfo = eficall! {fn
-                    (
-                        *mut Protocol,
-                        *mut super::base::Guid,
-                        *mut usize,
-                        *mut ::ffi::c_void,
-                    ) -> super::base::Status};
-
-                    pub type ProtocolSetInfo = eficall! {fn
-                    (
-                        *mut Protocol,
-                        *mut super::base::Guid,
-                        usize,
-                        *mut ::ffi::c_void,
-                    ) -> super::base::Status};
-
-                    pub type ProtocolFlush = eficall! {fn( *mut Protocol ) -> super::base::Status};
-
-                    pub type ProtocolOpenEx = eficall! {fn
-                    (
-                        *mut Protocol,
-                        *mut *mut Protocol,
-                        *mut super::base::Char16,
-                        u64,
-                        u64,
-                        *mut IoToken
-                    ) -> super::base::Status};
-
-                    pub type ProtocolReadEx = eficall! {fn( *mut Protocol, *mut IoToken ) -> super::base::Status};
-
-                    pub type ProtocolWriteEx = eficall! {fn( *mut Protocol, *mut IoToken ) -> super::base::Status};
-
-                    pub type ProtocolFlushEx = eficall! {fn( *mut Protocol, *mut IoToken ) -> super::base::Status};
-
-                    #[repr( C )] pub struct Protocol
-                    {
-                        pub revision: u64,
-                        pub open: ProtocolOpen,
-                        pub close: ProtocolClose,
-                        pub delete: ProtocolDelete,
-                        pub read: ProtocolRead,
-                        pub write: ProtocolWrite,
-                        pub get_position: ProtocolGetPosition,
-                        pub set_position: ProtocolSetPosition,
-                        pub get_info: ProtocolGetInfo,
-                        pub set_info: ProtocolSetInfo,
-                        pub flush: ProtocolFlush,
-                        pub open_ex: ProtocolOpenEx,
-                        pub read_ex: ProtocolReadEx,
-                        pub write_ex: ProtocolWriteEx,
-                        pub flush_ex: ProtocolFlushEx,
+                        pub reset: ProtocolReset,
+                        pub read_key_stroke: ProtocolReadKeyStroke,
+                        pub wait_for_key: Event,
                     }
                 }
-
-                pub mod device_path
+                
+                pub mod simple_text_output
                 {
-                    //! Device Path Protocol
                     use ::
                     {
                         *,
                     };
-                    
-                    pub const PROTOCOL_GUID: super::base::Guid = super::base::Guid::from_fields
-                    (
-                        0x09576e91,
-                        0x6d3f,
-                        0x11d2,
-                        0x8e,
-                        0x39,
-                        &[0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b],
-                    );
-
-                    pub const TYPE_HARDWARE: u8 = 0x01;
-                    pub const TYPE_ACPI: u8 = 0x02;
-                    pub const TYPE_MESSAGING: u8 = 0x03;
-                    pub const TYPE_MEDIA: u8 = 0x04;
-                    pub const TYPE_BIOS: u8 = 0x05;
-                    pub const TYPE_END: u8 = 0x7f;
-
-                    #[repr( C )] #[derive( Clone, Copy, Debug )]
-                    pub struct Protocol
-                    {
-                        pub r#type: u8,
-                        pub sub_type: u8,
-                        pub length: [u8; 2],
-                    }
-
-                    #[repr( C )] #[derive( Clone, Copy, Debug )]
-                    pub struct End
-                    {
-                        pub header: Protocol,
-                    }
-
-                    impl End
-                    {
-                        pub const SUBTYPE_INSTANCE: u8 = 0x01;
-                        pub const SUBTYPE_ENTIRE: u8 = 0xff;
-                    }
-
-                    #[repr( C )] #[derive( Clone, Copy, Debug )]
-                    pub struct Hardware
-                    {
-                        pub header: Protocol,
-                    }
-
-                    impl Hardware
-                    {
-                        pub const SUBTYPE_PCI: u8 = 0x01;
-                        pub const SUBTYPE_PCCARD: u8 = 0x02;
-                        pub const SUBTYPE_MMAP: u8 = 0x03;
-                        pub const SUBTYPE_VENDOR: u8 = 0x04;
-                        pub const SUBTYPE_CONTROLLER: u8 = 0x05;
-                        pub const SUBTYPE_BMC: u8 = 0x06;
-                    }
-
-                    #[repr( C, packed )] #[derive( Clone, Copy, Debug )]
-                    pub struct HardDriveMedia
-                    {
-                        pub header: Protocol,
-                        pub partition_number: u32,
-                        pub partition_start: u64,
-                        pub partition_size: u64,
-                        pub partition_signature: [u8; 16],
-                        pub partition_format: u8,
-                        pub signature_type: u8,
-                    }
-
-                    pub struct Media
-                    {
-                        pub header: Protocol,
-                    }
-
-                    impl Media
-                    {
-                        pub const SUBTYPE_HARDDRIVE: u8 = 0x01;
-                        pub const SUBTYPE_CDROM: u8 = 0x02;
-                        pub const SUBTYPE_VENDOR: u8 = 0x03;
-                        pub const SUBTYPE_FILE_PATH: u8 = 0x04;
-                        pub const SUBTYPE_MEDIA_PROTOCOL: u8 = 0x05;
-                        pub const SUBTYPE_PIWG_FIRMWARE_FILE: u8 = 0x06;
-                        pub const SUBTYPE_PIWG_FIRMWARE_VOLUME: u8 = 0x07;
-                        pub const SUBTYPE_RELATIVE_OFFSET_RANGE: u8 = 0x08;
-                        pub const SUBTYPE_RAM_DISK: u8 = 0x09;
-                    }
-                }
-
-                pub mod simple_file_system
-                {
-                    //! Simple File System Protocol
-                    use ::
-                    {
-                        *,
-                    };
-                    
-                    pub const PROTOCOL_GUID: super::base::Guid = super::base::Guid::from_fields
-                    (
-                        0x964e5b22,
-                        0x6459,
-                        0x11d2,
-                        0x8e,
-                        0x39,
-                        &[0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b],
-                    );
-
-                    pub const REVISION: u64 = 0x0000000000010000u64;
-
-                    pub type ProtocolOpenVolume = eficall! {fn
-                    (
-                        *mut Protocol,
-                        *mut *mut super::protocols::file::Protocol,
-                    ) -> super::base::Status};
-
-                    #[repr( C )] pub struct Protocol 
-                    {
-                        pub revision: u64,
-                        pub open_volume: ProtocolOpenVolume,
-                    }
-                }
-
-            } pub use self::protocols::file;
-
-            #[expect(dead_code)]
-            const FILE_PERMISSIONS_MASK: u64 = self::file::READ_ONLY;
-
-            pub struct File(!);
-
-            #[derive(Clone)]
-            pub struct FileAttr 
-            {
-                attr: u64,
-                size: u64,
-            }
-
-            pub struct ReadDir(!);
-
-            pub struct DirEntry(!);
-
-            #[derive(Clone, Debug)]
-            pub struct OpenOptions 
-            {
-                mode: u64,
-                append: bool,
-                truncate: bool,
-                create_new: bool,
-            }
-
-            #[derive(Copy, Clone, Debug, Default)]
-            pub struct FileTimes {}
-
-            #[derive(Clone, PartialEq, Eq, Debug)]
-            pub struct FilePermissions(bool);
-
-            #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-            pub struct FileType(bool);
-
-            #[derive( Debug )]
-            pub struct DirBuilder;
-
-            impl FileAttr 
-            {
-                pub fn size(&self) -> u64 { self.size }
-                pub fn perm(&self) -> FilePermissions { FilePermissions::from_attr(self.attr) }
-                pub fn file_type(&self) -> FileType { FileType::from_attr(self.attr) }
-                pub fn modified(&self) -> io::Result<SystemTime> { unsupported() }
-                pub fn accessed(&self) -> io::Result<SystemTime> { unsupported() }
-                pub fn created(&self) -> io::Result<SystemTime> { unsupported() }
-            }
-
-            impl FilePermissions
-            {
-                pub fn readonly(&self) -> bool { self.0 }
-
-                pub fn set_readonly(&mut self, readonly: bool) { self.0 = readonly }
-
-                const fn from_attr(attr: u64) -> Self { Self(attr & file::READ_ONLY != 0) }
-                
-                const fn to_attr(&self) -> u64 { if self.0 { file::READ_ONLY } else { 0 } }
-            }
-
-            impl FileTimes
-            {
-                pub fn set_accessed(&mut self, _t: SystemTime) {}
-                pub fn set_modified(&mut self, _t: SystemTime) {}
-            }
-
-            impl FileType
-            {
-                pub fn is_dir(&self) -> bool { self.0 }
-                pub fn is_file(&self) -> bool { !self.is_dir() }                
-                pub fn is_symlink(&self) -> bool { false }
-                const fn from_attr(attr: u64) -> Self { Self(attr & file::DIRECTORY != 0) }
-            }
-
-            impl fmt::Debug for ReadDir
-            {
-                fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result { self.0 }
-            }
-
-            impl Iterator for ReadDir
-            {
-                type Item = io::Result<DirEntry>;
-                fn next(&mut self) -> Option<io::Result<DirEntry>> { self.0 }
-            }
-
-            impl DirEntry
-            {
-                pub fn path(&self) -> PathBuf { self.0 }
-                pub fn file_name(&self) -> OsString { self.0 }
-                pub fn metadata(&self) -> io::Result<FileAttr> { self.0 }
-                pub fn file_type(&self) -> io::Result<FileType> { self.0 }
-            }
-
-            impl OpenOptions
-            {
-                pub fn new() -> OpenOptions
-                {
-                    OpenOptions 
-                    { 
-                        mode: 0, 
-                        append: false, 
-                        create_new: false, 
-                        truncate: false
-                    }
-                }
-
-                pub fn read(&mut self, read: bool)
-                {
-                    if read { self.mode |= file::MODE_READ; }
-                    else { self.mode &= !file::MODE_READ; }
-                }
-
-                pub fn write(&mut self, write: bool)
-                {
-                    if write
-                    {
-                        self.read(true);
-                        self.mode |= file::MODE_WRITE;
-                    }
-                    else { self.mode &= !file::MODE_WRITE; }
-                }
-
-                pub fn append(&mut self, append: bool)
-                {
-                    if append { self.write(true); }
-                    self.append = append;
-                }
-
-                pub fn truncate(&mut self, truncate: bool) { self.truncate = truncate; }
-
-                pub fn create(&mut self, create: bool)
-                {
-                    if create { self.mode |= file::MODE_CREATE; }
-                    else { self.mode &= !file::MODE_CREATE; }
-                }
-
-                pub fn create_new(&mut self, create_new: bool) { self.create_new = create_new; }
-                
-                const fn is_mode_valid(&self) -> bool
-                {
-                    self.mode == file::MODE_READ
-                    || self.mode == (file::MODE_READ | file::MODE_WRITE)
-                    || self.mode == (file::MODE_READ | file::MODE_WRITE | file::MODE_CREATE)
-                }
-            }
-
-            impl File
-            {
-                pub fn open(_path: &Path, _opts: &OpenOptions) -> io::Result<File> { unsupported() }
-                pub fn file_attr(&self) -> io::Result<FileAttr> { self.0 }
-                pub fn fsync(&self) -> io::Result<()> { self.0 }
-                pub fn datasync(&self) -> io::Result<()> { self.0 }
-                pub fn lock(&self) -> io::Result<()> { self.0 }
-                pub fn lock_shared(&self) -> io::Result<()> { self.0 }
-                pub fn try_lock(&self) -> io::Result<bool> { self.0 }
-                pub fn try_lock_shared(&self) -> io::Result<bool> { self.0 }
-                pub fn unlock(&self) -> io::Result<()> { self.0 }
-                pub fn truncate(&self, _size: u64) -> io::Result<()> { self.0 }
-                pub fn read(&self, _buf: &mut [u8]) -> io::Result<usize> { self.0 }
-                pub fn read_vectored(&self, _bufs: &mut [IoSliceMut<'_>]) -> io::Result<usize> { self.0 }
-                pub fn is_read_vectored(&self) -> bool { self.0 }
-                pub fn read_buf(&self, _cursor: BorrowedCursor<'_>) -> io::Result<()> { self.0 }
-                pub fn write(&self, _buf: &[u8]) -> io::Result<usize> { self.0 }
-                pub fn write_vectored(&self, _bufs: &[IoSlice<'_>]) -> io::Result<usize> { self.0 }
-                pub fn is_write_vectored(&self) -> bool { self.0 }
-                pub fn flush(&self) -> io::Result<()> { self.0 }
-                pub fn seek(&self, _pos: SeekFrom) -> io::Result<u64> { self.0 }
-                pub fn tell(&self) -> io::Result<u64> { self.0 }
-                pub fn duplicate(&self) -> io::Result<File> { self.0 }
-                pub fn set_permissions(&self, _perm: FilePermissions) -> io::Result<()> { self.0 }
-                pub fn set_times(&self, _times: FileTimes) -> io::Result<()> { self.0 }
-            }
-
-            impl DirBuilder
-            {
-                pub fn new() -> DirBuilder
-                {
-                    DirBuilder
-                }
-
-                pub fn mkdir(&self, p: &Path) -> io::Result<()>
-                {
-                    efi::mkdir(p)
-                }
-            }
-
-            impl fmt::Debug for File
-            {
-                fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result { self.0 }
-            }
-
-            pub fn readdir(_p: &Path) -> io::Result<ReadDir> { unsupported() }
-            pub fn unlink(_p: &Path) -> io::Result<()> { unsupported() }
-            pub fn rename(_old: &Path, _new: &Path) -> io::Result<()> { unsupported() }
-            pub fn set_perm(_p: &Path, _perm: FilePermissions) -> io::Result<()> { unsupported() }
-            pub fn rmdir(_p: &Path) -> io::Result<()> { unsupported() }
-            pub fn remove_dir_all(_path: &Path) -> io::Result<()> { unsupported() }
-            pub fn exists(path: &Path) -> io::Result<bool>
-            {
-                let f = uefi_fs::File::from_path(path, file::MODE_READ, 0);
-                match f
-                {
-                    Ok(_) => Ok(true),
-                    Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(false),
-                    Err(e) => Err(e),
-                }
-            }
-
-            pub fn readlink(_p: &Path) -> io::Result<PathBuf> { unsupported() }
-            pub fn symlink(_original: &Path, _link: &Path) -> io::Result<()> { unsupported() }
-            pub fn link(_src: &Path, _dst: &Path) -> io::Result<()> { unsupported() }
-            pub fn stat(_p: &Path) -> io::Result<FileAttr> { unsupported() }
-            pub fn lstat(p: &Path) -> io::Result<FileAttr> { stat(p) }
-            pub fn canonicalize(p: &Path) -> io::Result<PathBuf> { ::path::absolute(p) }
-            pub fn copy(_from: &Path, _to: &Path) -> io::Result<u64> { unsupported() }
-
-            mod efi
-            {
-                use ::
-                {
-                    boxed::Box,
-                    path::Path,
-                    ptr::NonNull,
-                    sys::helpers,
-                    *,
-                };
-                use super::protocols::{device_path, file, simple_file_system};
-                
-                pub struct File(NonNull<file::Protocol>);
-
-                impl File
-                {
-                    pub fn from_path(path: &Path, open_mode: u64, attr: u64) -> io::Result<Self>
-                    {
-                        let absolute = ::path::absolute(path)?;
-                        let p = helpers::OwnedDevicePath::from_text(absolute.as_os_str())?;
-                        let (vol, mut path_remaining) = Self::open_volume_from_device_path(p.borrow())?;
-                        vol.open(&mut path_remaining, open_mode, attr)
-                    }
-                    /// Open Filesystem volume given a devicepath to the volume, or a file/directory in the volume.
-                    fn open_volume_from_device_path ( path: helpers::BorrowedDevicePath<'_> ) -> 
-                    io::Result<(Self, Box<[u16]>)>
-                    {
-                        let handles = match helpers::locate_handles(simple_file_system::PROTOCOL_GUID) {
-                            Ok(x) => x,
-                            Err(e) => return Err(e),
-                        };
-                        for handle in handles {
-                            let volume_device_path: NonNull<device_path::Protocol> =
-                                match helpers::open_protocol(handle, device_path::PROTOCOL_GUID) {
-                                    Ok(x) => x,
-                                    Err(_) => continue,
-                                };
-                            let volume_device_path = helpers::BorrowedDevicePath::new(volume_device_path);
-
-                            if let Some(left_path) = path_best_match(&volume_device_path, &path) {
-                                return Ok((Self::open_volume(handle)?, left_path));
-                            }
-                        }
-
-                        Err(constant_error!(io::ErrorKind::NotFound, "Volume Not Found"))
-                    }
-                    
-                    pub fn open_volume(device_handle: NonNull<::ffi::c_void>) -> io::Result<Self>
-                    {
-                        let simple_file_system_protocol = helpers::open_protocol::<simple_file_system::Protocol>(
-                            device_handle,
-                            simple_file_system::PROTOCOL_GUID,
-                        )?;
-
-                        let mut file_protocol = ::ptr::null_mut();
-                        let r = unsafe {
-                            ((*simple_file_system_protocol.as_ptr()).open_volume)(
-                                simple_file_system_protocol.as_ptr(),
-                                &mut file_protocol,
-                            )
-                        };
-                        if r.is_error() {
-                            return Err(io::Error::from_raw_os_error(r.as_usize()));
-                        }
-                        
-                        let p = NonNull::new(file_protocol).unwrap();
-                        Ok(Self(p))
-                    }
-
-                    fn open(&self, path: &mut [u16], open_mode: u64, attr: u64) -> io::Result<Self> {
-                        let file_ptr = self.0.as_ptr();
-                        let mut file_opened = ::ptr::null_mut();
-
-                        let r = unsafe {
-                            ((*file_ptr).open)(file_ptr, &mut file_opened, path.as_mut_ptr(), open_mode, attr)
-                        };
-
-                        if r.is_error() {
-                            return Err(io::Error::from_raw_os_error(r.as_usize()));
-                        }
-                        
-                        let p = NonNull::new(file_opened).unwrap();
-                        Ok(File(p))
-                    }
-                }
-
-                impl Drop for File {
-                    fn drop(&mut self) {
-                        let file_ptr = self.0.as_ptr();
-                        let _ = unsafe { ((*self.0.as_ptr()).close)(file_ptr) };
-                    }
-                }
-
-                /// A helper to check that target path is a descendent of source.
-                fn path_best_match(
-                    source: &helpers::BorrowedDevicePath<'_>,
-                    target: &helpers::BorrowedDevicePath<'_>,
-                ) -> Option<Box<[u16]>> {
-                    let mut source_iter = source.iter().take_while(|x| !x.is_end_instance());
-                    let mut target_iter = target.iter().take_while(|x| !x.is_end_instance());
-
-                    loop {
-                        match (source_iter.next(), target_iter.next()) {
-                            (Some(x), Some(y)) if x == y => continue,
-                            (None, Some(y)) => {
-                                let p = y.to_path().to_text().ok()?;
-                                return helpers::os_string_to_raw(&p);
-                            }
-                            _ => return None,
-                        }
-                    }
-                }
-
-                /// An implementation of mkdir to allow creating new directory without having to open the
-                /// volume twice (once for checking and once for creating)
-                pub fn mkdir(path: &Path) -> io::Result<()> {
-                    let absolute = crate::path::absolute(path)?;
-
-                    let p = helpers::OwnedDevicePath::from_text(absolute.as_os_str())?;
-                    let (vol, mut path_remaining) = File::open_volume_from_device_path(p.borrow())?;
-
-                    // Check if file exists
-                    match vol.open(&mut path_remaining, file::MODE_READ, 0) {
-                        Ok(_) => {
-                            return Err(io::Error::new(io::ErrorKind::AlreadyExists, "Path already exists"));
-                        }
-                        Err(e) if e.kind() == io::ErrorKind::NotFound => {}
-                        Err(e) => return Err(e),
-                    }
-
-                    let _ = vol.open(
-                        &mut path_remaining,
-                        file::MODE_READ | file::MODE_WRITE | file::MODE_CREATE,
-                        file::DIRECTORY,
-                    )?;
-
-                    Ok(())
                 }
             }
         }
 
-        mod unsupported
+        pub mod process
         {
             use ::
             {
-                ffi::OsString,
-                hash::{Hash, Hasher},
-                io::{self, BorrowedCursor, IoSlice, IoSliceMut, SeekFrom},
-                path::{Path, PathBuf},
-                sys::time::SystemTime,
-                sys::unsupported,
-                *,
-            };
-            
-            pub struct File(!);
-
-            pub struct FileAttr(!);
-
-            pub struct ReadDir(!);
-
-            pub struct DirEntry(!);
-
-            #[derive(Clone, Debug)]
-            pub struct OpenOptions {}
-
-            #[derive(Copy, Clone, Debug, Default)]
-            pub struct FileTimes {}
-
-            pub struct FilePermissions(!);
-
-            pub struct FileType(!);
-
-            #[derive( Debug )]
-            pub struct DirBuilder {}
-
-            impl FileAttr
-            {
-                pub fn size(&self) -> u64 {
-                    self.0
-                }
-
-                pub fn perm(&self) -> FilePermissions {
-                    self.0
-                }
-
-                pub fn file_type(&self) -> FileType {
-                    self.0
-                }
-
-                pub fn modified(&self) -> io::Result<SystemTime> {
-                    self.0
-                }
-
-                pub fn accessed(&self) -> io::Result<SystemTime> {
-                    self.0
-                }
-
-                pub fn created(&self) -> io::Result<SystemTime> {
-                    self.0
-                }
-            }
-
-            impl Clone for FileAttr 
-            {
-                fn clone(&self) -> FileAttr {
-                    self.0
-                }
-            }
-
-            impl FilePermissions 
-            {
-                pub fn readonly(&self) -> bool {
-                    self.0
-                }
-
-                pub fn set_readonly(&mut self, _readonly: bool) {
-                    self.0
-                }
-            }
-
-            impl Clone for FilePermissions 
-            {
-                fn clone(&self) -> FilePermissions {
-                    self.0
-                }
-            }
-
-            impl PartialEq for FilePermissions 
-            {
-                fn eq(&self, _other: &FilePermissions) -> bool {
-                    self.0
-                }
-            }
-
-            impl Eq for FilePermissions {}
-
-            impl fmt::Debug for FilePermissions 
-            {
-                fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                    self.0
-                }
-            }
-
-            impl FileTimes 
-            {
-                pub fn set_accessed(&mut self, _t: SystemTime) {}
-                pub fn set_modified(&mut self, _t: SystemTime) {}
-            }
-
-            impl FileType 
-            {
-                pub fn is_dir(&self) -> bool {
-                    self.0
-                }
-
-                pub fn is_file(&self) -> bool {
-                    self.0
-                }
-
-                pub fn is_symlink(&self) -> bool {
-                    self.0
-                }
-            }
-
-            impl Clone for FileType 
-            {
-                fn clone(&self) -> FileType {
-                    self.0
-                }
-            }
-
-            impl Copy for FileType {}
-
-            impl PartialEq for FileType 
-            {
-                fn eq(&self, _other: &FileType) -> bool {
-                    self.0
-                }
-            }
-
-            impl Eq for FileType {}
-
-            impl Hash for FileType {
-                fn hash<H: Hasher>(&self, _h: &mut H) {
-                    self.0
-                }
-            }
-
-            impl fmt::Debug for FileType 
-            {
-                fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                    self.0
-                }
-            }
-
-            impl fmt::Debug for ReadDir 
-            {
-                fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                    self.0
-                }
-            }
-
-            impl Iterator for ReadDir 
-            {
-                type Item = io::Result<DirEntry>;
-
-                fn next(&mut self) -> Option<io::Result<DirEntry>> {
-                    self.0
-                }
-            }
-
-            impl DirEntry 
-            {
-                pub fn path(&self) -> PathBuf {
-                    self.0
-                }
-
-                pub fn file_name(&self) -> OsString {
-                    self.0
-                }
-
-                pub fn metadata(&self) -> io::Result<FileAttr> {
-                    self.0
-                }
-
-                pub fn file_type(&self) -> io::Result<FileType> {
-                    self.0
-                }
-            }
-
-            impl OpenOptions 
-            {
-                pub fn new() -> OpenOptions {
-                    OpenOptions {}
-                }
-
-                pub fn read(&mut self, _read: bool) {}
-                pub fn write(&mut self, _write: bool) {}
-                pub fn append(&mut self, _append: bool) {}
-                pub fn truncate(&mut self, _truncate: bool) {}
-                pub fn create(&mut self, _create: bool) {}
-                pub fn create_new(&mut self, _create_new: bool) {}
-            }
-
-            impl File 
-            {
-                pub fn open(_path: &Path, _opts: &OpenOptions) -> io::Result<File> {
-                    unsupported()
-                }
-
-                pub fn file_attr(&self) -> io::Result<FileAttr> {
-                    self.0
-                }
-
-                pub fn fsync(&self) -> io::Result<()> {
-                    self.0
-                }
-
-                pub fn datasync(&self) -> io::Result<()> {
-                    self.0
-                }
-
-                pub fn lock(&self) -> io::Result<()> {
-                    self.0
-                }
-
-                pub fn lock_shared(&self) -> io::Result<()> {
-                    self.0
-                }
-
-                pub fn try_lock(&self) -> io::Result<bool> {
-                    self.0
-                }
-
-                pub fn try_lock_shared(&self) -> io::Result<bool> {
-                    self.0
-                }
-
-                pub fn unlock(&self) -> io::Result<()> {
-                    self.0
-                }
-
-                pub fn truncate(&self, _size: u64) -> io::Result<()> {
-                    self.0
-                }
-
-                pub fn read(&self, _buf: &mut [u8]) -> io::Result<usize> {
-                    self.0
-                }
-
-                pub fn read_vectored(&self, _bufs: &mut [IoSliceMut<'_>]) -> io::Result<usize> {
-                    self.0
-                }
-
-                pub fn is_read_vectored(&self) -> bool {
-                    self.0
-                }
-
-                pub fn read_buf(&self, _cursor: BorrowedCursor<'_>) -> io::Result<()> {
-                    self.0
-                }
-
-                pub fn write(&self, _buf: &[u8]) -> io::Result<usize> {
-                    self.0
-                }
-
-                pub fn write_vectored(&self, _bufs: &[IoSlice<'_>]) -> io::Result<usize> {
-                    self.0
-                }
-
-                pub fn is_write_vectored(&self) -> bool {
-                    self.0
-                }
-
-                pub fn flush(&self) -> io::Result<()> {
-                    self.0
-                }
-
-                pub fn seek(&self, _pos: SeekFrom) -> io::Result<u64> {
-                    self.0
-                }
-
-                pub fn tell(&self) -> io::Result<u64> {
-                    self.0
-                }
-
-                pub fn duplicate(&self) -> io::Result<File> {
-                    self.0
-                }
-
-                pub fn set_permissions(&self, _perm: FilePermissions) -> io::Result<()> {
-                    self.0
-                }
-
-                pub fn set_times(&self, _times: FileTimes) -> io::Result<()> {
-                    self.0
-                }
-            }
-
-            impl DirBuilder 
-            {
-                pub fn new() -> DirBuilder {
-                    DirBuilder {}
-                }
-
-                pub fn mkdir(&self, _p: &Path) -> io::Result<()> {
-                    unsupported()
-                }
-            }
-
-            impl fmt::Debug for File 
-            {
-                fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                    self.0
-                }
-            }
-
-            pub fn readdir(_p: &Path) -> io::Result<ReadDir> 
-            {
-                unsupported()
-            }
-
-            pub fn unlink(_p: &Path) -> io::Result<()> 
-            {
-                unsupported()
-            }
-
-            pub fn rename(_old: &Path, _new: &Path) -> io::Result<()> 
-            {
-                unsupported()
-            }
-
-            pub fn set_perm(_p: &Path, perm: FilePermissions) -> io::Result<()> 
-            {
-                match perm.0 {}
-            }
-
-            pub fn rmdir(_p: &Path) -> io::Result<()> 
-            {
-                unsupported()
-            }
-
-            pub fn remove_dir_all(_path: &Path) -> io::Result<()> 
-            {
-                unsupported()
-            }
-
-            pub fn exists(_path: &Path) -> io::Result<bool> 
-            {
-                unsupported()
-            }
-
-            pub fn readlink(_p: &Path) -> io::Result<PathBuf> 
-            {
-                unsupported()
-            }
-
-            pub fn symlink(_original: &Path, _link: &Path) -> io::Result<()> 
-            {
-                unsupported()
-            }
-
-            pub fn link(_src: &Path, _dst: &Path) -> io::Result<()> 
-            {
-                unsupported()
-            }
-
-            pub fn stat(_p: &Path) -> io::Result<FileAttr> 
-            {
-                unsupported()
-            }
-
-            pub fn lstat(_p: &Path) -> io::Result<FileAttr> 
-            {
-                unsupported()
-            }
-
-            pub fn canonicalize(_p: &Path) -> io::Result<PathBuf> 
-            {
-                unsupported()
-            }
-
-            pub fn copy(_from: &Path, _to: &Path) -> io::Result<u64> 
-            {
-                unsupported()
-            }
-        }
-
-        #[cfg( unix )] pub use self::unix::{ * };
-        #[cfg( windows )] pub use self::windows::{ * };
-        #[cfg(target_os = "uefi")]  pub use self::uefi::{ * };
-
-        pub fn read_dir(path: &Path) -> io::Result<ReadDir> { imp::readdir(path) }
-
-        pub fn remove_file(path: &Path) -> io::Result<()> { with_native_path(path, &imp::unlink) }
-
-        pub fn rename(old: &Path, new: &Path) -> io::Result<()>
-        { with_native_path(old, &|old| with_native_path(new, &|new| imp::rename(old, new))) }
-
-        pub fn remove_dir(path: &Path) -> io::Result<()> { with_native_path(path, &imp::rmdir) }
-
-        pub fn remove_dir_all(path: &Path) -> io::Result<()>
-        {
-            #[cfg(not(windows))] return imp::remove_dir_all(path);
-            #[cfg(windows)] with_native_path(path, &imp::remove_dir_all)
-        }
-
-        pub fn read_link(path: &Path) -> io::Result<PathBuf> { with_native_path(path, &imp::readlink) }
-
-        pub fn symlink(original: &Path, link: &Path) -> io::Result<()>
-        {
-            #[cfg(windows)] 
-            return imp::symlink(original, link);
-
-            #[cfg(not(windows))] 
-            with_native_path(original, &|original| { with_native_path(link, &|link| imp::symlink(original, link)) })
-        }
-
-        pub fn hard_link(original: &Path, link: &Path) -> io::Result<()>
-        { with_native_path(original, &|original| { with_native_path(link, &|link| imp::link(original, link))})}
-
-        pub fn metadata(path: &Path) -> io::Result<FileAttr> { with_native_path(path, &imp::stat) }
-
-        pub fn symlink_metadata(path: &Path) -> io::Result<FileAttr> { with_native_path(path, &imp::lstat) }
-
-        pub fn set_permissions(path: &Path, perm: FilePermissions) -> io::Result<()>
-        { with_native_path(path, &|path| imp::set_perm(path, perm.clone())) }
-
-        pub fn canonicalize(path: &Path) -> io::Result<PathBuf> { with_native_path(path, &imp::canonicalize) }
-
-        pub fn copy(from: &Path, to: &Path) -> io::Result<u64>
-        {
-            #[cfg(not(windows))] return imp::copy(from, to);
-            #[cfg(windows)] with_native_path(from, &|from| with_native_path(to, &|to| imp::copy(from, to)))
-        }
-
-        pub fn exists(path: &Path) -> io::Result<bool>
-        {
-            #[cfg(not(windows))] return imp::exists(path);
-            #[cfg(windows)] with_native_path(path, &imp::exists)
-        }
-    }
-
-    pub mod os_str
-    {
-        mod bytes
-        {
-            //! The underlying OsString/OsStr implementation on Unix and many other systems: `Vec<u8>`/`[u8]`.
-            use ::
-            {
-                clone::CloneToUninit,
-                borrow::Cow,
-                collections::TryReserveError,
-                fmt::Write,
-                rc::Rc,
-                sync::Arc,
-                sys::common::{AsInner, FromInner, IntoInner},
-                *,
-            };
-
-            #[repr(transparent)] #[derive(Hash)]
-            pub struct Buf
-            {
-                pub inner: Vec<u8>,
-            }
-
-            #[repr(transparent)]
-            pub struct Slice
-            {
-                pub inner: [u8],
-            }
-
-            impl IntoInner<Vec<u8>> for Buf
-            {
-                fn into_inner(self) -> Vec<u8>
-                {
-                    self.inner
-                }
-            }
-
-            impl FromInner<Vec<u8>> for Buf
-            {
-                fn from_inner(inner: Vec<u8>) -> Self
-                {
-                    Buf { inner }
-                }
-            }
-
-            impl AsInner<[u8]> for Buf
-            {
-                #[inline]
-                fn as_inner(&self) -> &[u8]
-                {
-                    &self.inner
-                }
-            }
-
-            impl fmt::Debug for Buf
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-                {
-                    fmt::Debug::fmt(self.as_slice(), f)
-                }
-            }
-
-            impl fmt::Display for Buf
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-                {
-                    fmt::Display::fmt(self.as_slice(), f)
-                }
-            }
-
-            impl fmt::Debug for Slice
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-                {
-                    fmt::Debug::fmt(&self.inner.utf8_chunks().debug(), f)
-                }
-            }
-
-            impl fmt::Display for Slice
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-                {
-                    if self.inner.is_empty()
-                    {
-                        return "".fmt(f);
-                    }
-
-                    for chunk in self.inner.utf8_chunks()
-                    {
-                        let valid = chunk.valid();
-                        if chunk.invalid().is_empty() {
-                            return valid.fmt(f);
-                        }
-
-                        f.write_str(valid)?;
-                        f.write_char(char::REPLACEMENT_CHARACTER)?;
-                    }
-                    Ok(())
-                }
-            }
-
-            impl Clone for Buf
-            {
-                #[inline]
-                fn clone(&self) -> Self
-                {
-                    Buf { inner: self.inner.clone() }
-                }
-
-                #[inline]
-                fn clone_from(&mut self, source: &Self)
-                {
-                    self.inner.clone_from(&source.inner)
-                }
-            }
-
-            impl Buf
-            {
-                #[inline] pub fn into_encoded_bytes(self) -> Vec<u8>
-                {
-                    self.inner
-                }
-
-                #[inline]
-                pub unsafe fn from_encoded_bytes_unchecked(s: Vec<u8>) -> Self
-                {
-                    Self { inner: s }
-                }
-
-                #[inline] pub fn into_string(self) -> Result<String, Buf>
-                {
-                    String::from_utf8(self.inner).map_err(|p| Buf { inner: p.into_bytes() })
-                }
-
-                #[inline] pub fn from_string(s: String) -> Buf
-                {
-                    Buf { inner: s.into_bytes() }
-                }
-
-                #[inline] pub fn with_capacity(capacity: usize) -> Buf
-                {
-                    Buf { inner: Vec::with_capacity(capacity) }
-                }
-
-                #[inline] pub fn clear(&mut self)
-                {
-                    self.inner.clear()
-                }
-
-                #[inline] pub fn capacity(&self) -> usize
-                {
-                    self.inner.capacity()
-                }
-
-                #[inline] pub fn push_slice(&mut self, s: &Slice)
-                {
-                    self.inner.extend_from_slice(&s.inner)
-                }
-
-                #[inline] pub fn push_str(&mut self, s: &str)
-                {
-                    self.inner.extend_from_slice(s.as_bytes());
-                }
-
-                #[inline] pub fn reserve(&mut self, additional: usize)
-                {
-                    self.inner.reserve(additional)
-                }
-
-                #[inline] pub fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError>
-                {
-                    self.inner.try_reserve(additional)
-                }
-
-                #[inline] pub fn reserve_exact(&mut self, additional: usize)
-                {
-                    self.inner.reserve_exact(additional)
-                }
-
-                #[inline] pub fn try_reserve_exact(&mut self, additional: usize) -> Result<(), TryReserveError>
-                {
-                    self.inner.try_reserve_exact(additional)
-                }
-
-                #[inline] pub fn shrink_to_fit(&mut self)
-                {
-                    self.inner.shrink_to_fit()
-                }
-
-                #[inline] pub fn shrink_to(&mut self, min_capacity: usize)
-                {
-                    self.inner.shrink_to(min_capacity)
-                }
-
-                #[inline] pub fn as_slice(&self) -> &Slice
-                {
-                    unsafe { mem::transmute(self.inner.as_slice()) }
-                }
-
-                #[inline] pub fn as_mut_slice(&mut self) -> &mut Slice
-                {
-                    unsafe { mem::transmute(self.inner.as_mut_slice()) }
-                }
-
-                #[inline] pub fn leak<'a>(self) -> &'a mut Slice
-                {
-                    unsafe { mem::transmute(self.inner.leak()) }
-                }
-
-                #[inline] pub fn into_box(self) -> Box<Slice>
-                {
-                    unsafe { mem::transmute(self.inner.into_boxed_slice()) }
-                }
-
-                #[inline] pub fn from_box(boxed: Box<Slice>) -> Buf
-                {
-                    let inner: Box<[u8]> = unsafe { mem::transmute(boxed) };
-                    Buf { inner: inner.into_vec() }
-                }
-
-                #[inline] pub fn into_arc(&self) -> Arc<Slice>
-                {
-                    self.as_slice().into_arc()
-                }
-
-                #[inline] pub fn into_rc(&self) -> Rc<Slice>
-                {
-                    self.as_slice().into_rc()
-                }
-                
-                #[inline] pub fn truncate(&mut self, len: usize)
-                {
-                    self.inner.truncate(len);
-                }
-                
-                #[inline] pub fn extend_from_slice(&mut self, other: &[u8])
-                {
-                    self.inner.extend_from_slice(other);
-                }
-            }
-
-            impl Slice
-            {
-                #[inline] pub fn as_encoded_bytes(&self) -> &[u8]
-                {
-                    &self.inner
-                }
-
-                #[inline]
-                pub unsafe fn from_encoded_bytes_unchecked(s: &[u8]) -> &Slice
-                {
-                    unsafe { mem::transmute(s) }
-                }
-
-                #[track_caller]
-                #[inline] pub fn check_public_boundary(&self, index: usize)
-                {
-                    if index == 0 || index == self.inner.len() {
-                        return;
-                    }
-                    if index < self.inner.len()
-                        && (self.inner[index - 1].is_ascii() || self.inner[index].is_ascii())
-                    {
-                        return;
-                    }
-
-                    slow_path(&self.inner, index);
-                    
-                    #[track_caller]
-                    #[inline(never)]
-                    fn slow_path(bytes: &[u8], index: usize)
-                    {
-                        let (before, after) = bytes.split_at(index);
-                        let after = after.get(..4).unwrap_or(after);
-                        match str::from_utf8(after)
-                        {
-                            Ok(_) => return,
-                            Err(err) if err.valid_up_to() != 0 => return,
-                            Err(_) => (),
-                        }
-
-                        for len in 2..=4.min(index)
-                        {
-                            let before = &before[index - len..];
-                            if str::from_utf8(before).is_ok()
-                            {
-                                return;
-                            }
-                        }
-
-                        panic!("byte index {index} is not an OsStr boundary");
-                    }
-                }
-
-                #[inline] pub fn from_str(s: &str) -> &Slice
-                {
-                    unsafe { Slice::from_encoded_bytes_unchecked(s.as_bytes()) }
-                }
-
-                #[inline] pub fn to_str(&self) -> Result<&str, crate::str::Utf8Error>
-                {
-                    str::from_utf8(&self.inner)
-                }
-
-                #[inline] pub fn to_string_lossy(&self) -> Cow<'_, str>
-                {
-                    String::from_utf8_lossy(&self.inner)
-                }
-
-                #[inline] pub fn to_owned(&self) -> Buf
-                {
-                    Buf { inner: self.inner.to_vec() }
-                }
-
-                #[inline] pub fn clone_into(&self, buf: &mut Buf)
-                {
-                    self.inner.clone_into(&mut buf.inner)
-                }
-
-                #[inline] pub fn into_box(&self) -> Box<Slice>
-                {
-                    let boxed: Box<[u8]> = self.inner.into();
-                    unsafe { mem::transmute(boxed) }
-                }
-
-                #[inline] pub fn empty_box() -> Box<Slice>
-                {
-                    let boxed: Box<[u8]> = Default::default();
-                    unsafe { mem::transmute(boxed) }
-                }
-
-                #[inline] pub fn into_arc(&self) -> Arc<Slice>
-                {
-                    let arc: Arc<[u8]> = Arc::from(&self.inner);
-                    unsafe { Arc::from_raw(Arc::into_raw(arc) as *const Slice) }
-                }
-
-                #[inline] pub fn into_rc(&self) -> Rc<Slice>
-                {
-                    let rc: Rc<[u8]> = Rc::from(&self.inner);
-                    unsafe { Rc::from_raw(Rc::into_raw(rc) as *const Slice) }
-                }
-
-                #[inline] pub fn make_ascii_lowercase(&mut self)
-                {
-                    self.inner.make_ascii_lowercase()
-                }
-
-                #[inline] pub fn make_ascii_uppercase(&mut self)
-                {
-                    self.inner.make_ascii_uppercase()
-                }
-
-                #[inline] pub fn to_ascii_lowercase(&self) -> Buf
-                {
-                    Buf { inner: self.inner.to_ascii_lowercase() }
-                }
-
-                #[inline] pub fn to_ascii_uppercase(&self) -> Buf
-                {
-                    Buf { inner: self.inner.to_ascii_uppercase() }
-                }
-
-                #[inline] pub fn is_ascii(&self) -> bool {
-                    self.inner.is_ascii()
-                }
-
-                #[inline] pub fn eq_ignore_ascii_case(&self, other: &Self) -> bool
-                {
-                    self.inner.eq_ignore_ascii_case(&other.inner)
-                }
-            }
-            unsafe impl CloneToUninit for Slice
-            {
-                #[inline] unsafe fn clone_to_uninit(&self, dst: *mut u8)
-                {
-                    unsafe { self.inner.clone_to_uninit(dst) }
-                }
-            }
-        }
-        
-        mod wtf8
-        {
-            //! The underlying OsString/OsStr implementation on Windows is a wrapper around the "WTF-8" encoding.
-            use ::
-            {
-                clone::CloneToUninit,
-                borrow::Cow,
-                collections::TryReserveError,
-                rc::Rc,
-                sync::Arc,
-                sys::common::wtf8::{ AsInner, FromInner, IntoInner, Wtf8, Wtf8Buf, check_utf8_boundary },
-                *,
-            };
-            
-            #[derive(Hash)]
-            pub struct Buf
-            {
-                pub inner: Wtf8Buf,
-            }
-
-            #[repr(transparent)]
-            pub struct Slice
-            {
-                pub inner: Wtf8,
-            }
-
-            impl IntoInner<Wtf8Buf> for Buf
-            {
-                fn into_inner(self) -> Wtf8Buf
-                {
-                    self.inner
-                }
-            }
-
-            impl FromInner<Wtf8Buf> for Buf
-            {
-                fn from_inner(inner: Wtf8Buf) -> Self
-                {
-                    Buf { inner }
-                }
-            }
-
-            impl AsInner<Wtf8> for Buf
-            {
-                #[inline]
-                fn as_inner(&self) -> &Wtf8
-                {
-                    &self.inner
-                }
-            }
-
-            impl fmt::Debug for Buf
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-                {
-                    fmt::Debug::fmt(&self.inner, f)
-                }
-            }
-
-            impl fmt::Display for Buf
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-                {
-                    fmt::Display::fmt(&self.inner, f)
-                }
-            }
-
-            impl fmt::Debug for Slice
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-                {
-                    fmt::Debug::fmt(&self.inner, f)
-                }
-            }
-
-            impl fmt::Display for Slice
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-                {
-                    fmt::Display::fmt(&self.inner, f)
-                }
-            }
-
-            impl Clone for Buf
-            {
-                #[inline]
-                fn clone(&self) -> Self
-                {
-                    Buf { inner: self.inner.clone() }
-                }
-
-                #[inline]
-                fn clone_from(&mut self, source: &Self)
-                {
-                    self.inner.clone_from(&source.inner)
-                }
-            }
-
-            impl Buf
-            {
-                #[inline] pub fn into_encoded_bytes(self) -> Vec<u8>
-                {
-                    self.inner.into_bytes()
-                }
-
-                #[inline]  pub unsafe fn from_encoded_bytes_unchecked(s: Vec<u8>) -> Self
-                {
-                    unsafe { Self { inner: Wtf8Buf::from_bytes_unchecked(s) } }
-                }
-
-                #[inline] pub fn into_string(self) -> Result<String, Buf>
-                {
-                    self.inner.into_string().map_err(|buf| Buf { inner: buf })
-                }
-
-                #[inline] pub fn from_string(s: String) -> Buf
-                {
-                    Buf { inner: Wtf8Buf::from_string(s) }
-                }
-
-                #[inline] pub fn with_capacity(capacity: usize) -> Buf
-                {
-                    Buf { inner: Wtf8Buf::with_capacity(capacity) }
-                }
-
-                #[inline] pub fn clear(&mut self)
-                {
-                    self.inner.clear()
-                }
-
-                #[inline] pub fn capacity(&self) -> usize
-                {
-                    self.inner.capacity()
-                }
-
-                #[inline] pub fn push_slice(&mut self, s: &Slice)
-                {
-                    self.inner.push_wtf8(&s.inner)
-                }
-
-                #[inline] pub fn push_str(&mut self, s: &str)
-                {
-                    self.inner.push_str(s);
-                }
-
-                #[inline] pub fn reserve(&mut self, additional: usize)
-                {
-                    self.inner.reserve(additional)
-                }
-
-                #[inline] pub fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError>
-                {
-                    self.inner.try_reserve(additional)
-                }
-
-                #[inline] pub fn reserve_exact(&mut self, additional: usize)
-                {
-                    self.inner.reserve_exact(additional)
-                }
-
-                #[inline] pub fn try_reserve_exact(&mut self, additional: usize) -> Result<(), TryReserveError>
-                {
-                    self.inner.try_reserve_exact(additional)
-                }
-
-                #[inline] pub fn shrink_to_fit(&mut self)
-                {
-                    self.inner.shrink_to_fit()
-                }
-
-                #[inline] pub fn shrink_to(&mut self, min_capacity: usize)
-                {
-                    self.inner.shrink_to(min_capacity)
-                }
-
-                #[inline] pub fn as_slice(&self) -> &Slice
-                {
-                    unsafe { mem::transmute(self.inner.as_slice()) }
-                }
-
-                #[inline] pub fn as_mut_slice(&mut self) -> &mut Slice
-                {
-                    unsafe { mem::transmute(self.inner.as_mut_slice()) }
-                }
-
-                #[inline] pub fn leak<'a>(self) -> &'a mut Slice
-                {
-                    unsafe { mem::transmute(self.inner.leak()) }
-                }
-
-                #[inline] pub fn into_box(self) -> Box<Slice>
-                {
-                    unsafe { mem::transmute(self.inner.into_box()) }
-                }
-
-                #[inline] pub fn from_box(boxed: Box<Slice>) -> Buf
-                {
-                    let inner: Box<Wtf8> = unsafe { mem::transmute(boxed) };
-                    Buf { inner: Wtf8Buf::from_box(inner) }
-                }
-
-                #[inline] pub fn into_arc(&self) -> Arc<Slice>
-                {
-                    self.as_slice().into_arc()
-                }
-
-                #[inline] pub fn into_rc(&self) -> Rc<Slice>
-                {
-                    self.as_slice().into_rc()
-                }
-                
-                #[inline] pub fn truncate(&mut self, len: usize)
-                {
-                    self.inner.truncate(len);
-                }
-                
-                #[inline] pub fn extend_from_slice(&mut self, other: &[u8])
-                {
-                    self.inner.extend_from_slice(other);
-                }
-            }
-
-            impl Slice
-            {
-                #[inline] pub fn as_encoded_bytes(&self) -> &[u8]
-                {
-                    self.inner.as_bytes()
-                }
-
-                #[inline] pub unsafe fn from_encoded_bytes_unchecked(s: &[u8]) -> &Slice
-                {
-                    unsafe { mem::transmute(Wtf8::from_bytes_unchecked(s)) }
-                }
-
-                #[track_caller] #[inline] pub fn check_public_boundary(&self, index: usize)
-                {
-                    check_utf8_boundary(&self.inner, index);
-                }
-
-                #[inline] pub fn from_str(s: &str) -> &Slice
-                {
-                    unsafe { mem::transmute(Wtf8::from_str(s)) }
-                }
-
-                #[inline] pub fn to_str(&self) -> Result<&str, crate::str::Utf8Error>
-                {
-                    self.inner.as_str()
-                }
-
-                #[inline] pub fn to_string_lossy(&self) -> Cow<'_, str>
-                {
-                    self.inner.to_string_lossy()
-                }
-
-                #[inline] pub fn to_owned(&self) -> Buf
-                {
-                    Buf { inner: self.inner.to_owned() }
-                }
-
-                #[inline] pub fn clone_into(&self, buf: &mut Buf)
-                {
-                    self.inner.clone_into(&mut buf.inner)
-                }
-
-                #[inline] pub fn into_box(&self) -> Box<Slice>
-                {
-                    unsafe { mem::transmute(self.inner.into_box()) }
-                }
-
-                #[inline] pub fn empty_box() -> Box<Slice>
-                {
-                    unsafe { mem::transmute(Wtf8::empty_box()) }
-                }
-
-                #[inline] pub fn into_arc(&self) -> Arc<Slice>
-                {
-                    let arc = self.inner.into_arc();
-                    unsafe { Arc::from_raw(Arc::into_raw(arc) as *const Slice) }
-                }
-
-                #[inline] pub fn into_rc(&self) -> Rc<Slice>
-                {
-                    let rc = self.inner.into_rc();
-                    unsafe { Rc::from_raw(Rc::into_raw(rc) as *const Slice) }
-                }
-
-                #[inline] pub fn make_ascii_lowercase(&mut self)
-                {
-                    self.inner.make_ascii_lowercase()
-                }
-
-                #[inline] pub fn make_ascii_uppercase(&mut self)
-                {
-                    self.inner.make_ascii_uppercase()
-                }
-
-                #[inline] pub fn to_ascii_lowercase(&self) -> Buf
-                {
-                    Buf { inner: self.inner.to_ascii_lowercase() }
-                }
-
-                #[inline] pub fn to_ascii_uppercase(&self) -> Buf
-                {
-                    Buf { inner: self.inner.to_ascii_uppercase() }
-                }
-
-                #[inline] pub fn is_ascii(&self) -> bool
-                {
-                    self.inner.is_ascii()
-                }
-
-                #[inline] pub fn eq_ignore_ascii_case(&self, other: &Self) -> bool
-                {
-                    self.inner.eq_ignore_ascii_case(&other.inner)
-                }
-            }
-            
-            unsafe impl CloneToUninit for Slice
-            {
-                #[inline] unsafe fn clone_to_uninit(&self, dst: *mut u8)
-                {
-                    unsafe { self.inner.clone_to_uninit(dst) }
-                }
-            }
-        }
-
-        #[cfg( unix )] pub use self::bytes::{ Buf, Slice };
-        #[cfg( windows )] pub use self::wtf8::{ Buf, Slice };
-        #[cfg(target_os = "uefi")]  pub use self::wtf8::{ Buf, Slice };
-    }
-
-    pub mod pipe
-    {
-        use ::
-        {
-            *,
-        };
-    }
-
-    pub mod process
-    {
-        use ::
-        {
-            *,
-        };
-    }
-
-    pub mod prepare
-    {
-        use ::
-        {
-            system::{ api, SignalSet },
-            *,
-        };
-        /// Configures a [`Terminal`] or [`Screen`] instance to read special input.
-        #[derive(Copy, Clone, Debug)]
-        pub struct PrepareConfig
-        {
-            /// Whether to block signals that result from user input.
-            pub block_signals: bool,
-            /// Whether to enable control flow characters.
-            pub enable_control_flow: bool,
-            /// If `true`, the terminal will be configured to generate events from function keys.
-            pub enable_keypad: bool,
-            /// If `true`, the terminal will be configured to generate events for
-            /// mouse input, if supported, and `read_event` may return `Event::Mouse(_)`.
-            pub enable_mouse: bool,
-            /// If `true`, mouse motion events will always be reported.
-            /// If `false`, such events will only be reported while at least one mouse button is pressed.
-            pub always_track_motion: bool,
-            /// For each signal in the set, 
-            /// a signal handler will intercept the signal and report it by returning an `Event::Signal(_)` value.
-            pub report_signals: SignalSet,
-        }
-
-        impl Default for PrepareConfig
-        {
-            fn default() -> PrepareConfig
-            {
-                PrepareConfig
-                {
-                    block_signals: true,
-                    enable_control_flow: false,
-                    enable_keypad: true,
-                    enable_mouse: false,
-                    always_track_motion: false,
-                    report_signals: SignalSet::new(),
-                }
-            }
-        }
-
-        /// Represents a previous device state of a [`Terminal`].
-        #[must_use = "the result of `terminal.prepare()` should be passed to \
-            `terminal.restore()` to restore terminal to its original state"]
-        pub struct PrepareState( api::PrepareState );
-
-    }
-    
-    pub mod screen
-    {
-        //! Provides a drawable buffer on terminal devices.
-        use ::
-        {
-            sync::{ LockResult, TryLockResult },
-            system::
-            {
-                terminal::{ Color, Cursor, CursorMode, Event, Size, Style, Theme },
-                api, map_lock_result, map_try_lock_result
-            },
-            time::{ Duration },
-            *,
-        };
-        /*
-        use ::priv_util::{map_lock_result, map_try_lock_result};
-        use ::sys;
-        */
-        /// Provides operations on an underlying terminal device in screen mode.
-        pub struct Screen(api::Screen);
-        /// Holds an exclusive lock for read operations on a `Screen`.
-        pub struct ScreenReadGuard<'a>(api::ScreenReadGuard<'a>);
-        /// Holds an exclusive lock for write operations on a `Screen`.
-        pub struct ScreenWriteGuard<'a>(api::ScreenWriteGuard<'a>);
-
-        impl Screen
-        {
-            /// Opens a new screen interface on `stdout`.
-            pub fn new(config: PrepareConfig) -> io::Result<Screen> { api::Screen::stdout(config).map(Screen) }
-            /// Opens a new screen interface on `stderr`.
-            pub fn stderr(config: PrepareConfig) -> io::Result<Screen> { api::Screen::stderr(config).map(Screen) }
-            /// Begins a new screen session using the given `Terminal` instance.
-            pub fn with_terminal(term: Terminal, config: PrepareConfig) -> io::Result<Screen> { api::Screen::new(term.0, config).map(Screen) }
-            /// Returns the name of the terminal.
-            #[inline] pub fn name(&self) -> &str { self.0.name() }
-            /// Attempts to acquire an exclusive lock on terminal read operations.
-            #[inline] pub fn lock_read(&self) -> LockResult<ScreenReadGuard> { map_lock_result(self.0.lock_read(), ScreenReadGuard) }
-            /// Attempts to acquire an exclusive lock on terminal write operations.
-            #[inline] pub fn lock_write(&self) -> LockResult<ScreenWriteGuard> { map_lock_result(self.0.lock_write(), ScreenWriteGuard) }
-            /// Attempts to acquire an exclusive lock on terminal read operations.
-            #[inline] pub fn try_lock_read(&self) -> TryLockResult<ScreenReadGuard> { map_try_lock_result(self.0.try_lock_read(), ScreenReadGuard) }
-            /// Attempts to acquire an exclusive lock on terminal write operations.
-            #[inline] pub fn try_lock_write(&self) -> TryLockResult<ScreenWriteGuard> { map_try_lock_result(self.0.try_lock_write(), ScreenWriteGuard) }
-        }
-        /// # Locking
-        /// The following methods internally acquire the read lock.
-        impl Screen
-        {
-            /// Waits for an event from the terminal.
-            pub fn wait_event(&self, timeout: Option<Duration>) -> io::Result<bool> { self.0.wait_event(timeout) }
-            /// Reads an event from the terminal.
-            pub fn read_event(&self, timeout: Option<Duration>) -> io::Result<Option<Event>>
-            { self.0.read_event(timeout) }
-        }
-        /// # Locking
-        /// The following methods internally acquire the write lock.
-        impl Screen
-        {
-            /// Returns the current size of the terminal screen.
-            #[inline] pub fn size(&self) -> Size { self.0.size() }
-            /// Returns the current cursor position.
-            #[inline] pub fn cursor(&self) -> Cursor { self.0.cursor() }
-            /// Sets the cursor position.
-            #[inline] pub fn set_cursor<C: Into<Cursor>>(&self, pos: C) { self.0.set_cursor(pos.into()); }
-            /// Moves the cursor to the given column on the next line.
-            #[inline] pub fn next_line(&self, column: usize) { self.0.next_line(column); }
-            /// Set the current cursor mode.
-            pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> { self.0.set_cursor_mode(mode) }
-            /// Clears the internal screen buffer.
-            pub fn clear_screen(&self) { self.0.clear_screen(); }
-            /// Adds a set of `Style` flags to the current style setting.
-            #[inline] pub fn add_style(&self, style: Style) { self.0.add_style(style); }
-            /// Removes a set of `Style` flags to the current style setting.
-            #[inline] pub fn remove_style(&self, style: Style) { self.0.remove_style(style); }
-            /// Sets the current style setting to the given set of flags.
-            #[inline] pub fn set_style<S: Into<Option<Style>>>(&self, style: S) { self.0.set_style(style.into().unwrap_or_default()); }
-            /// Sets or removes foreground text color.
-            #[inline] pub fn set_fg<C: Into<Option<Color>>>(&self, fg: C) { self.0.set_fg(fg.into()); }
-            /// Sets or removes background text color.
-            #[inline] pub fn set_bg<C: Into<Option<Color>>>(&self, bg: C) { self.0.set_bg(bg.into()); }
-            /// Sets all attributes for the screen.
-            #[inline] pub fn set_theme(&self, theme: Theme) { self.0.set_theme(theme) }
-            /// Removes color and style attributes.
-            #[inline] pub fn clear_attributes(&self) { self.0.clear_attributes(); }
-            /// Adds bold to the current style setting.
-            #[inline] pub fn bold(&self) { self.add_style(Style::BOLD); }
-            /// Adds italic to the current style setting.
-            #[inline] pub fn italic(&self) { self.add_style(Style::ITALIC); }
-            /// Adds underline to the current style setting.
-            #[inline] pub fn underline(&self) { self.add_style(Style::UNDERLINE); }
-            /// Adds reverse to the current style setting.
-            #[inline] pub fn reverse(&self) { self.add_style(Style::REVERSE); }
-            /// Renders the internal buffer to the terminal screen.
-            pub fn refresh(&self) -> io::Result<()> { self.0.refresh() }
-            /// Writes text at the given position within the screen buffer.
-            pub fn write_at<C>(&self, position: C, text: &str) where 
-            C: Into<Cursor>
-            { self.0.write_at(position.into(), text); }
-            /// Writes text with the given attributes at the current cursor position.
-            pub fn write_styled<F, B, S>(&self, fg: F, bg: B, style: S, text: &str) where
-            F: Into<Option<Color>>,
-            B: Into<Option<Color>>,
-            S: Into<Option<Style>>
-            { self.0.write_styled(fg.into(), bg.into(), style.into().unwrap_or_default(), text); }
-            /// Writes text with the given attributes at the given position within the screen buffer.
-            pub fn write_styled_at<C, F, B, S>(&self, position: C, fg: F, bg: B, style: S, text: &str) where
-            C: Into<Cursor>,
-            F: Into<Option<Color>>,
-            B: Into<Option<Color>>,
-            S: Into<Option<Style>>
-            {
-                self.0.write_styled_at(position.into(), fg.into(), bg.into(), style.into().unwrap_or_default(), text);
-            }
-            /// Writes a single character at the cursor position using the current style and color settings.
-            pub fn write_char(&self, ch: char) { self.0.write_char(ch); }
-            /// Writes a string at the cursor position using the current style and color settings.
-            pub fn write_str(&self, s: &str) { self.0.write_str(s); }
-            /// Writes formatted text at the cursor position using the current style and color settings.
-            pub fn write_fmt(&self, args: fmt::Arguments)
-            {
-                let s = args.to_string();
-                self.write_str(&s) 
-            }
-
-            pub fn borrow_term_write_guard(&self) -> ScreenWriteGuard { self.lock_write().unwrap() }
-        }
-
-        impl<'a> ScreenReadGuard<'a>
-        {
-            /// Waits for an event from the terminal.
-            pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool>
-            { self.0.wait_event(timeout) }
-            /// Reads an event from the terminal.
-            pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> 
-            { self.0.read_event(timeout) }
-        }
-
-        impl<'a> ScreenWriteGuard<'a>
-        {
-            /// Returns the current size of the terminal screen.
-            #[inline] pub fn size(&self) -> Size { self.0.size() }
-            /// Sets the cursor position.
-            #[inline] pub fn cursor(&self) -> Cursor { self.0.cursor() }
-            /// Moves the cursor to the given column on the next line.
-            #[inline] pub fn set_cursor<C: Into<Cursor>>(&mut self, pos: C) { self.0.set_cursor(pos.into()); }
-            /// Set the current cursor mode.
-            #[inline] pub fn next_line(&mut self, column: usize) { self.0.next_line(column); }
-            /// Set the current cursor mode.
-            pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> { self.0.set_cursor_mode(mode) }
-            /// Adds a set of `Style` flags to the current style setting.
-            pub fn clear_screen(&mut self) { self.0.clear_screen(); }
-            /// Removes a set of `Style` flags to the current style setting.
-            /// Adds a set of `Style` flags to the current style setting.
-            #[inline] pub fn add_style(&mut self, style: Style) { self.0.add_style(style) }
-            /// Sets the current style setting to the given set of flags.
-            #[inline] pub fn remove_style(&mut self, style: Style) { self.0.remove_style(style) }
-            /// Sets or removes foreground text color.
-            #[inline] pub fn set_style<S: Into<Option<Style>>>(&mut self, style: S) { self.0.set_style(style.into().unwrap_or_default()) }
-            /// Sets or removes background text color.
-            #[inline] pub fn set_fg<C: Into<Option<Color>>>(&mut self, fg: C) { self.0.set_fg(fg.into()) }
-            /// Removes color and style attributes.
-            #[inline] pub fn set_bg<C: Into<Option<Color>>>(&mut self, bg: C) { self.0.set_bg(bg.into()) }
-            /// Sets all attributes for the screen.
-            #[inline] pub fn set_theme(&mut self, theme: Theme) { self.0.set_theme(theme) }
-            /// Adds bold to the current style setting.
-            #[inline] pub fn clear_attributes(&mut self) { self.0.clear_attributes() }
-            /// Adds bold to the current style setting.
-            #[inline] pub fn bold(&mut self) { self.add_style(Style::BOLD) }
-            /// Adds italic to the current style setting.
-            #[inline] pub fn italic(&mut self) { self.add_style(Style::ITALIC); }
-            /// Adds underline to the current style setting.
-            #[inline] pub fn underline(&mut self) { self.add_style(Style::UNDERLINE) }
-            /// Adds reverse to the current style setting.
-            #[inline] pub fn reverse(&mut self) { self.add_style(Style::REVERSE) }
-            /// Renders the internal buffer to the terminal screen.
-            pub fn refresh(&mut self) -> io::Result<()> { self.0.refresh() }
-            /// Writes text at the given position within the screen buffer.
-            pub fn write_at<C>(&mut self, position: C, text: &str) where
-            C: Into<Cursor> 
-            { self.0.write_at(position.into(), text) }
-            /// Writes text with the given attributes at the current cursor position.
-            pub fn write_styled<F, B, S>(&mut self, fg: F, bg: B, style: S, text: &str) where
-            F: Into<Option<Color>>,
-            B: Into<Option<Color>>,
-            S: Into<Option<Style>>
-            { self.0.write_styled(fg.into(), bg.into(), style.into().unwrap_or_default(), text) }
-            /// Writes text with the given attributes at the given position within the screen buffer.
-            pub fn write_styled_at<C, F, B, S>(&mut self, position: C, fg: F, bg: B, style: S, text: &str) where
-            C: Into<Cursor>,
-            F: Into<Option<Color>>,
-            B: Into<Option<Color>>,
-            S: Into<Option<Style>>,
-            { self.0.write_styled_at(position.into(), fg.into(), bg.into(), style.into().unwrap_or_default(), text) }
-            /// Writes a single character at the cursor position using the current style and color settings.
-            pub fn write_char(&mut self, ch: char) { self.0.write_char(ch) }
-            /// Writes a string at the cursor position using the current style and color settings.
-            pub fn write_str(&mut self, s: &str) { self.0.write_str(s) }
-            /// Writes formatted text at the cursor position using the current style and color settings.
-            pub fn write_fmt(&mut self, args: fmt::Arguments)
-            {
-                let s = args.to_string();
-                self.write_str(&s)
-            }
-            
-            pub fn borrow_term_write_guard(&mut self) -> &mut Self { self }
-        }
-
-        #[cfg(unix)]
-        impl system::api::TerminalExt for Screen
-        {
-            fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>>
-            { self.0.read_raw(buf, timeout) }
-        }
-
-        #[cfg(unix)]
-        impl<'a> system::api::TerminalExt for ScreenReadGuard<'a>
-        {
-            fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>>
-            { self.0.read_raw(buf, timeout) }
-        }
-
-        #[cfg(windows)]
-        impl system::api::TerminalExt for Screen
-        {
-            fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>>
-            { self.0.read_raw(buf, timeout) }
-
-            fn read_raw_event(&mut self, events: &mut [::winapi::um::wincon::INPUT_RECORD], timeout: Option<Duration>) ->
-            io::Result<Option<Event>>
-            { self.0.read_raw_event(events, timeout) }
-        }
-
-        #[cfg(windows)]
-        impl<'a> system::api::TerminalExt for ScreenReadGuard<'a>
-        {
-            fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>>
-            { self.0.read_raw(buf, timeout) }
-
-            fn read_raw_event(&mut self, events: &mut [::winapi::um::wincon::INPUT_RECORD], timeout: Option<Duration>) ->
-            io::Result<Option<Event>> 
-            { self.0.read_raw_event(events, timeout) }
-        }
-    } pub use self::screen::{ Screen, ScreenReadGuard, ScreenWriteGuard };
-    
-    pub mod signal
-    {
-        //! Contains types relating to operating system signals
-        use ::
-        {
-            iter::{ FromIterator },
-            *,
-        };
-
-        pub const NUM_SIGNALS: u8 = 6;
-
-        macro_rules! impl_op
-        {
-            ( $tr:ident , $tr_meth:ident , $method:ident ) =>
-            {
-                impl ops::$tr for SignalSet {
-                    type Output = SignalSet;
-
-                    fn $tr_meth(self, rhs: SignalSet) -> SignalSet {
-                        self.$method(rhs)
-                    }
-                }
-            }
-        }
-
-        macro_rules! impl_mut_op
-        {
-            ( $tr:ident , $tr_meth:ident , $method:ident ) => {
-                impl ops::$tr for SignalSet {
-                    fn $tr_meth(&mut self, rhs: SignalSet) {
-                        *self = self.$method(rhs);
-                    }
-                }
-            }
-        }
-
-        macro_rules! impl_unary_op
-        {
-            ( $tr:ident , $tr_meth:ident , $method:ident ) => {
-                impl ops::$tr for SignalSet {
-                    type Output = SignalSet;
-
-                    fn $tr_meth(self) -> SignalSet {
-                        self.$method()
-                    }
-                }
-            }
-        }
-        /// Signal received through a terminal device
-        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-        pub enum Signal
-        {
-            /// Break signal (`CTRL_BREAK_EVENT`); Windows only
-            Break,
-            /// Continue signal (`SIGCONT`); Unix only
-            Continue,
-            /// Interrupt signal (`SIGINT` on Unix, `CTRL_C_EVENT` on Windows)
-            Interrupt,
-            /// Terminal window resize (`SIGWINCH` on Unix, `WINDOW_BUFFER_SIZE_EVENT` on Windows).
-            Resize,
-            /// Suspend signal (`SIGTSTP`); Unix only
-            Suspend,
-            /// Quit signal (`SIGQUIT`); Unix only
-            Quit,
-        }
-
-        impl Signal
-        {
-            fn as_bit(&self) -> u8 { 1 << (*self as u8) }
-            fn all_bits() -> u8 { (1 << NUM_SIGNALS) - 1 }
-        }
-
-        impl ops::BitOr for Signal
-        {
-            type Output = SignalSet;
-            fn bitor(self, rhs: Signal) -> SignalSet
-            {
-                let mut set = SignalSet::new();
-                set.insert(self);
-                set.insert(rhs);
-                set
-            }
-        }
-
-        impl ops::Not for Signal
-        {
-            type Output = SignalSet;
-
-            fn not(self) -> SignalSet { !SignalSet::from(self) }
-        }
-        /// Represents a set of `Signal` values
-        #[derive(Copy, Clone, Default, Eq, PartialEq)]
-        pub struct SignalSet(u8);
-
-        impl SignalSet
-        {
-            /// Returns an empty `SignalSet`.
-            pub fn new() -> SignalSet { SignalSet(0) }
-            /// Returns a `SignalSet` containing all available signals.
-            pub fn all() -> SignalSet { SignalSet(Signal::all_bits()) }
-            /// Returns whether this set contains the given `Signal`.
-            pub fn contains(&self, sig: Signal) -> bool { self.0 & sig.as_bit() != 0 }
-            /// Returns whether this set contains all signals present in another set.
-            pub fn contains_all(&self, other: SignalSet) -> bool { self.0 & other.0 == other.0 }
-            /// Returns whether this set contains any signals present in another set.
-            pub fn intersects(&self, other: SignalSet) -> bool { self.0 & other.0 != 0 }
-            /// Returns whether this set contains any signals.
-            pub fn is_empty(&self) -> bool { self.0 == 0 }
-            /// Inserts a `Signal` into this set.
-            pub fn insert(&mut self, sig: Signal) { self.0 |= sig.as_bit(); }
-            /// Removes a `Signal` from this set.
-            pub fn remove(&mut self, sig: Signal) { self.0 &= !sig.as_bit(); }
-            /// Sets whether this set contains the given `Signal`.
-            pub fn set(&mut self, sig: Signal, set: bool) { if set { self.insert(sig); } else { self.remove(sig); } }
-            /// Returns the difference of two sets.
-            pub fn difference(&self, other: SignalSet) -> SignalSet { SignalSet(self.0 & !other.0) }
-            /// Returns the symmetric difference of two sets.
-            pub fn symmetric_difference(&self, other: SignalSet) -> SignalSet { SignalSet(self.0 ^ other.0) }
-            /// Returns the intersection of two sets.
-            pub fn intersection(&self, other: SignalSet) -> SignalSet { SignalSet(self.0 & other.0) }
-            /// Returns the union of two sets.
-            pub fn union(&self, other: SignalSet) -> SignalSet { SignalSet(self.0 | other.0) }
-            /// Returns the inverse of the set.
-            pub fn inverse(&self) -> SignalSet { SignalSet(!self.0 & Signal::all_bits()) }
-        }
-
-        impl fmt::Debug for SignalSet
-        {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
-            {
-                const SIGNALS: &[Signal] = &[
-                    Signal::Break,
-                    Signal::Continue,
-                    Signal::Interrupt,
-                    Signal::Resize,
-                    Signal::Suspend,
-                    Signal::Quit,
-                ];
-
-                let mut first = true;
-
-                f.write_str("SignalSet(")?;
-
-                for &sig in SIGNALS {
-                    if self.contains(sig) {
-                        if !first {
-                            f.write_str(" | ")?;
-                        }
-
-                        write!(f, "{:?}", sig)?;
-                        first = false;
-                    }
-                }
-
-                f.write_str(")")
-            }
-        }
-
-        impl From<Signal> for SignalSet
-        {
-            fn from(sig: Signal) -> SignalSet
-            {
-                let mut set = SignalSet::new();
-                set.insert(sig);
-                set
-            }
-        }
-
-        impl Extend<Signal> for SignalSet
-        {
-            fn extend<I: IntoIterator<Item=Signal>>(&mut self, iter: I)
-            {
-                for sig in iter {
-                    self.insert(sig);
-                }
-            }
-        }
-
-        impl FromIterator<Signal> for SignalSet
-        {
-            fn from_iter<I: IntoIterator<Item=Signal>>(iter: I) -> SignalSet
-            {
-                let mut set = SignalSet::new();
-                set.extend(iter);
-                set
-            }
-        }
-
-        impl_op!{ BitAnd, bitand, intersection }
-        impl_op!{ BitOr, bitor, union }
-        impl_op!{ BitXor, bitxor, symmetric_difference }
-        impl_op!{ Sub, sub, difference }
-
-        impl_unary_op!{ Not, not, inverse }
-
-        impl_mut_op!{ BitAndAssign, bitand_assign, intersection }
-        impl_mut_op!{ BitOrAssign, bitor_assign, union }
-        impl_mut_op!{ BitXorAssign, bitxor_assign, symmetric_difference }
-        impl_mut_op!{ SubAssign, sub_assign, difference }
-    } pub use self::signal::{ Signal, SignalSet };
-    
-    pub mod terminal
-    {
-        //! Provides an interface to terminal devices
-        use ::
-        {
-            system::
-            {
-                signal::{ Signal, SignalSet },
-            },
-            *,
-        };
-        /*
-        use std::fmt;
-        use std::io;
-        use std::sync::{LockResult, TryLockResult};
-        use std::time::Duration;
-
-        use ::priv_util::{map_lock_result, map_try_lock_result};
-        use ::sys;
-        */
-
-        /// Represents a color attribute applied to text foreground or background.
-        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-        pub enum Color
-        {
-            /// Black
-            Black,
-            /// Blue
-            Blue,
-            /// Cyan
-            Cyan,
-            /// Green
-            Green,
-            /// Magenta
-            Magenta,
-            /// Red
-            Red,
-            /// White
-            White,
-            /// Yellow
-            Yellow,
-        }
-
-        bitflags!
-        {
-            /// Represents a set of style attributes applied to text.
-            #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
-            pub struct Style: u8
-            {
-                /// Bold
-                const BOLD      = 1 << 0;
-                /// Italic
-                const ITALIC    = 1 << 1;
-                /// Reverse; foreground and background color swapped
-                const REVERSE   = 1 << 2;
-                /// Underline
-                const UNDERLINE = 1 << 3;
-            }
-        }
-        /// Represents a terminal output theme.
-        #[derive(Copy, Clone, Debug, Default)]
-        pub struct Theme
-        {
-            /// Foreground color
-            pub fg: Option<Color>,
-            /// Background color
-            pub bg: Option<Color>,
-            /// Style
-            pub style: Style,
-        }
-
-        impl Theme
-        {
-            /// Creates a new theme with given values.
-            pub fn new<F,B,S>(fg: F, bg: B, style: S) -> Theme where
-            F: Into<Option<Color>>,
-            B: Into<Option<Color>>,
-            S: Into<Option<Style>>
-            {
-                Theme
-                {
-                    fg: fg.into(),
-                    bg: bg.into(),
-                    style: style.into().unwrap_or_default(),
-                }
-            }
-            /// Sets the foreground color on the given Theme and returns the new.
-            pub fn fg<F>(mut self, fg: F) -> Theme where 
-            F: Into<Option<Color>>
-            {
-                self.fg = fg.into();
-                self
-            }
-            /// Sets the background color on the given Theme and returns the new.
-            pub fn bg<B>(mut self, bg: B) -> Theme where 
-            B: Into<Option<Color>> 
-            {
-                self.bg = bg.into();
-                self
-            }
-            /// Sets the style on the given Theme and returns the new.
-            pub fn style<S>(mut self, style: S) -> Theme where 
-            S: Into<Option<Style>>
-            {
-                self.style = style.into().unwrap_or_default();
-                self
-            }
-        }
-        /// Represents a keyboard key press event
-        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-        pub enum Key
-        {
-            /// Backspace
-            Backspace,
-            /// Enter
-            Enter,
-            /// Escape
-            Escape,
-            /// Tab
-            Tab,
-            /// Up arrow
-            Up,
-            /// Down arrow
-            Down,
-            /// Left arrow
-            Left,
-            /// Right arrow
-            Right,
-            /// Delete
-            Delete,
-            /// Insert
-            Insert,
-            /// Home
-            Home,
-            /// End
-            End,
-            /// PageUp
-            PageUp,
-            /// PageDown
-            PageDown,
-            /// Character key
-            Char(char),
-            /// Control character.
-            Ctrl(char),
-            /// Function `n` key; e.g. F1, F2, ...
-            F(u32),
-        }
-
-        impl From<char> for Key
-        {
-            fn from(ch: char) -> Key
-            {
-                use ::char::unctrl_lower;
-                match ch
-                {
-                    '\x1b' => Key::Escape,
-                    '\x7f' => Key::Backspace,
-                    '\r' | '\n' => Key::Enter,
-                    '\t' => Key::Tab,
-                    _ if is::ctrl(ch) => Key::Ctrl( unctrl_lower(ch) ),
-                    _ => Key::Char(ch),
-                }
-            }
-        }
-        /// Represents the cursor position in a terminal device
-        #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
-        pub struct Cursor
-        {
-            /// Index of line in terminal, beginning at `0`.
-            pub line: usize,
-            /// Index of column in terminal, beginning at `0`.
-            pub column: usize,
-        }
-
-        impl Cursor
-        {
-            /// Returns the position of the next cell within a terminal of the given size.
-            #[inline] pub fn next(&self, size: Size) -> Option<Cursor>
-            {
-                let mut line = self.line;
-                let mut column = self.column + 1;
-
-                if column >= size.columns
-                {
-                    column = 0;
-                    line += 1;
-                }
-
-                if line >= size.lines { None } else { Some(Cursor{line, column}) }
-            }
-            /// Returns the position of the previous cell within a terminal of the given size.
-            #[inline] pub fn previous(&self, size: Size) -> Option<Cursor>
-            {
-                if self.column == 0
-                {
-                    if self.line == 0 { None } else { Some(Cursor{line: self.line - 1, column: size.columns - 1}) }
-                }
-                else { Some(Cursor{line: self.line, column: self.column - 1}) }
-            }
-            /// Returns a `Cursor` pointing to the first cell, i.e. `(0, 0)`.
-            #[inline] pub fn first() -> Cursor
-            {
-                Cursor
-                {
-                    line: 0,
-                    column: 0,
-                }
-            }
-            /// Returns a `Cursor` pointing to the last cell of a screen of the given size.
-            #[inline] pub fn last(size: Size) -> Cursor
-            {
-                Cursor
-                {
-                    line: size.lines - 1,
-                    column: size.columns - 1,
-                }
-            }
-            /// Returns whether the cursor is out of bounds of the given size.
-            #[inline] pub fn is_out_of_bounds(&self, size: Size) -> bool
-            { self.line >= size.lines || self.column >= size.columns }
-            /// Returns the index of the cursor position within a one-dimensional array of the given size.
-            pub fn as_index(&self, size: Size) -> usize { self.line * size.columns + self.column }
-        }
-
-        impl From<(usize, usize)> for Cursor
-        {
-            /// Returns a `Cursor` value from a `(line, column)` or `(y, x)` tuple.
-            fn from((line, column): (usize, usize)) -> Cursor { Cursor{line, column} }
-        }
-        /// Represents the visual appearance of the cursor in the terminal.
-        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-        pub enum CursorMode
-        {
-            /// Normal mode
-            Normal,
-            /// Invisible mode
-            Invisible,
-            /// Overwrite mode
-            Overwrite,
-        }
-        /// Represents a button on a mouse device
-        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-        pub enum MouseButton
-        {
-            /// Left mouse button
-            Left,
-            /// Right mouse button
-            Right,
-            /// Middle mouse button
-            Middle,
-            /// Other mouse button
-            Other(u32),
-        }
-        /// Represents the type of mouse input event
-        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-        pub enum MouseInput
-        {
-            /// The mouse cursor was moved
-            Motion,
-            /// A mouse button was pressed
-            ButtonPressed(MouseButton),
-            /// A mouse button was released
-            ButtonReleased(MouseButton),
-            /// The mouse wheel was scrolled up
-            WheelUp,
-            /// The mouse wheel was scrolled down
-            WheelDown,
-        }
-
-        bitflags!
-        {
-            /// Represents a set of modifier keys
-            #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-            pub struct ModifierState: u8
-            {
-                /// Alt key
-                const ALT   = 1 << 0;
-                /// Ctrl key
-                const CTRL  = 1 << 1;
-                /// Shift key
-                const SHIFT = 1 << 2;
-            }
-        }
-        /// Represents a mouse event
-        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-        pub struct Mouse
-        {
-            /// The position of the mouse within the terminal when the event occurred
-            pub position: Cursor,
-            /// The input event that occurred
-            pub input: MouseInput,
-            /// Modifier keys held when the input event occurred.
-            pub modifiers: ModifierState,
-        }
-        /// Represents an event generated from a terminal interface
-        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-        pub enum Event
-        {
-            /// Keyboard event
-            Key( Key ),
-            /// Mouse event
-            Mouse( Mouse ),
-            /// Raw data read
-            Raw( usize ),
-            /// Terminal window size changed; contained value is the new size.
-            Resize( Size ),
-            /// Terminal signal received
-            Signal( Signal ),
-            /// No event.
-            NoEvent,
-        }
-        /// Represents the size of a terminal window.
-        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-        pub struct Size
-        {
-            /// Number of lines in the terminal
-            pub lines: usize,
-            /// Number of columns in the terminal
-            pub columns: usize,
-        }
-
-        impl Size
-        {
-            /// Returns the total number of cells in a terminal of the given size.
-            #[inline] pub fn area(&self) -> usize
-            { self.checked_area().unwrap_or_else( || panic!("overflow in Size::area {:?}", self)) }
-            /// Returns the total number of cells in a terminal of the given size.
-            #[inline] pub fn checked_area(&self) -> Option<usize> { self.lines.checked_mul(self.columns) }
-        }
-    }
-    pub use self::terminal::
-    { 
-        Color, Cursor, CursorMode, Size, Style, Theme, Event, Key, Mouse, MouseInput, MouseButton, ModifierState
-    };
-
-    pub mod variable
-    {
-        //! Contains types associated with user-configurable variables
-        use ::
-        {
-            borrow::{ Cow },
-            mem::{ replace },
-            time::{ Duration },
-            *,
-        };
-
-        macro_rules! define_variables
-        {
-            ( $( $field:ident : $ty:ty => ( $name:expr , $conv:ident ,
-                    |$gr:ident| $getter:expr , |$sr:ident, $v:ident| $setter:expr ) , )+ ) => {
-                static VARIABLE_NAMES: &[&str] = &[ $( $name ),+ ];
-
-                pub struct Variables {
-                    $( pub $field : $ty ),*
-                }
-
-                impl Variables {
-                    pub fn get_variable(&self, name: &str) -> Option<Variable> {
-                        match name {
-                            $( $name => {
-                                let $gr = self;
-                                Some(Variable::from($getter))
-                            } )+
-                            _ => None
-                        }
-                    }
-
-                    pub fn set_variable(&mut self, name: &str, value: &str)
-                            -> Option<Variable> {
-                        match name {
-                            $( $name => {
-                                if let Some($v) = $conv(value) {
-                                    let $sr = self;
-                                    Some(Variable::from($setter))
-                                } else {
-                                    None
-                                }
-                            } )+
-                            _ => None
-                        }
-                    }
-
-                    pub fn iter(&self) -> VariableIter {
-                        VariableIter{vars: self, n: 0}
-                    }
-                }
-
-                impl<'a> Iterator for VariableIter<'a> {
-                    type Item = (&'static str, Variable);
-
-                    fn next(&mut self) -> Option<Self::Item> {
-                        let res = match VARIABLE_NAMES.get(self.n).cloned() {
-                            $( Some($name) => ($name, {
-                                let $gr = self.vars;
-                                Variable::from($getter)
-                            }) , )+
-                            _ => return None
-                        };
-
-                        self.n += 1;
-                        Some(res)
-                    }
-                }
-            }
-        }
-        /// Default `keyseq_timeout`, in milliseconds
-        pub const KEYSEQ_TIMEOUT_MS: u64 = 500;
-        /// Iterator over `Reader` variable values
-        #[derive(Clone)]
-        pub struct VariableIter<'a>
-        {
-            vars: &'a Variables,
-            n: usize,
-        }
-        /// Represents a `Reader` variable of a given type
-        #[derive(Clone, Debug)]
-        pub enum Variable
-        {
-            /// Boolean variable
-            Boolean(bool),
-            /// Integer variable
-            Integer(i32),
-            /// String variable
-            String(Cow<'static, str>),
-        }
-
-        impl From<bool> for Variable
-        {
-            fn from(b: bool) -> Variable { Variable::Boolean(b) }
-        }
-
-        impl From<i32> for Variable
-        {
-            fn from(i: i32) -> Variable { Variable::Integer(i) }
-        }
-
-        impl From<&'static str> for Variable 
-        {
-            fn from(s: &'static str) -> Variable { Variable::String(s.into()) }
-        }
-
-        impl From<Cow<'static, str>> for Variable 
-        {
-            fn from(s: Cow<'static, str>) -> Variable { Variable::String(s) }
-        }
-
-        impl From<String> for Variable 
-        {
-            fn from(s: String) -> Variable { Variable::String(s.into()) }
-        }
-
-        impl fmt::Display for Variable 
-        {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
-            {
-                match *self
-                {
-                    Variable::Boolean(b) => f.write_str(if b { "on" } else { "off" }),
-                    Variable::Integer(n) => fmt::Display::fmt(&n, f),
-                    Variable::String(ref s) => fmt::Display::fmt(&s[..], f),
-                }
-            }
-        }
-
-        define_variables!{
-            blink_matching_paren: bool => ("blink-matching-paren", parse_bool,
-                |r| r.blink_matching_paren,
-                |r, v| replace(&mut r.blink_matching_paren, v)),
-            comment_begin: Cow<'static, str> => ("comment-begin", parse_string,
-                |r| r.comment_begin.clone(),
-                |r, v| replace(&mut r.comment_begin, v.into())),
-            completion_display_width: usize => ("completion-display-width", parse_usize,
-                |r| usize_as_i32(r.completion_display_width),
-                |r, v| usize_as_i32(replace(&mut r.completion_display_width, v))),
-            completion_query_items: usize => ("completion-query-items", parse_usize,
-                |r| usize_as_i32(r.completion_query_items),
-                |r, v| usize_as_i32(replace(&mut r.completion_query_items, v))),
-            disable_completion: bool => ("disable-completion", parse_bool,
-                |r| r.disable_completion,
-                |r, v| replace(&mut r.disable_completion, v)),
-            echo_control_characters: bool => ("echo-control-characters", parse_bool,
-                |r| r.echo_control_characters,
-                |r, v| replace(&mut r.echo_control_characters, v)),
-            keyseq_timeout: Option<Duration> => ("keyseq-timeout", parse_duration,
-                |r| as_millis(r.keyseq_timeout),
-                |r, v| as_millis(replace(&mut r.keyseq_timeout, v))),
-            page_completions: bool => ("page-completions", parse_bool,
-                |r| r.page_completions,
-                |r, v| replace(&mut r.page_completions, v)),
-            print_completions_horizontally: bool => ("print-completions-horizontally", parse_bool,
-                |r| r.print_completions_horizontally,
-                |r, v| replace(&mut r.print_completions_horizontally, v)),
-        }
-
-        impl Default for Variables
-        {
-            fn default() -> Variables
-            {
-                Variables
-                {
-                    blink_matching_paren: false,
-                    comment_begin: "#".into(),
-                    completion_display_width: usize::max_value(),
-                    completion_query_items: 100,
-                    disable_completion: false,
-                    echo_control_characters: true,
-                    keyseq_timeout: Some(Duration::from_millis(KEYSEQ_TIMEOUT_MS)),
-                    page_completions: true,
-                    print_completions_horizontally: false,
-                }
-            }
-        }
-
-        fn parse_bool(s: &str) -> Option<bool>
-        {
-            match s
-            {
-                "0" => Some(false),
-                "1" => Some(true),
-                s if s.eq_ignore_ascii_case("off") => Some(false),
-                s if s.eq_ignore_ascii_case("on") => Some(true),
-                _ => None
-            }
-        }
-
-        fn parse_string(s: &str) -> Option<String> { Some(s.to_owned()) }
-
-        fn as_millis(timeout: Option<Duration>) -> i32
-        {
-            match timeout
-            {
-                Some(t) =>
-                {
-                    let s = (t.as_secs() * 1_000) as i32;
-                    let ms = (t.subsec_nanos() / 1_000_000) as i32;
-
-                    s + ms
-                }
-                None => -1
-            }
-        }
-
-        fn parse_duration(s: &str) -> Option<Option<Duration>> 
-        {
-            match s.parse::<i32>() 
-            {
-                Ok(n) if n <= 0 => Some(None),
-                Ok(n) => Some(Some(Duration::from_millis(n as u64))),
-                Err(_) => Some(None)
-            }
-        }
-
-        fn usize_as_i32(u: usize) -> i32 
-        {
-            match u 
-            {
-                u if u > i32::max_value() as usize => -1,
-                u => u as i32
-            }
-        }
-
-        fn parse_usize(s: &str) -> Option<usize> 
-        {
-            match s.parse::<i32>() 
-            {
-                Ok(n) if n < 0 => Some(usize::max_value()),
-                Ok(n) => Some(n as usize),
-                Err(_) => None
-            }
-        }
-    }
-
-    pub mod unix
-    {
-        macro_rules! impl_is_minus_one
-        {
-            ($($t:ident)*) => ($(impl IsMinusOne for $t
-            {
-                fn is_minus_one(&self) -> bool { *self == -1 }
-            })*)
-        }
-
-        pub mod ext
-        {
-            //! Unix extension trait
-            use ::
-            {
+                collections::{ BTreeMap },
+                ffi::{ OsStr, OsString },
+                num::{ NonZero, NonZeroI32 },
                 path::{ Path },
-                system::{ Private },
-                time::{ Duration },
-                *,
-            };
-            /*
-            use ::terminal::Event;
-            */
-            /// Implements Unix-only extensions for terminal interfaces.
-            pub trait OpenTerminalExt: Sized + Private
-            {
-                /// Opens a terminal interface on the device at the given path.
-                fn from_path<P: AsRef<Path>>(path: P) -> io::Result<Self>;
-            }
-
-            /// Implements Unix-only extensions for terminal interfaces.
-            pub trait TerminalExt: Private 
-            {
-                /// Reads raw data from the terminal.
-                fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>>;
-            }
-        }
-
-        mod terminal
-        {
-            use ::
-            {
-                collections::{ FindResult, SequenceMap },
-                convert::{ TryFrom },
-                fs::{ File },
-                libc::{ ioctl, c_int, c_ushort, termios, STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, TIOCGWINSZ },
-                mem::{ replace, zeroed },
-                nix::
-                {
-                    errno::{ Errno },
-                    sys::
-                    {
-                        signal::{ sigaction, SaFlags, SigAction, SigHandler, Signal as NixSignal, SigSet, },
-                        termios::{ tcgetattr, tcsetattr, SetArg, InputFlags, LocalFlags, },
-                        time::{ TimeVal, TimeValLike },
-                    },
-                    unistd::{ read, write },
-                },
-                os::unix::io::{ FromRawFd, IntoRawFd, RawFd },
-                path::{ Path },
-                str::{ from_utf8, SmallString },
-                sync::
-                {
-                    atomic::{ AtomicUsize, Ordering },
-                    LockResult, Mutex, MutexGuard, TryLockResult,
-                },
                 system::
                 {
-                    signal::{ Signal, SignalSet },
-                    terminal::{ Color, Cursor, CursorMode, Event, Key, Size, Style, Theme, MouseButton, Mouse, MouseInput, ModifierState },
+                    api::{ protocols::{ simple_text_input, simple_text_output }, efi },
+                    common::
+                    {
+                        process::{ CommandEnv, CommandEnvs },
+                        support::{ unsupported },
+                    },
+                    fs::{ File },
+                    helpers::{ self, os::{ error_string }, },
+                    pipe::{ AnonPipe },
+                    
                 },
                 *,
-            };
-            /*
-            use terminfo::{self, capability as cap, Database};
-            use terminfo::capability::Expansion;
-            use terminfo::expand::Context;
-            */
-            pub const OUT_BUFFER_SIZE: usize = 8192;
-            pub const XTERM_ENABLE_MOUSE: &str = "\x1b[?1006h\x1b[?1002h";
-            pub const XTERM_DISABLE_MOUSE: &str = "\x1b[?1006l\x1b[?1002l";
-            pub const XTERM_ENABLE_MOUSE_MOTION: &str = "\x1b[?1003h";
-            pub const XTERM_DISABLE_MOUSE_MOTION: &str = "\x1b[?1003l";
-            pub const XTERM_MOUSE_INTRO: &str = "\x1b[<";
-            pub const XTERM_SHIFT_MASK: u32 = 0x04;
-            pub const XTERM_META_MASK: u32  = 0x08;
-            pub const XTERM_CTRL_MASK: u32  = 0x10;
-            pub const XTERM_MODIFIER_MASK: u32 = XTERM_SHIFT_MASK | XTERM_META_MASK | XTERM_CTRL_MASK;
-
-            pub type SeqMap = SequenceMap<SmallString<[u8; 8]>, SeqData>;
-
-            #[derive(Copy, Clone)]
-            enum SeqData
+            }; use self::OsString as EnvKey;
+            
+            #[derive(Debug)] 
+            pub struct Command
             {
-                XTermMouse,
-                Key(Key),
+                prog: OsString,
+                args: Vec<OsString>,
+                stdout: Option<Stdio>,
+                stderr: Option<Stdio>,
+                stdin: Option<Stdio>,
+                env: CommandEnv,
             }
-
-            pub struct Terminal {
-                info: Database,
-                out_fd: RawFd,
-                in_fd: RawFd,
-                owned_fd: bool,
-                sequences: SeqMap,
-                reader: Mutex<Reader>,
-                writer: Mutex<Writer>,
-            }
-
-            pub struct TerminalReadGuard<'a> {
-                term: &'a Terminal,
-                reader: MutexGuard<'a, Reader>,
-            }
-
-            pub struct TerminalWriteGuard<'a> {
-                term: &'a Terminal,
-                writer: MutexGuard<'a, Writer>,
-            }
-
-            struct Reader {
-                in_buffer: Vec<u8>,
-                resume: Option<Resume>,
-                report_signals: SignalSet,
-            }
-
-            struct Writer {
-                context: Context,
-                out_buffer: Vec<u8>,
-                fg: Option<Color>,
-                bg: Option<Color>,
-                cur_style: Style,
-            }
-
-            impl Terminal {
-                fn new(in_fd: RawFd, out_fd: RawFd, owned_fd: bool) -> io::Result<Terminal> {
-                    let info = Database::from_env().map_err(ti_to_io)?;
-                    let sequences = sequences(&info);
-
-                    Ok(Terminal{
-                        info,
-                        in_fd,
-                        out_fd,
-                        owned_fd,
-                        sequences,
-                        reader: Mutex::new(Reader{
-                            in_buffer: Vec::new(),
-                            resume: None,
-                            report_signals: SignalSet::new(),
-                        }),
-                        writer: Mutex::new(Writer::new()),
-                    })
-                }
-
-                pub fn open<P: AsRef<Path>>(path: P) -> io::Result<Terminal> {
-                    let fd = open_rw(path)?;
-
-                    let r = Terminal::new(fd, fd, true);
-
-                    if r.is_err() {
-                        unsafe { close_fd(fd); }
-                    }
-
-                    r
-                }
-
-                pub fn stdout() -> io::Result<Terminal> {
-                    Terminal::new(STDIN_FILENO, STDOUT_FILENO, false)
-                }
-
-                pub fn stderr() -> io::Result<Terminal> {
-                    Terminal::new(STDIN_FILENO, STDERR_FILENO, false)
-                }
-
-                pub fn name(&self) -> &str {
-                    self.info.name()
-                }
-
-                fn is_xterm(&self) -> bool {
-                    is_xterm(self.name())
-                }
-
-                pub fn size(&self) -> io::Result<Size> {
-                    self.lock_writer().size()
-                }
-
-                pub fn wait_event(&self, timeout: Option<Duration>) -> io::Result<bool> {
-                    self.lock_reader().wait_event(timeout)
-                }
-
-                pub fn read_event(&self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    self.lock_reader().read_event(timeout)
-                }
-
-                pub fn read_raw(&self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    self.lock_reader().read_raw(buf, timeout)
-                }
-
-                pub fn enter_screen(&self) -> io::Result<()> {
-                    self.lock_writer().enter_screen()
-                }
-
-                pub fn exit_screen(&self) -> io::Result<()> {
-                    self.lock_writer().exit_screen()
-                }
-
-                pub fn prepare(&self, config: PrepareConfig) -> io::Result<PrepareState> {
-                    self.lock_reader().prepare(config)
-                }
-
-                pub fn restore(&self, state: PrepareState) -> io::Result<()> {
-                    self.lock_reader().restore(state)
-                }
-
-                pub fn clear_screen(&self) -> io::Result<()> {
-                    self.lock_writer().clear_screen()
-                }
-
-                pub fn clear_to_line_end(&self) -> io::Result<()> {
-                    self.lock_writer().clear_to_line_end()
-                }
-
-                pub fn clear_to_screen_end(&self) -> io::Result<()> {
-                    self.lock_writer().clear_to_screen_end()
-                }
-
-                pub fn move_up(&self, n: usize) -> io::Result<()> {
-                    if n != 0 {
-                        self.lock_writer().move_up(n)?;
-                    }
-                    Ok(())
-                }
-
-                pub fn move_down(&self, n: usize) -> io::Result<()> {
-                    if n != 0 {
-                        self.lock_writer().move_down(n)?;
-                    }
-                    Ok(())
-                }
-
-                pub fn move_left(&self, n: usize) -> io::Result<()> {
-                    if n != 0 {
-                        self.lock_writer().move_left(n)?;
-                    }
-                    Ok(())
-                }
-
-                pub fn move_right(&self, n: usize) -> io::Result<()> {
-                    if n != 0 {
-                        self.lock_writer().move_right(n)?;
-                    }
-                    Ok(())
-                }
-
-                pub fn move_to_first_column(&self) -> io::Result<()> {
-                    self.lock_writer().move_to_first_column()
-                }
-
-                pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> {
-                    self.lock_writer().set_cursor_mode(mode)
-                }
-
-                pub fn write_char(&self, ch: char) -> io::Result<()> {
-                    self.write_str(ch.encode_utf8(&mut [0; 4]))
-                }
-
-                pub fn write_str(&self, s: &str) -> io::Result<()> {
-                    self.lock_writer().write_str(s)
-                }
-
-                pub fn write_styled(&self,
-                        fg: Option<Color>, bg: Option<Color>, style: Style, text: &str)
-                        -> io::Result<()> {
-                    self.lock_writer().write_styled(fg, bg, style, text)
-                }
-
-                pub fn clear_attributes(&self) -> io::Result<()> {
-                    self.lock_writer().clear_attributes()
-                }
-
-                pub fn set_fg(&self, fg: Option<Color>) -> io::Result<()> {
-                    self.lock_writer().set_fg(fg)
-                }
-
-                pub fn set_bg(&self, bg: Option<Color>) -> io::Result<()> {
-                    self.lock_writer().set_bg(bg)
-                }
-
-                pub fn add_style(&self, style: Style) -> io::Result<()> {
-                    self.lock_writer().add_style(style)
-                }
-
-                pub fn remove_style(&self, style: Style) -> io::Result<()> {
-                    self.lock_writer().remove_style(style)
-                }
-
-                pub fn set_style(&self, style: Style) -> io::Result<()> {
-                    self.lock_writer().set_style(style)
-                }
-
-                pub fn set_theme(&self, theme: Theme) -> io::Result<()> {
-                    self.lock_writer().set_theme(theme)
-                }
-
-                pub fn lock_read(&self) -> LockResult<TerminalReadGuard> {
-                    map_lock_result(self.reader.lock(),
-                        |r| TerminalReadGuard::new(self, r))
-                }
-
-                pub fn lock_write(&self) -> LockResult<TerminalWriteGuard> {
-                    map_lock_result(self.writer.lock(),
-                        |w| TerminalWriteGuard::new(self, w))
-                }
-
-                pub fn try_lock_read(&self) -> TryLockResult<TerminalReadGuard> {
-                    map_try_lock_result(self.reader.try_lock(),
-                        |r| TerminalReadGuard::new(self, r))
-                }
-
-                pub fn try_lock_write(&self) -> TryLockResult<TerminalWriteGuard> {
-                    map_try_lock_result(self.writer.try_lock(),
-                        |w| TerminalWriteGuard::new(self, w))
-                }
-
-                fn lock_reader(&self) -> TerminalReadGuard {
-                    self.lock_read().expect("Terminal::lock_reader")
-                }
-
-                fn lock_writer(&self) -> TerminalWriteGuard {
-                    self.lock_write().expect("Terminal::lock_writer")
-                }
-            }
-
-            impl Drop for Terminal {
-                fn drop(&mut self) {
-                    if let Err(e) = self.set_cursor_mode(CursorMode::Normal) {
-                        eprintln!("failed to restore terminal: {}", e);
-                    }
-
-                    if self.owned_fd {
-                        unsafe { close_fd(self.out_fd); }
-                    }
-                }
-            }
-
-            impl<'a> TerminalReadGuard<'a> {
-                fn new(term: &'a Terminal, reader: MutexGuard<'a, Reader>) -> TerminalReadGuard<'a> {
-                    TerminalReadGuard{term, reader}
-                }
-
-                pub fn prepare(&mut self, config: PrepareConfig) -> io::Result<PrepareState> {
-                    let mut writer = self.term.lock_writer();
-                    self.prepare_with_lock(&mut writer, config)
-                }
-
-                pub fn prepare_with_lock(&mut self, writer: &mut TerminalWriteGuard,
-                        config: PrepareConfig) -> io::Result<PrepareState> {
-                    use nix::sys::termios::SpecialCharacterIndices::*;
-
-                    let old_tio = tcgetattr(self.term.in_fd).map_err(nix_to_io)?;
-                    let mut tio = old_tio.clone();
-
-                    let mut state = PrepareState{
-                        old_tio: old_tio.into(),
-                        old_sigcont: None,
-                        old_sigint: None,
-                        old_sigtstp: None,
-                        old_sigquit: None,
-                        old_sigwinch: None,
-                        restore_keypad: false,
-                        restore_mouse: false,
-                        prev_resume: self.reader.resume,
-                    };
-
-                    tio.input_flags.remove(
-                        // Disable carriage return/line feed conversion
-                        InputFlags::INLCR | InputFlags::ICRNL
-                    );
-
-                    tio.local_flags.remove(
-                        // Disable canonical mode;
-                        // this gives us input without waiting for newline or EOF
-                        // and disables line-editing, treating such inputs as characters.
-                        // Disable ECHO, preventing input from being written to output.
-                        LocalFlags::ICANON | LocalFlags::ECHO
-                    );
-
-                    // ISIG, when enabled, causes the process to receive signals when
-                    // Ctrl-C, Ctrl-\, etc. are input
-                    if config.block_signals {
-                        tio.local_flags.remove(LocalFlags::ISIG);
-                    } else {
-                        tio.local_flags.insert(LocalFlags::ISIG);
-                    }
-
-                    // IXON, when enabled, allows Ctrl-S/Ctrl-Q to suspend and restart inputs
-                    if config.enable_control_flow {
-                        tio.input_flags.insert(InputFlags::IXON);
-                    } else {
-                        tio.input_flags.remove(InputFlags::IXON);
-                    }
-
-                    // Allow a read to return with 0 characters ready
-                    tio.control_chars[VMIN as usize] = 0;
-                    // Allow a read to return after 0 deciseconds
-                    tio.control_chars[VTIME as usize] = 0;
-
-                    tcsetattr(self.term.in_fd, SetArg::TCSANOW, &tio).map_err(nix_to_io)?;
-
-                    if config.enable_mouse {
-                        if writer.enable_mouse(config.always_track_motion)? {
-                            state.restore_mouse = true;
-                        }
-                    }
-
-                    if config.enable_keypad {
-                        if writer.enable_keypad()? {
-                            state.restore_keypad = true;
-                        }
-                    }
-
-                    writer.flush()?;
-
-                    let action = SigAction::new(SigHandler::Handler(handle_signal),
-                        SaFlags::empty(), SigSet::all());
-
-                    // Continue and Resize are always handled by the internals,
-                    // but only reported if requested.
-                    state.old_sigcont = Some(unsafe { sigaction(NixSignal::SIGCONT, &action).map_err(nix_to_io)? });
-                    state.old_sigwinch = Some(unsafe { sigaction(NixSignal::SIGWINCH, &action).map_err(nix_to_io)? });
-
-                    if config.report_signals.contains(Signal::Interrupt) {
-                        state.old_sigint = Some(unsafe { sigaction(NixSignal::SIGINT, &action).map_err(nix_to_io)? });
-                    }
-                    if config.report_signals.contains(Signal::Suspend) {
-                        state.old_sigtstp = Some(unsafe { sigaction(NixSignal::SIGTSTP, &action).map_err(nix_to_io)? });
-                    }
-                    if config.report_signals.contains(Signal::Quit) {
-                        state.old_sigquit = Some(unsafe { sigaction(NixSignal::SIGQUIT, &action).map_err(nix_to_io)? });
-                    }
-
-                    self.reader.report_signals = config.report_signals;
-                    self.reader.resume = Some(Resume{config});
-
-                    Ok(state)
-                }
-
-                pub fn restore(&mut self, state: PrepareState) -> io::Result<()> {
-                    let mut writer = self.term.lock_writer();
-                    self.restore_with_lock(&mut writer, state)
-                }
-
-                pub fn restore_with_lock(&mut self, writer: &mut TerminalWriteGuard,
-                        state: PrepareState) -> io::Result<()> {
-                    self.reader.resume = state.prev_resume;
-
-                    if state.restore_mouse {
-                        writer.disable_mouse()?;
-                    }
-
-                    if state.restore_keypad {
-                        writer.disable_keypad()?;
-                    }
-
-                    writer.flush()?;
-
-                    tcsetattr(self.term.in_fd, SetArg::TCSANOW, &state.old_tio.into()).map_err(nix_to_io)?;
-
-                    unsafe {
-                        if let Some(ref old) = state.old_sigcont {
-                            sigaction(NixSignal::SIGCONT, old).map_err(nix_to_io)?;
-                        }
-                        if let Some(ref old) = state.old_sigint {
-                            sigaction(NixSignal::SIGINT, old).map_err(nix_to_io)?;
-                        }
-                        if let Some(ref old) = state.old_sigtstp {
-                            sigaction(NixSignal::SIGTSTP, old).map_err(nix_to_io)?;
-                        }
-                        if let Some(ref old) = state.old_sigquit {
-                            sigaction(NixSignal::SIGQUIT, old).map_err(nix_to_io)?;
-                        }
-                        if let Some(ref old) = state.old_sigwinch {
-                            sigaction(NixSignal::SIGWINCH, old).map_err(nix_to_io)?;
-                        }
-                    }
-
-                    Ok(())
-                }
-
-                pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool> {
-                    if get_signal().is_some() {
-                        return Ok(true);
-                    }
-
-                    if peek_event(&self.reader.in_buffer, &self.term.sequences)?.is_some() {
-                        return Ok(true);
-                    }
-
-                    let mut timeout = timeout.map(to_timeval);
-
-                    let n = loop {
-                        let in_fd = self.term.in_fd;
-
-                        let mut r_fds = FdSet::new();
-                        r_fds.insert(in_fd);
-
-                        // FIXME: FdSet does not implement Copy or Clone
-                        let mut e_fds = FdSet::new();
-                        e_fds.insert(in_fd);
-
-                        match select(in_fd + 1,
-                                Some(&mut r_fds), None, Some(&mut e_fds), timeout.as_mut()) {
-                            Ok(n) => break n,
-                            Err(Errno::EINTR) =>
-                                if get_signal().is_some() {
-                                    return Ok(true);
-                                }
-                            
-                            Err(e) => return Err(nix_to_io(e))
-                        }
-                    };
-
-                    Ok(n != 0)
-                }
-
-                pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    if let Some(ev) = self.try_read()? {
-                        return Ok(Some(ev));
-                    }
-
-                    match self.read_into_buffer(timeout)? {
-                        Some(Event::Raw(_)) => self.try_read(),
-                        Some(Event::Signal(sig)) => {
-                            if let Some(ev) = self.handle_signal(sig)? {
-                                Ok(Some(ev))
-                            } else {
-                                Ok(None)
-                            }
-                        }
-                        r => Ok(r)
-                    }
-                }
-
-                pub fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    if !self.reader.in_buffer.is_empty() {
-                        let n = buf.len().min(self.reader.in_buffer.len());
-                        buf[..n].copy_from_slice(&self.reader.in_buffer[..n]);
-
-                        let _ = self.reader.in_buffer.drain(..n);
-
-                        return Ok(Some(Event::Raw(n)));
-                    }
-
-                    match self.read_input(buf, timeout)? {
-                        Some(Event::Signal(sig)) => {
-                            if let Some(event) = self.handle_signal(sig)? {
-                                Ok(Some(event))
-                            } else {
-                                Ok(None)
-                            }
-                        }
-                        r => Ok(r)
-                    }
-                }
-
-                fn read_into_buffer(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    // Temporarily replace the buffer to prevent borrow errors
-                    let mut buf = replace(&mut self.reader.in_buffer, Vec::new());
-
-                    buf.reserve(128);
-
-                    let len = buf.len();
-                    let cap = buf.capacity();
-                    let r;
-
-                    unsafe {
-                        buf.set_len(cap);
-
-                        r = self.read_input(&mut buf[len..], timeout);
-
-                        match r {
-                            Ok(Some(Event::Raw(n))) => buf.set_len(len + n),
-                            _ => buf.set_len(len)
-                        }
-                    }
-
-                    // Restore the buffer before returning
-                    self.reader.in_buffer = buf;
-
-                    r
-                }
-
-                fn read_input(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    // Check for a signal that may have already arrived.
-                    if let Some(sig) = take_signal() {
-                        return Ok(Some(Event::Signal(sig)));
-                    }
-
-                    if !self.wait_event(timeout)? {
-                        return Ok(None);
-                    }
-
-                    // Check for a signal again after waiting
-                    if let Some(sig) = take_signal() {
-                        return Ok(Some(Event::Signal(sig)));
-                    }
-
-                    loop {
-                        match read(self.term.in_fd, buf) {
-                            Ok(n) => break Ok(Some(Event::Raw(n))),
-                            Err(Errno::EINTR) => {
-                                if let Some(sig) = take_signal() {
-                                    return Ok(Some(Event::Signal(sig)));
-                                }
-                            }
-                            Err(e) => return Err(nix_to_io(e))
-                        }
-                    }
-                }
-
-                fn try_read(&mut self) -> io::Result<Option<Event>> {
-                    let in_buffer = &mut self.reader.in_buffer;
-
-                    if in_buffer.is_empty() {
-                        Ok(None)
-                    } else {
-                        match peek_event(&in_buffer, &self.term.sequences) {
-                            Ok(Some((ev, n))) => {
-                                let _ = in_buffer.drain(..n);
-                                Ok(Some(ev))
-                            }
-                            Ok(None) => Ok(None),
-                            Err(e) => Err(e)
-                        }
-                    }
-                }
-
-                fn handle_signal(&mut self, sig: Signal) -> io::Result<Option<Event>> {
-                    match sig {
-                        Signal::Continue => {
-                            self.resume()?;
-                        }
-                        Signal::Resize => {
-                            let size = self.term.size()?;
-                            return Ok(Some(Event::Resize(size)));
-                        }
-                        _ => ()
-                    }
-
-                    if self.reader.report_signals.contains(sig) {
-                        Ok(Some(Event::Signal(sig)))
-                    } else {
-                        Ok(None)
-                    }
-                }
-
-                fn resume(&mut self) -> io::Result<()> {
-                    if let Some(resume) = self.reader.resume {
-                        let _ = self.prepare(resume.config)?;
-                    }
-                    Ok(())
-                }
-            }
-
-            macro_rules! expand_opt {
-                ( $slf:expr , $cap:path ) => { {
-                    if let Some(cap) = $slf.term.info.get::<$cap>() {
-                        $slf.expand(cap.expand())
-                    } else {
-                        Ok(())
-                    }
-                } };
-                ( $slf:expr , $cap:path , |$ex:ident| $expansion:expr ) => { {
-                    if let Some(cap) = $slf.term.info.get::<$cap>() {
-                        let $ex = cap.expand();
-                        $slf.expand($expansion)
-                    } else {
-                        Ok(())
-                    }
-                } }
-            }
-
-            macro_rules! expand_req {
-                ( $slf:expr , $cap:path , $name:expr ) => { {
-                    $slf.term.info.get::<$cap>()
-                        .ok_or_else(|| not_supported($name))
-                        .and_then(|cap| $slf.expand(cap.expand()))
-                } };
-                ( $slf:expr , $cap:path , $name:expr , |$ex:ident| $expansion:expr ) => { {
-                    $slf.term.info.get::<$cap>()
-                        .ok_or_else(|| not_supported($name))
-                        .and_then(|cap| {
-                            let $ex = cap.expand();
-                            $slf.expand($expansion)
-                        })
-                } }
-            }
-
-            impl<'a> TerminalWriteGuard<'a> {
-                fn new(term: &'a Terminal, writer: MutexGuard<'a, Writer>) -> TerminalWriteGuard<'a> {
-                    TerminalWriteGuard{term, writer}
-                }
-
-                pub fn size(&self) -> io::Result<Size> {
-                    get_winsize(self.term.out_fd)
-                }
-
-                fn disable_keypad(&mut self) -> io::Result<()> {
-                    if let Some(local) = self.term.info.get::<cap::KeypadLocal>() {
-                        self.expand(local.expand())?;
-                    }
-                    Ok(())
-                }
-
-                fn enable_keypad(&mut self) -> io::Result<bool> {
-                    if let Some(xmit) = self.term.info.get::<cap::KeypadXmit>() {
-                        self.expand(xmit.expand())?;
-                        Ok(true)
-                    } else {
-                        Ok(false)
-                    }
-                }
-
-                fn disable_mouse(&mut self) -> io::Result<()> {
-                    self.write_bytes(XTERM_DISABLE_MOUSE.as_bytes())?;
-                    self.write_bytes(XTERM_DISABLE_MOUSE_MOTION.as_bytes())
-                }
-
-                fn enable_mouse(&mut self, track_motion: bool) -> io::Result<bool> {
-                    if self.term.is_xterm() {
-                        self.write_bytes(XTERM_ENABLE_MOUSE.as_bytes())?;
-                        if track_motion {
-                            self.write_bytes(XTERM_ENABLE_MOUSE_MOTION.as_bytes())?;
-                        }
-                        Ok(true)
-                    } else {
-                        Ok(false)
-                    }
-                }
-
-                fn enter_screen(&mut self) -> io::Result<()> {
-                    match (self.term.info.get::<cap::EnterCaMode>(),
-                            self.term.info.get::<cap::ChangeScrollRegion>(),
-                            self.term.info.get::<cap::CursorHome>()) {
-                        (enter, Some(scroll), Some(home)) => {
-                            let size = self.size()?;
-
-                            if let Some(enter) = enter {
-                                self.expand(enter.expand())?;
-                            }
-
-                            self.expand(scroll.expand()
-                                .parameters(0, to_u32(size.lines - 1)))?;
-                            self.expand(home.expand())?;
-                        }
-                        (_, None, _) => return Err(not_supported("change_scroll_region")),
-                        (_, _, None) => return Err(not_supported("cursor_home")),
-                    }
-
-                    self.clear_attributes()?;
-                    self.clear_screen()?;
-
-                    Ok(())
-                }
-
-                fn exit_screen(&mut self) -> io::Result<()> {
-                    if let Some(exit) = self.term.info.get::<cap::ExitCaMode>() {
-                        self.expand(exit.expand())?;
-                        self.flush()?;
-                    }
-
-                    Ok(())
-                }
-
-                pub fn clear_attributes(&mut self) -> io::Result<()> {
-                    if self.writer.fg.is_some() || self.writer.bg.is_some() ||
-                            !self.writer.cur_style.is_empty() {
-                        self.writer.fg = None;
-                        self.writer.bg = None;
-                        self.writer.cur_style = Style::empty();
-                        expand_opt!(self, cap::ExitAttributeMode)?;
-                    }
-
-                    Ok(())
-                }
-
-                pub fn set_fg(&mut self, fg: Option<Color>) -> io::Result<()> {
-                    if self.writer.fg == fg {
-                        Ok(())
-                    } else {
-                        if let Some(fg) = fg {
-                            self.set_fg_color(fg)?;
-                        } else {
-                            self.clear_fg()?;
-                        }
-
-                        self.writer.fg = fg;
-                        Ok(())
-                    }
-                }
-
-                pub fn set_bg(&mut self, bg: Option<Color>) -> io::Result<()> {
-                    if self.writer.bg == bg {
-                        Ok(())
-                    } else {
-                        if let Some(bg) = bg {
-                            self.set_bg_color(bg)?;
-                        } else {
-                            self.clear_bg()?;
-                        }
-
-                        self.writer.bg = bg;
-                        Ok(())
-                    }
-                }
-
-                pub fn add_style(&mut self, style: Style) -> io::Result<()> {
-                    let add = style - self.writer.cur_style;
-
-                    if add.contains(Style::BOLD) {
-                        expand_opt!(self, cap::EnterBoldMode)?;
-                    }
-                    if add.contains(Style::ITALIC) {
-                        expand_opt!(self, cap::EnterItalicsMode)?;
-                    }
-                    if add.contains(Style::REVERSE) {
-                        expand_opt!(self, cap::EnterReverseMode)?;
-                    }
-                    if add.contains(Style::UNDERLINE) {
-                        expand_opt!(self, cap::EnterUnderlineMode)?;
-                    }
-
-                    self.writer.cur_style |= add;
-
-                    Ok(())
-                }
-
-                pub fn remove_style(&mut self, style: Style) -> io::Result<()> {
-                    let remove = style & self.writer.cur_style;
-
-                    if remove.intersects(Style::BOLD | Style::REVERSE) {
-                        // terminfo does not contain entries to remove bold or reverse.
-                        // Instead, we must reset all attributes.
-                        let new_style = self.writer.cur_style - remove;
-                        let fg = self.writer.fg;
-                        let bg = self.writer.bg;
-                        self.clear_attributes()?;
-                        self.add_style(new_style)?;
-                        self.set_fg(fg)?;
-                        self.set_bg(bg)?;
-                    } else {
-                        if remove.contains(Style::ITALIC) {
-                            expand_opt!(self, cap::ExitItalicsMode)?;
-                        }
-                        if remove.contains(Style::UNDERLINE) {
-                            expand_opt!(self, cap::ExitUnderlineMode)?;
-                        }
-
-                        self.writer.cur_style -= remove;
-                    }
-
-                    Ok(())
-                }
-
-                pub fn set_style(&mut self, style: Style) -> io::Result<()> {
-                    let add = style - self.writer.cur_style;
-                    let remove = self.writer.cur_style - style;
-
-                    if remove.intersects(Style::BOLD | Style::REVERSE) {
-                        // terminfo does not contain entries to remove bold or reverse.
-                        // Instead, we must reset all attributes.
-                        let fg = self.writer.fg;
-                        let bg = self.writer.bg;
-                        self.clear_attributes()?;
-                        self.set_fg(fg)?;
-                        self.set_bg(bg)?;
-                        self.add_style(style)?;
-                    } else {
-                        self.add_style(add)?;
-                        self.remove_style(remove)?;
-                    }
-
-                    Ok(())
-                }
-
-                pub fn set_theme(&mut self, theme: Theme) -> io::Result<()> {
-                    self.set_attrs(theme.fg, theme.bg, theme.style)
-                }
-
-                pub fn set_attrs(&mut self, fg: Option<Color>, bg: Option<Color>, style: Style) -> io::Result<()> {
-                    if (self.writer.fg.is_some() && fg.is_none()) ||
-                            (self.writer.bg.is_some() && bg.is_none()) {
-                        self.clear_attributes()?;
-                    }
-
-                    self.set_style(style)?;
-                    self.set_fg(fg)?;
-                    self.set_bg(bg)?;
-
-                    Ok(())
-                }
-
-                fn clear_fg(&mut self) -> io::Result<()> {
-                    let bg = self.writer.bg;
-                    let style = self.writer.cur_style;
-
-                    self.clear_attributes()?;
-                    self.set_bg(bg)?;
-                    self.set_style(style)
-                }
-
-                fn clear_bg(&mut self) -> io::Result<()> {
-                    let fg = self.writer.fg;
-                    let style = self.writer.cur_style;
-
-                    self.clear_attributes()?;
-                    self.set_fg(fg)?;
-                    self.set_style(style)
-                }
-
-                fn set_fg_color(&mut self, fg: Color) -> io::Result<()> {
-                    expand_opt!(self, cap::SetAForeground,
-                        |ex| ex.parameters(color_code(fg)))
-                }
-
-                fn set_bg_color(&mut self, bg: Color) -> io::Result<()> {
-                    expand_opt!(self, cap::SetABackground,
-                        |ex| ex.parameters(color_code(bg)))
-                }
-
-                pub fn clear_screen(&mut self) -> io::Result<()> {
-                    expand_req!(self, cap::ClearScreen, "clear_screen")
-                }
-
-                pub fn clear_to_line_end(&mut self) -> io::Result<()> {
-                    expand_req!(self, cap::ClrEol, "clr_eol")
-                }
-
-                pub fn clear_to_screen_end(&mut self) -> io::Result<()> {
-                    expand_req!(self, cap::ClrEos, "clr_eos")
-                }
-
-                pub fn move_up(&mut self, n: usize) -> io::Result<()> {
-                    if n == 1 {
-                        expand_req!(self, cap::CursorUp, "cursor_up")?;
-                    } else if n != 0 {
-                        expand_req!(self, cap::ParmUpCursor, "parm_cursor_up",
-                            |ex| ex.parameters(to_u32(n)))?;
-                    }
-                    Ok(())
-                }
-
-                pub fn move_down(&mut self, n: usize) -> io::Result<()> {
-                    // Always use ParmDownCursor because CursorDown does not behave
-                    // as expected outside EnterCaMode state.
-                    if n != 0 {
-                        expand_req!(self, cap::ParmDownCursor, "parm_cursor_down",
-                            |ex| ex.parameters(to_u32(n)))?;
-                    }
-                    Ok(())
-                }
-
-                pub fn move_left(&mut self, n: usize) -> io::Result<()> {
-                    if n == 1 {
-                        expand_req!(self, cap::CursorLeft, "cursor_left")?;
-                    } else if n != 0 {
-                        expand_req!(self, cap::ParmLeftCursor, "parm_cursor_left",
-                            |ex| ex.parameters(to_u32(n)))?;
-                    }
-                    Ok(())
-                }
-
-                pub fn move_right(&mut self, n: usize) -> io::Result<()> {
-                    if n == 1 {
-                        expand_req!(self, cap::CursorRight, "cursor_right")?;
-                    } else if n != 0 {
-                        expand_req!(self, cap::ParmRightCursor, "parm_cursor_right",
-                            |ex| ex.parameters(to_u32(n)))?;
-                    }
-                    Ok(())
-                }
-
-                pub fn move_to_first_column(&mut self) -> io::Result<()> {
-                    self.write_bytes(b"\r")
-                }
-
-                pub fn move_cursor(&mut self, pos: Cursor) -> io::Result<()> {
-                    match (self.term.info.get::<cap::CursorAddress>(),
-                            self.term.info.get::<cap::CursorHome>()) {
-                        (_, Some(ref home)) if pos == Cursor::default() => {
-                            self.expand(home.expand())?;
-                        }
-                        (Some(addr), _) => {
-                            self.expand(addr.expand()
-                                .parameters(to_u32(pos.line), to_u32(pos.column)))?;
-                        }
-                        (None, _) => return Err(not_supported("cursor_address"))
-                    }
-
-                    Ok(())
-                }
-
-                pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> {
-                    match mode {
-                        CursorMode::Normal | CursorMode::Overwrite => {
-                            // Overwrite is not supported by Unix terminals.
-                            // We set to normal in this case as it will reverse
-                            // a setting of Invisible
-                            expand_opt!(self, cap::CursorNormal)?;
-                        }
-                        CursorMode::Invisible => {
-                            expand_opt!(self, cap::CursorInvisible)?;
-                        }
-                    }
-
-                    Ok(())
-                }
-
-                pub fn write_char(&mut self, ch: char) -> io::Result<()> {
-                    self.write_str(ch.encode_utf8(&mut [0; 4]))
-                }
-
-                pub fn write_str(&mut self, s: &str) -> io::Result<()> {
-                    self.write_bytes(s.as_bytes())
-                }
-
-                pub fn write_styled(&mut self,
-                        fg: Option<Color>, bg: Option<Color>, style: Style, text: &str)
-                        -> io::Result<()> {
-                    self.set_attrs(fg, bg, style)?;
-
-                    self.write_str(text)?;
-                    self.clear_attributes()
-                }
-
-                fn write_bytes(&mut self, buf: &[u8]) -> io::Result<()> {
-                    if buf.len() + self.writer.out_buffer.len() > self.writer.out_buffer.capacity() {
-                        self.flush()?;
-                    }
-
-                    if buf.len() > self.writer.out_buffer.capacity() {
-                        self.write_data(buf).1
-                    } else {
-                        self.writer.out_buffer.extend(buf);
-                        Ok(())
-                    }
-                }
-
-                pub fn flush(&mut self) -> io::Result<()> {
-                    let (n, res) = self.write_data(&self.writer.out_buffer);
-                    self.writer.out_buffer.drain(..n);
-                    res
-                }
-
-                fn write_data(&self, buf: &[u8]) -> (usize, io::Result<()>) {
-                    let mut offset = 0;
-
-                    let r = loop {
-                        if offset == buf.len() {
-                            break Ok(());
-                        }
-
-                        match write(self.term.out_fd, buf) {
-                            Ok(0) => break Err(io::Error::from(io::ErrorKind::WriteZero)),
-                            Ok(n) => offset += n,
-                            Err(Errno::EINTR) => continue,
-                            Err(e) => break Err(nix_to_io(e))
-                        }
-                    };
-
-                    (offset, r)
-                }
-
-                fn expand<T: AsRef<[u8]>>(&mut self, exp: Expansion<T>) -> io::Result<()> {
-                    let writer = &mut *self.writer;
-                    exp
-                        .with(&mut writer.context)
-                        .to(&mut writer.out_buffer)
-                        .map_err(ti_to_io)
-                }
-            }
-
-            impl<'a> Drop for TerminalWriteGuard<'a> {
-                fn drop(&mut self) {
-                    if let Err(e) = self.flush() {
-                        eprintln!("failed to flush terminal: {}", e);
-                    }
-                }
-            }
-
-            impl Writer {
-                fn new() -> Writer {
-                    Writer{
-                        context: Context::default(),
-                        out_buffer: Vec::with_capacity(OUT_BUFFER_SIZE),
-                        fg: None,
-                        bg: None,
-                        cur_style: Style::empty(),
-                    }
-                }
-            }
-
-            fn is_xterm(name: &str) -> bool {
-                // Includes such terminal names as "xterm-256color"
-                name == "xterm" || name.starts_with("xterm-")
-            }
-
-            fn sequences(info: &Database) -> SeqMap {
-                let mut sequences = SequenceMap::new();
-
-                macro_rules! add {
-                    ( $seq:ty , $key:expr ) => { {
-                        if let Some(seq) = info.get::<$seq>() {
-                            if let Some(s) = ascii_str(seq.as_ref()) {
-                                sequences.insert(s.into(), SeqData::Key($key));
-                            }
-                        }
-                    } }
-                }
-
-                add!(cap::KeyUp,        Key::Up);
-                add!(cap::KeyDown,      Key::Down);
-                add!(cap::KeyLeft,      Key::Left);
-                add!(cap::KeyRight,     Key::Right);
-                add!(cap::KeyHome,      Key::Home);
-                add!(cap::KeyEnd,       Key::End);
-                add!(cap::KeyNPage,     Key::PageDown);
-                add!(cap::KeyPPage,     Key::PageUp);
-                add!(cap::KeyDc,        Key::Delete);
-                add!(cap::KeyIc,        Key::Insert);
-                add!(cap::KeyF1,        Key::F(1));
-                add!(cap::KeyF2,        Key::F(2));
-                add!(cap::KeyF3,        Key::F(3));
-                add!(cap::KeyF4,        Key::F(4));
-                add!(cap::KeyF5,        Key::F(5));
-                add!(cap::KeyF6,        Key::F(6));
-                add!(cap::KeyF7,        Key::F(7));
-                add!(cap::KeyF8,        Key::F(8));
-                add!(cap::KeyF9,        Key::F(9));
-                add!(cap::KeyF10,       Key::F(10));
-                add!(cap::KeyF11,       Key::F(11));
-                add!(cap::KeyF12,       Key::F(12));
-
-                if is_xterm(info.name()) {
-                    sequences.insert(XTERM_MOUSE_INTRO.into(), SeqData::XTermMouse);
-                }
-
-                sequences
-            }
-
-            pub struct PrepareState {
-                old_tio: termios,
-                old_sigcont: Option<SigAction>,
-                old_sigint: Option<SigAction>,
-                old_sigtstp: Option<SigAction>,
-                old_sigquit: Option<SigAction>,
-                old_sigwinch: Option<SigAction>,
-                restore_keypad: bool,
-                restore_mouse: bool,
-                prev_resume: Option<Resume>,
+            
+            pub struct StdioPipes
+            {
+                pub stdin: Option<AnonPipe>,
+                pub stdout: Option<AnonPipe>,
+                pub stderr: Option<AnonPipe>,
             }
 
             #[derive(Copy, Clone, Debug)]
-            struct Resume {
-                config: PrepareConfig,
+            pub enum Stdio
+            {
+                Inherit,
+                Null,
+                MakePipe,
             }
 
-            unsafe fn close_fd(fd: RawFd) {
-                drop(File::from_raw_fd(fd));
-            }
-
-            fn open_rw<P: AsRef<Path>>(path: P) -> io::Result<RawFd> {
-                use std::fs::OpenOptions;
-
-                let file = OpenOptions::new()
-                    .read(true)
-                    .write(true)
-                    .open(path)?;
-
-                Ok(file.into_raw_fd())
-            }
-
-            #[repr(C)]
-            struct Winsize {
-                ws_row: c_ushort,
-                ws_col: c_ushort,
-                ws_xpixel: c_ushort,
-                ws_ypixel: c_ushort,
-            }
-
-            fn get_winsize(fd: c_int) -> io::Result<Size> {
-                let mut winsz: Winsize = unsafe { zeroed() };
-
-                // `TIOCGWINSZ.into()` is a workaround to a bug in the libc crate:
-                //  https://github.com/rust-lang/libc/pull/704
-                let res = unsafe { ioctl(fd, TIOCGWINSZ.into(), &mut winsz) };
-
-                if res == -1 {
-                    Err(io::Error::last_os_error())
-                } else {
-                    let size = Size{
-                        lines: winsz.ws_row as usize,
-                        columns: winsz.ws_col as usize,
-                    };
-
-                    Ok(size)
-                }
-            }
-
-            fn nix_to_io(e: nix::Error) -> io::Error {
-                io::Error::from_raw_os_error(e as i32)
-            }
-
-            fn ti_to_io(e: terminfo::Error) -> io::Error {
-                match e {
-                    terminfo::Error::Io(e) => e,
-                    terminfo::Error::NotFound => io::Error::new(
-                        io::ErrorKind::NotFound, "terminfo entry not found"),
-                    terminfo::Error::Parse => io::Error::new(
-                        io::ErrorKind::Other, "failed to parse terminfo entry"),
-                    terminfo::Error::Expand(_) => io::Error::new(
-                        io::ErrorKind::Other, "failed to expand terminfo entry"),
-                }
-            }
-
-            fn to_timeval(d: Duration) -> TimeVal {
-                const MAX_SECS: i64 = i64::max_value() / 1_000;
-
-                let secs = match d.as_secs() {
-                    n if n > MAX_SECS as u64 => MAX_SECS,
-                    n => n as i64,
-                };
-
-                let millis = d.subsec_millis() as i64;
-
-                TimeVal::milliseconds(secs * 1_000 + millis)
-            }
-
-            fn peek_event(buf: &[u8], sequences: &SeqMap)
-                    -> io::Result<Option<(Event, usize)>> {
-                let (res, n) = {
-                    let s = utf8_prefix(buf)?;
-
-                    if s.is_empty() {
-                        return Ok(None);
+            impl Command
+            {
+                pub fn new(program: &OsStr) -> Command
+                {
+                    Command
+                    {
+                        prog: program.to_os_string(),
+                        args: Vec::new(),
+                        stdout: None,
+                        stderr: None,
+                        stdin: None,
+                        env: Default::default(),
                     }
+                }
 
-                    let mut last_match = None;
+                pub fn arg(&mut self, arg: &OsStr) { self.args.push(arg.to_os_string()); }
 
-                    for pfx in prefixes(s) {
-                        match sequences.find(pfx) {
-                            FindResult::NotFound => break,
-                            FindResult::Found(value) => {
-                                last_match = Some((pfx, *value));
-                                break;
+                pub fn env_mut(&mut self) -> &mut CommandEnv { &mut self.env }
+
+                pub fn cwd(&mut self, _dir: &OsStr) { panic!("unsupported") }
+
+                pub fn stdin(&mut self, stdin: Stdio) { self.stdin = Some(stdin); }
+
+                pub fn stdout(&mut self, stdout: Stdio) { self.stdout = Some(stdout); }
+
+                pub fn stderr(&mut self, stderr: Stdio) { self.stderr = Some(stderr); }
+
+                pub fn get_program(&self) -> &OsStr { self.prog.as_ref() }
+
+                pub fn get_args(&self) -> CommandArgs<'_> { CommandArgs { iter: self.args.iter() } }
+
+                pub fn get_envs(&self) -> CommandEnvs<'_> { self.env.iter() }
+
+                pub fn get_current_dir(&self) -> Option<&Path> { None }
+
+                pub fn spawn( &mut self, _default: Stdio, _needs_stdin: bool ) -> 
+                io::Result<(Process, StdioPipes)> 
+                { unsupported() }
+
+                fn create_pipe( s: Stdio ) -> 
+                io::Result<Option<helpers::OwnedProtocol<uefi_command_internal::PipeProtocol>>>
+                {
+                    match s
+                    {
+                        Stdio::MakePipe => unsafe
+                        {
+                            helpers::OwnedProtocol::create(
+                                uefi_command_internal::PipeProtocol::new(),
+                                simple_text_output::PROTOCOL_GUID,
+                            )
+                        }.map(Some),
+
+                        Stdio::Null => unsafe
+                        {
+                            helpers::OwnedProtocol::create(
+                                uefi_command_internal::PipeProtocol::null(),
+                                simple_text_output::PROTOCOL_GUID,
+                            )
+                        }.map(Some),
+
+                        Stdio::Inherit => Ok(None),
+                    }
+                }
+
+                fn create_stdin( s: Stdio ) -> 
+                io::Result<Option<helpers::OwnedProtocol<uefi_command_internal::InputProtocol>>>
+                {
+                    match s
+                    {
+                        Stdio::Null => unsafe
+                        {
+                            helpers::OwnedProtocol::create
+                            (
+                                uefi_command_internal::InputProtocol::null(),
+                                simple_text_input::PROTOCOL_GUID,
+                            )
+                        }.map(Some),
+                        Stdio::Inherit => Ok(None),
+                        Stdio::MakePipe => unsupported(),
+                    }
+                }
+                
+                pub fn output(&mut self) -> io::Result<(ExitStatus, Vec<u8>, Vec<u8>)>
+                {
+                    let mut cmd = uefi_command_internal::Image::load_image(&self.prog)?;
+                    
+                    if !self.args.is_empty()
+                    {
+                        let args = uefi_command_internal::create_args(&self.prog, &self.args);
+                        cmd.set_args(args);
+                    }
+                    
+                    let stdout = self.stdout.unwrap_or(Stdio::MakePipe);
+                    let stdout = Self::create_pipe(stdout)?;
+                    
+                    if let Some(con) = stdout { cmd.stdout_init(con) } else { cmd.stdout_inherit() };
+                    
+                    let stderr = self.stderr.unwrap_or(Stdio::MakePipe);
+                    let stderr = Self::create_pipe(stderr)?;
+
+                    if let Some(con) = stderr { cmd.stderr_init(con) } else { cmd.stderr_inherit() };
+                    
+                    let stdin = self.stdin.unwrap_or(Stdio::Null);
+                    let stdin = Self::create_stdin(stdin)?;
+
+                    if let Some(con) = stdin { cmd.stdin_init(con) } else { cmd.stdin_inherit() };
+
+                    let env = env_changes(&self.env);
+                    
+                    if let Some(e) = &env
+                    {
+                        for (k, (_, v)) in e
+                        {
+                            match v
+                            {
+                                Some(v) => unsafe { ::env::set_var(k, v) },
+                                None => unsafe { ::env::remove_var(k) },
                             }
-                            FindResult::Incomplete => (),
-                            FindResult::Undecided(value) => {
-                                last_match = Some((pfx, *value));
+                        }
+                    }
+
+                    let stat = cmd.start_image()?;
+                    
+                    if let Some(e) = env 
+                    {
+                        for (k, (v, _)) in e 
+                        {
+                            match v 
+                            {
+                                Some(v) => unsafe { ::env::set_var(k, v) },
+                                None => unsafe { ::env::remove_var(k) },
                             }
                         }
                     }
 
-                    let res = last_match.and_then(|(seq, value)| {
-                        match value {
-                            SeqData::Key(key) => Some((Event::Key(key), seq.len())),
-                            SeqData::XTermMouse => {
-                                if let Some((data, len)) = parse_mouse_data(&buf[seq.len()..]) {
-                                    Some((Event::Mouse(data), seq.len() + len))
-                                } else {
-                                    // Input sequence was incomplete
-                                    None
-                                }
-                            }
-                        }
-                    });
+                    let stdout = cmd.stdout()?;
+                    let stderr = cmd.stderr()?;
 
-                    if let Some(res) = res {
-                        res
-                    } else {
-                        let ch = s.chars().next().unwrap();
-                        (Event::Key(ch.into()), ch.len_utf8())
-                    }
-                };
-
-                Ok(Some((res, n)))
-            }
-
-            fn parse_mouse_data(mut buf: &[u8]) -> Option<(Mouse, usize)> {
-                let orig_len = buf.len();
-
-                let (mut input, end) = parse_integer(&mut buf)?;
-
-                if end != b';' {
-                    return None;
-                }
-
-                let (column, end) = parse_integer(&mut buf)?;
-
-                if end != b';' {
-                    return None;
-                }
-
-                let (line, end) = parse_integer(&mut buf)?;
-
-                let is_pressed = match end {
-                    b'M' => true,
-                    b'm' => false,
-                    _ => return None
-                };
-
-                let mut mods = ModifierState::empty();
-
-                if (input & XTERM_SHIFT_MASK) != 0 {
-                    mods |= ModifierState::SHIFT;
-                }
-                if (input & XTERM_META_MASK) != 0 {
-                    mods |= ModifierState::ALT;
-                }
-                if (input & XTERM_CTRL_MASK) != 0 {
-                    mods |= ModifierState::CTRL;
-                }
-
-                input &= !XTERM_MODIFIER_MASK;
-
-                let input = match input {
-                    0 ..= 3 => mouse_button_event(input, is_pressed),
-                    64 => MouseInput::WheelUp,
-                    65 => MouseInput::WheelDown,
-                    _ => MouseInput::Motion,
-                };
-
-                let position = Cursor{
-                    // Parsed line and column begin at 1; we begin at 0
-                    line: (line - 1) as usize,
-                    column: (column - 1) as usize,
-                };
-
-                Some((Mouse{
-                    position,
-                    input,
-                    modifiers: mods,
-                }, orig_len - buf.len()))
-            }
-
-            fn parse_integer(buf: &mut &[u8]) -> Option<(u32, u8)> {
-                let mut n = 0u32;
-                let mut iter = buf.iter();
-
-                while let Some(&b) = iter.next() {
-                    match b {
-                        b'0' ..= b'9' => {
-                            n = n.checked_mul(10)?
-                                .checked_add((b - b'0') as u32)?;
-                        }
-                        _ => {
-                            *buf = iter.as_slice();
-                            return Some((n, b));
-                        }
-                    }
-                }
-
-                None
-            }
-
-            fn mouse_button_event(input: u32, is_pressed: bool) -> MouseInput {
-                let button = match input {
-                    0 => MouseButton::Left,
-                    1 => MouseButton::Middle,
-                    2 => MouseButton::Right,
-                    _ => MouseButton::Other(input)
-                };
-
-                if is_pressed {
-                    MouseInput::ButtonPressed(button)
-                } else {
-                    MouseInput::ButtonReleased(button)
+                    Ok((ExitStatus(stat), stdout, stderr))
                 }
             }
 
-            fn utf8_prefix(buf: &[u8]) -> io::Result<&str> {
-                match from_utf8(buf) {
-                    Ok(s) => Ok(s),
-                    Err(e) => {
-                        if e.valid_up_to() != 0 {
-                            from_utf8(&buf[..e.valid_up_to()])
-                                .map_err(|_| unreachable!())
-                        } else if e.error_len().is_some() {
-                            Err(io::Error::new(io::ErrorKind::Other,
-                                "read invalid utf-8 data from terminal"))
-                        } else {
-                            Ok("")
-                        }
+            impl From<AnonPipe> for Stdio 
+            {
+                fn from(pipe: AnonPipe) -> Stdio 
+                {
+                    pipe.diverge()
+                }
+            }
+
+            impl From<io::Stdout> for Stdio 
+            {
+                fn from(_: io::Stdout) -> Stdio 
+                {
+                    panic!("unsupported")
+                }
+            }
+
+            impl From<io::Stderr> for Stdio 
+            {
+                fn from(_: io::Stderr) -> Stdio 
+                {
+                    panic!("unsupported")
+                }
+            }
+
+            impl From<File> for Stdio 
+            {
+                fn from(_file: File) -> Stdio 
+                {
+                    panic!("unsupported")
+                }
+            }
+
+            #[non_exhaustive] #[derive(PartialEq, Eq, Clone, Copy, Debug)]
+            pub struct ExitStatus( efi::Status );
+
+            impl ExitStatus 
+            {
+                pub fn exit_ok(&self) -> Result<(), ExitStatusError> 
+                {
+                    if self.0 == efi::Status::SUCCESS { Ok(()) } else { Err(ExitStatusError(self.0)) }
+                }
+
+                pub fn code(&self) -> Option<i32>  { Some(self.0.as_usize() as i32) }
+            }
+
+            impl fmt::Display for ExitStatus 
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result 
+                {
+                    let err_str = error_string(self.0.as_usize());
+                    write!(f, "{}", err_str)
+                }
+            }
+
+            impl Default for ExitStatus 
+            {
+                fn default() -> Self  { ExitStatus( efi::Status::SUCCESS ) }
+            }
+
+            #[derive(Clone, Copy, PartialEq, Eq)]
+            pub struct ExitStatusError( efi::Status );
+
+            impl fmt::Debug for ExitStatusError 
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result 
+                {
+                    let err_str = error_string(self.0.as_usize());
+                    write!(f, "{}", err_str)
+                }
+            }
+
+            impl Into<ExitStatus> for ExitStatusError 
+            {
+                fn into(self) -> ExitStatus { ExitStatus(self.0) }
+            }
+
+            impl ExitStatusError 
+            {
+                pub fn code(self) -> Option<NonZero<i32>> { NonZeroI32::new(self.0.as_usize() as i32) }
+            }
+
+            #[derive(PartialEq, Eq, Clone, Copy, Debug)]
+            pub struct ExitCode(bool);
+
+            impl ExitCode 
+            {
+                pub const SUCCESS: ExitCode = ExitCode(false);
+                pub const FAILURE: ExitCode = ExitCode(true);
+
+                pub fn as_i32(&self) -> i32 { self.0 as i32 }
+            }
+
+            impl From<u8> for ExitCode 
+            {
+                fn from(code: u8) -> Self 
+                {
+                    match code
+                    {
+                        0 => Self::SUCCESS,
+                        1..=255 => Self::FAILURE,
                     }
                 }
             }
 
-            static LAST_SIGNAL: AtomicUsize = AtomicUsize::new(0);
+            pub struct Process(!);
 
-            extern "C" fn handle_signal(signum: c_int) {
-                LAST_SIGNAL.store(signum as usize, Ordering::Relaxed);
+            impl Process 
+            {
+                pub fn id(&self) -> u32  { self.0 }
+
+                pub fn kill(&mut self) -> io::Result<()>  { self.0 }
+
+                pub fn wait(&mut self) -> io::Result<ExitStatus>  { self.0 }
+
+                pub fn try_wait(&mut self) -> io::Result<Option<ExitStatus>>  { self.0 }
             }
 
-            fn conv_signal(sig: c_int) -> Option<Signal> {
-                match NixSignal::try_from(sig).ok() {
-                    Some(NixSignal::SIGCONT)  => Some(Signal::Continue),
-                    Some(NixSignal::SIGINT)   => Some(Signal::Interrupt),
-                    Some(NixSignal::SIGQUIT)  => Some(Signal::Quit),
-                    Some(NixSignal::SIGTSTP)  => Some(Signal::Suspend),
-                    Some(NixSignal::SIGWINCH) => Some(Signal::Resize),
-                    _ => None
+            pub struct CommandArgs<'a> 
+            {
+                iter: ::slice::Iter<'a, OsString>,
+            }
+
+            impl<'a> Iterator for CommandArgs<'a> 
+            {
+                type Item = &'a OsStr;
+
+                fn next(&mut self) -> Option<&'a OsStr>  { self.iter.next().map(|x| x.as_ref()) }
+
+                fn size_hint(&self) -> (usize, Option<usize>)  { self.iter.size_hint() }
+            }
+
+            impl<'a> ExactSizeIterator for CommandArgs<'a> 
+            {
+                fn len(&self) -> usize  { self.iter.len() }
+
+                fn is_empty(&self) -> bool  { self.iter.is_empty() }
+            }
+
+            impl<'a> fmt::Debug for CommandArgs<'a> 
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result 
+                {
+                    f.debug_list().entries(self.iter.clone()).finish()
                 }
-            }
-
-            fn get_signal() -> Option<Signal> {
-                conv_signal(LAST_SIGNAL.load(Ordering::Relaxed) as c_int)
-            }
-
-            fn take_signal() -> Option<Signal> {
-                conv_signal(LAST_SIGNAL.swap(0, Ordering::Relaxed) as c_int)
-            }
-
-            fn ascii_str(s: &[u8]) -> Option<&str> {
-                use std::str::from_utf8_unchecked;
-
-                if s.is_ascii() {
-                    Some(unsafe { from_utf8_unchecked(s) })
-                } else {
-                    None
-                }
-            }
-
-            fn color_code(color: Color) -> u8 {
-                match color {
-                    Color::Black =>     0,
-                    Color::Red =>       1,
-                    Color::Green =>     2,
-                    Color::Yellow =>    3,
-                    Color::Blue =>      4,
-                    Color::Magenta =>   5,
-                    Color::Cyan =>      6,
-                    Color::White =>     7,
-                }
-            }
-
-            fn not_supported(op: &str) -> io::Error {
-                io::Error::new(io::ErrorKind::Other,
-                    format!("operation not supported: {}", op))
             }
             
-            fn to_u32(u: usize) -> u32 {
-                if u > u32::max_value() as usize {
-                    u32::max_value()
-                } else {
-                    u as u32
-                }
-            }
-        } pub use self::terminal::{ PrepareState, Terminal, TerminalReadGuard, TerminalWriteGuard };
-
-        mod screen
-        {
-            use ::
+            mod uefi_command_internal 
             {
-                *,
-            };
-            /*
-            use std::io;
-            use std::sync::{LockResult, Mutex, MutexGuard, TryLockResult};
-            use std::time::Duration;
-
-            use ::buffer::ScreenBuffer;
-            use ::priv_util::{
-                map_lock_result, map_try_lock_result,
-                map2_lock_result, map2_try_lock_result,
-            };
-            use ::sys::{Terminal, TerminalReadGuard, TerminalWriteGuard, PrepareState};
-            use ::terminal::{Color, Cursor, CursorMode, Event, Size, Style, PrepareConfig};
-            */
-            pub struct Screen {
-                term: Terminal,
-
-                state: Option<PrepareState>,
-                writer: Mutex<Writer>,
-            }
-
-            pub struct ScreenReadGuard<'a> {
-                screen: &'a Screen,
-                reader: TerminalReadGuard<'a>,
-            }
-
-            pub struct ScreenWriteGuard<'a> {
-                writer: TerminalWriteGuard<'a>,
-                data: MutexGuard<'a, Writer>,
-            }
-
-            struct Writer {
-                buffer: ScreenBuffer,
-                clear_screen: bool,
-                real_cursor: Cursor,
-            }
-
-            impl Screen {
-                pub fn new(term: Terminal, config: PrepareConfig) -> io::Result<Screen> {
-                    let size = term.size()?;
-                    let state = term.prepare(config)?;
-
-                    let screen = Screen{
-                        term: term,
-                        state: Some(state),
-
-                        writer: Mutex::new(Writer{
-                            buffer: ScreenBuffer::new(size),
-                            clear_screen: false,
-                            real_cursor: Cursor::default(),
-                        }),
-                    };
-
-                    screen.term.enter_screen()?;
-
-                    Ok(screen)
-                }
-
-                pub fn stdout(config: PrepareConfig) -> io::Result<Screen> {
-                    Screen::new(Terminal::stdout()?, config)
-                }
-
-                pub fn stderr(config: PrepareConfig) -> io::Result<Screen> {
-                    Screen::new(Terminal::stderr()?, config)
-                }
-
-                forward_screen_buffer_methods!{ |slf| slf.lock_write_data().buffer }
-
-                pub fn lock_read(&self) -> LockResult<ScreenReadGuard> {
-                    map_lock_result(self.term.lock_read(),
-                        |r| ScreenReadGuard::new(self, r))
-                }
-
-                pub fn try_lock_read(&self) -> TryLockResult<ScreenReadGuard> {
-                    map_try_lock_result(self.term.try_lock_read(),
-                        |r| ScreenReadGuard::new(self, r))
-                }
-
-                pub fn lock_write(&self) -> LockResult<ScreenWriteGuard> {
-                    map2_lock_result(self.term.lock_write(), self.writer.lock(),
-                        |a, b| ScreenWriteGuard::new(a, b))
-                }
-
-                pub fn try_lock_write(&self) -> TryLockResult<ScreenWriteGuard> {
-                    map2_try_lock_result(self.term.try_lock_write(), self.writer.try_lock(),
-                        |a, b| ScreenWriteGuard::new(a, b))
-                }
-
-                fn lock_reader(&self) -> ScreenReadGuard {
-                    self.lock_read().expect("Screen::lock_reader")
-                }
-
-                fn lock_writer(&self) -> ScreenWriteGuard {
-                    self.lock_write().expect("Screen::lock_writer")
-                }
-
-                fn lock_write_data(&self) -> MutexGuard<Writer> {
-                    self.writer.lock().expect("Screen::lock_write_data")
-                }
-
-                pub fn name(&self) -> &str {
-                    self.term.name()
-                }
-
-                pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> {
-                    self.term.set_cursor_mode(mode)
-                }
-
-                pub fn wait_event(&self, timeout: Option<Duration>) -> io::Result<bool> {
-                    self.lock_reader().wait_event(timeout)
-                }
-
-                pub fn read_event(&self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    self.lock_reader().read_event(timeout)
-                }
-
-                pub fn read_raw(&self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    self.lock_reader().read_raw(buf, timeout)
-                }
-
-                pub fn refresh(&self) -> io::Result<()> {
-                    self.lock_writer().refresh()
-                }
-            }
-
-            impl Drop for Screen {
-                fn drop(&mut self) {
-                    let res = if let Some(state) = self.state.take() {
-                        self.term.restore(state)
-                    } else {
-                        Ok(())
-                    };
-
-                    if let Err(e) = res.and_then(|_| self.term.exit_screen()) {
-                        eprintln!("failed to restore terminal: {}", e);
-                    }
-                }
-            }
-
-            impl<'a> ScreenReadGuard<'a> {
-                fn new(screen: &'a Screen, reader: TerminalReadGuard<'a>) -> ScreenReadGuard<'a> {
-                    ScreenReadGuard{screen, reader}
-                }
-
-                pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool> {
-                    self.reader.wait_event(timeout)
-                }
-
-                pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    let r = self.reader.read_event(timeout)?;
-
-                    if let Some(Event::Resize(size)) = r {
-                        self.screen.lock_write_data().update_size(size);
-                    }
-
-                    Ok(r)
-                }
-
-                pub fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    let r = self.reader.read_raw(buf, timeout)?;
-
-                    if let Some(Event::Resize(size)) = r {
-                        self.screen.lock_write_data().update_size(size);
-                    }
-
-                    Ok(r)
-                }
-            }
-
-            impl<'a> ScreenWriteGuard<'a> {
-                fn new(writer: TerminalWriteGuard<'a>, data: MutexGuard<'a, Writer>)
-                        -> ScreenWriteGuard<'a> {
-                    ScreenWriteGuard{writer, data}
-                }
-
-                forward_screen_buffer_mut_methods!{ |slf| slf.data.buffer }
-
-                pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> {
-                    self.writer.set_cursor_mode(mode)
-                }
-
-                pub fn refresh(&mut self) -> io::Result<()> {
-                    if self.data.clear_screen {
-                        self.writer.clear_screen()?;
-                        self.data.clear_screen = false;
-                    }
-
-                    self.writer.clear_attributes()?;
-
-                    let mut indices = self.data.buffer.indices();
-
-                    while let Some((pos, cell)) = self.data.buffer.next_cell(&mut indices) {
-                        self.move_cursor(pos)?;
-
-                        self.apply_attrs(cell.attrs())?;
-                        self.writer.write_str(cell.text())?;
-                        self.data.real_cursor.column += 1;
-                    }
-
-                    self.writer.clear_attributes()?;
-
-                    let size = self.data.buffer.size();
-                    let pos = self.data.buffer.cursor();
-
-                    if pos.is_out_of_bounds(size) {
-                        self.move_cursor(Cursor::last(size))?;
-                    } else {
-                        self.move_cursor(pos)?;
-                    }
-
-                    self.writer.flush()
-                }
-
-                fn move_cursor(&mut self, pos: Cursor) -> io::Result<()> {
-                    if self.data.real_cursor != pos {
-                        self.writer.move_cursor(pos)?;
-                        self.data.real_cursor = pos;
-                    }
-
-                    Ok(())
-                }
-
-                fn apply_attrs(&mut self,
-                        (fg, bg, style): (Option<Color>, Option<Color>, Style))
-                        -> io::Result<()> {
-                    self.writer.set_attrs(fg, bg, style)
-                }
-            }
-
-            impl<'a> Drop for ScreenWriteGuard<'a> {
-                fn drop(&mut self) {
-                    if let Err(e) = self.refresh() {
-                        eprintln!("failed to refresh screen: {}", e);
-                    }
-                }
-            }
-
-            impl Writer {
-                fn update_size(&mut self, new_size: Size) {
-                    if self.real_cursor.is_out_of_bounds(new_size) {
-                        // Force cursor move on next refresh
-                        self.real_cursor = (!0, !0).into();
-                    }
-                    self.buffer.resize(new_size);
-                    self.clear_screen = true;
-                }
-            }
-        } pub use self::screen::{ Screen, ScreenReadGuard, ScreenWriteGuard };
-
-        use ::io::ErrorKind;
-
-        #[doc(hidden)]
-        pub trait IsMinusOne {
-            fn is_minus_one(&self) -> bool;
-        }
-
-        impl_is_minus_one! { i8 i16 i32 i64 isize }
-
-        pub fn cvt<T: IsMinusOne>(t: T) -> ::io::Result<T>
-        {
-            if t.is_minus_one() { Err(::io::Error::last_os_error()) }
-            else { Ok(t) }
-        }
-
-        pub fn cvt_r<T, F>(mut f: F) -> ::io::Result<T> where 
-        T: IsMinusOne,
-        F: FnMut() -> T
-        {
-            loop
-            {
-                match cvt(f())
+                use ::
                 {
-                    Err(ref e) if e.kind() == ErrorKind::Interrupted => {}
-                    other => return other,
+                    ffi::{ c_void, OsStr, OsString },
+                    io::{ self },
+                    mem::{ MaybeUninit },
+                    ptr::{ NonNull },
+                    system::
+                    {
+                        api::
+                        {
+                            efi::{ Boolean, BootServices, Handle, Status, SystemTable },
+                            protocols::{ loaded_image, simple_text_input, simple_text_output },
+                        },
+                        common::{ wstr::WStrUnits },
+                        env::{ boot_services, image_handle, system_table },
+                        ffi::{ OsStrExt, OsStringExt },
+                        helpers::{  open_protocol, OwnedDevicePath, OwnedProtocol, OwnedTable },
+                    },
+                    *,
+                };
+
+                pub struct Image
+                {
+                    handle: NonNull<c_void>,
+                    stdout: Option<OwnedProtocol<PipeProtocol>>,
+                    stderr: Option<OwnedProtocol<PipeProtocol>>,
+                    stdin: Option<OwnedProtocol<InputProtocol>>,
+                    st: OwnedTable<SystemTable>,
+                    args: Option<(*mut u16, usize)>,
                 }
+
+                impl Image
+                {
+                    pub fn load_image(p: &OsStr) -> io::Result<Self>
+                    {
+                        let path = OwnedDevicePath::from_text(p)?;
+                        let boot_services: NonNull<BootServices> = boot_services()
+                        .ok_or_else(|| const_error!(io::ErrorKind::NotFound, "Boot Services not found"))?
+                        .cast();
+
+                        let mut child_handle: MaybeUninit<Handle> = MaybeUninit::uninit();
+                        let image_handle = image_handle();
+
+                        let r = unsafe
+                        {
+                            ((*boot_services.as_ptr()).load_image)
+                            (
+                                Boolean::FALSE,
+                                image_handle.as_ptr(),
+                                path.as_ptr(),
+                                ptr::null_mut(),
+                                0,
+                                child_handle.as_mut_ptr(),
+                            )
+                        };
+
+                        if r.is_error() { Err(io::Error::from_raw_os_error(r.as_usize())) }
+                        else
+                        {
+                            let child_handle = unsafe { child_handle.assume_init() };
+                            let child_handle = NonNull::new(child_handle).unwrap();
+                            
+                            let loaded_image: NonNull<loaded_image::Protocol> = 
+                            open_protocol(child_handle, loaded_image::PROTOCOL_GUID).unwrap();
+
+                            let st = OwnedTable::from_table(unsafe { (*loaded_image.as_ptr()).system_table });
+
+                            Ok(Self 
+                            {
+                                handle: child_handle,
+                                stdout: None,
+                                stderr: None,
+                                stdin: None,
+                                st,
+                                args: None,
+                            })
+                        }
+                    }
+
+                    pub fn start_image(&mut self) -> io::Result<Status>
+                    {
+                        self.update_st_crc32()?;
+                        
+                        let loaded_image: NonNull<loaded_image::Protocol> = 
+                        open_protocol(self.handle, loaded_image::PROTOCOL_GUID).unwrap();
+                        
+                        unsafe
+                        {
+                            (*loaded_image.as_ptr()).system_table = self.st.as_mut_ptr();
+                        }
+
+                        let boot_services: NonNull<BootServices> = boot_services()
+                        .ok_or_else(|| const_error!(io::ErrorKind::NotFound, "Boot Services not found"))?
+                        .cast();
+
+                        let mut exit_data_size: usize = 0;
+                        let mut exit_data: MaybeUninit<*mut u16> = MaybeUninit::uninit();
+
+                        let r = unsafe 
+                        {
+                            ((*boot_services.as_ptr()).start_image)
+                            (
+                                self.handle.as_ptr(),
+                                &mut exit_data_size,
+                                exit_data.as_mut_ptr(),
+                            )
+                        };
+                        
+                        if exit_data_size != 0
+                        {
+                            unsafe
+                            {
+                                let exit_data = exit_data.assume_init();
+                                ((*boot_services.as_ptr()).free_pool)(exit_data as *mut c_void);
+                            }
+                        }
+
+                        Ok(r)
+                    }
+
+                    fn set_stdout
+                    (
+                        &mut self,
+                        handle: Handle,
+                        protocol: *mut simple_text_output::Protocol,
+                    )
+                    {
+                        unsafe
+                        {
+                            (*self.st.as_mut_ptr()).console_out_handle = handle;
+                            (*self.st.as_mut_ptr()).con_out = protocol;
+                        }
+                    }
+
+                    fn set_stderr
+                    (
+                        &mut self,
+                        handle: Handle,
+                        protocol: *mut simple_text_output::Protocol,
+                    )
+                    {
+                        unsafe
+                        {
+                            (*self.st.as_mut_ptr()).standard_error_handle = handle;
+                            (*self.st.as_mut_ptr()).std_err = protocol;
+                        }
+                    }
+
+                    fn set_stdin
+                    (
+                        &mut self,
+                        handle: Handle,
+                        protocol: *mut simple_text_input::Protocol,
+                    )
+                    {
+                        unsafe
+                        {
+                            (*self.st.as_mut_ptr()).console_in_handle = handle;
+                            (*self.st.as_mut_ptr()).con_in = protocol;
+                        }
+                    }
+
+                    pub fn stdout_init(&mut self, protocol: OwnedProtocol<PipeProtocol>)
+                    {
+                        self.set_stdout
+                        (
+                            protocol.handle().as_ptr(),
+                            protocol.as_ref() as *const PipeProtocol as *mut simple_text_output::Protocol,
+                        );
+
+                        self.stdout = Some(protocol);
+                    }
+
+                    pub fn stdout_inherit(&mut self)
+                    {
+                        let st: NonNull<SystemTable> = system_table().cast();
+                        unsafe { self.set_stdout((*st.as_ptr()).console_out_handle, (*st.as_ptr()).con_out) }
+                    }
+
+                    pub fn stderr_init(&mut self, protocol: OwnedProtocol<PipeProtocol>)
+                    {
+                        self.set_stderr
+                        (
+                            protocol.handle().as_ptr(),
+                            protocol.as_ref() as *const PipeProtocol as *mut simple_text_output::Protocol,
+                        );
+
+                        self.stderr = Some(protocol);
+                    }
+
+                    pub fn stderr_inherit(&mut self)
+                    {
+                        let st: NonNull<SystemTable> = system_table().cast();
+                        unsafe { self.set_stderr((*st.as_ptr()).standard_error_handle, (*st.as_ptr()).std_err) }
+                    }
+
+                    pub fn stdin_init(&mut self, protocol: OwnedProtocol<InputProtocol>)
+                    {
+                        self.set_stdin
+                        (
+                            protocol.handle().as_ptr(),
+                            protocol.as_ref() as *const InputProtocol as *mut simple_text_input::Protocol,
+                        );
+
+                        self.stdin = Some(protocol);
+                    }
+
+                    pub fn stdin_inherit(&mut self)
+                    {
+                        let st: NonNull<SystemTable> = system_table().cast();
+                        unsafe { self.set_stdin((*st.as_ptr()).console_in_handle, (*st.as_ptr()).con_in) }
+                    }
+
+                    pub fn stderr(&self) -> io::Result<Vec<u8>>
+                    {
+                        match &self.stderr
+                        {
+                            Some(stderr) => stderr.as_ref().utf8(),
+                            None => Ok(Vec::new()),
+                        }
+                    }
+
+                    pub fn stdout(&self) -> io::Result<Vec<u8>>
+                    {
+                        match &self.stdout
+                        {
+                            Some(stdout) => stdout.as_ref().utf8(),
+                            None => Ok(Vec::new()),
+                        }
+                    }
+
+                    pub fn set_args(&mut self, args: Box<[u16]>) 
+                    {
+                        let loaded_image: NonNull<loaded_image::Protocol> = 
+                        open_protocol(self.handle, loaded_image::PROTOCOL_GUID).unwrap();
+
+                        let len = args.len();
+                        let args_size: u32 = (len * size_of::<u16>()).try_into().unwrap();
+                        let ptr = Box::into_raw(args).as_mut_ptr();
+
+                        unsafe 
+                        {
+                            (*loaded_image.as_ptr()).load_options = ptr as *mut c_void;
+                            (*loaded_image.as_ptr()).load_options_size = args_size;
+                        }
+
+                        self.args = Some((ptr, len));
+                    }
+
+                    fn update_st_crc32(&mut self) -> io::Result<()> 
+                    {
+                        let bt: NonNull<BootServices> = boot_services().unwrap().cast();
+                        let st_size = unsafe { (*self.st.as_ptr()).hdr.header_size as usize };
+                        let mut crc32: u32 = 0;
+                        
+                        unsafe { (*self.st.as_mut_ptr()).hdr.crc32 = 0; }
+
+                        let r = unsafe
+                        {
+                            ((*bt.as_ptr()).calculate_crc32)(
+                                self.st.as_mut_ptr() as *mut c_void,
+                                st_size,
+                                &mut crc32,
+                            )
+                        };
+
+                        if r.is_error() 
+                        {
+                            Err(io::Error::from_raw_os_error(r.as_usize()))
+                        }
+                        else
+                        {
+                            unsafe { (*self.st.as_mut_ptr()).hdr.crc32 = crc32; }
+                            Ok(())
+                        }
+                    }
+                }
+
+                impl Drop for Image 
+                {
+                    fn drop(&mut self) 
+                    {
+                        if let Some(bt) = boot_services() 
+                        {
+                            let bt: NonNull<BootServices> = bt.cast();
+                            unsafe 
+                            {
+                                ((*bt.as_ptr()).unload_image)(self.handle.as_ptr());
+                            }
+                        }
+
+                        if let Some((ptr, len)) = self.args 
+                        {
+                            let _ = unsafe { Box::from_raw( ::ptr::slice_from_raw_parts_mut(ptr, len)) };
+                        }
+                    }
+                }
+
+                #[repr(C)] pub struct PipeProtocol 
+                {
+                    reset: simple_text_output::ProtocolReset,
+                    output_string: simple_text_output::ProtocolOutputString,
+                    test_string: simple_text_output::ProtocolTestString,
+                    query_mode: simple_text_output::ProtocolQueryMode,
+                    set_mode: simple_text_output::ProtocolSetMode,
+                    set_attribute: simple_text_output::ProtocolSetAttribute,
+                    clear_screen: simple_text_output::ProtocolClearScreen,
+                    set_cursor_position: simple_text_output::ProtocolSetCursorPosition,
+                    enable_cursor: simple_text_output::ProtocolEnableCursor,
+                    mode: *mut simple_text_output::Mode,
+                    _buffer: Vec<u16>,
+                }
+
+                impl PipeProtocol 
+                {
+                    pub fn new() -> Self 
+                    {
+                        let mode = Box::new(simple_text_output::Mode 
+                        {
+                            max_mode: 0,
+                            mode: 0,
+                            attribute: 0,
+                            cursor_column: 0,
+                            cursor_row: 0,
+                            cursor_visible: FALSE,
+                        });
+
+                        Self 
+                        {
+                            reset: Self::reset,
+                            output_string: Self::output_string,
+                            test_string: Self::test_string,
+                            query_mode: Self::query_mode,
+                            set_mode: Self::set_mode,
+                            set_attribute: Self::set_attribute,
+                            clear_screen: Self::clear_screen,
+                            set_cursor_position: Self::set_cursor_position,
+                            enable_cursor: Self::enable_cursor,
+                            mode: Box::into_raw(mode),
+                            _buffer: Vec::new(),
+                        }
+                    }
+
+                    pub fn null() -> Self 
+                    {
+                        let mode = Box::new(simple_text_output::Mode 
+                        {
+                            max_mode: 0,
+                            mode: 0,
+                            attribute: 0,
+                            cursor_column: 0,
+                            cursor_row: 0,
+                            cursor_visible: FALSE,
+                        });
+
+                        Self 
+                        {
+                            reset: Self::reset_null,
+                            output_string: Self::output_string_null,
+                            test_string: Self::test_string,
+                            query_mode: Self::query_mode,
+                            set_mode: Self::set_mode,
+                            set_attribute: Self::set_attribute,
+                            clear_screen: Self::clear_screen,
+                            set_cursor_position: Self::set_cursor_position,
+                            enable_cursor: Self::enable_cursor,
+                            mode: Box::into_raw(mode),
+                            _buffer: Vec::new(),
+                        }
+                    }
+
+                    pub fn utf8(&self) -> io::Result<Vec<u8>> 
+                    {
+                        OsString::from_wide(&self._buffer)
+                        .into_string()
+                        .map(Into::into)
+                        .map_err(|_| const_error!(io::ErrorKind::Other, "UTF-8 conversion failed"))
+                    }
+
+                    extern "efiapi" fn reset
+                    (
+                        proto: *mut simple_text_output::Protocol,
+                        _: Boolean,
+                    ) -> Status 
+                    {
+                        let proto: *mut PipeProtocol = proto.cast();
+                        unsafe {
+                            (*proto)._buffer.clear();
+                        }
+                        Status::SUCCESS
+                    }
+
+                    extern "efiapi" fn reset_null
+                    (
+                        _: *mut simple_text_output::Protocol,
+                        _: Boolean,
+                    ) -> Status { Status::SUCCESS }
+
+                    extern "efiapi" fn output_string
+                    (
+                        proto: *mut simple_text_output::Protocol,
+                        buf: *mut Char16,
+                    ) -> Status 
+                    {
+                        let proto: *mut PipeProtocol = proto.cast();
+                        let buf_len = unsafe {
+                            if let Some(x) = WStrUnits::new(buf) {
+                                x.count()
+                            } else {
+                                return Status::INVALID_PARAMETER;
+                            }
+                        };
+                        let buf_slice = unsafe { slice::from_raw_parts(buf, buf_len) };
+
+                        unsafe {
+                            (*proto)._buffer.extend_from_slice(buf_slice);
+                        };
+
+                        Status::SUCCESS
+                    }
+
+                    extern "efiapi" fn output_string_null
+                    (
+                        _: *mut simple_text_output::Protocol,
+                        _: *mut Char16,
+                    ) -> Status { Status::SUCCESS }
+
+                    extern "efiapi" fn test_string
+                    (
+                        _: *mut simple_text_output::Protocol,
+                        _: *mut Char16,
+                    ) -> Status { Status::SUCCESS }
+
+                    extern "efiapi" fn query_mode
+                    (
+                        _: *mut simple_text_output::Protocol,
+                        _: usize,
+                        _: *mut usize,
+                        _: *mut usize,
+                    ) -> Status { Status::UNSUPPORTED }
+
+                    extern "efiapi" fn set_mode
+                    (
+                        _: *mut simple_text_output::Protocol,
+                        _: usize,
+                    ) -> Status { Status::UNSUPPORTED }
+
+                    extern "efiapi" fn set_attribute
+                    (
+                        _: *mut simple_text_output::Protocol,
+                        _: usize,
+                    ) -> Status { Status::UNSUPPORTED }
+
+                    extern "efiapi" fn clear_screen
+                    (
+                        _: *mut simple_text_output::Protocol,
+                    ) -> Status { Status::UNSUPPORTED }
+
+                    extern "efiapi" fn set_cursor_position
+                    (
+                        _: *mut simple_text_output::Protocol,
+                        _: usize,
+                        _: usize,
+                    ) -> Status { Status::UNSUPPORTED }
+
+                    extern "efiapi" fn enable_cursor
+                    (
+                        _: *mut simple_text_output::Protocol,
+                        _: Boolean,
+                    ) -> Status { Status::UNSUPPORTED }
+                }
+
+                impl Drop for PipeProtocol
+                {
+                    fn drop(&mut self)
+                    {
+                        unsafe
+                        {
+                            let _ = Box::from_raw(self.mode);
+                        }
+                    }
+                }
+
+                #[repr(C)] pub struct InputProtocol
+                {
+                    reset: simple_text_input::ProtocolReset,
+                    read_key_stroke: simple_text_input::ProtocolReadKeyStroke,
+                    wait_for_key: efi::Event,
+                }
+
+                impl InputProtocol
+                {
+                    pub fn null() -> Self
+                    {
+                        let evt = OwnedEvent::new
+                        (
+                            efi::EVT_NOTIFY_WAIT,
+                            efi::TPL_CALLBACK,
+                            Some(Self::empty_notify),
+                            None,
+                        )
+                        .unwrap();
+
+                        Self 
+                        {
+                            reset: Self::null_reset,
+                            read_key_stroke: Self::null_read_key,
+                            wait_for_key: evt.into_raw(),
+                        }
+                    }
+
+                    extern "efiapi" fn null_reset
+                    (
+                        _: *mut simple_text_input::Protocol,
+                        _: Boolean,
+                    ) -> Status { Status::SUCCESS }
+
+                    extern "efiapi" fn null_read_key
+                    (
+                        _: *mut simple_text_input::Protocol,
+                        _: *mut simple_text_input::InputKey,
+                    ) -> Status  { Status::UNSUPPORTED }
+
+                    extern "efiapi" fn empty_notify(_: efi::Event, _: *mut c_void ) {}
+                }
+
+                impl Drop for InputProtocol
+                {
+                    fn drop(&mut self)
+                    {
+                        unsafe
+                        {
+                            let _ = OwnedEvent::from_raw(self.wait_for_key);
+                        }
+                    }
+                }
+
+                pub fn create_args(prog: &OsStr, args: &[OsString]) -> Box<[u16]>
+                {
+                    const QUOTE: u16 = 0x0022;
+                    const SPACE: u16 = 0x0020;
+                    const CARET: u16 = 0x005e;
+                    const NULL: u16 = 0;
+
+                    let mut res = Vec::with_capacity(args.iter().map(|arg| arg.len() + 3).sum());
+                    res.push(QUOTE);
+                    res.extend(prog.encode_wide());
+                    res.push(QUOTE);
+
+                    for arg in args
+                    {
+                        res.push(SPACE);
+                        res.push(QUOTE);
+
+                        for c in arg.encode_wide()
+                        {
+                            if c == QUOTE || c == CARET { res.push(CARET); }
+
+                            res.push(c);
+                        }
+
+                        res.push(QUOTE);
+                    }
+
+                    res.into_boxed_slice()
+                }
+            }
+            /// Create a map of environment variable changes.
+            fn env_changes(env: &CommandEnv) -> Option<BTreeMap<EnvKey, (Option<OsString>, Option<OsString>)>>
+            {
+                if env.is_unchanged() { return None; }
+
+                let mut result = BTreeMap::<EnvKey, (Option<OsString>, Option<OsString>)>::new();
+                
+                if env.does_clear()
+                {
+                    for (k, v) in ::env::vars_os()
+                    {
+                        result.insert(k.into(), (Some(v), None));
+                    }
+                }
+
+                for (k, v) in env.iter()
+                {
+                    let v: Option<OsString> = v.map(Into::into);
+                    result
+                    .entry(k.into())
+                    .and_modify(|cur| *cur = (cur.0.clone(), v.clone()))
+                    .or_insert(( ::env::var_os(k), v));
+                }
+
+                Some(result)
             }
         }
     }
-    
-    pub mod support
+    /// Common System Wide Implementations
+    pub mod unix
     {
         use ::
         {
             *,
         };
+        /// System Library API
+        pub mod api
+        {
+            pub use libc::{ * };
+            pub use nix::{ * };
+        }
 
-        pub mod os
+        pub mod process
         {
             use ::
             {
-                error::Error as StdError,
-                ffi::{OsStr, OsString},
-                marker::PhantomData,
-                path::{self, PathBuf},
-                *,
-            }; use super::unsupported;
-            
-            pub fn errno() -> i32 { 0 }
-            pub fn error_string(_errno: i32) -> String { "operation successful".to_string() }
-            pub fn getcwd() -> io::Result<PathBuf> { unsupported() }
-            pub fn chdir(_: &path::Path) -> io::Result<()> { unsupported() }
-            pub struct SplitPaths<'a>(!, PhantomData<&'a ()>);
-            pub fn split_paths(_unparsed: &OsStr) -> SplitPaths<'_> { panic!("unsupported") }
-
-            impl<'a> Iterator for SplitPaths<'a>
-            {
-                type Item = PathBuf;
-                fn next(&mut self) -> Option<PathBuf> { self.0 }
-            }
-
-            #[derive( Debug )]
-            pub struct JoinPathsError;
-
-            pub fn join_paths<I, T>(_paths: I) -> Result<OsString, JoinPathsError> where
-            I: Iterator<Item = T>,
-            T: AsRef<OsStr>
-            { Err(JoinPathsError) }
-
-            impl fmt::Display for JoinPathsError
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { "not supported on this platform yet".fmt(f) }
-            }
-
-            impl StdError for JoinPathsError
-            {
-                fn description(&self) -> &str { "not supported on this platform yet" }
-            }
-
-            pub fn current_exe() -> io::Result<PathBuf> { unsupported() }
-            pub fn temp_dir() -> PathBuf { panic!("no filesystem on this platform") }
-            pub fn home_dir() -> Option<PathBuf> { None }
-            pub fn exit(_code: i32) -> ! { crate::intrinsics::abort() }
-            pub fn getpid() -> u32 { panic!("no pids on this platform") }
-        }
-
-        pub mod pipe
-        {
-            use ::
-            {
-                io::{ self, BorrowedCursor, IoSlice, IoSliceMut },
-                sys::common::{FromInner, IntoInner},
-                *,
-            };
-            
-            pub struct AnonPipe(!);
-
-            impl fmt::Debug for AnonPipe
-            {
-                fn fmt(&self, _: &mut fmt::Formatter<'_>) -> fmt::Result { self.0 }
-            }
-
-            impl AnonPipe
-            {
-                pub fn try_clone(&self) -> io::Result<Self> { self.0 }
-                pub fn read(&self, _buf: &mut [u8]) -> io::Result<usize> { self.0 }
-                pub fn read_buf(&self, _buf: BorrowedCursor<'_>) -> io::Result<()> { self.0 }
-                pub fn read_vectored(&self, _bufs: &mut [IoSliceMut<'_>]) -> io::Result<usize> { self.0 }
-                pub fn is_read_vectored(&self) -> bool { self.0 }
-                pub fn read_to_end(&self, _buf: &mut Vec<u8>) -> io::Result<usize> { self.0 }
-                pub fn write(&self, _buf: &[u8]) -> io::Result<usize> { self.0 }
-                pub fn write_vectored(&self, _bufs: &[IoSlice<'_>]) -> io::Result<usize> { self.0 }
-                pub fn is_write_vectored(&self) -> bool { self.0 }
-                pub fn diverge(&self) -> ! { self.0 }
-            }
-
-            pub fn read2(p1: AnonPipe, _v1: &mut Vec<u8>, _p2: AnonPipe, _v2: &mut Vec<u8>) -> io::Result<()>
-            { match p1.0 {} }
-
-            impl FromInner<!> for AnonPipe 
-            {
-                fn from_inner(inner: !) -> Self { inner }
-            }
-
-            impl IntoInner<!> for AnonPipe
-            {
-                fn into_inner(self) -> ! { self.0 }
-            }
-        }
-
-        pub mod thread
-        {
-            use ::
-            {
-                ffi::CStr,
-                num::NonZero,
-                time::Duration,
-                *,
-            }; use super::unsupported;
-            
-            pub struct Thread(!);
-
-            pub const DEFAULT_MIN_STACK_SIZE: usize = 64 * 1024;
-
-            impl Thread
-            {
-                pub unsafe fn new(_stack: usize, _p: Box<dyn FnOnce()>) -> io::Result<Thread> { unsupported() }
-                pub fn yield_now() {}
-                pub fn set_name(_name: &CStr) {}
-                pub fn sleep(_dur: Duration) { panic!("can't sleep"); }
-                pub fn join(self) { self.0 }
-            }
-
-            pub fn available_parallelism() -> io::Result<NonZero<usize>> { unsupported() }
-        }
-
-        pub mod time
-        {
-            use ::
-            {
-                time::Duration,
-                *,
-            };
-
-            #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
-            pub struct Instant(Duration);
-
-            #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
-            pub struct SystemTime(Duration);
-
-            pub const UNIX_EPOCH: SystemTime = SystemTime(Duration::from_secs(0));
-
-            impl Instant 
-            {
-                pub fn now() -> Instant { panic!("time not implemented on this platform") }
-                pub fn checked_sub_instant(&self, other: &Instant) -> Option<Duration> { self.0.checked_sub(other.0) }
-                pub fn checked_add_duration(&self, other: &Duration) -> Option<Instant> { Some(Instant(self.0.checked_add(*other)?)) }
-                pub fn checked_sub_duration(&self, other: &Duration) -> Option<Instant> { Some(Instant(self.0.checked_sub(*other)?)) }
-            }
-
-            impl SystemTime
-            {
-                pub fn now() -> SystemTime { panic!("time not implemented on this platform") }
-
-                pub fn sub_time(&self, other: &SystemTime) -> Result<Duration, Duration>
-                { self.0.checked_sub(other.0).ok_or_else(|| other.0 - self.0) }
-
-                pub fn checked_add_duration(&self, other: &Duration) -> Option<SystemTime>
-                { Some(SystemTime(self.0.checked_add(*other)?)) }
-
-                pub fn checked_sub_duration(&self, other: &Duration) -> Option<SystemTime>
-                { Some(SystemTime(self.0.checked_sub(*other)?)) }
-            }
-        }
-
-        pub mod common
-        {
-            use ::
-            {
-                io::{ self as stdio },
-                *,
-            };
-            
-            pub unsafe fn init(_argc: isize, _argv: *const *const u8, _sigpipe: u8) {}
-            
-            pub unsafe fn cleanup() {}
-
-            pub fn unsupported<T>() -> stdio::Result<T> {
-                Err(unsupported_err())
-            }
-
-            pub fn unsupported_err() -> stdio::Error {
-                stdio::Error::UNSUPPORTED_PLATFORM
-            }
-
-            pub fn is_interrupted(_code: i32) -> bool {
-                false
-            }
-
-            pub fn decode_error_kind(_code: i32) -> ::io::ErrorKind {
-                ::io::ErrorKind::Uncategorized
-            }
-
-            pub fn abort_internal() -> ! {
-                ::intrinsics::abort();
-            }
-        }
-        pub use self::common::*;
-    } use self::system::support::unsupported;
-
-    pub mod windows
-    {
-        pub use self::screen::{ Screen, ScreenReadGuard, ScreenWriteGuard, };
-
-        pub use self::terminal::{ PrepareState, Terminal, TerminalReadGuard, TerminalWriteGuard, };
-
-        macro_rules! impl_is_zero
-        {
-            ($($t:ident)*) => ($(impl IsZero for $t
-            {
-                fn is_zero(&self) -> bool { *self == 0 }
-            })*)
-        }
-
-        pub mod ext
-        {
-            //! Windows console extension trait
-            use ::
-            {
-                *,
-            };
-            /*
-            use std::io;
-            use std::time::Duration;
-
-            use winapi::um::wincon::INPUT_RECORD;
-
-            use ::priv_util::Private;
-            use ::terminal::Event;
-            */
-            /// Implements Windows-only extensions for terminal interfaces.
-            pub trait TerminalExt: Private
-            {
-                /// Reads raw data from the console.
-                ///
-                /// Data read will be UTF-16 encoded, but may be incomplete. The caller may
-                /// consume any valid UTF-16 data before performing another `read_raw` call
-                /// to complete previously read data.
-                ///
-                /// If `timeout` elapses without an event occurring, this method will return
-                /// `Ok(None)`. If `timeout` is `None`, this method will wait indefinitely.
-                fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>)
-                        -> io::Result<Option<Event>>;
-
-                /// Reads raw event data from the console.
-                ///
-                /// If `timeout` elapses without an event occurring, this method will return
-                /// `Ok(None)`. If `timeout` is `None`, this method will wait indefinitely.
-                fn read_raw_event(&mut self, events: &mut [INPUT_RECORD],
-                        timeout: Option<Duration>) -> io::Result<Option<Event>>;
-            }
-        }
-
-        mod terminal
-        {
-            use ::
-            {
-                ffi::{ OsStr },
-                mem::{ replace, zeroed },
-                os::windows::ffi::{ OsStrExt },
-                sync::{ atomic::{AtomicUsize, Ordering}, LockResult, Mutex, MutexGuard, TryLockResult },
+                collections::{ BTreeMap },
+                ffi::{ CStr, CString, OsStr, OsString },
+                io::{ self, Error, ErrorKind },
+                num::{ NonZero },
+                path::{ Path },
+                sealed::{ Sealed },
                 system::
                 {
-                    prepare::{ PrepareConfig },
-                    terminal::
+                    api::{ EXIT_FAILURE, EXIT_SUCCESS, c_char, c_int, gid_t, pid_t, uid_t, sigemptyset, sigaddset },
+                    common::process::{ AsInner, AsInnerMut, CommandEnv, CommandEnvs, FromInner, IntoInner },
+                    cvt,
+                    fd::{ FileDesc },
+                    fs::{ File, OpenOptions },
+                    io::{ AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd, RawFd },
+                    pipe::{ self, AnonPipe },
+                },
+                *,
+            };
+            // os::unix::process
+            
+            impl CommandExt for process::Command
+            {
+                fn uid(&mut self, id: UserId) -> &mut process::Command
+                {
+                    self.as_inner_mut().uid(id);
+                    self
+                }
+
+                fn gid(&mut self, id: GroupId) -> &mut process::Command 
+                {
+                    self.as_inner_mut().gid(id);
+                    self
+                }
+
+                fn groups(&mut self, groups: &[GroupId]) -> &mut process::Command
+                {
+                    self.as_inner_mut().groups(groups);
+                    self
+                }
+
+                unsafe fn pre_exec<F>(&mut self, f: F) -> &mut process::Command where
+                F: FnMut() -> io::Result<()> + Send + Sync + 'static
+                {
+                    self.as_inner_mut().pre_exec(Box::new(f));
+                    self
+                }
+
+                fn exec(&mut self) -> io::Error
+                {
+                    self.as_inner_mut().exec(sys::process::Stdio::Inherit)
+                }
+
+                fn arg0<S>(&mut self, arg: S) -> &mut process::Command where
+                S: AsRef<OsStr>
+                {
+                    self.as_inner_mut().set_arg_0(arg.as_ref());
+                    self
+                }
+
+                fn process_group(&mut self, pgroup: i32) -> &mut process::Command
+                {
+                    self.as_inner_mut().pgroup(pgroup);
+                    self
+                }
+            }
+            
+            impl ExitStatusExt for process::ExitStatus
+            {
+                fn from_raw(raw: i32) -> Self
+                {
+                    process::ExitStatus::from_inner(From::from(raw))
+                }
+
+                fn signal(&self) -> Option<i32>
+                {
+                    self.as_inner().signal()
+                }
+
+                fn core_dumped(&self) -> bool
+                {
+                    self.as_inner().core_dumped()
+                }
+
+                fn stopped_signal(&self) -> Option<i32>
+                {
+                    self.as_inner().stopped_signal()
+                }
+
+                fn continued(&self) -> bool
+                {
+                    self.as_inner().continued()
+                }
+
+                fn into_raw(self) -> i32
+                {
+                    self.as_inner().into_raw().into()
+                }
+            }
+            
+            impl ExitStatusExt for process::ExitStatusError
+            {
+                fn from_raw(raw: i32) -> Self
+                {
+                    process::ExitStatus::from_raw(raw)
+                    .exit_ok()
+                    .expect_err("<ExitStatusError as ExitStatusExt>::from_raw(0) but zero is not an error")
+                }
+
+                fn signal(&self) -> Option<i32>
+                {
+                    self.into_status().signal()
+                }
+
+                fn core_dumped(&self) -> bool
+                {
+                    self.into_status().core_dumped()
+                }
+
+                fn stopped_signal(&self) -> Option<i32>
+                {
+                    self.into_status().stopped_signal()
+                }
+
+                fn continued(&self) -> bool
+                {
+                    self.into_status().continued()
+                }
+
+                fn into_raw(self) -> i32
+                {
+                    self.into_status().into_raw()
+                }
+            }
+            
+            impl FromRawFd for process::Stdio
+            {
+                #[inline] unsafe fn from_raw_fd(fd: RawFd) -> process::Stdio
+                {
+                    let fd = sys::fd::FileDesc::from_raw_fd(fd);
+                    let io = sys::process::Stdio::Fd(fd);
+                    process::Stdio::from_inner(io)
+                }
+            }
+            
+            impl From<OwnedFd> for process::Stdio
+            {
+                /// Takes ownership of a file descriptor and returns a [`Stdio`] that can attach a stream to it.
+                #[inline] fn from(fd: OwnedFd) -> process::Stdio
+                {
+                    let fd = sys::fd::FileDesc::from_inner(fd);
+                    let io = sys::process::Stdio::Fd(fd);
+                    process::Stdio::from_inner(io)
+                }
+            }
+            
+            impl AsRawFd for process::ChildStdin
+            {
+                #[inline] fn as_raw_fd(&self) -> RawFd
+                {
+                    self.as_inner().as_raw_fd()
+                }
+            }
+            
+            impl AsRawFd for process::ChildStdout
+            {
+                #[inline] fn as_raw_fd(&self) -> RawFd
+                {
+                    self.as_inner().as_raw_fd()
+                }
+            }
+            
+            impl AsRawFd for process::ChildStderr
+            {
+                #[inline] fn as_raw_fd(&self) -> RawFd
+                {
+                    self.as_inner().as_raw_fd()
+                }
+            }
+            
+            impl IntoRawFd for process::ChildStdin
+            {
+                #[inline] fn into_raw_fd(self) -> RawFd
+                {
+                    self.into_inner().into_inner().into_raw_fd()
+                }
+            }
+            
+            impl IntoRawFd for process::ChildStdout
+            {
+                #[inline] fn into_raw_fd(self) -> RawFd
+                {
+                    self.into_inner().into_inner().into_raw_fd()
+                }
+            }
+            
+            impl IntoRawFd for process::ChildStderr
+            {
+                #[inline] fn into_raw_fd(self) -> RawFd
+                {
+                    self.into_inner().into_inner().into_raw_fd()
+                }
+            }
+            
+            impl AsFd for ::process::ChildStdin
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_>
+                {
+                    self.as_inner().as_fd()
+                }
+            }
+            
+            impl From<::process::ChildStdin> for OwnedFd
+            {
+                /// Takes ownership of a [`ChildStdin`](::process::ChildStdin)'s file descriptor.
+                #[inline] fn from(child_stdin: ::process::ChildStdin) -> OwnedFd
+                {
+                    child_stdin.into_inner().into_inner().into_inner()
+                }
+            }
+            /// Creates a `ChildStdin` from the provided `OwnedFd`.
+            impl From<OwnedFd> for process::ChildStdin
+            {
+                #[inline] fn from(fd: OwnedFd) -> process::ChildStdin
+                {
+                    let fd = sys::fd::FileDesc::from_inner(fd);
+                    let pipe = sys::pipe::AnonPipe::from_inner(fd);
+                    process::ChildStdin::from_inner(pipe)
+                }
+            }
+            
+            impl AsFd for ::process::ChildStdout
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_>
+                {
+                    self.as_inner().as_fd()
+                }
+            }
+            
+            impl From<::process::ChildStdout> for OwnedFd
+            {
+                /// Takes ownership of a [`ChildStdout`](::process::ChildStdout)'s file descriptor.
+                #[inline] fn from(child_stdout: ::process::ChildStdout) -> OwnedFd
+                {
+                    child_stdout.into_inner().into_inner().into_inner()
+                }
+            }
+            /// Creates a `ChildStdout` from the provided `OwnedFd`.
+            impl From<OwnedFd> for process::ChildStdout
+            {
+                #[inline] fn from(fd: OwnedFd) -> process::ChildStdout
+                {
+                    let fd = sys::fd::FileDesc::from_inner(fd);
+                    let pipe = sys::pipe::AnonPipe::from_inner(fd);
+                    process::ChildStdout::from_inner(pipe)
+                }
+            }
+            
+            impl AsFd for ::process::ChildStderr
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_> { self.as_inner().as_fd() }
+            }
+            
+            impl From<::process::ChildStderr> for OwnedFd
+            {
+                /// Takes ownership of a [`ChildStderr`](::process::ChildStderr)'s file descriptor.
+                #[inline] fn from(child_stderr: ::process::ChildStderr) -> OwnedFd
+                {
+                    child_stderr.into_inner().into_inner().into_inner()
+                }
+            }
+            /// Creates a `ChildStderr` from the provided `OwnedFd`.
+            impl From<OwnedFd> for process::ChildStderr
+            {
+                #[inline] fn from(fd: OwnedFd) -> process::ChildStderr
+                {
+                    let fd = sys::fd::FileDesc::from_inner(fd);
+                    let pipe = sys::pipe::AnonPipe::from_inner(fd);
+                    process::ChildStderr::from_inner(pipe)
+                }
+            }
+            /// Returns the OS-assigned process identifier associated with this process's parent.
+            #[must_use]  pub fn parent_id() -> u32
+            {
+                crate::sys::os::getppid()
+            }
+            // sys::process::unix::unix.rs
+            impl Command 
+            {
+                pub fn spawn
+                (
+                    &mut self,
+                    default: Stdio,
+                    needs_stdin: bool,
+                ) -> io::Result<(Process, StdioPipes)> 
+                {
+                    const CLOEXEC_MSG_FOOTER: [u8; 4] = *b"NOEX";
+
+                    let envp = self.capture_env();
+
+                    if self.saw_nul() {
+                        return Err(io::const_error!(
+                            ErrorKind::InvalidInput,
+                            "nul byte found in provided data",
+                        ));
+                    }
+
+                    let (ours, theirs) = self.setup_io(default, needs_stdin)?;
+
+                    if let Some(ret) = self.posix_spawn(&theirs, envp.as_ref())? {
+                        return Ok((ret, ours));
+                    }
+                    
+                    let (input, output) = sys::pipe::anon_pipe()?;
+                    
+                    let env_lock = sys::env::env_read_lock();
+                    let pid = unsafe { self.do_fork()? };
+
+                    if pid == 0 {
+                        ::panic::always_abort();
+                        mem::forget(env_lock);
+                        drop(input);
+                        
+                        let Err(err) = unsafe { self.do_exec(theirs, envp.as_ref()) };
+                        let errno = err.raw_os_error().unwrap_or(libc::EINVAL) as u32;
+                        let errno = errno.to_be_bytes();
+                        let bytes = [
+                            errno[0],
+                            errno[1],
+                            errno[2],
+                            errno[3],
+                            CLOEXEC_MSG_FOOTER[0],
+                            CLOEXEC_MSG_FOOTER[1],
+                            CLOEXEC_MSG_FOOTER[2],
+                            CLOEXEC_MSG_FOOTER[3],
+                        ];
+                        
+                        rtassert!(output.write(&bytes).is_ok());
+                        unsafe { libc::_exit(1) }
+                    }
+
+                    drop(env_lock);
+                    drop(output);
+                    
+                    let pidfd = -1;
+                    
+                    let mut p = unsafe { Process::new(pid, pidfd) };
+                    let mut bytes = [0; 8];
+                    
+                    loop {
+                        match input.read(&mut bytes) {
+                            Ok(0) => return Ok((p, ours)),
+                            Ok(8) => {
+                                let (errno, footer) = bytes.split_at(4);
+                                assert_eq!(
+                                    CLOEXEC_MSG_FOOTER, footer,
+                                    "Validation on the CLOEXEC pipe failed: {:?}",
+                                    bytes
+                                );
+                                let errno = i32::from_be_bytes(errno.try_into().unwrap());
+                                assert!(p.wait().is_ok(), "wait() should either return Ok or panic");
+                                return Err(Error::from_raw_os_error(errno));
+                            }
+                            Err(ref e) if e.is_interrupted() => {}
+                            Err(e) => {
+                                assert!(p.wait().is_ok(), "wait() should either return Ok or panic");
+                                panic!("the CLOEXEC pipe failed: {e:?}")
+                            }
+                            Ok(..) => {
+                                assert!(p.wait().is_ok(), "wait() should either return Ok or panic");
+                                panic!("short read on the CLOEXEC pipe")
+                            }
+                        }
+                    }
+                }
+
+                pub fn output(&mut self) -> io::Result<(ExitStatus, Vec<u8>, Vec<u8>)> 
+                {
+                    let (proc, pipes) = self.spawn(Stdio::MakePipe, false)?;
+                    ::sys::common::process::wait_with_output(proc, pipes)
+                }
+                
+                unsafe fn do_fork(&mut self) -> Result<pid_t, io::Error> 
+                {
+                    cvt(libc::fork())
+                }
+                
+                pub fn exec(&mut self, default: Stdio) -> io::Error 
+                {
+                    let envp = self.capture_env();
+
+                    if self.saw_nul() {
+                        return io::const_error!(ErrorKind::InvalidInput, "nul byte found in provided data");
+                    }
+
+                    match self.setup_io(default, true) {
+                        Ok((_, theirs)) => {
+                            unsafe {
+                                let _lock = sys::env::env_read_lock();
+
+                                let Err(e) = self.do_exec(theirs, envp.as_ref());
+                                e
+                            }
+                        }
+                        Err(e) => e,
+                    }
+                }
+                
+                fn posix_spawn(
+                    &mut self,
+                    _: &ChildPipes,
+                    _: Option<&CStringArray>,
+                ) -> io::Result<Option<Process>> { Ok(None) }
+            }
+            /// The unique ID of the process (this should never be negative).
+            pub struct Process 
+            {
+                pid: pid_t,
+                status: Option<ExitStatus>,
+            }
+
+            impl Process 
+            {
+                unsafe fn new(pid: pid_t, _pidfd: pid_t) -> Self {
+                    Process { pid, status: None }
+                }
+
+                pub fn id(&self) -> u32 {
+                    self.pid as u32
+                }
+
+                pub fn kill(&mut self) -> io::Result<()> 
+                {
+                    if self.status.is_some() {
+                        return Ok(());
+                    }
+                    
+                    cvt(unsafe { libc::kill(self.pid, libc::SIGKILL) }).map(drop)
+                }
+
+                pub fn wait(&mut self) -> io::Result<ExitStatus> {
+                    use ::sys::cvt_r;
+                    if let Some(status) = self.status {
+                        return Ok(status);
+                    }
+                    
+                    let mut status = 0 as c_int;
+                    cvt_r(|| unsafe { libc::waitpid(self.pid, &mut status, 0) })?;
+                    self.status = Some(ExitStatus::new(status));
+                    Ok(ExitStatus::new(status))
+                }
+
+                pub fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
+                    if let Some(status) = self.status {
+                        return Ok(Some(status));
+                    }
+                    
+                    let mut status = 0 as c_int;
+                    let pid = cvt(unsafe { libc::waitpid(self.pid, &mut status, libc::WNOHANG) })?;
+                    if pid == 0 {
+                        Ok(None)
+                    } else {
+                        self.status = Some(ExitStatus::new(status));
+                        Ok(Some(ExitStatus::new(status)))
+                    }
+                }
+            }
+            /// Unix exit statuses
+            #[derive(PartialEq, Eq, Clone, Copy, Default)]
+            pub struct ExitStatus(c_int);
+
+            impl fmt::Debug for ExitStatus 
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    f.debug_tuple("unix_wait_status").field(&self.0).finish()
+                }
+            }
+
+            impl ExitStatus 
+            {
+                pub fn new(status: c_int) -> ExitStatus {
+                    ExitStatus(status)
+                }
+
+                fn exited(&self) -> bool {
+                    libc::WIFEXITED(self.0)
+                }
+
+                pub fn exit_ok(&self) -> Result<(), ExitStatusError> {
+                    match NonZero::try_from(self.0) {
+                        /* was nonzero */ Ok(failure) => Err(ExitStatusError(failure)),
+                        /* was zero, couldn't convert */ Err(_) => Ok(()),
+                    }
+                }
+
+                pub fn code(&self) -> Option<i32> {
+                    self.exited().then(|| libc::WEXITSTATUS(self.0))
+                }
+
+                pub fn signal(&self) -> Option<i32> {
+                    libc::WIFSIGNALED(self.0).then(|| libc::WTERMSIG(self.0))
+                }
+
+                pub fn core_dumped(&self) -> bool {
+                    libc::WIFSIGNALED(self.0) && libc::WCOREDUMP(self.0)
+                }
+
+                pub fn stopped_signal(&self) -> Option<i32> {
+                    libc::WIFSTOPPED(self.0).then(|| libc::WSTOPSIG(self.0))
+                }
+
+                pub fn continued(&self) -> bool {
+                    libc::WIFCONTINUED(self.0)
+                }
+
+                pub fn into_raw(&self) -> c_int {
+                    self.0
+                }
+            }
+            /// Converts a raw `c_int` to a type-safe `ExitStatus` by wrapping it without copying.
+            impl From<c_int> for ExitStatus
+            {
+                fn from(a: c_int) -> ExitStatus {
+                    ExitStatus(a)
+                }
+            }
+            /// Converts a signal number to a readable, searchable name.
+            fn signal_string(signal: i32) -> &'static str 
+            {
+                match signal {
+                    libc::SIGHUP => " (SIGHUP)",
+                    libc::SIGINT => " (SIGINT)",
+                    libc::SIGQUIT => " (SIGQUIT)",
+                    libc::SIGILL => " (SIGILL)",
+                    libc::SIGTRAP => " (SIGTRAP)",
+                    libc::SIGABRT => " (SIGABRT)",
+                    libc::SIGBUS => " (SIGBUS)",
+                    libc::SIGFPE => " (SIGFPE)",
+                    libc::SIGKILL => " (SIGKILL)",
+                    libc::SIGUSR1 => " (SIGUSR1)",
+                    libc::SIGSEGV => " (SIGSEGV)",
+                    libc::SIGUSR2 => " (SIGUSR2)",
+                    libc::SIGPIPE => " (SIGPIPE)",
+                    libc::SIGALRM => " (SIGALRM)",
+                    libc::SIGTERM => " (SIGTERM)",
+                    libc::SIGCHLD => " (SIGCHLD)",
+                    libc::SIGCONT => " (SIGCONT)",
+                    libc::SIGSTOP => " (SIGSTOP)",
+                    libc::SIGTSTP => " (SIGTSTP)",
+                    libc::SIGTTIN => " (SIGTTIN)",
+                    libc::SIGTTOU => " (SIGTTOU)",
+                    libc::SIGURG => " (SIGURG)",
+                    libc::SIGXCPU => " (SIGXCPU)",
+                    libc::SIGXFSZ => " (SIGXFSZ)",
+                    libc::SIGVTALRM => " (SIGVTALRM)",
+                    libc::SIGPROF => " (SIGPROF)",
+                    libc::SIGWINCH => " (SIGWINCH)",
+                    libc::SIGIO => " (SIGIO)",
+                    libc::SIGPOLL => " (SIGPOLL)",
+                    libc::SIGSYS => " (SIGSYS)",
+                    libc::SIGEMT => " (SIGEMT)",
+                    libc::SIGINFO => " (SIGINFO)",
+                    _ => "",
+                }
+            }
+
+            impl fmt::Display for ExitStatus 
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    if let Some(code) = self.code() {
+                        write!(f, "exit status: {code}")
+                    } else if let Some(signal) = self.signal() {
+                        let signal_string = signal_string(signal);
+                        if self.core_dumped() {
+                            write!(f, "signal: {signal}{signal_string} (core dumped)")
+                        } else {
+                            write!(f, "signal: {signal}{signal_string}")
+                        }
+                    } else if let Some(signal) = self.stopped_signal() {
+                        let signal_string = signal_string(signal);
+                        write!(f, "stopped (not terminated) by signal: {signal}{signal_string}")
+                    } else if self.continued() {
+                        write!(f, "continued (WIFCONTINUED)")
+                    } else {
+                        write!(f, "unrecognised wait status: {} {:#x}", self.0, self.0)
+                    }
+                }
+            }
+
+            #[derive(PartialEq, Eq, Clone, Copy)]
+            pub struct ExitStatusError(NonZero<c_int>);
+
+            impl Into<ExitStatus> for ExitStatusError 
+            {
+                fn into(self) -> ExitStatus {
+                    ExitStatus(self.0.into())
+                }
+            }
+
+            impl fmt::Debug for ExitStatusError 
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    f.debug_tuple("unix_wait_status").field(&self.0).finish()
+                }
+            }
+
+            impl ExitStatusError 
+            {
+                pub fn code(self) -> Option<NonZero<i32>> {
+                    ExitStatus(self.0.into()).code().map(|st| st.try_into().unwrap())
+                }
+            }
+            // sys::process::unix::common.rs 
+            pub struct Command
+            {
+                program: CString,
+                args: Vec<CString>,
+                argv: Argv,
+                env: CommandEnv,
+                program_kind: ProgramKind,
+                cwd: Option<CString>,
+                uid: Option<uid_t>,
+                gid: Option<gid_t>,
+                saw_nul: bool,
+                closures: Vec<Box<dyn FnMut() -> io::Result<()> + Send + Sync>>,
+                groups: Option<Box<[gid_t]>>,
+                stdin: Option<Stdio>,
+                stdout: Option<Stdio>,
+                stderr: Option<Stdio>,
+                pgroup: Option<pid_t>,
+            }
+            
+            struct Argv(Vec<*const c_char>);
+            unsafe impl Send for Argv {}
+            unsafe impl Sync for Argv {}
+            
+            pub struct StdioPipes 
+            {
+                pub stdin: Option<AnonPipe>,
+                pub stdout: Option<AnonPipe>,
+                pub stderr: Option<AnonPipe>,
+            }
+            
+            pub enum ChildStdio 
+            {
+                Inherit,
+                Explicit(c_int),
+                Owned(FileDesc),
+            }
+
+            #[derive(Debug)]
+            pub enum Stdio 
+            {
+                Inherit,
+                Null,
+                MakePipe,
+                Fd(FileDesc),
+                StaticFd(BorrowedFd<'static>),
+            }
+
+            #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+            pub enum ProgramKind 
+            {
+                /// A program that would be looked up on the PATH (e.g. `ls`)
+                PathLookup,
+                /// A relative path (e.g. `my-dir/foo`, `../foo`, `./foo`)
+                Relative,
+                /// An absolute path.
+                Absolute,
+            }
+
+            impl ProgramKind 
+            {
+                fn new(program: &OsStr) -> Self {
+                    if program.as_encoded_bytes().starts_with(b"/") {
+                        Self::Absolute
+                    } else if program.as_encoded_bytes().contains(&b'/') {
+                        // If the program has more than one component in it, it is a relative path.
+                        Self::Relative
+                    } else {
+                        Self::PathLookup
+                    }
+                }
+            }
+
+            impl Command 
+            {
+                pub fn new(program: &OsStr) -> Command 
+                {
+                    let mut saw_nul = false;
+                    let program_kind = ProgramKind::new(program.as_ref());
+                    let program = os2c(program, &mut saw_nul);
+                    Command {
+                        argv: Argv(vec![program.as_ptr(), ptr::null()]),
+                        args: vec![program.clone()],
+                        program,
+                        program_kind,
+                        env: Default::default(),
+                        cwd: None,
+                        uid: None,
+                        gid: None,
+                        saw_nul,
+                        closures: Vec::new(),
+                        groups: None,
+                        stdin: None,
+                        stdout: None,
+                        stderr: None,
+                        pgroup: None,
+                    }
+                }
+
+                pub fn set_arg_0(&mut self, arg: &OsStr) 
+                {
+                    let arg = os2c(arg, &mut self.saw_nul);
+                    debug_assert!(self.argv.0.len() > 1);
+                    self.argv.0[0] = arg.as_ptr();
+                    self.args[0] = arg;
+                }
+
+                pub fn arg(&mut self, arg: &OsStr) 
+                {
+                    let arg = os2c(arg, &mut self.saw_nul);
+                    self.argv.0[self.args.len()] = arg.as_ptr();
+                    self.argv.0.push(ptr::null());                    
+                    self.args.push(arg);
+                }
+
+                pub fn cwd(&mut self, dir: &OsStr) 
+                {
+                    self.cwd = Some(os2c(dir, &mut self.saw_nul));
+                }
+
+                pub fn uid(&mut self, id: uid_t) 
+                {
+                    self.uid = Some(id);
+                }
+
+                pub fn gid(&mut self, id: gid_t) 
+                {
+                    self.gid = Some(id);
+                }
+
+                pub fn groups(&mut self, groups: &[gid_t]) 
+                {
+                    self.groups = Some(Box::from(groups));
+                }
+
+                pub fn pgroup(&mut self, pgroup: pid_t) 
+                {
+                    self.pgroup = Some(pgroup);
+                }
+                
+                pub fn get_create_pidfd(&self) -> bool 
+                {
+                    false
+                }
+                
+                pub fn saw_nul(&self) -> bool 
+                {
+                    self.saw_nul
+                }
+
+                pub fn get_program(&self) -> &OsStr 
+                {
+                    OsStr::from_bytes(self.program.as_bytes())
+                }
+                
+                pub fn get_program_kind(&self) -> ProgramKind 
+                {
+                    self.program_kind
+                }
+
+                pub fn get_args(&self) -> CommandArgs<'_> 
+                {
+                    let mut iter = self.args.iter();
+                    iter.next();
+                    CommandArgs { iter }
+                }
+
+                pub fn get_envs(&self) -> CommandEnvs<'_> 
+                {
+                    self.env.iter()
+                }
+
+                pub fn get_current_dir(&self) -> Option<&Path> 
+                {
+                    self.cwd.as_ref().map(|cs| Path::new(OsStr::from_bytes(cs.as_bytes())))
+                }
+
+                pub fn get_argv(&self) -> &Vec<*const c_char> 
+                {
+                    &self.argv.0
+                }
+
+                pub fn get_program_cstr(&self) -> &CStr 
+                {
+                    &*self.program
+                }
+                
+                pub fn get_cwd(&self) -> Option<&CStr> 
+                {
+                    self.cwd.as_deref()
+                }
+                
+                pub fn get_uid(&self) -> Option<uid_t> 
+                {
+                    self.uid
+                }
+                
+                pub fn get_gid(&self) -> Option<gid_t> 
+                {
+                    self.gid
+                }
+                
+                pub fn get_groups(&self) -> Option<&[gid_t]> 
+                {
+                    self.groups.as_deref()
+                }
+                
+                pub fn get_pgroup(&self) -> Option<pid_t>
+                {
+                    self.pgroup
+                }
+
+                pub fn get_closures(&mut self) -> &mut Vec<Box<dyn FnMut() -> io::Result<()> + Send + Sync>> 
+                {
+                    &mut self.closures
+                }
+
+                pub unsafe fn pre_exec(&mut self, f: Box<dyn FnMut() -> io::Result<()> + Send + Sync>) 
+                {
+                    self.closures.push(f);
+                }
+
+                pub fn stdin(&mut self, stdin: Stdio) 
+                {
+                    self.stdin = Some(stdin);
+                }
+
+                pub fn stdout(&mut self, stdout: Stdio) 
+                {
+                    self.stdout = Some(stdout);
+                }
+
+                pub fn stderr(&mut self, stderr: Stdio) {
+                    self.stderr = Some(stderr);
+                }
+
+                pub fn env_mut(&mut self) -> &mut CommandEnv 
+                {
+                    &mut self.env
+                }
+
+                pub fn capture_env(&mut self) -> Option<CStringArray> 
+                {
+                    let maybe_env = self.env.capture_if_changed();
+                    maybe_env.map(|env| construct_envp(env, &mut self.saw_nul))
+                }
+                
+                pub fn env_saw_path(&self) -> bool 
+                {
+                    self.env.have_changed_path()
+                }
+                
+                pub fn program_is_path(&self) -> bool 
+                {
+                    self.program.to_bytes().contains(&b'/')
+                }
+
+                pub fn setup_io
+                (
+                    &self,
+                    default: Stdio,
+                    needs_stdin: bool,
+                ) -> io::Result<(StdioPipes, ChildPipes)> 
+                {
+                    let null = Stdio::Null;
+                    let default_stdin = if needs_stdin { &default } else { &null };
+                    let stdin = self.stdin.as_ref().unwrap_or(default_stdin);
+                    let stdout = self.stdout.as_ref().unwrap_or(&default);
+                    let stderr = self.stderr.as_ref().unwrap_or(&default);
+                    let (their_stdin, our_stdin) = stdin.to_child_stdio(true)?;
+                    let (their_stdout, our_stdout) = stdout.to_child_stdio(false)?;
+                    let (their_stderr, our_stderr) = stderr.to_child_stdio(false)?;
+                    let ours = StdioPipes { stdin: our_stdin, stdout: our_stdout, stderr: our_stderr };
+                    let theirs = ChildPipes { stdin: their_stdin, stdout: their_stdout, stderr: their_stderr };
+                    Ok((ours, theirs))
+                }
+            }
+
+            fn os2c(s: &OsStr, saw_nul: &mut bool) -> CString 
+            {
+                CString::new(s.as_bytes()).unwrap_or_else(|_e| {
+                    *saw_nul = true;
+                    CStr::from_bytes_with_nul(b"<string-with-nul>\0").unwrap().to_owned()
+                })
+            }
+            
+            pub struct CStringArray 
+            {
+                items: Vec<CString>,
+                ptrs: Vec<*const c_char>,
+            }
+
+            impl CStringArray 
+            {
+                pub fn with_capacity(capacity: usize) -> Self
+                 {
+                    let mut result = CStringArray {
+                        items: Vec::with_capacity(capacity),
+                        ptrs: Vec::with_capacity(capacity + 1),
+                    };
+                    result.ptrs.push(ptr::null());
+                    result
+                }
+
+                pub fn push(&mut self, item: CString) 
+                {
+                    let l = self.ptrs.len();
+                    self.ptrs[l - 1] = item.as_ptr();
+                    self.ptrs.push(ptr::null());
+                    self.items.push(item);
+                }
+
+                pub fn as_ptr(&self) -> *const *const c_char 
+                {
+                    self.ptrs.as_ptr()
+                }
+            }
+
+            fn construct_envp(env: BTreeMap<OsString, OsString>, saw_nul: &mut bool) -> CStringArray 
+            {
+                let mut result = CStringArray::with_capacity(env.len());
+                for (mut k, v) in env 
+                {
+                    k.reserve_exact(v.len() + 2);
+                    k.push("=");
+                    k.push(&v);
+                    
+                    if let Ok(item) = CString::new(k.into_vec()) {
+                        result.push(item);
+                    } else {
+                        *saw_nul = true;
+                    }
+                }
+
+                result
+            }
+
+            impl Stdio 
+            {
+                pub fn to_child_stdio(&self, readable: bool) -> io::Result<(ChildStdio, Option<AnonPipe>)> 
+                {
+                    match *self 
+                    {
+                        Stdio::Inherit => Ok((ChildStdio::Inherit, None)),
+                        Stdio::Fd(ref fd) => {
+                            if fd.as_raw_fd() >= 0 && fd.as_raw_fd() <= libc::STDERR_FILENO {
+                                Ok((ChildStdio::Owned(fd.duplicate()?), None))
+                            } else {
+                                Ok((ChildStdio::Explicit(fd.as_raw_fd()), None))
+                            }
+                        }
+
+                        Stdio::StaticFd(fd) => {
+                            let fd = FileDesc::from_inner(fd.try_clone_to_owned()?);
+                            Ok((ChildStdio::Owned(fd), None))
+                        }
+
+                        Stdio::MakePipe => {
+                            let (reader, writer) = pipe::anon_pipe()?;
+                            let (ours, theirs) = if readable { (writer, reader) } else { (reader, writer) };
+                            Ok((ChildStdio::Owned(theirs.into_inner()), Some(ours)))
+                        }
+                        
+                        Stdio::Null => 
+                        {
+                            let mut opts = OpenOptions::new();
+                            opts.read(readable);
+                            opts.write(!readable);
+                            let fd = File::open_c( CStr::from_bytes_with_nul(b"/dev/null\0").unwrap(), &opts)?;
+                            Ok((ChildStdio::Owned(fd.into_inner()), None))
+                        }
+                    }
+                }
+            }
+
+            impl From<AnonPipe> for Stdio 
+            {
+                fn from(pipe: AnonPipe) -> Stdio 
+                {
+                    Stdio::Fd(pipe.into_inner())
+                }
+            }
+
+            impl From<FileDesc> for Stdio 
+            {
+                fn from(fd: FileDesc) -> Stdio 
+                {
+                    Stdio::Fd(fd)
+                }
+            }
+
+            impl From<File> for Stdio 
+            {
+                fn from(file: File) -> Stdio 
+                {
+                    Stdio::Fd(file.into_inner())
+                }
+            }
+
+            impl From<io::Stdout> for Stdio 
+            {
+                fn from(_: io::Stdout) -> Stdio 
+                {
+                    Stdio::StaticFd(unsafe { BorrowedFd::borrow_raw(libc::STDOUT_FILENO) })
+                }
+            }
+
+            impl From<io::Stderr> for Stdio 
+            {
+                fn from(_: io::Stderr) -> Stdio 
+                {
+                    Stdio::StaticFd(unsafe { BorrowedFd::borrow_raw(libc::STDERR_FILENO) })
+                }
+            }
+
+            impl ChildStdio 
+            {
+                pub fn fd(&self) -> Option<c_int> 
+                {
+                    match *self 
+                    {
+                        ChildStdio::Inherit => None,
+                        ChildStdio::Explicit(fd) => Some(fd),
+                        ChildStdio::Owned(ref fd) => Some(fd.as_raw_fd()),
+                    }
+                }
+            }
+
+            impl fmt::Debug for Command 
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result 
+                {
+                    if f.alternate() {
+                        let mut debug_command = f.debug_struct("Command");
+                        debug_command.field("program", &self.program).field("args", &self.args);
+                        if !self.env.is_unchanged() {
+                            debug_command.field("env", &self.env);
+                        }
+
+                        if self.cwd.is_some() {
+                            debug_command.field("cwd", &self.cwd);
+                        }
+                        if self.uid.is_some() {
+                            debug_command.field("uid", &self.uid);
+                        }
+                        if self.gid.is_some() {
+                            debug_command.field("gid", &self.gid);
+                        }
+
+                        if self.groups.is_some() {
+                            debug_command.field("groups", &self.groups);
+                        }
+
+                        if self.stdin.is_some() {
+                            debug_command.field("stdin", &self.stdin);
+                        }
+                        if self.stdout.is_some() {
+                            debug_command.field("stdout", &self.stdout);
+                        }
+                        if self.stderr.is_some() {
+                            debug_command.field("stderr", &self.stderr);
+                        }
+                        if self.pgroup.is_some() {
+                            debug_command.field("pgroup", &self.pgroup);
+                        }
+
+                        debug_command.finish()
+                    } else {
+                        if let Some(ref cwd) = self.cwd {
+                            write!(f, "cd {cwd:?} && ")?;
+                        }
+                        if self.env.does_clear() {
+                            write!(f, "env -i ")?;
+                            // Altered env vars will be printed next, that should exactly work as expected.
+                        } else {
+                            // Removed env vars need the command to be wrapped in `env`.
+                            let mut any_removed = false;
+                            for (key, value_opt) in self.get_envs() {
+                                if value_opt.is_none() {
+                                    if !any_removed {
+                                        write!(f, "env ")?;
+                                        any_removed = true;
+                                    }
+                                    write!(f, "-u {} ", key.to_string_lossy())?;
+                                }
+                            }
+                        }
+                        // Altered env vars can just be added in front of the program.
+                        for (key, value_opt) in self.get_envs() {
+                            if let Some(value) = value_opt {
+                                write!(f, "{}={value:?} ", key.to_string_lossy())?;
+                            }
+                        }
+                        if self.program != self.args[0] {
+                            write!(f, "[{:?}] ", self.program)?;
+                        }
+                        write!(f, "{:?}", self.args[0])?;
+
+                        for arg in &self.args[1..] {
+                            write!(f, " {:?}", arg)?;
+                        }
+                        Ok(())
+                    }
+                }
+            }
+
+            #[derive(PartialEq, Eq, Clone, Copy)]
+            pub struct ExitCode(u8);
+
+            impl fmt::Debug for ExitCode 
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result 
+                {
+                    f.debug_tuple("unix_exit_status").field(&self.0).finish()
+                }
+            }
+
+            impl ExitCode 
+            {
+                pub const SUCCESS: ExitCode = ExitCode(EXIT_SUCCESS as _);
+                pub const FAILURE: ExitCode = ExitCode(EXIT_FAILURE as _);
+
+                #[inline] pub fn as_i32(&self) -> i32 
+                {
+                    self.0 as i32
+                }
+            }
+
+            impl From<u8> for ExitCode 
+            {
+                fn from(code: u8) -> Self 
+                {
+                    Self(code)
+                }
+            }
+
+            pub struct CommandArgs<'a>
+            {
+                iter: ::slice::Iter<'a, CString>,
+            }
+
+            impl<'a> Iterator for CommandArgs<'a>
+             {
+                type Item = &'a OsStr;
+                fn next(&mut self) -> Option<&'a OsStr> 
+                {
+                    self.iter.next().map(|cs| OsStr::from_bytes(cs.as_bytes()))
+                }
+                fn size_hint(&self) -> (usize, Option<usize>) 
+                {
+                    self.iter.size_hint()
+                }
+            }
+
+            impl<'a> ExactSizeIterator for CommandArgs<'a> 
+            {
+                fn len(&self) -> usize
+                 {
+                    self.iter.len()
+                }
+                fn is_empty(&self) -> bool 
+                {
+                    self.iter.is_empty()
+                }
+            }
+
+            impl<'a> fmt::Debug for CommandArgs<'a> 
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result 
+                {
+                    f.debug_list().entries(self.iter.clone()).finish()
+                }
+            }
+            // os::unix::process.rs
+            type UserId = u32;
+            type GroupId = u32;
+            /// Unix-specific extensions to the [`process::Command`] builder.
+            pub trait CommandExt:Sealed
+            {
+                /// Sets the child process's user ID.
+                fn uid(&mut self, id: UserId) -> &mut process::Command;
+                /// Similar to `uid`, but sets the group ID of the child process.
+                fn gid(&mut self, id: GroupId) -> &mut process::Command;
+                /// Sets the supplementary group IDs for the calling process.
+                fn groups(&mut self, groups: &[GroupId]) -> &mut process::Command;
+                /// Schedules a closure to be run just before the `exec` function is invoked.
+                unsafe fn pre_exec<F>(&mut self, f: F) -> &mut process::Command where
+                F: FnMut() -> io::Result<()> + Send + Sync + 'static;
+                /// Schedules a closure to be run just before the `exec` function is invoked.
+                unsafe fn before_exec<F>(&mut self, f: F) -> &mut process::Command where
+                F: FnMut() -> io::Result<()> + Send + Sync + 'static
+                { unsafe { self.pre_exec(f) } }
+                /// Performs all the required setup by this `Command`, followed by calling the `execvp` syscall.
+                #[must_use] fn exec(&mut self) -> io::Error;
+                /// Set executable argument.
+                fn arg0<S>(&mut self, arg: S) -> &mut process::Command where S: AsRef<OsStr>;
+                /// Sets the process group ID (PGID) of the child process.
+                fn process_group(&mut self, pgroup: i32) -> &mut process::Command;
+            }
+            
+            impl CommandExt for process::Command
+            {
+                fn uid(&mut self, id: UserId) -> &mut process::Command
+                {
+                    self.as_inner_mut().uid(id);
+                    self
+                }
+
+                fn gid(&mut self, id: GroupId) -> &mut process::Command
+                {
+                    self.as_inner_mut().gid(id);
+                    self
+                }
+
+                fn groups(&mut self, groups: &[GroupId]) -> &mut process::Command
+                {
+                    self.as_inner_mut().groups(groups);
+                    self
+                }
+
+                unsafe fn pre_exec<F>(&mut self, f: F) -> &mut process::Command where
+                F: FnMut() -> io::Result<()> + Send + Sync + 'static
+                {
+                    self.as_inner_mut().pre_exec(Box::new(f));
+                    self
+                }
+
+                fn exec(&mut self) -> io::Error { self.as_inner_mut().exec(sys::process::Stdio::Inherit) }
+
+                fn arg0<S>(&mut self, arg: S) -> &mut process::Command where
+                S: AsRef<OsStr>
+                {
+                    self.as_inner_mut().set_arg_0(arg.as_ref());
+                    self
+                }
+
+                fn process_group(&mut self, pgroup: i32) -> &mut process::Command
+                {
+                    self.as_inner_mut().pgroup(pgroup);
+                    self
+                }
+            }
+            /// Unix-specific extensions to [`process::ExitStatus`] and [`ExitStatusError`].
+            pub trait ExitStatusExt: Sealed
+            {
+                /// Creates a new `ExitStatus` or `ExitStatusError` 
+                /// from the raw underlying integer status value from `wait`.
+                fn from_raw(raw: i32) -> Self;
+                /// If the process was terminated by a signal, returns that signal.
+                fn signal(&self) -> Option<i32>;
+                /// If the process was terminated by a signal, says whether it dumped core.
+                fn core_dumped(&self) -> bool;
+                /// If the process was stopped by a signal, returns that signal.
+                fn stopped_signal(&self) -> Option<i32>;
+                /// Whether the process was continued from a stopped status.
+                fn continued(&self) -> bool;
+                /// Returns the underlying raw `wait` status.
+                fn into_raw(self) -> i32;
+            }
+            
+            impl ExitStatusExt for process::ExitStatus
+            {
+                fn from_raw(raw: i32) -> Self { process::ExitStatus::from_inner(From::from(raw)) }
+                fn signal(&self) -> Option<i32> { self.as_inner().signal() }
+                fn core_dumped(&self) -> bool { self.as_inner().core_dumped() }
+                fn stopped_signal(&self) -> Option<i32> { self.as_inner().stopped_signal() }
+                fn continued(&self) -> bool { self.as_inner().continued() }
+                fn into_raw(self) -> i32 { self.as_inner().into_raw().into() }
+            }
+            
+            impl ExitStatusExt for process::ExitStatusError
+            {
+                fn from_raw(raw: i32) -> Self
+                {
+                    process::ExitStatus::from_raw(raw)
+                        .exit_ok()
+                        .expect_err("<ExitStatusError as ExitStatusExt>::from_raw(0) but zero is not an error")
+                }
+
+                fn signal(&self) -> Option<i32> { self.into_status().signal() }
+                fn core_dumped(&self) -> bool { self.into_status().core_dumped() }
+                fn stopped_signal(&self) -> Option<i32> { self.into_status().stopped_signal() }
+                fn continued(&self) -> bool { self.into_status().continued() }
+                fn into_raw(self) -> i32 { self.into_status().into_raw() }
+            }
+            
+            impl FromRawFd for process::Stdio
+            {
+                #[inline] unsafe fn from_raw_fd(fd: RawFd) -> process::Stdio
+                {
+                    let fd = sys::fd::FileDesc::from_raw_fd(fd);
+                    let io = sys::process::Stdio::Fd(fd);
+                    process::Stdio::from_inner(io)
+                }
+            }
+            
+            impl From<OwnedFd> for process::Stdio
+            {
+                /// Takes ownership of a file descriptor and returns a [`Stdio`] that can attach a stream to it.
+                #[inline] fn from(fd: OwnedFd) -> process::Stdio
+                {
+                    let fd = sys::fd::FileDesc::from_inner(fd);
+                    let io = sys::process::Stdio::Fd(fd);
+                    process::Stdio::from_inner(io)
+                }
+            }
+            
+            impl AsRawFd for process::ChildStdin
+            {
+                #[inline] fn as_raw_fd(&self) -> RawFd { self.as_inner().as_raw_fd() }
+            }
+            
+            impl AsRawFd for process::ChildStdout
+            {
+                #[inline] fn as_raw_fd(&self) -> RawFd { self.as_inner().as_raw_fd() }
+            }
+            
+            impl AsRawFd for process::ChildStderr
+            {
+                #[inline] fn as_raw_fd(&self) -> RawFd { self.as_inner().as_raw_fd() }
+            }
+            
+            impl IntoRawFd for process::ChildStdin
+            {
+                #[inline] fn into_raw_fd(self) -> RawFd { self.into_inner().into_inner().into_raw_fd() }
+            }
+            
+            impl IntoRawFd for process::ChildStdout
+            {
+                #[inline] fn into_raw_fd(self) -> RawFd { self.into_inner().into_inner().into_raw_fd() }
+            }
+            
+            impl IntoRawFd for process::ChildStderr
+            {
+                #[inline] fn into_raw_fd(self) -> RawFd { self.into_inner().into_inner().into_raw_fd() }
+            }
+            
+            impl AsFd for ::process::ChildStdin
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_> { self.as_inner().as_fd() }
+            }
+            
+            impl From<::process::ChildStdin> for OwnedFd 
+            {
+                /// Takes ownership of a [`ChildStdin`](::process::ChildStdin)'s file descriptor.
+                #[inline] fn from(child_stdin: ::process::ChildStdin) -> OwnedFd
+                {
+                    child_stdin.into_inner().into_inner().into_inner()
+                }
+            }
+            /// Creates a `ChildStdin` from the provided `OwnedFd`.
+            impl From<OwnedFd> for process::ChildStdin
+            {
+                #[inline] fn from(fd: OwnedFd) -> process::ChildStdin
+                {
+                    let fd = sys::fd::FileDesc::from_inner(fd);
+                    let pipe = sys::pipe::AnonPipe::from_inner(fd);
+                    process::ChildStdin::from_inner(pipe)
+                }
+            }
+            
+            impl AsFd for ::process::ChildStdout
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_> { self.as_inner().as_fd() }
+            }
+            
+            impl From<::process::ChildStdout> for OwnedFd
+            {
+                /// Takes ownership of a [`ChildStdout`](::process::ChildStdout)'s file descriptor.
+                #[inline] fn from(child_stdout: ::process::ChildStdout) -> OwnedFd
+                {
+                    child_stdout.into_inner().into_inner().into_inner()
+                }
+            }
+            /// Creates a `ChildStdout` from the provided `OwnedFd`.
+            impl From<OwnedFd> for process::ChildStdout
+            {
+                #[inline] fn from(fd: OwnedFd) -> process::ChildStdout
+                {
+                    let fd = sys::fd::FileDesc::from_inner(fd);
+                    let pipe = sys::pipe::AnonPipe::from_inner(fd);
+                    process::ChildStdout::from_inner(pipe)
+                }
+            }
+            
+            impl AsFd for ::process::ChildStderr
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_>
+                {
+                    self.as_inner().as_fd()
+                }
+            }
+            
+            impl From<::process::ChildStderr> for OwnedFd
+            {
+                /// Takes ownership of a [`ChildStderr`](::process::ChildStderr)'s file descriptor.
+                #[inline] fn from(child_stderr: ::process::ChildStderr) -> OwnedFd
+                {
+                    child_stderr.into_inner().into_inner().into_inner()
+                }
+            }
+            /// Creates a `ChildStderr` from the provided `OwnedFd`.
+            impl From<OwnedFd> for process::ChildStderr
+            {
+                #[inline] fn from(fd: OwnedFd) -> process::ChildStderr
+                {
+                    let fd = sys::fd::FileDesc::from_inner(fd);
+                    let pipe = sys::pipe::AnonPipe::from_inner(fd);
+                    process::ChildStderr::from_inner(pipe)
+                }
+            }
+            /// Returns the OS-assigned process identifier associated with this process's parent.
+            #[must_use] pub fn parent_id() -> u32 { ::sys::os::getppid() }
+        }
+    }
+    /// Common System Wide Implementations
+    pub mod windows
+    {
+        use ::
+        {
+            *,
+        };
+        /// System Library API
+        pub mod api
+        {
+            //pub use winapi::{ * };
+        }
+
+        pub mod process
+        {   
+            //! Windows-specific extensions to primitives in the [`std::process`] module.
+            use ::
+            {
+                collections::{ BTreeMap },
+                env::consts::{ EXE_EXTENSION, EXE_SUFFIX },
+                ffi::{ OsStr, OsString, c_void },
+                io::{ self, Error },
+                mem::{ MaybeUninit },
+                num::{ NonZero },
+                path::{ Path, PathBuf },
+                sealed::{ Sealed },
+                sync::{ Mutex },
+                system::
+                {
+                    common::
                     { 
-                        Color, Cursor, CursorMode, Event, Key, Size, Style, Theme, MouseButton, Mouse, MouseInput, 
-                        ModifierState
+                        process::{ CommandEnv, CommandEnvs },
+                        AsInner, AsInnerMut, FromInner, IntoInner 
                     },
-                    signal::{ Signal, SignalSet },
+                    io::{ AsHandle, AsRawHandle, BorrowedHandle, FromRawHandle, IntoRawHandle, OwnedHandle, RawHandle },
                 },
                 *,
             };
             /*
-            use std::char;
-            use std::ffi::OsStr;
-            use std::io;
-            use std::mem::{replace, zeroed};
-            use std::os::windows::ffi::OsStrExt;
-            use std::ptr;
-            use std::sync::atomic::{AtomicUsize, Ordering};
-            use std::sync::{LockResult, Mutex, MutexGuard, TryLockResult};
-            use std::time::Duration;
+            use ::sys::args::{self, Arg};
+            use ::sys::c::{self, EXIT_FAILURE, EXIT_SUCCESS};
+            use ::sys::fs::{File, OpenOptions};
+            use ::sys::handle::Handle;
+            use ::sys::pal::api::{self, WinError, utf16};
+            use ::sys::pal::{ensure_no_nuls, fill_utf16_buf};
+            use ::sys::pipe::{self, AnonPipe};
+            use ::sys::{cvt, path, stdio};
             */
-            pub mod ctypes
+            // sys::process::windows
+            #[derive(Clone, Debug, Eq)]
+            pub struct EnvKey
             {
-                use ::
+                os_string: OsString,
+                utf16: Vec<u16>,
+            }
+
+            impl EnvKey
+            {
+                fn new<T: Into<OsString>>(key: T) -> Self { EnvKey::from(key.into()) }
+            }
+
+            impl Ord for EnvKey
+            {
+                fn cmp(&self, other: &Self) -> cmp::Ordering
                 {
-                    winapi::{ ctypes },
-                    *,
-                };
+                    unsafe
+                    {
+                        let result = c::CompareStringOrdinal
+                        (
+                            self.utf16.as_ptr(),
+                            self.utf16.len() as _,
+                            other.utf16.as_ptr(),
+                            other.utf16.len() as _,
+                            c::TRUE,
+                        );
+
+                        match result
+                        {
+                            c::CSTR_LESS_THAN => cmp::Ordering::Less,
+                            c::CSTR_EQUAL => cmp::Ordering::Equal,
+                            c::CSTR_GREATER_THAN => cmp::Ordering::Greater,
+                            _ => panic!("comparing environment keys failed: {}", Error::last_os_error()),
+                        }
+                    }
+                }
+            }
+
+            impl PartialOrd for EnvKey
+            {
+                fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> { Some(self.cmp(other)) }
+            }
+
+            impl PartialEq for EnvKey
+            {
+                fn eq(&self, other: &Self) -> bool
+                {
+                    if self.utf16.len() != other.utf16.len() { false }
+                    else { self.cmp(other) == cmp::Ordering::Equal }
+                }
+            }
+
+            impl PartialOrd<str> for EnvKey
+            {
+                fn partial_cmp(&self, other: &str) -> Option<cmp::Ordering> { Some(self.cmp(&EnvKey::new(other))) }
+            }
+
+            impl PartialEq<str> for EnvKey
+            {
+                fn eq(&self, other: &str) -> bool
+                {
+                    if self.os_string.len() != other.len() { false }
+                    else { self.cmp(&EnvKey::new(other)) == cmp::Ordering::Equal }
+                }
             }
             
-            pub mod shared
+            impl From<OsString> for EnvKey
             {
-                use ::
+                fn from(k: OsString) -> Self
                 {
-                    *,
-                };
-
-                pub mod winerror
-                {
-                    use ::
-                    {
-                        winapi::shared::winerror::{ * },
-                        *,
-                    };
-                }
-
-                pub mod minwindef
-                {
-                    use ::
-                    {
-                         winapi::shared::minwindef::{ * },
-                        *,
-                    };
-                }
-
-                pub mod ntdef
-                {
-                    use ::
-                    {
-                         winapi::shared::ntdef::{ * },
-                        *,
-                    };
+                    EnvKey { utf16: k.encode_wide().collect(), os_string: k }
                 }
             }
-            
-            pub mod um
+
+            impl From<EnvKey> for OsString
             {
-                use ::
-                {
-                    *,
-                };
+                fn from(k: EnvKey) -> Self { k.os_string }
+            }
 
-                pub mod consoleapi
+            impl From<&OsStr> for EnvKey
+            {
+                fn from(k: &OsStr) -> Self { Self::from(k.to_os_string()) }
+            }
+
+            impl AsRef<OsStr> for EnvKey
+            {
+                fn as_ref(&self) -> &OsStr { &self.os_string }
+            }
+
+            pub struct Command
+            {
+                program: OsString,
+                args: Vec<Arg>,
+                env: CommandEnv,
+                cwd: Option<OsString>,
+                flags: u32,
+                show_window: Option<u16>,
+                detach: bool,
+                stdin: Option<Stdio>,
+                stdout: Option<Stdio>,
+                stderr: Option<Stdio>,
+                force_quotes_enabled: bool,
+            }
+
+            pub enum Stdio
+            {
+                Inherit,
+                InheritSpecific { from_stdio_id: u32 },
+                Null,
+                MakePipe,
+                Pipe(AnonPipe),
+                Handle(Handle),
+            }
+
+            pub struct StdioPipes
+            {
+                pub stdin: Option<AnonPipe>,
+                pub stdout: Option<AnonPipe>,
+                pub stderr: Option<AnonPipe>,
+            }
+
+            impl Command
+            {
+                pub fn new(program: &OsStr) -> Command
                 {
-                    use ::
+                    Command {
+                        program: program.to_os_string(),
+                        args: Vec::new(),
+                        env: Default::default(),
+                        cwd: None,
+                        flags: 0,
+                        show_window: None,
+                        detach: false,
+                        stdin: None,
+                        stdout: None,
+                        stderr: None,
+                        force_quotes_enabled: false,
+                    }
+                }
+
+                pub fn arg(&mut self, arg: &OsStr)
+                {
+                    self.args.push(Arg::Regular(arg.to_os_string()))
+                }
+                pub fn env_mut(&mut self) -> &mut CommandEnv
+                {
+                    &mut self.env
+                }
+                pub fn cwd(&mut self, dir: &OsStr)
+                {
+                    self.cwd = Some(dir.to_os_string())
+                }
+                pub fn stdin(&mut self, stdin: Stdio)
+                {
+                    self.stdin = Some(stdin);
+                }
+                pub fn stdout(&mut self, stdout: Stdio)
+                {
+                    self.stdout = Some(stdout);
+                }
+                pub fn stderr(&mut self, stderr: Stdio)
+                {
+                    self.stderr = Some(stderr);
+                }
+                pub fn creation_flags(&mut self, flags: u32)
+                {
+                    self.flags = flags;
+                }
+                pub fn show_window(&mut self, cmd_show: Option<u16>)
+                {
+                    self.show_window = cmd_show;
+                }
+
+                pub fn force_quotes(&mut self, enabled: bool)
+                {
+                    self.force_quotes_enabled = enabled;
+                }
+
+                pub fn raw_arg(&mut self, command_str_to_append: &OsStr)
+                {
+                    self.args.push(Arg::Raw(command_str_to_append.to_os_string()))
+                }
+
+                pub fn get_program(&self) -> &OsStr
+                {
+                    &self.program
+                }
+
+                pub fn get_args(&self) -> CommandArgs<'_>
+                {
+                    let iter = self.args.iter();
+                    CommandArgs { iter }
+                }
+
+                pub fn get_envs(&self) -> CommandEnvs<'_>
+                {
+                    self.env.iter()
+                }
+
+                pub fn get_current_dir(&self) -> Option<&Path>
+                {
+                    self.cwd.as_ref().map(Path::new)
+                }
+
+                pub fn spawn(
+                    &mut self,
+                    default: Stdio,
+                    needs_stdin: bool,
+                ) -> io::Result<(Process, StdioPipes)>
+                {
+                    self.spawn_with_attributes(default, needs_stdin, None)
+                }
+
+                pub fn spawn_with_attributes(
+                    &mut self,
+                    default: Stdio,
+                    needs_stdin: bool,
+                    proc_thread_attribute_list: Option<&ProcThreadAttributeList<'_>>,
+                ) -> io::Result<(Process, StdioPipes)>
+                {
+                    let env_saw_path = self.env.have_changed_path();
+                    let maybe_env = self.env.capture_if_changed();
+
+                    let child_paths = if env_saw_path && let Some(env) = maybe_env.as_ref()
                     {
-                        winapi::um::consoleapi::{ * },
-                        *,
-                    };
-                }
-
-                pub mod handleapi
-                {
-                    use ::
-                    {
-                        winapi::um::handleapi::{ * },
-                        *,
-                    };
-                }
-
-                pub mod processenv
-                {
-                    use ::
-                    {
-                        winapi::um::processenv::{ * },
-                        *,
-                    };
-                }
-
-                pub mod synchapi
-                {
-                    use ::
-                    {
-                        winapi::um::synchapi::{ * },
-                        *,
-                    };
-                }
-
-                pub mod winbase
-                {
-                    use ::
-                    {
-                        winapi::um::winbase::{ * },
-                        *,
-                    };
-                }
-
-                pub mod wincon
-                {
-                    use ::
-                    {
-                        winapi::um::wincon::{ * },
-                        *,
-                    };
-                }
-
-                pub mod winuser
-                {
-                    use ::
-                    {
-                        winapi::um::winuser::{ * },
-                        *,
-                    };
-                }
-
-                pub mod winnt
-                {
-                    use ::
-                    {
-                        winapi::um::winnt::{ * },
-                        *,
-                    };
-                }
-            }
-            /*
-            use ::util::unctrl_lower;
-            */
-            pub struct Terminal {
-                in_handle: HANDLE,
-                default_attrs: WORD,
-                old_out_mode: DWORD,
-                reader: Mutex<Reader>,
-                writer: Mutex<Writer>,
-            }
-
-            pub struct TerminalReadGuard<'a> {
-                term: &'a Terminal,
-                reader: MutexGuard<'a, Reader>,
-            }
-
-            pub struct TerminalWriteGuard<'a> {
-                term: &'a Terminal,
-                writer: MutexGuard<'a, Writer>,
-            }
-
-            unsafe impl Send for Terminal {}
-            unsafe impl Sync for Terminal {}
-
-            struct Reader {
-                always_track_motion: bool,
-                prev_buttons: DWORD,
-            }
-
-            struct Writer {
-                out_handle: HANDLE,
-                fg: Option<Color>,
-                bg: Option<Color>,
-                style: Style,
-            }
-
-            pub struct PrepareState {
-                old_in_mode: u32,
-                clear_handler: bool,
-            }
-
-            impl Terminal {
-                fn new(out: DWORD) -> io::Result<Terminal> {
-                    let in_handle = result_handle(
-                        unsafe { GetStdHandle(STD_INPUT_HANDLE) })?;
-                    let out_handle = result_handle(
-                        unsafe { GetStdHandle(out) })?;
-
-                    let default_attrs = unsafe { console_info(out_handle)?.wAttributes };
-
-                    let old_out_mode = unsafe { prepare_output(out_handle)? };
-
-                    Ok(Terminal{
-                        in_handle,
-                        default_attrs,
-                        old_out_mode,
-                        reader: Mutex::new(Reader{
-                            always_track_motion: false,
-                            prev_buttons: 0,
-                        }),
-                        writer: Mutex::new(Writer{
-                            out_handle,
-                            fg: None,
-                            bg: None,
-                            style: Style::empty(),
-                        }),
-                    })
-                }
-
-                pub fn stdout() -> io::Result<Terminal> {
-                    Terminal::new(STD_OUTPUT_HANDLE)
-                }
-
-                pub fn stderr() -> io::Result<Terminal> {
-                    Terminal::new(STD_ERROR_HANDLE)
-                }
-
-                pub fn name(&self) -> &str {
-                    "windows-console"
-                }
-
-                pub fn size(&self) -> io::Result<Size> {
-                    self.lock_writer().size()
-                }
-
-                pub fn clear_screen(&self) -> io::Result<()> {
-                    self.lock_writer().clear_screen()
-                }
-
-                pub fn clear_to_line_end(&self) -> io::Result<()> {
-                    self.lock_writer().clear_to_line_end()
-                }
-
-                pub fn clear_to_screen_end(&self) -> io::Result<()> {
-                    self.lock_writer().clear_to_screen_end()
-                }
-
-                pub fn move_to_first_column(&self) -> io::Result<()> {
-                    self.lock_writer().move_to_first_column()
-                }
-
-                pub fn move_up(&self, n: usize) -> io::Result<()> {
-                    if n != 0 {
-                        self.lock_writer().move_up(n)?;
-                    }
-                    Ok(())
-                }
-
-                pub fn move_down(&self, n: usize) -> io::Result<()> {
-                    if n != 0 {
-                        self.lock_writer().move_down(n)?;
-                    }
-                    Ok(())
-                }
-
-                pub fn move_left(&self, n: usize) -> io::Result<()> {
-                    if n != 0 {
-                        self.lock_writer().move_left(n)?;
-                    }
-                    Ok(())
-                }
-
-                pub fn move_right(&self, n: usize) -> io::Result<()> {
-                    if n != 0 {
-                        self.lock_writer().move_right(n)?;
-                    }
-                    Ok(())
-                }
-
-                pub fn enter_screen(&self) -> io::Result<HANDLE> {
-                    self.lock_writer().enter_screen()
-                }
-                
-                pub unsafe fn exit_screen(&self, old_handle: HANDLE) -> io::Result<()> {
-                    self.lock_writer().exit_screen(old_handle)
-                }
-
-                pub fn prepare(&self, config: PrepareConfig) -> io::Result<PrepareState> {
-                    self.lock_reader().prepare(config)
-                }
-
-                pub fn restore(&self, state: PrepareState) -> io::Result<()> {
-                    self.lock_reader().restore(state)
-                }
-
-                pub fn wait_event(&self, timeout: Option<Duration>) -> io::Result<bool> {
-                    self.lock_reader().wait_event(timeout)
-                }
-
-                pub fn read_event(&self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    self.lock_reader().read_event(timeout)
-                }
-
-                pub fn read_raw(&self, buf: &mut [u16],
-                        timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    self.lock_reader().read_raw(buf, timeout)
-                }
-
-                pub fn read_raw_event(&self, events: &mut [INPUT_RECORD],
-                        timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    self.lock_reader().read_raw_event(events, timeout)
-                }
-
-                pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> {
-                    self.lock_writer().set_cursor_mode(mode)
-                }
-
-                pub fn clear_attributes(&self) -> io::Result<()> {
-                    self.lock_writer().clear_attributes()
-                }
-
-                pub fn add_style(&self, style: Style) -> io::Result<()> {
-                    self.lock_writer().add_style(style)
-                }
-
-                pub fn remove_style(&self, style: Style) -> io::Result<()> {
-                    self.lock_writer().remove_style(style)
-                }
-
-                pub fn set_style(&self, style: Style) -> io::Result<()> {
-                    self.lock_writer().set_style(style)
-                }
-
-                pub fn set_fg(&self, fg: Option<Color>) -> io::Result<()> {
-                    self.lock_writer().set_fg(fg)
-                }
-
-                pub fn set_bg(&self, bg: Option<Color>) -> io::Result<()> {
-                    self.lock_writer().set_bg(bg)
-                }
-
-                pub fn set_theme(&self, theme: Theme) -> io::Result<()> {
-                    self.lock_writer().set_theme(theme)
-                }
-
-                pub fn write_char(&self, ch: char) -> io::Result<()> {
-                    self.lock_writer().write_str(ch.encode_utf8(&mut [0; 4]))
-                }
-
-                pub fn write_str(&self, s: &str) -> io::Result<()> {
-                    self.lock_writer().write_str(s)
-                }
-
-                pub fn write_styled(&self,
-                        fg: Option<Color>, bg: Option<Color>, style: Style, text: &str)
-                        -> io::Result<()> {
-                    self.lock_writer().write_styled(fg, bg, style, text)
-                }
-
-                pub fn lock_read(&self) -> LockResult<TerminalReadGuard> {
-                    map_lock_result(self.reader.lock(),
-                        |r| TerminalReadGuard::new(self, r))
-                }
-
-                pub fn lock_write(&self) -> LockResult<TerminalWriteGuard> {
-                    map_lock_result(self.writer.lock(),
-                        |w| TerminalWriteGuard::new(self, w))
-                }
-
-                pub fn try_lock_read(&self) -> TryLockResult<TerminalReadGuard> {
-                    map_try_lock_result(self.reader.try_lock(),
-                        |r| TerminalReadGuard::new(self, r))
-                }
-
-                pub fn try_lock_write(&self) -> TryLockResult<TerminalWriteGuard> {
-                    map_try_lock_result(self.writer.try_lock(),
-                        |w| TerminalWriteGuard::new(self, w))
-                }
-
-                fn lock_reader(&self) -> TerminalReadGuard {
-                    self.lock_read().expect("Terminal::lock_reader")
-                }
-
-                fn lock_writer(&self) -> TerminalWriteGuard {
-                    self.lock_write().expect("Terminal::lock_writer")
-                }
-            }
-
-            impl Drop for Terminal {
-                fn drop(&mut self) {
-                    let r = self.set_cursor_mode(CursorMode::Normal);
-                    let r2 = r.and_then(|_| {
-                        let lock = self.lock_writer();
-                        unsafe { set_console_mode(lock.writer.out_handle, self.old_out_mode)?; }
-                        Ok(())
-                    });
-
-                    if let Err(e) = r2 {
-                        eprintln!("failed to restore terminal: {}", e);
-                    }
-                }
-            }
-
-            impl<'a> TerminalReadGuard<'a> {
-                fn new(term: &'a Terminal, reader: MutexGuard<'a, Reader>) -> TerminalReadGuard<'a> {
-                    TerminalReadGuard{term, reader}
-                }
-
-                pub fn prepare(&mut self, config: PrepareConfig) -> io::Result<PrepareState> {
-                    let mut writer = self.term.lock_writer();
-                    self.prepare_with_lock(&mut writer, config)
-                }
-
-                pub fn prepare_with_lock(&mut self, _writer: &mut TerminalWriteGuard,
-                        config: PrepareConfig) -> io::Result<PrepareState> {
-                    let old_in_mode = unsafe { console_mode(self.term.in_handle)? };
-
-                    let mut state = PrepareState{
-                        old_in_mode,
-                        clear_handler: false,
-                    };
-
-                    let mut in_mode = old_in_mode;
-                    
-                    in_mode |= ENABLE_EXTENDED_FLAGS;
-                    
-                    in_mode &= !ENABLE_ECHO_INPUT;
-                    
-                    in_mode &= !ENABLE_LINE_INPUT;
-                    
-                    if config.block_signals {
-                        in_mode &= !ENABLE_PROCESSED_INPUT;
-                    } else {
-                        in_mode |= ENABLE_PROCESSED_INPUT;
-                    }
-                    
-                    if config.enable_mouse {
-                        self.reader.always_track_motion = config.always_track_motion;
-                        in_mode |= ENABLE_MOUSE_INPUT;
-                    } else {
-                        in_mode &= !ENABLE_MOUSE_INPUT;
-                    }
-                    
-                    in_mode &= !ENABLE_QUICK_EDIT_MODE;
-                    
-                    in_mode |= ENABLE_WINDOW_INPUT;
-                    
-                    in_mode &= !ENABLE_VIRTUAL_TERMINAL_INPUT;
-
-                    unsafe {
-                        set_console_mode(self.term.in_handle, in_mode)?;
-
-                        if config.report_signals.intersects(Signal::Break | Signal::Interrupt) {
-                            catch_signals(config.report_signals);
-                            result_bool(SetConsoleCtrlHandler(Some(ctrl_handler), TRUE))?;
-                            state.clear_handler = true;
-                        }
-                    }
-
-                    Ok(state)
-                }
-
-                pub fn restore(&mut self, state: PrepareState) -> io::Result<()> {
-                    let mut writer = self.term.lock_writer();
-                    self.restore_with_lock(&mut writer, state)
-                }
-
-                pub fn restore_with_lock(&mut self, _writer: &mut TerminalWriteGuard,
-                        state: PrepareState) -> io::Result<()> {
-                    unsafe {
-                        if state.clear_handler {
-                            result_bool(SetConsoleCtrlHandler(Some(ctrl_handler), FALSE))?;
-                        }
-
-                        set_console_mode(self.term.in_handle,
-                            state.old_in_mode | ENABLE_EXTENDED_FLAGS)?;
-                    }
-
-                    Ok(())
-                }
-
-                pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool> {
-                    if get_signal().is_some() {
-                        return Ok(true);
-                    }
-
-                    let res = unsafe { WaitForSingleObject(
-                        self.term.in_handle, as_millis(timeout)) };
-
-                    match res {
-                        WAIT_OBJECT_0 => Ok(true),
-                        WAIT_TIMEOUT => Ok(false),
-                        WAIT_FAILED | _ => Err(io::Error::last_os_error())
-                    }
-                }
-
-                pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    let mut event: [INPUT_RECORD; 1] = unsafe { zeroed() };
-
-                    let n = match self.read_raw_event(&mut event, timeout)? {
-                        Some(Event::Raw(n)) => n,
-                        r => return Ok(r)
-                    };
-
-                    if n == 0 {
-                        Ok(None)
-                    } else {
-                        let event = event[0];
-
-                        if let Some(key) = key_press_event(&event) {
-                            Ok(Some(Event::Key(key)))
-                        } else if let Some(mouse) = self.mouse_event(&event) {
-                            Ok(Some(Event::Mouse(mouse)))
-                        } else if let Some(size) = size_event(&event) {
-                            Ok(Some(Event::Resize(size)))
-                        } else {
-                            Ok(Some(Event::NoEvent))
-                        }
-                    }
-                }
-
-                pub fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>)
-                        -> io::Result<Option<Event>> {
-                    if !self.wait_event(timeout)? {
-                        return Ok(None);
-                    }
-
-                    if let Some(sig) = take_signal() {
-                        return Ok(Some(Event::Signal(sig)));
-                    }
-
-                    unsafe {
-                        let len = to_dword(buf.len());
-                        let mut n_read = 0;
-
-                        result_bool(ReadConsoleW(
-                            self.term.in_handle,
-                            buf.as_ptr() as *mut VOID,
-                            len,
-                            &mut n_read,
-                            ptr::null_mut()))?;
-
-                        if n_read == 0 {
-                            Ok(None)
-                        } else {
-                            Ok(Some(Event::Raw(n_read as usize)))
-                        }
-                    }
-                }
-
-                pub fn read_raw_event(&mut self, events: &mut [INPUT_RECORD],
-                        timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    if !self.wait_event(timeout)? {
-                        return Ok(None);
-                    }
-
-                    if let Some(sig) = take_signal() {
-                        return Ok(Some(Event::Signal(sig)));
-                    }
-
-                    let len = to_dword(events.len());
-                    let mut n = 0;
-
-                    result_bool(unsafe { ReadConsoleInputW(
-                        self.term.in_handle,
-                        events.as_mut_ptr(),
-                        len,
-                        &mut n) })?;
-
-                    Ok(Some(Event::Raw(n as usize)))
-                }
-
-                fn mouse_event(&mut self, event: &INPUT_RECORD) -> Option<Mouse> {
-                    if event.EventType == MOUSE_EVENT {
-                        let mouse = unsafe { event.Event.Mouse() };
-
-                        let input = if mouse.dwEventFlags & wincon::MOUSE_WHEELED != 0 {
-                            let direction = (mouse.dwButtonState >> 16) as i16;
-
-                            if direction > 0 {
-                                MouseInput::WheelUp
-                            } else {
-                                MouseInput::WheelDown
-                            }
-                        } else {
-                            let prev_buttons = self.reader.prev_buttons;
-                            let now_buttons = mouse.dwButtonState;
-
-                            self.reader.prev_buttons = mouse.dwButtonState;
-
-                            if prev_buttons == now_buttons {
-                                if now_buttons == 0 && !self.reader.always_track_motion {
-                                    return None;
-                                }
-
-                                MouseInput::Motion
-                            } else {
-                                button_changed(prev_buttons, now_buttons)?
-                            }
-                        };
-
-                        let position = coord_to_cursor(mouse.dwMousePosition);
-
-                        let mut mods = ModifierState::empty();
-
-                        if has_alt(mouse.dwControlKeyState) {
-                            mods |= ModifierState::ALT;
-                        }
-                        if has_ctrl(mouse.dwControlKeyState) {
-                            mods |= ModifierState::CTRL;
-                        }
-                        if has_shift(mouse.dwControlKeyState) {
-                            mods |= ModifierState::SHIFT;
-                        }
-
-                        Some(Mouse{
-                            position,
-                            input,
-                            modifiers: mods,
-                        })
+                        env.get(&EnvKey::new("PATH")).map(|s| s.as_os_str())
                     } else {
                         None
-                    }
-                }
-            }
-
-            impl<'a> TerminalWriteGuard<'a> {
-                fn new(term: &'a Terminal, writer: MutexGuard<'a, Writer>) -> TerminalWriteGuard<'a> {
-                    TerminalWriteGuard{term, writer: writer}
-                }
-
-                fn enter_screen(&mut self) -> io::Result<HANDLE> {
-                    let size = self.size()?;
-
-                    let handle = result_handle(unsafe { CreateConsoleScreenBuffer(
-                        GENERIC_READ | GENERIC_WRITE,
-                        FILE_SHARE_READ | FILE_SHARE_WRITE,
-                        ptr::null(),
-                        CONSOLE_TEXTMODE_BUFFER,
-                        ptr::null_mut()) })?;
-
-                    if let Err(e) = unsafe { setup_screen(handle, size) } {
-                        let _ = unsafe { close_handle(handle) };
-                        return Err(e);
-                    }
-
-                    let old_handle = self.swap_out_handle(handle);
-
-                    let mut out_mode = unsafe { console_mode(handle)? };
-                    
-                    out_mode &= !(ENABLE_WRAP_AT_EOL_OUTPUT | DISABLE_NEWLINE_AUTO_RETURN);
-
-                    unsafe { set_console_mode(handle, out_mode)?; }
-
-                    Ok(old_handle)
-                }
-
-                unsafe fn exit_screen(&mut self, old_handle: HANDLE) -> io::Result<()> {
-                    result_bool(SetConsoleActiveScreenBuffer(old_handle))?;
-
-                    let handle = self.swap_out_handle(old_handle);
-
-                    close_handle(handle)
-                }
-
-                pub fn size(&self) -> io::Result<Size> {
-                    unsafe { console_size(self.writer.out_handle) }
-                }
-
-                pub fn flush(&mut self) -> io::Result<()> {
-                    Ok(())
-                }
-
-                pub fn clear_screen(&mut self) -> io::Result<()> {
-                    let mut info = self.get_info()?;
-
-                    let win_height = (info.srWindow.Bottom - info.srWindow.Top) + 1;
-
-                    if win_height == info.dwSize.Y {
-                        self.clear_area(
-                            COORD{X: 0, Y: 0},
-                            info.dwSize.X as DWORD * info.dwSize.Y as DWORD)?;
+                    };
+                    let program = resolve_exe(&self.program, || env::var_os("PATH"), child_paths)?;
+                    let has_bat_extension = |program: &[u16]| {
+                        matches!(
+                            program.len().checked_sub(4).and_then(|i| program.get(i..)),
+                            Some([46, 98 | 66, 97 | 65, 116 | 84] | [46, 99 | 67, 109 | 77, 100 | 68])
+                        )
+                    };
+                    let is_batch_file = if path::is_verbatim(&program) {
+                        has_bat_extension(&program[..program.len() - 1])
                     } else {
-                        let max = info.dwSize.Y - (info.srWindow.Bottom + 1);
-                        let dist = (info.dwCursorPosition.Y + 1) - info.srWindow.Top;
-
-                        let down = dist.min(max);
-                        
-                        if down > 0 {
-                            info.srWindow.Top += down as SHORT;
-                            info.srWindow.Bottom += down as SHORT;
-
-                            result_bool(unsafe { SetConsoleWindowInfo(
-                                self.writer.out_handle,
-                                TRUE,
-                                &info.srWindow) })?;
-                        }
-
-                        let clear = info.srWindow.Bottom - info.dwCursorPosition.Y;
-                        if clear < win_height {
-                            let dist = (win_height - clear) as SHORT;
-
-                            let src = SMALL_RECT{
-                                Top: dist,
-                                Bottom: info.dwCursorPosition.Y,
-                                Left: 0,
-                                Right: info.dwSize.X,
-                            };
-
-                            let dest = COORD{
-                                X: 0,
-                                Y: 0,
-                            };
-
-                            let fill = CHAR_INFO{
-                                Char: unicode_char(b' ' as WCHAR),
-                                Attributes: 0,
-                            };
-
-                            result_bool(unsafe { ScrollConsoleScreenBufferW(
-                                self.writer.out_handle,
-                                &src,
-                                ptr::null(),
-                                dest,
-                                &fill) })?;
-                        }
-                    }
-                    
-                    self.move_abs(COORD{
-                        X: info.srWindow.Left,
-                        Y: info.srWindow.Top,
-                    })
-                }
-
-                pub fn clear_to_line_end(&mut self) -> io::Result<()> {
-                    let info = self.get_info()?;
-
-                    let start = info.dwCursorPosition;
-                    let size = info.dwSize;
-
-                    self.clear_area(start, (size.X - start.X) as DWORD)
-                }
-
-                pub fn clear_to_screen_end(&mut self) -> io::Result<()> {
-                    let info = self.get_info()?;
-
-                    let start = info.dwCursorPosition;
-                    let size = info.dwSize;
-
-                    let lines = (size.Y - start.Y) as DWORD;
-                    let columns = (size.X - start.X) as DWORD;
-
-                    let n = lines * size.X as DWORD + columns;
-
-                    self.clear_area(start, n)
-                }
-
-                pub fn move_cursor(&mut self, pos: Cursor) -> io::Result<()> {
-                    self.move_abs(cursor_to_coord(pos))
-                }
-
-                pub fn move_to_first_column(&mut self) -> io::Result<()> {
-                    let info = self.get_info()?;
-                    self.move_abs(COORD{X: 0, Y: info.dwCursorPosition.Y})
-                }
-
-                pub fn move_up(&mut self, n: usize) -> io::Result<()> {
-                    self.move_rel(COORD{X: 0, Y: to_short_neg(n)})
-                }
-
-                pub fn move_down(&mut self, n: usize) -> io::Result<()> {
-                    self.move_rel(COORD{X: 0, Y: to_short(n)})
-                }
-
-                pub fn move_left(&mut self, n: usize) -> io::Result<()> {
-                    self.move_rel(COORD{X: to_short_neg(n), Y: 0})
-                }
-
-                pub fn move_right(&mut self, n: usize) -> io::Result<()> {
-                    self.move_rel(COORD{X: to_short(n), Y: 0})
-                }
-
-                pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> {
-                    let (size, vis) = match mode {
-                        CursorMode::Normal => (25, TRUE),
-                        CursorMode::Invisible => (1, FALSE),
-                        CursorMode::Overwrite => (100, TRUE),
+                        fill_utf16_buf(
+                            |buffer, size| unsafe {
+                                // resolve the path so we can test the final file name.
+                                c::GetFullPathNameW(program.as_ptr(), size, buffer, ptr::null_mut())
+                            },
+                            |program| has_bat_extension(program),
+                        )?
                     };
-
-                    let info = CONSOLE_CURSOR_INFO {
-                        dwSize: size,
-                        bVisible: vis,
+                    let (program, mut cmd_str) = if is_batch_file {
+                        (
+                            command_prompt()?,
+                            args::make_bat_command_line(&program, &self.args, self.force_quotes_enabled)?,
+                        )
+                    } else {
+                        let cmd_str = make_command_line(&self.program, &self.args, self.force_quotes_enabled)?;
+                        (program, cmd_str)
                     };
+                    cmd_str.push(0); // add null terminator
 
-                    result_bool(unsafe { SetConsoleCursorInfo(self.writer.out_handle, &info) })
-                }
-
-                pub fn clear_attributes(&mut self) -> io::Result<()> {
-                    self.set_attributes(None, None, Style::empty())
-                }
-
-                pub fn add_style(&mut self, style: Style) -> io::Result<()> {
-                    let add = style - self.writer.style;
-
-                    if !add.is_empty() {
-                        self.writer.style |= add;
-                        self.update_attrs()?;
+                    // stolen from the libuv code.
+                    let mut flags = self.flags | c::CREATE_UNICODE_ENVIRONMENT;
+                    if self.detach {
+                        flags |= c::DETACHED_PROCESS | c::CREATE_NEW_PROCESS_GROUP;
                     }
 
+                    let (envp, _data) = make_envp(maybe_env)?;
+                    let (dirp, _data) = make_dirp(self.cwd.as_ref())?;
+                    let mut pi = zeroed_process_information();
+
+                    // Prepare all stdio handles to be inherited by the child. This
+                    // currently involves duplicating any existing ones with the ability to
+                    // be inherited by child processes. Note, however, that once an
+                    // inheritable handle is created, *any* spawned child will inherit that
+                    // handle. We only want our own child to inherit this handle, so we wrap
+                    // the remaining portion of this spawn in a mutex.
+                    //
+                    // For more information, msdn also has an article about this race:
+                    // https://support.microsoft.com/kb/315939
+                    static CREATE_PROCESS_LOCK: Mutex<()> = Mutex::new(());
+
+                    let _guard = CREATE_PROCESS_LOCK.lock();
+
+                    let mut pipes = StdioPipes { stdin: None, stdout: None, stderr: None };
+                    let null = Stdio::Null;
+                    let default_stdin = if needs_stdin { &default } else { &null };
+                    let stdin = self.stdin.as_ref().unwrap_or(default_stdin);
+                    let stdout = self.stdout.as_ref().unwrap_or(&default);
+                    let stderr = self.stderr.as_ref().unwrap_or(&default);
+                    let stdin = stdin.to_handle(c::STD_INPUT_HANDLE, &mut pipes.stdin)?;
+                    let stdout = stdout.to_handle(c::STD_OUTPUT_HANDLE, &mut pipes.stdout)?;
+                    let stderr = stderr.to_handle(c::STD_ERROR_HANDLE, &mut pipes.stderr)?;
+
+                    let mut si = zeroed_startupinfo();
+
+                    // If at least one of stdin, stdout or stderr are set (i.e. are non null)
+                    // then set the `hStd` fields in `STARTUPINFO`.
+                    // Otherwise skip this and allow the OS to apply its default behavior.
+                    // This provides more consistent behavior between Win7 and Win8+.
+                    let is_set = |stdio: &Handle| !stdio.as_raw_handle().is_null();
+                    if is_set(&stderr) || is_set(&stdout) || is_set(&stdin) {
+                        si.dwFlags |= c::STARTF_USESTDHANDLES;
+                        si.hStdInput = stdin.as_raw_handle();
+                        si.hStdOutput = stdout.as_raw_handle();
+                        si.hStdError = stderr.as_raw_handle();
+                    }
+
+                    if let Some(cmd_show) = self.show_window {
+                        si.dwFlags |= c::STARTF_USESHOWWINDOW;
+                        si.wShowWindow = cmd_show;
+                    }
+
+                    let si_ptr: *mut c::STARTUPINFOW;
+
+                    let mut si_ex;
+
+                    if let Some(proc_thread_attribute_list) = proc_thread_attribute_list {
+                        si.cb = size_of::<c::STARTUPINFOEXW>() as u32;
+                        flags |= c::EXTENDED_STARTUPINFO_PRESENT;
+
+                        si_ex = c::STARTUPINFOEXW {
+                            StartupInfo: si,
+                            // SAFETY: Casting this `*const` pointer to a `*mut` pointer is "safe"
+                            // here because windows does not internally mutate the attribute list.
+                            // Ideally this should be reflected in the interface of the `windows-sys` crate.
+                            lpAttributeList: proc_thread_attribute_list.as_ptr().cast::<c_void>().cast_mut(),
+                        };
+                        si_ptr = (&raw mut si_ex) as _;
+                    } else {
+                        si.cb = size_of::<c::STARTUPINFOW>() as u32;
+                        si_ptr = (&raw mut si) as _;
+                    }
+
+                    unsafe {
+                        cvt(c::CreateProcessW(
+                            program.as_ptr(),
+                            cmd_str.as_mut_ptr(),
+                            ptr::null_mut(),
+                            ptr::null_mut(),
+                            c::TRUE,
+                            flags,
+                            envp,
+                            dirp,
+                            si_ptr,
+                            &mut pi,
+                        ))
+                    }?;
+
+                    unsafe {
+                        Ok((
+                            Process {
+                                handle: Handle::from_raw_handle(pi.hProcess),
+                                main_thread_handle: Handle::from_raw_handle(pi.hThread),
+                            },
+                            pipes,
+                        ))
+                    }
+                }
+
+                pub fn output(&mut self) -> io::Result<(ExitStatus, Vec<u8>, Vec<u8>)>
+                {
+                    let (proc, pipes) = self.spawn(Stdio::MakePipe, false)?;
+                    ::sys::common::process::wait_with_output(proc, pipes)
+                }
+            }
+
+            impl fmt::Debug for Command 
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    self.program.fmt(f)?;
+                    for arg in &self.args {
+                        f.write_str(" ")?;
+                        match arg {
+                            Arg::Regular(s) => s.fmt(f),
+                            Arg::Raw(s) => f.write_str(&s.to_string_lossy()),
+                        }?;
+                    }
                     Ok(())
                 }
-
-                pub fn remove_style(&mut self, style: Style) -> io::Result<()> {
-                    let remove = style & self.writer.style;
-
-                    if !remove.is_empty() {
-                        self.writer.style -= remove;
-                        self.update_attrs()?;
-                    }
-
-                    Ok(())
-                }
-
-                pub fn set_style(&mut self, style: Style) -> io::Result<()> {
-                    if self.writer.style != style {
-                        self.writer.style = style;
-                        self.update_attrs()?;
-                    }
-                    Ok(())
-                }
-
-                pub fn set_fg(&mut self, fg: Option<Color>) -> io::Result<()> {
-                    if self.writer.fg != fg {
-                        self.writer.fg = fg;
-                        self.update_attrs()?;
-                    }
-
-                    Ok(())
-                }
-
-                pub fn set_bg(&mut self, bg: Option<Color>) -> io::Result<()> {
-                    if self.writer.bg != bg {
-                        self.writer.bg = bg;
-                        self.update_attrs()?;
-                    }
-                    Ok(())
-                }
-
-                pub fn set_theme(&mut self, theme: Theme) -> io::Result<()> {
-                    self.set_attributes(theme.fg, theme.bg, theme.style)
-                }
-                
-                pub fn set_attributes(&mut self,
-                        fg: Option<Color>, bg: Option<Color>, style: Style) -> io::Result<()> {
-                    if self.writer.fg != fg || self.writer.bg != bg || self.writer.style != style {
-                        self.writer.fg = fg;
-                        self.writer.bg = bg;
-                        self.writer.style = style;
-                        self.update_attrs()?;
-                    }
-
-                    Ok(())
-                }
-
-                fn update_attrs(&mut self) -> io::Result<()> {
-                    let mut attrs = self.term.default_attrs;
-
-                    if let Some(fg) = self.writer.fg {
-                        attrs &= !fg_code(Color::White);
-                        attrs |= fg_code(fg);
-                    }
-
-                    if let Some(bg) = self.writer.bg {
-                        attrs &= !bg_code(Color::White);
-                        attrs |= bg_code(bg);
-                    }
-
-                    attrs |= style_code(self.writer.style);
-
-                    if self.writer.style.contains(Style::REVERSE) {
-                        attrs = swap_colors(attrs);
-                    }
-
-                    self.set_attrs(attrs)
-                }
-
-                pub fn write_char(&mut self, ch: char) -> io::Result<()> {
-                    let mut buf = [0; 4];
-                    self.write_str(ch.encode_utf8(&mut buf))
-                }
-
-                pub fn write_str(&mut self, s: &str) -> io::Result<()> {
-                    let buf = OsStr::new(s).encode_wide().collect::<Vec<_>>();
-                    let mut n = 0;
-
-                    while buf.len() > n {
-                        let mut n_dw = 0;
-                        let len = to_dword(buf.len() - n);
-
-                        result_bool(unsafe { WriteConsoleW(
-                            self.writer.out_handle,
-                            buf[n..].as_ptr() as *const VOID,
-                            len,
-                            &mut n_dw,
-                            ptr::null_mut()) })?;
-
-                        n += n_dw as usize;
-                    }
-
-                    Ok(())
-                }
-
-                pub fn write_styled(&mut self,
-                        fg: Option<Color>, bg: Option<Color>, style: Style, text: &str)
-                        -> io::Result<()> {
-                    self.set_attributes(fg, bg, style)?;
-                    self.write_str(text)?;
-                    self.clear_attributes()
-                }
-
-                fn clear_area(&mut self, start: COORD, n: DWORD) -> io::Result<()> {
-                    let mut n_chars = 0;
-
-                    result_bool(unsafe { FillConsoleOutputAttribute(
-                        self.writer.out_handle,
-                        self.term.default_attrs,
-                        n,
-                        start,
-                        &mut n_chars) })?;
-
-                    result_bool(unsafe { FillConsoleOutputCharacterA(
-                        self.writer.out_handle,
-                        b' ' as CHAR,
-                        n,
-                        start,
-                        &mut n_chars) })?;
-
-                    Ok(())
-                }
-
-                fn move_abs(&mut self, pos: COORD) -> io::Result<()> {
-                    result_bool(unsafe { SetConsoleCursorPosition(
-                        self.writer.out_handle, pos) })
-                }
-
-                fn move_rel(&mut self, off: COORD) -> io::Result<()> {
-                    let info = self.get_info()?;
-
-                    let size = info.dwSize;
-                    let cursor = info.dwCursorPosition;
-
-                    let dest = COORD{
-                        X: cursor.X.saturating_add(off.X).min(size.X - 1),
-                        Y: cursor.Y.saturating_add(off.Y).min(size.Y - 1),
-                    };
-
-                    self.move_abs(dest)
-                }
-
-                fn set_attrs(&mut self, attrs: WORD) -> io::Result<()> {
-                    result_bool(unsafe { SetConsoleTextAttribute(
-                        self.writer.out_handle, attrs) })
-                }
-
-                fn get_info(&self) -> io::Result<CONSOLE_SCREEN_BUFFER_INFO> {
-                    unsafe { console_info(self.writer.out_handle) }
-                }
-
-                fn swap_out_handle(&mut self, handle: HANDLE) -> HANDLE {
-                    replace(&mut self.writer.out_handle, handle)
-                }
-            }
-
-            fn as_millis(timeout: Option<Duration>) -> DWORD {
-                match timeout {
-                    Some(t) => {
-                        let s = (t.as_secs() * 1_000) as DWORD;
-                        let ms = (t.subsec_nanos() / 1_000_000) as DWORD;
-
-                        s + ms
-                    }
-                    None => INFINITE,
-                }
-            }
-
-            fn fg_code(color: Color) -> WORD {
-                (match color {
-                    Color::Black => 0,
-                    Color::Blue => wincon::FOREGROUND_BLUE,
-                    Color::Cyan => wincon::FOREGROUND_BLUE | wincon::FOREGROUND_GREEN,
-                    Color::Green => wincon::FOREGROUND_GREEN,
-                    Color::Magenta => wincon::FOREGROUND_BLUE | wincon::FOREGROUND_RED,
-                    Color::Red => wincon::FOREGROUND_RED,
-                    Color::White => wincon::FOREGROUND_RED | wincon::FOREGROUND_GREEN | wincon::FOREGROUND_BLUE,
-                    Color::Yellow => wincon::FOREGROUND_RED | wincon::FOREGROUND_GREEN,
-                }) as WORD
-            }
-
-            fn bg_code(color: Color) -> WORD {
-                (match color {
-                    Color::Black => 0,
-                    Color::Blue => wincon::BACKGROUND_BLUE,
-                    Color::Cyan => wincon::BACKGROUND_BLUE | wincon::BACKGROUND_GREEN,
-                    Color::Green => wincon::BACKGROUND_GREEN,
-                    Color::Magenta => wincon::BACKGROUND_BLUE | wincon::BACKGROUND_RED,
-                    Color::Red => wincon::BACKGROUND_RED,
-                    Color::White => wincon::BACKGROUND_RED | wincon::BACKGROUND_GREEN | wincon::BACKGROUND_BLUE,
-                    Color::Yellow => wincon::BACKGROUND_RED | wincon::BACKGROUND_GREEN,
-                }) as WORD
-            }
-
-            fn style_code(style: Style) -> WORD {
-                let mut code = 0;
-
-                if style.contains(Style::BOLD) {
-                    code |= wincon::FOREGROUND_INTENSITY as WORD;
-                }
-
-                code
-            }
-
-            fn swap_colors(code: WORD) -> WORD {
-                let fg_mask = fg_code(Color::White);
-                let bg_mask = bg_code(Color::White);
-
-                let fg_shift = fg_mask.trailing_zeros();
-                let bg_shift = bg_mask.trailing_zeros();
-                let shift = bg_shift - fg_shift;
-
-                let fg = code & fg_mask;
-                let bg = code & bg_mask;
-
-                let swapped_fg = fg << shift;
-                let swapped_bg = bg >> shift;
-
-                (code & !(fg_mask | bg_mask)) | swapped_fg | swapped_bg
-            }
-
-            unsafe fn close_handle(handle: HANDLE) -> io::Result<()> {
-                result_bool(CloseHandle(handle))
-            }
-
-            unsafe fn console_info(handle: HANDLE) -> io::Result<CONSOLE_SCREEN_BUFFER_INFO> {
-                let mut info = zeroed();
-
-                result_bool(GetConsoleScreenBufferInfo(handle, &mut info))?;
-
-                Ok(info)
-            }
-
-            unsafe fn console_mode(handle: HANDLE) -> io::Result<DWORD> {
-                let mut mode = 0;
-
-                result_bool(GetConsoleMode(handle, &mut mode))?;
-
-                Ok(mode)
-            }
-
-            unsafe fn console_size(handle: HANDLE) -> io::Result<Size> {
-                let info = console_info(handle)?;
-
-                Ok(coord_to_size(info.dwSize))
-            }
-
-            unsafe fn set_console_mode(handle: HANDLE, mode: DWORD) -> io::Result<()> {
-                result_bool(SetConsoleMode(handle, mode))
             }
             
-            unsafe fn setup_screen(handle: HANDLE, size: Size) -> io::Result<()> {
-                result_bool(SetConsoleScreenBufferSize(handle, size_to_coord(size)))?;
-                result_bool(SetConsoleActiveScreenBuffer(handle))
-            }
-
-            unsafe fn prepare_output(handle: HANDLE) -> io::Result<DWORD> {
-                let old_out_mode = console_mode(handle)?;
-
-                let mut out_mode = old_out_mode;
-                
-                out_mode |= ENABLE_PROCESSED_OUTPUT;
-                
-                out_mode |= ENABLE_WRAP_AT_EOL_OUTPUT;
-
-                set_console_mode(handle, out_mode)?;
-
-                Ok(old_out_mode)
-            }
-
-            fn button_changed(prev_buttons: DWORD, now_buttons: DWORD) -> Option<MouseInput> {
-                use std::mem::size_of;
-
-                let n_bits = size_of::<DWORD>() * 8;
-
-                for i in 0..n_bits {
-                    let bit = 1 << i;
-
-                    let changed = (prev_buttons ^ now_buttons) & bit != 0;
-
-                    if changed {
-                        let button = bit_to_button(bit);
-
-                        let input = if prev_buttons & bit == 0 {
-                            MouseInput::ButtonPressed(button)
-                        } else {
-                            MouseInput::ButtonReleased(button)
-                        };
-
-                        return Some(input);
-                    }
+            fn resolve_exe<'a>
+            (
+                exe_path: &'a OsStr,
+                parent_paths: impl FnOnce() -> Option<OsString>,
+                child_paths: Option<&OsStr>,
+            ) -> io::Result<Vec<u16>> 
+            {
+                // Early return if there is no filename.
+                if exe_path.is_empty() || path::has_trailing_slash(exe_path) {
+                    return Err(constant_error!(io::ErrorKind::InvalidInput, "program path has no file name"));
                 }
-
-                None
-            }
-
-            fn bit_to_button(mut bit: DWORD) -> MouseButton {
-                assert!(bit != 0);
-
-                match bit {
-                    wincon::FROM_LEFT_1ST_BUTTON_PRESSED => MouseButton::Left,
-                    wincon::RIGHTMOST_BUTTON_PRESSED => MouseButton::Right,
-                    wincon::FROM_LEFT_2ND_BUTTON_PRESSED => MouseButton::Middle,
-                    _ => {
-                        bit >>= 3;
-                        let mut n = 3;
-
-                        while bit != 1 {
-                            bit >>= 1;
-                            n += 1;
-                        }
-
-                        MouseButton::Other(n)
-                    }
-                }
-            }
-
-            fn coord_to_cursor(pos: COORD) -> Cursor {
-                Cursor{
-                    line: pos.Y as usize,
-                    column: pos.X as usize,
-                }
-            }
-
-            fn coord_to_size(size: COORD) -> Size {
-                Size{
-                    lines: size.Y as usize,
-                    columns: size.X as usize,
-                }
-            }
-
-            fn cursor_to_coord(pos: Cursor) -> COORD {
-                COORD{
-                    Y: to_short(pos.line),
-                    X: to_short(pos.column),
-                }
-            }
-
-            fn size_to_coord(size: Size) -> COORD {
-                COORD{
-                    Y: to_short(size.lines),
-                    X: to_short(size.columns),
-                }
-            }
-
-            fn has_alt(state: DWORD) -> bool {
-                state & (wincon::LEFT_ALT_PRESSED | wincon::RIGHT_ALT_PRESSED) != 0
-            }
-
-            fn has_ctrl(state: DWORD) -> bool {
-                state & (wincon::LEFT_CTRL_PRESSED | wincon::RIGHT_CTRL_PRESSED) != 0
-            }
-
-            fn has_shift(state: DWORD) -> bool {
-                state & wincon::SHIFT_PRESSED != 0
-            }
-
-            fn to_dword(n: usize) -> DWORD {
-                if n > DWORD::max_value() as usize {
-                    DWORD::max_value()
+                // Test if the file name has the `exe` extension.
+                // This does a case-insensitive `ends_with`.
+                let has_exe_suffix = if exe_path.len() >= EXE_SUFFIX.len() {
+                    exe_path.as_encoded_bytes()[exe_path.len() - EXE_SUFFIX.len()..]
+                        .eq_ignore_ascii_case(EXE_SUFFIX.as_bytes())
                 } else {
-                    n as DWORD
-                }
-            }
-
-            fn to_short(n: usize) -> SHORT {
-                if n > SHORT::max_value() as usize {
-                    SHORT::max_value()
-                } else {
-                    n as SHORT
-                }
-            }
-
-            fn to_short_neg(n: usize) -> SHORT {
-                let n = if n > isize::max_value() as usize {
-                    isize::min_value()
-                } else {
-                    -(n as isize)
+                    false
                 };
 
-                if n < SHORT::min_value() as isize {
-                    SHORT::min_value()
-                } else {
-                    n as SHORT
-                }
-            }
-
-            fn key_press_event(event: &INPUT_RECORD) -> Option<Key> {
-                if event.EventType == KEY_EVENT {
-                    let key = unsafe { event.Event.KeyEvent() };
-
-                    if key.bKeyDown == FALSE {
-                        return None;
+                // If `exe_path` is an absolute path or a sub-path then don't search `PATH` for it.
+                if !path::is_file_name(exe_path) {
+                    if has_exe_suffix {
+                        // The application name is a path to a `.exe` file.
+                        // Let `CreateProcessW` figure out if it exists or not.
+                        return args::to_user_path(Path::new(exe_path));
                     }
+                    let mut path = PathBuf::from(exe_path);
 
-                    let key = match key.wVirtualKeyCode as c_int {
-                        winuser::VK_BACK => Key::Backspace,
-                        winuser::VK_RETURN => Key::Enter,
-                        winuser::VK_ESCAPE => Key::Escape,
-                        winuser::VK_TAB => Key::Tab,
-                        winuser::VK_UP => Key::Up,
-                        winuser::VK_DOWN => Key::Down,
-                        winuser::VK_LEFT => Key::Left,
-                        winuser::VK_RIGHT => Key::Right,
-                        winuser::VK_DELETE => Key::Delete,
-                        winuser::VK_INSERT => Key::Insert,
-                        winuser::VK_HOME => Key::Home,
-                        winuser::VK_END => Key::End,
-                        winuser::VK_PRIOR => Key::PageUp,
-                        winuser::VK_NEXT => Key::PageDown,
-                        winuser::VK_F1 => Key::F(1),
-                        winuser::VK_F2 => Key::F(2),
-                        winuser::VK_F3 => Key::F(3),
-                        winuser::VK_F4 => Key::F(4),
-                        winuser::VK_F5 => Key::F(5),
-                        winuser::VK_F6 => Key::F(6),
-                        winuser::VK_F7 => Key::F(7),
-                        winuser::VK_F8 => Key::F(8),
-                        winuser::VK_F9 => Key::F(9),
-                        winuser::VK_F10 => Key::F(10),
-                        winuser::VK_F11 => Key::F(11),
-                        winuser::VK_F12 => Key::F(12),
-                        _ => {
-                            if has_alt(key.dwControlKeyState) {
-                                return None;
-                            }
+                    // Append `.exe` if not already there.
+                    path = path::append_suffix(path, EXE_SUFFIX.as_ref());
+                    if let Some(path) = program_exists(&path) {
+                        return Ok(path);
+                    } else {
+                        // It's ok to use `set_extension` here because the intent is to
+                        // remove the extension that was just added.
+                        path.set_extension("");
+                        return args::to_user_path(&path);
+                    }
+                } else {
+                    ensure_no_nuls(exe_path)?;
+                    // From the `CreateProcessW` docs:
+                    // > If the file name does not contain an extension, .exe is appended.
+                    // Note that this rule only applies when searching paths.
+                    let has_extension = exe_path.as_encoded_bytes().contains(&b'.');
 
-                            let is_ctrl = has_ctrl(key.dwControlKeyState);
-
-                            let u_char = unsafe { *key.uChar.UnicodeChar() };
-
-                            if u_char != 0 {
-                                match char::from_u32(u_char as u32) {
-                                    Some(ch) if is_ctrl => Key::Ctrl(unctrl_lower(ch)),
-                                    Some(ch) => ch.into(),
-                                    None => return None
-                                }
-                            } else {
-                                return None;
-                            }
+                    // Search the directories given by `search_paths`.
+                    let result = search_paths(parent_paths, child_paths, |mut path| {
+                        path.push(exe_path);
+                        if !has_extension {
+                            path.set_extension(EXE_EXTENSION);
                         }
-                    };
-
-                    Some(key)
-                } else {
-                    None
+                        program_exists(&path)
+                    });
+                    if let Some(path) = result {
+                        return Ok(path);
+                    }
                 }
+                // If we get here then the executable cannot be found.
+                Err(constant_error!(io::ErrorKind::NotFound, "program not found"))
             }
-
-            pub fn size_event(event: &INPUT_RECORD) -> Option<Size> {
-                if event.EventType == WINDOW_BUFFER_SIZE_EVENT {
-                    let size = unsafe { event.Event.WindowBufferSizeEvent() };
-
-                    Some(Size{
-                        lines: size.dwSize.Y as usize,
-                        columns: size.dwSize.X as usize,
-                    })
-                } else {
-                    None
-                }
-            }
-
-            fn unicode_char(wch: WCHAR) -> CHAR_INFO_Char {
-                let mut ch: CHAR_INFO_Char = unsafe { zeroed() };
-
-                unsafe { *ch.UnicodeChar_mut() = wch; }
-
-                ch
-            }
-
-            fn result_bool(b: BOOL) -> io::Result<()> {
-                if b == FALSE {
-                    Err(io::Error::last_os_error())
-                } else {
-                    Ok(())
-                }
-            }
-
-            fn result_handle(ptr: HANDLE) -> io::Result<HANDLE> {
-                if ptr.is_null() {
-                    Err(io::Error::last_os_error())
-                } else {
-                    Ok(ptr)
-                }
-            }
-
-            static CATCH_SIGNALS: AtomicUsize = AtomicUsize::new(0);
             
-            static LAST_SIGNAL: AtomicUsize = AtomicUsize::new(!0);
-
-            fn catch_signals(set: SignalSet) {
-                let mut sigs = 0;
-
-                if set.contains(Signal::Break) {
-                    sigs |= (1 << CTRL_BREAK_EVENT) as usize;
-                }
-                if set.contains(Signal::Interrupt) {
-                    sigs |= (1 << CTRL_C_EVENT) as usize;
-                }
-
-                CATCH_SIGNALS.store(sigs, Ordering::Relaxed);
-            }
-
-            unsafe extern "system" fn ctrl_handler(ctrl_type: DWORD) -> BOOL {
-                match ctrl_type {
-                    CTRL_BREAK_EVENT | CTRL_C_EVENT => {
-                        let catch = CATCH_SIGNALS.load(Ordering::Relaxed);
-
-                        if catch & (1 << ctrl_type) as usize == 0 {
-                            return FALSE;
-                        }
-
-                        LAST_SIGNAL.store(ctrl_type as usize, Ordering::Relaxed);
-
-                        if let Ok(handle) = result_handle( GetStdHandle(STD_INPUT_HANDLE))
-                        {
-                            let input = INPUT_RECORD{
-                                EventType: KEY_EVENT,
-                                // KEY_EVENT { bKeyDown: FALSE, ... }
-                                Event: zeroed(),
-                            };
-
-                            let mut n = 0;
-
-                            // Ignore any errors from this
-                            let _ = WriteConsoleInputW(
-                                handle,
-                                &input,
-                                1,
-                                &mut n);
-                        }
-
-                        TRUE
-                    }
-                    _ => FALSE
-                }
-            }
-
-            fn conv_signal(sig: DWORD) -> Option<Signal> {
-                match sig {
-                    CTRL_BREAK_EVENT => Some(Signal::Break),
-                    CTRL_C_EVENT => Some(Signal::Interrupt),
-                    _ => None
-                }
-            }
-
-            fn get_signal() -> Option<Signal> {
-                conv_signal(LAST_SIGNAL.load(Ordering::Relaxed) as DWORD)
-            }
-
-            fn take_signal() -> Option<Signal> {
-                conv_signal(LAST_SIGNAL.swap(!0, Ordering::Relaxed) as DWORD)
-            }
-        }
-
-        mod screen
-        {
-            use ::
+            fn search_paths<Paths, Exists>( parent_paths: Paths, child_paths: Option<&OsStr>, mut exists: Exists ) ->
+            Option<Vec<u16>> where
+            Paths: FnOnce() -> Option<OsString>,
+            Exists: FnMut(PathBuf) -> Option<Vec<u16>>,
             {
-                *,
-            };
-            /*
-            use std::io;
-            use std::sync::{LockResult, Mutex, MutexGuard, TryLockResult};
-            use std::time::Duration;
-
-            use winapi::shared::ntdef::HANDLE;
-            use winapi::um::wincon::INPUT_RECORD;
-
-            use ::buffer::ScreenBuffer;
-            use ::priv_util::{
-                map_lock_result, map_try_lock_result,
-                map2_lock_result, map2_try_lock_result,
-            };
-            use ::sys::terminal::{
-                size_event, PrepareState,
-                Terminal, TerminalReadGuard, TerminalWriteGuard,
-            };
-            use ::terminal::{Color, Cursor, CursorMode, Event, PrepareConfig, Size, Style};
-            */
-            pub struct Screen {
-                term: Terminal,
-
-                state: Option<PrepareState>,
-                old_handle: HANDLE,
-                writer: Mutex<Writer>,
-            }
-
-            pub struct ScreenReadGuard<'a> {
-                screen: &'a Screen,
-                reader: TerminalReadGuard<'a>,
-            }
-
-            pub struct ScreenWriteGuard<'a> {
-                writer: TerminalWriteGuard<'a>,
-                data: MutexGuard<'a, Writer>,
-            }
-
-            struct Writer {
-                buffer: ScreenBuffer,
-                clear_screen: bool,
-                real_cursor: Cursor,
-            }
-
-            impl Screen {
-                pub fn new(term: Terminal, config: PrepareConfig) -> io::Result<Screen> {
-                    let size = term.size()?;
-
-                    let old_handle = term.enter_screen()?;
-                    let state = term.prepare(config)?;
-
-                    Ok(Screen{
-                        term,
-                        state: Some(state),
-                        writer: Mutex::new(Writer{
-                            buffer: ScreenBuffer::new(size),
-                            clear_screen: false,
-                            real_cursor: Cursor::default(),
-                        }),
-                        old_handle,
-                    })
-                }
-
-                pub fn stdout(config: PrepareConfig) -> io::Result<Screen> {
-                    Screen::new(Terminal::stdout()?, config)
-                }
-
-                pub fn stderr(config: PrepareConfig) -> io::Result<Screen> {
-                    Screen::new(Terminal::stderr()?, config)
-                }
-
-                forward_screen_buffer_methods!{ |slf| slf.lock_write_data().buffer }
-
-                pub fn lock_read(&self) -> LockResult<ScreenReadGuard> {
-                    map_lock_result(self.term.lock_read(),
-                        |r| ScreenReadGuard::new(self, r))
-                }
-
-                pub fn try_lock_read(&self) -> TryLockResult<ScreenReadGuard> {
-                    map_try_lock_result(self.term.try_lock_read(),
-                        |r| ScreenReadGuard::new(self, r))
-                }
-
-                pub fn lock_write(&self) -> LockResult<ScreenWriteGuard> {
-                    map2_lock_result(self.term.lock_write(), self.writer.lock(),
-                        |a, b| ScreenWriteGuard::new(a, b))
-                }
-
-                pub fn try_lock_write(&self) -> TryLockResult<ScreenWriteGuard> {
-                    map2_try_lock_result(self.term.try_lock_write(), self.writer.try_lock(),
-                        |a, b| ScreenWriteGuard::new(a, b))
-                }
-
-                fn lock_reader(&self) -> ScreenReadGuard {
-                    self.lock_read().expect("Screen::lock_reader")
-                }
-
-                fn lock_writer(&self) -> ScreenWriteGuard {
-                    self.lock_write().expect("Screen::lock_writer")
-                }
-
-                fn lock_write_data(&self) -> MutexGuard<Writer> {
-                    self.writer.lock().expect("Screen::lock_writer")
-                }
-
-                pub fn name(&self) -> &str {
-                    self.term.name()
-                }
-
-                pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> {
-                    self.term.set_cursor_mode(mode)
-                }
-
-                pub fn wait_event(&self, timeout: Option<Duration>) -> io::Result<bool> {
-                    self.lock_reader().wait_event(timeout)
-                }
-
-                pub fn read_event(&self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    self.lock_reader().read_event(timeout)
-                }
-
-                pub fn read_raw(&self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    self.lock_reader().read_raw(buf, timeout)
-                }
-
-                pub fn read_raw_event(&self, events: &mut [INPUT_RECORD],
-                        timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    self.lock_reader().read_raw_event(events, timeout)
-                }
-
-                pub fn refresh(&self) -> io::Result<()> {
-                    self.lock_writer().refresh()
-                }
-            }
-
-            impl Drop for Screen {
-                fn drop(&mut self) {
-                    let res = if let Some(state) = self.state.take() {
-                        self.term.restore(state)
-                    } else {
-                        Ok(())
-                    };
-
-                    if let Err(e) = res.and_then(
-                            |_| unsafe { self.term.exit_screen(self.old_handle) }) {
-                        eprintln!("failed to restore terminal: {}", e);
-                    }
-                }
-            }
-
-            unsafe impl Send for Screen {}
-            unsafe impl Sync for Screen {}
-
-            impl<'a> ScreenReadGuard<'a> {
-                fn new(screen: &'a Screen, reader: TerminalReadGuard<'a>) -> ScreenReadGuard<'a> {
-                    ScreenReadGuard{screen, reader}
-                }
-
-                pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool> {
-                    self.reader.wait_event(timeout)
-                }
-
-                pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    let r = self.reader.read_event(timeout)?;
-
-                    if let Some(Event::Resize(size)) = r {
-                        self.screen.lock_write_data().update_size(size);
-                    }
-
-                    Ok(r)
-                }
-
-                pub fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    let r = self.reader.read_raw(buf, timeout)?;
-
-                    if let Some(Event::Resize(size)) = r {
-                        self.screen.lock_write_data().update_size(size);
-                    }
-
-                    Ok(r)
-                }
-
-                pub fn read_raw_event(&mut self, events: &mut [INPUT_RECORD],
-                        timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    let r = self.reader.read_raw_event(events, timeout)?;
-
-                    if let Some(Event::Raw(n)) = r {
-                        for ev in events[..n].iter().rev() {
-                            if let Some(size) = size_event(ev) {
-                                self.screen.lock_write_data().update_size(size);
-                                break;
-                            }
+                // 1. Child paths
+                // This is for consistency with Rust's historic behavior.
+                if let Some(paths) = child_paths {
+                    for path in env::split_paths(paths).filter(|p| !p.as_os_str().is_empty()) {
+                        if let Some(path) = exists(path) {
+                            return Some(path);
                         }
                     }
-
-                    Ok(r)
                 }
+
+                // 2. Application path
+                if let Ok(mut app_path) = env::current_exe() {
+                    app_path.pop();
+                    if let Some(path) = exists(app_path) {
+                        return Some(path);
+                    }
+                }
+
+                // 3 & 4. System paths
+                // SAFETY: This uses `fill_utf16_buf` to safely call the OS functions.
+                unsafe {
+                    if let Ok(Some(path)) = fill_utf16_buf(
+                        |buf, size| c::GetSystemDirectoryW(buf, size),
+                        |buf| exists(PathBuf::from(OsString::from_wide(buf))),
+                    ) {
+                        return Some(path);
+                    }
+                    #[cfg(not(target_vendor = "uwp"))]
+                    {
+                        if let Ok(Some(path)) = fill_utf16_buf(
+                            |buf, size| c::GetWindowsDirectoryW(buf, size),
+                            |buf| exists(PathBuf::from(OsString::from_wide(buf))),
+                        ) {
+                            return Some(path);
+                        }
+                    }
+                }
+
+                // 5. Parent paths
+                if let Some(parent_paths) = parent_paths() {
+                    for path in env::split_paths(&parent_paths).filter(|p| !p.as_os_str().is_empty()) {
+                        if let Some(path) = exists(path) {
+                            return Some(path);
+                        }
+                    }
+                }
+                None
             }
-
-            impl<'a> ScreenWriteGuard<'a> {
-                fn new(writer: TerminalWriteGuard<'a>, data: MutexGuard<'a, Writer>)
-                        -> ScreenWriteGuard<'a> {
-                    ScreenWriteGuard{writer, data}
-                }
-
-                forward_screen_buffer_mut_methods!{ |slf| slf.data.buffer }
-
-                pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> {
-                    self.writer.set_cursor_mode(mode)
-                }
-
-                pub fn refresh(&mut self) -> io::Result<()> {
-                    if self.data.clear_screen {
-                        self.writer.clear_screen()?;
-                        self.data.clear_screen = false;
-                    }
-
-                    let mut real_attrs = (None, None, Style::empty());
-
-                    self.writer.clear_attributes()?;
-
-                    let mut indices = self.data.buffer.indices();
-
-                    while let Some((pos, cell)) = self.data.buffer.next_cell(&mut indices) {
-                        self.move_cursor(pos)?;
-
-                        self.apply_attrs(real_attrs, cell.attrs())?;
-                        self.writer.write_str(cell.text())?;
-                        self.data.real_cursor.column += 1;
-
-                        real_attrs = cell.attrs();
-                    }
-
-                    self.writer.clear_attributes()?;
-
-                    let size = self.data.buffer.size();
-                    let pos = self.data.buffer.cursor();
-
-                    if pos.is_out_of_bounds(size) {
-                        self.move_cursor(Cursor::last(size))?;
+            /// Checks if a file exists without following symlinks.
+            fn program_exists(path: &Path) -> Option<Vec<u16>>
+            {
+                unsafe {
+                    let path = args::to_user_path(path).ok()?;
+                    // Getting attributes using `GetFileAttributesW` does not follow symlinks
+                    // and it will almost always be successful if the link exists.
+                    // There are some exceptions for special system files (e.g. the pagefile)
+                    // but these are not executable.
+                    if c::GetFileAttributesW(path.as_ptr()) == c::INVALID_FILE_ATTRIBUTES {
+                        None
                     } else {
-                        self.move_cursor(pos)?;
-                    }
-
-                    Ok(())
-                }
-
-                fn apply_attrs(&mut self,
-                        src: (Option<Color>, Option<Color>, Style),
-                        dest: (Option<Color>, Option<Color>, Style)) -> io::Result<()> {
-                    if src != dest {
-                        self.writer.set_attributes(dest.0, dest.1, dest.2)?;
-                    }
-                    Ok(())
-                }
-
-                fn move_cursor(&mut self, pos: Cursor) -> io::Result<()> {
-                    if self.data.real_cursor != pos {
-                        self.writer.move_cursor(pos)?;
-                        self.data.real_cursor = pos;
-                    }
-                    Ok(())
-                }
-            }
-
-            impl<'a> Drop for ScreenWriteGuard<'a> {
-                fn drop(&mut self) {
-                    if let Err(e) = self.refresh() {
-                        eprintln!("failed to refresh screen: {}", e);
+                        Some(path)
                     }
                 }
             }
 
-            impl Writer {
-                fn update_size(&mut self, new_size: Size) {
-                    if self.real_cursor.is_out_of_bounds(new_size) {
-                        // Force cursor move on next refresh
-                        self.real_cursor = (!0, !0).into();
+            impl Stdio 
+            {
+                fn to_handle(&self, stdio_id: u32, pipe: &mut Option<AnonPipe>) -> io::Result<Handle> {
+                    let use_stdio_id = |stdio_id| match stdio::get_handle(stdio_id) {
+                        Ok(io) => unsafe {
+                            let io = Handle::from_raw_handle(io);
+                            let ret = io.duplicate(0, true, c::DUPLICATE_SAME_ACCESS);
+                            let _ = io.into_raw_handle(); // Don't close the handle
+                            ret
+                        },
+                        // If no stdio handle is available, then propagate the null value.
+                        Err(..) => unsafe { Ok(Handle::from_raw_handle(ptr::null_mut())) },
+                    };
+                    match *self {
+                        Stdio::Inherit => use_stdio_id(stdio_id),
+                        Stdio::InheritSpecific { from_stdio_id } => use_stdio_id(from_stdio_id),
+
+                        Stdio::MakePipe => {
+                            let ours_readable = stdio_id != c::STD_INPUT_HANDLE;
+                            let pipes = pipe::anon_pipe(ours_readable, true)?;
+                            *pipe = Some(pipes.ours);
+                            Ok(pipes.theirs.into_handle())
+                        }
+
+                        Stdio::Pipe(ref source) => {
+                            let ours_readable = stdio_id != c::STD_INPUT_HANDLE;
+                            pipe::spawn_pipe_relay(source, ours_readable, true).map(AnonPipe::into_handle)
+                        }
+
+                        Stdio::Handle(ref handle) => handle.duplicate(0, true, c::DUPLICATE_SAME_ACCESS),
+
+                        // Open up a reference to NUL with appropriate read/write
+                        // permissions as well as the ability to be inherited to child
+                        // processes (as this is about to be inherited).
+                        Stdio::Null => {
+                            let size = size_of::<c::SECURITY_ATTRIBUTES>();
+                            let mut sa = c::SECURITY_ATTRIBUTES {
+                                nLength: size as u32,
+                                lpSecurityDescriptor: ptr::null_mut(),
+                                bInheritHandle: 1,
+                            };
+                            let mut opts = OpenOptions::new();
+                            opts.read(stdio_id == c::STD_INPUT_HANDLE);
+                            opts.write(stdio_id != c::STD_INPUT_HANDLE);
+                            opts.security_attributes(&mut sa);
+                            File::open(Path::new(r"\\.\NUL"), &opts).map(|file| file.into_inner())
+                        }
                     }
-                    self.buffer.resize(new_size);
-                    self.clear_screen = true;
                 }
             }
-        }
-        
-        pub trait IsZero
-        {
-            fn is_zero(&self) -> bool;
-        }
 
-        impl_is_zero! { i8 i16 i32 i64 isize u8 u16 u32 u64 usize }
+            impl From<AnonPipe> for Stdio 
+            {
+                fn from(pipe: AnonPipe) -> Stdio {
+                    Stdio::Pipe(pipe)
+                }
+            }
 
-        pub fn cvt<I: IsZero>(i: I) -> ::io::Result<I>
-        {
-            if i.is_zero() { Err( ::io::Error::last_os_error() ) }
-            else { Ok(i) }
-        }
+            impl From<Handle> for Stdio 
+            {
+                fn from(pipe: Handle) -> Stdio {
+                    Stdio::Handle(pipe)
+                }
+            }
 
-        /// Just to provide the same interface as sys/pal/unix/net.rs
-        pub fn cvt_r<T, F>(mut f: F) -> io::Result<T> where
-        T: IsMinusOne,
-        F: FnMut() -> T,
-        {
-            cvt(f())
-        }
-    }
-    #[cfg( unix )] pub use self::unix as api;
-    #[cfg( windows )] pub use self::windows as api;
-    pub use self::api::{ Terminal, TerminalReadGuard, TerminalWriteGuard };
-    
-    /// Private trait used to prevent external crates from implementing extension traits
-    pub trait Private {}
+            impl From<File> for Stdio 
+            {
+                fn from(file: File) -> Stdio {
+                    Stdio::Handle(file.into_inner())
+                }
+            }
 
-    impl Private for Screen {}
-    impl<'a> Private for ScreenReadGuard<'a> {}
-    impl Private for Terminal {}
-    impl<'a> Private for TerminalReadGuard<'a> {}
-    
-    pub fn map_lock_result<F, T, U>(res: LockResult<T>, f: F) -> LockResult<U> where
-    F: FnOnce(T) -> U
-    {
-        match res
-        {
-            Ok(t) => Ok(f(t)),
-            Err(e) => Err(PoisonError::new(f(e.into_inner()))),
-        }
-    
-    }
+            impl From<io::Stdout> for Stdio 
+            {
+                fn from(_: io::Stdout) -> Stdio {
+                    Stdio::InheritSpecific { from_stdio_id: c::STD_OUTPUT_HANDLE }
+                }
+            }
 
-    pub fn map_try_lock_result<F, T, U>(res: TryLockResult<T>, f: F) -> TryLockResult<U> where
-    F: FnOnce(T) -> U
-    {
-        match res
-        {
-            Ok(t) => Ok(f(t)),
-            Err(TryLockError::Poisoned(p)) => Err(TryLockError::Poisoned( PoisonError::new(f(p.into_inner())))),
-            Err(TryLockError::WouldBlock) => Err(TryLockError::WouldBlock),
-        }
-    }
+            impl From<io::Stderr> for Stdio 
+            {
+                fn from(_: io::Stderr) -> Stdio {
+                    Stdio::InheritSpecific { from_stdio_id: c::STD_ERROR_HANDLE }
+                }
+            }
+            /// A value representing a child process.
+            pub struct Process 
+            {
+                handle: Handle,
+                main_thread_handle: Handle,
+            }
 
-    pub fn map2_lock_result<F, T, U, R>(res: LockResult<T>, res2: LockResult<U>, f: F) -> LockResult<R> where 
-    F: FnOnce(T, U) -> R
-    {
-        match (res, res2)
-        {
-            (Ok(a), Ok(b)) => Ok(f(a, b)),
-            (Ok(a), Err(b)) => Err(PoisonError::new(f(a, b.into_inner()))),
-            (Err(a), Ok(b)) => Err(PoisonError::new(f(a.into_inner(), b))),
-            (Err(a), Err(b)) => Err(PoisonError::new(f(a.into_inner(), b.into_inner()))),
-        }
-    }
+            impl Process 
+            {
+                pub fn kill(&mut self) -> io::Result<()> {
+                    let result = unsafe { c::TerminateProcess(self.handle.as_raw_handle(), 1) };
+                    if result == c::FALSE {
+                        let error = api::get_last_error();
+                        // TerminateProcess returns ERROR_ACCESS_DENIED if the process has already been
+                        // terminated (by us, or for any other reason). So check if the process was actually
+                        // terminated, and if so, do not return an error.
+                        if error != WinError::ACCESS_DENIED || self.try_wait().is_err() {
+                            return Err(::io::Error::from_raw_os_error(error.code as i32));
+                        }
+                    }
+                    Ok(())
+                }
 
-    pub fn map2_try_lock_result<F, T, U, R>( res: TryLockResult<T>, res2: TryLockResult<U>, f: F) -> 
-    TryLockResult<R> where 
-    F: FnOnce(T, U) -> R
-    {
-        match (res, res2)
-        {
-            (Ok(a), Ok(b)) => Ok(f(a, b)), (Err(TryLockError::WouldBlock), _) => 
-            Err(TryLockError::WouldBlock),
+                pub fn id(&self) -> u32 {
+                    unsafe { c::GetProcessId(self.handle.as_raw_handle()) }
+                }
 
-            (_, Err(TryLockError::WouldBlock)) => 
-            Err(TryLockError::WouldBlock),
+                pub fn main_thread_handle(&self) -> BorrowedHandle<'_> {
+                    self.main_thread_handle.as_handle()
+                }
+
+                pub fn wait(&mut self) -> io::Result<ExitStatus> {
+                    unsafe {
+                        let res = c::WaitForSingleObject(self.handle.as_raw_handle(), c::INFINITE);
+                        if res != c::WAIT_OBJECT_0 {
+                            return Err(Error::last_os_error());
+                        }
+                        let mut status = 0;
+                        cvt(c::GetExitCodeProcess(self.handle.as_raw_handle(), &mut status))?;
+                        Ok(ExitStatus(status))
+                    }
+                }
+
+                pub fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
+                    unsafe {
+                        match c::WaitForSingleObject(self.handle.as_raw_handle(), 0) {
+                            c::WAIT_OBJECT_0 => {}
+                            c::WAIT_TIMEOUT => {
+                                return Ok(None);
+                            }
+                            _ => return Err(io::Error::last_os_error()),
+                        }
+                        let mut status = 0;
+                        cvt(c::GetExitCodeProcess(self.handle.as_raw_handle(), &mut status))?;
+                        Ok(Some(ExitStatus(status)))
+                    }
+                }
+
+                pub fn handle(&self) -> &Handle {
+                    &self.handle
+                }
+
+                pub fn into_handle(self) -> Handle {
+                    self.handle
+                }
+            }
+
+            #[derive(PartialEq, Eq, Clone, Copy, Debug, Default)]
+            pub struct ExitStatus(u32);
+
+            impl ExitStatus 
+            {
+                pub fn exit_ok(&self) -> Result<(), ExitStatusError> {
+                    match NonZero::<u32>::try_from(self.0) {
+                        /* was nonzero */ Ok(failure) => Err(ExitStatusError(failure)),
+                        /* was zero, couldn't convert */ Err(_) => Ok(()),
+                    }
+                }
+                pub fn code(&self) -> Option<i32> {
+                    Some(self.0 as i32)
+                }
+            }
+            /// Converts a raw `u32` to a type-safe `ExitStatus` by wrapping it without copying.
+            impl From<u32> for ExitStatus 
+            {
+                fn from(u: u32) -> ExitStatus {
+                    ExitStatus(u)
+                }
+            }
+
+            impl fmt::Display for ExitStatus 
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    // Windows exit codes with the high bit set typically mean some form of
+                    // unhandled exception or warning. In this scenario printing the exit
+                    // code in decimal doesn't always make sense because it's a very large
+                    // and somewhat gibberish number. The hex code is a bit more
+                    // recognizable and easier to search for, so print that.
+                    if self.0 & 0x80000000 != 0 {
+                        write!(f, "exit code: {:#x}", self.0)
+                    } else {
+                        write!(f, "exit code: {}", self.0)
+                    }
+                }
+            }
+
+            #[derive(PartialEq, Eq, Clone, Copy, Debug)]
+            pub struct ExitStatusError(NonZero<u32>);
+
+            impl Into<ExitStatus> for ExitStatusError 
+            {
+                fn into(self) -> ExitStatus {
+                    ExitStatus(self.0.into())
+                }
+            }
+
+            impl ExitStatusError 
+            {
+                pub fn code(self) -> Option<NonZero<i32>> {
+                    Some((u32::from(self.0) as i32).try_into().unwrap())
+                }
+            }
+
+            #[derive(PartialEq, Eq, Clone, Copy, Debug)]
+            pub struct ExitCode(u32);
+
+            impl ExitCode 
+            {
+                pub const SUCCESS: ExitCode = ExitCode(EXIT_SUCCESS as _);
+                pub const FAILURE: ExitCode = ExitCode(EXIT_FAILURE as _);
+
+                #[inline] pub fn as_i32(&self) -> i32 {
+                    self.0 as i32
+                }
+            }
+
+            impl From<u8> for ExitCode 
+            {
+                fn from(code: u8) -> Self {
+                    ExitCode(u32::from(code))
+                }
+            }
+
+            impl From<u32> for ExitCode 
+            {
+                fn from(code: u32) -> Self {
+                    ExitCode(u32::from(code))
+                }
+            }
+
+            fn zeroed_startupinfo() -> c::STARTUPINFOW 
+            {
+                c::STARTUPINFOW {
+                    cb: 0,
+                    lpReserved: ptr::null_mut(),
+                    lpDesktop: ptr::null_mut(),
+                    lpTitle: ptr::null_mut(),
+                    dwX: 0,
+                    dwY: 0,
+                    dwXSize: 0,
+                    dwYSize: 0,
+                    dwXCountChars: 0,
+                    dwYCountChars: 0,
+                    dwFillAttribute: 0,
+                    dwFlags: 0,
+                    wShowWindow: 0,
+                    cbReserved2: 0,
+                    lpReserved2: ptr::null_mut(),
+                    hStdInput: ptr::null_mut(),
+                    hStdOutput: ptr::null_mut(),
+                    hStdError: ptr::null_mut(),
+                }
+            }
+
+            fn zeroed_process_information() -> c::PROCESS_INFORMATION 
+            {
+                c::PROCESS_INFORMATION {
+                    hProcess: ptr::null_mut(),
+                    hThread: ptr::null_mut(),
+                    dwProcessId: 0,
+                    dwThreadId: 0,
+                }
+            }
             
-            (Ok(a), Err(TryLockError::Poisoned(b))) => 
-            Err(TryLockError::Poisoned(PoisonError::new(f(a, b.into_inner())))),
+            fn make_command_line(argv0: &OsStr, args: &[Arg], force_quotes: bool) -> io::Result<Vec<u16>> 
+            {
+                // Encode the command and arguments in a command line string such
+                // that the spawned process may recover them using CommandLineToArgvW.
+                let mut cmd: Vec<u16> = Vec::new();
 
-            (Err(TryLockError::Poisoned(a)), Ok(b)) =>
-            Err(TryLockError::Poisoned(PoisonError::new(f(a.into_inner(), b)))),
+                // Always quote the program name so CreateProcess to avoid ambiguity when
+                // the child process parses its arguments.
+                // Note that quotes aren't escaped here because they can't be used in arg0.
+                // But that's ok because file paths can't contain quotes.
+                cmd.push(b'"' as u16);
+                cmd.extend(argv0.encode_wide());
+                cmd.push(b'"' as u16);
 
-            (Err(TryLockError::Poisoned(a)), Err(TryLockError::Poisoned(b))) =>
-            Err(TryLockError::Poisoned(PoisonError::new( f(a.into_inner(), b.into_inner())))),
+                for arg in args {
+                    cmd.push(' ' as u16);
+                    args::append_arg(&mut cmd, arg, force_quotes)?;
+                }
+                Ok(cmd)
+            }
+            
+            fn command_prompt() -> io::Result<Vec<u16>> 
+            {
+                let mut system: Vec<u16> =
+                    fill_utf16_buf(|buf, size| unsafe { c::GetSystemDirectoryW(buf, size) }, |buf| buf.into())?;
+                system.extend("\\cmd.exe".encode_utf16().chain([0]));
+                Ok(system)
+            }
+
+            fn make_envp(maybe_env: Option<BTreeMap<EnvKey, OsString>>) -> io::Result<(*mut c_void, Vec<u16>)> 
+            {
+                // On Windows we pass an "environment block" which is not a char**, but
+                // rather a concatenation of null-terminated k=v\0 sequences, with a final
+                // \0 to terminate.
+                if let Some(env) = maybe_env {
+                    let mut blk = Vec::new();
+
+                    // If there are no environment variables to set then signal this by
+                    // pushing a null.
+                    if env.is_empty() {
+                        blk.push(0);
+                    }
+
+                    for (k, v) in env {
+                        ensure_no_nuls(k.os_string)?;
+                        blk.extend(k.utf16);
+                        blk.push('=' as u16);
+                        blk.extend(ensure_no_nuls(v)?.encode_wide());
+                        blk.push(0);
+                    }
+                    blk.push(0);
+                    Ok((blk.as_mut_ptr() as *mut c_void, blk))
+                } else {
+                    Ok((ptr::null_mut(), Vec::new()))
+                }
+            }
+
+            fn make_dirp(d: Option<&OsString>) -> io::Result<(*const u16, Vec<u16>)> 
+            {
+                match d {
+                    Some(dir) => {
+                        let mut dir_str: Vec<u16> = ensure_no_nuls(dir)?.encode_wide().chain([0]).collect();
+                        // Try to remove the `\\?\` prefix, if any.
+                        // This is necessary because the current directory does not support verbatim paths.
+                        // However. this can only be done if it doesn't change how the path will be resolved.
+                        let ptr = if dir_str.starts_with(utf16!(r"\\?\UNC")) {
+                            // Turn the `C` in `UNC` into a `\` so we can then use `\\rest\of\path`.
+                            let start = r"\\?\UN".len();
+                            dir_str[start] = b'\\' as u16;
+                            if path::is_absolute_exact(&dir_str[start..]) {
+                                dir_str[start..].as_ptr()
+                            } else {
+                                // Revert the above change.
+                                dir_str[start] = b'C' as u16;
+                                dir_str.as_ptr()
+                            }
+                        } else if dir_str.starts_with(utf16!(r"\\?\")) {
+                            // Strip the leading `\\?\`
+                            let start = r"\\?\".len();
+                            if path::is_absolute_exact(&dir_str[start..]) {
+                                dir_str[start..].as_ptr()
+                            } else {
+                                dir_str.as_ptr()
+                            }
+                        } else {
+                            dir_str.as_ptr()
+                        };
+                        Ok((ptr, dir_str))
+                    }
+                    None => Ok((ptr::null(), Vec::new())),
+                }
+            }
+
+            pub struct CommandArgs<'a> 
+            {
+                iter: ::slice::Iter<'a, Arg>,
+            }
+
+            impl<'a> Iterator for CommandArgs<'a> 
+            {
+                type Item = &'a OsStr;
+                fn next(&mut self) -> Option<&'a OsStr> {
+                    self.iter.next().map(|arg| match arg {
+                        Arg::Regular(s) | Arg::Raw(s) => s.as_ref(),
+                    })
+                }
+                fn size_hint(&self) -> (usize, Option<usize>) {
+                    self.iter.size_hint()
+                }
+            }
+
+            impl<'a> ExactSizeIterator for CommandArgs<'a> 
+            {
+                fn len(&self) -> usize {
+                    self.iter.len()
+                }
+                fn is_empty(&self) -> bool {
+                    self.iter.is_empty()
+                }
+            }
+
+            impl<'a> fmt::Debug for CommandArgs<'a> 
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    f.debug_list().entries(self.iter.clone()).finish()
+                }
+            }
+            // os::windows::process
+            impl FromRawHandle for process::Stdio
+            {
+                unsafe fn from_raw_handle(handle: RawHandle) -> process::Stdio
+                {
+                    let handle = unsafe { sys::handle::Handle::from_raw_handle(handle as *mut _) };
+                    let io = sys::process::Stdio::Handle(handle);
+                    process::Stdio::from_inner(io)
+                }
+            }
+            
+            impl From<OwnedHandle> for process::Stdio
+            {
+                /// Takes ownership of a handle 
+                /// and returns a [`Stdio`](process::Stdio) that can attach a stream to it.
+                fn from(handle: OwnedHandle) -> process::Stdio
+                {
+                    let handle = sys::handle::Handle::from_inner(handle);
+                    let io = sys::process::Stdio::Handle(handle);
+                    process::Stdio::from_inner(io)
+                }
+            }
+            
+            impl AsRawHandle for process::Child
+            {
+                #[inline] fn as_raw_handle(&self) -> RawHandle { self.as_inner().handle().as_raw_handle() as *mut _ }
+            }
+            
+            impl AsHandle for process::Child
+            {
+                #[inline] fn as_handle(&self) -> BorrowedHandle<'_> { self.as_inner().handle().as_handle() }
+            }
+            
+            impl IntoRawHandle for process::Child
+            {
+                fn into_raw_handle(self) -> RawHandle { self.into_inner().into_handle().into_raw_handle() as *mut _ }
+            }
+            
+            impl From<process::Child> for OwnedHandle
+            {
+                /// Takes ownership of a [`Child`](process::Child)'s process handle.
+                fn from(child: process::Child) -> OwnedHandle { child.into_inner().into_handle().into_inner() }
+            }
+            
+            impl AsRawHandle for process::ChildStdin
+            {
+                #[inline] fn as_raw_handle(&self) -> RawHandle { self.as_inner().handle().as_raw_handle() as *mut _ }
+            }
+            
+            impl AsRawHandle for process::ChildStdout
+            {
+                #[inline] fn as_raw_handle(&self) -> RawHandle { self.as_inner().handle().as_raw_handle() as *mut _ }
+            }
+            
+            impl AsRawHandle for process::ChildStderr
+            {
+                #[inline] fn as_raw_handle(&self) -> RawHandle { self.as_inner().handle().as_raw_handle() as *mut _ }
+            }
+            
+            impl IntoRawHandle for process::ChildStdin
+            {
+                fn into_raw_handle(self) -> RawHandle { self.into_inner().into_handle().into_raw_handle() as *mut _ }
+            }
+            
+            impl IntoRawHandle for process::ChildStdout
+            {
+                fn into_raw_handle(self) -> RawHandle { self.into_inner().into_handle().into_raw_handle() as *mut _ }
+            }
+            
+            impl IntoRawHandle for process::ChildStderr
+            {
+                fn into_raw_handle(self) -> RawHandle { self.into_inner().into_handle().into_raw_handle() as *mut _ }
+            }
+            /// Creates a `ChildStdin` from the provided `OwnedHandle`.
+            impl From<OwnedHandle> for process::ChildStdin
+            {
+                fn from(handle: OwnedHandle) -> process::ChildStdin
+                {
+                    let handle = sys::handle::Handle::from_inner(handle);
+                    let pipe = sys::pipe::AnonPipe::from_inner(handle);
+                    process::ChildStdin::from_inner(pipe)
+                }
+            }
+            /// Creates a `ChildStdout` from the provided `OwnedHandle`.
+            impl From<OwnedHandle> for process::ChildStdout
+            {
+                fn from(handle: OwnedHandle) -> process::ChildStdout
+                {
+                    let handle = sys::handle::Handle::from_inner(handle);
+                    let pipe = sys::pipe::AnonPipe::from_inner(handle);
+                    process::ChildStdout::from_inner(pipe)
+                }
+            }
+            /// Creates a `ChildStderr` from the provided `OwnedHandle`.
+            impl From<OwnedHandle> for process::ChildStderr
+            {
+                fn from(handle: OwnedHandle) -> process::ChildStderr
+                {
+                    let handle = sys::handle::Handle::from_inner(handle);
+                    let pipe = sys::pipe::AnonPipe::from_inner(handle);
+                    process::ChildStderr::from_inner(pipe)
+                }
+            }
+            /// Windows-specific extensions to [`process::ExitStatus`].            
+            pub trait ExitStatusExt: Sealed
+            {
+                /// Creates a new `ExitStatus` from the raw underlying `u32` return value of a process.
+                fn from_raw(raw: u32) -> Self;
+            }
+            
+            impl ExitStatusExt for process::ExitStatus
+            {
+                fn from_raw(raw: u32) -> Self { process::ExitStatus::from_inner(From::from(raw)) }
+            }
+            /// Windows-specific extensions to the [`process::Command`] builder.            
+            pub trait CommandExt: Sealed
+            {
+                /// Sets the [process creation flags][1] to be passed to `CreateProcess`.
+                fn creation_flags(&mut self, flags: u32) -> &mut process::Command;
+                /// Sets the field `wShowWindow` of [STARTUPINFO][1] that is passed to `CreateProcess`.
+                fn show_window(&mut self, cmd_show: u16) -> &mut process::Command;
+                /// Forces all arguments to be wrapped in quote (`"`) characters.
+                fn force_quotes(&mut self, enabled: bool) -> &mut process::Command;
+                /// Append literal text to the command line without any quoting or escaping.
+                fn raw_arg<S: AsRef<OsStr>>(&mut self, text_to_append_as_is: S) -> &mut process::Command;
+                /// When [`process::Command`] creates pipes, request that our side is always async.
+                fn async_pipes(&mut self, always_async: bool) -> &mut process::Command;
+                /// Executes the command as a child process with the given [`ProcThreadAttributeList`], 
+                /// returning a handle to it.
+                fn spawn_with_attributes( &mut self, attribute_list: &ProcThreadAttributeList<'_> ) -> 
+                io::Result<process::Child>;
+            }
+            
+            impl CommandExt for process::Command
+            {
+                fn creation_flags(&mut self, flags: u32) -> &mut process::Command {
+                    self.as_inner_mut().creation_flags(flags);
+                    self
+                }
+
+                fn show_window(&mut self, cmd_show: u16) -> &mut process::Command {
+                    self.as_inner_mut().show_window(Some(cmd_show));
+                    self
+                }
+
+                fn force_quotes(&mut self, enabled: bool) -> &mut process::Command {
+                    self.as_inner_mut().force_quotes(enabled);
+                    self
+                }
+
+                fn raw_arg<S: AsRef<OsStr>>(&mut self, raw_text: S) -> &mut process::Command {
+                    self.as_inner_mut().raw_arg(raw_text.as_ref());
+                    self
+                }
+
+                fn async_pipes(&mut self, always_async: bool) -> &mut process::Command {
+                    let _ = always_async;
+                    self
+                }
+
+                fn spawn_with_attributes(
+                    &mut self,
+                    attribute_list: &ProcThreadAttributeList<'_>,
+                ) -> io::Result<process::Child> {
+                    self.as_inner_mut()
+                        .spawn_with_attributes(sys::process::Stdio::Inherit, true, Some(attribute_list))
+                        .map(process::Child::from_inner)
+                }
+            }
+
+            pub trait ChildExt: Sealed
+            {
+                /// Extracts the main thread raw handle, without taking ownership   
+                fn main_thread_handle(&self) -> BorrowedHandle<'_>;
+            }
+            
+            impl ChildExt for process::Child
+            {
+                fn main_thread_handle(&self) -> BorrowedHandle<'_> { self.handle.main_thread_handle() }
+            }
+            /// Windows-specific extensions to [`process::ExitCode`].
+            pub trait ExitCodeExt: Sealed
+            {
+                /// Creates a new `ExitCode` from the raw underlying `u32` return value of a process.
+                fn from_raw(raw: u32) -> Self;
+            }
+            
+            impl ExitCodeExt for process::ExitCode
+            {
+                fn from_raw(raw: u32) -> Self { process::ExitCode::from_inner(From::from(raw)) }
+            }
+            /// A wrapper around windows [`ProcThreadAttributeList`].
+            #[derive(Debug)]
+            pub struct ProcThreadAttributeList<'a>
+            {
+                attribute_list: Box<[MaybeUninit<u8>]>,
+                _lifetime_marker: marker::PhantomData<&'a ()>,
+            }
+            
+            impl<'a> ProcThreadAttributeList<'a>
+            {
+                /// Creates a new builder for constructing a [`ProcThreadAttributeList`].
+                pub fn build() -> ProcThreadAttributeListBuilder<'a> { ProcThreadAttributeListBuilder::new() }
+                /// Returns a pointer to the underling attribute list.
+                pub fn as_ptr(&self) -> *const MaybeUninit<u8> { self.attribute_list.as_ptr() }
+            }
+            
+            impl<'a> Drop for ProcThreadAttributeList<'a>
+            {
+                /// Deletes the attribute list.
+                fn drop(&mut self)
+                {
+                    let lp_attribute_list = self.attribute_list.as_mut_ptr().cast::<c_void>();
+                    unsafe { sys::c::DeleteProcThreadAttributeList(lp_attribute_list) }
+                }
+            }
+            /// Builder for constructing a [`ProcThreadAttributeList`].
+            #[derive(Clone, Debug)]
+            pub struct ProcThreadAttributeListBuilder<'a>
+            {
+                attributes: ::collections::BTreeMap<usize, ProcThreadAttributeValue>,
+                _lifetime_marker: marker::PhantomData<&'a ()>,
+            }
+            
+            impl<'a> ProcThreadAttributeListBuilder<'a>
+            {
+                fn new() -> Self
+                {
+                    ProcThreadAttributeListBuilder
+                    {
+                        attributes: ::collections::BTreeMap::new(),
+                        _lifetime_marker: marker::PhantomData,
+                    }
+                }
+
+                /// Sets an attribute on the attribute list.
+                pub fn attribute<T>(self, attribute: usize, value: &'a T) -> Self
+                {
+                    unsafe { self.raw_attribute(attribute, ptr::addr_of!(*value).cast::<c_void>(), size_of::<T>()) }
+                }
+                /// Sets a raw attribute on the attribute list.
+                pub unsafe fn raw_attribute<T>
+                (
+                    mut self,
+                    attribute: usize,
+                    value_ptr: *const T,
+                    value_size: usize,
+                ) -> Self
+                {
+                    self.attributes.insert
+                    (
+                        attribute,
+                        ProcThreadAttributeValue { ptr: value_ptr.cast::<c_void>(), size: value_size },
+                    );
+                    self
+                }
+                /// Finalizes the construction of the `ProcThreadAttributeList`.
+                pub fn finish(&self) -> io::Result<ProcThreadAttributeList<'a>>
+                {
+                    let mut required_size = 0;
+                    let Ok(attribute_count) = self.attributes.len().try_into() else
+                    {
+                        return Err(constant_error!
+                        (
+                            io::ErrorKind::InvalidInput,
+                            "maximum number of ProcThreadAttributes exceeded",
+                        ));
+                    };
+                    
+                    unsafe
+                    {
+                        sys::c::InitializeProcThreadAttributeList
+                        (
+                            ptr::null_mut(),
+                            attribute_count,
+                            0,
+                            &mut required_size,
+                        )
+                    };
+
+                    let mut attribute_list = vec![MaybeUninit::uninit(); required_size].into_boxed_slice();
+                    sys::cvt(unsafe
+                    {
+                        sys::c::InitializeProcThreadAttributeList(
+                            attribute_list.as_mut_ptr().cast::<c_void>(),
+                            attribute_count,
+                            0,
+                            &mut required_size,
+                        )
+                    })?;
+                    
+                    for (&attribute, value) in self.attributes.iter().take(attribute_count as usize)
+                    {
+                        sys::cvt(unsafe
+                        {
+                            sys::c::UpdateProcThreadAttribute
+                            (
+                                attribute_list.as_mut_ptr().cast::<c_void>(),
+                                0,
+                                attribute,
+                                value.ptr,
+                                value.size,
+                                ptr::null_mut(),
+                                ptr::null_mut(),
+                            )
+                        })?;
+                    }
+
+                    Ok(ProcThreadAttributeList { attribute_list, _lifetime_marker: marker::PhantomData })
+                }
+            }
+            /// Wrapper around the value data to be used as a Process Thread Attribute.
+            #[derive(Clone, Debug)]
+            pub struct ProcThreadAttributeValue
+            {
+                ptr: *const c_void,
+                size: usize,
+            }
         }
     }
-
-    pub fn cvt<T: IsMinusOne>(t: T) -> io::Result<T>
-    {
-        if t.is_minus_one() { Err(last_error()) } else { Ok(t) }
-    }
+    #[cfg(target_os = "uefi")] pub use self::uefi::{ * };
+    #[cfg(unix)] pub use self::unix::{ * };    
+    #[cfg(windows)] pub use self::windows::{ * };
 } pub use self::system as sys;
 /// Types and Traits for working with asynchronous tasks.
 pub mod task
@@ -37590,6 +30011,7 @@ pub mod terminal
     pub mod highlighter
     {
         //! Syntax highlighting functionality for the terminal interface.
+        use terminal::GREEN;
         use ::
         {
             collections::{ HashSet },
@@ -37598,6 +30020,7 @@ pub mod terminal
             os::unix::fs::{ PermissionsExt },
             ops::{ Range },
             sync::{ Arc, Mutex },
+            terminal::{ GREEN },
             *,
         };
         
@@ -37720,7 +30143,7 @@ pub mod terminal
 
                             if is_start_of_segment && !word.is_empty()
                             {
-                                if is_command( word )
+                                if is::command( word )
                                 { current_token_style = Style::AnsiColor( GREEN.to_string() ); }
 
                                 is_start_of_segment = false;
@@ -38973,10 +31396,10 @@ pub mod terminal
                     {
                         if n != 0
                         {
-                            if let Some( first ) = first_word
+                            if let Some( first ) = regex::first_word
                             ( &self.write.buffer[..self.write.cursor], &self.read.word_break )
                             {
-                                let start = word_start( &self.write.buffer, self.write.cursor, &self.read.word_break );
+                                let start = get::word_start( &self.write.buffer, self.write.cursor, &self.read.word_break );
 
                                 if first != start
                                 {
@@ -38984,14 +31407,14 @@ pub mod terminal
 
                                     if !self.explicit_arg() && start == self.write.buffer.len()
                                     {
-                                        let dest_start = backward_word
+                                        let dest_start = get::backward_word
                                         ( 1, &self.write.buffer, start, &self.read.word_break );
-                                        let dest_end = word_end
+                                        let dest_end = get::word_end
                                         ( &self.write.buffer, dest_start, &self.read.word_break );
 
-                                        let src_start = backward_word
+                                        let src_start = get::backward_word
                                         ( 1, &self.write.buffer, dest_start, &self.read.word_break );
-                                        let src_end = word_end
+                                        let src_end = get::word_end
                                         ( &self.write.buffer, src_start, &self.read.word_break );
 
                                         src = src_start..src_end;
@@ -39000,21 +31423,21 @@ pub mod terminal
                                     
                                     else
                                     {
-                                        let src_start = backward_word
+                                        let src_start = get::backward_word
                                         ( 1, &self.write.buffer, start, &self.read.word_break );
-                                        let src_end = word_end
+                                        let src_end = get::word_end
                                         ( &self.write.buffer, src_start, &self.read.word_break );
 
                                         src = src_start..src_end;
 
                                         dest = if n < 0 
                                         {
-                                            back_n_words
+                                            get::back_n_words
                                             ( ( -n ) as usize, &self.write.buffer, src_start, &self.read.word_break )
                                         } 
                                         else 
                                         {
-                                            forward_n_words
+                                            get::forward_n_words
                                             ( n as usize, &self.write.buffer, src_start, &self.read.word_break )
                                         };
                                     }
@@ -40419,4 +32842,4 @@ fn main()
     }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 40422
+// 32842
