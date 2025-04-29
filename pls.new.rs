@@ -406,6 +406,16 @@ extern crate unicode_width;
             $value.expand($output, &[$($item.into()),*], $context)
         })
     }
+    #[macro_export] macro_rules! constant_error
+    {
+        ($kind:expr, $message:expr $(,)?) =>
+        {
+            $crate::hint::must_use
+            (
+                $crate::io::Error::from_static_message( const { &$crate::io::SimpleMessage { kind: $kind, message: $message } } ) 
+            );
+        };
+    }
     /// Facilitates chaining calls from either a `Terminal` or `Screen` lock.
     pub trait Chain: Sized
     {
@@ -483,7 +493,15 @@ pub mod char
         str::{ CharIndices, from_utf8, from_utf8_unchecked },
         *,
     };
+    /// The maximum number of bytes required to [encode](char::encode_utf8) a `char` to
+    /// UTF-8 encoding.
+    #[unstable(feature = "char_max_len", issue = "121714")]
+    pub const MAX_LEN_UTF8: usize = char::MAX_LEN_UTF8;
 
+    /// The maximum number of two-byte units required to [encode](char::encode_utf16) a `char`
+    /// to UTF-16 encoding.
+    #[unstable(feature = "char_max_len", issue = "121714")]
+    pub const MAX_LEN_UTF16: usize = char::MAX_LEN_UTF16;
     pub const CTRL_MASK: u8 = 0x1f;
     pub const UNCTRL_BIT: u8 = 0x40;    
     /// Returns the control character corresponding to the given character.
@@ -671,6 +689,81 @@ pub mod char
         {
             '\n' => String::from( "\\n" ),
             ch => format!( "{}", ch ),
+        }
+    }
+    /// Encodes a raw `u32` value as UTF-8 into the provided byte buffer,
+    /// and then returns the subslice of the buffer that contains the encoded character.
+    #[inline] pub const fn encode_utf8_raw(code: u32, dst: &mut [u8]) -> &mut [u8]
+    {
+        let len = len_utf8(code);
+        if dst.len() < len {
+            const_panic!(
+                "encode_utf8: buffer does not have enough bytes to encode code point",
+                "encode_utf8: need {len} bytes to encode U+{code:04X} but buffer has just {dst_len}",
+                code: u32 = code,
+                len: usize = len,
+                dst_len: usize = dst.len(),
+            );
+        }
+    }
+    /// Encodes a raw `u32` value as UTF-8 into the byte buffer pointed to by `dst`.
+    #[inline] pub const unsafe fn encode_utf8_raw_unchecked(code: u32, dst: *mut u8)
+    {
+        unsafe
+        {
+            let len = len_utf8(code);
+            match len {
+                1 => {
+                    *dst = code as u8;
+                }
+                2 => {
+                    *dst = (code >> 6 & 0x1F) as u8 | TAG_TWO_B;
+                    *dst.add(1) = (code & 0x3F) as u8 | TAG_CONT;
+                }
+                3 => {
+                    *dst = (code >> 12 & 0x0F) as u8 | TAG_THREE_B;
+                    *dst.add(1) = (code >> 6 & 0x3F) as u8 | TAG_CONT;
+                    *dst.add(2) = (code & 0x3F) as u8 | TAG_CONT;
+                }
+                4 => {
+                    *dst = (code >> 18 & 0x07) as u8 | TAG_FOUR_B;
+                    *dst.add(1) = (code >> 12 & 0x3F) as u8 | TAG_CONT;
+                    *dst.add(2) = (code >> 6 & 0x3F) as u8 | TAG_CONT;
+                    *dst.add(3) = (code & 0x3F) as u8 | TAG_CONT;
+                }
+                // SAFETY: `char` always takes between 1 and 4 bytes to encode in UTF-8.
+                _ => ::hint::unreachable_unchecked(),
+            }
+        }
+    }
+    /// Encodes a raw `u32` value as native endian UTF-16 into the provided `u16` buffer,
+    /// and then returns the subslice of the buffer that contains the encoded character.
+    #[inline] pub const fn encode_utf16_raw(mut code: u32, dst: &mut [u16]) -> &mut [u16]
+    {
+        unsafe
+        {
+            let len = len_utf16(code);
+            match (len, &mut *dst)
+            {
+                (1, [a, ..]) => {
+                    *a = code as u16;
+                }
+                (2, [a, b, ..]) => {
+                    code -= 0x1_0000;
+                    *a = (code >> 10) as u16 | 0xD800;
+                    *b = (code & 0x3FF) as u16 | 0xDC00;
+                }
+                _ => {
+                    const_panic!(
+                        "encode_utf16: buffer does not have enough bytes to encode code point",
+                        "encode_utf16: need {len} bytes to encode U+{code:04X} but buffer has just {dst_len}",
+                        code: u32 = code,
+                        len: usize = len,
+                        dst_len: usize = dst.len(),
+                    )
+                }
+            };
+            slice::from_raw_parts_mut(dst.as_mut_ptr(), len)
         }
     }
 }
@@ -3760,7 +3853,7 @@ pub mod error
             *,
         };
 
-        #[derive(Debug)]
+        #[derive( Debug )]
         pub enum Error
         {
             /// IO error.
@@ -7129,6 +7222,12 @@ pub mod io
             }
         }
     }
+}
+/// Core Intrinsics
+pub mod intrinsics
+{
+    pub use std::intrinsics::{ * };
+
 }
 /// Composable external iteration.
 pub mod iter
@@ -21941,14 +22040,12 @@ pub mod scripts
         status
     }
 }
+/// Prevents outside implementations of our extension traits.
 mod sealed
 {
-    /// This trait being unreachable from outside the crate
-    /// prevents outside implementations of our extension traits.
-    /// This allows adding more trait methods in the future.
+    /// This trait being unreachable from outside the crate prevents outside implementations of our extension traits.
     pub trait Sealed {}
 }
-
 /// Shell
 pub mod shell
 {
@@ -23575,7 +23672,7 @@ pub mod str
         #[inline] fn next_back(&mut self) -> Option<char> { self.iter.next_back() }
     }
     /// A possible error value when creating a `SmallString` from a byte array.
-    #[derive(Debug)]
+    #[derive( Debug )]
     pub struct FromUtf8Error<A: Array<Item = u8>>
     {
         buf: A,
@@ -23670,7 +23767,24 @@ pub mod string
 /// Useful synchronization primitives.
 pub mod sync
 {
-    pub use std::sync::{ * };
+    pub use std::sync::{ atomic as _, * };
+    pub mod atomic
+    {
+        use ::
+        {
+            sealed::Sealed,
+            *,
+        };
+        pub use std::sync::atomic::{ * };
+        /// A marker trait for primitive types which can be modified atomically.
+        pub unsafe trait AtomicPrimitive: Sized + Copy + Sealed
+        {
+            /// Temporary implementation detail.
+            type AtomicInner: Sized;
+        }
+        /// A memory location which can be safely modified from multiple threads.
+        pub type Atomic<T> = <T as AtomicPrimitive>::AtomicInner;
+    }
 }
 /// Provides System implementations
 pub mod system
@@ -24210,7 +24324,7 @@ pub mod system
             }
         }
 
-        #[derive(Debug)]
+        #[derive( Debug )]
         pub struct OutOfBounds(());
 
         #[derive(Clone, Debug, Eq, PartialEq)]
@@ -24297,6 +24411,73 @@ pub mod system
         {
             *,
         };
+
+        pub mod fs
+        {
+            use ::
+            {
+                io::{ self, Error, ErrorKind },
+                path::{ Path },
+                sys::common::ignore_notfound,
+                *,
+            };
+            
+            pub const NOT_FILE_ERROR: Error = constant_error!(
+                ErrorKind::InvalidInput,
+                "the source path is neither a regular file nor a symlink to a regular file",
+            );
+
+            pub fn copy(from: &Path, to: &Path) -> io::Result<u64> {
+                let mut reader = fs::File::open(from)?;
+                let metadata = reader.metadata()?;
+
+                if !metadata.is_file() {
+                    return Err(NOT_FILE_ERROR);
+                }
+
+                let mut writer = fs::File::create(to)?;
+                let perm = metadata.permissions();
+
+                let ret = io::copy(&mut reader, &mut writer)?;
+                writer.set_permissions(perm)?;
+                Ok(ret)
+            }
+
+            pub fn remove_dir_all(path: &Path) -> io::Result<()> {
+                let filetype = fs::symlink_metadata(path)?.file_type();
+                if filetype.is_symlink() { fs::remove_file(path) } else { remove_dir_all_recursive(path) }
+            }
+
+            fn remove_dir_all_recursive(path: &Path) -> io::Result<()> 
+            {
+                for child in fs::read_dir(path)? 
+                {
+                    let result: io::Result<()> = 
+                    {
+                        let child = child?;
+                        if child.file_type()?.is_dir() {
+                            remove_dir_all_recursive(&child.path())?;
+                        } else {
+                            fs::remove_file(&child.path())?;
+                        }
+                    };
+                    
+                    if let Err(err) = &result && err.kind() != io::ErrorKind::NotFound
+                    {
+                        return result;
+                    }
+                }
+                ignore_notfound(fs::remove_dir(path))
+            }
+
+            pub fn exists(path: &Path) -> io::Result<bool> {
+                match fs::metadata(path) {
+                    Ok(_) => Ok(true),
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+                    Err(error) => Err(error),
+                }
+            }
+        }
         
         pub mod process
         {
@@ -24393,7 +24574,7 @@ pub mod system
             }
             /// An iterator over the command environment variables.
             #[must_use = "iterators are lazy and do nothing unless consumed"]
-            #[derive(Debug)]
+            #[derive( Debug )]
             pub struct CommandEnvs<'a>
             {
                 iter: ::collections::btree_map::Iter<'a, EnvKey, Option<OsString>>,
@@ -25299,6 +25480,60 @@ pub mod system
                 }
             }
         }
+
+        pub mod small_c_string
+        {
+            use ::
+            {
+                ffi::{CStr, CString},
+                mem::MaybeUninit,
+                path::Path,
+                *,
+            };
+            
+            const MAX_STACK_ALLOCATION: usize = 384;
+
+            const NUL_ERR: io::Error = 
+            constant_error!(io::ErrorKind::InvalidInput, "file name contained an unexpected NUL byte");
+
+            #[inline] pub fn run_path_with_cstr<T>(path: &Path, f: &dyn Fn(&CStr) -> io::Result<T>) -> io::Result<T>
+            { run_with_cstr(path.as_os_str().as_encoded_bytes(), f) }
+
+            #[inline] pub fn run_with_cstr<T>(bytes: &[u8], f: &dyn Fn(&CStr) -> io::Result<T>) -> io::Result<T>
+            {
+                if bytes.len() >= MAX_STACK_ALLOCATION { run_with_cstr_allocating(bytes, f) }
+                else { unsafe { run_with_cstr_stack(bytes, f) } }
+            }
+            
+            pub unsafe fn run_with_cstr_stack<T> ( bytes: &[u8], f: &dyn Fn(&CStr) -> io::Result<T> ) -> 
+            io::Result<T>
+            {
+                unsafe
+                {
+                    let mut buf = MaybeUninit::<[u8; MAX_STACK_ALLOCATION]>::uninit();
+                    let buf_ptr = buf.as_mut_ptr() as *mut u8;
+                    ptr::copy_nonoverlapping(bytes.as_ptr(), buf_ptr, bytes.len());
+                    buf_ptr.add(bytes.len()).write(0);
+
+                    match CStr::from_bytes_with_nul(unsafe { slice::from_raw_parts(buf_ptr, bytes.len() + 1) })
+                    {
+                        Ok(s) => f(s),
+                        Err(_) => Err(NUL_ERR),
+                    }
+                }
+            }
+
+            #[cold] #[inline(never)] fn run_with_cstr_allocating<T>(bytes: &[u8], f: &dyn Fn(&CStr) -> io::Result<T>) 
+            -> io::Result<T> 
+            {
+                match CString::new(bytes)
+                {
+                    Ok(s) => f(&s),
+                    Err(_) => Err(NUL_ERR),
+                }
+            }
+        }
+
         /// A trait for viewing representations from std types
         pub trait AsInner<Inner: ?Sized>
         {
@@ -25337,6 +25572,25 @@ pub mod system
             }
         }
     }
+    
+    pub mod fd
+    {
+        use ::
+        {
+            *,
+        };
+        
+        type ValidRawFd = ::num::niche_types::NotAllOnes<RawFd>;
+        
+        /// An owned file descriptor.
+        #[repr(transparent)] #[rustc_nonnull_optimization_guaranteed]
+        pub struct OwnedFd
+        {
+            fd: ValidRawFd,
+        }
+        #[derive(Debug)]
+        pub struct FileDesc(OwnedFd);
+    }
 
     pub mod fs
     {
@@ -25345,14 +25599,6 @@ pub mod system
             path::{ Path, PathBuf },
             *,
         };
-
-        pub mod common
-        {
-            use ::
-            {
-                *,
-            };
-        }
 
         mod unix
         {
@@ -25373,7 +25619,7 @@ pub mod system
                 sys::common::{AsInner, AsInnerMut, FromInner, IntoInner},
                 *,
             };
-            pub use ::sys::fs::common::exists;
+            pub use ::sys::common::fs::exists;
             
             pub struct File(FileDesc);
             
@@ -25450,8 +25696,8 @@ pub mod system
                 }
             }
 
-            impl core::hash::Hash for FileType {
-                fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+            impl ::hash::Hash for FileType {
+                fn hash<H: ::hash::Hasher>(&self, state: &mut H) {
                     self.masked().hash(state);
                 }
             }
@@ -25832,23 +26078,23 @@ pub mod system
                 }
                 
                 pub fn lock(&self) -> io::Result<()> {
-                    Err(io::const_error!(io::ErrorKind::Unsupported, "lock() not supported"))
+                    Err(constant_error!(io::ErrorKind::Unsupported, "lock() not supported"))
                 }
                 
                 pub fn lock_shared(&self) -> io::Result<()> {
-                    Err(io::const_error!(io::ErrorKind::Unsupported, "lock_shared() not supported"))
+                    Err(constant_error!(io::ErrorKind::Unsupported, "lock_shared() not supported"))
                 }
                 
                 pub fn try_lock(&self) -> io::Result<bool> {
-                    Err(io::const_error!(io::ErrorKind::Unsupported, "try_lock() not supported"))
+                    Err(constant_error!(io::ErrorKind::Unsupported, "try_lock() not supported"))
                 }
                 
                 pub fn try_lock_shared(&self) -> io::Result<bool> {
-                    Err(io::const_error!(io::ErrorKind::Unsupported, "try_lock_shared() not supported"))
+                    Err(constant_error!(io::ErrorKind::Unsupported, "try_lock_shared() not supported"))
                 }
                 
                 pub fn unlock(&self) -> io::Result<()> {
-                    Err(io::const_error!(io::ErrorKind::Unsupported, "unlock() not supported"))
+                    Err(constant_error!(io::ErrorKind::Unsupported, "unlock() not supported"))
                 }
 
                 pub fn truncate(&self, size: u64) -> io::Result<()> {
@@ -26598,7 +26844,7 @@ pub mod system
                     }
                     Ok(())
                 }
-            } use remove_dir_all::remove_dir_all_iterative;
+            } use self::remove_dir_all::remove_dir_all_iterative;
 
             pub struct File
             {
@@ -26688,7 +26934,7 @@ pub mod system
                 }
             }
 
-            #[derive(Debug)]
+            #[derive( Debug )]
             pub struct DirBuilder;
 
             impl fmt::Debug for ReadDir
@@ -27183,7 +27429,7 @@ pub mod system
                                 )
                             }
                             _ => {
-                                return Err(io::const_error!(
+                                return Err(constant_error!(
                                     io::ErrorKind::Uncategorized,
                                     "Unsupported reparse point type",
                                 ));
@@ -27227,7 +27473,7 @@ pub mod system
                         || times.modified.map_or(false, is_zero)
                         || times.created.map_or(false, is_zero)
                     {
-                        return Err(io::const_error!(
+                        return Err(constant_error!(
                             io::ErrorKind::InvalidInput,
                             "cannot set file timestamp to 0",
                         ));
@@ -27237,7 +27483,7 @@ pub mod system
                         || times.modified.map_or(false, is_max)
                         || times.created.map_or(false, is_max)
                     {
-                        return Err(io::const_error!(
+                        return Err(constant_error!(
                             io::ErrorKind::InvalidInput,
                             "cannot set file timestamp to 0xFFFF_FFFF_FFFF_FFFF",
                         ));
@@ -27897,10 +28143,1437 @@ pub mod system
 
         mod uefi
         {
+            
             use ::
             {
+                ffi::OsString,
+                hash::Hash,
+                io::{self, BorrowedCursor, IoSlice, IoSliceMut, SeekFrom},
+                path::{Path, PathBuf},
+                sys::time::SystemTime,
+                sys::unsupported,
                 *,
             };
+            
+            pub mod protocols
+            {
+                use ::
+                {
+                    *,
+                };
+                pub mod base
+                {
+                    //! UEFI Base Environment
+                    use ::
+                    {
+                        *,
+                    };
+
+                    #[macro_export] macro_rules! eficall_abi
+                    {
+                        (($($prefix:tt)*),($($suffix:tt)*)) => { $($prefix)* extern "efiapi" $($suffix)* };
+                    }
+                    /// Annotate function with UEFI calling convention.
+                    #[macro_export] macro_rules! eficall
+                    {
+                        (@munch(($($prefix:tt)*),(pub $($suffix:tt)*))) => { eficall!{@munch(($($prefix)* pub),($($suffix)*))} };
+                        (@munch(($($prefix:tt)*),(unsafe $($suffix:tt)*))) => { eficall!{@munch(($($prefix)* unsafe),($($suffix)*))} };
+                        (@munch(($($prefix:tt)*),($($suffix:tt)*))) => { eficall_abi!{($($prefix)*),($($suffix)*)} };
+                        ($($arg:tt)*) => { eficall!{@munch((),($($arg)*))} };
+                    }
+                    /// Boolean Type.
+                    #[repr( C )] #[derive(Clone, Copy, Debug)]
+                    pub struct Boolean(u8);
+                    /// Single-byte Character Type.
+                    pub type Char8 = u8;
+                    /// Dual-byte Character Type.
+                    pub type Char16 = u16;
+                    /// Status Codes.
+                    #[repr( C )] #[derive( Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd )]
+                    pub struct Status(usize);
+                    /// Object Handles.
+                    pub type Handle = *mut ::ffi::c_void;
+                    /// Event Objects.
+                    pub type Event = *mut ::ffi::c_void;
+                    /// Logical Block Addresses.
+                    pub type Lba = u64;
+                    /// Thread Priority Levels.
+                    pub type Tpl = usize;
+                    /// Physical Memory Address.
+                    pub type PhysicalAddress = u64;
+                    /// Virtual Memory Address.
+                    pub type VirtualAddress = u64;
+                    /// Application Entry Point.
+                    pub type ImageEntryPoint = eficall! {fn(Handle, *mut crate::system::SystemTable) -> Status};
+                    /// Globally Unique Identifiers.
+                    #[repr( C, align(4) )]
+                    #[derive( Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd )]
+                    pub struct Guid
+                    {
+                        time_low: [u8; 4],
+                        time_mid: [u8; 2],
+                        time_hi_and_version: [u8; 2],
+                        clk_seq_hi_res: u8,
+                        clk_seq_low: u8,
+                        node: [u8; 6],
+                    }
+                    /// Network MAC Address.
+                    #[repr( C )] #[derive( Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd )]
+                    pub struct MacAddress
+                    {
+                        pub addr: [u8; 32],
+                    }
+                    /// IPv4 Address.
+                    #[repr( C )] #[derive( Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd )]
+                    pub struct Ipv4Address
+                    {
+                        pub addr: [u8; 4],
+                    }
+                    /// IPv6 Address.
+                    #[repr( C )] #[derive( Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd )]
+                    pub struct Ipv6Address
+                    {
+                        pub addr: [u8; 16],
+                    }
+                    /// IP Address.
+                    #[repr(C, align(4))] #[derive( Clone, Copy )]
+                    pub union IpAddress
+                    {
+                        pub addr: [u32; 4],
+                        pub v4: Ipv4Address,
+                        pub v6: Ipv6Address,
+                    }
+
+                    impl Boolean
+                    {
+                        /// Literal False
+                        pub const FALSE: Boolean = Boolean(0u8);
+                        /// Literal True
+                        pub const TRUE: Boolean = Boolean(1u8);
+                    }
+
+                    impl From<u8> for Boolean
+                    {
+                        fn from(v: u8) -> Self { Boolean(v) }
+                    }
+
+                    impl From<bool> for Boolean
+                    {
+                        fn from(v: bool) -> Self
+                        {
+                            match v
+                            {
+                                false => Boolean::FALSE,
+                                true => Boolean::TRUE,
+                            }
+                        }
+                    }
+
+                    impl Default for Boolean
+                    {
+                        fn default() -> Self { Self::FALSE }
+                    }
+
+                    impl From<Boolean> for u8
+                    {
+                        fn from(v: Boolean) -> Self
+                        {
+                            match v.0
+                            {
+                                0 => 0,
+                                _ => 1,
+                            }
+                        }
+                    }
+
+                    impl From<Boolean> for bool
+                    {
+                        fn from(v: Boolean) -> Self
+                        {
+                            match v.0
+                            {
+                                0 => false,
+                                _ => true,
+                            }
+                        }
+                    }
+
+                    impl Eq for Boolean {}
+
+                    impl ::hash::Hash for Boolean
+                    {
+                        fn hash<H: ::hash::Hasher>(&self, state: &mut H) { bool::from(*self).hash(state) }
+                    }
+
+                    impl Ord for Boolean
+                    {
+                        fn cmp(&self, other: &Boolean) -> ::cmp::Ordering { bool::from(*self).cmp(&(*other).into()) }
+                    }
+
+                    impl PartialEq for Boolean
+                    {
+                        fn eq(&self, other: &Boolean) -> bool { bool::from(*self).eq(&(*other).into()) }
+                    }
+
+                    impl PartialEq<bool> for Boolean
+                    {
+                        fn eq(&self, other: &bool) -> bool { bool::from(*self).eq(other) }
+                    }
+
+                    impl PartialOrd for Boolean
+                    {
+                        fn partial_cmp(&self, other: &Boolean) -> Option<::cmp::Ordering>
+                        { bool::from(*self).partial_cmp(&(*other).into()) }
+                    }
+
+                    impl PartialOrd<bool> for Boolean
+                    {
+                        fn partial_cmp(&self, other: &bool) -> Option<::cmp::Ordering>
+                        { bool::from(*self).partial_cmp(other) }
+                    }
+
+                    impl Status
+                    {
+                        pub const WIDTH: usize = 8usize * ::mem::size_of::<Status>();
+                        pub const MASK: usize = 0xc0 << (Status::WIDTH - 8);
+                        pub const ERROR_MASK: usize = 0x80 << (Status::WIDTH - 8);
+                        pub const WARNING_MASK: usize = 0x00 << (Status::WIDTH - 8);
+
+                        /// Success Code.
+                        pub const SUCCESS: Status = Status::from_usize(0);
+                        /// List of predefined error codes.
+                        pub const LOAD_ERROR: Status = Status::from_usize(1 | Status::ERROR_MASK);
+                        pub const INVALID_PARAMETER: Status = Status::from_usize(2 | Status::ERROR_MASK);
+                        pub const UNSUPPORTED: Status = Status::from_usize(3 | Status::ERROR_MASK);
+                        pub const BAD_BUFFER_SIZE: Status = Status::from_usize(4 | Status::ERROR_MASK);
+                        pub const BUFFER_TOO_SMALL: Status = Status::from_usize(5 | Status::ERROR_MASK);
+                        pub const NOT_READY: Status = Status::from_usize(6 | Status::ERROR_MASK);
+                        pub const DEVICE_ERROR: Status = Status::from_usize(7 | Status::ERROR_MASK);
+                        pub const WRITE_PROTECTED: Status = Status::from_usize(8 | Status::ERROR_MASK);
+                        pub const OUT_OF_RESOURCES: Status = Status::from_usize(9 | Status::ERROR_MASK);
+                        pub const VOLUME_CORRUPTED: Status = Status::from_usize(10 | Status::ERROR_MASK);
+                        pub const VOLUME_FULL: Status = Status::from_usize(11 | Status::ERROR_MASK);
+                        pub const NO_MEDIA: Status = Status::from_usize(12 | Status::ERROR_MASK);
+                        pub const MEDIA_CHANGED: Status = Status::from_usize(13 | Status::ERROR_MASK);
+                        pub const NOT_FOUND: Status = Status::from_usize(14 | Status::ERROR_MASK);
+                        pub const ACCESS_DENIED: Status = Status::from_usize(15 | Status::ERROR_MASK);
+                        pub const NO_RESPONSE: Status = Status::from_usize(16 | Status::ERROR_MASK);
+                        pub const NO_MAPPING: Status = Status::from_usize(17 | Status::ERROR_MASK);
+                        pub const TIMEOUT: Status = Status::from_usize(18 | Status::ERROR_MASK);
+                        pub const NOT_STARTED: Status = Status::from_usize(19 | Status::ERROR_MASK);
+                        pub const ALREADY_STARTED: Status = Status::from_usize(20 | Status::ERROR_MASK);
+                        pub const ABORTED: Status = Status::from_usize(21 | Status::ERROR_MASK);
+                        pub const ICMP_ERROR: Status = Status::from_usize(22 | Status::ERROR_MASK);
+                        pub const TFTP_ERROR: Status = Status::from_usize(23 | Status::ERROR_MASK);
+                        pub const PROTOCOL_ERROR: Status = Status::from_usize(24 | Status::ERROR_MASK);
+                        pub const INCOMPATIBLE_VERSION: Status = Status::from_usize(25 | Status::ERROR_MASK);
+                        pub const SECURITY_VIOLATION: Status = Status::from_usize(26 | Status::ERROR_MASK);
+                        pub const CRC_ERROR: Status = Status::from_usize(27 | Status::ERROR_MASK);
+                        pub const END_OF_MEDIA: Status = Status::from_usize(28 | Status::ERROR_MASK);
+                        pub const END_OF_FILE: Status = Status::from_usize(31 | Status::ERROR_MASK);
+                        pub const INVALID_LANGUAGE: Status = Status::from_usize(32 | Status::ERROR_MASK);
+                        pub const COMPROMISED_DATA: Status = Status::from_usize(33 | Status::ERROR_MASK);
+                        pub const IP_ADDRESS_CONFLICT: Status = Status::from_usize(34 | Status::ERROR_MASK);
+                        pub const HTTP_ERROR: Status = Status::from_usize(35 | Status::ERROR_MASK);
+                        /// Error Codes | UDP4
+                        pub const NETWORK_UNREACHABLE: Status = Status::from_usize(100 | Status::ERROR_MASK);
+                        pub const HOST_UNREACHABLE: Status = Status::from_usize(101 | Status::ERROR_MASK);
+                        pub const PROTOCOL_UNREACHABLE: Status = Status::from_usize(102 | Status::ERROR_MASK);
+                        pub const PORT_UNREACHABLE: Status = Status::from_usize(103 | Status::ERROR_MASK);
+                        /// Error Codes |  TCP4
+                        pub const CONNECTION_FIN: Status = Status::from_usize(104 | Status::ERROR_MASK);
+                        pub const CONNECTION_RESET: Status = Status::from_usize(105 | Status::ERROR_MASK);
+                        pub const CONNECTION_REFUSED: Status = Status::from_usize(106 | Status::ERROR_MASK);
+                        ///  Error Codes | Various
+                        pub const WARN_UNKNOWN_GLYPH: Status = Status::from_usize(1 | Status::WARNING_MASK);
+                        pub const WARN_DELETE_FAILURE: Status = Status::from_usize(2 | Status::WARNING_MASK);
+                        pub const WARN_WRITE_FAILURE: Status = Status::from_usize(3 | Status::WARNING_MASK);
+                        pub const WARN_BUFFER_TOO_SMALL: Status = Status::from_usize(4 | Status::WARNING_MASK);
+                        pub const WARN_STALE_DATA: Status = Status::from_usize(5 | Status::WARNING_MASK);
+                        pub const WARN_FILE_SYSTEM: Status = Status::from_usize(6 | Status::WARNING_MASK);
+                        pub const WARN_RESET_REQUIRED: Status = Status::from_usize(7 | Status::WARNING_MASK);
+                        /// Create Status Code from Integer.
+                        pub const fn from_usize(v: usize) -> Status { Status(v) }
+                        /// Return Underlying Integer Representation.
+                        pub const fn as_usize(&self) -> usize { self.0 }
+
+                        pub fn value(&self) -> usize { self.0 }
+
+                        pub fn mask(&self) -> usize { self.value() & Status::MASK }
+                        /// Check whether this is an error.
+                        pub fn is_error(&self) -> bool { self.mask() == Status::ERROR_MASK }
+                        /// Check whether this is a warning.
+                        pub fn is_warning(&self) -> bool { self.value() != 0 && self.mask() == Status::WARNING_MASK }
+                    }
+
+                    impl From<Status> for Result<Status, Status>
+                    {
+                        fn from(status: Status) -> Self
+                        {
+                            if status.is_error() { Err(status) }
+                            else { Ok(status) }
+                        }
+                    }
+
+                    impl Guid
+                    {
+                        pub const fn u32_to_bytes_le(num: u32) -> [u8; 4]
+                        {
+                            [
+                                num as u8,
+                                (num >> 8) as u8,
+                                (num >> 16) as u8,
+                                (num >> 24) as u8,
+                            ]
+                        }
+
+                        pub const fn u32_from_bytes_le(bytes: &[u8; 4]) -> u32
+                        {
+                            (bytes[0] as u32)
+                            | ((bytes[1] as u32) << 8)
+                            | ((bytes[2] as u32) << 16)
+                            | ((bytes[3] as u32) << 24)
+                        }
+
+                        pub const fn u16_to_bytes_le(num: u16) -> [u8; 2]
+                        {
+                            [num as u8, (num >> 8) as u8]
+                        }
+
+                        pub const fn u16_from_bytes_le(bytes: &[u8; 2]) -> u16
+                        {
+                            (bytes[0] as u16) | ((bytes[1] as u16) << 8)
+                        }
+
+                        /// Initialize a Guid from its individual fields.
+                        pub const fn from_fields
+                        (
+                            time_low: u32,
+                            time_mid: u16,
+                            time_hi_and_version: u16,
+                            clk_seq_hi_res: u8,
+                            clk_seq_low: u8,
+                            node: &[u8; 6],
+                        ) -> Guid
+                        {
+                            Guid
+                            {
+                                time_low: Self::u32_to_bytes_le(time_low),
+                                time_mid: Self::u16_to_bytes_le(time_mid),
+                                time_hi_and_version: Self::u16_to_bytes_le(time_hi_and_version),
+                                clk_seq_hi_res: clk_seq_hi_res,
+                                clk_seq_low: clk_seq_low,
+                                node: *node,
+                            }
+                        }
+                        /// Access a Guid as individual fields.
+                        pub const fn as_fields(&self) -> (u32, u16, u16, u8, u8, &[u8; 6])
+                        {
+                            (
+                                Self::u32_from_bytes_le(&self.time_low),
+                                Self::u16_from_bytes_le(&self.time_mid),
+                                Self::u16_from_bytes_le(&self.time_hi_and_version),
+                                self.clk_seq_hi_res,
+                                self.clk_seq_low,
+                                &self.node,
+                            )
+                        }
+                        /// Initialize a Guid from its byte representation.
+                        pub const fn from_bytes(bytes: &[u8; 16]) -> Self
+                        { unsafe { ::mem::transmute::<[u8; 16], Guid>(*bytes) } }
+                        /// Access a Guid as raw byte array.
+                        pub const fn as_bytes(&self) -> &[u8; 16]
+                        { unsafe { ::mem::transmute::<&Guid, &[u8; 16]>(self) } }
+                    }
+                }
+
+                pub mod system
+                {
+                    //! UEFI System Integration
+                    use ::
+                    {
+                        *,
+                    };
+
+                    pub const TIME_ADJUST_DAYLIGHT: u8 = 0x01u8;
+                    pub const TIME_IN_DAYLIGHT: u8 = 0x02u8;
+                    pub const UNSPECIFIED_TIMEZONE: i16 = 0x07ffi16;
+                    
+                    #[repr( C )] #[derive( Clone, Copy, Debug, Default )]
+                    pub struct Time
+                    {
+                        pub year: u16,
+                        pub month: u8,
+                        pub day: u8,
+                        pub hour: u8,
+                        pub minute: u8,
+                        pub second: u8,
+                        pub pad1: u8,
+                        pub nanosecond: u32,
+                        pub timezone: i16,
+                        pub daylight: u8,
+                        pub pad2: u8,
+                    }
+                }
+
+                pub mod file
+                {
+                    //! File Protocol
+                    use ::
+                    {
+                        *,
+                    };
+                    pub const REVISION: u64 = 0x0000_0000_0001_0000u64;
+                    pub const REVISION2: u64 = 0x0000_0000_0002_0000u64;
+                    pub const LATEST_REVISION: u64 = REVISION2;
+
+                    pub const MODE_READ: u64 = 0x0000000000000001u64;
+                    pub const MODE_WRITE: u64 = 0x0000000000000002u64;
+                    pub const MODE_CREATE: u64 = 0x8000000000000000u64;
+
+                    pub const READ_ONLY: u64 = 0x0000000000000001u64;
+                    pub const HIDDEN: u64 = 0x0000000000000002u64;
+                    pub const SYSTEM: u64 = 0x0000000000000004u64;
+                    pub const RESERVED: u64 = 0x0000000000000008u64;
+                    pub const DIRECTORY: u64 = 0x0000000000000010u64;
+                    pub const ARCHIVE: u64 = 0x0000000000000020u64;
+                    pub const VALID_ATTR: u64 = 0x0000000000000037u64;
+
+                    pub const INFO_ID: super::base::Guid = super::base::Guid::from_fields
+                    (
+                        0x09576e92,
+                        0x6d3f,
+                        0x11d2,
+                        0x8e,
+                        0x39,
+                        &[0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b],
+                    );
+
+                    pub const SYSTEM_INFO_ID: super::base::Guid = super::base::Guid::from_fields
+                    (
+                        0x09576e93,
+                        0x6d3f,
+                        0x11d2,
+                        0x8e,
+                        0x39,
+                        &[0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b],
+                    );
+
+                    pub const SYSTEM_VOLUME_LABEL_ID: super::base::Guid = super::base::Guid::from_fields
+                    (
+                        0xdb47d7d3,
+                        0xfe81,
+                        0x11d3,
+                        0x9a,
+                        0x35,
+                        &[0x00, 0x90, 0x27, 0x3f, 0xc1, 0x4d],
+                    );
+
+                    #[repr( C )] #[derive( Clone, Copy, Debug )]
+                    pub struct IoToken
+                    {
+                        pub event: super::base::Event,
+                        pub status: super::base::Status,
+                        pub buffer_size: usize,
+                        pub buffer: *mut ::ffi::c_void,
+                    }
+
+                    #[repr( C )] #[derive( Clone, Copy, Debug )]
+                    pub struct Info<const N: usize = 0> 
+                    {
+                        pub size: u64,
+                        pub file_size: u64,
+                        pub physical_size: u64,
+                        pub create_time: super::system::Time,
+                        pub last_access_time: super::system::Time,
+                        pub modification_time: super::system::Time,
+                        pub attribute: u64,
+                        pub file_name: [super::base::Char16; N],
+                    }
+
+                    #[repr( C )] #[derive( Clone, Copy, Debug )]
+                    pub struct SystemInfo<const N: usize = 0>
+                    {
+                        pub size: u64,
+                        pub read_only: super::base::Boolean,
+                        pub volume_size: u64,
+                        pub free_space: u64,
+                        pub block_size: u32,
+                        pub volume_label: [super::base::Char16; N],
+                    }
+
+                    #[repr( C )] #[derive( Clone, Copy, Debug )]
+                    pub struct SystemVolumeLabel<const N: usize = 0>
+                    {
+                        pub volume_label: [super::base::Char16; N],
+                    }
+
+                    pub type ProtocolOpen = eficall! {fn
+                    (
+                        *mut Protocol,
+                        *mut *mut Protocol,
+                        *mut super::base::Char16,
+                        u64,
+                        u64,
+                    ) -> super::base::Status};
+
+                    pub type ProtocolClose = eficall! {fn
+                    (
+                        *mut Protocol,
+                    ) -> super::base::Status};
+
+                    pub type ProtocolDelete = eficall! {fn
+                    (
+                        *mut Protocol,
+                    ) -> super::base::Status};
+
+                    pub type ProtocolRead = eficall! {fn
+                    (
+                        *mut Protocol,
+                        *mut usize,
+                        *mut ::ffi::c_void,
+                    ) -> super::base::Status};
+
+                    pub type ProtocolWrite = eficall! {fn
+                    (
+                        *mut Protocol,
+                        *mut usize,
+                        *mut ::ffi::c_void,
+                    ) -> super::base::Status};
+
+                    pub type ProtocolGetPosition = eficall! {fn
+                    (
+                        *mut Protocol,
+                        *mut u64,
+                    ) -> super::base::Status};
+
+                    pub type ProtocolSetPosition = eficall! {fn
+                    (
+                        *mut Protocol,
+                        u64,
+                    ) -> super::base::Status};
+
+                    pub type ProtocolGetInfo = eficall! {fn
+                    (
+                        *mut Protocol,
+                        *mut super::base::Guid,
+                        *mut usize,
+                        *mut ::ffi::c_void,
+                    ) -> super::base::Status};
+
+                    pub type ProtocolSetInfo = eficall! {fn
+                    (
+                        *mut Protocol,
+                        *mut super::base::Guid,
+                        usize,
+                        *mut ::ffi::c_void,
+                    ) -> super::base::Status};
+
+                    pub type ProtocolFlush = eficall! {fn( *mut Protocol ) -> super::base::Status};
+
+                    pub type ProtocolOpenEx = eficall! {fn
+                    (
+                        *mut Protocol,
+                        *mut *mut Protocol,
+                        *mut super::base::Char16,
+                        u64,
+                        u64,
+                        *mut IoToken
+                    ) -> super::base::Status};
+
+                    pub type ProtocolReadEx = eficall! {fn( *mut Protocol, *mut IoToken ) -> super::base::Status};
+
+                    pub type ProtocolWriteEx = eficall! {fn( *mut Protocol, *mut IoToken ) -> super::base::Status};
+
+                    pub type ProtocolFlushEx = eficall! {fn( *mut Protocol, *mut IoToken ) -> super::base::Status};
+
+                    #[repr( C )] pub struct Protocol
+                    {
+                        pub revision: u64,
+                        pub open: ProtocolOpen,
+                        pub close: ProtocolClose,
+                        pub delete: ProtocolDelete,
+                        pub read: ProtocolRead,
+                        pub write: ProtocolWrite,
+                        pub get_position: ProtocolGetPosition,
+                        pub set_position: ProtocolSetPosition,
+                        pub get_info: ProtocolGetInfo,
+                        pub set_info: ProtocolSetInfo,
+                        pub flush: ProtocolFlush,
+                        pub open_ex: ProtocolOpenEx,
+                        pub read_ex: ProtocolReadEx,
+                        pub write_ex: ProtocolWriteEx,
+                        pub flush_ex: ProtocolFlushEx,
+                    }
+                }
+
+                pub mod device_path
+                {
+                    //! Device Path Protocol
+                    use ::
+                    {
+                        *,
+                    };
+                    
+                    pub const PROTOCOL_GUID: super::base::Guid = super::base::Guid::from_fields
+                    (
+                        0x09576e91,
+                        0x6d3f,
+                        0x11d2,
+                        0x8e,
+                        0x39,
+                        &[0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b],
+                    );
+
+                    pub const TYPE_HARDWARE: u8 = 0x01;
+                    pub const TYPE_ACPI: u8 = 0x02;
+                    pub const TYPE_MESSAGING: u8 = 0x03;
+                    pub const TYPE_MEDIA: u8 = 0x04;
+                    pub const TYPE_BIOS: u8 = 0x05;
+                    pub const TYPE_END: u8 = 0x7f;
+
+                    #[repr( C )] #[derive( Clone, Copy, Debug )]
+                    pub struct Protocol
+                    {
+                        pub r#type: u8,
+                        pub sub_type: u8,
+                        pub length: [u8; 2],
+                    }
+
+                    #[repr( C )] #[derive( Clone, Copy, Debug )]
+                    pub struct End
+                    {
+                        pub header: Protocol,
+                    }
+
+                    impl End
+                    {
+                        pub const SUBTYPE_INSTANCE: u8 = 0x01;
+                        pub const SUBTYPE_ENTIRE: u8 = 0xff;
+                    }
+
+                    #[repr( C )] #[derive( Clone, Copy, Debug )]
+                    pub struct Hardware
+                    {
+                        pub header: Protocol,
+                    }
+
+                    impl Hardware
+                    {
+                        pub const SUBTYPE_PCI: u8 = 0x01;
+                        pub const SUBTYPE_PCCARD: u8 = 0x02;
+                        pub const SUBTYPE_MMAP: u8 = 0x03;
+                        pub const SUBTYPE_VENDOR: u8 = 0x04;
+                        pub const SUBTYPE_CONTROLLER: u8 = 0x05;
+                        pub const SUBTYPE_BMC: u8 = 0x06;
+                    }
+
+                    #[repr( C, packed )] #[derive( Clone, Copy, Debug )]
+                    pub struct HardDriveMedia
+                    {
+                        pub header: Protocol,
+                        pub partition_number: u32,
+                        pub partition_start: u64,
+                        pub partition_size: u64,
+                        pub partition_signature: [u8; 16],
+                        pub partition_format: u8,
+                        pub signature_type: u8,
+                    }
+
+                    pub struct Media
+                    {
+                        pub header: Protocol,
+                    }
+
+                    impl Media
+                    {
+                        pub const SUBTYPE_HARDDRIVE: u8 = 0x01;
+                        pub const SUBTYPE_CDROM: u8 = 0x02;
+                        pub const SUBTYPE_VENDOR: u8 = 0x03;
+                        pub const SUBTYPE_FILE_PATH: u8 = 0x04;
+                        pub const SUBTYPE_MEDIA_PROTOCOL: u8 = 0x05;
+                        pub const SUBTYPE_PIWG_FIRMWARE_FILE: u8 = 0x06;
+                        pub const SUBTYPE_PIWG_FIRMWARE_VOLUME: u8 = 0x07;
+                        pub const SUBTYPE_RELATIVE_OFFSET_RANGE: u8 = 0x08;
+                        pub const SUBTYPE_RAM_DISK: u8 = 0x09;
+                    }
+                }
+
+                pub mod simple_file_system
+                {
+                    //! Simple File System Protocol
+                    use ::
+                    {
+                        *,
+                    };
+                    
+                    pub const PROTOCOL_GUID: super::base::Guid = super::base::Guid::from_fields
+                    (
+                        0x964e5b22,
+                        0x6459,
+                        0x11d2,
+                        0x8e,
+                        0x39,
+                        &[0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b],
+                    );
+
+                    pub const REVISION: u64 = 0x0000000000010000u64;
+
+                    pub type ProtocolOpenVolume = eficall! {fn
+                    (
+                        *mut Protocol,
+                        *mut *mut super::protocols::file::Protocol,
+                    ) -> super::base::Status};
+
+                    #[repr( C )] pub struct Protocol 
+                    {
+                        pub revision: u64,
+                        pub open_volume: ProtocolOpenVolume,
+                    }
+                }
+
+            } pub use self::protocols::file;
+
+            #[expect(dead_code)]
+            const FILE_PERMISSIONS_MASK: u64 = self::file::READ_ONLY;
+
+            pub struct File(!);
+
+            #[derive(Clone)]
+            pub struct FileAttr 
+            {
+                attr: u64,
+                size: u64,
+            }
+
+            pub struct ReadDir(!);
+
+            pub struct DirEntry(!);
+
+            #[derive(Clone, Debug)]
+            pub struct OpenOptions 
+            {
+                mode: u64,
+                append: bool,
+                truncate: bool,
+                create_new: bool,
+            }
+
+            #[derive(Copy, Clone, Debug, Default)]
+            pub struct FileTimes {}
+
+            #[derive(Clone, PartialEq, Eq, Debug)]
+            pub struct FilePermissions(bool);
+
+            #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+            pub struct FileType(bool);
+
+            #[derive( Debug )]
+            pub struct DirBuilder;
+
+            impl FileAttr 
+            {
+                pub fn size(&self) -> u64 { self.size }
+                pub fn perm(&self) -> FilePermissions { FilePermissions::from_attr(self.attr) }
+                pub fn file_type(&self) -> FileType { FileType::from_attr(self.attr) }
+                pub fn modified(&self) -> io::Result<SystemTime> { unsupported() }
+                pub fn accessed(&self) -> io::Result<SystemTime> { unsupported() }
+                pub fn created(&self) -> io::Result<SystemTime> { unsupported() }
+            }
+
+            impl FilePermissions
+            {
+                pub fn readonly(&self) -> bool { self.0 }
+
+                pub fn set_readonly(&mut self, readonly: bool) { self.0 = readonly }
+
+                const fn from_attr(attr: u64) -> Self { Self(attr & file::READ_ONLY != 0) }
+                
+                const fn to_attr(&self) -> u64 { if self.0 { file::READ_ONLY } else { 0 } }
+            }
+
+            impl FileTimes
+            {
+                pub fn set_accessed(&mut self, _t: SystemTime) {}
+                pub fn set_modified(&mut self, _t: SystemTime) {}
+            }
+
+            impl FileType
+            {
+                pub fn is_dir(&self) -> bool { self.0 }
+                pub fn is_file(&self) -> bool { !self.is_dir() }                
+                pub fn is_symlink(&self) -> bool { false }
+                const fn from_attr(attr: u64) -> Self { Self(attr & file::DIRECTORY != 0) }
+            }
+
+            impl fmt::Debug for ReadDir
+            {
+                fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result { self.0 }
+            }
+
+            impl Iterator for ReadDir
+            {
+                type Item = io::Result<DirEntry>;
+                fn next(&mut self) -> Option<io::Result<DirEntry>> { self.0 }
+            }
+
+            impl DirEntry
+            {
+                pub fn path(&self) -> PathBuf { self.0 }
+                pub fn file_name(&self) -> OsString { self.0 }
+                pub fn metadata(&self) -> io::Result<FileAttr> { self.0 }
+                pub fn file_type(&self) -> io::Result<FileType> { self.0 }
+            }
+
+            impl OpenOptions
+            {
+                pub fn new() -> OpenOptions
+                {
+                    OpenOptions 
+                    { 
+                        mode: 0, 
+                        append: false, 
+                        create_new: false, 
+                        truncate: false
+                    }
+                }
+
+                pub fn read(&mut self, read: bool)
+                {
+                    if read { self.mode |= file::MODE_READ; }
+                    else { self.mode &= !file::MODE_READ; }
+                }
+
+                pub fn write(&mut self, write: bool)
+                {
+                    if write
+                    {
+                        self.read(true);
+                        self.mode |= file::MODE_WRITE;
+                    }
+                    else { self.mode &= !file::MODE_WRITE; }
+                }
+
+                pub fn append(&mut self, append: bool)
+                {
+                    if append { self.write(true); }
+                    self.append = append;
+                }
+
+                pub fn truncate(&mut self, truncate: bool) { self.truncate = truncate; }
+
+                pub fn create(&mut self, create: bool)
+                {
+                    if create { self.mode |= file::MODE_CREATE; }
+                    else { self.mode &= !file::MODE_CREATE; }
+                }
+
+                pub fn create_new(&mut self, create_new: bool) { self.create_new = create_new; }
+                
+                const fn is_mode_valid(&self) -> bool
+                {
+                    self.mode == file::MODE_READ
+                    || self.mode == (file::MODE_READ | file::MODE_WRITE)
+                    || self.mode == (file::MODE_READ | file::MODE_WRITE | file::MODE_CREATE)
+                }
+            }
+
+            impl File
+            {
+                pub fn open(_path: &Path, _opts: &OpenOptions) -> io::Result<File> { unsupported() }
+                pub fn file_attr(&self) -> io::Result<FileAttr> { self.0 }
+                pub fn fsync(&self) -> io::Result<()> { self.0 }
+                pub fn datasync(&self) -> io::Result<()> { self.0 }
+                pub fn lock(&self) -> io::Result<()> { self.0 }
+                pub fn lock_shared(&self) -> io::Result<()> { self.0 }
+                pub fn try_lock(&self) -> io::Result<bool> { self.0 }
+                pub fn try_lock_shared(&self) -> io::Result<bool> { self.0 }
+                pub fn unlock(&self) -> io::Result<()> { self.0 }
+                pub fn truncate(&self, _size: u64) -> io::Result<()> { self.0 }
+                pub fn read(&self, _buf: &mut [u8]) -> io::Result<usize> { self.0 }
+                pub fn read_vectored(&self, _bufs: &mut [IoSliceMut<'_>]) -> io::Result<usize> { self.0 }
+                pub fn is_read_vectored(&self) -> bool { self.0 }
+                pub fn read_buf(&self, _cursor: BorrowedCursor<'_>) -> io::Result<()> { self.0 }
+                pub fn write(&self, _buf: &[u8]) -> io::Result<usize> { self.0 }
+                pub fn write_vectored(&self, _bufs: &[IoSlice<'_>]) -> io::Result<usize> { self.0 }
+                pub fn is_write_vectored(&self) -> bool { self.0 }
+                pub fn flush(&self) -> io::Result<()> { self.0 }
+                pub fn seek(&self, _pos: SeekFrom) -> io::Result<u64> { self.0 }
+                pub fn tell(&self) -> io::Result<u64> { self.0 }
+                pub fn duplicate(&self) -> io::Result<File> { self.0 }
+                pub fn set_permissions(&self, _perm: FilePermissions) -> io::Result<()> { self.0 }
+                pub fn set_times(&self, _times: FileTimes) -> io::Result<()> { self.0 }
+            }
+
+            impl DirBuilder
+            {
+                pub fn new() -> DirBuilder
+                {
+                    DirBuilder
+                }
+
+                pub fn mkdir(&self, p: &Path) -> io::Result<()>
+                {
+                    efi::mkdir(p)
+                }
+            }
+
+            impl fmt::Debug for File
+            {
+                fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result { self.0 }
+            }
+
+            pub fn readdir(_p: &Path) -> io::Result<ReadDir> { unsupported() }
+            pub fn unlink(_p: &Path) -> io::Result<()> { unsupported() }
+            pub fn rename(_old: &Path, _new: &Path) -> io::Result<()> { unsupported() }
+            pub fn set_perm(_p: &Path, _perm: FilePermissions) -> io::Result<()> { unsupported() }
+            pub fn rmdir(_p: &Path) -> io::Result<()> { unsupported() }
+            pub fn remove_dir_all(_path: &Path) -> io::Result<()> { unsupported() }
+            pub fn exists(path: &Path) -> io::Result<bool>
+            {
+                let f = uefi_fs::File::from_path(path, file::MODE_READ, 0);
+                match f
+                {
+                    Ok(_) => Ok(true),
+                    Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(false),
+                    Err(e) => Err(e),
+                }
+            }
+
+            pub fn readlink(_p: &Path) -> io::Result<PathBuf> { unsupported() }
+            pub fn symlink(_original: &Path, _link: &Path) -> io::Result<()> { unsupported() }
+            pub fn link(_src: &Path, _dst: &Path) -> io::Result<()> { unsupported() }
+            pub fn stat(_p: &Path) -> io::Result<FileAttr> { unsupported() }
+            pub fn lstat(p: &Path) -> io::Result<FileAttr> { stat(p) }
+            pub fn canonicalize(p: &Path) -> io::Result<PathBuf> { ::path::absolute(p) }
+            pub fn copy(_from: &Path, _to: &Path) -> io::Result<u64> { unsupported() }
+
+            mod efi
+            {
+                use ::
+                {
+                    boxed::Box,
+                    path::Path,
+                    ptr::NonNull,
+                    sys::helpers,
+                    *,
+                };
+                use super::protocols::{device_path, file, simple_file_system};
+                
+                pub struct File(NonNull<file::Protocol>);
+
+                impl File
+                {
+                    pub fn from_path(path: &Path, open_mode: u64, attr: u64) -> io::Result<Self>
+                    {
+                        let absolute = ::path::absolute(path)?;
+                        let p = helpers::OwnedDevicePath::from_text(absolute.as_os_str())?;
+                        let (vol, mut path_remaining) = Self::open_volume_from_device_path(p.borrow())?;
+                        vol.open(&mut path_remaining, open_mode, attr)
+                    }
+                    /// Open Filesystem volume given a devicepath to the volume, or a file/directory in the volume.
+                    fn open_volume_from_device_path ( path: helpers::BorrowedDevicePath<'_> ) -> 
+                    io::Result<(Self, Box<[u16]>)>
+                    {
+                        let handles = match helpers::locate_handles(simple_file_system::PROTOCOL_GUID) {
+                            Ok(x) => x,
+                            Err(e) => return Err(e),
+                        };
+                        for handle in handles {
+                            let volume_device_path: NonNull<device_path::Protocol> =
+                                match helpers::open_protocol(handle, device_path::PROTOCOL_GUID) {
+                                    Ok(x) => x,
+                                    Err(_) => continue,
+                                };
+                            let volume_device_path = helpers::BorrowedDevicePath::new(volume_device_path);
+
+                            if let Some(left_path) = path_best_match(&volume_device_path, &path) {
+                                return Ok((Self::open_volume(handle)?, left_path));
+                            }
+                        }
+
+                        Err(constant_error!(io::ErrorKind::NotFound, "Volume Not Found"))
+                    }
+                    
+                    pub fn open_volume(device_handle: NonNull<::ffi::c_void>) -> io::Result<Self>
+                    {
+                        let simple_file_system_protocol = helpers::open_protocol::<simple_file_system::Protocol>(
+                            device_handle,
+                            simple_file_system::PROTOCOL_GUID,
+                        )?;
+
+                        let mut file_protocol = ::ptr::null_mut();
+                        let r = unsafe {
+                            ((*simple_file_system_protocol.as_ptr()).open_volume)(
+                                simple_file_system_protocol.as_ptr(),
+                                &mut file_protocol,
+                            )
+                        };
+                        if r.is_error() {
+                            return Err(io::Error::from_raw_os_error(r.as_usize()));
+                        }
+                        
+                        let p = NonNull::new(file_protocol).unwrap();
+                        Ok(Self(p))
+                    }
+
+                    fn open(&self, path: &mut [u16], open_mode: u64, attr: u64) -> io::Result<Self> {
+                        let file_ptr = self.0.as_ptr();
+                        let mut file_opened = ::ptr::null_mut();
+
+                        let r = unsafe {
+                            ((*file_ptr).open)(file_ptr, &mut file_opened, path.as_mut_ptr(), open_mode, attr)
+                        };
+
+                        if r.is_error() {
+                            return Err(io::Error::from_raw_os_error(r.as_usize()));
+                        }
+                        
+                        let p = NonNull::new(file_opened).unwrap();
+                        Ok(File(p))
+                    }
+                }
+
+                impl Drop for File {
+                    fn drop(&mut self) {
+                        let file_ptr = self.0.as_ptr();
+                        let _ = unsafe { ((*self.0.as_ptr()).close)(file_ptr) };
+                    }
+                }
+
+                /// A helper to check that target path is a descendent of source.
+                fn path_best_match(
+                    source: &helpers::BorrowedDevicePath<'_>,
+                    target: &helpers::BorrowedDevicePath<'_>,
+                ) -> Option<Box<[u16]>> {
+                    let mut source_iter = source.iter().take_while(|x| !x.is_end_instance());
+                    let mut target_iter = target.iter().take_while(|x| !x.is_end_instance());
+
+                    loop {
+                        match (source_iter.next(), target_iter.next()) {
+                            (Some(x), Some(y)) if x == y => continue,
+                            (None, Some(y)) => {
+                                let p = y.to_path().to_text().ok()?;
+                                return helpers::os_string_to_raw(&p);
+                            }
+                            _ => return None,
+                        }
+                    }
+                }
+
+                /// An implementation of mkdir to allow creating new directory without having to open the
+                /// volume twice (once for checking and once for creating)
+                pub fn mkdir(path: &Path) -> io::Result<()> {
+                    let absolute = crate::path::absolute(path)?;
+
+                    let p = helpers::OwnedDevicePath::from_text(absolute.as_os_str())?;
+                    let (vol, mut path_remaining) = File::open_volume_from_device_path(p.borrow())?;
+
+                    // Check if file exists
+                    match vol.open(&mut path_remaining, file::MODE_READ, 0) {
+                        Ok(_) => {
+                            return Err(io::Error::new(io::ErrorKind::AlreadyExists, "Path already exists"));
+                        }
+                        Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+                        Err(e) => return Err(e),
+                    }
+
+                    let _ = vol.open(
+                        &mut path_remaining,
+                        file::MODE_READ | file::MODE_WRITE | file::MODE_CREATE,
+                        file::DIRECTORY,
+                    )?;
+
+                    Ok(())
+                }
+            }
+        }
+
+        mod unsupported
+        {
+            use ::
+            {
+                ffi::OsString,
+                hash::{Hash, Hasher},
+                io::{self, BorrowedCursor, IoSlice, IoSliceMut, SeekFrom},
+                path::{Path, PathBuf},
+                sys::time::SystemTime,
+                sys::unsupported,
+                *,
+            };
+            
+            pub struct File(!);
+
+            pub struct FileAttr(!);
+
+            pub struct ReadDir(!);
+
+            pub struct DirEntry(!);
+
+            #[derive(Clone, Debug)]
+            pub struct OpenOptions {}
+
+            #[derive(Copy, Clone, Debug, Default)]
+            pub struct FileTimes {}
+
+            pub struct FilePermissions(!);
+
+            pub struct FileType(!);
+
+            #[derive( Debug )]
+            pub struct DirBuilder {}
+
+            impl FileAttr
+            {
+                pub fn size(&self) -> u64 {
+                    self.0
+                }
+
+                pub fn perm(&self) -> FilePermissions {
+                    self.0
+                }
+
+                pub fn file_type(&self) -> FileType {
+                    self.0
+                }
+
+                pub fn modified(&self) -> io::Result<SystemTime> {
+                    self.0
+                }
+
+                pub fn accessed(&self) -> io::Result<SystemTime> {
+                    self.0
+                }
+
+                pub fn created(&self) -> io::Result<SystemTime> {
+                    self.0
+                }
+            }
+
+            impl Clone for FileAttr 
+            {
+                fn clone(&self) -> FileAttr {
+                    self.0
+                }
+            }
+
+            impl FilePermissions 
+            {
+                pub fn readonly(&self) -> bool {
+                    self.0
+                }
+
+                pub fn set_readonly(&mut self, _readonly: bool) {
+                    self.0
+                }
+            }
+
+            impl Clone for FilePermissions 
+            {
+                fn clone(&self) -> FilePermissions {
+                    self.0
+                }
+            }
+
+            impl PartialEq for FilePermissions 
+            {
+                fn eq(&self, _other: &FilePermissions) -> bool {
+                    self.0
+                }
+            }
+
+            impl Eq for FilePermissions {}
+
+            impl fmt::Debug for FilePermissions 
+            {
+                fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    self.0
+                }
+            }
+
+            impl FileTimes 
+            {
+                pub fn set_accessed(&mut self, _t: SystemTime) {}
+                pub fn set_modified(&mut self, _t: SystemTime) {}
+            }
+
+            impl FileType 
+            {
+                pub fn is_dir(&self) -> bool {
+                    self.0
+                }
+
+                pub fn is_file(&self) -> bool {
+                    self.0
+                }
+
+                pub fn is_symlink(&self) -> bool {
+                    self.0
+                }
+            }
+
+            impl Clone for FileType 
+            {
+                fn clone(&self) -> FileType {
+                    self.0
+                }
+            }
+
+            impl Copy for FileType {}
+
+            impl PartialEq for FileType 
+            {
+                fn eq(&self, _other: &FileType) -> bool {
+                    self.0
+                }
+            }
+
+            impl Eq for FileType {}
+
+            impl Hash for FileType {
+                fn hash<H: Hasher>(&self, _h: &mut H) {
+                    self.0
+                }
+            }
+
+            impl fmt::Debug for FileType 
+            {
+                fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    self.0
+                }
+            }
+
+            impl fmt::Debug for ReadDir 
+            {
+                fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    self.0
+                }
+            }
+
+            impl Iterator for ReadDir 
+            {
+                type Item = io::Result<DirEntry>;
+
+                fn next(&mut self) -> Option<io::Result<DirEntry>> {
+                    self.0
+                }
+            }
+
+            impl DirEntry 
+            {
+                pub fn path(&self) -> PathBuf {
+                    self.0
+                }
+
+                pub fn file_name(&self) -> OsString {
+                    self.0
+                }
+
+                pub fn metadata(&self) -> io::Result<FileAttr> {
+                    self.0
+                }
+
+                pub fn file_type(&self) -> io::Result<FileType> {
+                    self.0
+                }
+            }
+
+            impl OpenOptions 
+            {
+                pub fn new() -> OpenOptions {
+                    OpenOptions {}
+                }
+
+                pub fn read(&mut self, _read: bool) {}
+                pub fn write(&mut self, _write: bool) {}
+                pub fn append(&mut self, _append: bool) {}
+                pub fn truncate(&mut self, _truncate: bool) {}
+                pub fn create(&mut self, _create: bool) {}
+                pub fn create_new(&mut self, _create_new: bool) {}
+            }
+
+            impl File 
+            {
+                pub fn open(_path: &Path, _opts: &OpenOptions) -> io::Result<File> {
+                    unsupported()
+                }
+
+                pub fn file_attr(&self) -> io::Result<FileAttr> {
+                    self.0
+                }
+
+                pub fn fsync(&self) -> io::Result<()> {
+                    self.0
+                }
+
+                pub fn datasync(&self) -> io::Result<()> {
+                    self.0
+                }
+
+                pub fn lock(&self) -> io::Result<()> {
+                    self.0
+                }
+
+                pub fn lock_shared(&self) -> io::Result<()> {
+                    self.0
+                }
+
+                pub fn try_lock(&self) -> io::Result<bool> {
+                    self.0
+                }
+
+                pub fn try_lock_shared(&self) -> io::Result<bool> {
+                    self.0
+                }
+
+                pub fn unlock(&self) -> io::Result<()> {
+                    self.0
+                }
+
+                pub fn truncate(&self, _size: u64) -> io::Result<()> {
+                    self.0
+                }
+
+                pub fn read(&self, _buf: &mut [u8]) -> io::Result<usize> {
+                    self.0
+                }
+
+                pub fn read_vectored(&self, _bufs: &mut [IoSliceMut<'_>]) -> io::Result<usize> {
+                    self.0
+                }
+
+                pub fn is_read_vectored(&self) -> bool {
+                    self.0
+                }
+
+                pub fn read_buf(&self, _cursor: BorrowedCursor<'_>) -> io::Result<()> {
+                    self.0
+                }
+
+                pub fn write(&self, _buf: &[u8]) -> io::Result<usize> {
+                    self.0
+                }
+
+                pub fn write_vectored(&self, _bufs: &[IoSlice<'_>]) -> io::Result<usize> {
+                    self.0
+                }
+
+                pub fn is_write_vectored(&self) -> bool {
+                    self.0
+                }
+
+                pub fn flush(&self) -> io::Result<()> {
+                    self.0
+                }
+
+                pub fn seek(&self, _pos: SeekFrom) -> io::Result<u64> {
+                    self.0
+                }
+
+                pub fn tell(&self) -> io::Result<u64> {
+                    self.0
+                }
+
+                pub fn duplicate(&self) -> io::Result<File> {
+                    self.0
+                }
+
+                pub fn set_permissions(&self, _perm: FilePermissions) -> io::Result<()> {
+                    self.0
+                }
+
+                pub fn set_times(&self, _times: FileTimes) -> io::Result<()> {
+                    self.0
+                }
+            }
+
+            impl DirBuilder 
+            {
+                pub fn new() -> DirBuilder {
+                    DirBuilder {}
+                }
+
+                pub fn mkdir(&self, _p: &Path) -> io::Result<()> {
+                    unsupported()
+                }
+            }
+
+            impl fmt::Debug for File 
+            {
+                fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    self.0
+                }
+            }
+
+            pub fn readdir(_p: &Path) -> io::Result<ReadDir> 
+            {
+                unsupported()
+            }
+
+            pub fn unlink(_p: &Path) -> io::Result<()> 
+            {
+                unsupported()
+            }
+
+            pub fn rename(_old: &Path, _new: &Path) -> io::Result<()> 
+            {
+                unsupported()
+            }
+
+            pub fn set_perm(_p: &Path, perm: FilePermissions) -> io::Result<()> 
+            {
+                match perm.0 {}
+            }
+
+            pub fn rmdir(_p: &Path) -> io::Result<()> 
+            {
+                unsupported()
+            }
+
+            pub fn remove_dir_all(_path: &Path) -> io::Result<()> 
+            {
+                unsupported()
+            }
+
+            pub fn exists(_path: &Path) -> io::Result<bool> 
+            {
+                unsupported()
+            }
+
+            pub fn readlink(_p: &Path) -> io::Result<PathBuf> 
+            {
+                unsupported()
+            }
+
+            pub fn symlink(_original: &Path, _link: &Path) -> io::Result<()> 
+            {
+                unsupported()
+            }
+
+            pub fn link(_src: &Path, _dst: &Path) -> io::Result<()> 
+            {
+                unsupported()
+            }
+
+            pub fn stat(_p: &Path) -> io::Result<FileAttr> 
+            {
+                unsupported()
+            }
+
+            pub fn lstat(_p: &Path) -> io::Result<FileAttr> 
+            {
+                unsupported()
+            }
+
+            pub fn canonicalize(_p: &Path) -> io::Result<PathBuf> 
+            {
+                unsupported()
+            }
+
+            pub fn copy(_from: &Path, _to: &Path) -> io::Result<u64> 
+            {
+                unsupported()
+            }
         }
 
         #[cfg( unix )] pub use self::unix::{ * };
@@ -27956,6 +29629,718 @@ pub mod system
             #[cfg(not(windows))] return imp::exists(path);
             #[cfg(windows)] with_native_path(path, &imp::exists)
         }
+    }
+
+    pub mod os_str
+    {
+        mod bytes
+        {
+            //! The underlying OsString/OsStr implementation on Unix and many other systems: `Vec<u8>`/`[u8]`.
+            use ::
+            {
+                clone::CloneToUninit,
+                borrow::Cow,
+                collections::TryReserveError,
+                fmt::Write,
+                rc::Rc,
+                sync::Arc,
+                sys::common::{AsInner, FromInner, IntoInner},
+                *,
+            };
+
+            #[repr(transparent)] #[derive(Hash)]
+            pub struct Buf
+            {
+                pub inner: Vec<u8>,
+            }
+
+            #[repr(transparent)]
+            pub struct Slice
+            {
+                pub inner: [u8],
+            }
+
+            impl IntoInner<Vec<u8>> for Buf
+            {
+                fn into_inner(self) -> Vec<u8>
+                {
+                    self.inner
+                }
+            }
+
+            impl FromInner<Vec<u8>> for Buf
+            {
+                fn from_inner(inner: Vec<u8>) -> Self
+                {
+                    Buf { inner }
+                }
+            }
+
+            impl AsInner<[u8]> for Buf
+            {
+                #[inline]
+                fn as_inner(&self) -> &[u8]
+                {
+                    &self.inner
+                }
+            }
+
+            impl fmt::Debug for Buf
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    fmt::Debug::fmt(self.as_slice(), f)
+                }
+            }
+
+            impl fmt::Display for Buf
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    fmt::Display::fmt(self.as_slice(), f)
+                }
+            }
+
+            impl fmt::Debug for Slice
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    fmt::Debug::fmt(&self.inner.utf8_chunks().debug(), f)
+                }
+            }
+
+            impl fmt::Display for Slice
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    if self.inner.is_empty()
+                    {
+                        return "".fmt(f);
+                    }
+
+                    for chunk in self.inner.utf8_chunks()
+                    {
+                        let valid = chunk.valid();
+                        if chunk.invalid().is_empty() {
+                            return valid.fmt(f);
+                        }
+
+                        f.write_str(valid)?;
+                        f.write_char(char::REPLACEMENT_CHARACTER)?;
+                    }
+                    Ok(())
+                }
+            }
+
+            impl Clone for Buf
+            {
+                #[inline]
+                fn clone(&self) -> Self
+                {
+                    Buf { inner: self.inner.clone() }
+                }
+
+                #[inline]
+                fn clone_from(&mut self, source: &Self)
+                {
+                    self.inner.clone_from(&source.inner)
+                }
+            }
+
+            impl Buf
+            {
+                #[inline] pub fn into_encoded_bytes(self) -> Vec<u8>
+                {
+                    self.inner
+                }
+
+                #[inline]
+                pub unsafe fn from_encoded_bytes_unchecked(s: Vec<u8>) -> Self
+                {
+                    Self { inner: s }
+                }
+
+                #[inline] pub fn into_string(self) -> Result<String, Buf>
+                {
+                    String::from_utf8(self.inner).map_err(|p| Buf { inner: p.into_bytes() })
+                }
+
+                #[inline] pub fn from_string(s: String) -> Buf
+                {
+                    Buf { inner: s.into_bytes() }
+                }
+
+                #[inline] pub fn with_capacity(capacity: usize) -> Buf
+                {
+                    Buf { inner: Vec::with_capacity(capacity) }
+                }
+
+                #[inline] pub fn clear(&mut self)
+                {
+                    self.inner.clear()
+                }
+
+                #[inline] pub fn capacity(&self) -> usize
+                {
+                    self.inner.capacity()
+                }
+
+                #[inline] pub fn push_slice(&mut self, s: &Slice)
+                {
+                    self.inner.extend_from_slice(&s.inner)
+                }
+
+                #[inline] pub fn push_str(&mut self, s: &str)
+                {
+                    self.inner.extend_from_slice(s.as_bytes());
+                }
+
+                #[inline] pub fn reserve(&mut self, additional: usize)
+                {
+                    self.inner.reserve(additional)
+                }
+
+                #[inline] pub fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError>
+                {
+                    self.inner.try_reserve(additional)
+                }
+
+                #[inline] pub fn reserve_exact(&mut self, additional: usize)
+                {
+                    self.inner.reserve_exact(additional)
+                }
+
+                #[inline] pub fn try_reserve_exact(&mut self, additional: usize) -> Result<(), TryReserveError>
+                {
+                    self.inner.try_reserve_exact(additional)
+                }
+
+                #[inline] pub fn shrink_to_fit(&mut self)
+                {
+                    self.inner.shrink_to_fit()
+                }
+
+                #[inline] pub fn shrink_to(&mut self, min_capacity: usize)
+                {
+                    self.inner.shrink_to(min_capacity)
+                }
+
+                #[inline] pub fn as_slice(&self) -> &Slice
+                {
+                    unsafe { mem::transmute(self.inner.as_slice()) }
+                }
+
+                #[inline] pub fn as_mut_slice(&mut self) -> &mut Slice
+                {
+                    unsafe { mem::transmute(self.inner.as_mut_slice()) }
+                }
+
+                #[inline] pub fn leak<'a>(self) -> &'a mut Slice
+                {
+                    unsafe { mem::transmute(self.inner.leak()) }
+                }
+
+                #[inline] pub fn into_box(self) -> Box<Slice>
+                {
+                    unsafe { mem::transmute(self.inner.into_boxed_slice()) }
+                }
+
+                #[inline] pub fn from_box(boxed: Box<Slice>) -> Buf
+                {
+                    let inner: Box<[u8]> = unsafe { mem::transmute(boxed) };
+                    Buf { inner: inner.into_vec() }
+                }
+
+                #[inline] pub fn into_arc(&self) -> Arc<Slice>
+                {
+                    self.as_slice().into_arc()
+                }
+
+                #[inline] pub fn into_rc(&self) -> Rc<Slice>
+                {
+                    self.as_slice().into_rc()
+                }
+                
+                #[inline] pub fn truncate(&mut self, len: usize)
+                {
+                    self.inner.truncate(len);
+                }
+                
+                #[inline] pub fn extend_from_slice(&mut self, other: &[u8])
+                {
+                    self.inner.extend_from_slice(other);
+                }
+            }
+
+            impl Slice
+            {
+                #[inline] pub fn as_encoded_bytes(&self) -> &[u8]
+                {
+                    &self.inner
+                }
+
+                #[inline]
+                pub unsafe fn from_encoded_bytes_unchecked(s: &[u8]) -> &Slice
+                {
+                    unsafe { mem::transmute(s) }
+                }
+
+                #[track_caller]
+                #[inline] pub fn check_public_boundary(&self, index: usize)
+                {
+                    if index == 0 || index == self.inner.len() {
+                        return;
+                    }
+                    if index < self.inner.len()
+                        && (self.inner[index - 1].is_ascii() || self.inner[index].is_ascii())
+                    {
+                        return;
+                    }
+
+                    slow_path(&self.inner, index);
+                    
+                    #[track_caller]
+                    #[inline(never)]
+                    fn slow_path(bytes: &[u8], index: usize)
+                    {
+                        let (before, after) = bytes.split_at(index);
+                        let after = after.get(..4).unwrap_or(after);
+                        match str::from_utf8(after)
+                        {
+                            Ok(_) => return,
+                            Err(err) if err.valid_up_to() != 0 => return,
+                            Err(_) => (),
+                        }
+
+                        for len in 2..=4.min(index)
+                        {
+                            let before = &before[index - len..];
+                            if str::from_utf8(before).is_ok()
+                            {
+                                return;
+                            }
+                        }
+
+                        panic!("byte index {index} is not an OsStr boundary");
+                    }
+                }
+
+                #[inline] pub fn from_str(s: &str) -> &Slice
+                {
+                    unsafe { Slice::from_encoded_bytes_unchecked(s.as_bytes()) }
+                }
+
+                #[inline] pub fn to_str(&self) -> Result<&str, crate::str::Utf8Error>
+                {
+                    str::from_utf8(&self.inner)
+                }
+
+                #[inline] pub fn to_string_lossy(&self) -> Cow<'_, str>
+                {
+                    String::from_utf8_lossy(&self.inner)
+                }
+
+                #[inline] pub fn to_owned(&self) -> Buf
+                {
+                    Buf { inner: self.inner.to_vec() }
+                }
+
+                #[inline] pub fn clone_into(&self, buf: &mut Buf)
+                {
+                    self.inner.clone_into(&mut buf.inner)
+                }
+
+                #[inline] pub fn into_box(&self) -> Box<Slice>
+                {
+                    let boxed: Box<[u8]> = self.inner.into();
+                    unsafe { mem::transmute(boxed) }
+                }
+
+                #[inline] pub fn empty_box() -> Box<Slice>
+                {
+                    let boxed: Box<[u8]> = Default::default();
+                    unsafe { mem::transmute(boxed) }
+                }
+
+                #[inline] pub fn into_arc(&self) -> Arc<Slice>
+                {
+                    let arc: Arc<[u8]> = Arc::from(&self.inner);
+                    unsafe { Arc::from_raw(Arc::into_raw(arc) as *const Slice) }
+                }
+
+                #[inline] pub fn into_rc(&self) -> Rc<Slice>
+                {
+                    let rc: Rc<[u8]> = Rc::from(&self.inner);
+                    unsafe { Rc::from_raw(Rc::into_raw(rc) as *const Slice) }
+                }
+
+                #[inline] pub fn make_ascii_lowercase(&mut self)
+                {
+                    self.inner.make_ascii_lowercase()
+                }
+
+                #[inline] pub fn make_ascii_uppercase(&mut self)
+                {
+                    self.inner.make_ascii_uppercase()
+                }
+
+                #[inline] pub fn to_ascii_lowercase(&self) -> Buf
+                {
+                    Buf { inner: self.inner.to_ascii_lowercase() }
+                }
+
+                #[inline] pub fn to_ascii_uppercase(&self) -> Buf
+                {
+                    Buf { inner: self.inner.to_ascii_uppercase() }
+                }
+
+                #[inline] pub fn is_ascii(&self) -> bool {
+                    self.inner.is_ascii()
+                }
+
+                #[inline] pub fn eq_ignore_ascii_case(&self, other: &Self) -> bool
+                {
+                    self.inner.eq_ignore_ascii_case(&other.inner)
+                }
+            }
+            unsafe impl CloneToUninit for Slice
+            {
+                #[inline] unsafe fn clone_to_uninit(&self, dst: *mut u8)
+                {
+                    unsafe { self.inner.clone_to_uninit(dst) }
+                }
+            }
+        }
+        
+        mod wtf8
+        {
+            //! The underlying OsString/OsStr implementation on Windows is a wrapper around the "WTF-8" encoding.
+            use ::
+            {
+                clone::CloneToUninit,
+                borrow::Cow,
+                collections::TryReserveError,
+                rc::Rc,
+                sync::Arc,
+                sys::common::wtf8::{ AsInner, FromInner, IntoInner, Wtf8, Wtf8Buf, check_utf8_boundary },
+                *,
+            };
+            
+            #[derive(Hash)]
+            pub struct Buf
+            {
+                pub inner: Wtf8Buf,
+            }
+
+            #[repr(transparent)]
+            pub struct Slice
+            {
+                pub inner: Wtf8,
+            }
+
+            impl IntoInner<Wtf8Buf> for Buf
+            {
+                fn into_inner(self) -> Wtf8Buf
+                {
+                    self.inner
+                }
+            }
+
+            impl FromInner<Wtf8Buf> for Buf
+            {
+                fn from_inner(inner: Wtf8Buf) -> Self
+                {
+                    Buf { inner }
+                }
+            }
+
+            impl AsInner<Wtf8> for Buf
+            {
+                #[inline]
+                fn as_inner(&self) -> &Wtf8
+                {
+                    &self.inner
+                }
+            }
+
+            impl fmt::Debug for Buf
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    fmt::Debug::fmt(&self.inner, f)
+                }
+            }
+
+            impl fmt::Display for Buf
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    fmt::Display::fmt(&self.inner, f)
+                }
+            }
+
+            impl fmt::Debug for Slice
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    fmt::Debug::fmt(&self.inner, f)
+                }
+            }
+
+            impl fmt::Display for Slice
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    fmt::Display::fmt(&self.inner, f)
+                }
+            }
+
+            impl Clone for Buf
+            {
+                #[inline]
+                fn clone(&self) -> Self
+                {
+                    Buf { inner: self.inner.clone() }
+                }
+
+                #[inline]
+                fn clone_from(&mut self, source: &Self)
+                {
+                    self.inner.clone_from(&source.inner)
+                }
+            }
+
+            impl Buf
+            {
+                #[inline] pub fn into_encoded_bytes(self) -> Vec<u8>
+                {
+                    self.inner.into_bytes()
+                }
+
+                #[inline]  pub unsafe fn from_encoded_bytes_unchecked(s: Vec<u8>) -> Self
+                {
+                    unsafe { Self { inner: Wtf8Buf::from_bytes_unchecked(s) } }
+                }
+
+                #[inline] pub fn into_string(self) -> Result<String, Buf>
+                {
+                    self.inner.into_string().map_err(|buf| Buf { inner: buf })
+                }
+
+                #[inline] pub fn from_string(s: String) -> Buf
+                {
+                    Buf { inner: Wtf8Buf::from_string(s) }
+                }
+
+                #[inline] pub fn with_capacity(capacity: usize) -> Buf
+                {
+                    Buf { inner: Wtf8Buf::with_capacity(capacity) }
+                }
+
+                #[inline] pub fn clear(&mut self)
+                {
+                    self.inner.clear()
+                }
+
+                #[inline] pub fn capacity(&self) -> usize
+                {
+                    self.inner.capacity()
+                }
+
+                #[inline] pub fn push_slice(&mut self, s: &Slice)
+                {
+                    self.inner.push_wtf8(&s.inner)
+                }
+
+                #[inline] pub fn push_str(&mut self, s: &str)
+                {
+                    self.inner.push_str(s);
+                }
+
+                #[inline] pub fn reserve(&mut self, additional: usize)
+                {
+                    self.inner.reserve(additional)
+                }
+
+                #[inline] pub fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError>
+                {
+                    self.inner.try_reserve(additional)
+                }
+
+                #[inline] pub fn reserve_exact(&mut self, additional: usize)
+                {
+                    self.inner.reserve_exact(additional)
+                }
+
+                #[inline] pub fn try_reserve_exact(&mut self, additional: usize) -> Result<(), TryReserveError>
+                {
+                    self.inner.try_reserve_exact(additional)
+                }
+
+                #[inline] pub fn shrink_to_fit(&mut self)
+                {
+                    self.inner.shrink_to_fit()
+                }
+
+                #[inline] pub fn shrink_to(&mut self, min_capacity: usize)
+                {
+                    self.inner.shrink_to(min_capacity)
+                }
+
+                #[inline] pub fn as_slice(&self) -> &Slice
+                {
+                    unsafe { mem::transmute(self.inner.as_slice()) }
+                }
+
+                #[inline] pub fn as_mut_slice(&mut self) -> &mut Slice
+                {
+                    unsafe { mem::transmute(self.inner.as_mut_slice()) }
+                }
+
+                #[inline] pub fn leak<'a>(self) -> &'a mut Slice
+                {
+                    unsafe { mem::transmute(self.inner.leak()) }
+                }
+
+                #[inline] pub fn into_box(self) -> Box<Slice>
+                {
+                    unsafe { mem::transmute(self.inner.into_box()) }
+                }
+
+                #[inline] pub fn from_box(boxed: Box<Slice>) -> Buf
+                {
+                    let inner: Box<Wtf8> = unsafe { mem::transmute(boxed) };
+                    Buf { inner: Wtf8Buf::from_box(inner) }
+                }
+
+                #[inline] pub fn into_arc(&self) -> Arc<Slice>
+                {
+                    self.as_slice().into_arc()
+                }
+
+                #[inline] pub fn into_rc(&self) -> Rc<Slice>
+                {
+                    self.as_slice().into_rc()
+                }
+                
+                #[inline] pub fn truncate(&mut self, len: usize)
+                {
+                    self.inner.truncate(len);
+                }
+                
+                #[inline] pub fn extend_from_slice(&mut self, other: &[u8])
+                {
+                    self.inner.extend_from_slice(other);
+                }
+            }
+
+            impl Slice
+            {
+                #[inline] pub fn as_encoded_bytes(&self) -> &[u8]
+                {
+                    self.inner.as_bytes()
+                }
+
+                #[inline] pub unsafe fn from_encoded_bytes_unchecked(s: &[u8]) -> &Slice
+                {
+                    unsafe { mem::transmute(Wtf8::from_bytes_unchecked(s)) }
+                }
+
+                #[track_caller] #[inline] pub fn check_public_boundary(&self, index: usize)
+                {
+                    check_utf8_boundary(&self.inner, index);
+                }
+
+                #[inline] pub fn from_str(s: &str) -> &Slice
+                {
+                    unsafe { mem::transmute(Wtf8::from_str(s)) }
+                }
+
+                #[inline] pub fn to_str(&self) -> Result<&str, crate::str::Utf8Error>
+                {
+                    self.inner.as_str()
+                }
+
+                #[inline] pub fn to_string_lossy(&self) -> Cow<'_, str>
+                {
+                    self.inner.to_string_lossy()
+                }
+
+                #[inline] pub fn to_owned(&self) -> Buf
+                {
+                    Buf { inner: self.inner.to_owned() }
+                }
+
+                #[inline] pub fn clone_into(&self, buf: &mut Buf)
+                {
+                    self.inner.clone_into(&mut buf.inner)
+                }
+
+                #[inline] pub fn into_box(&self) -> Box<Slice>
+                {
+                    unsafe { mem::transmute(self.inner.into_box()) }
+                }
+
+                #[inline] pub fn empty_box() -> Box<Slice>
+                {
+                    unsafe { mem::transmute(Wtf8::empty_box()) }
+                }
+
+                #[inline] pub fn into_arc(&self) -> Arc<Slice>
+                {
+                    let arc = self.inner.into_arc();
+                    unsafe { Arc::from_raw(Arc::into_raw(arc) as *const Slice) }
+                }
+
+                #[inline] pub fn into_rc(&self) -> Rc<Slice>
+                {
+                    let rc = self.inner.into_rc();
+                    unsafe { Rc::from_raw(Rc::into_raw(rc) as *const Slice) }
+                }
+
+                #[inline] pub fn make_ascii_lowercase(&mut self)
+                {
+                    self.inner.make_ascii_lowercase()
+                }
+
+                #[inline] pub fn make_ascii_uppercase(&mut self)
+                {
+                    self.inner.make_ascii_uppercase()
+                }
+
+                #[inline] pub fn to_ascii_lowercase(&self) -> Buf
+                {
+                    Buf { inner: self.inner.to_ascii_lowercase() }
+                }
+
+                #[inline] pub fn to_ascii_uppercase(&self) -> Buf
+                {
+                    Buf { inner: self.inner.to_ascii_uppercase() }
+                }
+
+                #[inline] pub fn is_ascii(&self) -> bool
+                {
+                    self.inner.is_ascii()
+                }
+
+                #[inline] pub fn eq_ignore_ascii_case(&self, other: &Self) -> bool
+                {
+                    self.inner.eq_ignore_ascii_case(&other.inner)
+                }
+            }
+            
+            unsafe impl CloneToUninit for Slice
+            {
+                #[inline] unsafe fn clone_to_uninit(&self, dst: *mut u8)
+                {
+                    unsafe { self.inner.clone_to_uninit(dst) }
+                }
+            }
+        }
+
+        #[cfg( unix )] pub use self::bytes::{ Buf, Slice };
+        #[cfg( windows )] pub use self::wtf8::{ Buf, Slice };
+        #[cfg(target_os = "uefi")]  pub use self::wtf8::{ Buf, Slice };
     }
 
     pub mod pipe
@@ -28822,7 +31207,7 @@ pub mod system
                     |$gr:ident| $getter:expr , |$sr:ident, $v:ident| $setter:expr ) , )+ ) => {
                 static VARIABLE_NAMES: &[&str] = &[ $( $name ),+ ];
 
-                pub(crate) struct Variables {
+                pub struct Variables {
                     $( pub $field : $ty ),*
                 }
 
@@ -30782,6 +33167,206 @@ pub mod system
             }
         }
     }
+    
+    pub mod support
+    {
+        use ::
+        {
+            *,
+        };
+
+        pub mod os
+        {
+            use ::
+            {
+                error::Error as StdError,
+                ffi::{OsStr, OsString},
+                marker::PhantomData,
+                path::{self, PathBuf},
+                *,
+            }; use super::unsupported;
+            
+            pub fn errno() -> i32 { 0 }
+            pub fn error_string(_errno: i32) -> String { "operation successful".to_string() }
+            pub fn getcwd() -> io::Result<PathBuf> { unsupported() }
+            pub fn chdir(_: &path::Path) -> io::Result<()> { unsupported() }
+            pub struct SplitPaths<'a>(!, PhantomData<&'a ()>);
+            pub fn split_paths(_unparsed: &OsStr) -> SplitPaths<'_> { panic!("unsupported") }
+
+            impl<'a> Iterator for SplitPaths<'a>
+            {
+                type Item = PathBuf;
+                fn next(&mut self) -> Option<PathBuf> { self.0 }
+            }
+
+            #[derive( Debug )]
+            pub struct JoinPathsError;
+
+            pub fn join_paths<I, T>(_paths: I) -> Result<OsString, JoinPathsError> where
+            I: Iterator<Item = T>,
+            T: AsRef<OsStr>
+            { Err(JoinPathsError) }
+
+            impl fmt::Display for JoinPathsError
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { "not supported on this platform yet".fmt(f) }
+            }
+
+            impl StdError for JoinPathsError
+            {
+                fn description(&self) -> &str { "not supported on this platform yet" }
+            }
+
+            pub fn current_exe() -> io::Result<PathBuf> { unsupported() }
+            pub fn temp_dir() -> PathBuf { panic!("no filesystem on this platform") }
+            pub fn home_dir() -> Option<PathBuf> { None }
+            pub fn exit(_code: i32) -> ! { crate::intrinsics::abort() }
+            pub fn getpid() -> u32 { panic!("no pids on this platform") }
+        }
+
+        pub mod pipe
+        {
+            use ::
+            {
+                io::{ self, BorrowedCursor, IoSlice, IoSliceMut },
+                sys::common::{FromInner, IntoInner},
+                *,
+            };
+            
+            pub struct AnonPipe(!);
+
+            impl fmt::Debug for AnonPipe
+            {
+                fn fmt(&self, _: &mut fmt::Formatter<'_>) -> fmt::Result { self.0 }
+            }
+
+            impl AnonPipe
+            {
+                pub fn try_clone(&self) -> io::Result<Self> { self.0 }
+                pub fn read(&self, _buf: &mut [u8]) -> io::Result<usize> { self.0 }
+                pub fn read_buf(&self, _buf: BorrowedCursor<'_>) -> io::Result<()> { self.0 }
+                pub fn read_vectored(&self, _bufs: &mut [IoSliceMut<'_>]) -> io::Result<usize> { self.0 }
+                pub fn is_read_vectored(&self) -> bool { self.0 }
+                pub fn read_to_end(&self, _buf: &mut Vec<u8>) -> io::Result<usize> { self.0 }
+                pub fn write(&self, _buf: &[u8]) -> io::Result<usize> { self.0 }
+                pub fn write_vectored(&self, _bufs: &[IoSlice<'_>]) -> io::Result<usize> { self.0 }
+                pub fn is_write_vectored(&self) -> bool { self.0 }
+                pub fn diverge(&self) -> ! { self.0 }
+            }
+
+            pub fn read2(p1: AnonPipe, _v1: &mut Vec<u8>, _p2: AnonPipe, _v2: &mut Vec<u8>) -> io::Result<()>
+            { match p1.0 {} }
+
+            impl FromInner<!> for AnonPipe 
+            {
+                fn from_inner(inner: !) -> Self { inner }
+            }
+
+            impl IntoInner<!> for AnonPipe
+            {
+                fn into_inner(self) -> ! { self.0 }
+            }
+        }
+
+        pub mod thread
+        {
+            use ::
+            {
+                ffi::CStr,
+                num::NonZero,
+                time::Duration,
+                *,
+            }; use super::unsupported;
+            
+            pub struct Thread(!);
+
+            pub const DEFAULT_MIN_STACK_SIZE: usize = 64 * 1024;
+
+            impl Thread
+            {
+                pub unsafe fn new(_stack: usize, _p: Box<dyn FnOnce()>) -> io::Result<Thread> { unsupported() }
+                pub fn yield_now() {}
+                pub fn set_name(_name: &CStr) {}
+                pub fn sleep(_dur: Duration) { panic!("can't sleep"); }
+                pub fn join(self) { self.0 }
+            }
+
+            pub fn available_parallelism() -> io::Result<NonZero<usize>> { unsupported() }
+        }
+
+        pub mod time
+        {
+            use ::
+            {
+                time::Duration,
+                *,
+            };
+
+            #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
+            pub struct Instant(Duration);
+
+            #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
+            pub struct SystemTime(Duration);
+
+            pub const UNIX_EPOCH: SystemTime = SystemTime(Duration::from_secs(0));
+
+            impl Instant 
+            {
+                pub fn now() -> Instant { panic!("time not implemented on this platform") }
+                pub fn checked_sub_instant(&self, other: &Instant) -> Option<Duration> { self.0.checked_sub(other.0) }
+                pub fn checked_add_duration(&self, other: &Duration) -> Option<Instant> { Some(Instant(self.0.checked_add(*other)?)) }
+                pub fn checked_sub_duration(&self, other: &Duration) -> Option<Instant> { Some(Instant(self.0.checked_sub(*other)?)) }
+            }
+
+            impl SystemTime
+            {
+                pub fn now() -> SystemTime { panic!("time not implemented on this platform") }
+
+                pub fn sub_time(&self, other: &SystemTime) -> Result<Duration, Duration>
+                { self.0.checked_sub(other.0).ok_or_else(|| other.0 - self.0) }
+
+                pub fn checked_add_duration(&self, other: &Duration) -> Option<SystemTime>
+                { Some(SystemTime(self.0.checked_add(*other)?)) }
+
+                pub fn checked_sub_duration(&self, other: &Duration) -> Option<SystemTime>
+                { Some(SystemTime(self.0.checked_sub(*other)?)) }
+            }
+        }
+
+        pub mod common
+        {
+            use ::
+            {
+                io::{ self as stdio },
+                *,
+            };
+            
+            pub unsafe fn init(_argc: isize, _argv: *const *const u8, _sigpipe: u8) {}
+            
+            pub unsafe fn cleanup() {}
+
+            pub fn unsupported<T>() -> stdio::Result<T> {
+                Err(unsupported_err())
+            }
+
+            pub fn unsupported_err() -> stdio::Error {
+                stdio::Error::UNSUPPORTED_PLATFORM
+            }
+
+            pub fn is_interrupted(_code: i32) -> bool {
+                false
+            }
+
+            pub fn decode_error_kind(_code: i32) -> ::io::ErrorKind {
+                ::io::ErrorKind::Uncategorized
+            }
+
+            pub fn abort_internal() -> ! {
+                ::intrinsics::abort();
+            }
+        }
+        pub use self::common::*;
+    } use self::system::support::unsupported;
 
     pub mod windows
     {
@@ -32514,10 +35099,19 @@ pub mod system
             if i.is_zero() { Err( ::io::Error::last_os_error() ) }
             else { Ok(i) }
         }
+
+        /// Just to provide the same interface as sys/pal/unix/net.rs
+        pub fn cvt_r<T, F>(mut f: F) -> io::Result<T> where
+        T: IsMinusOne,
+        F: FnMut() -> T,
+        {
+            cvt(f())
+        }
     }
     #[cfg( unix )] pub use self::unix as api;
     #[cfg( windows )] pub use self::windows as api;
     pub use self::api::{ Terminal, TerminalReadGuard, TerminalWriteGuard };
+    
     /// Private trait used to prevent external crates from implementing extension traits
     pub trait Private {}
 
@@ -33892,7 +36486,7 @@ pub mod terminal
             String(Vec<u8>),
         }
         /// Expansion helper struct.
-        #[derive(Debug)]
+        #[derive( Debug )]
         pub struct Expansion<'a, T: 'a + AsRef<[u8]>> 
         {
             string: &'a T,
@@ -37825,4 +40419,4 @@ fn main()
     }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 37828
+// 40422
