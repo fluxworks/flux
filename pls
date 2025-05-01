@@ -73,8 +73,10 @@ External Macros
 #[macro_use] extern crate lazy_static; */
 /*
 External Crates */
+extern crate rand;
 extern crate regex as re;
-extern crate nix; 
+extern crate nix;
+extern crate time as timed;
 /*
     extern crate fnv;
     extern crate libc;
@@ -84,7 +86,6 @@ extern crate nix;
     extern crate unicode_normalization;
     extern crate unicode_width; 
 */
-
 extern crate libc;
 
 #[macro_use] pub mod macros
@@ -118,6 +119,16 @@ pub mod borrow
 {
     //! A module for working with borrowed data.
     pub use std::borrow::{ * };
+}
+
+pub mod cell
+{
+    pub use std::cell::{ * };
+}
+
+pub mod cmp
+{
+    pub use std::cmp::{ * };
 }
 
 pub mod collections
@@ -374,101 +385,12 @@ pub mod fmt
     use ::
     {
         borrow::{ Borrow },
-        primitive::{ Uuid, Variant },
+        primitive::{ Braced, Hyphenated, Simple, Urn, Uuid, Variant },
         str::{ FromStr },
         string::{ String, ToString },
         *,
     };
     // rust-uuid v1.4::fmt.rs
-    
-
-    macro_rules! impl_fmt_traits
-    {
-        ($($T:ident<$($a:lifetime),*>),+) => {$(
-            impl<$($a),*> fmt::Display for $T<$($a),*> {
-                #[inline]
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                    fmt::LowerHex::fmt(self, f)
-                }
-            }
-
-            impl<$($a),*> fmt::LowerHex for $T<$($a),*> {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                    f.write_str(self.encode_lower(&mut [0; Self::LENGTH]))
-                }
-            }
-
-            impl<$($a),*> fmt::UpperHex for $T<$($a),*> {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                    f.write_str(self.encode_upper(&mut [0; Self::LENGTH]))
-                }
-            }
-
-            impl_fmt_from!($T<$($a),*>);
-        )+}
-    }
-
-    macro_rules! impl_fmt_from
-    {
-        ($T:ident<>) => {
-            impl From<Uuid> for $T {
-                #[inline]
-                fn from(f: Uuid) -> Self {
-                    $T(f)
-                }
-            }
-
-            impl From<$T> for Uuid {
-                #[inline]
-                fn from(f: $T) -> Self {
-                    f.into_uuid()
-                }
-            }
-
-            impl AsRef<Uuid> for $T {
-                #[inline]
-                fn as_ref(&self) -> &Uuid {
-                    &self.0
-                }
-            }
-
-            impl Borrow<Uuid> for $T {
-                #[inline]
-                fn borrow(&self) -> &Uuid {
-                    &self.0
-                }
-            }
-        };
-        ($T:ident<$a:lifetime>) => {
-            impl<$a> From<&$a Uuid> for $T<$a> {
-                #[inline]
-                fn from(f: &$a Uuid) -> Self {
-                    $T::from_uuid_ref(f)
-                }
-            }
-
-            impl<$a> From<$T<$a>> for &$a Uuid {
-                #[inline]
-                fn from(f: $T<$a>) -> &$a Uuid {
-                    f.0
-                }
-            }
-
-            impl<$a> AsRef<Uuid> for $T<$a> {
-                #[inline]
-                fn as_ref(&self) -> &Uuid {
-                    self.0
-                }
-            }
-
-            impl<$a> Borrow<Uuid> for $T<$a> {
-                #[inline]
-                fn borrow(&self) -> &Uuid {
-                    self.0
-                }
-            }
-        };
-    }
 
     impl std::fmt::Debug for Uuid
     {
@@ -515,792 +437,51 @@ pub mod fmt
         }
     }
 
-    impl Uuid {
+    impl Uuid 
+    {
         /// Get a [`Hyphenated`] formatter.
-        #[inline]
-        pub const fn hyphenated(self) -> Hyphenated {
+        #[inline] pub const fn hyphenated(self) -> Hyphenated {
             Hyphenated(self)
         }
 
         /// Get a borrowed [`Hyphenated`] formatter.
-        #[inline]
-        pub fn as_hyphenated(&self) -> &Hyphenated {
+        #[inline] pub fn as_hyphenated(&self) -> &Hyphenated {
             // SAFETY: `Uuid` and `Hyphenated` have the same ABI
             unsafe { &*(self as *const Uuid as *const Hyphenated) }
         }
 
         /// Get a [`Simple`] formatter.
-        #[inline]
-        pub const fn simple(self) -> Simple {
+        #[inline] pub const fn simple(self) -> Simple {
             Simple(self)
         }
 
         /// Get a borrowed [`Simple`] formatter.
-        #[inline]
-        pub fn as_simple(&self) -> &Simple {
+        #[inline] pub fn as_simple(&self) -> &Simple {
             // SAFETY: `Uuid` and `Simple` have the same ABI
             unsafe { &*(self as *const Uuid as *const Simple) }
         }
 
         /// Get a [`Urn`] formatter.
-        #[inline]
-        pub const fn urn(self) -> Urn {
+        #[inline] pub const fn urn(self) -> Urn {
             Urn(self)
         }
 
         /// Get a borrowed [`Urn`] formatter.
-        #[inline]
-        pub fn as_urn(&self) -> &Urn {
+        #[inline] pub fn as_urn(&self) -> &Urn {
             // SAFETY: `Uuid` and `Urn` have the same ABI
             unsafe { &*(self as *const Uuid as *const Urn) }
         }
 
         /// Get a [`Braced`] formatter.
-        #[inline]
-        pub const fn braced(self) -> Braced {
+        #[inline] pub const fn braced(self) -> Braced {
             Braced(self)
         }
 
         /// Get a borrowed [`Braced`] formatter.
-        #[inline]
-        pub fn as_braced(&self) -> &Braced {
+        #[inline] pub fn as_braced(&self) -> &Braced {
             // SAFETY: `Uuid` and `Braced` have the same ABI
             unsafe { &*(self as *const Uuid as *const Braced) }
         }
-    }
-
-    const UPPER: [u8; 16] = [
-        b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'A', b'B', b'C', b'D', b'E', b'F',
-    ];
-    const LOWER: [u8; 16] = [
-        b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'a', b'b', b'c', b'd', b'e', b'f',
-    ];
-
-    #[inline]
-    const fn format_simple(src: &[u8; 16], upper: bool) -> [u8; 32] {
-        let lut = if upper { &UPPER } else { &LOWER };
-        let mut dst = [0; 32];
-        let mut i = 0;
-        while i < 16 {
-            let x = src[i];
-            dst[i * 2] = lut[(x >> 4) as usize];
-            dst[i * 2 + 1] = lut[(x & 0x0f) as usize];
-            i += 1;
-        }
-        dst
-    }
-
-    #[inline]
-    const fn format_hyphenated(src: &[u8; 16], upper: bool) -> [u8; 36] {
-        let lut = if upper { &UPPER } else { &LOWER };
-        let groups = [(0, 8), (9, 13), (14, 18), (19, 23), (24, 36)];
-        let mut dst = [0; 36];
-
-        let mut group_idx = 0;
-        let mut i = 0;
-        while group_idx < 5 {
-            let (start, end) = groups[group_idx];
-            let mut j = start;
-            while j < end {
-                let x = src[i];
-                i += 1;
-
-                dst[j] = lut[(x >> 4) as usize];
-                dst[j + 1] = lut[(x & 0x0f) as usize];
-                j += 2;
-            }
-            if group_idx < 4 {
-                dst[end] = b'-';
-            }
-            group_idx += 1;
-        }
-        dst
-    }
-
-    #[inline]
-    fn encode_simple<'b>(src: &[u8; 16], buffer: &'b mut [u8], upper: bool) -> &'b mut str {
-        let buf = &mut buffer[..Simple::LENGTH];
-        let dst = buf.as_mut_ptr();
-
-        // SAFETY: `buf` is guaranteed to be at least `LEN` bytes
-        // SAFETY: The encoded buffer is ASCII encoded
-        unsafe {
-            ptr::write(dst.cast(), format_simple(src, upper));
-            str::from_utf8_unchecked_mut(buf)
-        }
-    }
-
-    #[inline]
-    fn encode_hyphenated<'b>(src: &[u8; 16], buffer: &'b mut [u8], upper: bool) -> &'b mut str {
-        let buf = &mut buffer[..Hyphenated::LENGTH];
-        let dst = buf.as_mut_ptr();
-
-        // SAFETY: `buf` is guaranteed to be at least `LEN` bytes
-        // SAFETY: The encoded buffer is ASCII encoded
-        unsafe {
-            ptr::write(dst.cast(), format_hyphenated(src, upper));
-            str::from_utf8_unchecked_mut(buf)
-        }
-    }
-
-    #[inline]
-    fn encode_braced<'b>(src: &[u8; 16], buffer: &'b mut [u8], upper: bool) -> &'b mut str {
-        let buf = &mut buffer[..Braced::LENGTH];
-        buf[0] = b'{';
-        buf[Braced::LENGTH - 1] = b'}';
-
-        // SAFETY: `buf` is guaranteed to be at least `LEN` bytes
-        // SAFETY: The encoded buffer is ASCII encoded
-        unsafe {
-            let dst = buf.as_mut_ptr().add(1);
-
-            ptr::write(dst.cast(), format_hyphenated(src, upper));
-            str::from_utf8_unchecked_mut(buf)
-        }
-    }
-
-    #[inline]
-    fn encode_urn<'b>(src: &[u8; 16], buffer: &'b mut [u8], upper: bool) -> &'b mut str {
-        let buf = &mut buffer[..Urn::LENGTH];
-        buf[..9].copy_from_slice(b"urn:uuid:");
-
-        // SAFETY: `buf` is guaranteed to be at least `LEN` bytes
-        // SAFETY: The encoded buffer is ASCII encoded
-        unsafe {
-            let dst = buf.as_mut_ptr().add(9);
-
-            ptr::write(dst.cast(), format_hyphenated(src, upper));
-            str::from_utf8_unchecked_mut(buf)
-        }
-    }
-
-    impl Hyphenated {
-        /// The length of a hyphenated [`Uuid`] string.
-        ///
-        /// [`Uuid`]: ../struct.Uuid.html
-        pub const LENGTH: usize = 36;
-
-        /// Creates a [`Hyphenated`] from a [`Uuid`].
-        ///
-        /// [`Uuid`]: ../struct.Uuid.html
-        /// [`Hyphenated`]: struct.Hyphenated.html
-        pub const fn from_uuid(uuid: Uuid) -> Self {
-            Hyphenated(uuid)
-        }
-
-        /// Writes the [`Uuid`] as a lower-case hyphenated string to
-        /// `buffer`, and returns the subslice of the buffer that contains the
-        /// encoded UUID.
-        ///
-        /// This is slightly more efficient than using the formatting
-        /// infrastructure as it avoids virtual calls, and may avoid
-        /// double buffering.
-        ///
-        /// [`Uuid`]: ../struct.Uuid.html
-        ///
-        /// # Panics
-        ///
-        /// Panics if the buffer is not large enough: it must have length at least
-        /// [`LENGTH`]. [`Uuid::encode_buffer`] can be used to get a
-        /// sufficiently-large temporary buffer.
-        ///
-        /// [`LENGTH`]: #associatedconstant.LENGTH
-        /// [`Uuid::encode_buffer`]: ../struct.Uuid.html#method.encode_buffer
-        ///
-        /// # Examples
-        ///
-        /// ```rust
-        /// use uuid::Uuid;
-        ///
-        /// fn main() -> Result<(), uuid::Error> {
-        ///     let uuid = Uuid::parse_str("936DA01f9abd4d9d80c702af85c822a8")?;
-        ///
-        ///     // the encoded portion is returned
-        ///     assert_eq!(
-        ///         uuid.hyphenated()
-        ///             .encode_lower(&mut Uuid::encode_buffer()),
-        ///         "936da01f-9abd-4d9d-80c7-02af85c822a8"
-        ///     );
-        ///
-        ///     // the buffer is mutated directly, and trailing contents remains
-        ///     let mut buf = [b'!'; 40];
-        ///     uuid.hyphenated().encode_lower(&mut buf);
-        ///     assert_eq!(
-        ///         &buf as &[_],
-        ///         b"936da01f-9abd-4d9d-80c7-02af85c822a8!!!!" as &[_]
-        ///     );
-        ///
-        ///     Ok(())
-        /// }
-        /// ```
-        /// */
-        #[inline]
-        pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str {
-            encode_hyphenated(self.0.as_bytes(), buffer, false)
-        }
-
-        /// Writes the [`Uuid`] as an upper-case hyphenated string to
-        /// `buffer`, and returns the subslice of the buffer that contains the
-        /// encoded UUID.
-        ///
-        /// This is slightly more efficient than using the formatting
-        /// infrastructure as it avoids virtual calls, and may avoid
-        /// double buffering.
-        ///
-        /// [`Uuid`]: ../struct.Uuid.html
-        ///
-        /// # Panics
-        ///
-        /// Panics if the buffer is not large enough: it must have length at least
-        /// [`LENGTH`]. [`Uuid::encode_buffer`] can be used to get a
-        /// sufficiently-large temporary buffer.
-        ///
-        /// [`LENGTH`]: #associatedconstant.LENGTH
-        /// [`Uuid::encode_buffer`]: ../struct.Uuid.html#method.encode_buffer
-        ///
-        /// # Examples
-        ///
-        /// ```rust
-        /// use uuid::Uuid;
-        ///
-        /// fn main() -> Result<(), uuid::Error> {
-        ///     let uuid = Uuid::parse_str("936da01f9abd4d9d80c702af85c822a8")?;
-        ///
-        ///     // the encoded portion is returned
-        ///     assert_eq!(
-        ///         uuid.hyphenated()
-        ///             .encode_upper(&mut Uuid::encode_buffer()),
-        ///         "936DA01F-9ABD-4D9D-80C7-02AF85C822A8"
-        ///     );
-        ///
-        ///     // the buffer is mutated directly, and trailing contents remains
-        ///     let mut buf = [b'!'; 40];
-        ///     uuid.hyphenated().encode_upper(&mut buf);
-        ///     assert_eq!(
-        ///         &buf as &[_],
-        ///         b"936DA01F-9ABD-4D9D-80C7-02AF85C822A8!!!!" as &[_]
-        ///     );
-        ///
-        ///     Ok(())
-        /// }
-        /// ```
-        /// */
-        #[inline]
-        pub fn encode_upper<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str {
-            encode_hyphenated(self.0.as_bytes(), buffer, true)
-        }
-
-        /// Get a reference to the underlying [`Uuid`].
-        ///
-        /// # Examples
-        ///
-        /// ```rust
-        /// use uuid::Uuid;
-        ///
-        /// let hyphenated = Uuid::nil().hyphenated();
-        /// assert_eq!(*hyphenated.as_uuid(), Uuid::nil());
-        /// ```
-        pub const fn as_uuid(&self) -> &Uuid {
-            &self.0
-        }
-
-        /// Consumes the [`Hyphenated`], returning the underlying [`Uuid`].
-        ///
-        /// # Examples
-        ///
-        /// ```rust
-        /// use uuid::Uuid;
-        ///
-        /// let hyphenated = Uuid::nil().hyphenated();
-        /// assert_eq!(hyphenated.into_uuid(), Uuid::nil());
-        /// ```
-        pub const fn into_uuid(self) -> Uuid {
-            self.0
-        }
-    }
-
-    impl Braced {
-        /// The length of a braced [`Uuid`] string.
-        ///
-        /// [`Uuid`]: ../struct.Uuid.html
-        pub const LENGTH: usize = 38;
-
-        /// Creates a [`Braced`] from a [`Uuid`].
-        ///
-        /// [`Uuid`]: ../struct.Uuid.html
-        /// [`Braced`]: struct.Braced.html
-        pub const fn from_uuid(uuid: Uuid) -> Self {
-            Braced(uuid)
-        }
-
-        /// Writes the [`Uuid`] as a lower-case hyphenated string surrounded by
-        /// braces to `buffer`, and returns the subslice of the buffer that contains
-        /// the encoded UUID.
-        ///
-        /// This is slightly more efficient than using the formatting
-        /// infrastructure as it avoids virtual calls, and may avoid
-        /// double buffering.
-        ///
-        /// [`Uuid`]: ../struct.Uuid.html
-        ///
-        /// # Panics
-        ///
-        /// Panics if the buffer is not large enough: it must have length at least
-        /// [`LENGTH`]. [`Uuid::encode_buffer`] can be used to get a
-        /// sufficiently-large temporary buffer.
-        ///
-        /// [`LENGTH`]: #associatedconstant.LENGTH
-        /// [`Uuid::encode_buffer`]: ../struct.Uuid.html#method.encode_buffer
-        ///
-        /// # Examples
-        ///
-        /// ```rust
-        /// use uuid::Uuid;
-        ///
-        /// fn main() -> Result<(), uuid::Error> {
-        ///     let uuid = Uuid::parse_str("936DA01f9abd4d9d80c702af85c822a8")?;
-        ///
-        ///     // the encoded portion is returned
-        ///     assert_eq!(
-        ///         uuid.braced()
-        ///             .encode_lower(&mut Uuid::encode_buffer()),
-        ///         "{936da01f-9abd-4d9d-80c7-02af85c822a8}"
-        ///     );
-        ///
-        ///     // the buffer is mutated directly, and trailing contents remains
-        ///     let mut buf = [b'!'; 40];
-        ///     uuid.braced().encode_lower(&mut buf);
-        ///     assert_eq!(
-        ///         &buf as &[_],
-        ///         b"{936da01f-9abd-4d9d-80c7-02af85c822a8}!!" as &[_]
-        ///     );
-        ///
-        ///     Ok(())
-        /// }
-        /// ```
-        /// */
-        #[inline]
-        pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str {
-            encode_braced(self.0.as_bytes(), buffer, false)
-        }
-
-        /// Writes the [`Uuid`] as an upper-case hyphenated string surrounded by
-        /// braces to `buffer`, and returns the subslice of the buffer that contains
-        /// the encoded UUID.
-        ///
-        /// This is slightly more efficient than using the formatting
-        /// infrastructure as it avoids virtual calls, and may avoid
-        /// double buffering.
-        ///
-        /// [`Uuid`]: ../struct.Uuid.html
-        ///
-        /// # Panics
-        ///
-        /// Panics if the buffer is not large enough: it must have length at least
-        /// [`LENGTH`]. [`Uuid::encode_buffer`] can be used to get a
-        /// sufficiently-large temporary buffer.
-        ///
-        /// [`LENGTH`]: #associatedconstant.LENGTH
-        /// [`Uuid::encode_buffer`]: ../struct.Uuid.html#method.encode_buffer
-        ///
-        /// # Examples
-        ///
-        /// ```rust
-        /// use uuid::Uuid;
-        ///
-        /// fn main() -> Result<(), uuid::Error> {
-        ///     let uuid = Uuid::parse_str("936da01f9abd4d9d80c702af85c822a8")?;
-        ///
-        ///     // the encoded portion is returned
-        ///     assert_eq!(
-        ///         uuid.braced()
-        ///             .encode_upper(&mut Uuid::encode_buffer()),
-        ///         "{936DA01F-9ABD-4D9D-80C7-02AF85C822A8}"
-        ///     );
-        ///
-        ///     // the buffer is mutated directly, and trailing contents remains
-        ///     let mut buf = [b'!'; 40];
-        ///     uuid.braced().encode_upper(&mut buf);
-        ///     assert_eq!(
-        ///         &buf as &[_],
-        ///         b"{936DA01F-9ABD-4D9D-80C7-02AF85C822A8}!!" as &[_]
-        ///     );
-        ///
-        ///     Ok(())
-        /// }
-        /// ```
-        /// */
-        #[inline]
-        pub fn encode_upper<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str {
-            encode_braced(self.0.as_bytes(), buffer, true)
-        }
-
-        /// Get a reference to the underlying [`Uuid`].
-        ///
-        /// # Examples
-        ///
-        /// ```rust
-        /// use uuid::Uuid;
-        ///
-        /// let braced = Uuid::nil().braced();
-        /// assert_eq!(*braced.as_uuid(), Uuid::nil());
-        /// ```
-        pub const fn as_uuid(&self) -> &Uuid {
-            &self.0
-        }
-
-        /// Consumes the [`Braced`], returning the underlying [`Uuid`].
-        ///
-        /// # Examples
-        ///
-        /// ```rust
-        /// use uuid::Uuid;
-        ///
-        /// let braced = Uuid::nil().braced();
-        /// assert_eq!(braced.into_uuid(), Uuid::nil());
-        /// ```
-        pub const fn into_uuid(self) -> Uuid {
-            self.0
-        }
-    }
-
-    impl Simple {
-        /// The length of a simple [`Uuid`] string.
-        ///
-        /// [`Uuid`]: ../struct.Uuid.html
-        pub const LENGTH: usize = 32;
-
-        /// Creates a [`Simple`] from a [`Uuid`].
-        ///
-        /// [`Uuid`]: ../struct.Uuid.html
-        /// [`Simple`]: struct.Simple.html
-        pub const fn from_uuid(uuid: Uuid) -> Self {
-            Simple(uuid)
-        }
-
-        /// Writes the [`Uuid`] as a lower-case simple string to `buffer`,
-        /// and returns the subslice of the buffer that contains the encoded UUID.
-        ///
-        /// This is slightly more efficient than using the formatting
-        /// infrastructure as it avoids virtual calls, and may avoid
-        /// double buffering.
-        ///
-        /// [`Uuid`]: ../struct.Uuid.html
-        ///
-        /// # Panics
-        ///
-        /// Panics if the buffer is not large enough: it must have length at least
-        /// [`LENGTH`]. [`Uuid::encode_buffer`] can be used to get a
-        /// sufficiently-large temporary buffer.
-        ///
-        /// [`LENGTH`]: #associatedconstant.LENGTH
-        /// [`Uuid::encode_buffer`]: ../struct.Uuid.html#method.encode_buffer
-        ///
-        /// # Examples
-        ///
-        /// ```rust
-        /// use uuid::Uuid;
-        ///
-        /// fn main() -> Result<(), uuid::Error> {
-        ///     let uuid = Uuid::parse_str("936DA01f9abd4d9d80c702af85c822a8")?;
-        ///
-        ///     // the encoded portion is returned
-        ///     assert_eq!(
-        ///         uuid.simple().encode_lower(&mut Uuid::encode_buffer()),
-        ///         "936da01f9abd4d9d80c702af85c822a8"
-        ///     );
-        ///
-        ///     // the buffer is mutated directly, and trailing contents remains
-        ///     let mut buf = [b'!'; 36];
-        ///     assert_eq!(
-        ///         uuid.simple().encode_lower(&mut buf),
-        ///         "936da01f9abd4d9d80c702af85c822a8"
-        ///     );
-        ///     assert_eq!(
-        ///         &buf as &[_],
-        ///         b"936da01f9abd4d9d80c702af85c822a8!!!!" as &[_]
-        ///     );
-        ///
-        ///     Ok(())
-        /// }
-        /// ```
-        /// */
-        #[inline]
-        pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str {
-            encode_simple(self.0.as_bytes(), buffer, false)
-        }
-
-        /// Writes the [`Uuid`] as an upper-case simple string to `buffer`,
-        /// and returns the subslice of the buffer that contains the encoded UUID.
-        ///
-        /// [`Uuid`]: ../struct.Uuid.html
-        ///
-        /// # Panics
-        ///
-        /// Panics if the buffer is not large enough: it must have length at least
-        /// [`LENGTH`]. [`Uuid::encode_buffer`] can be used to get a
-        /// sufficiently-large temporary buffer.
-        ///
-        /// [`LENGTH`]: #associatedconstant.LENGTH
-        /// [`Uuid::encode_buffer`]: ../struct.Uuid.html#method.encode_buffer
-        ///
-        /// # Examples
-        ///
-        /// ```rust
-        /// use uuid::Uuid;
-        ///
-        /// fn main() -> Result<(), uuid::Error> {
-        ///     let uuid = Uuid::parse_str("936da01f9abd4d9d80c702af85c822a8")?;
-        ///
-        ///     // the encoded portion is returned
-        ///     assert_eq!(
-        ///         uuid.simple().encode_upper(&mut Uuid::encode_buffer()),
-        ///         "936DA01F9ABD4D9D80C702AF85C822A8"
-        ///     );
-        ///
-        ///     // the buffer is mutated directly, and trailing contents remains
-        ///     let mut buf = [b'!'; 36];
-        ///     assert_eq!(
-        ///         uuid.simple().encode_upper(&mut buf),
-        ///         "936DA01F9ABD4D9D80C702AF85C822A8"
-        ///     );
-        ///     assert_eq!(
-        ///         &buf as &[_],
-        ///         b"936DA01F9ABD4D9D80C702AF85C822A8!!!!" as &[_]
-        ///     );
-        ///
-        ///     Ok(())
-        /// }
-        /// ```
-        /// */
-        #[inline]
-        pub fn encode_upper<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str {
-            encode_simple(self.0.as_bytes(), buffer, true)
-        }
-
-        /// Get a reference to the underlying [`Uuid`].
-        ///
-        /// # Examples
-        ///
-        /// ```rust
-        /// use uuid::Uuid;
-        ///
-        /// let simple = Uuid::nil().simple();
-        /// assert_eq!(*simple.as_uuid(), Uuid::nil());
-        /// ```
-        pub const fn as_uuid(&self) -> &Uuid {
-            &self.0
-        }
-
-        /// Consumes the [`Simple`], returning the underlying [`Uuid`].
-        ///
-        /// # Examples
-        ///
-        /// ```rust
-        /// use uuid::Uuid;
-        ///
-        /// let simple = Uuid::nil().simple();
-        /// assert_eq!(simple.into_uuid(), Uuid::nil());
-        /// ```
-        pub const fn into_uuid(self) -> Uuid {
-            self.0
-        }
-    }
-
-    impl Urn {
-        /// The length of a URN [`Uuid`] string.
-        ///
-        /// [`Uuid`]: ../struct.Uuid.html
-        pub const LENGTH: usize = 45;
-
-        /// Creates a [`Urn`] from a [`Uuid`].
-        ///
-        /// [`Uuid`]: ../struct.Uuid.html
-        /// [`Urn`]: struct.Urn.html
-        pub const fn from_uuid(uuid: Uuid) -> Self {
-            Urn(uuid)
-        }
-
-        /// Writes the [`Uuid`] as a lower-case URN string to
-        /// `buffer`, and returns the subslice of the buffer that contains the
-        /// encoded UUID.
-        ///
-        /// This is slightly more efficient than using the formatting
-        /// infrastructure as it avoids virtual calls, and may avoid
-        /// double buffering.
-        ///
-        /// [`Uuid`]: ../struct.Uuid.html
-        ///
-        /// # Panics
-        ///
-        /// Panics if the buffer is not large enough: it must have length at least
-        /// [`LENGTH`]. [`Uuid::encode_buffer`] can be used to get a
-        /// sufficiently-large temporary buffer.
-        ///
-        /// [`LENGTH`]: #associatedconstant.LENGTH
-        /// [`Uuid::encode_buffer`]: ../struct.Uuid.html#method.encode_buffer
-        ///
-        /// # Examples
-        ///
-        /// ```rust
-        /// use uuid::Uuid;
-        ///
-        /// fn main() -> Result<(), uuid::Error> {
-        ///     let uuid = Uuid::parse_str("936DA01f9abd4d9d80c702af85c822a8")?;
-        ///
-        ///     // the encoded portion is returned
-        ///     assert_eq!(
-        ///         uuid.urn().encode_lower(&mut Uuid::encode_buffer()),
-        ///         "urn:uuid:936da01f-9abd-4d9d-80c7-02af85c822a8"
-        ///     );
-        ///
-        ///     // the buffer is mutated directly, and trailing contents remains
-        ///     let mut buf = [b'!'; 49];
-        ///     uuid.urn().encode_lower(&mut buf);
-        ///     assert_eq!(
-        ///         uuid.urn().encode_lower(&mut buf),
-        ///         "urn:uuid:936da01f-9abd-4d9d-80c7-02af85c822a8"
-        ///     );
-        ///     assert_eq!(
-        ///         &buf as &[_],
-        ///         b"urn:uuid:936da01f-9abd-4d9d-80c7-02af85c822a8!!!!" as &[_]
-        ///     );
-        ///     
-        ///     Ok(())
-        /// }
-        /// ```
-        /// */
-        #[inline]
-        pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str {
-            encode_urn(self.0.as_bytes(), buffer, false)
-        }
-
-        /// Writes the [`Uuid`] as an upper-case URN string to
-        /// `buffer`, and returns the subslice of the buffer that contains the
-        /// encoded UUID.
-        ///
-        /// This is slightly more efficient than using the formatting
-        /// infrastructure as it avoids virtual calls, and may avoid
-        /// double buffering.
-        ///
-        /// [`Uuid`]: ../struct.Uuid.html
-        ///
-        /// # Panics
-        ///
-        /// Panics if the buffer is not large enough: it must have length at least
-        /// [`LENGTH`]. [`Uuid::encode_buffer`] can be used to get a
-        /// sufficiently-large temporary buffer.
-        ///
-        /// [`LENGTH`]: #associatedconstant.LENGTH
-        /// [`Uuid::encode_buffer`]: ../struct.Uuid.html#method.encode_buffer
-        ///
-        /// # Examples
-        ///
-        /// ```rust
-        /// use uuid::Uuid;
-        ///
-        /// fn main() -> Result<(), uuid::Error> {
-        ///     let uuid = Uuid::parse_str("936da01f9abd4d9d80c702af85c822a8")?;
-        ///
-        ///     // the encoded portion is returned
-        ///     assert_eq!(
-        ///         uuid.urn().encode_upper(&mut Uuid::encode_buffer()),
-        ///         "urn:uuid:936DA01F-9ABD-4D9D-80C7-02AF85C822A8"
-        ///     );
-        ///
-        ///     // the buffer is mutated directly, and trailing contents remains
-        ///     let mut buf = [b'!'; 49];
-        ///     assert_eq!(
-        ///         uuid.urn().encode_upper(&mut buf),
-        ///         "urn:uuid:936DA01F-9ABD-4D9D-80C7-02AF85C822A8"
-        ///     );
-        ///     assert_eq!(
-        ///         &buf as &[_],
-        ///         b"urn:uuid:936DA01F-9ABD-4D9D-80C7-02AF85C822A8!!!!" as &[_]
-        ///     );
-        ///
-        ///     Ok(())
-        /// }
-        /// ```
-        /// */
-        #[inline]
-        pub fn encode_upper<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str {
-            encode_urn(self.0.as_bytes(), buffer, true)
-        }
-
-        /// Get a reference to the underlying [`Uuid`].
-        ///
-        /// # Examples
-        ///
-        /// ```rust
-        /// use uuid::Uuid;
-        ///
-        /// let urn = Uuid::nil().urn();
-        /// assert_eq!(*urn.as_uuid(), Uuid::nil());
-        /// ```
-        pub const fn as_uuid(&self) -> &Uuid {
-            &self.0
-        }
-
-        /// Consumes the [`Urn`], returning the underlying [`Uuid`].
-        ///
-        /// # Examples
-        ///
-        /// ```rust
-        /// use uuid::Uuid;
-        ///
-        /// let urn = Uuid::nil().urn();
-        /// assert_eq!(urn.into_uuid(), Uuid::nil());
-        /// ```
-        pub const fn into_uuid(self) -> Uuid {
-            self.0
-        }
-    }
-
-    impl FromStr for Hyphenated {
-        type Err = Error;
-
-        fn from_str(s: &str) -> Result<Self, Self::Err> {
-            crate::parser::parse_hyphenated(s.as_bytes())
-                .map(|b| Hyphenated(Uuid(b)))
-                .map_err(|invalid| invalid.into_err())
-        }
-    }
-
-    impl FromStr for Simple {
-        type Err = Error;
-
-        fn from_str(s: &str) -> Result<Self, Self::Err> {
-            crate::parser::parse_simple(s.as_bytes())
-                .map(|b| Simple(Uuid(b)))
-                .map_err(|invalid| invalid.into_err())
-        }
-    }
-
-    impl FromStr for Urn {
-        type Err = Error;
-
-        fn from_str(s: &str) -> Result<Self, Self::Err> {
-            crate::parser::parse_urn(s.as_bytes())
-                .map(|b| Urn(Uuid(b)))
-                .map_err(|invalid| invalid.into_err())
-        }
-    }
-
-    impl FromStr for Braced {
-        type Err = Error;
-
-        fn from_str(s: &str) -> Result<Self, Self::Err> {
-            crate::parser::parse_braced(s.as_bytes())
-                .map(|b| Braced(Uuid(b)))
-                .map_err(|invalid| invalid.into_err())
-        }
-    }
-    impl_fmt_traits! {
-        Hyphenated<>,
-        Simple<>,
-        Urn<>,
-        Braced<>
     }
 }
 
@@ -1370,6 +551,35 @@ pub mod is
     }
 }
 
+pub mod panic
+{
+    pub use std::panic::{ * };
+}
+
+pub mod parsers
+{
+    use ::
+    {
+        *
+    };
+
+    pub mod line
+    {
+        use ::
+        {
+            *
+        };
+    }
+
+    pub mod uuid
+    {
+        use ::
+        {
+            *
+        };
+    }
+}
+
 pub mod path
 {
     //! Cross-platform path manipulation.
@@ -1385,9 +595,15 @@ pub mod primitive
     {
         collections::{HashMap, HashSet},
         convert::{ TryFrom, TryInto },
-        hash::{ Hash },
+        error::
+        {
+            uuid::{ Error as UuidError },
+        },
+        hash::{ Hash, Hasher },
+        ptr::{ self },
         regex::{ contains, Regex },
-        *,
+        str::{ FromStr },
+        time::{ stamp as timestamp },
     };
     /*
     use crate::parsers;
@@ -1399,6 +615,94 @@ pub mod primitive
     pub type Token = (String, String);
     pub type Tokens = Vec<Token>;
     pub type Redirection = (String, String, String);
+
+    macro_rules! impl_fmt_traits 
+    {
+        ($($T:ident<$($a:lifetime),*>),+) => {$(
+            impl<$($a),*> fmt::Display for $T<$($a),*> {
+                #[inline]
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    fmt::LowerHex::fmt(self, f)
+                }
+            }
+
+            impl<$($a),*> fmt::LowerHex for $T<$($a),*> {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    f.write_str(self.encode_lower(&mut [0; Self::LENGTH]))
+                }
+            }
+
+            impl<$($a),*> fmt::UpperHex for $T<$($a),*> {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    f.write_str(self.encode_upper(&mut [0; Self::LENGTH]))
+                }
+            }
+
+            impl_fmt_from!($T<$($a),*>);
+        )+}
+    }
+
+    macro_rules! impl_fmt_from 
+    {
+        ($T:ident<>) => {
+            impl From<Uuid> for $T {
+                #[inline]
+                fn from(f: Uuid) -> Self {
+                    $T(f)
+                }
+            }
+
+            impl From<$T> for Uuid {
+                #[inline]
+                fn from(f: $T) -> Self {
+                    f.into_uuid()
+                }
+            }
+
+            impl AsRef<Uuid> for $T {
+                #[inline]
+                fn as_ref(&self) -> &Uuid {
+                    &self.0
+                }
+            }
+
+            impl Borrow<Uuid> for $T {
+                #[inline]
+                fn borrow(&self) -> &Uuid {
+                    &self.0
+                }
+            }
+        };
+        ($T:ident<$a:lifetime>) => {
+            impl<$a> From<&$a Uuid> for $T<$a> {
+                #[inline]
+                fn from(f: &$a Uuid) -> Self {
+                    $T::from_uuid_ref(f)
+                }
+            }
+
+            impl<$a> From<$T<$a>> for &$a Uuid {
+                #[inline]
+                fn from(f: $T<$a>) -> &$a Uuid {
+                    f.0
+                }
+            }
+
+            impl<$a> AsRef<Uuid> for $T<$a> {
+                #[inline]
+                fn as_ref(&self) -> &Uuid {
+                    self.0
+                }
+            }
+
+            impl<$a> Borrow<Uuid> for $T<$a> {
+                #[inline]
+                fn borrow(&self) -> &Uuid {
+                    self.0
+                }
+            }
+        };
+    }
 
     #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
     pub struct WaitStatus(i32, i32, i32);
@@ -1443,7 +747,7 @@ pub mod primitive
         }
     }
 
-    impl fmt::Debug for WaitStatus
+    impl ::fmt::Debug for WaitStatus
     {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
         {
@@ -1801,10 +1105,15 @@ pub mod primitive
     }
     /// A Universally Unique Identifier (UUID).
     #[repr( transparent )] #[derive( Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd )]
-    pub struct Uuid( Bytes );
+    pub struct Uuid( pub Bytes );
 
     impl Uuid
     {
+        pub const UPPER: [u8; 16] = 
+        [ b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'A', b'B', b'C', b'D', b'E', b'F' ];
+        
+        pub const LOWER: [u8; 16] = 
+        [ b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'a', b'b', b'c', b'd', b'e', b'f' ];
         /// UUID namespace for Domain Name System (DNS).
         pub const NAMESPACE_DNS: Self = Uuid
         ([ 0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8, ]);
@@ -1901,11 +1210,11 @@ pub mod primitive
         pub const fn is_nil(&self) -> bool { self.as_u128() == u128::MIN }
         /// Tests if the UUID is max (all ones).
         pub const fn is_max(&self) -> bool { self.as_u128() == u128::MAX }
-        /// A buffer that can be used for `encode_...` calls, that is
-        /// guaranteed to be long enough for any of the format adapters.
-        pub const fn encode_buffer() -> [u8; fmt::Urn::LENGTH] { [0; fmt::Urn::LENGTH] }
+        /// A buffer that can be used for `encode_...` calls, 
+        /// that is guaranteed to be long enough for any of the format adapters.
+        pub const fn encode_buffer() -> [u8; Urn::LENGTH] { [0; Urn::LENGTH] }
         /// Return the timestamp in a version-agnostic [`Timestamp`].
-        pub const fn get_timestamp(&self) -> Option<Timestamp>
+        pub const fn get_timestamp(&self) -> Option<timestamp::Timestamp>
         {
             match self.get_version()
             {
@@ -1924,13 +1233,12 @@ pub mod primitive
                     let millis = timestamp::decode_unix_timestamp_millis(self);
                     let seconds = millis / 1000;
                     let nanos = ((millis % 1000) * 1_000_000) as u32;
-                    Some(Timestamp::from_unix_time(seconds, nanos, 0, 0))
+                    Some(timestamp::Timestamp::from_unix_time(seconds, nanos, 0, 0))
                 }
                 _ => None,
             }
         }
-        /// If the UUID is the correct version (v1, or v6) this will return the
-        /// node value as a 6-byte array.
+        /// If the UUID is the correct version (v1, or v6) this will return the node value as a 6-byte array.
         pub const fn get_node_id(&self) -> Option<[u8; 6]>
         {
             match self.get_version()
@@ -1948,12 +1256,118 @@ pub mod primitive
                 }
                 _ => None,
             }
-        }
-    }
+        }        
+        /// Get a [`Hyphenated`] formatter.
+        #[inline] pub const fn hyphenated(self) -> Hyphenated { Hyphenated(self) }
+        /// Get a borrowed [`Hyphenated`] formatter.
+        #[inline] pub fn as_hyphenated(&self) -> &Hyphenated 
+        { unsafe { &*(self as *const Uuid as *const Hyphenated) } }
+        /// Get a [`Simple`] formatter.
+        #[inline] pub const fn simple(self) -> Simple { Simple(self) }
+        /// Get a borrowed [`Simple`] formatter.
+        #[inline] pub fn as_simple(&self) -> &Simple {  unsafe { &*(self as *const Uuid as *const Simple) } }
+        /// Get a [`Urn`] formatter.
+        #[inline] pub const fn urn(self) -> Urn { Urn(self) }
+        /// Get a borrowed [`Urn`] formatter.
+        #[inline] pub fn as_urn(&self) -> &Urn { unsafe { &*(self as *const Uuid as *const Urn) } }
+        /// Get a [`Braced`] formatter.
+        #[inline] pub const fn braced(self) -> Braced { Braced(self) }
+        /// Get a borrowed [`Braced`] formatter.
+        #[inline] pub fn as_braced(&self) -> &Braced { unsafe { &*(self as *const Uuid as *const Braced) } }
+        #[inline] const fn format_simple(src: &[u8; 16], upper: bool) -> [u8; 32]
+        {
+            let lut = if upper { &UPPER } else { &LOWER };
+            let mut dst = [0; 32];
+            let mut i = 0;
 
-    impl Hash for Uuid
-    {
-        fn hash<H: Hasher>(&self, state: &mut H) { state.write(&self.0); }
+            while i < 16
+            {
+                let x = src[i];
+                dst[i * 2] = lut[(x >> 4) as usize];
+                dst[i * 2 + 1] = lut[(x & 0x0f) as usize];
+                i += 1;
+            }
+
+            dst
+        }
+
+        #[inline] const fn format_hyphenated(src: &[u8; 16], upper: bool) -> [u8; 36]
+        {
+            let lut = if upper { &UPPER } else { &LOWER };
+            let groups = [(0, 8), (9, 13), (14, 18), (19, 23), (24, 36)];
+            let mut dst = [0; 36];
+            let mut group_idx = 0;
+            let mut i = 0;
+
+            while group_idx < 5
+            {
+                let (start, end) = groups[group_idx];
+                let mut j = start;
+            
+                while j < end
+                {
+                    let x = src[i];
+                    i += 1;
+                    dst[j] = lut[(x >> 4) as usize];
+                    dst[j + 1] = lut[(x & 0x0f) as usize];
+                    j += 2;
+                }
+
+                if group_idx < 4 { dst[end] = b'-'; }
+
+                group_idx += 1;
+            }
+
+            dst
+        }
+
+        #[inline] fn encode_simple<'b>(src: &[u8; 16], buffer: &'b mut [u8], upper: bool) -> &'b mut str
+        {
+            let buf = &mut buffer[..Simple::LENGTH];
+            let dst = buf.as_mut_ptr();
+            unsafe
+            {
+                ptr::write(dst.cast(), format_simple(src, upper));
+                str::from_utf8_unchecked_mut(buf)
+            }
+        }
+
+        #[inline] fn encode_hyphenated<'b>(src: &[u8; 16], buffer: &'b mut [u8], upper: bool) -> &'b mut str
+        {
+            let buf = &mut buffer[..Hyphenated::LENGTH];
+            let dst = buf.as_mut_ptr();
+            unsafe
+            {
+                ptr::write(dst.cast(), format_hyphenated(src, upper));
+                str::from_utf8_unchecked_mut(buf)
+            }
+        }
+
+        #[inline] fn encode_braced<'b>(src: &[u8; 16], buffer: &'b mut [u8], upper: bool) -> &'b mut str
+        {
+            let buf = &mut buffer[..Braced::LENGTH];
+            buf[0] = b'{';
+            buf[Braced::LENGTH - 1] = b'}';
+            unsafe
+            {
+                let dst = buf.as_mut_ptr().add(1);
+
+                ptr::write(dst.cast(), format_hyphenated(src, upper));
+                str::from_utf8_unchecked_mut(buf)
+            }
+        }
+
+        #[inline] fn encode_urn<'b>(src: &[u8; 16], buffer: &'b mut [u8], upper: bool) -> &'b mut str
+        {
+            let buf = &mut buffer[..Urn::LENGTH];
+            buf[..9].copy_from_slice(b"urn:uuid:");
+            unsafe
+            {
+                let dst = buf.as_mut_ptr().add(9);
+                ptr::write(dst.cast(), format_hyphenated(src, upper));
+                str::from_utf8_unchecked_mut(buf)
+            }
+        }
     }
 
     impl Default for Uuid
@@ -1978,24 +1392,289 @@ pub mod primitive
     
     impl TryFrom<Vec<u8>> for Uuid
     {
-        type Error = Error;
+        type Error = UuidError;
         fn try_from( value:Vec<u8> ) -> Result<Self, Self::Error> { Uuid::from_slice(&value) }
     }
     
+
+    pub const UPPER: [u8; 16] = [ b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'A', b'B', b'C', b'D', b'E', b'F' ];
+
+    pub const LOWER: [u8; 16] = [ b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'a', b'b', b'c', b'd', b'e', b'f' ];
+
+    #[inline] pub const fn format_simple(src: &[u8; 16], upper: bool) -> [u8; 32] 
+    {
+        let lut = if upper { &UPPER } else { &LOWER };
+        let mut dst = [0; 32];
+        let mut i = 0;
+
+        while i < 16 
+        {
+            let x = src[i];
+            dst[i * 2] = lut[(x >> 4) as usize];
+            dst[i * 2 + 1] = lut[(x & 0x0f) as usize];
+            i += 1;
+        }
+
+        dst
+    }
+
+    #[inline] pub const fn format_hyphenated(src: &[u8; 16], upper: bool) -> [u8; 36] 
+    {
+        let lut = if upper { &UPPER } else { &LOWER };
+        let groups = [(0, 8), (9, 13), (14, 18), (19, 23), (24, 36)];
+        let mut dst = [0; 36];
+        let mut group_idx = 0;
+        let mut i = 0;
+
+        while group_idx < 5 
+        {
+            let (start, end) = groups[group_idx];
+            let mut j = start;
+
+            while j < end 
+            {
+                let x = src[i];
+                i += 1;
+
+                dst[j] = lut[(x >> 4) as usize];
+                dst[j + 1] = lut[(x & 0x0f) as usize];
+                j += 2;
+            }
+
+            if group_idx < 4 
+            {
+                dst[end] = b'-';
+            }
+
+            group_idx += 1;
+        }
+
+        dst
+    }
+
+    #[inline] pub fn encode_simple<'b>(src: &[u8; 16], buffer: &'b mut [u8], upper: bool) -> &'b mut str 
+    {
+        let buf = &mut buffer[..Simple::LENGTH];
+        let dst = buf.as_mut_ptr();
+        unsafe 
+        {
+            ptr::write(dst.cast(), format_simple(src, upper));
+            str::from_utf8_unchecked_mut(buf)
+        }
+    }
+
+    #[inline] pub fn encode_hyphenated<'b>(src: &[u8; 16], buffer: &'b mut [u8], upper: bool) -> &'b mut str 
+    {
+        let buf = &mut buffer[..Hyphenated::LENGTH];
+        let dst = buf.as_mut_ptr();
+        unsafe 
+        {
+            ptr::write(dst.cast(), format_hyphenated(src, upper));
+            str::from_utf8_unchecked_mut(buf)
+        }
+    }
+
+    #[inline] pub fn encode_braced<'b>(src: &[u8; 16], buffer: &'b mut [u8], upper: bool) -> &'b mut str 
+    {
+        let buf = &mut buffer[..Braced::LENGTH];
+        buf[0] = b'{';
+        buf[Braced::LENGTH - 1] = b'}';        
+        unsafe 
+        {
+            let dst = buf.as_mut_ptr().add(1);
+            ptr::write(dst.cast(), format_hyphenated(src, upper));
+            str::from_utf8_unchecked_mut(buf)
+        }
+    }
+
+    #[inline] pub fn encode_urn<'b>(src: &[u8; 16], buffer: &'b mut [u8], upper: bool) -> &'b mut str
+    {
+        let buf = &mut buffer[..Urn::LENGTH];
+        buf[..9].copy_from_slice(b"urn:uuid:");
+        
+        unsafe 
+        {
+            let dst = buf.as_mut_ptr().add(9);
+            ptr::write(dst.cast(), format_hyphenated(src, upper));
+            str::from_utf8_unchecked_mut(buf)
+        }
+    }
+    
     #[repr(transparent)] #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-    pub struct Hyphenated(Uuid);
+    pub struct Hyphenated( pub Uuid );
+
+    impl Hyphenated 
+    {
+        /// The length of a hyphenated [`Uuid`] string.
+        pub const LENGTH: usize = 36;
+        /// Creates a [`Hyphenated`] from a [`Uuid`].
+        pub const fn from_uuid(uuid: Uuid) -> Self 
+        {
+            Hyphenated(uuid)
+        }
+        /// Writes the [`Uuid`] as a lower-case hyphenated string to `buffer`,
+        /// and returns the subslice of the buffer that contains the encoded UUID.
+        #[inline] pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str
+        { encode_hyphenated(self.0.as_bytes(), buffer, false) }
+        /// Writes the [`Uuid`] as an upper-case hyphenated string to `buffer`,
+        /// and returns the subslice of the buffer that contains the encoded UUID.
+        #[inline] pub fn encode_upper<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str 
+        { encode_hyphenated(self.0.as_bytes(), buffer, true) }
+        /// Get a reference to the underlying [`Uuid`].
+        pub const fn as_uuid(&self) -> &Uuid { &self.0 }
+        /// Consumes the [`Hyphenated`], returning the underlying [`Uuid`].
+        pub const fn into_uuid(self) -> Uuid { self.0 }
+    }
+
+    impl FromStr for Hyphenated
+    {
+        type Err = Error;
+
+        fn from_str(s: &str) -> Result<Self, Self::Err>
+        {
+            crate::parsers::uuid::parse_hyphenated(s.as_bytes())
+            .map(|b| Hyphenated(Uuid(b)))
+            .map_err(|invalid| invalid.into_err())
+        }
+    }
     /// Format a [`Uuid`] as a simple string, like `67e5504410b1426f9247bb680e5fe0c8`.
-    #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-    #[repr(transparent)]
-    pub struct Simple(Uuid);
+    #[repr(transparent)] #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]    
+    pub struct Simple( pub Uuid );
+
+    impl Simple
+    {
+        /// The length of a simple [`Uuid`] string.
+        pub const LENGTH: usize = 32;
+        /// Creates a [`Simple`] from a [`Uuid`].
+        pub const fn from_uuid(uuid: Uuid) -> Self
+        {
+            Simple(uuid)
+        }
+        /// Writes the [`Uuid`] as a lower-case simple string to `buffer`,
+        /// and returns the subslice of the buffer that contains the encoded UUID.
+        #[inline] pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str
+        { encode_simple(self.0.as_bytes(), buffer, false) }
+        /// Writes the [`Uuid`] as an upper-case simple string to `buffer`,
+        /// and returns the subslice of the buffer that contains the encoded UUID.
+        #[inline] pub fn encode_upper<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str
+        { encode_simple(self.0.as_bytes(), buffer, true) }
+        /// Get a reference to the underlying [`Uuid`].
+        pub const fn as_uuid(&self) -> &Uuid { &self.0 }
+        /// Consumes the [`Simple`], returning the underlying [`Uuid`].
+        pub const fn into_uuid(self) -> Uuid { self.0 }
+    }
+
+    impl FromStr for Simple
+    {
+        type Err = Error;
+
+        fn from_str(s: &str) -> Result<Self, Self::Err> 
+        {
+            crate::parsers::uuid::parse_simple(s.as_bytes())
+            .map(|b| Simple(Uuid(b)))
+            .map_err(|invalid| invalid.into_err())
+        }
+    }
     /// Format a [`Uuid`] as a URN string, like `urn:uuid:67e55044-10b1-426f-9247-bb680e5fe0c8`.
     #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
     #[repr(transparent)]
-    pub struct Urn(Uuid);
+    pub struct Urn( pub Uuid );
+
+    impl Urn 
+    {
+        /// The length of a URN [`Uuid`] string.
+        pub const LENGTH: usize = 45;
+        /// Creates a [`Urn`] from a [`Uuid`].
+        pub const fn from_uuid(uuid: Uuid) -> Self
+        {
+            Urn(uuid)
+        }
+        /// Writes the [`Uuid`] as a lower-case URN string to `buffer`,
+        /// and returns the subslice of the buffer that contains the encoded UUID.
+        #[inline] pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str
+        { encode_urn(self.0.as_bytes(), buffer, false) }
+        /// Writes the [`Uuid`] as an upper-case URN string to `buffer`, 
+        /// and returns the subslice of the buffer that contains the encoded UUID.
+        #[inline] pub fn encode_upper<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str
+        { encode_urn(self.0.as_bytes(), buffer, true) }
+        /// Get a reference to the underlying [`Uuid`].
+        pub const fn as_uuid(&self) -> &Uuid { &self.0 }
+        /// Consumes the [`Urn`], returning the underlying [`Uuid`].
+        pub const fn into_uuid(self) -> Uuid { self.0 }
+    }
+
+    impl FromStr for Urn 
+    {
+        type Err = Error;
+
+        fn from_str(s: &str) -> Result<Self, Self::Err>
+        {
+            crate::parsers::uuid::parse_urn(s.as_bytes())
+            .map(|b| Urn(Uuid(b)))
+            .map_err(|invalid| invalid.into_err())
+        }
+    }
     /// Format a [`Uuid`] as a braced hyphenated string, like `{67e55044-10b1-426f-9247-bb680e5fe0c8}`.
     #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
     #[repr(transparent)]
-    pub struct Braced(Uuid);
+    pub struct Braced( pub Uuid );
+
+    impl Braced 
+    {
+        /// The length of a braced [`Uuid`] string.
+        pub const LENGTH: usize = 38;
+        /// Creates a [`Braced`] from a [`Uuid`].
+        pub const fn from_uuid(uuid: Uuid) -> Self
+        {
+            Braced(uuid)
+        }
+        /// Writes the [`Uuid`] as a lower-case hyphenated string surrounded by braces to `buffer`,
+        /// and returns the subslice of the buffer that contains the encoded UUID.
+        #[inline] pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str
+        { encode_braced(self.0.as_bytes(), buffer, false) }
+        /// Writes the [`Uuid`] as an upper-case hyphenated string surrounded by braces to `buffer`,
+        /// and returns the subslice of the buffer that contains the encoded UUID.
+        #[inline] pub fn encode_upper<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str 
+        { encode_braced(self.0.as_bytes(), buffer, true) }
+        /// Get a reference to the underlying [`Uuid`].
+        pub const fn as_uuid(&self) -> &Uuid { &self.0 }
+        /// Consumes the [`Braced`], returning the underlying [`Uuid`].
+        pub const fn into_uuid(self) -> Uuid { self.0 }
+    }
+
+    impl FromStr for Braced
+    {
+        type Err = UuidError;
+
+        fn from_str(s: &str) -> Result<Self, Self::Err>
+        {
+            crate::parsers::uuid::parse_braced(s.as_bytes())
+            .map(|b| Braced(Uuid(b)))
+            .map_err(|invalid| invalid.into_err())
+        }
+    }
+
+    impl_fmt_traits! 
+    {
+        Hyphenated<>,
+        Simple<>,
+        Urn<>,
+        Braced<>
+    }
+}
+
+pub mod ptr
+{
+    pub use std::ptr::{ * };
+}
+
+pub mod random
+{
+    pub use ::rand::{ * };
+    use ::
+    {
+        *,
+    };
 }
 
 pub mod regex
@@ -2045,6 +1724,11 @@ pub mod regex
         let result = re.replace_all(text, ptn_to);
         result.to_string()
     }
+}
+
+pub mod result
+{
+    pub use std::result::{ * };
 }
 
 pub mod shell
@@ -2113,6 +1797,871 @@ pub mod string
     pub use std::string::{ * };
 }
 
+pub mod sync
+{
+    pub mod atomic
+    {
+        pub use std::sync::atomic::{ * };
+    }
+
+    pub use std::sync::{ atomic as _, * };
+}
+
+pub mod thread
+{
+    pub use std::thread::{ * };
+}
+
+pub mod time
+{
+    pub use std::time::{ * };
+    pub mod c
+    {
+        pub use ::timed::{ * };
+        
+        #[derive(Debug, PartialEq, Eq)]
+        pub struct DateTime
+        {
+            odt:OffsetDateTime,
+        }
+
+        impl DateTime
+        {
+            pub fn now() -> Self
+            {
+                let odt: OffsetDateTime = match OffsetDateTime::now_local()
+                {
+                    Ok(dt) => dt,
+                    Err(_) => OffsetDateTime::now_utc(),
+                };
+
+                DateTime { odt }
+            }
+
+            pub fn from_timestamp(ts: f64) -> Self
+            {
+                let dummy_now = Self::now();
+                let offset_seconds = dummy_now.odt.offset().whole_minutes() * 60;
+                let ts_nano = (ts + offset_seconds as f64) * 1000000000.0;
+                let odt: OffsetDateTime = match OffsetDateTime::from_unix_timestamp_nanos(ts_nano as i128)
+                {
+                    Ok(x) => x,
+                    Err(_) => OffsetDateTime::now_utc(),
+                };
+
+                DateTime { odt }
+            }
+
+            pub fn unix_timestamp(&self) -> f64 { self.odt.unix_timestamp_nanos() as f64 / 1000000000.0 }
+        }
+
+        impl fmt::Display for DateTime
+        {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+            {
+                write!
+                (
+                    f,
+                    "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:03}",
+                    self.odt.year(),
+                    self.odt.month() as u8,
+                    self.odt.day(),
+                    self.odt.hour(),
+                    self.odt.minute(),
+                    self.odt.second(),
+                    self.odt.millisecond(),
+                )
+            }
+        }
+    }
+
+    pub mod stamp
+    {
+        //! Generating UUIDs from timestamps.
+        use ::
+        {
+            primitive::{ Uuid },
+            *,
+        };
+        /// The number of 100 nanosecond ticks between the RFC 9562 epoch (`1582-10-15 00:00:00`) 
+        /// and the Unix epoch (`1970-01-01 00:00:00`).
+        pub const UUID_TICKS_BETWEEN_EPOCHS: u64 = 0x01B2_1DD2_1381_4000;
+        /// A timestamp that can be encoded into a UUID.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        pub struct Timestamp
+        {
+            seconds: u64,
+            subsec_nanos: u32,
+            counter: u128,
+            usable_counter_bits: u8,
+        }
+
+        impl Timestamp
+        {
+            /// Get a timestamp representing the current system time and up to a 128-bit counter.
+            pub fn now(context: impl ClockSequence<Output = impl Into<u128>>) -> Self
+            {
+                let (seconds, subsec_nanos) = now();
+                let (counter, seconds, subsec_nanos) = context.generate_timestamp_sequence(seconds, subsec_nanos);
+                let counter = counter.into();
+                let usable_counter_bits = context.usable_bits() as u8;
+
+                Timestamp
+                {
+                    seconds,
+                    subsec_nanos,
+                    counter,
+                    usable_counter_bits,
+                }
+            }
+            /// Construct a `Timestamp` from the number of 100 nanosecond ticks since 00:00:00.00, 15 October 1582
+            /// (the date of Gregorian reform to the Christian calendar) and a 14-bit counter, 
+            /// as used in versions 1 and 6 UUIDs.
+            pub const fn from_gregorian(ticks: u64, counter: u16) -> Self
+            {
+                let (seconds, subsec_nanos) = Self::gregorian_to_unix(ticks);
+
+                Timestamp
+                {
+                    seconds,
+                    subsec_nanos,
+                    counter: counter as u128,
+                    usable_counter_bits: 14,
+                }
+            }
+            /// Construct a `Timestamp` from a Unix timestamp and up to a 128-bit counter, as used in version 7 UUIDs.
+            pub const fn from_unix_time
+            (
+                seconds: u64,
+                subsec_nanos: u32,
+                counter: u128,
+                usable_counter_bits: u8,
+            ) -> Self
+            {
+                Timestamp
+                {
+                    seconds,
+                    subsec_nanos,
+                    counter,
+                    usable_counter_bits,
+                }
+            }
+            /// Construct a `Timestamp` from a Unix timestamp and up to a 128-bit counter, as used in version 7 UUIDs.
+            pub fn from_unix
+            (
+                context: impl ClockSequence<Output = impl Into<u128>>,
+                seconds: u64,
+                subsec_nanos: u32,
+            ) -> Self
+            {
+                let (counter, seconds, subsec_nanos) = context.generate_timestamp_sequence(seconds, subsec_nanos);
+                let counter = counter.into();
+                let usable_counter_bits = context.usable_bits() as u8;
+
+                Timestamp
+                {
+                    seconds,
+                    subsec_nanos,
+                    counter,
+                    usable_counter_bits,
+                }
+            }
+            /// Get the value of the timestamp as the number of 100 nanosecond ticks since 00:00:00.00,
+            /// 15 October 1582 and a 14-bit counter, as used in versions 1 and 6 UUIDs.
+            pub const fn to_gregorian(&self) -> (u64, u16)
+            {
+                (
+                    Self::unix_to_gregorian_ticks(self.seconds, self.subsec_nanos),
+                    (self.counter as u16) & 0x3FFF,
+                )
+            }
+
+            // NOTE: This method is not public; the usable counter bits are lost in a version 7 UUID
+            // so can't be reliably recovered.
+            #[cfg(feature = "v7")]
+            pub const fn counter(&self) -> (u128, u8) {
+                (self.counter, self.usable_counter_bits)
+            }
+
+            const fn unix_to_gregorian_ticks(seconds: u64, nanos: u32) -> u64
+            {
+                UUID_TICKS_BETWEEN_EPOCHS
+                .wrapping_add(seconds.wrapping_mul(10_000_000))
+                .wrapping_add(nanos as u64 / 100)
+            }
+
+            const fn gregorian_to_unix(ticks: u64) -> (u64, u32)
+            {
+                (
+                    ticks.wrapping_sub(UUID_TICKS_BETWEEN_EPOCHS) / 10_000_000,
+                    (ticks.wrapping_sub(UUID_TICKS_BETWEEN_EPOCHS) % 10_000_000) as u32 * 100,
+                )
+            }
+        }
+        
+        impl Timestamp
+        {
+            pub const fn from_rfc4122(ticks: u64, counter: u16) -> Self { Timestamp::from_gregorian(ticks, counter) }
+            
+            pub const fn to_rfc4122(&self) -> (u64, u16) { self.to_gregorian() }
+            
+            pub const fn to_unix_nanos(&self) -> u32
+            {
+                panic!("`Timestamp::to_unix_nanos()` is deprecated and will be removed: use `Timestamp::to_unix()`")
+            }
+        }
+
+        pub const fn encode_gregorian_timestamp
+        (
+            ticks: u64,
+            counter: u16,
+            node_id: &[u8; 6],
+        ) -> Uuid
+        {
+            let time_low = (ticks & 0xFFFF_FFFF) as u32;
+            let time_mid = ((ticks >> 32) & 0xFFFF) as u16;
+            let time_high_and_version = (((ticks >> 48) & 0x0FFF) as u16) | (1 << 12);
+            let mut d4 = [0; 8];
+            d4[0] = (((counter & 0x3F00) >> 8) as u8) | 0x80;
+            d4[1] = (counter & 0xFF) as u8;
+            d4[2] = node_id[0];
+            d4[3] = node_id[1];
+            d4[4] = node_id[2];
+            d4[5] = node_id[3];
+            d4[6] = node_id[4];
+            d4[7] = node_id[5];
+            Uuid::from_fields(time_low, time_mid, time_high_and_version, &d4)
+        }
+
+        pub const fn decode_gregorian_timestamp(uuid: &Uuid) -> (u64, u16)
+        {
+            let bytes = uuid.as_bytes();
+            let ticks: u64 = ((bytes[6] & 0x0F) as u64) << 56
+            | (bytes[7] as u64) << 48
+            | (bytes[4] as u64) << 40
+            | (bytes[5] as u64) << 32
+            | (bytes[0] as u64) << 24
+            | (bytes[1] as u64) << 16
+            | (bytes[2] as u64) << 8
+            | (bytes[3] as u64);
+            let counter: u16 = ((bytes[8] & 0x3F) as u16) << 8 | (bytes[9] as u16);
+            (ticks, counter)
+        }
+
+        pub const fn encode_sorted_gregorian_timestamp
+        (
+            ticks: u64,
+            counter: u16,
+            node_id: &[u8; 6],
+        ) -> Uuid
+        {
+            let time_high = ((ticks >> 28) & 0xFFFF_FFFF) as u32;
+            let time_mid = ((ticks >> 12) & 0xFFFF) as u16;
+            let time_low_and_version = ((ticks & 0x0FFF) as u16) | (0x6 << 12);
+            let mut d4 = [0; 8];
+            d4[0] = (((counter & 0x3F00) >> 8) as u8) | 0x80;
+            d4[1] = (counter & 0xFF) as u8;
+            d4[2] = node_id[0];
+            d4[3] = node_id[1];
+            d4[4] = node_id[2];
+            d4[5] = node_id[3];
+            d4[6] = node_id[4];
+            d4[7] = node_id[5];
+            Uuid::from_fields(time_high, time_mid, time_low_and_version, &d4)
+        }
+
+        pub const fn decode_sorted_gregorian_timestamp(uuid: &Uuid) -> (u64, u16)
+        {
+            let bytes = uuid.as_bytes();
+            let ticks: u64 = ((bytes[0]) as u64) << 52
+            | (bytes[1] as u64) << 44
+            | (bytes[2] as u64) << 36
+            | (bytes[3] as u64) << 28
+            | (bytes[4] as u64) << 20
+            | (bytes[5] as u64) << 12
+            | ((bytes[6] & 0xF) as u64) << 8
+            | (bytes[7] as u64);
+            let counter: u16 = ((bytes[8] & 0x3F) as u16) << 8 | (bytes[9] as u16);
+            (ticks, counter)
+        }
+
+        pub const fn encode_unix_timestamp_millis(
+            millis: u64,
+            counter_random_bytes: &[u8; 10],
+        ) -> Uuid
+        {
+            let millis_high = ((millis >> 16) & 0xFFFF_FFFF) as u32;
+            let millis_low = (millis & 0xFFFF) as u16;
+            let counter_random_version = (counter_random_bytes[1] as u16
+            | ((counter_random_bytes[0] as u16) << 8) & 0x0FFF)
+            | (0x7 << 12);
+
+            let mut d4 = [0; 8];
+            d4[0] = (counter_random_bytes[2] & 0x3F) | 0x80;
+            d4[1] = counter_random_bytes[3];
+            d4[2] = counter_random_bytes[4];
+            d4[3] = counter_random_bytes[5];
+            d4[4] = counter_random_bytes[6];
+            d4[5] = counter_random_bytes[7];
+            d4[6] = counter_random_bytes[8];
+            d4[7] = counter_random_bytes[9];
+            Uuid::from_fields(millis_high, millis_low, counter_random_version, &d4)
+        }
+
+        pub const fn decode_unix_timestamp_millis(uuid: &Uuid) -> u64
+        {
+            let bytes = uuid.as_bytes();
+            let millis: u64 = (bytes[0] as u64) << 40
+            | (bytes[1] as u64) << 32
+            | (bytes[2] as u64) << 24
+            | (bytes[3] as u64) << 16
+            | (bytes[4] as u64) << 8
+            | (bytes[5] as u64);
+            millis
+        }
+        
+        fn now() -> (u64, u32)
+        {
+            let dur = ::time::SystemTime::UNIX_EPOCH.elapsed().expect
+            (
+                "Getting elapsed time since UNIX_EPOCH. If this fails, we've somehow violated causality",
+            );
+            (dur.as_secs(), dur.subsec_nanos())
+        }
+        /// A counter that can be used by versions 1 and 6 UUIDs to support the uniqueness of timestamps.
+        pub trait ClockSequence
+        {
+            /// The type of sequence returned by this counter.
+            type Output;
+            /// Get the next value in the sequence to feed into a timestamp.
+            fn generate_sequence(&self, seconds: u64, subsec_nanos: u32) -> Self::Output;
+            /// Get the next value in the sequence, potentially also adjusting the timestamp.
+            fn generate_timestamp_sequence
+            (
+                &self,
+                seconds: u64,
+                subsec_nanos: u32,
+            ) -> (Self::Output, u64, u32)
+            {
+                (
+                    self.generate_sequence(seconds, subsec_nanos),
+                    seconds,
+                    subsec_nanos,
+                )
+            }
+
+            /// The number of usable bits from the least significant bit in the result of [`ClockSequence::generate_sequence`]
+            /// or [`ClockSequence::generate_timestamp_sequence`].
+            fn usable_bits(&self) -> usize where
+            Self::Output: Sized
+            { cmp::min(128, core::mem::size_of::<Self::Output>()) }
+        }
+
+        impl<'a, T: ClockSequence + ?Sized> ClockSequence for &'a T
+        {
+            type Output = T::Output;
+
+            fn generate_sequence(&self, seconds: u64, subsec_nanos: u32) -> Self::Output
+            { (**self).generate_sequence(seconds, subsec_nanos) }
+
+            fn generate_timestamp_sequence
+            (
+                &self,
+                seconds: u64,
+                subsec_nanos: u32,
+            ) -> (Self::Output, u64, u32)
+            { (**self).generate_timestamp_sequence(seconds, subsec_nanos) }
+
+            fn usable_bits(&self) -> usize where
+            Self::Output: Sized
+            { (**self).usable_bits() }
+        }
+        /// Default implementations for the [`ClockSequence`] trait.
+        pub mod context
+        {
+            use super::ClockSequence;
+            
+            mod v1_support
+            {
+                use ::
+                {
+                    random::prelude::{ * },
+                    time::stamp::context::{ * },
+                    sync::
+                    {
+                        atomic::{ Atomic, Ordering },
+                    },
+                    *,
+                };
+                
+                static CONTEXT: Context = Context
+                {
+                    count: Atomic::new(0),
+                };
+                
+                static CONTEXT_INITIALIZED: Atomic<bool> = Atomic::new(false);
+                
+                pub fn shared_context() -> &'static Context
+                {
+                    
+                    if CONTEXT_INITIALIZED
+                    .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+                    .is_ok()
+                    { CONTEXT.count.store(crate::rng::u16(), Ordering::Release); }
+
+                    &CONTEXT
+                }
+                /// A thread-safe, wrapping counter that produces 14-bit values.
+                #[derive(Debug)]
+                pub struct Context
+                {
+                    count: Atomic<u16>,
+                }
+
+                impl Context
+                {
+                    /// Construct a new context that's initialized with the given value.
+                    pub const fn new(count: u16) -> Self 
+                    {
+                        Self 
+                        {
+                            count: Atomic::<u16>::new(count),
+                        }
+                    }
+                    /// Construct a new context that's initialized with a random value.
+                    pub fn new_random() -> Self
+                    {
+                        let mut rng = rand::rng();
+                        Self
+                        {
+                            count: Atomic::<u16>::new( rng.random::<u16>() ),
+                        }
+                    }
+                }
+
+                impl ClockSequence for Context 
+                {
+                    type Output = u16;
+
+                    fn generate_sequence(&self, _seconds: u64, _nanos: u32) -> Self::Output 
+                    {
+                        self.count.fetch_add(1, Ordering::AcqRel) & (u16::MAX >> 2)
+                    }
+
+                    fn usable_bits(&self) -> usize 
+                    {
+                        14
+                    }
+                }
+            } pub use self::v1_support::*;
+            
+            mod std_support 
+            {
+                use ::
+                {
+                    panic::{ AssertUnwindSafe, RefUnwindSafe },
+                    sync::{ Mutex },
+                    thread::{ LocalKey },
+                    time::stamp::context::{ * },
+                    *,
+                };
+                /// A wrapper for a context that uses thread-local storage.
+                pub struct ThreadLocalContext<C: 'static>(&'static LocalKey<C>);
+
+                impl<C> ::fmt::Debug for ThreadLocalContext<C>
+                {
+                    fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result
+                    {
+                        f.debug_struct("ThreadLocalContext").finish_non_exhaustive()
+                    }
+                }
+
+                impl<C: 'static> ThreadLocalContext<C>
+                {
+                    /// Wrap a thread-local container with a context.
+                    pub const fn new(local_key: &'static LocalKey<C>) -> Self
+                    {
+                        ThreadLocalContext(local_key)
+                    }
+                }
+
+                impl<C: ClockSequence + 'static> ClockSequence for ThreadLocalContext<C>
+                {
+                    type Output = C::Output;
+
+                    fn generate_sequence(&self, seconds: u64, subsec_nanos: u32) -> Self::Output
+                    { self.0.with(|ctxt| ctxt.generate_sequence(seconds, subsec_nanos)) }
+
+                    fn generate_timestamp_sequence
+                    (
+                        &self,
+                        seconds: u64,
+                        subsec_nanos: u32,
+                    ) -> (Self::Output, u64, u32)
+                    { self.0.with(|ctxt| ctxt.generate_timestamp_sequence(seconds, subsec_nanos)) }
+
+                    fn usable_bits(&self) -> usize { self.0.with(|ctxt| ctxt.usable_bits()) }
+                }
+
+                impl<C: ClockSequence> ClockSequence for AssertUnwindSafe<C>
+                {
+                    type Output = C::Output;
+
+                    fn generate_sequence(&self, seconds: u64, subsec_nanos: u32) -> Self::Output
+                    {
+                        self.0.generate_sequence(seconds, subsec_nanos)
+                    }
+
+                    fn generate_timestamp_sequence
+                    (
+                        &self,
+                        seconds: u64,
+                        subsec_nanos: u32,
+                    ) -> (Self::Output, u64, u32)
+                    {
+                        self.0.generate_timestamp_sequence(seconds, subsec_nanos)
+                    }
+
+                    fn usable_bits(&self) -> usize where
+                    Self::Output: Sized
+                    {
+                        self.0.usable_bits()
+                    }
+                }
+
+                impl<C: ClockSequence + RefUnwindSafe> ClockSequence for Mutex<C>
+                {
+                    type Output = C::Output;
+
+                    fn generate_sequence(&self, seconds: u64, subsec_nanos: u32) -> Self::Output
+                    {
+                        self.lock()
+                        .unwrap_or_else(|err| err.into_inner())
+                        .generate_sequence(seconds, subsec_nanos)
+                    }
+
+                    fn generate_timestamp_sequence
+                    (
+                        &self,
+                        seconds: u64,
+                        subsec_nanos: u32,
+                    ) -> (Self::Output, u64, u32)
+                    {
+                        self.lock()
+                        .unwrap_or_else(|err| err.into_inner())
+                        .generate_timestamp_sequence(seconds, subsec_nanos)
+                    }
+
+                    fn usable_bits(&self) -> usize where
+                    Self::Output: Sized
+                    {
+                        self.lock()
+                        .unwrap_or_else(|err| err.into_inner())
+                        .usable_bits()
+                    }
+                }
+            } pub use self::std_support::*;
+            
+            mod v7_support
+            {
+                use ::
+                {
+                    cell::{ Cell },
+                    panic::{ RefUnwindSafe },
+                    sync::{ Mutex },
+                    time::stamp::context::{ * },
+                    *,
+                };
+                
+                static CONTEXT_V7: SharedContextV7 = SharedContextV7( Mutex::new( ContextV7::new() ) );
+                const USABLE_BITS: usize = 42;
+                const RESEED_MASK: u64 = u64::MAX >> 23;
+                const MAX_COUNTER: u64 = u64::MAX >> 22;
+                /// An unsynchronized, reseeding counter that produces 42-bit values.
+                #[derive(Debug)]
+                pub struct ContextV7
+                {
+                    timestamp: Cell<ReseedingTimestamp>,
+                    counter: Cell<Counter>,
+                    adjust: Adjust,
+                    precision: Precision,
+                }
+
+                impl RefUnwindSafe for ContextV7 {}
+
+                impl ContextV7 
+                {
+                    /// Construct a new context that will reseed its counter 
+                    /// on the first non-zero timestamp it receives.
+                    pub const fn new() -> Self 
+                    {
+                        ContextV7 
+                        {
+                            timestamp: Cell::new(ReseedingTimestamp 
+                            {
+                                last_seed: 0,
+                                seconds: 0,
+                                subsec_nanos: 0,
+                            }),
+                            counter: Cell::new(Counter { value: 0 }),
+                            adjust: Adjust { by_ns: 0 },
+                            precision: Precision 
+                            {
+                                bits: 0,
+                                mask: 0,
+                                factor: 0,
+                                shift: 0,
+                            },
+                        }
+                    }
+                    /// Specify an amount to shift timestamps by to obfuscate their actual generation time.
+                    pub fn with_adjust_by_millis(mut self, millis: u32) -> Self 
+                    {
+                        self.adjust = Adjust::by_millis(millis);
+                        self
+                    }
+                    /// Use the leftmost 12 bits of the counter for additional timestamp precision.
+                    pub fn with_additional_precision(mut self) -> Self 
+                    {
+                        self.precision = Precision::new(12);
+                        self
+                    }
+                }
+
+                impl ClockSequence for ContextV7 
+                {
+                    type Output = u64;
+
+                    fn generate_sequence(&self, seconds: u64, subsec_nanos: u32) -> Self::Output 
+                    {
+                        self.generate_timestamp_sequence(seconds, subsec_nanos).0
+                    }
+
+                    fn generate_timestamp_sequence
+                    (
+                        &self,
+                        seconds: u64,
+                        subsec_nanos: u32,
+                    ) -> (Self::Output, u64, u32)
+                    {
+                        let (seconds, subsec_nanos) = self.adjust.apply(seconds, subsec_nanos);
+                        let mut counter;
+                        let (mut timestamp, should_reseed) = self.timestamp.get().advance(seconds, subsec_nanos);
+
+                        if should_reseed 
+                        {
+                            counter = Counter::reseed(&self.precision, &timestamp);
+                        }
+                        else 
+                        {
+                            counter = self.counter.get().increment(&self.precision, &timestamp);
+
+                            if counter.has_overflowed() 
+                            {
+                                timestamp = timestamp.increment();
+                                counter = Counter::reseed(&self.precision, &timestamp);
+                            }
+                        };
+
+                        self.timestamp.set(timestamp);
+                        self.counter.set(counter);
+
+                        (counter.value, timestamp.seconds, timestamp.subsec_nanos)
+                    }
+
+                    fn usable_bits(&self) -> usize { USABLE_BITS }
+                }
+
+                #[derive(Debug)]
+                struct Adjust 
+                {
+                    by_ns: u128,
+                }
+
+                impl Adjust 
+                {
+                    #[inline] fn by_millis(millis: u32) -> Self 
+                    {
+                        Adjust 
+                        {
+                            by_ns: (millis as u128).saturating_mul(1_000_000),
+                        }
+                    }
+
+                    #[inline] fn apply(&self, seconds: u64, subsec_nanos: u32) -> (u64, u32) 
+                    {
+                        if self.by_ns == 0 { return (seconds, subsec_nanos); }
+
+                        let ts = (seconds as u128)
+                        .saturating_mul(1_000_000_000)
+                        .saturating_add(subsec_nanos as u128)
+                        .saturating_add(self.by_ns as u128);
+
+                        ((ts / 1_000_000_000) as u64, (ts % 1_000_000_000) as u32)
+                    }
+                }
+
+                #[derive(Debug, Default, Clone, Copy)]
+                struct ReseedingTimestamp 
+                {
+                    last_seed: u64,
+                    seconds: u64,
+                    subsec_nanos: u32,
+                }
+
+                impl ReseedingTimestamp 
+                {
+                    #[inline] fn advance(&self, seconds: u64, subsec_nanos: u32) -> (Self, bool) 
+                    {
+                        let incoming = ReseedingTimestamp::from_ts(seconds, subsec_nanos);
+
+                        if incoming.last_seed > self.last_seed 
+                        {
+                            (incoming, true)
+                        }
+                        
+                        else 
+                        {
+                            let mut value = *self;
+                            value.subsec_nanos = cmp::max(self.subsec_nanos, subsec_nanos);
+                            (value, false)
+                        }
+                    }
+
+                    #[inline] fn from_ts(seconds: u64, subsec_nanos: u32) -> Self
+                    {
+                        let last_seed = seconds
+                        .saturating_mul(1_000)
+                        .saturating_add((subsec_nanos / 1_000_000) as u64);
+
+                        ReseedingTimestamp
+                        {
+                            last_seed,
+                            seconds,
+                            subsec_nanos,
+                        }
+                    }
+
+                    #[inline] fn increment(&self) -> Self 
+                    {
+                        let (seconds, subsec_nanos) = Adjust::by_millis(1).apply(self.seconds, self.subsec_nanos);
+
+                        ReseedingTimestamp::from_ts(seconds, subsec_nanos)
+                    }
+
+                    #[inline] fn submilli_nanos(&self) -> u32 { self.subsec_nanos % 1_000_000 }
+                }
+
+                #[derive(Debug)]
+                struct Precision 
+                {
+                    bits: usize,
+                    factor: u64,
+                    mask: u64,
+                    shift: u64,
+                }
+
+                impl Precision 
+                {
+                    fn new(bits: usize) -> Self 
+                    {
+                        let mask = u64::MAX >> (64 - USABLE_BITS + bits);
+                        let shift = (USABLE_BITS - bits) as u64;
+                        let factor = (999_999 / u64::pow(2, bits as u32)) + 1;
+
+                        Precision 
+                        {
+                            bits,
+                            factor,
+                            mask,
+                            shift,
+                        }
+                    }
+
+                    #[inline] fn apply(&self, value: u64, timestamp: &ReseedingTimestamp) -> u64
+                    {
+                        if self.bits == 0 { return value; }
+
+                        let additional = timestamp.submilli_nanos() as u64 / self.factor;
+                        (value & self.mask) | (additional << self.shift)
+                    }
+                }
+
+                #[derive(Debug, Clone, Copy)]
+                struct Counter 
+                {
+                    value: u64,
+                }
+
+                impl Counter 
+                {
+                    #[inline] fn reseed(precision: &Precision, timestamp: &ReseedingTimestamp) -> Self 
+                    {
+                        let mut rng = rand::rng();
+                        
+                        Counter 
+                        {
+                            value: precision.apply( rng.random::<u64>() & RESEED_MASK, timestamp),
+                        }
+                    }
+
+                    #[inline] fn increment(&self, precision: &Precision, timestamp: &ReseedingTimestamp) -> Self
+                    {
+                        let mut counter = Counter
+                        {
+                            value: precision.apply( self.value, timestamp ),
+                        };
+                        counter.value += 1;
+                        counter
+                    }
+
+                    #[inline] fn has_overflowed(&self) -> bool { self.value > MAX_COUNTER }
+                }
+                
+                pub struct SharedContextV7( Mutex<ContextV7> );
+                
+                impl ClockSequence for SharedContextV7 
+                {
+                    type Output = u64;
+
+                    fn generate_sequence(&self, seconds: u64, subsec_nanos: u32) -> Self::Output
+                    { self.0.generate_sequence(seconds, subsec_nanos) }
+
+                    fn generate_timestamp_sequence
+                    (
+                        &self,
+                        seconds: u64,
+                        subsec_nanos: u32,
+                    ) -> (Self::Output, u64, u32) 
+                    { self.0.generate_timestamp_sequence(seconds, subsec_nanos) }
+
+                    fn usable_bits(&self) -> usize where
+                    Self::Output: Sized
+                    { USABLE_BITS }
+                }
+                
+                pub fn shared_context_v7() -> &'static SharedContextV7
+                {
+                    &CONTEXT_V7
+                }
+            } pub use self::v7_support::*;
+
+            /// An empty counter that will always return the value `0`.
+            #[derive(Debug, Clone, Copy, Default)]
+            pub struct NoContext;
+
+            impl ClockSequence for NoContext 
+            {
+                type Output = u16;
+
+                fn generate_sequence(&self, _seconds: u64, _nanos: u32) -> Self::Output { 0 }
+
+                fn usable_bits(&self) -> usize { 0 }
+            }
+        }
+    }
+}
+
 pub mod vec
 {
     pub use std::vec::{ * };
@@ -2146,4 +2695,4 @@ fn main()
     }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 2149
+// 2698
