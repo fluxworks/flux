@@ -60,6 +60,7 @@ Allowances */
 #![allow
 ( 
     dead_code,
+    non_camel_case_types,
     unknown_lints,
     unused_attributes,
     unused_imports,
@@ -115,10 +116,25 @@ extern crate time as timed;
 
 }
 
+pub mod alloc
+{
+    pub use std::alloc::{ * };
+}
+
+pub mod array
+{
+    pub use std::array::{ * };
+}
+
 pub mod borrow
 {
     //! A module for working with borrowed data.
     pub use std::borrow::{ * };
+}
+
+pub mod boxed
+{
+    pub use std::boxed::{ * };
 }
 
 pub mod bytes
@@ -246,7 +262,6 @@ pub mod error
             /// Some other error occurred.
             Other,
         }
-
         /// A string that is guaranteed to fail to parse to a [`Uuid`].
         #[derive(Clone, Debug, Eq, Hash, PartialEq)]
         pub struct InvalidUuid<'a>(pub &'a [u8]);
@@ -385,6 +400,11 @@ pub mod error
     }
 }
 
+pub mod ffi
+{
+    pub use std::ffi::{ * };
+}
+
 pub mod fmt
 {
     //! Utilities for formatting and printing strings.
@@ -485,10 +505,236 @@ pub mod hash
     pub use std::hash::{ * };
 }
 
+pub mod hint
+{
+    pub use std::hint::{ * };
+}
+
 pub mod io
 {
     //! Traits, helpers, and type definitions for core I/O functionality.
     pub use std::io::{ * };
+    /// A borrowed byte buffer which is incrementally filled and initialized.
+    pub struct BorrowedBuf<'data>
+    {
+        /// The buffer's underlying data.
+        buf: &'data mut [::mem::MaybeUninit<u8>],
+        /// The length of `self.buf` which is known to be filled.
+        filled: usize,
+        /// The length of `self.buf` which is known to be initialized.
+        init: usize,
+    }
+
+    impl ::fmt::Debug for BorrowedBuf<'_>
+    {
+        fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result
+        {
+            f.debug_struct("BorrowedBuf")
+            .field("init", &self.init)
+            .field("filled", &self.filled)
+            .field("capacity", &self.capacity())
+            .finish()
+        }
+    }
+    /// Creates a new `BorrowedBuf` from a fully initialized slice.
+    impl<'data> From<&'data mut [u8]> for BorrowedBuf<'data>
+    {
+        #[inline] fn from(slice: &'data mut [u8]) -> BorrowedBuf<'data>
+        {
+            unsafe
+            {
+                let pointer:*mut [u8] = slice as *mut [u8];
+                BorrowedBuf
+                {
+                    buf: ::mem::transmute( pointer ),//: unsafe { (slice as *mut [u8]).as_uninit_slice_mut().unwrap() },
+                    filled: 0,
+                    init: slice.len(),
+                }
+            }
+        }
+    }
+    /// Creates a new `BorrowedBuf` from an uninitialized buffer.
+    impl<'data> From<&'data mut [::mem::MaybeUninit<u8>]> for BorrowedBuf<'data>
+    {
+        #[inline] fn from(buf: &'data mut [::mem::MaybeUninit<u8>]) -> BorrowedBuf<'data>
+        {
+            BorrowedBuf { buf, filled: 0, init: 0 }
+        }
+    }
+
+    impl<'data> BorrowedBuf<'data>
+    {
+        /// Returns the total capacity of the buffer.
+        #[inline] pub fn capacity(&self) -> usize { self.buf.len() }
+        /// Returns the length of the filled part of the buffer.
+        #[inline] pub fn len(&self) -> usize { self.filled }
+        /// Returns the length of the initialized part of the buffer.
+        #[inline] pub fn init_len(&self) -> usize { self.init }
+        /// Returns a shared reference to the filled portion of the buffer.
+        #[inline] pub fn filled(&self) -> &[u8] 
+        {
+            unsafe
+            {
+                ::mem::transmute( self.buf.get_unchecked(..self.filled) )
+            }
+        }
+        /// Returns a mutable reference to the filled portion of the buffer.
+        #[inline] pub fn filled_mut(&mut self) -> &mut [u8]
+        {
+            unsafe
+            {
+                ::mem::transmute( self.buf.get_unchecked_mut(..self.filled) )
+            }
+        }
+        /// Returns a shared reference to the filled portion of the buffer with its original lifetime.
+        #[inline] pub fn into_filled(self) -> &'data [u8]
+        {
+            unsafe
+            {
+                ::mem::transmute( self.buf.get_unchecked(..self.filled) )
+            }
+        }
+        /// Returns a mutable reference to the filled portion of the buffer with its original lifetime.
+        #[inline] pub fn into_filled_mut(self) -> &'data mut [u8]
+        {
+            unsafe
+            {
+                ::mem::transmute( self.buf.get_unchecked_mut(..self.filled) )
+            }
+        }
+        /// Returns a cursor over the unfilled part of the buffer.
+        #[inline] pub fn unfilled<'this>(&'this mut self) -> BorrowedCursor<'this>
+        {
+            unsafe
+            {
+                BorrowedCursor
+                {
+                    start: self.filled,
+                    buf: ::mem::transmute::<&'this mut BorrowedBuf<'data>, &'this mut BorrowedBuf<'this>>(self),
+                }
+            }
+        }
+        /// Clears the buffer, resetting the filled region to empty.
+        #[inline] pub fn clear(&mut self) -> &mut Self
+        {
+            self.filled = 0;
+            self
+        }
+        /// Asserts that the first `n` bytes of the buffer are initialized.
+        #[inline] pub unsafe fn set_init(&mut self, n: usize) -> &mut Self
+        {
+            self.init = ::cmp::max(self.init, n);
+            self
+        }
+    }
+    /// A writeable view of the unfilled portion of a [`BorrowedBuf`].
+    use mem::MaybeUninit;
+
+
+    #[derive(Debug)]
+    pub struct BorrowedCursor<'a>
+    {
+        /// The underlying buffer.
+        buf: &'a mut BorrowedBuf<'a>,
+        /// The length of the filled portion of the underlying buffer at the time of the cursor's creation.
+        start: usize,
+    }
+
+    impl<'a> BorrowedCursor<'a>
+    {
+        /// Reborrows this cursor by cloning it with a smaller lifetime.
+        #[inline] pub fn reborrow<'this>(&'this mut self) -> BorrowedCursor<'this>
+        {
+            unsafe
+            {
+                BorrowedCursor
+                {
+                    buf: ::mem::transmute::<&'this mut BorrowedBuf<'a>, &'this mut BorrowedBuf<'this>>( self.buf ),
+                    start: self.start,
+                }
+            }
+        }
+        /// Returns the available space in the cursor.
+        #[inline] pub fn capacity(&self) -> usize { self.buf.capacity() - self.buf.filled }
+        /// Returns the number of bytes written to this cursor since it was created from a `BorrowedBuf`.
+        #[inline] pub fn written(&self) -> usize { self.buf.filled - self.start }
+        /// Returns a shared reference to the initialized portion of the cursor.
+        #[inline] pub fn init_ref(&self) -> &[u8]
+        {
+            unsafe
+            {
+                unsafe
+                {
+                    ::mem::transmute( self.buf.buf.get_unchecked(self.buf.filled..self.buf.init) )
+                }
+            }
+        }
+        /// Returns a mutable reference to the initialized portion of the cursor.
+        #[inline] pub fn init_mut(&mut self) -> &mut [u8]
+        {
+            unsafe
+            {
+                ::mem::transmute( self.buf.buf.get_unchecked_mut(self.buf.filled..self.buf.init) )
+            }
+        }
+        /// Returns a mutable reference to the uninitialized part of the cursor.
+        #[inline] pub fn uninit_mut(&mut self) -> &mut [MaybeUninit<u8>]
+        {
+            unsafe { self.buf.buf.get_unchecked_mut(self.buf.init..) }
+        }
+        /// Returns a mutable reference to the whole cursor.
+        #[inline] pub unsafe fn as_mut(&mut self) -> &mut [MaybeUninit<u8>]
+        {
+            unsafe { self.buf.buf.get_unchecked_mut(self.buf.filled..) }
+        }
+        /// Advances the cursor by asserting that `n` bytes have been filled.
+        #[inline] pub fn advance(&mut self, n: usize) -> &mut Self
+        {
+            /*
+            let filled = self.buf.filled.strict_add(n);
+            assert!(filled <= self.buf.init);
+            self.buf.filled = filled;
+            */
+            self
+        }
+        /// Advances the cursor by asserting that `n` bytes have been filled.
+        #[inline] pub unsafe fn advance_unchecked(&mut self, n: usize) -> &mut Self
+        {
+            self.buf.filled += n;
+            self.buf.init = ::cmp::max(self.buf.init, self.buf.filled);
+            self
+        }
+        /// Initializes all bytes in the cursor.
+        #[inline] pub fn ensure_init(&mut self) -> &mut Self
+        {
+            unsafe
+            {
+                let uninit = self.uninit_mut();
+                ::ptr::write_bytes(uninit.as_mut_ptr(), 0, uninit.len());
+                self.buf.init = self.buf.capacity();
+                self
+            }
+        }
+        /// Asserts that the first `n` unfilled bytes of the cursor are initialized.
+        #[inline] pub unsafe fn set_init(&mut self, n: usize) -> &mut Self
+        {
+            self.buf.init = ::cmp::max(self.buf.init, self.buf.filled + n);
+            self
+        }
+        /// Appends data to the cursor, advancing position within its buffer.
+        #[inline] pub fn append(&mut self, buf: &[u8])
+        {
+            unsafe
+            {
+                /*
+                assert!(self.capacity() >= buf.len());
+                self.as_mut()[..buf.len()].write_copy_of_slice(buf);
+                self.set_init(buf.len());
+                self.buf.filled += buf.len();
+                */
+            }
+        }
+    }
 }
 
 pub mod is
@@ -536,6 +782,27 @@ pub mod is
 
         false
     }
+}
+
+pub mod lines
+{
+    /*
+    linefeed v0.6.0*/
+    use ::
+    {
+        *,
+    };
+}
+
+pub mod marker
+{
+    pub use std::marker::{ * };
+}
+
+pub mod mem
+{
+    //! Basic functions for dealing with memory.
+    pub use std::mem::{ * };
 }
 
 pub mod panic
@@ -771,8 +1038,7 @@ pub mod primitive
     {
         ($($T:ident<$($a:lifetime),*>),+) => {$(
             impl<$($a),*> ::fmt::Display for $T<$($a),*> {
-                #[inline]
-                fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result {
+                #[inline] fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result {
                     ::fmt::LowerHex::fmt(self, f)
                 }
             }
@@ -797,58 +1063,50 @@ pub mod primitive
     {
         ($T:ident<>) => {
             impl From<Uuid> for $T {
-                #[inline]
-                fn from(f: Uuid) -> Self {
+                #[inline] fn from(f: Uuid) -> Self {
                     $T(f)
                 }
             }
 
             impl From<$T> for Uuid {
-                #[inline]
-                fn from(f: $T) -> Self {
+                #[inline] fn from(f: $T) -> Self {
                     f.into_uuid()
                 }
             }
 
             impl AsRef<Uuid> for $T {
-                #[inline]
-                fn as_ref(&self) -> &Uuid {
+                #[inline] fn as_ref(&self) -> &Uuid {
                     &self.0
                 }
             }
 
             impl Borrow<Uuid> for $T {
-                #[inline]
-                fn borrow(&self) -> &Uuid {
+                #[inline] fn borrow(&self) -> &Uuid {
                     &self.0
                 }
             }
         };
         ($T:ident<$a:lifetime>) => {
             impl<$a> From<&$a Uuid> for $T<$a> {
-                #[inline]
-                fn from(f: &$a Uuid) -> Self {
+                #[inline] fn from(f: &$a Uuid) -> Self {
                     $T::from_uuid_ref(f)
                 }
             }
 
             impl<$a> From<$T<$a>> for &$a Uuid {
-                #[inline]
-                fn from(f: $T<$a>) -> &$a Uuid {
+                #[inline] fn from(f: $T<$a>) -> &$a Uuid {
                     f.0
                 }
             }
 
             impl<$a> AsRef<Uuid> for $T<$a> {
-                #[inline]
-                fn as_ref(&self) -> &Uuid {
+                #[inline] fn as_ref(&self) -> &Uuid {
                     self.0
                 }
             }
 
             impl<$a> Borrow<Uuid> for $T<$a> {
-                #[inline]
-                fn borrow(&self) -> &Uuid {
+                #[inline] fn borrow(&self) -> &Uuid {
                     self.0
                 }
             }
@@ -1262,7 +1520,6 @@ pub mod primitive
     {
         pub const UPPER: [u8; 16] = 
         [ b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'A', b'B', b'C', b'D', b'E', b'F' ];
-        
         pub const LOWER: [u8; 16] = 
         [ b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'a', b'b', b'c', b'd', b'e', b'f' ];
         /// UUID namespace for Domain Name System (DNS).
@@ -1551,7 +1808,6 @@ pub mod primitive
                 d4[7],
             ])
         }
-        
         pub const fn from_u128(v: u128) -> Self { Uuid::from_bytes(v.to_be_bytes()) }
 
         pub fn new_v4() -> Uuid 
@@ -1996,6 +2252,11 @@ pub mod shell
     }
 }
 
+pub mod slice
+{
+    pub use std::slice::{ * };
+}
+
 pub mod str
 {
     pub use std::str::{ * };
@@ -2022,6 +2283,1660 @@ pub mod sync
 
     pub use std::sync::{ atomic as _, * };
 }
+
+pub mod system
+{
+    use ::
+    {
+        *,
+    };
+
+    pub mod common
+    {
+        //! Platform-independent platform abstraction
+        use ::
+        {
+            *,
+        };
+
+        pub mod alloc
+        {
+            use ::
+            {
+                alloc::{ GlobalAlloc, Layout, System },
+                *,
+            };
+            /// The minimum alignment guaranteed by the architecture.
+            const MIN_ALIGN: usize = 16;
+            pub unsafe fn realloc_fallback
+            (
+                alloc: &System,
+                ptr: *mut u8,
+                old_layout: Layout,
+                new_size: usize,
+            ) -> *mut u8
+            {
+                unsafe
+                {
+                    let new_layout = Layout::from_size_align_unchecked(new_size, old_layout.align());
+                    let new_ptr = GlobalAlloc::alloc(alloc, new_layout);
+
+                    if !new_ptr.is_null()
+                    {
+                        let size = usize::min(old_layout.size(), new_size);
+                        ptr::copy_nonoverlapping(ptr, new_ptr, size);
+                        GlobalAlloc::dealloc(alloc, ptr, old_layout);
+                    }
+
+                    new_ptr
+                }
+            }
+        }
+
+        pub mod args
+        {
+            use ::
+            {
+                ffi::{ OsString },
+                num::{ NonZero },
+                ops::{ Try },
+                *,
+            };
+            /*
+            use crate::{array, fmt, vec};
+            */
+            pub struct Args
+            {
+                iter: vec::IntoIter<OsString>,
+            }
+
+            impl !Send for Args {}
+            impl !Sync for Args {}
+
+            impl Args
+            {
+                #[inline] pub fn new(args: Vec<OsString>) -> Self { Args { iter: args.into_iter() } }
+            }
+
+            impl fmt::Debug for Args
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { self.iter.as_slice().fmt(f) }
+            }
+
+            impl Iterator for Args
+            {
+                type Item = OsString;
+                #[inline] fn next(&mut self) -> Option<OsString> { self.iter.next() }
+
+                #[inline] fn next_chunk<const N: usize>( &mut self, ) -> 
+                Result<[OsString; N], array::IntoIter<OsString, N>> 
+                { self.iter.next_chunk() }
+
+                #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
+                #[inline] fn count(self) -> usize { self.iter.len() }
+                #[inline] fn last(mut self) -> Option<OsString> { self.iter.next_back() }
+                #[inline] fn advance_by(&mut self, n: usize) -> Result<(), NonZero<usize>> { self.iter.advance_by(n) }
+                #[inline] fn try_fold<B, F, R>(&mut self, init: B, f: F) -> R where
+                F: FnMut(B, Self::Item) -> R,
+                R: Try<Output = B>
+                { self.iter.try_fold(init, f) }
+
+                #[inline] fn fold<B, F>(self, init: B, f: F) -> B where
+                F: FnMut(B, Self::Item) -> B
+                { self.iter.fold(init, f) }
+            }
+
+            impl DoubleEndedIterator for Args
+            {
+                #[inline] fn next_back(&mut self) -> Option<OsString> { self.iter.next_back() }
+                #[inline] fn advance_back_by(&mut self, n: usize) -> Result<(), NonZero<usize>>
+                { self.iter.advance_back_by(n) }
+            }
+
+            impl ExactSizeIterator for Args
+            {
+                #[inline] fn len(&self) -> usize { self.iter.len() }
+                #[inline] fn is_empty(&self) -> bool { self.iter.is_empty() }
+            }
+        }
+
+        pub mod bytes
+        {
+            use ::
+            {
+                *,
+            };
+            /// A platform independent representation of a string.
+            #[derive(Debug)]
+            pub enum BytesOrWideString<'a>
+            {
+                /// A slice, typically provided on Unix platforms.
+                Bytes(&'a [u8]),
+                /// Wide strings typically from Windows.
+                Wide(&'a [u16]),
+            }
+
+            impl<'a> BytesOrWideString<'a>
+            {
+                /// Lossy converts to a `Cow<str>`, 
+                /// will allocate if `Bytes` is not valid UTF-8 or if `BytesOrWideString` is `Wide`.
+                pub fn to_str_lossy(&self) -> Cow<'a, str>
+                {
+                    use self::BytesOrWideString::*;
+
+                    match *self
+                    {
+                        Bytes(slice) => String::from_utf8_lossy(slice),
+                        Wide(wide) => Cow::Owned(String::from_utf16_lossy(wide)),
+                    }
+                }
+            }
+            
+            impl<'a> fmt::Display for BytesOrWideString<'a>
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { self.to_str_lossy().fmt(f) }
+            }
+        }
+
+        pub mod backtrace
+        {
+            //! Common code for printing backtraces.
+            use ::
+            {
+                *,
+            };
+            /*
+            use crate::borrow::Cow;
+            use crate::io::prelude::*;
+            use crate::path::{self, Path, PathBuf};
+            use crate::sync::{Mutex, MutexGuard, PoisonError};
+            use crate::{env, fmt, io};
+            */
+
+            /// Max number of frames to print.
+            pub const MAX_NB_FRAMES: usize = 100;
+
+            pub struct BacktraceLock<'a>(#[allow(dead_code)] MutexGuard<'a, ()>);
+
+            pub fn lock<'a>() -> BacktraceLock<'a> 
+            {
+                static LOCK: Mutex<()> = Mutex::new(());
+                BacktraceLock(LOCK.lock().unwrap_or_else(PoisonError::into_inner))
+            }
+
+            impl BacktraceLock<'_> {
+                /// Prints the current backtrace.
+                ///
+                /// NOTE: this function is not Sync. The caller must hold a mutex lock, or there must be only one thread in the program.
+                pub fn print(&mut self, w: &mut dyn Write, format: PrintFmt) -> io::Result<()> {
+                    // There are issues currently linking libbacktrace into tests, and in
+                    // general during std's own unit tests we're not testing this path. In
+                    // test mode immediately return here to optimize away any references to the
+                    // libbacktrace symbols
+                    if cfg!(test) {
+                        return Ok(());
+                    }
+
+                    struct DisplayBacktrace {
+                        format: PrintFmt,
+                    }
+                    impl fmt::Display for DisplayBacktrace {
+                        fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+                            unsafe { _print_fmt(fmt, self.format) }
+                        }
+                    }
+                    write!(w, "{}", DisplayBacktrace { format })
+                }
+            }
+
+            unsafe fn _print_fmt(fmt: &mut fmt::Formatter<'_>, print_fmt: PrintFmt) -> fmt::Result
+            {
+                // Always 'fail' to get the cwd when running under Miri -
+                // this allows Miri to display backtraces in isolation mode
+                let cwd = if !cfg!(miri) { env::current_dir().ok() } else { None };
+
+                let mut print_path = move |fmt: &mut fmt::Formatter<'_>, bows: BytesOrWideString<'_>| {
+                    output_filename(fmt, bows, print_fmt, cwd.as_ref())
+                };
+                writeln!(fmt, "stack backtrace:")?;
+                let mut bt_fmt = BacktraceFmt::new(fmt, print_fmt, &mut print_path);
+                bt_fmt.add_context()?;
+                let mut idx = 0;
+                let mut res = Ok(());
+                let mut omitted_count: usize = 0;
+                let mut first_omit = true;
+                // If we're using a short backtrace, ignore all frames until we're told to start printing.
+                let mut print = print_fmt != PrintFmt::Short;
+                set_image_base();
+                // SAFETY: we roll our own locking in this town
+                unsafe {
+                    trace_unsynchronized(|frame| {
+                        if print_fmt == PrintFmt::Short && idx > MAX_NB_FRAMES {
+                            return false;
+                        }
+
+                        let mut hit = false;
+                        backtrace_rs::resolve_frame_unsynchronized(frame, |symbol| {
+                            hit = true;
+
+                            // `__rust_end_short_backtrace` means we are done hiding symbols
+                            // for now. Print until we see `__rust_begin_short_backtrace`.
+                            if print_fmt == PrintFmt::Short {
+                                if let Some(sym) = symbol.name().and_then(|s| s.as_str()) {
+                                    if sym.contains("__rust_end_short_backtrace") {
+                                        print = true;
+                                        return;
+                                    }
+                                    if print && sym.contains("__rust_begin_short_backtrace") {
+                                        print = false;
+                                        return;
+                                    }
+                                    if !print {
+                                        omitted_count += 1;
+                                    }
+                                }
+                            }
+
+                            if print {
+                                if omitted_count > 0 {
+                                    debug_assert!(print_fmt == PrintFmt::Short);
+                                    // only print the message between the middle of frames
+                                    if !first_omit {
+                                        let _ = writeln!(
+                                            bt_fmt.formatter(),
+                                            "      [... omitted {} frame{} ...]",
+                                            omitted_count,
+                                            if omitted_count > 1 { "s" } else { "" }
+                                        );
+                                    }
+                                    first_omit = false;
+                                    omitted_count = 0;
+                                }
+                                res = bt_fmt.frame().symbol(frame, symbol);
+                            }
+                        });
+                        if !hit && print {
+                            res = bt_fmt.frame().print_raw(frame.ip(), None, None, None);
+                        }
+
+                        idx += 1;
+                        res.is_ok()
+                    })
+                };
+                res?;
+                bt_fmt.finish()?;
+                if print_fmt == PrintFmt::Short {
+                    writeln!(
+                        fmt,
+                        "note: Some details are omitted, \
+                        run with `RUST_BACKTRACE=full` for a verbose backtrace."
+                    )?;
+                }
+                Ok(())
+            }
+            
+            #[inline(never)] pub fn __rust_begin_short_backtrace<F, T>(f: F) -> T where
+            F: FnOnce() -> T
+            {
+                let result = f();
+                ::hint::black_box(());
+                result
+            }
+            
+            #[inline(never)] pub fn __rust_end_short_backtrace<F, T>(f: F) -> T where
+            F: FnOnce() -> T
+            {
+                let result = f();
+                ::hint::black_box(());
+                result
+            }
+            
+            pub fn set_image_base() { /* nothing to do for platforms other than SGX */ }
+            /// A formatter for backtraces.
+            pub struct BacktraceFmt<'a, 'b>
+            {
+                fmt: &'a mut fmt::Formatter<'b>,
+                frame_index: usize,
+                format: PrintFmt,
+                print_path: &'a mut (dyn FnMut(&mut fmt::Formatter<'_>, BytesOrWideString<'_>) -> fmt::Result + 'b),
+            }
+            /// The styles of printing that we can print
+            #[non_exhaustive] #[derive( Copy, Clone, Eq, PartialEq )]
+            pub enum PrintFmt
+            {
+                /// Prints a terser backtrace which ideally only contains relevant information.
+                Short,
+                /// Prints a backtrace that contains all possible information.
+                Full,
+            }
+            /// Same as `trace`, only unsafe as it's unsynchronized.
+            pub unsafe fn trace_unsynchronized<F: FnMut(&Frame) -> bool>(mut cb: F)
+            {
+                unsafe { traces(&mut cb) }
+            }
+            /// Same as `resolve_frame`, only unsafe as it's unsynchronized.
+            ///
+            /// This function does not have synchronization guarantees but is available
+            /// when the `std` feature of this crate isn't compiled in. See the
+            /// `resolve_frame` function for more documentation and examples.
+            ///
+            /// # Panics
+            ///
+            /// See information on `resolve_frame` for caveats on `cb` panicking.
+            pub unsafe fn resolve_frame_unsynchronized<F>(frame: &Frame, mut cb: F) where
+            F: FnMut(&Symbol)
+            {
+                unsafe { imp::resolve(ResolveWhat::Frame(frame), &mut cb) }
+            }
+        }
+
+        pub mod cmath
+        {
+            use ::
+            {
+                *,
+            };
+            
+            unsafe extern "C"
+            {
+                pub safe fn acos(n: f64) -> f64;
+                pub safe fn asin(n: f64) -> f64;
+                pub safe fn atan(n: f64) -> f64;
+                pub safe fn atan2(a: f64, b: f64) -> f64;
+                pub safe fn cbrt(n: f64) -> f64;
+                pub safe fn cbrtf(n: f32) -> f32;
+                pub safe fn cosh(n: f64) -> f64;
+                pub safe fn expm1(n: f64) -> f64;
+                pub safe fn expm1f(n: f32) -> f32;
+                pub safe fn fdim(a: f64, b: f64) -> f64;
+                pub safe fn fdimf(a: f32, b: f32) -> f32;
+                pub safe fn hypot(x: f64, y: f64) -> f64;
+                pub safe fn hypotf(x: f32, y: f32) -> f32;
+                pub safe fn log1p(n: f64) -> f64;
+                pub safe fn log1pf(n: f32) -> f32;
+                pub safe fn sinh(n: f64) -> f64;
+                pub safe fn tan(n: f64) -> f64;
+                pub safe fn tanh(n: f64) -> f64;
+                pub safe fn tgamma(n: f64) -> f64;
+                pub safe fn tgammaf(n: f32) -> f32;
+                pub safe fn lgamma_r(n: f64, s: &mut i32) -> f64;
+                pub safe fn lgammaf_r(n: f32, s: &mut i32) -> f32;
+                pub safe fn erf(n: f64) -> f64;
+                pub safe fn erff(n: f32) -> f32;
+                pub safe fn erfc(n: f64) -> f64;
+                pub safe fn erfcf(n: f32) -> f32;
+                pub safe fn acosf128(n: f128) -> f128;
+                pub safe fn asinf128(n: f128) -> f128;
+                pub safe fn atanf128(n: f128) -> f128;
+                pub safe fn atan2f128(a: f128, b: f128) -> f128;
+                pub safe fn cbrtf128(n: f128) -> f128;
+                pub safe fn coshf128(n: f128) -> f128;
+                pub safe fn expm1f128(n: f128) -> f128;
+                pub safe fn hypotf128(x: f128, y: f128) -> f128;
+                pub safe fn log1pf128(n: f128) -> f128;
+                pub safe fn sinhf128(n: f128) -> f128;
+                pub safe fn tanf128(n: f128) -> f128;
+                pub safe fn tanhf128(n: f128) -> f128;
+                pub safe fn tgammaf128(n: f128) -> f128;
+                pub safe fn lgammaf128_r(n: f128, s: &mut i32) -> f128;
+                pub safe fn erff128(n: f128) -> f128;
+                pub safe fn erfcf128(n: f128) -> f128;
+            }
+        }
+
+        pub mod env
+        {
+            use ::
+            {
+                ffi::{ OsString },
+                *,
+            };
+            
+            pub struct Env
+            {
+                iter: vec::IntoIter<(OsString, OsString)>,
+            }
+            
+            pub struct EnvStrDebug<'a>
+            {
+                slice: &'a [(OsString, OsString)],
+            }
+
+            impl fmt::Debug for EnvStrDebug<'_>
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    f.debug_list()
+                    .entries(self.slice.iter().map(|(a, b)| (a.to_str().unwrap(), b.to_str().unwrap())))
+                    .finish()
+                }
+            }
+
+            impl Env
+            {
+                pub fn new(env: Vec<(OsString, OsString)>) -> Self { Env { iter: env.into_iter() } }
+
+                pub fn str_debug(&self) -> impl fmt::Debug + '_ { EnvStrDebug { slice: self.iter.as_slice() } }
+            }
+
+            impl fmt::Debug for Env
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                { f.debug_list().entries(self.iter.as_slice()).finish() }
+            }
+
+            impl !Send for Env {}
+            impl !Sync for Env {}
+
+            impl Iterator for Env
+            {
+                type Item = (OsString, OsString);
+                fn next(&mut self) -> Option<(OsString, OsString)> { self.iter.next() }
+                fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
+            }
+        }
+
+        pub mod exit_guard
+        {
+            //! std::process::exit Mitigation
+            use ::
+            {
+                *,
+            };
+
+            pub fn unique_thread_exit() { /* Mitigation not required on platforms where `exit` is thread-safe. */ }
+        }
+
+        pub mod fd
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod fs
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod io
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod net
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod os_str
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod path
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod personality
+        {
+            use ::
+            {
+                *,
+            };
+        }
+        
+        pub mod process
+        {
+            use ::
+            {
+                collections::{ btree_map::{ self }, BTreeMap },
+                ffi::{ OsStr, OsString },
+                sys::
+                {
+                    pipe::{ read2 },
+                    // process::{EnvKey, ExitStatus, Process, StdioPipes},
+                },
+                *,
+            };
+            
+            #[derive(Clone, Default)]
+            pub struct CommandEnv
+            {
+                clear: bool,
+                saw_path: bool,
+                vars: BTreeMap<EnvKey, Option<OsString>>,
+            }
+
+            impl fmt::Debug for CommandEnv
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    let mut debug_command_env = f.debug_struct("CommandEnv");
+                    debug_command_env.field("clear", &self.clear).field("vars", &self.vars);
+                    debug_command_env.finish()
+                }
+            }
+
+            impl CommandEnv
+            {
+                /// Capture the current environment with these changes applied.
+                pub fn capture(&self) -> BTreeMap<EnvKey, OsString>
+                {
+                    let mut result = BTreeMap::<EnvKey, OsString>::new();
+                    if !self.clear {
+                        for (k, v) in env::vars_os() {
+                            result.insert(k.into(), v);
+                        }
+                    }
+                    for (k, maybe_v) in &self.vars {
+                        if let &Some(ref v) = maybe_v {
+                            result.insert(k.clone(), v.clone());
+                        } else {
+                            result.remove(k);
+                        }
+                    }
+                    result
+                }
+
+                pub fn is_unchanged(&self) -> bool { !self.clear && self.vars.is_empty() }
+
+                pub fn capture_if_changed(&self) -> Option<BTreeMap<EnvKey, OsString>>
+                { if self.is_unchanged() { None } else { Some(self.capture()) } }
+                
+                pub fn set(&mut self, key: &OsStr, value: &OsStr)
+                {
+                    let key = EnvKey::from(key);
+                    self.maybe_saw_path(&key);
+                    self.vars.insert(key, Some(value.to_owned()));
+                }
+
+                pub fn remove(&mut self, key: &OsStr)
+                {
+                    let key = EnvKey::from(key);
+                    self.maybe_saw_path(&key);
+
+                    if self.clear { self.vars.remove(&key); }
+                    else {  self.vars.insert(key, None); }
+                }
+
+                pub fn clear(&mut self)
+                {
+                    self.clear = true;
+                    self.vars.clear();
+                }
+
+                pub fn does_clear(&self) -> bool { self.clear }
+
+                pub fn have_changed_path(&self) -> bool { self.saw_path || self.clear }
+
+                pub fn maybe_saw_path(&mut self, key: &EnvKey)
+                {
+                    if !self.saw_path && key == "PATH"
+                    {
+                        self.saw_path = true;
+                    }
+                }
+
+                pub fn iter(&self) -> CommandEnvs<'_>
+                {
+                    let iter = self.vars.iter();
+                    CommandEnvs { iter }
+                }
+            }
+            /// An iterator over the command environment variables.
+            #[derive(Debug)]
+            pub struct CommandEnvs<'a>
+            {
+                iter: btree_map::Iter<'a, EnvKey, Option<OsString>>,
+            }
+
+            impl <'a> CommandEnvs<'a>
+            {
+                fn is_empty(&self) -> bool { self.len() == 0 }
+            }
+            
+            impl<'a> Iterator for CommandEnvs<'a>
+            {
+                type Item = (&'a OsStr, Option<&'a OsStr>);
+                
+                fn next(&mut self) -> Option<Self::Item> 
+                { self.iter.next().map(|(key, value)| (key.as_ref(), value.as_deref())) }
+
+                fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
+            }
+            
+            impl<'a> ExactSizeIterator for CommandEnvs<'a>
+            {
+                fn len(&self) -> usize { self.iter.len() }
+                //fn is_empty(&self) -> bool { self.iter.len() == 0 }
+            }
+
+            pub fn wait_with_output( mut process:Process, mut pipes:StdioPipes ) -> 
+            io::Result<(ExitStatus, Vec<u8>, Vec<u8>)>
+            {
+                drop(pipes.stdin.take());
+
+                let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+                match (pipes.stdout.take(), pipes.stderr.take())
+                {
+                    (None, None) => {}
+                    (Some(out), None) =>
+                    {
+                        let res = out.read_to_end(&mut stdout);
+                        res.unwrap();
+                    }
+
+                    (None, Some(err)) =>
+                    {
+                        let res = err.read_to_end(&mut stderr);
+                        res.unwrap();
+                    }
+
+                    (Some(out), Some(err)) =>
+                    {
+                        let res = read2(out, &mut stdout, err, &mut stderr);
+                        res.unwrap();
+                    }
+                }
+
+                let status = process.wait()?;
+                Ok((status, stdout, stderr))
+            }
+        }
+
+        pub mod random
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod stdio
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod sync
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod thread_local
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod wstr
+        {
+            use ::
+            {
+                *,
+            };
+
+        }
+
+        pub mod wtf8
+        {
+            use ::
+            {
+                *,
+            };
+
+        }
+        
+        /// A trait for viewing representations from std types.
+        pub trait AsInner<Inner: ?Sized>
+        {
+            fn as_inner(&self) -> &Inner;
+        }
+        /// A trait for viewing representations from std types
+        pub trait AsInnerMut<Inner: ?Sized>
+        {
+            fn as_inner_mut(&mut self) -> &mut Inner;
+        }
+        /// A trait for extracting representations from std types
+        pub trait IntoInner<Inner>
+        {
+            fn into_inner(self) -> Inner;
+        }
+        /// A trait for creating std types from internal representations
+        pub trait FromInner<Inner>
+        {
+            fn from_inner(inner: Inner) -> Self;
+        }
+
+        pub fn mul_div_u64(value: u64, numer: u64, denom: u64) -> u64
+        {
+            let q = value / denom;
+            let r = value % denom;
+            q * numer + r * numer / denom
+        }
+
+        pub fn ignore_notfound<T>(result: ::io::Result<T>) -> ::io::Result<()>
+        {
+            match result
+            {
+                Err(err) if err.kind() == ::io::ErrorKind::NotFound => Ok(()),
+                Ok(_) => Ok(()),
+                Err(err) => Err(err),
+            }
+        }
+        /*
+        terminfo v0.9.0*/
+
+    }
+    // libstd::sys::pal::<target_os>
+    pub mod os
+    {
+        use ::
+        {
+            *,
+        };
+
+        pub mod uefi
+        {
+            use ::
+            {
+                *,
+            };
+            /*
+            std/src/sys/alloc/uefi.rs
+            std/src/sys/anonymous_pipe/unsupported.rs
+            std/src/sys/args/uefi.rs
+            std/src/sys/env/uefi.rs
+            */
+            pub mod backtrace
+            {
+                //! Empty implementation of unwinding used when no other implementation is appropriate.
+                use ::
+                {
+                    ffi::{ c_void },
+                    ptr::{ null_mut },
+                    *,
+                };
+                
+                #[inline(always)] pub unsafe fn trace(_cb: &mut dyn FnMut(&super::Frame) -> bool) {}
+
+                #[derive(Clone)]
+                pub struct Frame;
+
+                impl Frame
+                {
+                    pub fn ip(&self) -> *mut c_void {
+                        null_mut()
+                    }
+
+                    pub fn sp(&self) -> *mut c_void {
+                        null_mut()
+                    }
+
+                    pub fn symbol_address(&self) -> *mut c_void {
+                        null_mut()
+                    }
+
+                    pub fn module_base_address(&self) -> Option<*mut c_void> {
+                        None
+                    }
+                }
+                /// Prints the filename of the backtrace frame.
+                pub fn output_filename
+                (
+                    fmt: &mut fmt::Formatter<'_>,
+                    bows: BytesOrWideString<'_>,
+                    print_fmt: PrintFmt,
+                    cwd: Option<&PathBuf>,
+                ) -> fmt::Result
+                {
+                    let file: Cow<'_, Path> = match bows 
+                    {
+                        Path::new( ::str::from_utf8(bytes).unwrap_or("<unknown>") ).into()
+                    };
+                    
+                    if print_fmt == PrintFmt::Short && file.is_absolute()
+                    {
+                        if let Some(cwd) = cwd
+                        {
+                            if let Ok(stripped) = file.strip_prefix(&cwd)
+                            {
+                                if let Some(s) = stripped.to_str()
+                                {
+                                    return write!(fmt, ".{}{s}", path::MAIN_SEPARATOR);
+                                }
+                            }
+                        }
+                    }
+                    fmt::Display::fmt(&file.display(), fmt)
+                }
+
+                pub unsafe fn resolve(_addr: ResolveWhat<'_>, _cb: &mut dyn FnMut(&super::Symbol)) {}
+                
+                
+                pub struct Symbol<'a> {
+                    _marker: marker::PhantomData<&'a i32>,
+                }
+
+                impl Symbol<'_> {
+                    pub fn name(&self) -> Option<SymbolName<'_>> {
+                        None
+                    }
+
+                    pub fn addr(&self) -> Option<*mut c_void> {
+                        None
+                    }
+
+                    pub fn filename_raw(&self) -> Option<BytesOrWideString<'_>> {
+                        None
+                    }
+                    
+                    pub fn filename(&self) -> Option<&::std::path::Path> {
+                        None
+                    }
+
+                    pub fn lineno(&self) -> Option<u32> {
+                        None
+                    }
+
+                    pub fn colno(&self) -> Option<u32> {
+                        None
+                    }
+                }
+            }
+
+            pub mod bytes
+            {
+                use ::
+                {
+                    *,
+                };
+                
+                impl<'a> BytesOrWideString<'a>
+                { 
+                    /// Provides a `Path` representation of `BytesOrWideString`.
+                    pub fn into_path_buf(self) -> PathBuf
+                    {
+                        if let BytesOrWideString::Bytes(b) = self {
+                            if let Ok(s) = str::from_utf8(b) {
+                                return PathBuf::from(s);
+                            }
+                        }
+
+                        unreachable!()
+                    }
+                }
+            }
+
+            pub mod env
+            {
+                use ::
+                {
+                    *,
+                };
+                pub const FAMILY: &str = "";
+                pub const OS: &str = "uefi";
+                pub const DLL_PREFIX: &str = "";
+                pub const DLL_SUFFIX: &str = "";
+                pub const DLL_EXTENSION: &str = "";
+                pub const EXE_SUFFIX: &str = ".efi";
+                pub const EXE_EXTENSION: &str = "efi";
+            }
+        }
+        
+        pub mod unix
+        {
+            use ::
+            {
+                *,
+            };
+            /*
+            std/src/sys/alloc/unix.rs
+            std/src/sys/anonymous_pipe/unix.rs
+            std/src/sys/args/unix.rs
+            std/src/sys/env/unix.rs
+            */
+            pub mod backtrace
+            {
+                //! Backtrace support using libunwind/gcc_s/etc APIs.
+                use ::
+                {
+                    ffi::{ c_void },
+                    ptr::{ addr_of_mut },
+                    *,
+                };
+                /// Prints the filename of the backtrace frame.
+                pub fn output_filename
+                (
+                    fmt: &mut fmt::Formatter<'_>,
+                    bows: BytesOrWideString<'_>,
+                    print_fmt: PrintFmt,
+                    cwd: Option<&PathBuf>,
+                ) -> fmt::Result
+                {
+                    let file: Cow<'_, Path> = match bows
+                    {
+                        BytesOrWideString::Bytes(bytes) =>
+                        {
+                            //use crate::os::unix::prelude::*;
+                            Path::new(crate::ffi::OsStr::from_bytes(bytes)).into()
+                        }
+                    };
+                    
+                    if print_fmt == PrintFmt::Short && file.is_absolute()
+                    {
+                        if let Some(cwd) = cwd
+                        {
+                            if let Ok(stripped) = file.strip_prefix(&cwd)
+                            {
+                                if let Some(s) = stripped.to_str()
+                                {
+                                    return write!(fmt, ".{}{s}", path::MAIN_SEPARATOR);
+                                }
+                            }
+                        }
+                    }
+                    fmt::Display::fmt(&file.display(), fmt)
+                }
+                
+                pub enum Frame
+                {
+                    Raw(*mut uw::_Unwind_Context),
+                    Cloned
+                    {
+                        ip: *mut c_void,
+                        sp: *mut c_void,
+                        symbol_address: *mut c_void,
+                    },
+                }
+                
+                unsafe impl Send for Frame {}
+                unsafe impl Sync for Frame {}
+
+                impl Frame
+                {
+                    pub fn ip(&self) -> *mut c_void
+                    {
+                        let ctx = match *self
+                        {
+                            Frame::Raw(ctx) => ctx,
+                            Frame::Cloned { ip, .. } => return ip,
+                        };
+                        
+                        let mut ip = unsafe { uw::_Unwind_GetIP(ctx) as *mut c_void };
+                        
+                        ip
+                    }
+
+                    pub fn sp(&self) -> *mut c_void
+                    {
+                        match *self
+                        {
+                            Frame::Raw(ctx) => unsafe { uw::get_sp(ctx) as *mut c_void },
+                            Frame::Cloned { sp, .. } => sp,
+                        }
+                    }
+
+                    pub fn symbol_address(&self) -> *mut c_void
+                    {
+                        if let Frame::Cloned { symbol_address, .. } = *self {
+                            return symbol_address;
+                        }
+                        
+                        unsafe { uw::_Unwind_FindEnclosingFunction(self.ip()) }
+                    }
+
+                    pub fn module_base_address(&self) -> Option<*mut c_void> { None }
+                }
+
+                impl Clone for Frame
+                {
+                    fn clone(&self) -> Frame
+                    {
+                        Frame::Cloned
+                        {
+                            ip: self.ip(),
+                            sp: self.sp(),
+                            symbol_address: self.symbol_address(),
+                        }
+                    }
+                }
+
+                struct Bomb
+                {
+                    enabled: bool,
+                }
+
+                impl Drop for Bomb
+                {
+                    fn drop(&mut self)
+                    {
+                        if self.enabled
+                        {
+                            panic!("cannot panic during the backtrace function");
+                        }
+                    }
+                }
+
+                #[inline(always)] pub unsafe fn traces(mut cb: &mut dyn FnMut(&super::Frame) -> bool)
+                {
+                    unsafe
+                    {
+                        uw::_Unwind_Backtrace(trace_fn, addr_of_mut!(cb).cast());
+                        extern "C" fn trace_fn
+                        (
+                            ctx: *mut uw::_Unwind_Context,
+                            arg: *mut c_void,
+                        ) -> uw::_Unwind_Reason_Code
+                        {
+                            let cb = unsafe { &mut *arg.cast::<&mut dyn FnMut(&super::Frame) -> bool>() };
+                            let cx = super::Frame {
+                                inner: Frame::Raw(ctx),
+                            };
+
+                            let mut bomb = Bomb { enabled: true };
+                            let keep_going = cb(&cx);
+                            bomb.enabled = false;
+
+                            if keep_going {
+                                uw::_URC_NO_REASON
+                            } else {
+                                uw::_URC_FAILURE
+                            }
+                        }
+                    }
+
+                    
+                }
+
+                /// Unwind library interface used for backtraces.
+                mod uw
+                {
+                    pub use self::_Unwind_Reason_Code::*;
+
+                    use ::ffi::c_void;
+
+                    #[repr(C)]
+                    pub enum _Unwind_Reason_Code
+                    {
+                        _URC_NO_REASON = 0,
+                        _URC_FOREIGN_EXCEPTION_CAUGHT = 1,
+                        _URC_FATAL_PHASE2_ERROR = 2,
+                        _URC_FATAL_PHASE1_ERROR = 3,
+                        _URC_NORMAL_STOP = 4,
+                        _URC_END_OF_STACK = 5,
+                        _URC_HANDLER_FOUND = 6,
+                        _URC_INSTALL_CONTEXT = 7,
+                        _URC_CONTINUE_UNWIND = 8,
+                        _URC_FAILURE = 9,
+                    }
+
+                    pub enum _Unwind_Context {}
+
+                    pub type _Unwind_Trace_Fn = 
+                    extern "C" fn(ctx: *mut _Unwind_Context, arg: *mut c_void) -> _Unwind_Reason_Code;
+
+                    unsafe extern "C" 
+                    {
+                        pub fn _Unwind_Backtrace
+                        (
+                            trace: _Unwind_Trace_Fn,
+                            trace_argument: *mut c_void,
+                        ) -> _Unwind_Reason_Code;
+                    }
+
+                    
+                    use ::ptr::addr_of_mut;
+                    
+                    #[repr(C)]
+                    enum _Unwind_VRS_Result {
+                        _UVRSR_OK = 0,
+                        _UVRSR_NOT_IMPLEMENTED = 1,
+                        _UVRSR_FAILED = 2,
+                    }
+                    #[repr(C)]
+                    enum _Unwind_VRS_RegClass {
+                        _UVRSC_CORE = 0,
+                        _UVRSC_VFP = 1,
+                        _UVRSC_FPA = 2,
+                        _UVRSC_WMMXD = 3,
+                        _UVRSC_WMMXC = 4,
+                    }
+                    #[repr(C)]
+                    enum _Unwind_VRS_DataRepresentation {
+                        _UVRSD_UINT32 = 0,
+                        _UVRSD_VFPX = 1,
+                        _UVRSD_FPAX = 2,
+                        _UVRSD_UINT64 = 3,
+                        _UVRSD_FLOAT = 4,
+                        _UVRSD_DOUBLE = 5,
+                    }
+
+                    type _Unwind_Word = libc::c_uint;
+                    unsafe extern "C" {
+                        fn _Unwind_VRS_Get(
+                            ctx: *mut _Unwind_Context,
+                            klass: _Unwind_VRS_RegClass,
+                            word: _Unwind_Word,
+                            repr: _Unwind_VRS_DataRepresentation,
+                            data: *mut c_void,
+                        ) -> _Unwind_VRS_Result;
+                    }
+
+                    pub unsafe fn _Unwind_GetIP(ctx: *mut _Unwind_Context) -> libc::uintptr_t {
+                        let mut val: _Unwind_Word = 0;
+                        let ptr = addr_of_mut!(val);
+                        unsafe {
+                            let _ = _Unwind_VRS_Get(
+                                ctx,
+                                _Unwind_VRS_RegClass::_UVRSC_CORE,
+                                15,
+                                _Unwind_VRS_DataRepresentation::_UVRSD_UINT32,
+                                ptr.cast::<c_void>(),
+                            );
+                        }
+                        (val & !1) as libc::uintptr_t
+                    }
+                    
+                    const SP: _Unwind_Word = 13;
+
+                    pub unsafe fn get_sp(ctx: *mut _Unwind_Context) -> libc::uintptr_t {
+                        let mut val: _Unwind_Word = 0;
+                        let ptr = addr_of_mut!(val);
+                        unsafe {
+                            let _ = _Unwind_VRS_Get(
+                                ctx,
+                                _Unwind_VRS_RegClass::_UVRSC_CORE,
+                                SP,
+                                _Unwind_VRS_DataRepresentation::_UVRSD_UINT32,
+                                ptr.cast::<c_void>(),
+                            );
+                        }
+                        val as libc::uintptr_t
+                    }
+                    
+                    pub unsafe fn _Unwind_FindEnclosingFunction(pc: *mut c_void) -> *mut c_void {
+                        pc
+                    }
+                }
+
+                pub unsafe fn resolve(_addr: ResolveWhat<'_>, _cb: &mut dyn FnMut(&super::Symbol)) {}
+                
+                
+                pub struct Symbol<'a> {
+                    _marker: marker::PhantomData<&'a i32>,
+                }
+
+                impl Symbol<'_> {
+                    pub fn name(&self) -> Option<SymbolName<'_>> {
+                        None
+                    }
+
+                    pub fn addr(&self) -> Option<*mut c_void> {
+                        None
+                    }
+
+                    pub fn filename_raw(&self) -> Option<BytesOrWideString<'_>> {
+                        None
+                    }
+                    
+                    pub fn filename(&self) -> Option<&::std::path::Path> {
+                        None
+                    }
+
+                    pub fn lineno(&self) -> Option<u32> {
+                        None
+                    }
+
+                    pub fn colno(&self) -> Option<u32> {
+                        None
+                    }
+                }
+            }
+
+            pub mod bytes
+            {
+                use ::
+                {
+                    *,
+                };
+                
+                impl<'a> BytesOrWideString<'a>
+                { 
+                    /// Provides a `Path` representation of `BytesOrWideString`.
+                    pub fn into_path_buf(self) -> PathBuf
+                    {
+                        use std::ffi::OsStr;
+                        use std::os::unix::ffi::OsStrExt;
+
+                        if let BytesOrWideString::Bytes(slice) = self {
+                            return PathBuf::from(OsStr::from_bytes(slice));
+                        }
+
+                        if let BytesOrWideString::Bytes(b) = self {
+                            if let Ok(s) = str::from_utf8(b) {
+                                return PathBuf::from(s);
+                            }
+                        }
+
+                        unreachable!()
+                    }
+                }
+            }
+
+            pub mod cmath
+            {
+                use ::
+                {
+                    *,
+                };
+                
+                unsafe extern "C"
+                {
+                    pub safe fn acosf(n: f32) -> f32;
+                    pub safe fn asinf(n: f32) -> f32;
+                    pub safe fn atan2f(a: f32, b: f32) -> f32;
+                    pub safe fn atanf(n: f32) -> f32;
+                    pub safe fn coshf(n: f32) -> f32;
+                    pub safe fn sinhf(n: f32) -> f32;
+                    pub safe fn tanf(n: f32) -> f32;
+                    pub safe fn tanhf(n: f32) -> f32;
+                }
+            }
+
+            pub mod env
+            {
+                use ::
+                {
+                    *,
+                };
+                
+                pub const FAMILY: &str = "unix";
+                pub const OS: &str = "openbsd";
+                pub const DLL_PREFIX: &str = "lib";
+                pub const DLL_SUFFIX: &str = ".so";
+                pub const DLL_EXTENSION: &str = "so";
+                pub const EXE_SUFFIX: &str = "";
+                pub const EXE_EXTENSION: &str = "";
+            }
+        }
+
+        pub mod unsupported
+        {
+            use ::
+            {
+                *,
+            };
+            /*
+            std/src/sys/anonymous_pipe/unsupported.rs
+            std/src/sys/args/unsupported.rs
+            std/src/sys/env/unsupported.rs
+            */
+            pub mod backtrace
+            {
+                //! Empty implementation of unwinding used when no other implementation is appropriate.
+                use ::
+                {
+                    ffi::{ c_void },
+                    ptr::{ null_mut },
+                    *,
+                };
+                /// Prints the filename of the backtrace frame.
+                pub fn output_filename
+                (
+                    fmt: &mut fmt::Formatter<'_>,
+                    bows: BytesOrWideString<'_>,
+                    print_fmt: PrintFmt,
+                    cwd: Option<&PathBuf>,
+                ) -> fmt::Result 
+                {
+                    let file: Cow<'_, Path> = match bows 
+                    {
+                        BytesOrWideString::Wide(_wide) => Path::new("<unknown>").into(),
+                    };
+                    
+                    if print_fmt == PrintFmt::Short && file.is_absolute()
+                    {
+                        if let Some(cwd) = cwd
+                        {
+                            if let Ok(stripped) = file.strip_prefix(&cwd)
+                            {
+                                if let Some(s) = stripped.to_str()
+                                {
+                                    return write!(fmt, ".{}{s}", path::MAIN_SEPARATOR);
+                                }
+                            }
+                        }
+                    }
+                    fmt::Display::fmt(&file.display(), fmt)
+                }
+                
+                #[inline(always)] pub unsafe fn traces(_cb: &mut dyn FnMut(&super::Frame) -> bool) {}
+
+                #[derive(Clone)]
+                pub struct Frame;
+
+                impl Frame
+                {
+                    pub fn ip(&self) -> *mut c_void { null_mut() }
+                    pub fn sp(&self) -> *mut c_void { null_mut() }
+                    pub fn symbol_address(&self) -> *mut c_void { null_mut() }
+                    pub fn module_base_address(&self) -> Option<*mut c_void> { None }
+                }
+
+                pub unsafe fn resolve(_addr: ResolveWhat<'_>, _cb: &mut dyn FnMut(&super::Symbol)) {}
+                
+                
+                pub struct Symbol<'a> {
+                    _marker: marker::PhantomData<&'a i32>,
+                }
+
+                impl Symbol<'_> {
+                    pub fn name(&self) -> Option<SymbolName<'_>> {
+                        None
+                    }
+
+                    pub fn addr(&self) -> Option<*mut c_void> {
+                        None
+                    }
+
+                    pub fn filename_raw(&self) -> Option<BytesOrWideString<'_>> {
+                        None
+                    }
+                    
+                    pub fn filename(&self) -> Option<&::std::path::Path> {
+                        None
+                    }
+
+                    pub fn lineno(&self) -> Option<u32> {
+                        None
+                    }
+
+                    pub fn colno(&self) -> Option<u32> {
+                        None
+                    }
+                }
+
+            }
+
+            pub mod bytes
+            {
+                use ::
+                {
+                    *,
+                };
+                
+                impl<'a> BytesOrWideString<'a>
+                { 
+                    /// Provides a `Path` representation of `BytesOrWideString`.
+                    pub fn into_path_buf(self) -> PathBuf
+                    {
+                        if let BytesOrWideString::Bytes(b) = self
+                        {
+                            if let Ok(s) = str::from_utf8(b) {
+                                return PathBuf::from(s);
+                            }
+                        }
+
+                        unreachable!()
+                    }
+                }
+            }
+
+            pub mod env
+            {
+                use ::{ * };            
+                pub const FAMILY: &str = "";
+                pub const OS: &str = "";
+                pub const DLL_PREFIX: &str = "";
+                pub const DLL_SUFFIX: &str = "";
+                pub const DLL_EXTENSION: &str = "";
+                pub const EXE_SUFFIX: &str = "";
+                pub const EXE_EXTENSION: &str = "";
+            }
+        }
+
+        pub mod windows
+        {
+            use ::
+            {
+                *,
+            };
+            /*
+            std/src/sys/alloc/windows.rs
+            std/src/sys/anonymous_pipe/windows.rs
+            std/src/sys/args/windows.rs
+            std/src/sys/env/windows.rs
+            */
+            pub mod backtrace
+            {
+                //! Backtrace strategy for Windows `x86_64` and `aarch64` platforms.
+                use ::
+                {
+                    ffi::c_void,
+                    *,
+                }; // use super::super::windows_sys::*;
+                /// Prints the filename of the backtrace frame.
+                pub fn output_filename
+                (
+                    fmt: &mut fmt::Formatter<'_>,
+                    bows: BytesOrWideString<'_>,
+                    print_fmt: PrintFmt,
+                    cwd: Option<&PathBuf>,
+                ) -> fmt::Result
+                {
+                    let file: Cow<'_, Path> = match bows
+                    {
+                        BytesOrWideString::Wide(_wide) => Path::new("<unknown>").into(),
+                    };
+                    
+                    if print_fmt == PrintFmt::Short && file.is_absolute()
+                    {
+                        if let Some(cwd) = cwd
+                        {
+                            if let Ok(stripped) = file.strip_prefix(&cwd)
+                            {
+                                if let Some(s) = stripped.to_str()
+                                {
+                                    return write!(fmt, ".{}{s}", path::MAIN_SEPARATOR);
+                                }
+                            }
+                        }
+                    }
+
+                    fmt::Display::fmt(&file.display(), fmt)
+                }
+                
+                #[derive(Clone, Copy)]
+                pub struct Frame
+                {
+                    base_address: *mut c_void,
+                    ip: *mut c_void,
+                    sp: *mut c_void,
+                    inline_context: Option<u32>,
+                }
+                
+                unsafe impl Send for Frame {}
+                unsafe impl Sync for Frame {}
+
+                impl Frame
+                {
+                    pub fn ip(&self) -> *mut c_void { self.ip }
+                    pub fn sp(&self) -> *mut c_void { self.sp }
+                    pub fn symbol_address(&self) -> *mut c_void { self.ip }
+                    pub fn module_base_address(&self) -> Option<*mut c_void> { Some(self.base_address) }                    
+                    pub fn inline_context(&self) -> Option<u32> { self.inline_context }                
+                }
+
+                #[repr(C, align(16))]
+                struct MyContext(CONTEXT);
+                
+                impl MyContext
+                {
+                    #[inline(always)] fn ip(&self) -> u64 { self.0.Rip }
+                    #[inline(always)] fn sp(&self) -> u64 { self.0.Rsp }
+                }
+
+                #[inline(always)] pub unsafe fn traces(cb: &mut dyn FnMut(&super::Frame) -> bool)
+                {
+                    unsafe
+                    {
+                        let mut context = ::mem::zeroed::<MyContext>();
+                        RtlCaptureContext(&mut context.0);
+
+                        loop 
+                        {
+                            let ip = context.ip();
+                            let mut base = 0;
+                            let fn_entry = unsafe { RtlLookupFunctionEntry(ip, &mut base, ptr::null_mut()) };
+                            if fn_entry.is_null() { break; }
+
+                            let frame = super::Frame
+                            {
+                                inner: Frame
+                                {
+                                    base_address: base as *mut c_void,
+                                    ip: ip as *mut c_void,
+                                    sp: context.sp() as *mut c_void,
+                                    inline_context: None,
+                                },
+                            };
+                            
+                            if !cb(&frame) { break; }
+                            
+                            let previous_ip = ip;
+                            let previous_sp = context.sp();
+                            let mut handler_data = 0usize;
+                            let mut establisher_frame = 0;
+                            
+                            RtlVirtualUnwind
+                            (
+                                0,
+                                base,
+                                ip,
+                                fn_entry,
+                                &mut context.0,
+                                ptr::addr_of_mut!(handler_data).cast::<*mut c_void>(),
+                                &mut establisher_frame,
+                                ptr::null_mut(),
+                            );
+                            
+                            let ip = context.ip();
+                            if ip == 0 || (ip == previous_ip && context.sp() == previous_sp) { break; }
+                        }
+                    }
+                }
+
+                pub unsafe fn resolve(_addr: ResolveWhat<'_>, _cb: &mut dyn FnMut(&super::Symbol)) {}
+                
+                
+                pub struct Symbol<'a> {
+                    _marker: marker::PhantomData<&'a i32>,
+                }
+
+                impl Symbol<'_> {
+                    pub fn name(&self) -> Option<SymbolName<'_>> {
+                        None
+                    }
+
+                    pub fn addr(&self) -> Option<*mut c_void> {
+                        None
+                    }
+
+                    pub fn filename_raw(&self) -> Option<BytesOrWideString<'_>> {
+                        None
+                    }
+                    
+                    pub fn filename(&self) -> Option<&::std::path::Path> {
+                        None
+                    }
+
+                    pub fn lineno(&self) -> Option<u32> {
+                        None
+                    }
+
+                    pub fn colno(&self) -> Option<u32> {
+                        None
+                    }
+                }
+            }
+
+            pub mod bytes
+            {
+                use ::
+                {
+                    *,
+                };
+                
+                impl<'a> BytesOrWideString<'a>
+                { 
+                    /// Provides a `Path` representation of `BytesOrWideString`.
+                    pub fn into_path_buf(self) -> PathBuf
+                    {
+                        use std::ffi::OsString;
+                        use std::os::windows::ffi::OsStringExt;
+
+                        if let BytesOrWideString::Wide(slice) = self {
+                            return PathBuf::from(OsString::from_wide(slice));
+                        }
+
+                        if let BytesOrWideString::Bytes(b) = self {
+                            if let Ok(s) = str::from_utf8(b) {
+                                return PathBuf::from(s);
+                            }
+                        }
+
+                        unreachable!()
+                    }
+                }
+            }
+
+            pub mod env
+            {
+                use ::{ * };            
+                pub const FAMILY: &str = "windows";
+                pub const OS: &str = "windows";
+                pub const DLL_PREFIX: &str = "";
+                pub const DLL_SUFFIX: &str = ".dll";
+                pub const DLL_EXTENSION: &str = "dll";
+                pub const EXE_SUFFIX: &str = ".exe";
+                pub const EXE_EXTENSION: &str = "exe";
+            }
+        }
+        
+        #[cfg( target_os = "uefi" )] pub use self::uefi::{ * };
+        #[cfg( unix )] pub use self::unix::{ * };
+        #[cfg( windows )] pub use self::windows::{ * };
+
+    }
+    /*
+    mortal v0.2.4*/
+} pub use self::system::{ self as sys };
 
 pub mod thread
 {
@@ -2408,6 +4323,7 @@ pub unsafe fn domain()
         let mut shell = shell::Shell::new();
         let arguments: Vec<String> = env::args().collect();
 
+
         println!(r#"( {} )::seed( {} )"#, shell.session_id, is::login( &arguments ) );
         /*
         loop
@@ -2428,4 +4344,4 @@ fn main()
     }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 2431
+// 4347
