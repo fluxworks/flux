@@ -805,6 +805,16 @@ pub mod mem
     pub use std::mem::{ * };
 }
 
+pub mod num
+{
+    pub use std::num::{ * };
+}
+
+pub mod ops
+{
+    pub use std::ops::{ * };
+}
+
 pub mod panic
 {
     pub use std::panic::{ * };
@@ -2339,7 +2349,6 @@ pub mod system
             {
                 ffi::{ OsString },
                 num::{ NonZero },
-                ops::{ Try },
                 *,
             };
             /*
@@ -2349,54 +2358,20 @@ pub mod system
             {
                 iter: vec::IntoIter<OsString>,
             }
-
+            /*
             impl !Send for Args {}
             impl !Sync for Args {}
-
+            */
             impl Args
             {
                 #[inline] pub fn new(args: Vec<OsString>) -> Self { Args { iter: args.into_iter() } }
+                #[inline] fn len(&self) -> usize { self.iter.len() }
+                #[inline] fn is_empty(&self) -> bool { self.len() == 0 }
             }
 
             impl fmt::Debug for Args
             {
                 fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { self.iter.as_slice().fmt(f) }
-            }
-
-            impl Iterator for Args
-            {
-                type Item = OsString;
-                #[inline] fn next(&mut self) -> Option<OsString> { self.iter.next() }
-
-                #[inline] fn next_chunk<const N: usize>( &mut self, ) -> 
-                Result<[OsString; N], array::IntoIter<OsString, N>> 
-                { self.iter.next_chunk() }
-
-                #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
-                #[inline] fn count(self) -> usize { self.iter.len() }
-                #[inline] fn last(mut self) -> Option<OsString> { self.iter.next_back() }
-                #[inline] fn advance_by(&mut self, n: usize) -> Result<(), NonZero<usize>> { self.iter.advance_by(n) }
-                #[inline] fn try_fold<B, F, R>(&mut self, init: B, f: F) -> R where
-                F: FnMut(B, Self::Item) -> R,
-                R: Try<Output = B>
-                { self.iter.try_fold(init, f) }
-
-                #[inline] fn fold<B, F>(self, init: B, f: F) -> B where
-                F: FnMut(B, Self::Item) -> B
-                { self.iter.fold(init, f) }
-            }
-
-            impl DoubleEndedIterator for Args
-            {
-                #[inline] fn next_back(&mut self) -> Option<OsString> { self.iter.next_back() }
-                #[inline] fn advance_back_by(&mut self, n: usize) -> Result<(), NonZero<usize>>
-                { self.iter.advance_back_by(n) }
-            }
-
-            impl ExactSizeIterator for Args
-            {
-                #[inline] fn len(&self) -> usize { self.iter.len() }
-                #[inline] fn is_empty(&self) -> bool { self.iter.is_empty() }
             }
         }
 
@@ -2404,6 +2379,7 @@ pub mod system
         {
             use ::
             {
+                borrow::Cow,
                 *,
             };
             /// A platform independent representation of a string.
@@ -2443,16 +2419,22 @@ pub mod system
             //! Common code for printing backtraces.
             use ::
             {
+                borrow::Cow,
+                boxed::{ Box },
+                ffi::c_void,
+                io::prelude::*,
+                path::{ self, Path, PathBuf },
+                sync::{Mutex, MutexGuard, PoisonError},
+                sys::
+                { 
+                    common::
+                    {
+                        bytes::{ BytesOrWideString },
+                    },
+                    // os::backtrace::{ Frame, output_filename, resolve_frame_unsynchronized, Symbol, traces },
+                },
                 *,
             };
-            /*
-            use crate::borrow::Cow;
-            use crate::io::prelude::*;
-            use crate::path::{self, Path, PathBuf};
-            use crate::sync::{Mutex, MutexGuard, PoisonError};
-            use crate::{env, fmt, io};
-            */
-
             /// Max number of frames to print.
             pub const MAX_NB_FRAMES: usize = 100;
 
@@ -2464,115 +2446,118 @@ pub mod system
                 BacktraceLock(LOCK.lock().unwrap_or_else(PoisonError::into_inner))
             }
 
-            impl BacktraceLock<'_> {
+            impl BacktraceLock<'_>
+            {
                 /// Prints the current backtrace.
-                ///
-                /// NOTE: this function is not Sync. The caller must hold a mutex lock, or there must be only one thread in the program.
-                pub fn print(&mut self, w: &mut dyn Write, format: PrintFmt) -> io::Result<()> {
-                    // There are issues currently linking libbacktrace into tests, and in
-                    // general during std's own unit tests we're not testing this path. In
-                    // test mode immediately return here to optimize away any references to the
-                    // libbacktrace symbols
-                    if cfg!(test) {
-                        return Ok(());
-                    }
-
-                    struct DisplayBacktrace {
+                pub fn print(&mut self, w: &mut dyn Write, format: PrintFmt) -> io::Result<()>
+                {
+                    struct DisplayBacktrace
+                    {
                         format: PrintFmt,
                     }
-                    impl fmt::Display for DisplayBacktrace {
+
+                    impl fmt::Display for DisplayBacktrace
+                    {
                         fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
                             unsafe { _print_fmt(fmt, self.format) }
                         }
                     }
+
                     write!(w, "{}", DisplayBacktrace { format })
                 }
             }
 
             unsafe fn _print_fmt(fmt: &mut fmt::Formatter<'_>, print_fmt: PrintFmt) -> fmt::Result
             {
-                // Always 'fail' to get the cwd when running under Miri -
-                // this allows Miri to display backtraces in isolation mode
-                let cwd = if !cfg!(miri) { env::current_dir().ok() } else { None };
+                unsafe
+                {
+                    let cwd = env::current_dir().ok();
+                    let mut print_path = move | fmt:&mut fmt::Formatter<'_>, bows:BytesOrWideString<'_> |
+                    { output_filename(fmt, bows, print_fmt, cwd.as_ref()) };
 
-                let mut print_path = move |fmt: &mut fmt::Formatter<'_>, bows: BytesOrWideString<'_>| {
-                    output_filename(fmt, bows, print_fmt, cwd.as_ref())
-                };
-                writeln!(fmt, "stack backtrace:")?;
-                let mut bt_fmt = BacktraceFmt::new(fmt, print_fmt, &mut print_path);
-                bt_fmt.add_context()?;
-                let mut idx = 0;
-                let mut res = Ok(());
-                let mut omitted_count: usize = 0;
-                let mut first_omit = true;
-                // If we're using a short backtrace, ignore all frames until we're told to start printing.
-                let mut print = print_fmt != PrintFmt::Short;
-                set_image_base();
-                // SAFETY: we roll our own locking in this town
-                unsafe {
-                    trace_unsynchronized(|frame| {
-                        if print_fmt == PrintFmt::Short && idx > MAX_NB_FRAMES {
-                            return false;
-                        }
+                    writeln!(fmt, "stack backtrace:")?;
+
+                    let mut bt_fmt = BacktraceFmt::new(fmt, print_fmt, &mut print_path);
+                    bt_fmt.add_context()?;
+                    let mut idx = 0;
+                    let mut res = Ok(());
+                    let mut omitted_count: usize = 0;
+                    let mut first_omit = true;
+                    let mut print = print_fmt != PrintFmt::Short;
+                    
+                    trace_unsynchronized( | frame |
+                    {
+                        if print_fmt == PrintFmt::Short && idx > MAX_NB_FRAMES { return false; }
 
                         let mut hit = false;
-                        backtrace_rs::resolve_frame_unsynchronized(frame, |symbol| {
+                        resolve_frame_unsynchronized(frame, |symbol|
+                        {
                             hit = true;
-
-                            // `__rust_end_short_backtrace` means we are done hiding symbols
-                            // for now. Print until we see `__rust_begin_short_backtrace`.
-                            if print_fmt == PrintFmt::Short {
-                                if let Some(sym) = symbol.name().and_then(|s| s.as_str()) {
-                                    if sym.contains("__rust_end_short_backtrace") {
+                            
+                            if print_fmt == PrintFmt::Short
+                            {
+                                if let Some(sym) = symbol.name().and_then(|s| s.as_str())
+                                {
+                                    if sym.contains("__rust_end_short_backtrace")
+                                    {
                                         print = true;
                                         return;
                                     }
-                                    if print && sym.contains("__rust_begin_short_backtrace") {
+                                    
+                                    if print && sym.contains("__rust_begin_short_backtrace")
+                                    {
                                         print = false;
                                         return;
                                     }
-                                    if !print {
-                                        omitted_count += 1;
-                                    }
+                                    
+                                    if !print { omitted_count += 1; }
                                 }
                             }
 
-                            if print {
-                                if omitted_count > 0 {
+                            if print
+                            {
+                                if omitted_count > 0
+                                {
                                     debug_assert!(print_fmt == PrintFmt::Short);
-                                    // only print the message between the middle of frames
-                                    if !first_omit {
-                                        let _ = writeln!(
+                                    if !first_omit
+                                    {
+                                        let _ = writeln!
+                                        (
                                             bt_fmt.formatter(),
                                             "      [... omitted {} frame{} ...]",
                                             omitted_count,
                                             if omitted_count > 1 { "s" } else { "" }
                                         );
                                     }
+
                                     first_omit = false;
                                     omitted_count = 0;
                                 }
+
                                 res = bt_fmt.frame().symbol(frame, symbol);
                             }
                         });
-                        if !hit && print {
-                            res = bt_fmt.frame().print_raw(frame.ip(), None, None, None);
-                        }
+
+                        if !hit && print { res = bt_fmt.frame().print_raw(frame.ip(), None, None, None); }
 
                         idx += 1;
                         res.is_ok()
-                    })
-                };
-                res?;
-                bt_fmt.finish()?;
-                if print_fmt == PrintFmt::Short {
-                    writeln!(
-                        fmt,
-                        "note: Some details are omitted, \
-                        run with `RUST_BACKTRACE=full` for a verbose backtrace."
-                    )?;
+                    });
+
+                    res?;
+                    bt_fmt.finish()?;
+                    if print_fmt == PrintFmt::Short
+                    {
+                        writeln!
+                        (
+                            fmt,
+                            "note: Some details are omitted, \
+                            run with `RUST_BACKTRACE=full` for a verbose backtrace."
+                        )?;
+                    }
+
+                    Ok(())
                 }
-                Ok(())
             }
             
             #[inline(never)] pub fn __rust_begin_short_backtrace<F, T>(f: F) -> T where
@@ -2590,8 +2575,35 @@ pub mod system
                 ::hint::black_box(());
                 result
             }
-            
-            pub fn set_image_base() { /* nothing to do for platforms other than SGX */ }
+            #[derive(Clone, Copy)]
+            pub struct TracePtr(*mut c_void);
+
+            unsafe impl Send for TracePtr {}
+            unsafe impl Sync for TracePtr {}
+
+            impl TracePtr
+            {
+                fn into_void(self) -> *mut c_void {
+                    self.0
+                }
+            }
+            /// Captured version of a symbol in a backtrace.
+            #[derive(Clone)]
+            pub struct BacktraceSymbol
+            {
+                name: Option<Box<[u8]>>,
+                addr: Option<TracePtr>,
+                filename: Option<PathBuf>,
+                lineno: Option<u32>,
+                colno: Option<u32>,
+            }
+            /// Captured version of a frame in a backtrace.
+            #[derive(Clone)]
+            pub struct BacktraceFrame
+            {
+                frame: Frame,
+                symbols: Option<Box<[BacktraceSymbol]>>,
+            }
             /// A formatter for backtraces.
             pub struct BacktraceFmt<'a, 'b>
             {
@@ -2599,6 +2611,200 @@ pub mod system
                 frame_index: usize,
                 format: PrintFmt,
                 print_path: &'a mut (dyn FnMut(&mut fmt::Formatter<'_>, BytesOrWideString<'_>) -> fmt::Result + 'b),
+            }
+
+            impl<'a, 'b> BacktraceFmt<'a, 'b>
+            {
+                /// Create a new `BacktraceFmt` which will write output to the provided `fmt`.
+                pub fn new
+                (
+                    fmt: &'a mut fmt::Formatter<'b>,
+                    format: PrintFmt,
+                    print_path: &'a mut (dyn FnMut(&mut fmt::Formatter<'_>, BytesOrWideString<'_>) -> fmt::Result + 'b),
+                ) -> Self
+                {
+                    BacktraceFmt
+                    {
+                        fmt,
+                        frame_index: 0,
+                        format,
+                        print_path,
+                    }
+                }
+                /// Prints a preamble for the backtrace about to be printed.
+                pub fn add_context(&mut self) -> fmt::Result { Ok(()) }
+                /// Adds a frame to the backtrace output.
+                pub fn frame(&mut self) -> BacktraceFrameFmt<'_, 'a, 'b>
+                {
+                    BacktraceFrameFmt
+                    {
+                        fmt: self,
+                        symbol_index: 0,
+                    }
+                }
+                /// Completes the backtrace output.
+                pub fn finish(&mut self) -> fmt::Result { Ok(()) }
+                /// Inserts a message in the backtrace output.
+                pub fn message(&mut self, msg: &str) -> fmt::Result { self.fmt.write_str(msg) }
+                /// Return the inner formatter.
+                pub fn formatter(&mut self) -> &mut fmt::Formatter<'b> { self.fmt }
+            }
+            /// A formatter for just one frame of a backtrace.
+            pub struct BacktraceFrameFmt<'fmt, 'a, 'b>
+            {
+                fmt: &'fmt mut BacktraceFmt<'a, 'b>,
+                symbol_index: usize,
+            }
+
+            impl BacktraceFrameFmt<'_, '_, '_>
+            {
+                /// Prints a `BacktraceFrame` with this frame formatter.
+                pub fn backtrace_frame(&mut self, frame: &BacktraceFrame) -> fmt::Result
+                {
+                    let symbols = frame.symbols();
+
+                    for symbol in symbols
+                    {
+                        self.backtrace_symbol(frame, symbol)?;
+                    }
+                    
+                    if symbols.is_empty() { self.print_raw(frame.ip(), None, None, None)?; }
+
+                    Ok(())
+                }
+                /// Prints a `BacktraceSymbol` within a `BacktraceFrame`.
+                pub fn backtrace_symbol
+                (
+                    &mut self,
+                    frame: &BacktraceFrame,
+                    symbol: &BacktraceSymbol,
+                ) -> fmt::Result
+                {
+                    self.print_raw_with_column
+                    (
+                        frame.ip(),
+                        symbol.name(),
+                        symbol
+                        .filename()
+                        .and_then(|p| Some(BytesOrWideString::Bytes(p.to_str()?.as_bytes()))),
+                        symbol.lineno(),
+                        symbol.colno(),
+                    )?;
+                    Ok(())
+                }
+                /// Prints a raw traced `Frame` and `Symbol`, typically from within the raw callbacks of this crate.
+                pub fn symbol(&mut self, frame: &Frame, symbol: &super::Symbol) -> fmt::Result
+                {
+                    self.print_raw_with_column
+                    (
+                        frame.ip(),
+                        symbol.name(),
+                        symbol.filename_raw(),
+                        symbol.lineno(),
+                        symbol.colno(),
+                    )?;
+                    Ok(())
+                }
+                /// Adds a raw frame to the backtrace output.
+                pub fn print_raw
+                (
+                    &mut self,
+                    frame_ip: *mut c_void,
+                    symbol_name: Option<SymbolName<'_>>,
+                    filename: Option<BytesOrWideString<'_>>,
+                    lineno: Option<u32>,
+                ) -> fmt::Result
+                { self.print_raw_with_column(frame_ip, symbol_name, filename, lineno, None) }
+                /// Adds a raw frame to the backtrace output, including column information.
+                pub fn print_raw_with_column
+                (
+                    &mut self,
+                    frame_ip: *mut c_void,
+                    symbol_name: Option<SymbolName<'_>>,
+                    filename: Option<BytesOrWideString<'_>>,
+                    lineno: Option<u32>,
+                    colno: Option<u32>,
+                ) -> fmt::Result
+                {
+                    self.print_raw_generic(frame_ip, symbol_name, filename, lineno, colno)?;
+                    self.symbol_index += 1;
+                    Ok(())
+                }
+                
+                fn print_raw_generic
+                (
+                    &mut self,
+                    frame_ip: *mut c_void,
+                    symbol_name: Option<SymbolName<'_>>,
+                    filename: Option<BytesOrWideString<'_>>,
+                    lineno: Option<u32>,
+                    colno: Option<u32>,
+                ) -> fmt::Result
+                {
+                    if let PrintFmt::Short = self.fmt.format { if frame_ip.is_null() { return Ok(()); } }
+                    
+                    if self.symbol_index == 0
+                    {
+                        write!(self.fmt.fmt, "{:4}: ", self.fmt.frame_index)?;
+                        if let PrintFmt::Full = self.fmt.format { write!(self.fmt.fmt, "{frame_ip:HEX_WIDTH$?} - ")?; }
+                    }
+
+                    else
+                    {
+                        write!(self.fmt.fmt, "      ")?;
+                        if let PrintFmt::Full = self.fmt.format { write!(self.fmt.fmt, "{:1$}", "", HEX_WIDTH + 3)?; }
+                    }
+                    
+                    match (symbol_name, &self.fmt.format)
+                    {
+                        (Some(name), PrintFmt::Short) => write!(self.fmt.fmt, "{name:#}")?,
+                        (Some(name), PrintFmt::Full) => write!(self.fmt.fmt, "{name}")?,
+                        (None, _) => write!(self.fmt.fmt, "<unknown>")?,
+                    }
+
+                    self.fmt.fmt.write_str("\n")?;
+                    
+                    if let (Some(file), Some(line)) = (filename, lineno) { self.print_fileline(file, line, colno)?; }
+
+                    Ok(())
+                }
+
+                fn print_fileline
+                (
+                    &mut self,
+                    file: BytesOrWideString<'_>,
+                    line: u32,
+                    colno: Option<u32>,
+                ) -> fmt::Result
+                {
+                    if let PrintFmt::Full = self.fmt.format { write!(self.fmt.fmt, "{:1$}", "", HEX_WIDTH)?; }
+
+                    write!(self.fmt.fmt, "             at ")?;
+                    (self.fmt.print_path)(self.fmt.fmt, file)?;
+                    write!(self.fmt.fmt, ":{line}")?;
+                    
+                    if let Some(colno) = colno { write!(self.fmt.fmt, ":{colno}")?; }
+
+                    writeln!(self.fmt.fmt)?;
+                    Ok(())
+                }
+
+                fn print_raw_fuchsia(&mut self, frame_ip: *mut c_void) -> fmt::Result
+                {
+                    if self.symbol_index == 0
+                    {
+                        self.fmt.fmt.write_str("{{{bt:")?;
+                        write!(self.fmt.fmt, "{}:{:?}", self.fmt.frame_index, frame_ip)?;
+                        self.fmt.fmt.write_str("}}}\n")?;
+                    }
+
+                    Ok(())
+                }
+            }
+
+            impl Drop for BacktraceFrameFmt<'_, '_, '_>
+            {
+                fn drop(&mut self) { self.fmt.frame_index += 1; }
             }
             /// The styles of printing that we can print
             #[non_exhaustive] #[derive( Copy, Clone, Eq, PartialEq )]
@@ -2614,19 +2820,113 @@ pub mod system
             {
                 unsafe { traces(&mut cb) }
             }
-            /// Same as `resolve_frame`, only unsafe as it's unsynchronized.
-            ///
-            /// This function does not have synchronization guarantees but is available
-            /// when the `std` feature of this crate isn't compiled in. See the
-            /// `resolve_frame` function for more documentation and examples.
-            ///
-            /// # Panics
-            ///
-            /// See information on `resolve_frame` for caveats on `cb` panicking.
-            pub unsafe fn resolve_frame_unsynchronized<F>(frame: &Frame, mut cb: F) where
-            F: FnMut(&Symbol)
+
+            pub enum ResolveWhat<'a>
             {
-                unsafe { imp::resolve(ResolveWhat::Frame(frame), &mut cb) }
+                Address(*mut c_void),
+                View(&'a View),
+            }
+
+            impl<'a> ResolveWhat<'a> 
+            {
+                fn address_or_ip(&self) -> *mut c_void
+                {
+                    match self
+                    {
+                        ResolveWhat::Address(a) => adjust_ip(*a),
+                        ResolveWhat::View(f) => adjust_ip(f.ip()),
+                    }
+                }
+            }
+            //// IP values from stack frames are typically the instruction 
+            /// *after* the call that's the actual stack trace.
+            pub fn adjust_ip(a: *mut c_void) -> *mut c_void
+            { if a.is_null() { a } else { (a as usize - 1) as *mut c_void } }
+            /// A wrapper around a symbol name to provide ergonomic accessors
+            /// to the demangled name, the raw bytes, the raw string, etc.
+            pub struct SymbolName<'a>
+            {
+                bytes: &'a [u8],
+                demangled: Option<Demangle<'a>>,
+            }
+
+            impl<'a> SymbolName<'a>
+            {
+                /// Creates a new symbol name from the raw underlying bytes.
+                pub fn new(bytes: &'a [u8]) -> SymbolName<'a>
+                {
+                    let str_bytes = str::from_utf8(bytes).ok();
+                    let demangled = str_bytes.and_then(|s| try_demangle(s).ok());
+
+                    SymbolName
+                    {
+                        bytes,
+                        demangled,
+                    }
+                }
+                /// Returns the raw (mangled) symbol name as a `str` if the symbol is valid utf-8.
+                pub fn as_str(&self) -> Option<&'a str>
+                {
+                    self.demangled
+                    .as_ref()
+                    .map(|s| s.as_str())
+                    .or_else(|| str::from_utf8(self.bytes).ok())
+                }
+                /// Returns the raw symbol name as a list of bytes
+                pub fn as_bytes(&self) -> &'a [u8] { self.bytes }
+            }
+
+            fn format_symbol_name
+            (
+                fmt: fn(&str, &mut fmt::Formatter<'_>) -> fmt::Result,
+                mut bytes: &[u8],
+                f: &mut fmt::Formatter<'_>,
+            ) -> fmt::Result
+            {
+                while bytes.len() > 0
+                {
+                    match str::from_utf8(bytes)
+                    {
+                        Ok(name) =>
+                        {
+                            fmt(name, f)?;
+                            break;
+                        }
+                        
+                        Err(err) =>
+                        {
+                            fmt("\u{FFFD}", f)?;
+
+                            match err.error_len()
+                            {
+                                Some(len) => bytes = &bytes[err.valid_up_to() + len..],
+                                None => break,
+                            }
+                        }
+                    }
+                }
+
+                Ok(())
+            }
+
+            impl<'a> fmt::Display for SymbolName<'a>
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    if let Some(ref s) = self.demangled { return s.fmt(f); }
+                    
+                    format_symbol_name(fmt::Display::fmt, self.bytes, f)
+                }
+            }
+
+            impl<'a> fmt::Debug for SymbolName<'a>
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    if let Some(ref s) = self.demangled { return s.fmt(f); }
+
+                    format_symbol_name(fmt::Debug::fmt, self.bytes, f)
+                }
             }
         }
 
@@ -2665,22 +2965,6 @@ pub mod system
                 pub safe fn erff(n: f32) -> f32;
                 pub safe fn erfc(n: f64) -> f64;
                 pub safe fn erfcf(n: f32) -> f32;
-                pub safe fn acosf128(n: f128) -> f128;
-                pub safe fn asinf128(n: f128) -> f128;
-                pub safe fn atanf128(n: f128) -> f128;
-                pub safe fn atan2f128(a: f128, b: f128) -> f128;
-                pub safe fn cbrtf128(n: f128) -> f128;
-                pub safe fn coshf128(n: f128) -> f128;
-                pub safe fn expm1f128(n: f128) -> f128;
-                pub safe fn hypotf128(x: f128, y: f128) -> f128;
-                pub safe fn log1pf128(n: f128) -> f128;
-                pub safe fn sinhf128(n: f128) -> f128;
-                pub safe fn tanf128(n: f128) -> f128;
-                pub safe fn tanhf128(n: f128) -> f128;
-                pub safe fn tgammaf128(n: f128) -> f128;
-                pub safe fn lgammaf128_r(n: f128, s: &mut i32) -> f128;
-                pub safe fn erff128(n: f128) -> f128;
-                pub safe fn erfcf128(n: f128) -> f128;
             }
         }
 
@@ -2691,6 +2975,8 @@ pub mod system
                 ffi::{ OsString },
                 *,
             };
+
+            pub type Key = OsString;
             
             pub struct Env
             {
@@ -2811,6 +3097,10 @@ pub mod system
                 ffi::{ OsStr, OsString },
                 sys::
                 {
+                    common::
+                    {
+                        env::{ Key as EnvKey },
+                    },
                     pipe::{ read2 },
                     // process::{EnvKey, ExitStatus, Process, StdioPipes},
                 },
@@ -3067,146 +3357,6 @@ pub mod system
             {
                 *,
             };
-            /*
-            std/src/sys/alloc/uefi.rs
-            std/src/sys/anonymous_pipe/unsupported.rs
-            std/src/sys/args/uefi.rs
-            std/src/sys/env/uefi.rs
-            */
-            pub mod backtrace
-            {
-                //! Empty implementation of unwinding used when no other implementation is appropriate.
-                use ::
-                {
-                    ffi::{ c_void },
-                    ptr::{ null_mut },
-                    *,
-                };
-                
-                #[inline(always)] pub unsafe fn trace(_cb: &mut dyn FnMut(&super::Frame) -> bool) {}
-
-                #[derive(Clone)]
-                pub struct Frame;
-
-                impl Frame
-                {
-                    pub fn ip(&self) -> *mut c_void {
-                        null_mut()
-                    }
-
-                    pub fn sp(&self) -> *mut c_void {
-                        null_mut()
-                    }
-
-                    pub fn symbol_address(&self) -> *mut c_void {
-                        null_mut()
-                    }
-
-                    pub fn module_base_address(&self) -> Option<*mut c_void> {
-                        None
-                    }
-                }
-                /// Prints the filename of the backtrace frame.
-                pub fn output_filename
-                (
-                    fmt: &mut fmt::Formatter<'_>,
-                    bows: BytesOrWideString<'_>,
-                    print_fmt: PrintFmt,
-                    cwd: Option<&PathBuf>,
-                ) -> fmt::Result
-                {
-                    let file: Cow<'_, Path> = match bows 
-                    {
-                        Path::new( ::str::from_utf8(bytes).unwrap_or("<unknown>") ).into()
-                    };
-                    
-                    if print_fmt == PrintFmt::Short && file.is_absolute()
-                    {
-                        if let Some(cwd) = cwd
-                        {
-                            if let Ok(stripped) = file.strip_prefix(&cwd)
-                            {
-                                if let Some(s) = stripped.to_str()
-                                {
-                                    return write!(fmt, ".{}{s}", path::MAIN_SEPARATOR);
-                                }
-                            }
-                        }
-                    }
-                    fmt::Display::fmt(&file.display(), fmt)
-                }
-
-                pub unsafe fn resolve(_addr: ResolveWhat<'_>, _cb: &mut dyn FnMut(&super::Symbol)) {}
-                
-                
-                pub struct Symbol<'a> {
-                    _marker: marker::PhantomData<&'a i32>,
-                }
-
-                impl Symbol<'_> {
-                    pub fn name(&self) -> Option<SymbolName<'_>> {
-                        None
-                    }
-
-                    pub fn addr(&self) -> Option<*mut c_void> {
-                        None
-                    }
-
-                    pub fn filename_raw(&self) -> Option<BytesOrWideString<'_>> {
-                        None
-                    }
-                    
-                    pub fn filename(&self) -> Option<&::std::path::Path> {
-                        None
-                    }
-
-                    pub fn lineno(&self) -> Option<u32> {
-                        None
-                    }
-
-                    pub fn colno(&self) -> Option<u32> {
-                        None
-                    }
-                }
-            }
-
-            pub mod bytes
-            {
-                use ::
-                {
-                    *,
-                };
-                
-                impl<'a> BytesOrWideString<'a>
-                { 
-                    /// Provides a `Path` representation of `BytesOrWideString`.
-                    pub fn into_path_buf(self) -> PathBuf
-                    {
-                        if let BytesOrWideString::Bytes(b) = self {
-                            if let Ok(s) = str::from_utf8(b) {
-                                return PathBuf::from(s);
-                            }
-                        }
-
-                        unreachable!()
-                    }
-                }
-            }
-
-            pub mod env
-            {
-                use ::
-                {
-                    *,
-                };
-                pub const FAMILY: &str = "";
-                pub const OS: &str = "uefi";
-                pub const DLL_PREFIX: &str = "";
-                pub const DLL_SUFFIX: &str = "";
-                pub const DLL_EXTENSION: &str = "";
-                pub const EXE_SUFFIX: &str = ".efi";
-                pub const EXE_EXTENSION: &str = "efi";
-            }
         }
         
         pub mod unix
@@ -3215,375 +3365,6 @@ pub mod system
             {
                 *,
             };
-            /*
-            std/src/sys/alloc/unix.rs
-            std/src/sys/anonymous_pipe/unix.rs
-            std/src/sys/args/unix.rs
-            std/src/sys/env/unix.rs
-            */
-            pub mod backtrace
-            {
-                //! Backtrace support using libunwind/gcc_s/etc APIs.
-                use ::
-                {
-                    ffi::{ c_void },
-                    ptr::{ addr_of_mut },
-                    *,
-                };
-                /// Prints the filename of the backtrace frame.
-                pub fn output_filename
-                (
-                    fmt: &mut fmt::Formatter<'_>,
-                    bows: BytesOrWideString<'_>,
-                    print_fmt: PrintFmt,
-                    cwd: Option<&PathBuf>,
-                ) -> fmt::Result
-                {
-                    let file: Cow<'_, Path> = match bows
-                    {
-                        BytesOrWideString::Bytes(bytes) =>
-                        {
-                            //use crate::os::unix::prelude::*;
-                            Path::new(crate::ffi::OsStr::from_bytes(bytes)).into()
-                        }
-                    };
-                    
-                    if print_fmt == PrintFmt::Short && file.is_absolute()
-                    {
-                        if let Some(cwd) = cwd
-                        {
-                            if let Ok(stripped) = file.strip_prefix(&cwd)
-                            {
-                                if let Some(s) = stripped.to_str()
-                                {
-                                    return write!(fmt, ".{}{s}", path::MAIN_SEPARATOR);
-                                }
-                            }
-                        }
-                    }
-                    fmt::Display::fmt(&file.display(), fmt)
-                }
-                
-                pub enum Frame
-                {
-                    Raw(*mut uw::_Unwind_Context),
-                    Cloned
-                    {
-                        ip: *mut c_void,
-                        sp: *mut c_void,
-                        symbol_address: *mut c_void,
-                    },
-                }
-                
-                unsafe impl Send for Frame {}
-                unsafe impl Sync for Frame {}
-
-                impl Frame
-                {
-                    pub fn ip(&self) -> *mut c_void
-                    {
-                        let ctx = match *self
-                        {
-                            Frame::Raw(ctx) => ctx,
-                            Frame::Cloned { ip, .. } => return ip,
-                        };
-                        
-                        let mut ip = unsafe { uw::_Unwind_GetIP(ctx) as *mut c_void };
-                        
-                        ip
-                    }
-
-                    pub fn sp(&self) -> *mut c_void
-                    {
-                        match *self
-                        {
-                            Frame::Raw(ctx) => unsafe { uw::get_sp(ctx) as *mut c_void },
-                            Frame::Cloned { sp, .. } => sp,
-                        }
-                    }
-
-                    pub fn symbol_address(&self) -> *mut c_void
-                    {
-                        if let Frame::Cloned { symbol_address, .. } = *self {
-                            return symbol_address;
-                        }
-                        
-                        unsafe { uw::_Unwind_FindEnclosingFunction(self.ip()) }
-                    }
-
-                    pub fn module_base_address(&self) -> Option<*mut c_void> { None }
-                }
-
-                impl Clone for Frame
-                {
-                    fn clone(&self) -> Frame
-                    {
-                        Frame::Cloned
-                        {
-                            ip: self.ip(),
-                            sp: self.sp(),
-                            symbol_address: self.symbol_address(),
-                        }
-                    }
-                }
-
-                struct Bomb
-                {
-                    enabled: bool,
-                }
-
-                impl Drop for Bomb
-                {
-                    fn drop(&mut self)
-                    {
-                        if self.enabled
-                        {
-                            panic!("cannot panic during the backtrace function");
-                        }
-                    }
-                }
-
-                #[inline(always)] pub unsafe fn traces(mut cb: &mut dyn FnMut(&super::Frame) -> bool)
-                {
-                    unsafe
-                    {
-                        uw::_Unwind_Backtrace(trace_fn, addr_of_mut!(cb).cast());
-                        extern "C" fn trace_fn
-                        (
-                            ctx: *mut uw::_Unwind_Context,
-                            arg: *mut c_void,
-                        ) -> uw::_Unwind_Reason_Code
-                        {
-                            let cb = unsafe { &mut *arg.cast::<&mut dyn FnMut(&super::Frame) -> bool>() };
-                            let cx = super::Frame {
-                                inner: Frame::Raw(ctx),
-                            };
-
-                            let mut bomb = Bomb { enabled: true };
-                            let keep_going = cb(&cx);
-                            bomb.enabled = false;
-
-                            if keep_going {
-                                uw::_URC_NO_REASON
-                            } else {
-                                uw::_URC_FAILURE
-                            }
-                        }
-                    }
-
-                    
-                }
-
-                /// Unwind library interface used for backtraces.
-                mod uw
-                {
-                    pub use self::_Unwind_Reason_Code::*;
-
-                    use ::ffi::c_void;
-
-                    #[repr(C)]
-                    pub enum _Unwind_Reason_Code
-                    {
-                        _URC_NO_REASON = 0,
-                        _URC_FOREIGN_EXCEPTION_CAUGHT = 1,
-                        _URC_FATAL_PHASE2_ERROR = 2,
-                        _URC_FATAL_PHASE1_ERROR = 3,
-                        _URC_NORMAL_STOP = 4,
-                        _URC_END_OF_STACK = 5,
-                        _URC_HANDLER_FOUND = 6,
-                        _URC_INSTALL_CONTEXT = 7,
-                        _URC_CONTINUE_UNWIND = 8,
-                        _URC_FAILURE = 9,
-                    }
-
-                    pub enum _Unwind_Context {}
-
-                    pub type _Unwind_Trace_Fn = 
-                    extern "C" fn(ctx: *mut _Unwind_Context, arg: *mut c_void) -> _Unwind_Reason_Code;
-
-                    unsafe extern "C" 
-                    {
-                        pub fn _Unwind_Backtrace
-                        (
-                            trace: _Unwind_Trace_Fn,
-                            trace_argument: *mut c_void,
-                        ) -> _Unwind_Reason_Code;
-                    }
-
-                    
-                    use ::ptr::addr_of_mut;
-                    
-                    #[repr(C)]
-                    enum _Unwind_VRS_Result {
-                        _UVRSR_OK = 0,
-                        _UVRSR_NOT_IMPLEMENTED = 1,
-                        _UVRSR_FAILED = 2,
-                    }
-                    #[repr(C)]
-                    enum _Unwind_VRS_RegClass {
-                        _UVRSC_CORE = 0,
-                        _UVRSC_VFP = 1,
-                        _UVRSC_FPA = 2,
-                        _UVRSC_WMMXD = 3,
-                        _UVRSC_WMMXC = 4,
-                    }
-                    #[repr(C)]
-                    enum _Unwind_VRS_DataRepresentation {
-                        _UVRSD_UINT32 = 0,
-                        _UVRSD_VFPX = 1,
-                        _UVRSD_FPAX = 2,
-                        _UVRSD_UINT64 = 3,
-                        _UVRSD_FLOAT = 4,
-                        _UVRSD_DOUBLE = 5,
-                    }
-
-                    type _Unwind_Word = libc::c_uint;
-                    unsafe extern "C" {
-                        fn _Unwind_VRS_Get(
-                            ctx: *mut _Unwind_Context,
-                            klass: _Unwind_VRS_RegClass,
-                            word: _Unwind_Word,
-                            repr: _Unwind_VRS_DataRepresentation,
-                            data: *mut c_void,
-                        ) -> _Unwind_VRS_Result;
-                    }
-
-                    pub unsafe fn _Unwind_GetIP(ctx: *mut _Unwind_Context) -> libc::uintptr_t {
-                        let mut val: _Unwind_Word = 0;
-                        let ptr = addr_of_mut!(val);
-                        unsafe {
-                            let _ = _Unwind_VRS_Get(
-                                ctx,
-                                _Unwind_VRS_RegClass::_UVRSC_CORE,
-                                15,
-                                _Unwind_VRS_DataRepresentation::_UVRSD_UINT32,
-                                ptr.cast::<c_void>(),
-                            );
-                        }
-                        (val & !1) as libc::uintptr_t
-                    }
-                    
-                    const SP: _Unwind_Word = 13;
-
-                    pub unsafe fn get_sp(ctx: *mut _Unwind_Context) -> libc::uintptr_t {
-                        let mut val: _Unwind_Word = 0;
-                        let ptr = addr_of_mut!(val);
-                        unsafe {
-                            let _ = _Unwind_VRS_Get(
-                                ctx,
-                                _Unwind_VRS_RegClass::_UVRSC_CORE,
-                                SP,
-                                _Unwind_VRS_DataRepresentation::_UVRSD_UINT32,
-                                ptr.cast::<c_void>(),
-                            );
-                        }
-                        val as libc::uintptr_t
-                    }
-                    
-                    pub unsafe fn _Unwind_FindEnclosingFunction(pc: *mut c_void) -> *mut c_void {
-                        pc
-                    }
-                }
-
-                pub unsafe fn resolve(_addr: ResolveWhat<'_>, _cb: &mut dyn FnMut(&super::Symbol)) {}
-                
-                
-                pub struct Symbol<'a> {
-                    _marker: marker::PhantomData<&'a i32>,
-                }
-
-                impl Symbol<'_> {
-                    pub fn name(&self) -> Option<SymbolName<'_>> {
-                        None
-                    }
-
-                    pub fn addr(&self) -> Option<*mut c_void> {
-                        None
-                    }
-
-                    pub fn filename_raw(&self) -> Option<BytesOrWideString<'_>> {
-                        None
-                    }
-                    
-                    pub fn filename(&self) -> Option<&::std::path::Path> {
-                        None
-                    }
-
-                    pub fn lineno(&self) -> Option<u32> {
-                        None
-                    }
-
-                    pub fn colno(&self) -> Option<u32> {
-                        None
-                    }
-                }
-            }
-
-            pub mod bytes
-            {
-                use ::
-                {
-                    *,
-                };
-                
-                impl<'a> BytesOrWideString<'a>
-                { 
-                    /// Provides a `Path` representation of `BytesOrWideString`.
-                    pub fn into_path_buf(self) -> PathBuf
-                    {
-                        use std::ffi::OsStr;
-                        use std::os::unix::ffi::OsStrExt;
-
-                        if let BytesOrWideString::Bytes(slice) = self {
-                            return PathBuf::from(OsStr::from_bytes(slice));
-                        }
-
-                        if let BytesOrWideString::Bytes(b) = self {
-                            if let Ok(s) = str::from_utf8(b) {
-                                return PathBuf::from(s);
-                            }
-                        }
-
-                        unreachable!()
-                    }
-                }
-            }
-
-            pub mod cmath
-            {
-                use ::
-                {
-                    *,
-                };
-                
-                unsafe extern "C"
-                {
-                    pub safe fn acosf(n: f32) -> f32;
-                    pub safe fn asinf(n: f32) -> f32;
-                    pub safe fn atan2f(a: f32, b: f32) -> f32;
-                    pub safe fn atanf(n: f32) -> f32;
-                    pub safe fn coshf(n: f32) -> f32;
-                    pub safe fn sinhf(n: f32) -> f32;
-                    pub safe fn tanf(n: f32) -> f32;
-                    pub safe fn tanhf(n: f32) -> f32;
-                }
-            }
-
-            pub mod env
-            {
-                use ::
-                {
-                    *,
-                };
-                
-                pub const FAMILY: &str = "unix";
-                pub const OS: &str = "openbsd";
-                pub const DLL_PREFIX: &str = "lib";
-                pub const DLL_SUFFIX: &str = ".so";
-                pub const DLL_EXTENSION: &str = "so";
-                pub const EXE_SUFFIX: &str = "";
-                pub const EXE_EXTENSION: &str = "";
-            }
         }
 
         pub mod unsupported
@@ -3592,133 +3373,6 @@ pub mod system
             {
                 *,
             };
-            /*
-            std/src/sys/anonymous_pipe/unsupported.rs
-            std/src/sys/args/unsupported.rs
-            std/src/sys/env/unsupported.rs
-            */
-            pub mod backtrace
-            {
-                //! Empty implementation of unwinding used when no other implementation is appropriate.
-                use ::
-                {
-                    ffi::{ c_void },
-                    ptr::{ null_mut },
-                    *,
-                };
-                /// Prints the filename of the backtrace frame.
-                pub fn output_filename
-                (
-                    fmt: &mut fmt::Formatter<'_>,
-                    bows: BytesOrWideString<'_>,
-                    print_fmt: PrintFmt,
-                    cwd: Option<&PathBuf>,
-                ) -> fmt::Result 
-                {
-                    let file: Cow<'_, Path> = match bows 
-                    {
-                        BytesOrWideString::Wide(_wide) => Path::new("<unknown>").into(),
-                    };
-                    
-                    if print_fmt == PrintFmt::Short && file.is_absolute()
-                    {
-                        if let Some(cwd) = cwd
-                        {
-                            if let Ok(stripped) = file.strip_prefix(&cwd)
-                            {
-                                if let Some(s) = stripped.to_str()
-                                {
-                                    return write!(fmt, ".{}{s}", path::MAIN_SEPARATOR);
-                                }
-                            }
-                        }
-                    }
-                    fmt::Display::fmt(&file.display(), fmt)
-                }
-                
-                #[inline(always)] pub unsafe fn traces(_cb: &mut dyn FnMut(&super::Frame) -> bool) {}
-
-                #[derive(Clone)]
-                pub struct Frame;
-
-                impl Frame
-                {
-                    pub fn ip(&self) -> *mut c_void { null_mut() }
-                    pub fn sp(&self) -> *mut c_void { null_mut() }
-                    pub fn symbol_address(&self) -> *mut c_void { null_mut() }
-                    pub fn module_base_address(&self) -> Option<*mut c_void> { None }
-                }
-
-                pub unsafe fn resolve(_addr: ResolveWhat<'_>, _cb: &mut dyn FnMut(&super::Symbol)) {}
-                
-                
-                pub struct Symbol<'a> {
-                    _marker: marker::PhantomData<&'a i32>,
-                }
-
-                impl Symbol<'_> {
-                    pub fn name(&self) -> Option<SymbolName<'_>> {
-                        None
-                    }
-
-                    pub fn addr(&self) -> Option<*mut c_void> {
-                        None
-                    }
-
-                    pub fn filename_raw(&self) -> Option<BytesOrWideString<'_>> {
-                        None
-                    }
-                    
-                    pub fn filename(&self) -> Option<&::std::path::Path> {
-                        None
-                    }
-
-                    pub fn lineno(&self) -> Option<u32> {
-                        None
-                    }
-
-                    pub fn colno(&self) -> Option<u32> {
-                        None
-                    }
-                }
-
-            }
-
-            pub mod bytes
-            {
-                use ::
-                {
-                    *,
-                };
-                
-                impl<'a> BytesOrWideString<'a>
-                { 
-                    /// Provides a `Path` representation of `BytesOrWideString`.
-                    pub fn into_path_buf(self) -> PathBuf
-                    {
-                        if let BytesOrWideString::Bytes(b) = self
-                        {
-                            if let Ok(s) = str::from_utf8(b) {
-                                return PathBuf::from(s);
-                            }
-                        }
-
-                        unreachable!()
-                    }
-                }
-            }
-
-            pub mod env
-            {
-                use ::{ * };            
-                pub const FAMILY: &str = "";
-                pub const OS: &str = "";
-                pub const DLL_PREFIX: &str = "";
-                pub const DLL_SUFFIX: &str = "";
-                pub const DLL_EXTENSION: &str = "";
-                pub const EXE_SUFFIX: &str = "";
-                pub const EXE_EXTENSION: &str = "";
-            }
         }
 
         pub mod windows
@@ -3727,206 +3381,6 @@ pub mod system
             {
                 *,
             };
-            /*
-            std/src/sys/alloc/windows.rs
-            std/src/sys/anonymous_pipe/windows.rs
-            std/src/sys/args/windows.rs
-            std/src/sys/env/windows.rs
-            */
-            pub mod backtrace
-            {
-                //! Backtrace strategy for Windows `x86_64` and `aarch64` platforms.
-                use ::
-                {
-                    ffi::c_void,
-                    *,
-                }; // use super::super::windows_sys::*;
-                /// Prints the filename of the backtrace frame.
-                pub fn output_filename
-                (
-                    fmt: &mut fmt::Formatter<'_>,
-                    bows: BytesOrWideString<'_>,
-                    print_fmt: PrintFmt,
-                    cwd: Option<&PathBuf>,
-                ) -> fmt::Result
-                {
-                    let file: Cow<'_, Path> = match bows
-                    {
-                        BytesOrWideString::Wide(_wide) => Path::new("<unknown>").into(),
-                    };
-                    
-                    if print_fmt == PrintFmt::Short && file.is_absolute()
-                    {
-                        if let Some(cwd) = cwd
-                        {
-                            if let Ok(stripped) = file.strip_prefix(&cwd)
-                            {
-                                if let Some(s) = stripped.to_str()
-                                {
-                                    return write!(fmt, ".{}{s}", path::MAIN_SEPARATOR);
-                                }
-                            }
-                        }
-                    }
-
-                    fmt::Display::fmt(&file.display(), fmt)
-                }
-                
-                #[derive(Clone, Copy)]
-                pub struct Frame
-                {
-                    base_address: *mut c_void,
-                    ip: *mut c_void,
-                    sp: *mut c_void,
-                    inline_context: Option<u32>,
-                }
-                
-                unsafe impl Send for Frame {}
-                unsafe impl Sync for Frame {}
-
-                impl Frame
-                {
-                    pub fn ip(&self) -> *mut c_void { self.ip }
-                    pub fn sp(&self) -> *mut c_void { self.sp }
-                    pub fn symbol_address(&self) -> *mut c_void { self.ip }
-                    pub fn module_base_address(&self) -> Option<*mut c_void> { Some(self.base_address) }                    
-                    pub fn inline_context(&self) -> Option<u32> { self.inline_context }                
-                }
-
-                #[repr(C, align(16))]
-                struct MyContext(CONTEXT);
-                
-                impl MyContext
-                {
-                    #[inline(always)] fn ip(&self) -> u64 { self.0.Rip }
-                    #[inline(always)] fn sp(&self) -> u64 { self.0.Rsp }
-                }
-
-                #[inline(always)] pub unsafe fn traces(cb: &mut dyn FnMut(&super::Frame) -> bool)
-                {
-                    unsafe
-                    {
-                        let mut context = ::mem::zeroed::<MyContext>();
-                        RtlCaptureContext(&mut context.0);
-
-                        loop 
-                        {
-                            let ip = context.ip();
-                            let mut base = 0;
-                            let fn_entry = unsafe { RtlLookupFunctionEntry(ip, &mut base, ptr::null_mut()) };
-                            if fn_entry.is_null() { break; }
-
-                            let frame = super::Frame
-                            {
-                                inner: Frame
-                                {
-                                    base_address: base as *mut c_void,
-                                    ip: ip as *mut c_void,
-                                    sp: context.sp() as *mut c_void,
-                                    inline_context: None,
-                                },
-                            };
-                            
-                            if !cb(&frame) { break; }
-                            
-                            let previous_ip = ip;
-                            let previous_sp = context.sp();
-                            let mut handler_data = 0usize;
-                            let mut establisher_frame = 0;
-                            
-                            RtlVirtualUnwind
-                            (
-                                0,
-                                base,
-                                ip,
-                                fn_entry,
-                                &mut context.0,
-                                ptr::addr_of_mut!(handler_data).cast::<*mut c_void>(),
-                                &mut establisher_frame,
-                                ptr::null_mut(),
-                            );
-                            
-                            let ip = context.ip();
-                            if ip == 0 || (ip == previous_ip && context.sp() == previous_sp) { break; }
-                        }
-                    }
-                }
-
-                pub unsafe fn resolve(_addr: ResolveWhat<'_>, _cb: &mut dyn FnMut(&super::Symbol)) {}
-                
-                
-                pub struct Symbol<'a> {
-                    _marker: marker::PhantomData<&'a i32>,
-                }
-
-                impl Symbol<'_> {
-                    pub fn name(&self) -> Option<SymbolName<'_>> {
-                        None
-                    }
-
-                    pub fn addr(&self) -> Option<*mut c_void> {
-                        None
-                    }
-
-                    pub fn filename_raw(&self) -> Option<BytesOrWideString<'_>> {
-                        None
-                    }
-                    
-                    pub fn filename(&self) -> Option<&::std::path::Path> {
-                        None
-                    }
-
-                    pub fn lineno(&self) -> Option<u32> {
-                        None
-                    }
-
-                    pub fn colno(&self) -> Option<u32> {
-                        None
-                    }
-                }
-            }
-
-            pub mod bytes
-            {
-                use ::
-                {
-                    *,
-                };
-                
-                impl<'a> BytesOrWideString<'a>
-                { 
-                    /// Provides a `Path` representation of `BytesOrWideString`.
-                    pub fn into_path_buf(self) -> PathBuf
-                    {
-                        use std::ffi::OsString;
-                        use std::os::windows::ffi::OsStringExt;
-
-                        if let BytesOrWideString::Wide(slice) = self {
-                            return PathBuf::from(OsString::from_wide(slice));
-                        }
-
-                        if let BytesOrWideString::Bytes(b) = self {
-                            if let Ok(s) = str::from_utf8(b) {
-                                return PathBuf::from(s);
-                            }
-                        }
-
-                        unreachable!()
-                    }
-                }
-            }
-
-            pub mod env
-            {
-                use ::{ * };            
-                pub const FAMILY: &str = "windows";
-                pub const OS: &str = "windows";
-                pub const DLL_PREFIX: &str = "";
-                pub const DLL_SUFFIX: &str = ".dll";
-                pub const DLL_EXTENSION: &str = "dll";
-                pub const EXE_SUFFIX: &str = ".exe";
-                pub const EXE_EXTENSION: &str = "exe";
-            }
         }
         
         #[cfg( target_os = "uefi" )] pub use self::uefi::{ * };
@@ -4344,4 +3798,4 @@ fn main()
     }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 4347
+// 3801
