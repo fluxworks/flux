@@ -114,6 +114,42 @@ extern crate time as timed;
         );
     }
 
+    #[macro_export] macro_rules! log
+    {
+        ($fmt:expr) => (
+            let log_file = if let Ok(x) = ::env::var("CICADA_LOG_FILE") {
+                x.clone()
+            } else {
+                String::new()
+            };
+
+            if !log_file.is_empty() {
+                use ::io::Write as _;
+
+                let msg = $fmt;
+                match ::fs::OpenOptions::new().append(true).create(true).open(&log_file) {
+                    Ok(mut cfile) => {
+                        let pid = ::process::getpid();
+                        let now = ::time::c::DateTime::now();
+                        let msg = format!("[{}][{}] {}", now, pid, msg);
+                        let msg = if msg.ends_with('\n') { msg } else { format!("{}\n", msg) };
+                        match cfile.write_all(msg.as_bytes()) {
+                            Ok(_) => {}
+                            Err(_) => println!("tlog: write_all error")
+                        }
+                    }
+                    Err(_) => println!("tlog: open file error"),
+                }
+
+            }
+        );
+
+        ($fmt:expr, $($arg:tt)*) => (
+            let msg = format!($fmt, $($arg)*);
+            log!(&msg);
+        );
+    }
+
 }
 
 pub mod alloc
@@ -161,6 +197,102 @@ pub mod collections
     pub use std::collections::{ * };
 }
 
+pub mod commands
+{
+    //! Available Commands
+    use ::
+    {
+        collections::HashSet,
+        path::Path,
+        sync::Mutex,
+        *,
+    };
+    /*
+        use std::ops::Range;
+        use std::sync::Arc;
+            use std::os::unix::fs::PermissionsExt;
+
+        use lineread::highlighting::{Highlighter, Style};
+
+        use crate::tools;
+        use crate::shell;
+        use crate::parsers::parser_line;
+    */
+    lazy_static!
+    {
+        static ref AVAILABLE_COMMANDS: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
+        static ref ALIASES: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
+    }
+    /// Initialize the available commands cache by scanning PATH directories
+    pub fn initialize_cache()
+    {
+        let commands = scan_available_commands();
+        
+        if let Ok(mut cache) = AVAILABLE_COMMANDS.lock()
+        {
+            *cache = commands;
+        }
+    }
+
+    pub fn scan_available_commands() -> HashSet<String>
+    {
+        let mut commands = HashSet::new();
+
+        if let Ok(path_var) = env::var("PATH")
+        {
+            for path in path_var.split(':')
+            {
+                if path.is_empty() { continue; }
+
+                let dir_path = Path::new(path);
+
+                if !dir_path.is_dir() { continue; }
+
+                if let Ok(entries) = fs::read_dir(dir_path)
+                {
+                    for entry in entries.filter_map(Result::ok)
+                    {
+                        if let Ok(file_type) = entry.file_type()
+                        {
+                            if file_type.is_file() || file_type.is_symlink()
+                            {
+                                if let Ok(metadata) = entry.metadata()
+                                {
+                                    /*
+                                    // Check if file is executable
+                                    if metadata.permissions().mode() & 0o111 != 0
+                                    {
+                                        if let Some(name) = entry.file_name().to_str() {
+                                            commands.insert(name.to_string());
+                                        }
+                                    }
+                                    */
+                                    if let Some(name) = entry.file_name().to_str()
+                                    { commands.insert(name.to_string()); }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        commands
+    }
+
+    pub fn update_aliases(sh: &shell::Shell)
+    {
+        if let Ok(mut aliases) = ALIASES.lock()
+        {
+            aliases.clear();
+            for alias_name in sh.aliases.keys()
+            {
+                aliases.insert(alias_name.clone());
+            }
+        }
+    }
+}
+
 pub mod convert
 {
     //! Traits for conversions between types.
@@ -173,6 +305,7 @@ pub mod env
     pub use std::env::{ * };
     use ::
     {
+        fs::{ read_dir },
         path::{ Path },
         *,
     };
@@ -210,7 +343,71 @@ pub mod env
         set_var( "PATH", directories );
     }
 
-    
+    pub fn args_to_command_line() -> String
+    {
+        let mut result = String::new();
+        let env_args = args();
+
+        if env_args.len() <= 1 { return result; }
+
+        for (i, arg) in env_args.enumerate()
+        {
+            if i == 0 || arg == "-c" { continue; }
+
+            result.push_str(arg.as_str());
+        }
+
+        result
+    }
+
+    pub fn find_file_in_path(filename: &str, exec: bool) -> String
+    {
+        /*
+        let env_path = match var("PATH") {
+            Ok(x) => x,
+            Err(e) => {
+                println_stderr!("cicada: error with env PATH: {:?}", e);
+                return String::new();
+            }
+        };
+        let vec_path: Vec<&str> = env_path.split(':').collect();
+        for p in &vec_path {
+            match read_dir(p) {
+                Ok(list) => {
+                    for entry in list.flatten() {
+                        if let Ok(name) = entry.file_name().into_string() {
+                            if name != filename {
+                                continue;
+                            }
+
+                            if exec
+                            {
+                                let _mode = match entry.metadata() {
+                                    Ok(x) => x,
+                                    Err(e) => {
+                                        println_stderr!("cicada: metadata error: {:?}", e);
+                                        continue;
+                                    }
+                                };
+                                let mode = _mode.permissions().mode();
+                                if mode & 0o111 == 0 {  continue; }
+                            }
+
+                            return entry.path().to_string_lossy().to_string();
+                        }
+                    }
+                }
+
+                Err(e) =>
+                {
+                    if e.kind() == ErrorKind::NotFound { continue; }
+                    log!("cicada: fs read_dir error: {}: {}", p, e);
+                }
+            }
+        }*/
+
+        String::new()
+    }
 }
 
 pub mod error
@@ -398,6 +595,221 @@ pub mod error
         
         impl ::error::Error for self::Error {}
     }
+    /*
+    errno 0.2.4*/
+    pub mod no
+    {        
+        pub mod uefi
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod unix
+        {
+            use ::
+            {
+                error::{ Errno },
+                libc::{self, c_int, size_t, strerror_r, strlen},
+                *,
+            };
+
+            fn from_utf8_lossy(input: &[u8]) -> &str
+            {
+                match str::from_utf8(input)
+                {
+                    Ok(valid) => valid,
+                    Err(error) => unsafe { str::from_utf8_unchecked(&input[..error.valid_up_to()]) },
+                }
+            }
+
+            pub fn with_description<F, T>(err: Errno, callback: F) -> T where
+            F: FnOnce(Result<&str, Errno>) -> T
+            {
+                let mut buf = [0u8; 1024];
+                let c_str = unsafe {
+                    let rc = strerror_r(err.0, buf.as_mut_ptr() as *mut _, buf.len() as size_t);
+                    if rc != 0
+                    {
+                        let fm_err = match rc < 0 {
+                            true => errno(),
+                            false => Errno(rc),
+                        };
+                        if fm_err != Errno(libc::ERANGE) {
+                            return callback(Err(fm_err));
+                        }
+                    }
+                    let c_str_len = strlen(buf.as_ptr() as *const _);
+                    &buf[..c_str_len]
+                };
+
+                callback(Ok(from_utf8_lossy(c_str)))
+            }
+
+            pub const STRERROR_NAME: &str = "strerror_r";
+
+            pub fn errno() -> Errno {
+                unsafe { Errno(*errno_location()) }
+            }
+
+            pub fn set_errno(Errno(errno): Errno) {
+                unsafe {
+                    *errno_location() = errno;
+                }
+            }
+            
+            fn errno_location() -> *mut c_int
+            {
+                0 as *mut c_int
+            }
+        }
+        
+        pub mod windows
+        {
+            use ::
+            {
+                char::{self, REPLACEMENT_CHARACTER},
+                error::{ Errno },
+                *,
+            };
+            /*
+            use core::char::{self, REPLACEMENT_CHARACTER};
+            use core::ptr;
+            use core::str;
+            use windows_sys::Win32::Foundation::{GetLastError, SetLastError, WIN32_ERROR};
+            use windows_sys::Win32::System::Diagnostics::Debug::{
+                FormatMessageW, FORMAT_MESSAGE_FROM_SYSTEM, FORMAT_MESSAGE_IGNORE_INSERTS,
+            };
+            */
+            use crate::Errno;
+
+            fn from_utf16_lossy<'a>(input: &[u16], output: &'a mut [u8]) -> &'a str
+            {
+                let mut output_len = 0;
+                for c in char::decode_utf16(input.iter().copied().take_while(|&x| x != 0))
+                    .map(|x| x.unwrap_or(REPLACEMENT_CHARACTER))
+                {
+                    let c_len = c.len_utf8();
+                    if c_len > output.len() - output_len {
+                        break;
+                    }
+                    c.encode_utf8(&mut output[output_len..]);
+                    output_len += c_len;
+                }
+                unsafe { str::from_utf8_unchecked(&output[..output_len]) }
+            }
+
+            pub fn with_description<F, T>(err: Errno, callback: F) -> T where
+            F: FnOnce(Result<&str, Errno>) -> T
+            {
+                // This value is calculated from the macro
+                // MAKELANGID(LANG_SYSTEM_DEFAULT, SUBLANG_SYS_DEFAULT)
+                let lang_id = 0x0800_u32;
+
+                let mut buf = [0u16; 2048];
+
+                unsafe {
+                    let res = FormatMessageW(
+                        FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                        ptr::null_mut(),
+                        err.0 as u32,
+                        lang_id,
+                        buf.as_mut_ptr(),
+                        buf.len() as u32,
+                        ptr::null_mut(),
+                    );
+                    if res == 0 {
+                        // Sometimes FormatMessageW can fail e.g. system doesn't like lang_id
+                        let fm_err = errno();
+                        return callback(Err(fm_err));
+                    }
+
+                    let mut msg = [0u8; 2048];
+                    let msg = from_utf16_lossy(&buf[..res as usize], &mut msg[..]);
+                    // Trim trailing CRLF inserted by FormatMessageW
+                    callback(Ok(msg.trim_end()))
+                }
+            }
+
+            pub const STRERROR_NAME: &str = "FormatMessageW";
+
+            pub fn errno() -> Errno
+            {
+                unsafe { Errno(GetLastError() as i32) }
+            }
+
+            pub fn set_errno(Errno(errno): Errno)
+            {
+                unsafe { SetLastError(errno as WIN32_ERROR) }
+            }
+        }
+
+        #[cfg(unix)] pub use self::unix as sys;
+        #[cfg(unix)] pub use self::windows as sys;
+
+        /// Wraps a platform-specific error code.
+        #[derive(Copy, Clone, Eq, Ord, PartialEq, PartialOrd, Hash)]
+        pub struct Errno(pub i32);
+
+        impl fmt::Debug for Errno
+        {
+            fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result
+            {
+                sys::with_description(*self, |desc|
+                {
+                    fmt.debug_struct("Errno")
+                    .field("code", &self.0)
+                    .field("description", &desc.ok())
+                    .finish()
+                })
+            }
+        }
+
+        impl fmt::Display for Errno
+        {
+            fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result
+            {
+                sys::with_description(*self, |desc| match desc
+                {
+                    Ok(desc) => fmt.write_str(desc),
+                    Err(fm_err) => write
+                    (
+                        fmt,
+                        "OS error {} ({} returned error {})",
+                        self.0,
+                        sys::STRERROR_NAME,
+                        fm_err.0
+                    ),
+                })
+            }
+        }
+
+        impl From<Errno> for i32
+        {
+            fn from(e: Errno) -> Self { e.0 }
+        }
+        
+        impl Error for Errno
+        {
+            fn description(&self) -> &str { "system error" }
+        }
+        
+        impl From<Errno> for io::Error
+        {
+            fn from(errno: Errno) -> Self { io::Error::from_raw_os_error(errno.0) }
+        }
+        /// Returns the platform-specific value of `errno`.
+        pub fn errno() -> Errno {
+            sys::errno()
+        }
+
+        /// Sets the platform-specific value of `errno`.
+        pub fn set_errno(err: Errno) {
+            sys::set_errno(err)
+        }
+    }
 }
 
 pub mod ffi
@@ -464,6 +876,11 @@ pub mod fmt
             fmt::UpperHex::fmt(self.as_hyphenated(), f)
         }
     }
+}
+
+pub mod fs
+{
+    pub use std::fs::{ * };
 }
 
 pub mod get
@@ -782,6 +1199,45 @@ pub mod is
 
         false
     }
+    /*
+    pub fn is_script(...) -> bool */
+    pub fn script(args: &[String]) -> bool { args.len() > 1 && !args[1].starts_with("-") }
+    /*
+    pub fn is_command_string(...) -> bool */
+    pub fn command_string(args: &[String]) -> bool { args.len() > 1 && args[1] == "-c" }
+    /*
+    pub fn is_non_tty(...) -> bool */
+    pub fn non_tty() -> bool { unsafe { libc::isatty(0) == 0 } }
+    /*
+    pub fn is_symbol_like(...) -> bool */
+    pub fn symbol_like(s: &str) -> bool
+    {
+        s.chars().all(|c|
+        {
+            ascii_alphanumeric(c) || ascii_punctuation(c)
+        })
+    }
+    /*
+    pub fn is_ascii_alphanumeric(...) -> bool */
+    pub fn ascii_alphanumeric(c: char) -> bool
+    {
+        match c {
+            '\u{0041}'..='\u{005A}' | '\u{0061}'..='\u{007A}' | '\u{0030}'..='\u{0039}' => true,
+            _ => false,
+        }
+    }
+    /*
+    pub fn is_ascii_punctuation(...) -> bool */
+    pub fn ascii_punctuation(c: char) -> bool
+    {
+        match c {
+            '\u{0021}'..='\u{002F}'
+            | '\u{003A}'..='\u{0040}'
+            | '\u{005B}'..='\u{0060}'
+            | '\u{007B}'..='\u{007E}' => true,
+            _ => false,
+        }
+    }
 }
 
 pub mod lines
@@ -790,8 +1246,35 @@ pub mod lines
     linefeed v0.6.0*/
     use ::
     {
+        primitive::{ CommandResult },
         *,
     };
+    /*
+    pub fn run_lines(sh: &mut shell::Shell, lines: &str, args: &Vec<String>, capture: bool) -> Vec<CommandResult> */
+    pub fn run(sh: &mut shell::Shell, lines: &str, args: &Vec<String>, capture: bool) -> Vec<CommandResult>
+    {
+        let mut cr_list = Vec::new();
+        /*
+        match parsers::locust::parse_lines(lines)
+        {
+            Ok(pairs_exp) => 
+            {
+                for pair in pairs_exp
+                {
+                    let (mut _cr_list, _cont, _brk) = run_exp(sh, pair, args, false, capture);
+                    cr_list.append(&mut _cr_list);
+                }
+            }
+            
+            Err(e) => 
+            {
+                println_stderr!("syntax error: {:?}", e);
+                return cr_list;
+            }
+        } */
+
+        cr_list
+    }
 }
 
 pub mod marker
@@ -803,6 +1286,105 @@ pub mod mem
 {
     //! Basic functions for dealing with memory.
     pub use std::mem::{ * };
+}
+
+pub mod now
+{
+    use ::
+    {
+        collections::HashMap,
+        io::{ Read as _ },
+        primitive::{ CommandLine, CommandResult },
+        shell::Shell,
+        *,
+    };
+    /// Run simple command or pipeline without using `&&`, `||`, `;`.
+    /// example 1: `ls`
+    /// example 2: `ls | wc`
+    pub fn run_procedure(sh: &mut Shell, line: &str, tty: bool, capture: bool) -> CommandResult
+    {
+        let log_cmd = !sh.cmd.starts_with(' ');
+        match CommandLine::from_line(line, sh)
+        {
+            Ok(cl) =>
+            {
+                if cl.is_empty()
+                {
+                    if !cl.envs.is_empty() { set_shell_vars(sh, &cl.envs); }
+                    return CommandResult::new();
+                }
+
+                let (term_given, cr) = process::run_pipeline(sh, &cl, tty, capture, log_cmd);
+                if term_given
+                {
+                    unsafe
+                    {
+                        let gid = libc::getpgid(0);
+                        terminal::give_to(gid);
+                    }
+                }
+
+                cr
+            }
+            Err(e) => {
+                println_stderr!("cicada: {}", e);
+                CommandResult::from_status(0, 1)
+            }
+        }
+    }
+
+    pub fn run_command_line(sh: &mut Shell, line: &str, tty: bool, capture: bool) -> Vec<CommandResult>
+    {
+        let mut cr_list = Vec::new();
+        let mut status = 0;
+        let mut sep = String::new();
+
+        for token in parsers::line::line_to_cmds(line)
+        {
+            if token == ";" || token == "&&" || token == "||"
+            {
+                sep = token.clone();
+                continue;
+            }
+
+            if sep == "&&" && status != 0 { break; }
+
+            if sep == "||" && status == 0 { break; }
+
+            let cmd = token.clone();
+            let cr = run_procedure(sh, &cmd, tty, capture);
+            status = cr.status;
+            sh.previous_status = status;
+            cr_list.push(cr);
+        }
+
+        cr_list
+    }
+    
+    /// Entry point for non-ttys (e.g. Cmd-N on MacVim)
+    pub fn run_procs_for_non_tty(sh: &mut Shell)
+    {
+        let mut buffer = String::new();
+        let stdin = io::stdin();
+        let mut handle = stdin.lock();
+        match handle.read_to_string(&mut buffer) {
+            Ok(_) => {
+                log!("run non tty command: {}", &buffer);
+                run_command_line(sh, &buffer, false, false);
+            }
+            Err(e) => {
+                println!("cicada: stdin.read_to_string() failed: {:?}", e);
+            }
+        }
+    }
+
+    fn set_shell_vars(sh: &mut Shell, envs: &HashMap<String, String>)
+    {
+        for (name, value) in envs.iter()
+        {
+            sh.set_env(name, value);
+        }
+    }
 }
 
 pub mod num
@@ -833,6 +1415,112 @@ pub mod parsers
         {
             *
         };
+        /// Parse command line for multiple commands.
+        pub fn line_to_cmds(line: &str) -> Vec<String>
+        {
+            let mut result = Vec::new();
+            /*
+            let mut sep = String::new();
+            let mut token = String::new();
+            let mut has_backslash = false;
+            let len = line.chars().count();
+            for (i, c) in line.chars().enumerate() {
+                if has_backslash {
+                    token.push('\\');
+                    token.push(c);
+                    has_backslash = false;
+                    continue;
+                }
+
+                if c == '\\' && sep != "'" {
+                    has_backslash = true;
+                    continue;
+                }
+
+                if c == '#' {
+                    if sep.is_empty() {
+                        break;
+                    } else {
+                        token.push(c);
+                        continue;
+                    }
+                }
+                if c == '\'' || c == '"' || c == '`' {
+                    if sep.is_empty() {
+                        sep.push(c);
+                        token.push(c);
+                        continue;
+                    } else if sep == c.to_string() {
+                        token.push(c);
+                        sep = String::new();
+                        continue;
+                    } else {
+                        token.push(c);
+                        continue;
+                    }
+                }
+                if c == '&' || c == '|' {
+                    // needs watch ahead here
+                    if sep.is_empty() {
+                        if i + 1 == len {
+                            // for bg commands, e.g. `ls &`
+                            token.push(c);
+                            continue;
+                        } else {
+                            let c_next = match line.chars().nth(i + 1) {
+                                Some(x) => x,
+                                None => {
+                                    println!("chars nth error - should never happen");
+                                    continue;
+                                }
+                            };
+
+                            if c_next != c {
+                                token.push(c);
+                                continue;
+                            }
+                        }
+                    }
+
+                    if sep.is_empty() {
+                        sep.push(c);
+                        continue;
+                    } else if c.to_string() == sep {
+                        let _token = token.trim().to_string();
+                        if !_token.is_empty() {
+                            result.push(_token);
+                        }
+                        token = String::new();
+                        result.push(format!("{}{}", sep, sep));
+                        sep = String::new();
+                        continue;
+                    } else {
+                        token.push(c);
+                        continue;
+                    }
+                }
+                if c == ';' {
+                    if sep.is_empty() {
+                        let _token = token.trim().to_string();
+                        if !_token.is_empty() {
+                            result.push(_token);
+                        }
+                        result.push(String::from(";"));
+                        token = String::new();
+                        continue;
+                    } else {
+                        token.push(c);
+                        continue;
+                    }
+                }
+                token.push(c);
+            }
+            if !token.is_empty() {
+                result.push(token.trim().to_string());
+            }
+            */
+            result
+        }
     }
 
     pub mod uuid
@@ -1215,15 +1903,6 @@ pub mod primitive
         pub redirect_from: Option<Token>,
     }
 
-    #[derive(Debug)]
-    pub struct CommandLine
-    {
-        pub line: String,
-        pub commands: Vec<Command>,
-        pub envs: HashMap<String, String>,
-        pub background: bool,
-    }
-
     impl Command
     {
         /*
@@ -1307,6 +1986,70 @@ pub mod primitive
         pub fn is_builtin(&self) -> bool { ::is::builtin(&self.tokens[0].1) }
     }
 
+    #[derive(Debug)]
+    pub struct CommandLine
+    {
+        pub line: String,
+        pub commands: Vec<Command>,
+        pub envs: HashMap<String, String>,
+        pub background: bool,
+    }
+
+    impl CommandLine
+    {
+        /*
+        pub fn from_line( line: &str, sh: &mut shell::Shell ) -> Result<CommandLine, String>
+        {
+            let linfo = parsers::line::parse( line );
+            let mut tokens = linfo.tokens;
+            shell::do_expansion(sh, &mut tokens);
+            let envs = drain_env_tokens(&mut tokens);
+            let mut background = false;
+            let len = tokens.len();
+            
+            if len > 1 && tokens[len - 1].1 == "&"
+            {
+                background = true;
+                tokens.pop();
+            }
+
+            let mut commands = Vec::new();
+            for sub_tokens in split_tokens_by_pipes(&tokens)
+            {
+                match Command::from_tokens(sub_tokens)
+                {
+                    Ok(c) => { commands.push(c); }
+                    Err(e) => { return Err(e); }
+                }
+            }
+
+            Ok(CommandLine
+            {
+                line: line.to_string(),
+                commands,
+                envs,
+                background,
+            })
+        }
+        */
+        pub fn from_line( line: &str, sh: &mut ::shell::Shell ) -> Result<CommandLine, String>
+        {
+            Ok( CommandLine
+            {
+                line: String::new(),
+                commands: Vec::new(),
+                envs: HashMap::new(),
+                background:false,
+            })
+        }
+
+        pub fn is_empty(&self) -> bool { self.commands.is_empty() }
+
+        pub fn with_pipeline(&self) -> bool { self.commands.len() > 1 }
+
+        pub fn is_single_and_builtin(&self) -> bool { self.commands.len() == 1 && self.commands[0].is_builtin() }
+    }
+    
     #[derive(Debug, Clone, Default)]
     pub struct Job
     {
@@ -1436,51 +2179,6 @@ pub mod primitive
         envs
     }
     */
-
-    impl CommandLine
-    {
-        /*
-        pub fn from_line( line: &str, sh: &mut shell::Shell ) -> Result<CommandLine, String>
-        {
-            let linfo = parsers::line::parse( line );
-            let mut tokens = linfo.tokens;
-            shell::do_expansion(sh, &mut tokens);
-            let envs = drain_env_tokens(&mut tokens);
-            let mut background = false;
-            let len = tokens.len();
-            
-            if len > 1 && tokens[len - 1].1 == "&"
-            {
-                background = true;
-                tokens.pop();
-            }
-
-            let mut commands = Vec::new();
-            for sub_tokens in split_tokens_by_pipes(&tokens)
-            {
-                match Command::from_tokens(sub_tokens)
-                {
-                    Ok(c) => { commands.push(c); }
-                    Err(e) => { return Err(e); }
-                }
-            }
-
-            Ok(CommandLine
-            {
-                line: line.to_string(),
-                commands,
-                envs,
-                background,
-            })
-        }
-        */
-
-        pub fn is_empty(&self) -> bool { self.commands.is_empty() }
-
-        pub fn with_pipeline(&self) -> bool { self.commands.len() > 1 }
-
-        pub fn is_single_and_builtin(&self) -> bool { self.commands.len() == 1 && self.commands[0].is_builtin() }
-    }
     /// A 128-bit (16 byte) buffer containing the UUID.
     pub type Bytes = [ u8; 16 ];
     /// The version of the UUID, denoting the generating algorithm.
@@ -2134,6 +2832,160 @@ pub mod primitive
 pub mod process
 {
     pub use std::process::{ * };
+
+    use ::
+    {
+        primitive::{ CommandLine, CommandResult },
+        *,
+    };
+
+    pub fn getpid() -> i32 { unsafe { libc::getpid() } }
+    /// Run a pipeline (e.g. `echo hi | wc -l`)
+    /// returns: (is-terminal-given, command-result)
+    pub fn run_pipeline(
+        sh: &mut ::shell::Shell,
+        cl: &CommandLine,
+        tty: bool,
+        capture: bool,
+        log_cmd: bool,
+    ) -> (bool, CommandResult)
+    {
+        /*
+        let mut term_given = false;
+        if cl.background && capture {
+            println_stderr!("cicada: cannot capture output of background cmd");
+            return (term_given, CommandResult::error());
+        }
+
+        if let Some(cr) = try_run_calculator(&cl.line, capture) {
+            return (term_given, cr);
+        }
+
+        // FIXME: move func-run into run single command
+        if let Some(cr) = try_run_func(sh, cl, capture, log_cmd) {
+            return (term_given, cr);
+        }
+
+        if log_cmd {
+            log!("run: {}", cl.line);
+        }
+
+        let length = cl.commands.len();
+        if length == 0 {
+            println!("cicada: invalid command: cmds with empty length");
+            return (false, CommandResult::error());
+        }
+
+        let mut pipes = Vec::new();
+        let mut errored_pipes = false;
+        for _ in 0..length - 1 {
+            match pipe() {
+                Ok(fds) => pipes.push(fds),
+                Err(e) => {
+                    errored_pipes = true;
+                    println_stderr!("cicada: pipeline1: {}", e);
+                    break;
+                }
+            }
+        }
+
+        if errored_pipes {
+            // release fds that already created when errors occurred
+            for fds in pipes {
+                libs::close(fds.0);
+                libs::close(fds.1);
+            }
+            return (false, CommandResult::error());
+        }
+
+        if pipes.len() + 1 != length {
+            println!("cicada: invalid command: unmatched pipes count");
+            return (false, CommandResult::error());
+        }
+
+        let mut pgid: i32 = 0;
+        let mut fg_pids: Vec<i32> = Vec::new();
+
+        let isatty = if tty {
+            unsafe { libc::isatty(1) == 1 }
+        } else {
+            false
+        };
+        let options = CommandOptions {
+            isatty,
+            capture_output: capture,
+            background: cl.background,
+            envs: cl.envs.clone(),
+        };
+
+        let mut fds_capture_stdout = None;
+        let mut fds_capture_stderr = None;
+        if capture {
+            match pipe() {
+                Ok(fds) => fds_capture_stdout = Some(fds),
+                Err(e) => {
+                    println_stderr!("cicada: pipeline2: {}", e);
+                    return (false, CommandResult::error());
+                }
+            }
+            match pipe() {
+                Ok(fds) => fds_capture_stderr = Some(fds),
+                Err(e) => {
+                    if let Some(fds) = fds_capture_stdout {
+                        libs::close(fds.0);
+                        libs::close(fds.1);
+                    }
+                    println_stderr!("cicada: pipeline3: {}", e);
+                    return (false, CommandResult::error());
+                }
+            }
+        }
+
+        let mut cmd_result = CommandResult::new();
+        for i in 0..length {
+            let child_id: i32 = run_single_program(
+                sh,
+                cl,
+                i,
+                &options,
+                &mut pgid,
+                &mut term_given,
+                &mut cmd_result,
+                &pipes,
+                &fds_capture_stdout,
+                &fds_capture_stderr,
+            );
+
+            if child_id > 0 && !cl.background {
+                fg_pids.push(child_id);
+            }
+        }
+
+        if cl.is_single_and_builtin() {
+            return (false, cmd_result);
+        }
+
+        if cl.background {
+            if let Some(job) = sh.get_job_by_gid(pgid) {
+                println_stderr!("[{}] {}", job.id, job.gid);
+            }
+        }
+
+        if !fg_pids.is_empty() {
+            let _cr = jobc::wait_fg_job(sh, pgid, &fg_pids);
+            // for capture commands, e.g. `echo foo` in `echo "hello $(echo foo)"
+            // the cmd_result is already built in loop calling run_single_program()
+            // above.
+            if !capture {
+                cmd_result = _cr;
+            }
+        }
+
+        (term_given, cmd_result)
+        */
+        ( false, CommandResult::new() )
+    }
+
 }
 
 pub mod ptr
@@ -2204,6 +3056,142 @@ pub mod result
     pub use std::result::{ * };
 }
 
+pub mod scripts
+{
+    
+    use ::
+    {
+        fs::File,
+        io::{ ErrorKind, Read as _ },
+        path::{ Path },
+        regex::{ Regex, RegexBuilder },
+        *,
+    };
+    /*
+    pub fn run_script(sh: &mut shell::Shell, args: &Vec<String>) -> i32 */
+    pub fn run(sh: &mut shell::Shell, args: &Vec<String>) -> i32
+    {
+        let src_file = &args[1];
+        let full_src_file: String;
+
+        if src_file.contains('/') { full_src_file = src_file.clone(); }
+        else
+        {
+            let full_path = env::find_file_in_path(src_file, false);
+            if full_path.is_empty()
+            {
+                if !Path::new(src_file).exists()
+                {
+                    println_stderr!("cicada: {}: no such file", src_file);
+                    return 1;
+                }
+                
+                full_src_file = format!("./{}", src_file);
+            }
+            else { full_src_file = full_path.clone(); }
+        }
+
+        if !Path::new(&full_src_file).exists()
+        {
+            println_stderr!("cicada: {}: no such file", src_file);
+            return 1;
+        }
+
+        if Path::new(&full_src_file).is_dir()
+        {
+            println_stderr!("cicada: {}: is a directory", src_file);
+            return 1;
+        }
+
+        let mut file;
+        
+        match File::open(&full_src_file)
+        {
+            Ok(x) => file = x,
+            Err(e) =>
+            {
+                println_stderr!("cicada: {}: failed to open file - {:?}", &full_src_file, e.kind());
+                return 1;
+            }
+        }
+
+        let mut text = String::new();
+        
+        match file.read_to_string(&mut text)
+        {
+            Ok(_) => {}
+            Err(e) =>
+            {
+                match e.kind()
+                {
+                    ErrorKind::InvalidData =>
+                    {
+                        println_stderr!("cicada: {}: not a valid script file", &full_src_file);
+                    }
+                    
+                    _ =>
+                    {
+                        println_stderr!("cicada: {}: error: {:?}", &full_src_file, e);
+                    }
+                }
+
+                return 1;
+            }
+        }
+
+        if text.contains("\\\n") {
+            let re = RegexBuilder::new(r#"([ \t]*\\\n[ \t]+)|([ \t]+\\\n[ \t]*)"#)
+                .multi_line(true).build().unwrap();
+            text = re.replace_all(&text, " ").to_string();
+
+            let re = RegexBuilder::new(r#"\\\n"#).multi_line(true).build().unwrap();
+            text = re.replace_all(&text, "").to_string();
+        }
+
+        let re_func_head = Regex::new(r"^function ([a-zA-Z_-][a-zA-Z0-9_-]*) *(?:\(\))? *\{$").unwrap();
+        let re_func_tail = Regex::new(r"^\}$").unwrap();
+        let mut text_new = String::new();
+        let mut enter_func = false;
+        let mut func_name = String::new();
+        let mut func_body = String::new();
+        for line in text.clone().lines() {
+            if re_func_head.is_match(line.trim()) {
+                enter_func = true;
+                let cap = re_func_head.captures(line.trim()).unwrap();
+                func_name = cap[1].to_string();
+                func_body = String::new();
+                continue;
+            }
+            if re_func_tail.is_match(line.trim()) {
+                sh.set_func(&func_name, &func_body);
+                enter_func = false;
+                continue;
+            }
+            if enter_func {
+                func_body.push_str(line);
+                func_body.push('\n');
+            } else {
+                text_new.push_str(line);
+                text_new.push('\n');
+            }
+        }
+
+        let mut status = 0;
+        let cr_list = lines::run(sh, &text_new, args, false);
+        if let Some(last) = cr_list.last() {
+            status = last.status;
+        }
+
+        // FIXME: We probably need to fix the issue in the `set` builtin,
+        // which currently set `exit_on_error` at the shell session level,
+        // we should instead set in a script-level.
+        // Here is a work-around ugly fix.
+        sh.exit_on_error = false;
+
+        status
+    }
+}
+
 pub mod shell
 {
     //! Simple Shell Interface
@@ -2259,6 +3247,15 @@ pub mod shell
                 seed:random::random::<usize>(),
             }
         }
+        /*
+        Update existing *ENV Variable* if such name exists in ENVs. */
+        pub fn set_env(&mut self, name: &str, value: &str)
+        {
+            if env::var(name).is_ok() { env::set_var(name, value); }
+            else { self.envs.insert(name.to_string(), value.to_string()); }
+        }
+
+        pub fn set_func(&mut self, name: &str, value: &str) { self.funcs.insert(name.to_string(), value.to_string());         }
     }
 }
 
@@ -2308,1040 +3305,8 @@ pub mod system
         {
             *,
         };
-
-        pub mod alloc
-        {
-            use ::
-            {
-                alloc::{ GlobalAlloc, Layout, System },
-                *,
-            };
-            /// The minimum alignment guaranteed by the architecture.
-            const MIN_ALIGN: usize = 16;
-            pub unsafe fn realloc_fallback
-            (
-                alloc: &System,
-                ptr: *mut u8,
-                old_layout: Layout,
-                new_size: usize,
-            ) -> *mut u8
-            {
-                unsafe
-                {
-                    let new_layout = Layout::from_size_align_unchecked(new_size, old_layout.align());
-                    let new_ptr = GlobalAlloc::alloc(alloc, new_layout);
-
-                    if !new_ptr.is_null()
-                    {
-                        let size = usize::min(old_layout.size(), new_size);
-                        ptr::copy_nonoverlapping(ptr, new_ptr, size);
-                        GlobalAlloc::dealloc(alloc, ptr, old_layout);
-                    }
-
-                    new_ptr
-                }
-            }
-        }
-
-        pub mod args
-        {
-            use ::
-            {
-                ffi::{ OsString },
-                num::{ NonZero },
-                *,
-            };
-            /*
-            use crate::{array, fmt, vec};
-            */
-            pub struct Args
-            {
-                iter: vec::IntoIter<OsString>,
-            }
-            /*
-            impl !Send for Args {}
-            impl !Sync for Args {}
-            */
-            impl Args
-            {
-                #[inline] pub fn new(args: Vec<OsString>) -> Self { Args { iter: args.into_iter() } }
-                #[inline] fn len(&self) -> usize { self.iter.len() }
-                #[inline] fn is_empty(&self) -> bool { self.len() == 0 }
-            }
-
-            impl fmt::Debug for Args
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { self.iter.as_slice().fmt(f) }
-            }
-        }
-
-        pub mod bytes
-        {
-            use ::
-            {
-                borrow::Cow,
-                *,
-            };
-            /// A platform independent representation of a string.
-            #[derive(Debug)]
-            pub enum BytesOrWideString<'a>
-            {
-                /// A slice, typically provided on Unix platforms.
-                Bytes(&'a [u8]),
-                /// Wide strings typically from Windows.
-                Wide(&'a [u16]),
-            }
-
-            impl<'a> BytesOrWideString<'a>
-            {
-                /// Lossy converts to a `Cow<str>`, 
-                /// will allocate if `Bytes` is not valid UTF-8 or if `BytesOrWideString` is `Wide`.
-                pub fn to_str_lossy(&self) -> Cow<'a, str>
-                {
-                    use self::BytesOrWideString::*;
-
-                    match *self
-                    {
-                        Bytes(slice) => String::from_utf8_lossy(slice),
-                        Wide(wide) => Cow::Owned(String::from_utf16_lossy(wide)),
-                    }
-                }
-            }
-            
-            impl<'a> fmt::Display for BytesOrWideString<'a>
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { self.to_str_lossy().fmt(f) }
-            }
-        }
-
-        pub mod backtrace
-        {
-            //! Common code for printing backtraces.
-            use ::
-            {
-                borrow::Cow,
-                boxed::{ Box },
-                ffi::c_void,
-                io::prelude::*,
-                path::{ self, Path, PathBuf },
-                sync::{Mutex, MutexGuard, PoisonError},
-                sys::
-                { 
-                    common::
-                    {
-                        bytes::{ BytesOrWideString },
-                    },
-                    // os::backtrace::{ Frame, output_filename, resolve_frame_unsynchronized, Symbol, traces },
-                },
-                *,
-            };
-            /// Max number of frames to print.
-            pub const MAX_NB_FRAMES: usize = 100;
-
-            pub struct BacktraceLock<'a>(#[allow(dead_code)] MutexGuard<'a, ()>);
-
-            pub fn lock<'a>() -> BacktraceLock<'a> 
-            {
-                static LOCK: Mutex<()> = Mutex::new(());
-                BacktraceLock(LOCK.lock().unwrap_or_else(PoisonError::into_inner))
-            }
-
-            impl BacktraceLock<'_>
-            {
-                /// Prints the current backtrace.
-                pub fn print(&mut self, w: &mut dyn Write, format: PrintFmt) -> io::Result<()>
-                {
-                    struct DisplayBacktrace
-                    {
-                        format: PrintFmt,
-                    }
-
-                    impl fmt::Display for DisplayBacktrace
-                    {
-                        fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-                            unsafe { _print_fmt(fmt, self.format) }
-                        }
-                    }
-
-                    write!(w, "{}", DisplayBacktrace { format })
-                }
-            }
-
-            unsafe fn _print_fmt(fmt: &mut fmt::Formatter<'_>, print_fmt: PrintFmt) -> fmt::Result
-            {
-                unsafe
-                {
-                    let cwd = env::current_dir().ok();
-                    let mut print_path = move | fmt:&mut fmt::Formatter<'_>, bows:BytesOrWideString<'_> |
-                    { output_filename(fmt, bows, print_fmt, cwd.as_ref()) };
-
-                    writeln!(fmt, "stack backtrace:")?;
-
-                    let mut bt_fmt = BacktraceFmt::new(fmt, print_fmt, &mut print_path);
-                    bt_fmt.add_context()?;
-                    let mut idx = 0;
-                    let mut res = Ok(());
-                    let mut omitted_count: usize = 0;
-                    let mut first_omit = true;
-                    let mut print = print_fmt != PrintFmt::Short;
-                    
-                    trace_unsynchronized( | frame |
-                    {
-                        if print_fmt == PrintFmt::Short && idx > MAX_NB_FRAMES { return false; }
-
-                        let mut hit = false;
-                        resolve_frame_unsynchronized(frame, |symbol|
-                        {
-                            hit = true;
-                            
-                            if print_fmt == PrintFmt::Short
-                            {
-                                if let Some(sym) = symbol.name().and_then(|s| s.as_str())
-                                {
-                                    if sym.contains("__rust_end_short_backtrace")
-                                    {
-                                        print = true;
-                                        return;
-                                    }
-                                    
-                                    if print && sym.contains("__rust_begin_short_backtrace")
-                                    {
-                                        print = false;
-                                        return;
-                                    }
-                                    
-                                    if !print { omitted_count += 1; }
-                                }
-                            }
-
-                            if print
-                            {
-                                if omitted_count > 0
-                                {
-                                    debug_assert!(print_fmt == PrintFmt::Short);
-                                    if !first_omit
-                                    {
-                                        let _ = writeln!
-                                        (
-                                            bt_fmt.formatter(),
-                                            "      [... omitted {} frame{} ...]",
-                                            omitted_count,
-                                            if omitted_count > 1 { "s" } else { "" }
-                                        );
-                                    }
-
-                                    first_omit = false;
-                                    omitted_count = 0;
-                                }
-
-                                res = bt_fmt.frame().symbol(frame, symbol);
-                            }
-                        });
-
-                        if !hit && print { res = bt_fmt.frame().print_raw(frame.ip(), None, None, None); }
-
-                        idx += 1;
-                        res.is_ok()
-                    });
-
-                    res?;
-                    bt_fmt.finish()?;
-                    if print_fmt == PrintFmt::Short
-                    {
-                        writeln!
-                        (
-                            fmt,
-                            "note: Some details are omitted, \
-                            run with `RUST_BACKTRACE=full` for a verbose backtrace."
-                        )?;
-                    }
-
-                    Ok(())
-                }
-            }
-            
-            #[inline(never)] pub fn __rust_begin_short_backtrace<F, T>(f: F) -> T where
-            F: FnOnce() -> T
-            {
-                let result = f();
-                ::hint::black_box(());
-                result
-            }
-            
-            #[inline(never)] pub fn __rust_end_short_backtrace<F, T>(f: F) -> T where
-            F: FnOnce() -> T
-            {
-                let result = f();
-                ::hint::black_box(());
-                result
-            }
-            #[derive(Clone, Copy)]
-            pub struct TracePtr(*mut c_void);
-
-            unsafe impl Send for TracePtr {}
-            unsafe impl Sync for TracePtr {}
-
-            impl TracePtr
-            {
-                fn into_void(self) -> *mut c_void {
-                    self.0
-                }
-            }
-            /// Captured version of a symbol in a backtrace.
-            #[derive(Clone)]
-            pub struct BacktraceSymbol
-            {
-                name: Option<Box<[u8]>>,
-                addr: Option<TracePtr>,
-                filename: Option<PathBuf>,
-                lineno: Option<u32>,
-                colno: Option<u32>,
-            }
-            /// Captured version of a frame in a backtrace.
-            #[derive(Clone)]
-            pub struct BacktraceFrame
-            {
-                frame: Frame,
-                symbols: Option<Box<[BacktraceSymbol]>>,
-            }
-            /// A formatter for backtraces.
-            pub struct BacktraceFmt<'a, 'b>
-            {
-                fmt: &'a mut fmt::Formatter<'b>,
-                frame_index: usize,
-                format: PrintFmt,
-                print_path: &'a mut (dyn FnMut(&mut fmt::Formatter<'_>, BytesOrWideString<'_>) -> fmt::Result + 'b),
-            }
-
-            impl<'a, 'b> BacktraceFmt<'a, 'b>
-            {
-                /// Create a new `BacktraceFmt` which will write output to the provided `fmt`.
-                pub fn new
-                (
-                    fmt: &'a mut fmt::Formatter<'b>,
-                    format: PrintFmt,
-                    print_path: &'a mut (dyn FnMut(&mut fmt::Formatter<'_>, BytesOrWideString<'_>) -> fmt::Result + 'b),
-                ) -> Self
-                {
-                    BacktraceFmt
-                    {
-                        fmt,
-                        frame_index: 0,
-                        format,
-                        print_path,
-                    }
-                }
-                /// Prints a preamble for the backtrace about to be printed.
-                pub fn add_context(&mut self) -> fmt::Result { Ok(()) }
-                /// Adds a frame to the backtrace output.
-                pub fn frame(&mut self) -> BacktraceFrameFmt<'_, 'a, 'b>
-                {
-                    BacktraceFrameFmt
-                    {
-                        fmt: self,
-                        symbol_index: 0,
-                    }
-                }
-                /// Completes the backtrace output.
-                pub fn finish(&mut self) -> fmt::Result { Ok(()) }
-                /// Inserts a message in the backtrace output.
-                pub fn message(&mut self, msg: &str) -> fmt::Result { self.fmt.write_str(msg) }
-                /// Return the inner formatter.
-                pub fn formatter(&mut self) -> &mut fmt::Formatter<'b> { self.fmt }
-            }
-            /// A formatter for just one frame of a backtrace.
-            pub struct BacktraceFrameFmt<'fmt, 'a, 'b>
-            {
-                fmt: &'fmt mut BacktraceFmt<'a, 'b>,
-                symbol_index: usize,
-            }
-
-            impl BacktraceFrameFmt<'_, '_, '_>
-            {
-                /// Prints a `BacktraceFrame` with this frame formatter.
-                pub fn backtrace_frame(&mut self, frame: &BacktraceFrame) -> fmt::Result
-                {
-                    let symbols = frame.symbols();
-
-                    for symbol in symbols
-                    {
-                        self.backtrace_symbol(frame, symbol)?;
-                    }
-                    
-                    if symbols.is_empty() { self.print_raw(frame.ip(), None, None, None)?; }
-
-                    Ok(())
-                }
-                /// Prints a `BacktraceSymbol` within a `BacktraceFrame`.
-                pub fn backtrace_symbol
-                (
-                    &mut self,
-                    frame: &BacktraceFrame,
-                    symbol: &BacktraceSymbol,
-                ) -> fmt::Result
-                {
-                    self.print_raw_with_column
-                    (
-                        frame.ip(),
-                        symbol.name(),
-                        symbol
-                        .filename()
-                        .and_then(|p| Some(BytesOrWideString::Bytes(p.to_str()?.as_bytes()))),
-                        symbol.lineno(),
-                        symbol.colno(),
-                    )?;
-                    Ok(())
-                }
-                /// Prints a raw traced `Frame` and `Symbol`, typically from within the raw callbacks of this crate.
-                pub fn symbol(&mut self, frame: &Frame, symbol: &super::Symbol) -> fmt::Result
-                {
-                    self.print_raw_with_column
-                    (
-                        frame.ip(),
-                        symbol.name(),
-                        symbol.filename_raw(),
-                        symbol.lineno(),
-                        symbol.colno(),
-                    )?;
-                    Ok(())
-                }
-                /// Adds a raw frame to the backtrace output.
-                pub fn print_raw
-                (
-                    &mut self,
-                    frame_ip: *mut c_void,
-                    symbol_name: Option<SymbolName<'_>>,
-                    filename: Option<BytesOrWideString<'_>>,
-                    lineno: Option<u32>,
-                ) -> fmt::Result
-                { self.print_raw_with_column(frame_ip, symbol_name, filename, lineno, None) }
-                /// Adds a raw frame to the backtrace output, including column information.
-                pub fn print_raw_with_column
-                (
-                    &mut self,
-                    frame_ip: *mut c_void,
-                    symbol_name: Option<SymbolName<'_>>,
-                    filename: Option<BytesOrWideString<'_>>,
-                    lineno: Option<u32>,
-                    colno: Option<u32>,
-                ) -> fmt::Result
-                {
-                    self.print_raw_generic(frame_ip, symbol_name, filename, lineno, colno)?;
-                    self.symbol_index += 1;
-                    Ok(())
-                }
-                
-                fn print_raw_generic
-                (
-                    &mut self,
-                    frame_ip: *mut c_void,
-                    symbol_name: Option<SymbolName<'_>>,
-                    filename: Option<BytesOrWideString<'_>>,
-                    lineno: Option<u32>,
-                    colno: Option<u32>,
-                ) -> fmt::Result
-                {
-                    if let PrintFmt::Short = self.fmt.format { if frame_ip.is_null() { return Ok(()); } }
-                    
-                    if self.symbol_index == 0
-                    {
-                        write!(self.fmt.fmt, "{:4}: ", self.fmt.frame_index)?;
-                        if let PrintFmt::Full = self.fmt.format { write!(self.fmt.fmt, "{frame_ip:HEX_WIDTH$?} - ")?; }
-                    }
-
-                    else
-                    {
-                        write!(self.fmt.fmt, "      ")?;
-                        if let PrintFmt::Full = self.fmt.format { write!(self.fmt.fmt, "{:1$}", "", HEX_WIDTH + 3)?; }
-                    }
-                    
-                    match (symbol_name, &self.fmt.format)
-                    {
-                        (Some(name), PrintFmt::Short) => write!(self.fmt.fmt, "{name:#}")?,
-                        (Some(name), PrintFmt::Full) => write!(self.fmt.fmt, "{name}")?,
-                        (None, _) => write!(self.fmt.fmt, "<unknown>")?,
-                    }
-
-                    self.fmt.fmt.write_str("\n")?;
-                    
-                    if let (Some(file), Some(line)) = (filename, lineno) { self.print_fileline(file, line, colno)?; }
-
-                    Ok(())
-                }
-
-                fn print_fileline
-                (
-                    &mut self,
-                    file: BytesOrWideString<'_>,
-                    line: u32,
-                    colno: Option<u32>,
-                ) -> fmt::Result
-                {
-                    if let PrintFmt::Full = self.fmt.format { write!(self.fmt.fmt, "{:1$}", "", HEX_WIDTH)?; }
-
-                    write!(self.fmt.fmt, "             at ")?;
-                    (self.fmt.print_path)(self.fmt.fmt, file)?;
-                    write!(self.fmt.fmt, ":{line}")?;
-                    
-                    if let Some(colno) = colno { write!(self.fmt.fmt, ":{colno}")?; }
-
-                    writeln!(self.fmt.fmt)?;
-                    Ok(())
-                }
-
-                fn print_raw_fuchsia(&mut self, frame_ip: *mut c_void) -> fmt::Result
-                {
-                    if self.symbol_index == 0
-                    {
-                        self.fmt.fmt.write_str("{{{bt:")?;
-                        write!(self.fmt.fmt, "{}:{:?}", self.fmt.frame_index, frame_ip)?;
-                        self.fmt.fmt.write_str("}}}\n")?;
-                    }
-
-                    Ok(())
-                }
-            }
-
-            impl Drop for BacktraceFrameFmt<'_, '_, '_>
-            {
-                fn drop(&mut self) { self.fmt.frame_index += 1; }
-            }
-            /// The styles of printing that we can print
-            #[non_exhaustive] #[derive( Copy, Clone, Eq, PartialEq )]
-            pub enum PrintFmt
-            {
-                /// Prints a terser backtrace which ideally only contains relevant information.
-                Short,
-                /// Prints a backtrace that contains all possible information.
-                Full,
-            }
-            /// Same as `trace`, only unsafe as it's unsynchronized.
-            pub unsafe fn trace_unsynchronized<F: FnMut(&Frame) -> bool>(mut cb: F)
-            {
-                unsafe { traces(&mut cb) }
-            }
-
-            pub enum ResolveWhat<'a>
-            {
-                Address(*mut c_void),
-                View(&'a View),
-            }
-
-            impl<'a> ResolveWhat<'a> 
-            {
-                fn address_or_ip(&self) -> *mut c_void
-                {
-                    match self
-                    {
-                        ResolveWhat::Address(a) => adjust_ip(*a),
-                        ResolveWhat::View(f) => adjust_ip(f.ip()),
-                    }
-                }
-            }
-            //// IP values from stack frames are typically the instruction 
-            /// *after* the call that's the actual stack trace.
-            pub fn adjust_ip(a: *mut c_void) -> *mut c_void
-            { if a.is_null() { a } else { (a as usize - 1) as *mut c_void } }
-            /// A wrapper around a symbol name to provide ergonomic accessors
-            /// to the demangled name, the raw bytes, the raw string, etc.
-            pub struct SymbolName<'a>
-            {
-                bytes: &'a [u8],
-                demangled: Option<Demangle<'a>>,
-            }
-
-            impl<'a> SymbolName<'a>
-            {
-                /// Creates a new symbol name from the raw underlying bytes.
-                pub fn new(bytes: &'a [u8]) -> SymbolName<'a>
-                {
-                    let str_bytes = str::from_utf8(bytes).ok();
-                    let demangled = str_bytes.and_then(|s| try_demangle(s).ok());
-
-                    SymbolName
-                    {
-                        bytes,
-                        demangled,
-                    }
-                }
-                /// Returns the raw (mangled) symbol name as a `str` if the symbol is valid utf-8.
-                pub fn as_str(&self) -> Option<&'a str>
-                {
-                    self.demangled
-                    .as_ref()
-                    .map(|s| s.as_str())
-                    .or_else(|| str::from_utf8(self.bytes).ok())
-                }
-                /// Returns the raw symbol name as a list of bytes
-                pub fn as_bytes(&self) -> &'a [u8] { self.bytes }
-            }
-
-            fn format_symbol_name
-            (
-                fmt: fn(&str, &mut fmt::Formatter<'_>) -> fmt::Result,
-                mut bytes: &[u8],
-                f: &mut fmt::Formatter<'_>,
-            ) -> fmt::Result
-            {
-                while bytes.len() > 0
-                {
-                    match str::from_utf8(bytes)
-                    {
-                        Ok(name) =>
-                        {
-                            fmt(name, f)?;
-                            break;
-                        }
-                        
-                        Err(err) =>
-                        {
-                            fmt("\u{FFFD}", f)?;
-
-                            match err.error_len()
-                            {
-                                Some(len) => bytes = &bytes[err.valid_up_to() + len..],
-                                None => break,
-                            }
-                        }
-                    }
-                }
-
-                Ok(())
-            }
-
-            impl<'a> fmt::Display for SymbolName<'a>
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-                {
-                    if let Some(ref s) = self.demangled { return s.fmt(f); }
-                    
-                    format_symbol_name(fmt::Display::fmt, self.bytes, f)
-                }
-            }
-
-            impl<'a> fmt::Debug for SymbolName<'a>
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-                {
-                    if let Some(ref s) = self.demangled { return s.fmt(f); }
-
-                    format_symbol_name(fmt::Debug::fmt, self.bytes, f)
-                }
-            }
-        }
-
-        pub mod cmath
-        {
-            use ::
-            {
-                *,
-            };
-            
-            unsafe extern "C"
-            {
-                pub safe fn acos(n: f64) -> f64;
-                pub safe fn asin(n: f64) -> f64;
-                pub safe fn atan(n: f64) -> f64;
-                pub safe fn atan2(a: f64, b: f64) -> f64;
-                pub safe fn cbrt(n: f64) -> f64;
-                pub safe fn cbrtf(n: f32) -> f32;
-                pub safe fn cosh(n: f64) -> f64;
-                pub safe fn expm1(n: f64) -> f64;
-                pub safe fn expm1f(n: f32) -> f32;
-                pub safe fn fdim(a: f64, b: f64) -> f64;
-                pub safe fn fdimf(a: f32, b: f32) -> f32;
-                pub safe fn hypot(x: f64, y: f64) -> f64;
-                pub safe fn hypotf(x: f32, y: f32) -> f32;
-                pub safe fn log1p(n: f64) -> f64;
-                pub safe fn log1pf(n: f32) -> f32;
-                pub safe fn sinh(n: f64) -> f64;
-                pub safe fn tan(n: f64) -> f64;
-                pub safe fn tanh(n: f64) -> f64;
-                pub safe fn tgamma(n: f64) -> f64;
-                pub safe fn tgammaf(n: f32) -> f32;
-                pub safe fn lgamma_r(n: f64, s: &mut i32) -> f64;
-                pub safe fn lgammaf_r(n: f32, s: &mut i32) -> f32;
-                pub safe fn erf(n: f64) -> f64;
-                pub safe fn erff(n: f32) -> f32;
-                pub safe fn erfc(n: f64) -> f64;
-                pub safe fn erfcf(n: f32) -> f32;
-            }
-        }
-
-        pub mod env
-        {
-            use ::
-            {
-                ffi::{ OsString },
-                *,
-            };
-
-            pub type Key = OsString;
-            
-            pub struct Env
-            {
-                iter: vec::IntoIter<(OsString, OsString)>,
-            }
-            
-            pub struct EnvStrDebug<'a>
-            {
-                slice: &'a [(OsString, OsString)],
-            }
-
-            impl fmt::Debug for EnvStrDebug<'_>
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-                {
-                    f.debug_list()
-                    .entries(self.slice.iter().map(|(a, b)| (a.to_str().unwrap(), b.to_str().unwrap())))
-                    .finish()
-                }
-            }
-
-            impl Env
-            {
-                pub fn new(env: Vec<(OsString, OsString)>) -> Self { Env { iter: env.into_iter() } }
-
-                pub fn str_debug(&self) -> impl fmt::Debug + '_ { EnvStrDebug { slice: self.iter.as_slice() } }
-            }
-
-            impl fmt::Debug for Env
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-                { f.debug_list().entries(self.iter.as_slice()).finish() }
-            }
-
-            impl !Send for Env {}
-            impl !Sync for Env {}
-
-            impl Iterator for Env
-            {
-                type Item = (OsString, OsString);
-                fn next(&mut self) -> Option<(OsString, OsString)> { self.iter.next() }
-                fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
-            }
-        }
-
-        pub mod exit_guard
-        {
-            //! std::process::exit Mitigation
-            use ::
-            {
-                *,
-            };
-
-            pub fn unique_thread_exit() { /* Mitigation not required on platforms where `exit` is thread-safe. */ }
-        }
-
-        pub mod fd
-        {
-            use ::
-            {
-                *,
-            };
-        }
-
-        pub mod fs
-        {
-            use ::
-            {
-                *,
-            };
-        }
-
-        pub mod io
-        {
-            use ::
-            {
-                *,
-            };
-        }
-
-        pub mod net
-        {
-            use ::
-            {
-                *,
-            };
-        }
-
-        pub mod os_str
-        {
-            use ::
-            {
-                *,
-            };
-        }
-
-        pub mod path
-        {
-            use ::
-            {
-                *,
-            };
-        }
-
-        pub mod personality
-        {
-            use ::
-            {
-                *,
-            };
-        }
-        
-        pub mod process
-        {
-            use ::
-            {
-                collections::{ btree_map::{ self }, BTreeMap },
-                ffi::{ OsStr, OsString },
-                sys::
-                {
-                    common::
-                    {
-                        env::{ Key as EnvKey },
-                    },
-                    pipe::{ read2 },
-                    // process::{EnvKey, ExitStatus, Process, StdioPipes},
-                },
-                *,
-            };
-            
-            #[derive(Clone, Default)]
-            pub struct CommandEnv
-            {
-                clear: bool,
-                saw_path: bool,
-                vars: BTreeMap<EnvKey, Option<OsString>>,
-            }
-
-            impl fmt::Debug for CommandEnv
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-                {
-                    let mut debug_command_env = f.debug_struct("CommandEnv");
-                    debug_command_env.field("clear", &self.clear).field("vars", &self.vars);
-                    debug_command_env.finish()
-                }
-            }
-
-            impl CommandEnv
-            {
-                /// Capture the current environment with these changes applied.
-                pub fn capture(&self) -> BTreeMap<EnvKey, OsString>
-                {
-                    let mut result = BTreeMap::<EnvKey, OsString>::new();
-                    if !self.clear {
-                        for (k, v) in env::vars_os() {
-                            result.insert(k.into(), v);
-                        }
-                    }
-                    for (k, maybe_v) in &self.vars {
-                        if let &Some(ref v) = maybe_v {
-                            result.insert(k.clone(), v.clone());
-                        } else {
-                            result.remove(k);
-                        }
-                    }
-                    result
-                }
-
-                pub fn is_unchanged(&self) -> bool { !self.clear && self.vars.is_empty() }
-
-                pub fn capture_if_changed(&self) -> Option<BTreeMap<EnvKey, OsString>>
-                { if self.is_unchanged() { None } else { Some(self.capture()) } }
-                
-                pub fn set(&mut self, key: &OsStr, value: &OsStr)
-                {
-                    let key = EnvKey::from(key);
-                    self.maybe_saw_path(&key);
-                    self.vars.insert(key, Some(value.to_owned()));
-                }
-
-                pub fn remove(&mut self, key: &OsStr)
-                {
-                    let key = EnvKey::from(key);
-                    self.maybe_saw_path(&key);
-
-                    if self.clear { self.vars.remove(&key); }
-                    else {  self.vars.insert(key, None); }
-                }
-
-                pub fn clear(&mut self)
-                {
-                    self.clear = true;
-                    self.vars.clear();
-                }
-
-                pub fn does_clear(&self) -> bool { self.clear }
-
-                pub fn have_changed_path(&self) -> bool { self.saw_path || self.clear }
-
-                pub fn maybe_saw_path(&mut self, key: &EnvKey)
-                {
-                    if !self.saw_path && key == "PATH"
-                    {
-                        self.saw_path = true;
-                    }
-                }
-
-                pub fn iter(&self) -> CommandEnvs<'_>
-                {
-                    let iter = self.vars.iter();
-                    CommandEnvs { iter }
-                }
-            }
-            /// An iterator over the command environment variables.
-            #[derive(Debug)]
-            pub struct CommandEnvs<'a>
-            {
-                iter: btree_map::Iter<'a, EnvKey, Option<OsString>>,
-            }
-
-            impl <'a> CommandEnvs<'a>
-            {
-                fn is_empty(&self) -> bool { self.len() == 0 }
-            }
-            
-            impl<'a> Iterator for CommandEnvs<'a>
-            {
-                type Item = (&'a OsStr, Option<&'a OsStr>);
-                
-                fn next(&mut self) -> Option<Self::Item> 
-                { self.iter.next().map(|(key, value)| (key.as_ref(), value.as_deref())) }
-
-                fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
-            }
-            
-            impl<'a> ExactSizeIterator for CommandEnvs<'a>
-            {
-                fn len(&self) -> usize { self.iter.len() }
-                //fn is_empty(&self) -> bool { self.iter.len() == 0 }
-            }
-
-            pub fn wait_with_output( mut process:Process, mut pipes:StdioPipes ) -> 
-            io::Result<(ExitStatus, Vec<u8>, Vec<u8>)>
-            {
-                drop(pipes.stdin.take());
-
-                let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
-                match (pipes.stdout.take(), pipes.stderr.take())
-                {
-                    (None, None) => {}
-                    (Some(out), None) =>
-                    {
-                        let res = out.read_to_end(&mut stdout);
-                        res.unwrap();
-                    }
-
-                    (None, Some(err)) =>
-                    {
-                        let res = err.read_to_end(&mut stderr);
-                        res.unwrap();
-                    }
-
-                    (Some(out), Some(err)) =>
-                    {
-                        let res = read2(out, &mut stdout, err, &mut stderr);
-                        res.unwrap();
-                    }
-                }
-
-                let status = process.wait()?;
-                Ok((status, stdout, stderr))
-            }
-        }
-
-        pub mod random
-        {
-            use ::
-            {
-                *,
-            };
-        }
-
-        pub mod stdio
-        {
-            use ::
-            {
-                *,
-            };
-        }
-
-        pub mod sync
-        {
-            use ::
-            {
-                *,
-            };
-        }
-
-        pub mod thread_local
-        {
-            use ::
-            {
-                *,
-            };
-        }
-
-        pub mod wstr
-        {
-            use ::
-            {
-                *,
-            };
-
-        }
-
-        pub mod wtf8
-        {
-            use ::
-            {
-                *,
-            };
-
-        }
-        
-        /// A trait for viewing representations from std types.
-        pub trait AsInner<Inner: ?Sized>
-        {
-            fn as_inner(&self) -> &Inner;
-        }
-        /// A trait for viewing representations from std types
-        pub trait AsInnerMut<Inner: ?Sized>
-        {
-            fn as_inner_mut(&mut self) -> &mut Inner;
-        }
-        /// A trait for extracting representations from std types
-        pub trait IntoInner<Inner>
-        {
-            fn into_inner(self) -> Inner;
-        }
-        /// A trait for creating std types from internal representations
-        pub trait FromInner<Inner>
-        {
-            fn from_inner(inner: Inner) -> Self;
-        }
-
-        pub fn mul_div_u64(value: u64, numer: u64, denom: u64) -> u64
-        {
-            let q = value / denom;
-            let r = value % denom;
-            q * numer + r * numer / denom
-        }
-
-        pub fn ignore_notfound<T>(result: ::io::Result<T>) -> ::io::Result<()>
-        {
-            match result
-            {
-                Err(err) if err.kind() == ::io::ErrorKind::NotFound => Ok(()),
-                Ok(_) => Ok(()),
-                Err(err) => Err(err),
-            }
-        }
         /*
         terminfo v0.9.0*/
-
     }
     // libstd::sys::pal::<target_os>
     pub mod os
@@ -3391,6 +3356,48 @@ pub mod system
     /*
     mortal v0.2.4*/
 } pub use self::system::{ self as sys };
+
+pub mod terminal
+{
+    use ::
+    {
+        nix::errno::errno,
+        *,
+    };
+    /*
+    pub unsafe fn give_terminal_to(...) -> bool */
+    pub unsafe fn give_to(gid: i32) -> bool
+    {
+        let mut mask: libc::sigset_t = mem::zeroed();
+        let mut old_mask: libc::sigset_t = mem::zeroed();
+
+        libc::sigemptyset(&mut mask);
+        libc::sigaddset(&mut mask, libc::SIGTSTP);
+        libc::sigaddset(&mut mask, libc::SIGTTIN);
+        libc::sigaddset(&mut mask, libc::SIGTTOU);
+        libc::sigaddset(&mut mask, libc::SIGCHLD);
+
+        let rcode = libc::pthread_sigmask(libc::SIG_BLOCK, &mask, &mut old_mask);
+        if rcode != 0 {
+            log!("failed to call pthread_sigmask");
+        }
+        let rcode = libc::tcsetpgrp(1, gid);
+        let given;
+        if rcode == -1 {
+            given = false;
+            let e = errno();
+            //let code = e.0;
+            log!("error in give_terminal_to() {}: {}", 0, e);
+        } else {
+            given = true;
+        }
+        let rcode = libc::pthread_sigmask(libc::SIG_SETMASK, &old_mask, &mut mask);
+        if rcode != 0 {
+            log!("failed to call pthread_sigmask");
+        }
+        given
+    }
+}
 
 pub mod thread
 {
@@ -3774,11 +3781,39 @@ pub unsafe fn domain()
     unsafe
     {   
         env::initialize_paths();
-        let mut shell = shell::Shell::new();
+        let mut pls = shell::Shell::new();
         let arguments: Vec<String> = env::args().collect();
+        commands::initialize_cache();
+        commands::update_aliases( &pls );
 
+        match true
+        {
+            true if is::script(&arguments) =>
+            {
+                log!("run script: {:?} ", &arguments);
+                let status = scripts::run(&mut pls, &arguments);
+                process::exit(status);
+            }
+            
+            true if is::command_string(&arguments) =>
+            {
+                let line = env::args_to_command_line();
+                log!("run with -c args: {}", &line);
+                now::run_command_line(&mut pls, &line, false, false);
+                process::exit( pls.previous_status);
+            }
+            
+            true if is::non_tty() =>
+            {
+                now::run_procs_for_non_tty( &mut pls );
+                return;
+            }
 
-        println!(r#"( {} )::seed( {} )"#, shell.session_id, is::login( &arguments ) );
+            _ =>
+            {
+                println!( r#"( {} )::seed( {} )"#, pls.session_id, is::login( &arguments ) );
+            }
+        }
         /*
         loop
         {
@@ -3798,4 +3833,4 @@ fn main()
     }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 3801
+// 3836
