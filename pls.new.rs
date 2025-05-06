@@ -27,6 +27,76 @@ extern crate regex;
 
 use lineread::{Command, Interface, ReadResult};
 
+
+#[macro_use] mod macros
+{
+    use ::
+    {
+        *,
+    };
+
+    #[macro_export] macro_rules! log
+    {
+        ($fmt:expr) =>
+        (
+            let log_file = if let Ok(x) = std::env::var("CICADA_LOG_FILE") { x.clone() }
+            else { String::new() };
+
+            if !log_file.is_empty()
+            {
+                use std::io::Write as _;
+
+                let msg = $fmt;
+                match std::fs::OpenOptions::new().append(true).create(true).open(&log_file)
+                {
+                    Ok(mut cfile) =>
+                    {
+                        let pid = $crate::tlog::getpid();
+                        let now = $crate::ctime::DateTime::now();
+                        let msg = format!("[{}][{}] {}", now, pid, msg);
+                        let msg = if msg.ends_with('\n') { msg } else { format!("{}\n", msg) };
+                        match cfile.write_all(msg.as_bytes())
+                        {
+                            Ok(_) => {}
+                            Err(_) => println!("tlog: write_all error")
+                        }
+                    }
+
+                    Err(_) => println!("tlog: open file error"),
+                }
+
+            }
+        );
+
+        ($fmt:expr, $($arg:tt)*) =>
+        (
+            let msg = format!($fmt, $($arg)*);
+            log!(&msg);
+        );
+    }
+
+    #[macro_export] macro_rules! println_stderr
+    {
+        ($fmt:expr) =>
+        (
+            match writeln!(&mut ::std::io::stderr(), $fmt)
+            {
+                Ok(_) => {}
+                Err(e) => println!("write to stderr failed: {:?}", e)
+            }
+        );
+
+        ($fmt:expr, $($arg:tt)*) =>
+        (
+            match writeln!(&mut ::std::io::stderr(), $fmt, $($arg)*)
+            {
+                Ok(_) => {}
+                Err(e) => println!("write to stderr failed: {:?}", e)
+            }
+        );
+    }
+}
+
 pub mod env
 {
     pub use std::env::{ * };
@@ -36,6 +106,13 @@ pub mod io
 {
     pub use std::io::{ * };
 } use std::io::Write;
+
+
+pub mod process
+{
+    pub use std::process::{*};
+    pub fn getpid() -> i32 { unsafe { libc::getpid() } }
+}
 
 pub mod sync
 {
@@ -65,20 +142,15 @@ pub mod clap
             };
 
             /// Allows you to pull the version from your Cargo.toml at compile time as `MAJOR.MINOR.PATCH_PKGVERSION_PRE`
-            #[cfg(feature = "cargo")]
-            #[macro_export]
-            macro_rules! crate_version {
+            #[macro_export] macro_rules! crate_version {
                 () => {
                     env!("CARGO_PKG_VERSION")
                 };
             }
-
             /// Allows you to pull the authors for the command from your Cargo.toml at
             /// compile time in the form:
             /// `"author1 lastname <author1@example.com>:author2 lastname <author2@example.com>"`
-            #[cfg(feature = "cargo")]
-            #[macro_export]
-            macro_rules! crate_authors {
+            #[macro_export] macro_rules! crate_authors {
                 ($sep:expr) => {{
                     static AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
                     if AUTHORS.contains(':') {
@@ -94,29 +166,20 @@ pub mod clap
                     env!("CARGO_PKG_AUTHORS")
                 };
             }
-
             /// Allows you to pull the description from your Cargo.toml at compile time.
-            #[cfg(feature = "cargo")]
-            #[macro_export]
-            macro_rules! crate_description {
+            #[macro_export] macro_rules! crate_description {
                 () => {
                     env!("CARGO_PKG_DESCRIPTION")
                 };
             }
-
             /// Allows you to pull the name from your Cargo.toml at compile time.
-            #[cfg(feature = "cargo")]
-            #[macro_export]
-            macro_rules! crate_name {
+            #[macro_export] macro_rules! crate_name {
                 () => {
                     env!("CARGO_PKG_NAME")
                 };
             }
-
             /// Allows you to build the `Command` instance from your Cargo.toml at compile time.
-            #[cfg(feature = "cargo")]
-            #[macro_export]
-            macro_rules! command {
+            #[macro_export] macro_rules! command {
                 () => {{
                     $crate::command!($crate::crate_name!())
                 }};
@@ -136,11 +199,8 @@ pub mod clap
                     cmd
                 }};
             }
-
             /// Requires `cargo` feature flag to be enabled.
-            #[cfg(not(feature = "cargo"))]
-            #[macro_export]
-            macro_rules! command {
+            #[macro_export] macro_rules! command {
                 () => {{
                     compile_error!("`cargo` feature flag is required");
                 }};
@@ -149,9 +209,7 @@ pub mod clap
                 }};
             }
 
-            #[doc(hidden)]
-            #[macro_export]
-            macro_rules! arg_impl {
+            #[macro_export] macro_rules! arg_impl {
                 ( @string $val:ident ) => {
                     stringify!($val)
                 };
@@ -421,10 +479,8 @@ pub mod clap
                     $arg
                 }};
             }
-
             /// Create an [`Arg`] from a usage string.
-            #[macro_export]
-            macro_rules! arg {
+            #[macro_export] macro_rules! arg {
                 ( $name:ident: $($tail:tt)+ ) => {{
                     let arg = $crate::Arg::new($crate::arg_impl! { @string $name });
                     let arg = $crate::arg_impl! {
@@ -441,23 +497,7 @@ pub mod clap
                     arg
                 }};
             }
-
-            #[cfg(feature = "debug")]
-            macro_rules! debug {
-                ($($arg:tt)*) => ({
-                    use std::fmt::Write as _;
-                    let hint = anstyle::Style::new().dimmed();
-
-                    let module_path = module_path!();
-                    let body = format!($($arg)*);
-                    let mut styled = $crate::builder::StyledStr::new();
-                    let _ = write!(styled, "{hint}[{module_path:>28}]{body}{hint:#}\n");
-                    let color = $crate::output::fmt::Colorizer::new($crate::output::fmt::Stream::Stderr, $crate::ColorChoice::Auto).with_content(styled);
-                    let _ = color.print();
-                })
-            }
-
-            #[cfg(not(feature = "debug"))]
+            
             macro_rules! debug {
                 ($($arg:tt)*) => {};
             }
@@ -492,14 +532,15 @@ pub mod clap
             {
                 *,
             };
-            
-            use crate::builder::PossibleValue;
-            use crate::{ArgMatches, Command, Error};
-
+            /*
+            use clap::builder::PossibleValue;
+            use clap::{ArgMatches, Command, Error};
             use std::ffi::OsString;
-
+            */
             /// Parse command-line arguments into `Self`.
-            pub trait Parser: FromArgMatches + CommandFactory + Sized {
+            pub trait Parser: FromArgMatches + CommandFactory + Sized 
+            {
+
                 /// Parse from `std::env::args_os()`, [exit][Error::exit] on error.
                 fn parse() -> Self {
                     let mut matches = <Self as CommandFactory>::command().get_matches();
@@ -514,16 +555,13 @@ pub mod clap
                         }
                     }
                 }
-
                 /// Parse from `std::env::args_os()`, return Err on error.
                 fn try_parse() -> Result<Self, Error> {
                     let mut matches = ok!(<Self as CommandFactory>::command().try_get_matches());
                     <Self as FromArgMatches>::from_arg_matches_mut(&mut matches).map_err(format_error::<Self>)
                 }
-
                 /// Parse from iterator, [exit][Error::exit] on error.
-                fn parse_from<I, T>(itr: I) -> Self
-                where
+                fn parse_from<I, T>(itr: I) -> Self where
                     I: IntoIterator<Item = T>,
                     T: Into<OsString> + Clone,
                 {
@@ -539,24 +577,16 @@ pub mod clap
                         }
                     }
                 }
-
                 /// Parse from iterator, return Err on error.
-                fn try_parse_from<I, T>(itr: I) -> Result<Self, Error>
-                where
+                fn try_parse_from<I, T>(itr: I) -> Result<Self, Error> where
                     I: IntoIterator<Item = T>,
                     T: Into<OsString> + Clone,
                 {
                     let mut matches = ok!(<Self as CommandFactory>::command().try_get_matches_from(itr));
                     <Self as FromArgMatches>::from_arg_matches_mut(&mut matches).map_err(format_error::<Self>)
                 }
-
                 /// Update from iterator, [exit][Error::exit] on error.
-                ///
-                /// Unlike [`Parser::parse`], this works with an existing instance of `self`.
-                /// The assumption is that all required fields are already provided and any [`Args`] or
-                /// [`Subcommand`]s provided by the user will modify only what is specified.
-                fn update_from<I, T>(&mut self, itr: I)
-                where
+                fn update_from<I, T>(&mut self, itr: I)  where
                     I: IntoIterator<Item = T>,
                     T: Into<OsString> + Clone,
                 {
@@ -569,10 +599,8 @@ pub mod clap
                         e.exit()
                     }
                 }
-
                 /// Update from iterator, return Err on error.
-                fn try_update_from<I, T>(&mut self, itr: I) -> Result<(), Error>
-                where
+                fn try_update_from<I, T>(&mut self, itr: I) -> Result<(), Error> where
                     I: IntoIterator<Item = T>,
                     T: Into<OsString> + Clone,
                 {
@@ -581,10 +609,11 @@ pub mod clap
                     <Self as FromArgMatches>::update_from_arg_matches_mut(self, &mut matches)
                         .map_err(format_error::<Self>)
                 }
-            }
 
+            }
             /// Create a [`Command`] relevant for a user-defined container.
-            pub trait CommandFactory: Sized {
+            pub trait CommandFactory: Sized 
+            {
                 /// Build a [`Command`] that can instantiate `Self`.
                 ///
                 /// See [`FromArgMatches::from_arg_matches_mut`] for instantiating `Self`.
@@ -594,9 +623,9 @@ pub mod clap
                 /// See [`FromArgMatches::update_from_arg_matches_mut`] for updating `self`.
                 fn command_for_update() -> Command;
             }
-
             /// Converts an instance of [`ArgMatches`] to a user-defined container.
-            pub trait FromArgMatches: Sized {
+            pub trait FromArgMatches: Sized 
+            {
                 /// Instantiate `Self` from [`ArgMatches`], parsing the arguments as needed.
                 fn from_arg_matches(matches: &ArgMatches) -> Result<Self, Error>;
 
@@ -604,7 +633,6 @@ pub mod clap
                 fn from_arg_matches_mut(matches: &mut ArgMatches) -> Result<Self, Error> {
                     Self::from_arg_matches(matches)
                 }
-
                 /// Assign values from `ArgMatches` to `self`.
                 fn update_from_arg_matches(&mut self, matches: &ArgMatches) -> Result<(), Error>;
 
@@ -613,9 +641,9 @@ pub mod clap
                     self.update_from_arg_matches(matches)
                 }
             }
-
             /// Parse a set of arguments into a user-defined container.
-            pub trait Args: FromArgMatches + Sized {
+            pub trait Args: FromArgMatches + Sized 
+            {
                 /// Report the [`ArgGroup::id`][crate::ArgGroup::id] for this set of arguments
                 fn group_id() -> Option<crate::Id> {
                     None
@@ -635,9 +663,9 @@ pub mod clap
                 /// See also [`CommandFactory::command_for_update`].
                 fn augment_args_for_update(cmd: Command) -> Command;
             }
-
             /// Parse a sub-command into a user-defined enum.
-            pub trait Subcommand: FromArgMatches + Sized {
+            pub trait Subcommand: FromArgMatches + Sized 
+            {
                 /// Append to [`Command`] so it can instantiate `Self` via
                 /// [`FromArgMatches::from_arg_matches_mut`]
                 ///
@@ -655,10 +683,9 @@ pub mod clap
                 /// Test whether `Self` can parse a specific subcommand
                 fn has_subcommand(name: &str) -> bool;
             }
-
             /// Parse arguments into enums.
-            /// </div>
-            pub trait ValueEnum: Sized + Clone {
+            pub trait ValueEnum: Sized + Clone 
+            {
                 /// All possible argument values, in display order.
                 fn value_variants<'a>() -> &'a [Self];
 
@@ -674,14 +701,14 @@ pub mod clap
                         .cloned()
                         .ok_or_else(|| format!("invalid variant: {input}"))
                 }
-
                 /// The canonical argument value.
                 ///
                 /// The value is `None` for skipped variants.
                 fn to_possible_value(&self) -> Option<PossibleValue>;
             }
 
-            impl<T: Parser> Parser for Box<T> {
+            impl<T: Parser> Parser for Box<T> 
+            {
                 fn parse() -> Self {
                     Box::new(<T as Parser>::parse())
                 }
@@ -690,16 +717,14 @@ pub mod clap
                     <T as Parser>::try_parse().map(Box::new)
                 }
 
-                fn parse_from<I, It>(itr: I) -> Self
-                where
+                fn parse_from<I, It>(itr: I) -> Self where
                     I: IntoIterator<Item = It>,
                     It: Into<OsString> + Clone,
                 {
                     Box::new(<T as Parser>::parse_from(itr))
                 }
 
-                fn try_parse_from<I, It>(itr: I) -> Result<Self, Error>
-                where
+                fn try_parse_from<I, It>(itr: I) -> Result<Self, Error> where
                     I: IntoIterator<Item = It>,
                     It: Into<OsString> + Clone,
                 {
@@ -707,7 +732,8 @@ pub mod clap
                 }
             }
 
-            impl<T: CommandFactory> CommandFactory for Box<T> {
+            impl<T: CommandFactory> CommandFactory for Box<T> 
+            {
                 fn command() -> Command {
                     <T as CommandFactory>::command()
                 }
@@ -716,7 +742,8 @@ pub mod clap
                 }
             }
 
-            impl<T: FromArgMatches> FromArgMatches for Box<T> {
+            impl<T: FromArgMatches> FromArgMatches for Box<T> 
+            {
                 fn from_arg_matches(matches: &ArgMatches) -> Result<Self, Error> {
                     <T as FromArgMatches>::from_arg_matches(matches).map(Box::new)
                 }
@@ -731,7 +758,8 @@ pub mod clap
                 }
             }
 
-            impl<T: Args> Args for Box<T> {
+            impl<T: Args> Args for Box<T> 
+            {
                 fn augment_args(cmd: Command) -> Command {
                     <T as Args>::augment_args(cmd)
                 }
@@ -740,7 +768,8 @@ pub mod clap
                 }
             }
 
-            impl<T: Subcommand> Subcommand for Box<T> {
+            impl<T: Subcommand> Subcommand for Box<T> 
+            {
                 fn augment_subcommands(cmd: Command) -> Command {
                     <T as Subcommand>::augment_subcommands(cmd)
                 }
@@ -752,7 +781,8 @@ pub mod clap
                 }
             }
 
-            fn format_error<I: CommandFactory>(err: Error) -> Error {
+            fn format_error<I: CommandFactory>(err: Error) -> Error 
+            {
                 let mut cmd = I::command();
                 err.format(&mut cmd)
             }
@@ -772,16 +802,16 @@ pub mod clap
                 {
                     *,
                 };
+                /*
                 #[cfg(debug_assertions)]
                 use crate::util::AnyValueId;
 
                 use crate::builder::ValueRange;
-
+                */
                 /// Behavior of arguments when they are encountered while parsing.
-                #[derive(Clone, Debug)]
-                #[non_exhaustive]
-                #[allow(missing_copy_implementations)] // In the future, we may accept `Box<dyn ...>`
-                pub enum ArgAction {
+                #[non_exhaustive] #[derive(Clone, Debug)]                
+                pub enum ArgAction
+                {
                     /// When encountered, store the associated value(s) in [`ArgMatches`][crate::ArgMatches]
                     Set,
                     /// When encountered, store the associated value(s) in [`ArgMatches`][crate::ArgMatches]
@@ -802,7 +832,8 @@ pub mod clap
                     Version,
                 }
 
-                impl ArgAction {
+                impl ArgAction 
+                {
                     /// Returns whether this action accepts values on the command-line
                     ///
                     /// [`default_values`][super::Arg::default_values] and [`env`][super::Arg::env] may still be
@@ -822,7 +853,7 @@ pub mod clap
                     }
 
                     #[cfg(debug_assertions)]
-                    pub(crate) fn max_num_args(&self) -> ValueRange {
+                    pub fn max_num_args(&self) -> ValueRange {
                         match self {
                             Self::Set => ValueRange::FULL,
                             Self::Append => ValueRange::FULL,
@@ -836,7 +867,7 @@ pub mod clap
                         }
                     }
 
-                    pub(crate) fn default_num_args(&self) -> ValueRange {
+                    pub fn default_num_args(&self) -> ValueRange {
                         match self {
                             Self::Set => ValueRange::SINGLE,
                             Self::Append => ValueRange::SINGLE,
@@ -850,7 +881,7 @@ pub mod clap
                         }
                     }
 
-                    pub(crate) fn default_value(&self) -> Option<&'static std::ffi::OsStr> {
+                    pub fn default_value(&self) -> Option<&'static std::ffi::OsStr> {
                         match self {
                             Self::Set => None,
                             Self::Append => None,
@@ -864,7 +895,7 @@ pub mod clap
                         }
                     }
 
-                    pub(crate) fn default_missing_value(&self) -> Option<&'static std::ffi::OsStr> {
+                    pub fn default_missing_value(&self) -> Option<&'static std::ffi::OsStr> {
                         match self {
                             Self::Set => None,
                             Self::Append => None,
@@ -878,7 +909,7 @@ pub mod clap
                         }
                     }
 
-                    pub(crate) fn default_value_parser(&self) -> Option<super::ValueParser> {
+                    pub fn default_value_parser(&self) -> Option<super::ValueParser> {
                         match self {
                             Self::Set => None,
                             Self::Append => None,
@@ -893,7 +924,7 @@ pub mod clap
                     }
 
                     #[cfg(debug_assertions)]
-                    pub(crate) fn value_type_id(&self) -> Option<AnyValueId> {
+                    pub fn value_type_id(&self) -> Option<AnyValueId> {
                         match self {
                             Self::Set => None,
                             Self::Append => None,
@@ -908,7 +939,7 @@ pub mod clap
                     }
                 }
 
-                pub(crate) type CountType = u8;
+                pub type CountType = u8;
             }
 
             pub mod app_settings
@@ -917,54 +948,51 @@ pub mod clap
                 {
                     *,
                 };
+                /*
                 #[allow(unused)]
                 use crate::Arg;
                 #[allow(unused)]
                 use crate::Command;
-
+                */
                 #[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
-                pub(crate) struct AppFlags(u32);
+                pub struct AppFlags(u32);
 
-                impl AppFlags {
-                    pub(crate) fn set(&mut self, setting: AppSettings) {
+                impl AppFlags
+                {
+                    pub fn set(&mut self, setting: AppSettings) 
+                    {
                         self.0 |= setting.bit();
                     }
 
-                    pub(crate) fn unset(&mut self, setting: AppSettings) {
+                    pub fn unset(&mut self, setting: AppSettings) 
+                    {
                         self.0 &= !setting.bit();
                     }
 
-                    pub(crate) fn is_set(&self, setting: AppSettings) -> bool {
+                    pub fn is_set(&self, setting: AppSettings) -> bool 
+                    {
                         self.0 & setting.bit() != 0
                     }
 
-                    pub(crate) fn insert(&mut self, other: Self) {
+                    pub fn insert(&mut self, other: Self) 
+                    {
                         self.0 |= other.0;
                     }
                 }
 
-                impl std::ops::BitOr for AppFlags {
+                impl std::ops::BitOr for AppFlags
+                {
                     type Output = Self;
-
-                    fn bitor(mut self, rhs: Self) -> Self::Output {
+                    fn bitor(mut self, rhs: Self) -> Self::Output
+                    {
                         self.insert(rhs);
                         self
                     }
                 }
-
-                /// Application level settings, which affect how [`Command`] operates
-                ///
-                /// <div class="warning">
-                ///
-                /// **NOTE:** When these settings are used, they apply only to current command, and are *not*
-                /// propagated down or up through child or parent subcommands
-                ///
-                /// </div>
-                ///
-                /// [`Command`]: crate::Command
-                #[derive(Debug, PartialEq, Copy, Clone)]
-                #[repr(u8)]
-                pub(crate) enum AppSettings {
+                /// Application level settings, which affect how [`Command`] operates.
+                #[repr(u8)] #[derive(Debug, PartialEq, Copy, Clone)]
+                pub enum AppSettings
+                {
                     IgnoreErrors,
                     AllowHyphenValues,
                     AllowNegativeNumbers,
@@ -992,7 +1020,6 @@ pub mod clap
                     HidePossibleValues,
                     HelpExpected,
                     NoBinaryName,
-                    #[allow(dead_code)]
                     ColorAuto,
                     ColorAlways,
                     ColorNever,
@@ -1000,8 +1027,10 @@ pub mod clap
                     BinNameBuilt,
                 }
 
-                impl AppSettings {
-                    fn bit(self) -> u32 {
+                impl AppSettings
+                {
+                    fn bit(self) -> u32
+                    {
                         1 << (self as u8)
                     }
                 }
@@ -1013,6 +1042,7 @@ pub mod clap
                 {
                     *,
                 };
+                /*
                 // Std
                 #[cfg(feature = "env")]
                 use std::env;
@@ -1026,7 +1056,7 @@ pub mod clap
 
                 // Internal
                 use super::{ArgFlags, ArgSettings};
-                #[cfg(feature = "unstable-ext")]
+                // crate                
                 use crate::builder::ext::Extension;
                 use crate::builder::ext::Extensions;
                 use crate::builder::ArgPredicate;
@@ -1042,6 +1072,7 @@ pub mod clap
                 use crate::Id;
                 use crate::ValueHint;
                 use crate::INTERNAL_ERROR_MSG;
+                */
                 
                 //pub mod arg_group
                 pub mod group
@@ -1056,14 +1087,13 @@ pub mod clap
                     /// Family of related [arguments].
                     #[derive(Default, Clone, Debug, PartialEq, Eq)]
                     pub struct ArgGroup {
-                        pub(crate) id: Id,
-                        pub(crate) args: Vec<Id>,
-                        pub(crate) required: bool,
-                        pub(crate) requires: Vec<Id>,
-                        pub(crate) conflicts: Vec<Id>,
-                        pub(crate) multiple: bool,
+                        pub id: Id,
+                        pub args: Vec<Id>,
+                        pub required: bool,
+                        pub requires: Vec<Id>,
+                        pub conflicts: Vec<Id>,
+                        pub multiple: bool,
                     }
-
                     /// # Builder
                     impl ArgGroup {
                         /// Create a `ArgGroup` using a unique name.
@@ -1164,7 +1194,6 @@ pub mod clap
                             self
                         }
                     }
-
                     /// # Reflection
                     impl ArgGroup {
                         /// Get the name of the group
@@ -1224,22 +1253,22 @@ pub mod clap
                     use crate::Arg;
 
                     #[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
-                    pub(crate) struct ArgFlags(u32);
+                    pub struct ArgFlags(u32);
 
                     impl ArgFlags {
-                        pub(crate) fn set(&mut self, setting: ArgSettings) {
+                        pub fn set(&mut self, setting: ArgSettings) {
                             self.0 |= setting.bit();
                         }
 
-                        pub(crate) fn unset(&mut self, setting: ArgSettings) {
+                        pub fn unset(&mut self, setting: ArgSettings) {
                             self.0 &= !setting.bit();
                         }
 
-                        pub(crate) fn is_set(&self, setting: ArgSettings) -> bool {
+                        pub fn is_set(&self, setting: ArgSettings) -> bool {
                             self.0 & setting.bit() != 0
                         }
 
-                        pub(crate) fn insert(&mut self, other: Self) {
+                        pub fn insert(&mut self, other: Self) {
                             self.0 |= other.0;
                         }
                     }
@@ -1252,7 +1281,6 @@ pub mod clap
                             self
                         }
                     }
-
                     /// Various settings that apply to arguments and may be set, unset, and checked via getter/setter
                     /// methods [`Arg::setting`], [`Arg::unset_setting`], and [`Arg::is_set`]. This is what the
                     /// [`Arg`] methods which accept a `bool` use internally.
@@ -1263,7 +1291,7 @@ pub mod clap
                     /// [`Arg::is_set`]: crate::Arg::is_set()
                     #[derive(Debug, PartialEq, Copy, Clone)]
                     #[repr(u8)]
-                    pub(crate) enum ArgSettings {
+                    pub enum ArgSettings {
                         Required,
                         Global,
                         Hidden,
@@ -1291,61 +1319,56 @@ pub mod clap
                         }
                     }
                 }
-
                 /// The abstract representation of a command line argument.
                 #[derive(Default, Clone)]
-                pub struct Arg {
-                    pub(crate) id: Id,
-                    pub(crate) help: Option<StyledStr>,
-                    pub(crate) long_help: Option<StyledStr>,
-                    pub(crate) action: Option<ArgAction>,
-                    pub(crate) value_parser: Option<super::ValueParser>,
-                    pub(crate) blacklist: Vec<Id>,
-                    pub(crate) settings: ArgFlags,
-                    pub(crate) overrides: Vec<Id>,
-                    pub(crate) groups: Vec<Id>,
-                    pub(crate) requires: Vec<(ArgPredicate, Id)>,
-                    pub(crate) r_ifs: Vec<(Id, OsStr)>,
-                    pub(crate) r_ifs_all: Vec<(Id, OsStr)>,
-                    pub(crate) r_unless: Vec<Id>,
-                    pub(crate) r_unless_all: Vec<Id>,
-                    pub(crate) short: Option<char>,
-                    pub(crate) long: Option<Str>,
-                    pub(crate) aliases: Vec<(Str, bool)>, // (name, visible)
-                    pub(crate) short_aliases: Vec<(char, bool)>, // (name, visible)
-                    pub(crate) disp_ord: Option<usize>,
-                    pub(crate) val_names: Vec<Str>,
-                    pub(crate) num_vals: Option<ValueRange>,
-                    pub(crate) val_delim: Option<char>,
-                    pub(crate) default_vals: Vec<OsStr>,
-                    pub(crate) default_vals_ifs: Vec<(Id, ArgPredicate, Option<OsStr>)>,
-                    pub(crate) default_missing_vals: Vec<OsStr>,
+                pub struct Arg 
+                {
+                    pub id: Id,
+                    pub help: Option<StyledStr>,
+                    pub long_help: Option<StyledStr>,
+                    pub action: Option<ArgAction>,
+                    pub value_parser: Option<super::ValueParser>,
+                    pub blacklist: Vec<Id>,
+                    pub settings: ArgFlags,
+                    pub overrides: Vec<Id>,
+                    pub groups: Vec<Id>,
+                    pub requires: Vec<(ArgPredicate, Id)>,
+                    pub r_ifs: Vec<(Id, OsStr)>,
+                    pub r_ifs_all: Vec<(Id, OsStr)>,
+                    pub r_unless: Vec<Id>,
+                    pub r_unless_all: Vec<Id>,
+                    pub short: Option<char>,
+                    pub long: Option<Str>,
+                    pub aliases: Vec<(Str, bool)>, // (name, visible)
+                    pub short_aliases: Vec<(char, bool)>, // (name, visible)
+                    pub disp_ord: Option<usize>,
+                    pub val_names: Vec<Str>,
+                    pub num_vals: Option<ValueRange>,
+                    pub val_delim: Option<char>,
+                    pub default_vals: Vec<OsStr>,
+                    pub default_vals_ifs: Vec<(Id, ArgPredicate, Option<OsStr>)>,
+                    pub default_missing_vals: Vec<OsStr>,
                     #[cfg(feature = "env")]
-                    pub(crate) env: Option<(OsStr, Option<OsString>)>,
-                    pub(crate) terminator: Option<Str>,
-                    pub(crate) index: Option<usize>,
-                    pub(crate) help_heading: Option<Option<Str>>,
-                    pub(crate) ext: Extensions,
+                    pub env: Option<(OsStr, Option<OsString>)>,
+                    pub terminator: Option<Str>,
+                    pub index: Option<usize>,
+                    pub help_heading: Option<Option<Str>>,
+                    pub ext: Extensions,
                 }
-
                 /// # Basic API
-                impl Arg {
+                impl Arg
+                {
                     /// Create a new [`Arg`] with a unique name.
                     pub fn new(id: impl Into<Id>) -> Self {
                         Arg::default().id(id)
                     }
-
                     /// Set the identifier used for referencing this argument in the clap API.
-                    #[must_use]
-                    pub fn id(mut self, id: impl Into<Id>) -> Self {
+                    #[must_use] pub fn id(mut self, id: impl Into<Id>) -> Self {
                         self.id = id.into();
                         self
                     }
-
                     /// Sets the short version of the argument without the preceding `-`.
-                    #[inline]
-                    #[must_use]
-                    pub fn short(mut self, s: impl IntoResettable<char>) -> Self {
+                    #[inline] #[must_use] pub fn short(mut self, s: impl IntoResettable<char>) -> Self {
                         if let Some(s) = s.into_resettable().into_option() {
                             debug_assert!(s != '-', "short option name cannot be `-`");
                             self.short = Some(s);
@@ -1354,18 +1377,13 @@ pub mod clap
                         }
                         self
                     }
-
                     /// Sets the long version of the argument without the preceding `--`.
-                    #[inline]
-                    #[must_use]
-                    pub fn long(mut self, l: impl IntoResettable<Str>) -> Self {
+                    #[inline] #[must_use] pub fn long(mut self, l: impl IntoResettable<Str>) -> Self {
                         self.long = l.into_resettable().into_option();
                         self
                     }
-
                     /// Add an alias, which functions as a hidden long flag.
-                    #[must_use]
-                    pub fn alias(mut self, name: impl IntoResettable<Str>) -> Self {
+                    #[must_use] pub fn alias(mut self, name: impl IntoResettable<Str>) -> Self {
                         if let Some(name) = name.into_resettable().into_option() {
                             self.aliases.push((name, false));
                         } else {
@@ -1373,10 +1391,8 @@ pub mod clap
                         }
                         self
                     }
-
                     /// Add an alias, which functions as a hidden short flag.
-                    #[must_use]
-                    pub fn short_alias(mut self, name: impl IntoResettable<char>) -> Self {
+                    #[must_use] pub fn short_alias(mut self, name: impl IntoResettable<char>) -> Self {
                         if let Some(name) = name.into_resettable().into_option() {
                             debug_assert!(name != '-', "short alias name cannot be `-`");
                             self.short_aliases.push((name, false));
@@ -1385,28 +1401,22 @@ pub mod clap
                         }
                         self
                     }
-
                     /// Add aliases, which function as hidden long flags.
-                    #[must_use]
-                    pub fn aliases(mut self, names: impl IntoIterator<Item = impl Into<Str>>) -> Self {
+                    #[must_use] pub fn aliases(mut self, names: impl IntoIterator<Item = impl Into<Str>>) -> Self {
                         self.aliases
                             .extend(names.into_iter().map(|x| (x.into(), false)));
                         self
                     }
-
                     /// Add aliases, which functions as a hidden short flag.
-                    #[must_use]
-                    pub fn short_aliases(mut self, names: impl IntoIterator<Item = char>) -> Self {
+                    #[must_use] pub fn short_aliases(mut self, names: impl IntoIterator<Item = char>) -> Self {
                         for s in names {
                             debug_assert!(s != '-', "short alias name cannot be `-`");
                             self.short_aliases.push((s, false));
                         }
                         self
                     }
-
                     /// Add an alias, which functions as a visible long flag.
-                    #[must_use]
-                    pub fn visible_alias(mut self, name: impl IntoResettable<Str>) -> Self {
+                    #[must_use] pub fn visible_alias(mut self, name: impl IntoResettable<Str>) -> Self {
                         if let Some(name) = name.into_resettable().into_option() {
                             self.aliases.push((name, true));
                         } else {
@@ -1414,10 +1424,8 @@ pub mod clap
                         }
                         self
                     }
-
                     /// Add an alias, which functions as a visible short flag.
-                    #[must_use]
-                    pub fn visible_short_alias(mut self, name: impl IntoResettable<char>) -> Self {
+                    #[must_use] pub fn visible_short_alias(mut self, name: impl IntoResettable<char>) -> Self {
                         if let Some(name) = name.into_resettable().into_option() {
                             debug_assert!(name != '-', "short alias name cannot be `-`");
                             self.short_aliases.push((name, true));
@@ -1426,33 +1434,25 @@ pub mod clap
                         }
                         self
                     }
-
                     /// Add aliases, which function as visible long flags.
-                    #[must_use]
-                    pub fn visible_aliases(mut self, names: impl IntoIterator<Item = impl Into<Str>>) -> Self {
+                    #[must_use] pub fn visible_aliases(mut self, names: impl IntoIterator<Item = impl Into<Str>>) -> Self {
                         self.aliases
                             .extend(names.into_iter().map(|n| (n.into(), true)));
                         self
                     }
-
                     /// Add aliases, which function as visible short flags.
-                    #[must_use]
-                    pub fn visible_short_aliases(mut self, names: impl IntoIterator<Item = char>) -> Self {
+                    #[must_use] pub fn visible_short_aliases(mut self, names: impl IntoIterator<Item = char>) -> Self {
                         for n in names {
                             debug_assert!(n != '-', "short alias name cannot be `-`");
                             self.short_aliases.push((n, true));
                         }
                         self
                     }
-
                     /// Specifies the index of a positional argument **starting at** 1.
-                    #[inline]
-                    #[must_use]
-                    pub fn index(mut self, idx: impl IntoResettable<usize>) -> Self {
+                    #[inline] #[must_use] pub fn index(mut self, idx: impl IntoResettable<usize>) -> Self {
                         self.index = idx.into_resettable().into_option();
                         self
                     }
-
                     /// This is a "var arg" and everything that follows should be captured by it, as if the user had used a `--`.
                     pub fn trailing_var_arg(self, yes: bool) -> Self {
                         if yes {
@@ -1461,34 +1461,26 @@ pub mod clap
                             self.unset_setting(ArgSettings::TrailingVarArg)
                         }
                     }
-
                     /// This arg is the last, or final, positional argument (i.e. has the highest
                     /// index) and is *only* able to be accessed via the `--` syntax (i.e. `$ prog args --
                     /// last_arg`).
-                    #[inline]
-                    #[must_use]
-                    pub fn last(self, yes: bool) -> Self {
+                    #[inline] #[must_use] pub fn last(self, yes: bool) -> Self {
                         if yes {
                             self.setting(ArgSettings::Last)
                         } else {
                             self.unset_setting(ArgSettings::Last)
                         }
                     }
-
                     /// Specifies that the argument must be present.
-                    #[inline]
-                    #[must_use]
-                    pub fn required(self, yes: bool) -> Self {
+                    #[inline] #[must_use] pub fn required(self, yes: bool) -> Self {
                         if yes {
                             self.setting(ArgSettings::Required)
                         } else {
                             self.unset_setting(ArgSettings::Required)
                         }
                     }
-
                     /// Sets an argument that is required when this one is present.
-                    #[must_use]
-                    pub fn requires(mut self, arg_id: impl IntoResettable<Id>) -> Self {
+                    #[must_use] pub fn requires(mut self, arg_id: impl IntoResettable<Id>) -> Self {
                         if let Some(arg_id) = arg_id.into_resettable().into_option() {
                             self.requires.push((ArgPredicate::IsPresent, arg_id));
                         } else {
@@ -1496,22 +1488,16 @@ pub mod clap
                         }
                         self
                     }
-
                     /// This argument must be passed alone; it conflicts with all other arguments.
-                    #[inline]
-                    #[must_use]
-                    pub fn exclusive(self, yes: bool) -> Self {
+                    #[inline] #[must_use] pub fn exclusive(self, yes: bool) -> Self {
                         if yes {
                             self.setting(ArgSettings::Exclusive)
                         } else {
                             self.unset_setting(ArgSettings::Exclusive)
                         }
                     }
-
                     /// Specifies that an argument can be matched to all child [`Subcommand`]s.
-                    #[inline]
-                    #[must_use]
-                    pub fn global(self, yes: bool) -> Self {
+                    #[inline] #[must_use] pub fn global(self, yes: bool) -> Self {
                         if yes {
                             self.setting(ArgSettings::Global)
                         } else {
@@ -1519,54 +1505,40 @@ pub mod clap
                         }
                     }
 
-                    #[inline]
-                    pub(crate) fn is_set(&self, s: ArgSettings) -> bool {
+                    #[inline] pub fn is_set(&self, s: ArgSettings) -> bool {
                         self.settings.is_set(s)
                     }
 
-                    #[inline]
-                    #[must_use]
-                    pub(crate) fn setting(mut self, setting: ArgSettings) -> Self {
+                    #[inline] #[must_use] pub fn setting(mut self, setting: ArgSettings) -> Self {
                         self.settings.set(setting);
                         self
                     }
 
-                    #[inline]
-                    #[must_use]
-                    pub(crate) fn unset_setting(mut self, setting: ArgSettings) -> Self {
+                    #[inline] #[must_use] pub fn unset_setting(mut self, setting: ArgSettings) -> Self {
                         self.settings.unset(setting);
                         self
                     }
-
                     /// Extend [`Arg`] with [`ArgExt`] data
-                    #[cfg(feature = "unstable-ext")]
-                    #[allow(clippy::should_implement_trait)]
                     pub fn add<T: ArgExt + Extension>(mut self, tagged: T) -> Self {
                         self.ext.set(tagged);
                         self
                     }
                 }
-
                 /// # Value Handling
-                impl Arg {
+                impl Arg 
+                {
                     /// Specify how to react to an argument when parsing it.
-                    #[inline]
-                    #[must_use]
-                    pub fn action(mut self, action: impl IntoResettable<ArgAction>) -> Self {
+                    #[inline] #[must_use] pub fn action(mut self, action: impl IntoResettable<ArgAction>) -> Self {
                         self.action = action.into_resettable().into_option();
                         self
                     }
-
                     /// Specify the typed behavior of the argument.
                     pub fn value_parser(mut self, parser: impl IntoResettable<super::ValueParser>) -> Self {
                         self.value_parser = parser.into_resettable().into_option();
                         self
                     }
-
                     /// Specifies the number of arguments parsed per occurrence.
-                    #[inline]
-                    #[must_use]
-                    pub fn num_args(mut self, qty: impl IntoResettable<ValueRange>) -> Self {
+                    #[inline] #[must_use] pub fn num_args(mut self, qty: impl IntoResettable<ValueRange>) -> Self {
                         self.num_vals = qty.into_resettable().into_option();
                         self
                     }
@@ -1579,11 +1551,8 @@ pub mod clap
                     pub fn number_of_values(self, qty: usize) -> Self {
                         self.num_args(qty)
                     }
-
                     /// Placeholder for the argument's value in the help message / usage.
-                    #[inline]
-                    #[must_use]
-                    pub fn value_name(mut self, name: impl IntoResettable<Str>) -> Self {
+                    #[inline] #[must_use] pub fn value_name(mut self, name: impl IntoResettable<Str>) -> Self {
                         if let Some(name) = name.into_resettable().into_option() {
                             self.value_names([name])
                         } else {
@@ -1591,17 +1560,13 @@ pub mod clap
                             self
                         }
                     }
-
                     /// Placeholders for the argument's values in the help message / usage.
-                    #[must_use]
-                    pub fn value_names(mut self, names: impl IntoIterator<Item = impl Into<Str>>) -> Self {
+                    #[must_use] pub fn value_names(mut self, names: impl IntoIterator<Item = impl Into<Str>>) -> Self {
                         self.val_names = names.into_iter().map(|s| s.into()).collect();
                         self
                     }
-
                     /// Provide the shell a hint about how to complete this argument.
-                    #[must_use]
-                    pub fn value_hint(mut self, value_hint: impl IntoResettable<ValueHint>) -> Self {
+                    #[must_use] pub fn value_hint(mut self, value_hint: impl IntoResettable<ValueHint>) -> Self {
                         // HACK: we should use `Self::add` and `Self::remove` to type-check that `ArgExt` is used
                         match value_hint.into_resettable().into_option() {
                             Some(value_hint) => {
@@ -1613,43 +1578,32 @@ pub mod clap
                         }
                         self
                     }
-
                     /// Match values against [`PossibleValuesParser`][crate::builder::PossibleValuesParser] without matching case.
-                    #[inline]
-                    #[must_use]
-                    pub fn ignore_case(self, yes: bool) -> Self {
+                    #[inline] #[must_use] pub fn ignore_case(self, yes: bool) -> Self {
                         if yes {
                             self.setting(ArgSettings::IgnoreCase)
                         } else {
                             self.unset_setting(ArgSettings::IgnoreCase)
                         }
                     }
-
                     /// Allows values which start with a leading hyphen (`-`)
-                    #[inline]
-                    #[must_use]
-                    pub fn allow_hyphen_values(self, yes: bool) -> Self {
+                    #[inline] #[must_use] pub fn allow_hyphen_values(self, yes: bool) -> Self {
                         if yes {
                             self.setting(ArgSettings::AllowHyphenValues)
                         } else {
                             self.unset_setting(ArgSettings::AllowHyphenValues)
                         }
                     }
-
                     /// Allows negative numbers to pass as values.
-                    #[inline]
-                    pub fn allow_negative_numbers(self, yes: bool) -> Self {
+                    #[inline] pub fn allow_negative_numbers(self, yes: bool) -> Self {
                         if yes {
                             self.setting(ArgSettings::AllowNegativeNumbers)
                         } else {
                             self.unset_setting(ArgSettings::AllowNegativeNumbers)
                         }
                     }
-
                     /// Requires that options use the `--option=val` syntax.
-                    #[inline]
-                    #[must_use]
-                    pub fn require_equals(self, yes: bool) -> Self {
+                    #[inline] #[must_use] pub fn require_equals(self, yes: bool) -> Self {
                         if yes {
                             self.setting(ArgSettings::RequireEquals)
                         } else {
@@ -1670,37 +1624,25 @@ pub mod clap
                         }
                         self
                     }
-
                     /// Allow grouping of multiple values via a delimiter.
-                    #[inline]
-                    #[must_use]
-                    pub fn value_delimiter(mut self, d: impl IntoResettable<char>) -> Self {
+                    #[inline] #[must_use] pub fn value_delimiter(mut self, d: impl IntoResettable<char>) -> Self {
                         self.val_delim = d.into_resettable().into_option();
                         self
                     }
-
                     /// Sentinel to **stop** parsing multiple values of a given argument.
-                    #[inline]
-                    #[must_use]
-                    pub fn value_terminator(mut self, term: impl IntoResettable<Str>) -> Self {
+                    #[inline] #[must_use] pub fn value_terminator(mut self, term: impl IntoResettable<Str>) -> Self {
                         self.terminator = term.into_resettable().into_option();
                         self
                     }
-
                     /// Consume all following arguments.
-                    #[inline]
-                    #[must_use]
-                    pub fn raw(mut self, yes: bool) -> Self {
+                    #[inline] #[must_use] pub fn raw(mut self, yes: bool) -> Self {
                         if yes {
                             self.num_vals.get_or_insert_with(|| (1..).into());
                         }
                         self.allow_hyphen_values(yes).last(yes)
                     }
-
                     /// Value for the argument when not present.
-                    #[inline]
-                    #[must_use]
-                    pub fn default_value(mut self, val: impl IntoResettable<OsStr>) -> Self {
+                    #[inline] #[must_use] pub fn default_value(mut self, val: impl IntoResettable<OsStr>) -> Self {
                         if let Some(val) = val.into_resettable().into_option() {
                             self.default_values([val])
                         } else {
@@ -1719,11 +1661,8 @@ pub mod clap
                     pub fn default_value_os(self, val: impl Into<OsStr>) -> Self {
                         self.default_values([val])
                     }
-
                     /// Value for the argument when not present.
-                    #[inline]
-                    #[must_use]
-                    pub fn default_values(mut self, vals: impl IntoIterator<Item = impl Into<OsStr>>) -> Self {
+                    #[inline] #[must_use] pub fn default_values(mut self, vals: impl IntoIterator<Item = impl Into<OsStr>>) -> Self {
                         self.default_vals = vals.into_iter().map(|s| s.into()).collect();
                         self
                     }
@@ -1738,11 +1677,8 @@ pub mod clap
                     pub fn default_values_os(self, vals: impl IntoIterator<Item = impl Into<OsStr>>) -> Self {
                         self.default_values(vals)
                     }
-
                     /// Value for the argument when the flag is present but no value is specified.
-                    #[inline]
-                    #[must_use]
-                    pub fn default_missing_value(mut self, val: impl IntoResettable<OsStr>) -> Self {
+                    #[inline] #[must_use] pub fn default_missing_value(mut self, val: impl IntoResettable<OsStr>) -> Self {
                         if let Some(val) = val.into_resettable().into_option() {
                             self.default_missing_values_os([val])
                         } else {
@@ -1750,37 +1686,25 @@ pub mod clap
                             self
                         }
                     }
-
                     /// Value for the argument when the flag is present but no value is specified.
-                    #[inline]
-                    #[must_use]
-                    pub fn default_missing_value_os(self, val: impl Into<OsStr>) -> Self {
+                    #[inline] #[must_use] pub fn default_missing_value_os(self, val: impl Into<OsStr>) -> Self {
                         self.default_missing_values_os([val])
                     }
-
                     /// Value for the argument when the flag is present but no value is specified.
-                    #[inline]
-                    #[must_use]
-                    pub fn default_missing_values(self, vals: impl IntoIterator<Item = impl Into<OsStr>>) -> Self {
+                    #[inline] #[must_use] pub fn default_missing_values(self, vals: impl IntoIterator<Item = impl Into<OsStr>>) -> Self {
                         self.default_missing_values_os(vals)
                     }
-
                     /// Value for the argument when the flag is present but no value is specified.
-                    #[inline]
-                    #[must_use]
-                    pub fn default_missing_values_os(
+                    #[inline] #[must_use] pub fn default_missing_values_os(
                         mut self,
                         vals: impl IntoIterator<Item = impl Into<OsStr>>,
                     ) -> Self {
                         self.default_missing_vals = vals.into_iter().map(|s| s.into()).collect();
                         self
                     }
-
                     /// Read from `name` environment variable when argument is not present.
                     #[cfg(feature = "env")]
-                    #[inline]
-                    #[must_use]
-                    pub fn env(mut self, name: impl IntoResettable<OsStr>) -> Self {
+                    #[inline] #[must_use] pub fn env(mut self, name: impl IntoResettable<OsStr>) -> Self {
                         if let Some(name) = name.into_resettable().into_option() {
                             let value = env::var_os(&name);
                             self.env = Some((name, value));
@@ -1800,126 +1724,91 @@ pub mod clap
                         self.env(name)
                     }
                 }
-
                 /// # Help
-                impl Arg {
+                impl Arg 
+                {
                     /// Sets the description of the argument for short help (`-h`).
-                    #[inline]
-                    #[must_use]
-                    pub fn help(mut self, h: impl IntoResettable<StyledStr>) -> Self {
+                    #[inline] #[must_use] pub fn help(mut self, h: impl IntoResettable<StyledStr>) -> Self {
                         self.help = h.into_resettable().into_option();
                         self
                     }
-
                     /// Sets the description of the argument for long help (`--help`).
-                    #[inline]
-                    #[must_use]
-                    pub fn long_help(mut self, h: impl IntoResettable<StyledStr>) -> Self {
+                    #[inline] #[must_use] pub fn long_help(mut self, h: impl IntoResettable<StyledStr>) -> Self {
                         self.long_help = h.into_resettable().into_option();
                         self
                     }
-
                     /// Allows custom ordering of args within the help message.
-                    #[inline]
-                    #[must_use]
-                    pub fn display_order(mut self, ord: impl IntoResettable<usize>) -> Self {
+                    #[inline] #[must_use] pub fn display_order(mut self, ord: impl IntoResettable<usize>) -> Self {
                         self.disp_ord = ord.into_resettable().into_option();
                         self
                     }
-
                     /// Override the [current] help section.
                     ///
                     /// [current]: crate::Command::next_help_heading
-                    #[inline]
-                    #[must_use]
-                    pub fn help_heading(mut self, heading: impl IntoResettable<Str>) -> Self {
+                    #[inline] #[must_use] pub fn help_heading(mut self, heading: impl IntoResettable<Str>) -> Self {
                         self.help_heading = Some(heading.into_resettable().into_option());
                         self
                     }
-
                     /// Render the [help][Arg::help] on the line after the argument.
-                    #[inline]
-                    #[must_use]
-                    pub fn next_line_help(self, yes: bool) -> Self {
+                    #[inline] #[must_use] pub fn next_line_help(self, yes: bool) -> Self {
                         if yes {
                             self.setting(ArgSettings::NextLineHelp)
                         } else {
                             self.unset_setting(ArgSettings::NextLineHelp)
                         }
                     }
-
                     /// Do not display the argument in help message.
-                    #[inline]
-                    #[must_use]
-                    pub fn hide(self, yes: bool) -> Self {
+                    #[inline] #[must_use] pub fn hide(self, yes: bool) -> Self {
                         if yes {
                             self.setting(ArgSettings::Hidden)
                         } else {
                             self.unset_setting(ArgSettings::Hidden)
                         }
                     }
-
                     /// Do not display the [possible values][crate::builder::ValueParser::possible_values] in the help message.
-                    #[inline]
-                    #[must_use]
-                    pub fn hide_possible_values(self, yes: bool) -> Self {
+                    #[inline] #[must_use] pub fn hide_possible_values(self, yes: bool) -> Self {
                         if yes {
                             self.setting(ArgSettings::HidePossibleValues)
                         } else {
                             self.unset_setting(ArgSettings::HidePossibleValues)
                         }
                     }
-
                     /// Do not display the default value of the argument in the help message.
-                    #[inline]
-                    #[must_use]
-                    pub fn hide_default_value(self, yes: bool) -> Self {
+                    #[inline] #[must_use] pub fn hide_default_value(self, yes: bool) -> Self {
                         if yes {
                             self.setting(ArgSettings::HideDefaultValue)
                         } else {
                             self.unset_setting(ArgSettings::HideDefaultValue)
                         }
                     }
-
                     /// Do not display in help the environment variable name.
                     #[cfg(feature = "env")]
-                    #[inline]
-                    #[must_use]
-                    pub fn hide_env(self, yes: bool) -> Self {
+                    #[inline] #[must_use] pub fn hide_env(self, yes: bool) -> Self {
                         if yes {
                             self.setting(ArgSettings::HideEnv)
                         } else {
                             self.unset_setting(ArgSettings::HideEnv)
                         }
                     }
-
                     /// Do not display in help any values inside the associated ENV variables for the argument.
                     #[cfg(feature = "env")]
-                    #[inline]
-                    #[must_use]
-                    pub fn hide_env_values(self, yes: bool) -> Self {
+                    #[inline] #[must_use] pub fn hide_env_values(self, yes: bool) -> Self {
                         if yes {
                             self.setting(ArgSettings::HideEnvValues)
                         } else {
                             self.unset_setting(ArgSettings::HideEnvValues)
                         }
                     }
-
                     /// Hides an argument from short help (`-h`).
-                    #[inline]
-                    #[must_use]
-                    pub fn hide_short_help(self, yes: bool) -> Self {
+                    #[inline] #[must_use] pub fn hide_short_help(self, yes: bool) -> Self {
                         if yes {
                             self.setting(ArgSettings::HiddenShortHelp)
                         } else {
                             self.unset_setting(ArgSettings::HiddenShortHelp)
                         }
                     }
-
                     /// Hides an argument from long help (`--help`).
-                    #[inline]
-                    #[must_use]
-                    pub fn hide_long_help(self, yes: bool) -> Self {
+                    #[inline] #[must_use] pub fn hide_long_help(self, yes: bool) -> Self {
                         if yes {
                             self.setting(ArgSettings::HiddenLongHelp)
                         } else {
@@ -1927,12 +1816,11 @@ pub mod clap
                         }
                     }
                 }
-
                 /// # Advanced Argument Relations
-                impl Arg {
+                impl Arg 
+                {
                     /// The name of the [`ArgGroup`] the argument belongs to.
-                    #[must_use]
-                    pub fn group(mut self, group_id: impl IntoResettable<Id>) -> Self {
+                    #[must_use] pub fn group(mut self, group_id: impl IntoResettable<Id>) -> Self {
                         if let Some(group_id) = group_id.into_resettable().into_option() {
                             self.groups.push(group_id);
                         } else {
@@ -1940,17 +1828,13 @@ pub mod clap
                         }
                         self
                     }
-
                     /// The names of [`ArgGroup`]'s the argument belongs to.
-                    #[must_use]
-                    pub fn groups(mut self, group_ids: impl IntoIterator<Item = impl Into<Id>>) -> Self {
+                    #[must_use] pub fn groups(mut self, group_ids: impl IntoIterator<Item = impl Into<Id>>) -> Self {
                         self.groups.extend(group_ids.into_iter().map(Into::into));
                         self
                     }
-
                     /// Specifies the value of the argument if `arg` has been used at runtime.
-                    #[must_use]
-                    pub fn default_value_if(
+                    #[must_use] pub fn default_value_if(
                         mut self,
                         arg_id: impl Into<Id>,
                         predicate: impl Into<ArgPredicate>,
@@ -1978,10 +1862,8 @@ pub mod clap
                     ) -> Self {
                         self.default_value_if(arg_id, predicate, default)
                     }
-
                     /// Specifies multiple values and conditions in the same manner as [`Arg::default_value_if`].
-                    #[must_use]
-                    pub fn default_value_ifs(
+                    #[must_use] pub fn default_value_ifs(
                         mut self,
                         ifs: impl IntoIterator<
                             Item = (
@@ -2015,10 +1897,8 @@ pub mod clap
                     ) -> Self {
                         self.default_value_ifs(ifs)
                     }
-
                     /// Set this arg as [required] as long as the specified argument is not present at runtime.
-                    #[must_use]
-                    pub fn required_unless_present(mut self, arg_id: impl IntoResettable<Id>) -> Self {
+                    #[must_use] pub fn required_unless_present(mut self, arg_id: impl IntoResettable<Id>) -> Self {
                         if let Some(arg_id) = arg_id.into_resettable().into_option() {
                             self.r_unless.push(arg_id);
                         } else {
@@ -2026,37 +1906,29 @@ pub mod clap
                         }
                         self
                     }
-
                     /// Sets this arg as [required] unless *all* of the specified arguments are present at runtime.
-                    #[must_use]
-                    pub fn required_unless_present_all(
+                    #[must_use] pub fn required_unless_present_all(
                         mut self,
                         names: impl IntoIterator<Item = impl Into<Id>>,
                     ) -> Self {
                         self.r_unless_all.extend(names.into_iter().map(Into::into));
                         self
                     }
-
                     /// Sets this arg as [required] unless *any* of the specified arguments are present at runtime.
-                    #[must_use]
-                    pub fn required_unless_present_any(
+                    #[must_use] pub fn required_unless_present_any(
                         mut self,
                         names: impl IntoIterator<Item = impl Into<Id>>,
                     ) -> Self {
                         self.r_unless.extend(names.into_iter().map(Into::into));
                         self
                     }
-
                     /// This argument is [required] only if the specified `arg` is present at runtime and its value
-                    #[must_use]
-                    pub fn required_if_eq(mut self, arg_id: impl Into<Id>, val: impl Into<OsStr>) -> Self {
+                    #[must_use] pub fn required_if_eq(mut self, arg_id: impl Into<Id>, val: impl Into<OsStr>) -> Self {
                         self.r_ifs.push((arg_id.into(), val.into()));
                         self
                     }
-
                     /// Specify this argument is [required] based on multiple conditions.
-                    #[must_use]
-                    pub fn required_if_eq_any(
+                    #[must_use] pub fn required_if_eq_any(
                         mut self,
                         ifs: impl IntoIterator<Item = (impl Into<Id>, impl Into<OsStr>)>,
                     ) -> Self {
@@ -2064,10 +1936,8 @@ pub mod clap
                             .extend(ifs.into_iter().map(|(id, val)| (id.into(), val.into())));
                         self
                     }
-
                     /// Specify this argument is [required] based on multiple conditions.
-                    #[must_use]
-                    pub fn required_if_eq_all(
+                    #[must_use] pub fn required_if_eq_all(
                         mut self,
                         ifs: impl IntoIterator<Item = (impl Into<Id>, impl Into<OsStr>)>,
                     ) -> Self {
@@ -2075,17 +1945,13 @@ pub mod clap
                             .extend(ifs.into_iter().map(|(id, val)| (id.into(), val.into())));
                         self
                     }
-
                     /// Require another argument if this arg matches the [`ArgPredicate`]
-                    #[must_use]
-                    pub fn requires_if(mut self, val: impl Into<ArgPredicate>, arg_id: impl Into<Id>) -> Self {
+                    #[must_use] pub fn requires_if(mut self, val: impl Into<ArgPredicate>, arg_id: impl Into<Id>) -> Self {
                         self.requires.push((val.into(), arg_id.into()));
                         self
                     }
-
                     /// Allows multiple conditional requirements.
-                    #[must_use]
-                    pub fn requires_ifs(
+                    #[must_use] pub fn requires_ifs(
                         mut self,
                         ifs: impl IntoIterator<Item = (impl Into<ArgPredicate>, impl Into<Id>)>,
                     ) -> Self {
@@ -2102,10 +1968,8 @@ pub mod clap
                     pub fn requires_all(self, ids: impl IntoIterator<Item = impl Into<Id>>) -> Self {
                         self.requires_ifs(ids.into_iter().map(|id| (ArgPredicate::IsPresent, id)))
                     }
-
                     /// This argument is mutually exclusive with the specified argument.
-                    #[must_use]
-                    pub fn conflicts_with(mut self, arg_id: impl IntoResettable<Id>) -> Self {
+                    #[must_use] pub fn conflicts_with(mut self, arg_id: impl IntoResettable<Id>) -> Self {
                         if let Some(arg_id) = arg_id.into_resettable().into_option() {
                             self.blacklist.push(arg_id);
                         } else {
@@ -2113,17 +1977,13 @@ pub mod clap
                         }
                         self
                     }
-
                     /// This argument is mutually exclusive with the specified arguments.
-                    #[must_use]
-                    pub fn conflicts_with_all(mut self, names: impl IntoIterator<Item = impl Into<Id>>) -> Self {
+                    #[must_use] pub fn conflicts_with_all(mut self, names: impl IntoIterator<Item = impl Into<Id>>) -> Self {
                         self.blacklist.extend(names.into_iter().map(Into::into));
                         self
                     }
-
                     /// Sets an overridable argument.
-                    #[must_use]
-                    pub fn overrides_with(mut self, arg_id: impl IntoResettable<Id>) -> Self {
+                    #[must_use] pub fn overrides_with(mut self, arg_id: impl IntoResettable<Id>) -> Self {
                         if let Some(arg_id) = arg_id.into_resettable().into_option() {
                             self.overrides.push(arg_id);
                         } else {
@@ -2131,59 +1991,44 @@ pub mod clap
                         }
                         self
                     }
-
                     /// Sets multiple mutually overridable arguments by name.
-                    #[must_use]
-                    pub fn overrides_with_all(mut self, names: impl IntoIterator<Item = impl Into<Id>>) -> Self {
+                    #[must_use] pub fn overrides_with_all(mut self, names: impl IntoIterator<Item = impl Into<Id>>) -> Self {
                         self.overrides.extend(names.into_iter().map(Into::into));
                         self
                     }
                 }
-
                 /// # Reflection
-                impl Arg {
+                impl Arg 
+                {
                     /// Get the name of the argument
-                    #[inline]
-                    pub fn get_id(&self) -> &Id {
+                    #[inline] pub fn get_id(&self) -> &Id {
                         &self.id
                     }
-
                     /// Get the help specified for this argument, if any
-                    #[inline]
-                    pub fn get_help(&self) -> Option<&StyledStr> {
+                    #[inline] pub fn get_help(&self) -> Option<&StyledStr> {
                         self.help.as_ref()
                     }
-
                     /// Get the long help specified for this argument, if any.
-                    #[inline]
-                    pub fn get_long_help(&self) -> Option<&StyledStr> {
+                    #[inline] pub fn get_long_help(&self) -> Option<&StyledStr> {
                         self.long_help.as_ref()
                     }
-
                     /// Get the placement within help
-                    #[inline]
-                    pub fn get_display_order(&self) -> usize {
+                    #[inline] pub fn get_display_order(&self) -> usize {
                         self.disp_ord.unwrap_or(999)
                     }
-
                     /// Get the help heading specified for this argument, if any
-                    #[inline]
-                    pub fn get_help_heading(&self) -> Option<&str> {
+                    #[inline] pub fn get_help_heading(&self) -> Option<&str> {
                         self.help_heading
                             .as_ref()
                             .map(|s| s.as_deref())
                             .unwrap_or_default()
                     }
-
                     /// Get the short option name for this argument, if any
-                    #[inline]
-                    pub fn get_short(&self) -> Option<char> {
+                    #[inline] pub fn get_short(&self) -> Option<char> {
                         self.short
                     }
-
                     /// Get visible short aliases for this argument, if any
-                    #[inline]
-                    pub fn get_visible_short_aliases(&self) -> Option<Vec<char>> {
+                    #[inline] pub fn get_visible_short_aliases(&self) -> Option<Vec<char>> {
                         if self.short_aliases.is_empty() {
                             None
                         } else {
@@ -2196,20 +2041,16 @@ pub mod clap
                             )
                         }
                     }
-
                     /// Get *all* short aliases for this argument, if any, both visible and hidden.
-                    #[inline]
-                    pub fn get_all_short_aliases(&self) -> Option<Vec<char>> {
+                    #[inline] pub fn get_all_short_aliases(&self) -> Option<Vec<char>> {
                         if self.short_aliases.is_empty() {
                             None
                         } else {
                             Some(self.short_aliases.iter().map(|(s, _)| s).copied().collect())
                         }
                     }
-
                     /// Get the short option name and its visible aliases, if any
-                    #[inline]
-                    pub fn get_short_and_visible_aliases(&self) -> Option<Vec<char>> {
+                    #[inline] pub fn get_short_and_visible_aliases(&self) -> Option<Vec<char>> {
                         let mut shorts = match self.short {
                             Some(short) => vec![short],
                             None => return None,
@@ -2219,16 +2060,12 @@ pub mod clap
                         }
                         Some(shorts)
                     }
-
                     /// Get the long option name for this argument, if any
-                    #[inline]
-                    pub fn get_long(&self) -> Option<&str> {
+                    #[inline] pub fn get_long(&self) -> Option<&str> {
                         self.long.as_deref()
                     }
-
                     /// Get visible aliases for this argument, if any
-                    #[inline]
-                    pub fn get_visible_aliases(&self) -> Option<Vec<&str>> {
+                    #[inline] pub fn get_visible_aliases(&self) -> Option<Vec<&str>> {
                         if self.aliases.is_empty() {
                             None
                         } else {
@@ -2240,20 +2077,16 @@ pub mod clap
                             )
                         }
                     }
-
                     /// Get *all* aliases for this argument, if any, both visible and hidden.
-                    #[inline]
-                    pub fn get_all_aliases(&self) -> Option<Vec<&str>> {
+                    #[inline] pub fn get_all_aliases(&self) -> Option<Vec<&str>> {
                         if self.aliases.is_empty() {
                             None
                         } else {
                             Some(self.aliases.iter().map(|(s, _)| s.as_str()).collect())
                         }
                     }
-
                     /// Get the long option name and its visible aliases, if any
-                    #[inline]
-                    pub fn get_long_and_visible_aliases(&self) -> Option<Vec<&str>> {
+                    #[inline] pub fn get_long_and_visible_aliases(&self) -> Option<Vec<&str>> {
                         let mut longs = match self.get_long() {
                             Some(long) => vec![long],
                             None => return None,
@@ -2263,10 +2096,8 @@ pub mod clap
                         }
                         Some(longs)
                     }
-
                     /// Get hidden aliases for this argument, if any
-                    #[inline]
-                    pub fn get_aliases(&self) -> Option<Vec<&str>> {
+                    #[inline] pub fn get_aliases(&self) -> Option<Vec<&str>> {
                         if self.aliases.is_empty() {
                             None
                         } else {
@@ -2278,7 +2109,6 @@ pub mod clap
                             )
                         }
                     }
-
                     /// Get the names of possible values for this argument. Only useful for user
                     /// facing applications, such as building help messages or man files
                     pub fn get_possible_values(&self) -> Vec<PossibleValue> {
@@ -2291,47 +2121,35 @@ pub mod clap
                                 .unwrap_or_default()
                         }
                     }
-
                     /// Get the names of values for this argument.
-                    #[inline]
-                    pub fn get_value_names(&self) -> Option<&[Str]> {
+                    #[inline] pub fn get_value_names(&self) -> Option<&[Str]> {
                         if self.val_names.is_empty() {
                             None
                         } else {
                             Some(&self.val_names)
                         }
                     }
-
                     /// Get the number of values for this argument.
-                    #[inline]
-                    pub fn get_num_args(&self) -> Option<ValueRange> {
+                    #[inline] pub fn get_num_args(&self) -> Option<ValueRange> {
                         self.num_vals
                     }
 
-                    #[inline]
-                    pub(crate) fn get_min_vals(&self) -> usize {
+                    #[inline] pub fn get_min_vals(&self) -> usize {
                         self.get_num_args().expect(INTERNAL_ERROR_MSG).min_values()
                     }
-
                     /// Get the delimiter between multiple values
-                    #[inline]
-                    pub fn get_value_delimiter(&self) -> Option<char> {
+                    #[inline] pub fn get_value_delimiter(&self) -> Option<char> {
                         self.val_delim
                     }
-
                     /// Get the value terminator for this argument. The `value_terminator` is a value
                     /// that terminates parsing of multi-valued arguments.
-                    #[inline]
-                    pub fn get_value_terminator(&self) -> Option<&Str> {
+                    #[inline] pub fn get_value_terminator(&self) -> Option<&Str> {
                         self.terminator.as_ref()
                     }
-
                     /// Get the index of this argument, if any
-                    #[inline]
-                    pub fn get_index(&self) -> Option<usize> {
+                    #[inline] pub fn get_index(&self) -> Option<usize> {
                         self.index
                     }
-
                     /// Get the value hint of this argument
                     pub fn get_value_hint(&self) -> ValueHint {
                         // HACK: we should use `Self::add` and `Self::remove` to type-check that `ArgExt` is used
@@ -2348,54 +2166,46 @@ pub mod clap
                             }
                         })
                     }
-
                     /// Get the environment variable name specified for this argument, if any.
                     #[cfg(feature = "env")]
                     pub fn get_env(&self) -> Option<&std::ffi::OsStr> {
                         self.env.as_ref().map(|x| x.0.as_os_str())
                     }
-
                     /// Get the default values specified for this argument, if any.
                     pub fn get_default_values(&self) -> &[OsStr] {
                         &self.default_vals
                     }
-
                     /// Checks whether this argument is a positional or not.
                     pub fn is_positional(&self) -> bool {
                         self.get_long().is_none() && self.get_short().is_none()
                     }
-
                     /// Reports whether [`Arg::required`] is set
                     pub fn is_required_set(&self) -> bool {
                         self.is_set(ArgSettings::Required)
                     }
 
-                    pub(crate) fn is_multiple_values_set(&self) -> bool {
+                    pub fn is_multiple_values_set(&self) -> bool {
                         self.get_num_args().unwrap_or_default().is_multiple()
                     }
 
-                    pub(crate) fn is_takes_value_set(&self) -> bool {
+                    pub fn is_takes_value_set(&self) -> bool {
                         self.get_num_args()
                             .unwrap_or_else(|| 1.into())
                             .takes_values()
                     }
-
                     /// Report whether [`Arg::allow_hyphen_values`] is set
                     pub fn is_allow_hyphen_values_set(&self) -> bool {
                         self.is_set(ArgSettings::AllowHyphenValues)
                     }
-
                     /// Report whether [`Arg::allow_negative_numbers`] is set
                     pub fn is_allow_negative_numbers_set(&self) -> bool {
                         self.is_set(ArgSettings::AllowNegativeNumbers)
                     }
-
                     /// Behavior when parsing the argument
                     pub fn get_action(&self) -> &ArgAction {
                         const DEFAULT: ArgAction = ArgAction::Set;
                         self.action.as_ref().unwrap_or(&DEFAULT)
                     }
-
                     /// Configured parser for argument values.
                     pub fn get_value_parser(&self) -> &super::ValueParser {
                         if let Some(value_parser) = self.value_parser.as_ref() {
@@ -2405,95 +2215,79 @@ pub mod clap
                             &DEFAULT
                         }
                     }
-
                     /// Report whether [`Arg::global`] is set
                     pub fn is_global_set(&self) -> bool {
                         self.is_set(ArgSettings::Global)
                     }
-
                     /// Report whether [`Arg::next_line_help`] is set
                     pub fn is_next_line_help_set(&self) -> bool {
                         self.is_set(ArgSettings::NextLineHelp)
                     }
-
                     /// Report whether [`Arg::hide`] is set
                     pub fn is_hide_set(&self) -> bool {
                         self.is_set(ArgSettings::Hidden)
                     }
-
                     /// Report whether [`Arg::hide_default_value`] is set
                     pub fn is_hide_default_value_set(&self) -> bool {
                         self.is_set(ArgSettings::HideDefaultValue)
                     }
-
                     /// Report whether [`Arg::hide_possible_values`] is set
                     pub fn is_hide_possible_values_set(&self) -> bool {
                         self.is_set(ArgSettings::HidePossibleValues)
                     }
-
                     /// Report whether [`Arg::hide_env`] is set
                     #[cfg(feature = "env")]
                     pub fn is_hide_env_set(&self) -> bool {
                         self.is_set(ArgSettings::HideEnv)
                     }
-
                     /// Report whether [`Arg::hide_env_values`] is set
                     #[cfg(feature = "env")]
                     pub fn is_hide_env_values_set(&self) -> bool {
                         self.is_set(ArgSettings::HideEnvValues)
                     }
-
                     /// Report whether [`Arg::hide_short_help`] is set
                     pub fn is_hide_short_help_set(&self) -> bool {
                         self.is_set(ArgSettings::HiddenShortHelp)
                     }
-
                     /// Report whether [`Arg::hide_long_help`] is set
                     pub fn is_hide_long_help_set(&self) -> bool {
                         self.is_set(ArgSettings::HiddenLongHelp)
                     }
-
                     /// Report whether [`Arg::require_equals`] is set
                     pub fn is_require_equals_set(&self) -> bool {
                         self.is_set(ArgSettings::RequireEquals)
                     }
-
                     /// Reports whether [`Arg::exclusive`] is set
                     pub fn is_exclusive_set(&self) -> bool {
                         self.is_set(ArgSettings::Exclusive)
                     }
-
                     /// Report whether [`Arg::trailing_var_arg`] is set
                     pub fn is_trailing_var_arg_set(&self) -> bool {
                         self.is_set(ArgSettings::TrailingVarArg)
                     }
-
                     /// Reports whether [`Arg::last`] is set
                     pub fn is_last_set(&self) -> bool {
                         self.is_set(ArgSettings::Last)
                     }
-
                     /// Reports whether [`Arg::ignore_case`] is set
                     pub fn is_ignore_case_set(&self) -> bool {
                         self.is_set(ArgSettings::IgnoreCase)
                     }
-
                     /// Access an [`ArgExt`]
-                    #[cfg(feature = "unstable-ext")]
+                    
                     pub fn get<T: ArgExt + Extension>(&self) -> Option<&T> {
                         self.ext.get::<T>()
                     }
-
                     /// Remove an [`ArgExt`]
-                    #[cfg(feature = "unstable-ext")]
+                    
                     pub fn remove<T: ArgExt + Extension>(mut self) -> Option<T> {
                         self.ext.remove::<T>()
                     }
                 }
-
                 /// # Internally used only
-                impl Arg {
-                    pub(crate) fn _build(&mut self) {
+                impl Arg 
+                {
+                    pub fn _build(&mut self) {
                         if self.action.is_none() {
                             if self.num_vals == Some(ValueRange::EMPTY) {
                                 let action = ArgAction::SetTrue;
@@ -2543,7 +2337,7 @@ pub mod clap
                     }
 
                     // Used for positionals when printing
-                    pub(crate) fn name_no_brackets(&self) -> String {
+                    pub fn name_no_brackets(&self) -> String {
                         debug!("Arg::name_no_brackets:{}", self.get_id());
                         let delim = " ";
                         if !self.val_names.is_empty() {
@@ -2568,7 +2362,7 @@ pub mod clap
                         }
                     }
 
-                    pub(crate) fn stylized(&self, styles: &Styles, required: Option<bool>) -> StyledStr {
+                    pub fn stylized(&self, styles: &Styles, required: Option<bool>) -> StyledStr {
                         use std::fmt::Write as _;
                         let literal = styles.get_literal();
 
@@ -2583,7 +2377,7 @@ pub mod clap
                         styled
                     }
 
-                    pub(crate) fn stylize_arg_suffix(&self, styles: &Styles, required: Option<bool>) -> StyledStr {
+                    pub fn stylize_arg_suffix(&self, styles: &Styles, required: Option<bool>) -> StyledStr {
                         use std::fmt::Write as _;
                         let literal = styles.get_literal();
                         let placeholder = styles.get_placeholder();
@@ -2620,7 +2414,6 @@ pub mod clap
 
                         styled
                     }
-
                     /// Write the values such as `<name1> <name2>`
                     fn render_arg_val(&self, required: bool) -> String {
                         let mut rendered = String::new();
@@ -2663,32 +2456,35 @@ pub mod clap
 
                         rendered
                     }
-
                     /// Either multiple values or occurrences
-                    pub(crate) fn is_multiple(&self) -> bool {
+                    pub fn is_multiple(&self) -> bool {
                         self.is_multiple_values_set() || matches!(*self.get_action(), ArgAction::Append)
                     }
                 }
 
-                impl From<&'_ Arg> for Arg {
+                impl From<&'_ Arg> for Arg 
+                {
                     fn from(a: &Arg) -> Self {
                         a.clone()
                     }
                 }
 
-                impl PartialEq for Arg {
+                impl PartialEq for Arg 
+                {
                     fn eq(&self, other: &Arg) -> bool {
                         self.get_id() == other.get_id()
                     }
                 }
 
-                impl PartialOrd for Arg {
+                impl PartialOrd for Arg 
+                {
                     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
                         Some(self.cmp(other))
                     }
                 }
 
-                impl Ord for Arg {
+                impl Ord for Arg 
+                {
                     fn cmp(&self, other: &Arg) -> Ordering {
                         self.get_id().cmp(other.get_id())
                     }
@@ -2696,14 +2492,16 @@ pub mod clap
 
                 impl Eq for Arg {}
 
-                impl Display for Arg {
+                impl Display for Arg 
+                {
                     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
                         let plain = Styles::plain();
                         self.stylized(&plain, None).fmt(f)
                     }
                 }
 
-                impl fmt::Debug for Arg {
+                impl fmt::Debug for Arg 
+                {
                     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
                         let mut ds = f.debug_struct("Arg");
 
@@ -2745,9 +2543,7 @@ pub mod clap
                         ds.finish()
                     }
                 }
-
                 /// User-provided data that can be attached to an [`Arg`]
-                #[cfg(feature = "unstable-ext")]
                 pub trait ArgExt: Extension {}
             }
 
@@ -2757,7 +2553,7 @@ pub mod clap
                 {
                     *,
                 };
-                
+                /*
                 // Std
                 use std::env;
                 use std::ffi::OsString;
@@ -2790,10 +2586,12 @@ pub mod clap
 
                 #[cfg(debug_assertions)]
                 use crate::builder::debug_asserts::assert_app;
+                */
 
                 /// Build a command-line interface.
                 #[derive(Debug, Clone)]
-                pub struct Command {
+                pub struct Command 
+                {
                     name: Str,
                     long_flag: Option<Str>,
                     short_flag: Option<char>,
@@ -2829,13 +2627,13 @@ pub mod clap
                     external_value_parser: Option<super::ValueParser>,
                     long_help_exists: bool,
                     deferred: Option<fn(Command) -> Command>,
-                    #[cfg(feature = "unstable-ext")]
+                    
                     ext: Extensions,
                     app_ext: Extensions,
                 }
-
                 /// # Basic API
-                impl Command {
+                impl Command 
+                {
                     /// Creates a new instance of an `Command`.
                     pub fn new(name: impl Into<Str>) -> Self {
                         /// The actual implementation of `new`, non-generic to save code size.
@@ -2851,10 +2649,8 @@ pub mod clap
 
                         new_inner(name.into())
                     }
-
                     /// Adds an [argument] to the list of valid possibilities.
-                    #[must_use]
-                    pub fn arg(mut self, a: impl Into<Arg>) -> Self {
+                    #[must_use] pub fn arg(mut self, a: impl Into<Arg>) -> Self {
                         let arg = a.into();
                         self.arg_internal(arg);
                         self
@@ -2873,16 +2669,13 @@ pub mod clap
                             .get_or_insert_with(|| self.current_help_heading.clone());
                         self.args.push(arg);
                     }
-
                     /// Adds multiple [arguments] to the list of valid possibilities.
-                    #[must_use]
-                    pub fn args(mut self, args: impl IntoIterator<Item = impl Into<Arg>>) -> Self {
+                    #[must_use] pub fn args(mut self, args: impl IntoIterator<Item = impl Into<Arg>>) -> Self {
                         for arg in args {
                             self = self.arg(arg);
                         }
                         self
                     }
-
                     /// Allows one to mutate an [`Arg`] after it's been added to a [`Command`].
                     #[must_use]
                     #[cfg_attr(debug_assertions, track_caller)]
@@ -2899,7 +2692,6 @@ pub mod clap
                         self.args.push(f(a));
                         self
                     }
-
                     /// Allows one to mutate all [`Arg`]s after they've been added to a [`Command`].
                     #[cfg_attr(feature = "string", doc = "```")]
                     #[cfg_attr(not(feature = "string"), doc = "```ignore")]
@@ -2913,7 +2705,6 @@ pub mod clap
                         self.args.mut_args(f);
                         self
                     }
-
                     /// Allows one to mutate an [`ArgGroup`] after it's been added to a [`Command`].
                     #[must_use]
                     #[cfg_attr(debug_assertions, track_caller)]
@@ -2933,8 +2724,7 @@ pub mod clap
                         self
                     }
                     /// Allows one to mutate a [`Command`] after it's been added as a subcommand.
-                    #[must_use]
-                    pub fn mut_subcommand<F>(mut self, name: impl AsRef<str>, f: F) -> Self
+                    #[must_use] pub fn mut_subcommand<F>(mut self, name: impl AsRef<str>, f: F) -> Self
                     where
                         F: FnOnce(Self) -> Self,
                     {
@@ -2950,28 +2740,20 @@ pub mod clap
                         self.subcommands.push(f(subcmd));
                         self
                     }
-
                     /// Adds an [`ArgGroup`] to the application.
-                    #[inline]
-                    #[must_use]
-                    pub fn group(mut self, group: impl Into<ArgGroup>) -> Self {
+                    #[inline] #[must_use] pub fn group(mut self, group: impl Into<ArgGroup>) -> Self {
                         self.groups.push(group.into());
                         self
                     }
-
                     /// Adds multiple [`ArgGroup`]s to the [`Command`] at once.
-                    #[must_use]
-                    pub fn groups(mut self, groups: impl IntoIterator<Item = impl Into<ArgGroup>>) -> Self {
+                    #[must_use] pub fn groups(mut self, groups: impl IntoIterator<Item = impl Into<ArgGroup>>) -> Self {
                         for g in groups {
                             self = self.group(g.into());
                         }
                         self
                     }
-
                     /// Adds a subcommand to the list of valid possibilities.
-                    #[inline]
-                    #[must_use]
-                    pub fn subcommand(self, subcmd: impl Into<Command>) -> Self {
+                    #[inline] #[must_use] pub fn subcommand(self, subcmd: impl Into<Command>) -> Self {
                         let subcmd = subcmd.into();
                         self.subcommand_internal(subcmd)
                     }
@@ -2985,51 +2767,40 @@ pub mod clap
                         self.subcommands.push(subcmd);
                         self
                     }
-
                     /// Adds multiple subcommands to the list of valid possibilities.
-                    #[must_use]
-                    pub fn subcommands(mut self, subcmds: impl IntoIterator<Item = impl Into<Self>>) -> Self {
+                    #[must_use] pub fn subcommands(mut self, subcmds: impl IntoIterator<Item = impl Into<Self>>) -> Self {
                         for subcmd in subcmds {
                             self = self.subcommand(subcmd);
                         }
                         self
                     }
-
                     /// Delay initialization for parts of the `Command`
                     pub fn defer(mut self, deferred: fn(Command) -> Command) -> Self {
                         self.deferred = Some(deferred);
                         self
                     }
-
                     /// Catch problems earlier in the development cycle.
                     pub fn debug_assert(mut self) {
                         self.build();
                     }
-
                     /// Custom error message for post-parsing validation
                     pub fn error(&mut self, kind: ErrorKind, message: impl fmt::Display) -> Error {
                         Error::raw(kind, message).format(self)
                     }
-
                     /// Parse [`env::args_os`], [exiting][Error::exit] on failure.
-                    #[inline]
-                    pub fn get_matches(self) -> ArgMatches {
+                    #[inline] pub fn get_matches(self) -> ArgMatches {
                         self.get_matches_from(env::args_os())
                     }
-
                     /// Parse [`env::args_os`], [exiting][Error::exit] on failure.
                     pub fn get_matches_mut(&mut self) -> ArgMatches {
                         self.try_get_matches_from_mut(env::args_os())
                             .unwrap_or_else(|e| e.exit())
                     }
-
                     /// Parse [`env::args_os`], returning a [`clap::Result`] on failure.
-                    #[inline]
-                    pub fn try_get_matches(self) -> ClapResult<ArgMatches> {
+                    #[inline] pub fn try_get_matches(self) -> ClapResult<ArgMatches> {
                         // Start the parsing
                         self.try_get_matches_from(env::args_os())
                     }
-
                     /// Parse the specified arguments, [exiting][Error::exit] on failure.
                     pub fn get_matches_from<I, T>(mut self, itr: I) -> ArgMatches
                     where
@@ -3041,7 +2812,6 @@ pub mod clap
                             e.exit()
                         })
                     }
-
                     /// Parse the specified arguments, returning a [`clap::Result`] on failure.
                     pub fn try_get_matches_from<I, T>(mut self, itr: I) -> ClapResult<ArgMatches>
                     where
@@ -3050,7 +2820,6 @@ pub mod clap
                     {
                         self.try_get_matches_from_mut(itr)
                     }
-
                     /// Parse the specified arguments, returning a [`clap::Result`] on failure.
                     pub fn try_get_matches_from_mut<I, T>(&mut self, itr: I) -> ClapResult<ArgMatches>
                     where
@@ -3101,7 +2870,6 @@ pub mod clap
 
                         self._do_parse(&mut raw_args, cursor)
                     }
-
                     /// Prints the short help message (`-h`) to [`io::stdout()`].
                     pub fn print_help(&mut self) -> io::Result<()> {
                         self._build_self(false);
@@ -3114,7 +2882,6 @@ pub mod clap
                         let c = Colorizer::new(Stream::Stdout, color).with_content(styled);
                         c.print()
                     }
-
                     /// Prints the long help message (`--help`) to [`io::stdout()`].
                     pub fn print_long_help(&mut self) -> io::Result<()> {
                         self._build_self(false);
@@ -3127,7 +2894,6 @@ pub mod clap
                         let c = Colorizer::new(Stream::Stdout, color).with_content(styled);
                         c.print()
                     }
-
                     /// Render the short help message (`-h`) to a [`StyledStr`]
                     pub fn render_help(&mut self) -> StyledStr {
                         self._build_self(false);
@@ -3137,7 +2903,6 @@ pub mod clap
                         write_help(&mut styled, self, &usage, false);
                         styled
                     }
-
                     /// Render the long help message (`--help`) to a [`StyledStr`].
                     pub fn render_long_help(&mut self) -> StyledStr {
                         self._build_self(false);
@@ -3177,86 +2942,72 @@ pub mod clap
                         ok!(write!(w, "{styled}"));
                         w.flush()
                     }
-
                     /// Version message rendered as if the user ran `-V`.
                     pub fn render_version(&self) -> String {
                         self._render_version(false)
                     }
-
                     /// Version message rendered as if the user ran `--version`.
                     pub fn render_long_version(&self) -> String {
                         self._render_version(true)
                     }
-
                     /// Usage statement
                     pub fn render_usage(&mut self) -> StyledStr {
                         self.render_usage_().unwrap_or_default()
                     }
 
-                    pub(crate) fn render_usage_(&mut self) -> Option<StyledStr> {
+                    pub fn render_usage_(&mut self) -> Option<StyledStr> {
                         // If there are global arguments, or settings we need to propagate them down to subcommands
                         // before parsing incase we run into a subcommand
                         self._build_self(false);
 
                         Usage::new(self).create_usage_with_title(&[])
                     }
-
                     /// Extend [`Command`] with [`CommandExt`] data
-                    #[cfg(feature = "unstable-ext")]
-                    #[allow(clippy::should_implement_trait)]
+                    
+                    
                     pub fn add<T: CommandExt + Extension>(mut self, tagged: T) -> Self {
                         self.ext.set(tagged);
                         self
                     }
                 }
-
                 /// # Application-wide Settings
-                impl Command {
+                impl Command 
+                {
                     /// Specifies that the parser should not assume the first argument passed is the binary name.
-                    #[inline]
-                    pub fn no_binary_name(self, yes: bool) -> Self {
+                    #[inline] pub fn no_binary_name(self, yes: bool) -> Self {
                         if yes {
                             self.global_setting(AppSettings::NoBinaryName)
                         } else {
                             self.unset_global_setting(AppSettings::NoBinaryName)
                         }
                     }
-
                     /// Try not to fail on parse errors, like missing option values.
-                    #[inline]
-                    pub fn ignore_errors(self, yes: bool) -> Self {
+                    #[inline] pub fn ignore_errors(self, yes: bool) -> Self {
                         if yes {
                             self.global_setting(AppSettings::IgnoreErrors)
                         } else {
                             self.unset_global_setting(AppSettings::IgnoreErrors)
                         }
                     }
-
                     /// Replace prior occurrences of arguments rather than error
-                    #[inline]
-                    pub fn args_override_self(self, yes: bool) -> Self {
+                    #[inline] pub fn args_override_self(self, yes: bool) -> Self {
                         if yes {
                             self.global_setting(AppSettings::AllArgsOverrideSelf)
                         } else {
                             self.unset_global_setting(AppSettings::AllArgsOverrideSelf)
                         }
                     }
-
                     /// Disables the automatic delimiting of values after `--` or when [`Arg::trailing_var_arg`]
-                    #[inline]
-                    pub fn dont_delimit_trailing_values(self, yes: bool) -> Self {
+                    #[inline] pub fn dont_delimit_trailing_values(self, yes: bool) -> Self {
                         if yes {
                             self.global_setting(AppSettings::DontDelimitTrailingValues)
                         } else {
                             self.unset_global_setting(AppSettings::DontDelimitTrailingValues)
                         }
                     }
-
                     /// Sets when to color output.
                     #[cfg(feature = "color")]
-                    #[inline]
-                    #[must_use]
-                    pub fn color(self, color: ColorChoice) -> Self {
+                    #[inline] #[must_use] pub fn color(self, color: ColorChoice) -> Self {
                         let cmd = self
                             .unset_global_setting(AppSettings::ColorAuto)
                             .unset_global_setting(AppSettings::ColorAlways)
@@ -3267,16 +3018,12 @@ pub mod clap
                             ColorChoice::Never => cmd.global_setting(AppSettings::ColorNever),
                         }
                     }
-
                     /// Sets the [`Styles`] for terminal output
                     #[cfg(feature = "color")]
-                    #[inline]
-                    #[must_use]
-                    pub fn styles(mut self, styles: Styles) -> Self {
+                    #[inline] #[must_use] pub fn styles(mut self, styles: Styles) -> Self {
                         self.app_ext.set(styles);
                         self
                     }
-
                     /// Sets the terminal width at which to wrap help messages.
                     #[inline]
                     #[must_use]
@@ -3285,7 +3032,6 @@ pub mod clap
                         self.app_ext.set(TermWidth(width));
                         self
                     }
-
                     /// Limit the line length for wrapping help when using the current terminal's width.
                     #[inline]
                     #[must_use]
@@ -3294,70 +3040,56 @@ pub mod clap
                         self.app_ext.set(MaxTermWidth(width));
                         self
                     }
-
                     /// Disables `-V` and `--version` flag.
-                    #[inline]
-                    pub fn disable_version_flag(self, yes: bool) -> Self {
+                    #[inline] pub fn disable_version_flag(self, yes: bool) -> Self {
                         if yes {
                             self.global_setting(AppSettings::DisableVersionFlag)
                         } else {
                             self.unset_global_setting(AppSettings::DisableVersionFlag)
                         }
                     }
-
                     /// Specifies to use the version of the current command for all [`subcommands`].
-                    #[inline]
-                    pub fn propagate_version(self, yes: bool) -> Self {
+                    #[inline] pub fn propagate_version(self, yes: bool) -> Self {
                         if yes {
                             self.global_setting(AppSettings::PropagateVersion)
                         } else {
                             self.unset_global_setting(AppSettings::PropagateVersion)
                         }
                     }
-
                     /// Places the help string for all arguments and subcommands on the line after them.
-                    #[inline]
-                    pub fn next_line_help(self, yes: bool) -> Self {
+                    #[inline] pub fn next_line_help(self, yes: bool) -> Self {
                         if yes {
                             self.global_setting(AppSettings::NextLineHelp)
                         } else {
                             self.unset_global_setting(AppSettings::NextLineHelp)
                         }
                     }
-
                     /// Disables `-h` and `--help` flag.
-                    #[inline]
-                    pub fn disable_help_flag(self, yes: bool) -> Self {
+                    #[inline] pub fn disable_help_flag(self, yes: bool) -> Self {
                         if yes {
                             self.global_setting(AppSettings::DisableHelpFlag)
                         } else {
                             self.unset_global_setting(AppSettings::DisableHelpFlag)
                         }
                     }
-
                     /// Disables the `help` [`subcommand`].
-                    #[inline]
-                    pub fn disable_help_subcommand(self, yes: bool) -> Self {
+                    #[inline] pub fn disable_help_subcommand(self, yes: bool) -> Self {
                         if yes {
                             self.global_setting(AppSettings::DisableHelpSubcommand)
                         } else {
                             self.unset_global_setting(AppSettings::DisableHelpSubcommand)
                         }
                     }
-
                     /// Disables colorized help messages.
-                    #[inline]
-                    pub fn disable_colored_help(self, yes: bool) -> Self {
+                    #[inline] pub fn disable_colored_help(self, yes: bool) -> Self {
                         if yes {
                             self.global_setting(AppSettings::DisableColoredHelp)
                         } else {
                             self.unset_global_setting(AppSettings::DisableColoredHelp)
                         }
                     }
-
                     /// Panic if help descriptions are omitted.
-                    #[inline]
-                    pub fn help_expected(self, yes: bool) -> Self {
+                    #[inline] pub fn help_expected(self, yes: bool) -> Self {
                         if yes {
                             self.global_setting(AppSettings::HelpExpected)
                         } else {
@@ -3373,30 +3105,24 @@ pub mod clap
                     pub fn dont_collapse_args_in_usage(self, _yes: bool) -> Self {
                         self
                     }
-
                     /// Tells `clap` *not* to print possible values when displaying help information.
-                    #[inline]
-                    pub fn hide_possible_values(self, yes: bool) -> Self {
+                    #[inline] pub fn hide_possible_values(self, yes: bool) -> Self {
                         if yes {
                             self.global_setting(AppSettings::HidePossibleValues)
                         } else {
                             self.unset_global_setting(AppSettings::HidePossibleValues)
                         }
                     }
-
                     /// Allow partial matches of long arguments or their [aliases].
-                    #[inline]
-                    pub fn infer_long_args(self, yes: bool) -> Self {
+                    #[inline] pub fn infer_long_args(self, yes: bool) -> Self {
                         if yes {
                             self.global_setting(AppSettings::InferLongArgs)
                         } else {
                             self.unset_global_setting(AppSettings::InferLongArgs)
                         }
                     }
-
                     /// Allow partial matches of [subcommand] names and their [aliases].
-                    #[inline]
-                    pub fn infer_subcommands(self, yes: bool) -> Self {
+                    #[inline] pub fn infer_subcommands(self, yes: bool) -> Self {
                         if yes {
                             self.global_setting(AppSettings::InferSubcommands)
                         } else {
@@ -3404,107 +3130,79 @@ pub mod clap
                         }
                     }
                 }
-
                 /// # Command-specific Settings
-                impl Command {
+                impl Command 
+                {
                     /// (Re)Sets the program's name.
-                    #[must_use]
-                    pub fn name(mut self, name: impl Into<Str>) -> Self {
+                    #[must_use] pub fn name(mut self, name: impl Into<Str>) -> Self {
                         self.name = name.into();
                         self
                     }
-
                     /// Overrides the runtime-determined name of the binary for help and error messages.
-                    #[must_use]
-                    pub fn bin_name(mut self, name: impl IntoResettable<String>) -> Self {
+                    #[must_use] pub fn bin_name(mut self, name: impl IntoResettable<String>) -> Self {
                         self.bin_name = name.into_resettable().into_option();
                         self
                     }
-
                     /// Overrides the runtime-determined display name of the program for help and error messages.
-                    #[must_use]
-                    pub fn display_name(mut self, name: impl IntoResettable<String>) -> Self {
+                    #[must_use] pub fn display_name(mut self, name: impl IntoResettable<String>) -> Self {
                         self.display_name = name.into_resettable().into_option();
                         self
                     }
-
                     /// Sets the author(s) for the help message.
-                    #[must_use]
-                    pub fn author(mut self, author: impl IntoResettable<Str>) -> Self {
+                    #[must_use] pub fn author(mut self, author: impl IntoResettable<Str>) -> Self {
                         self.author = author.into_resettable().into_option();
                         self
                     }
-
                     /// Sets the program's description for the short help (`-h`).
-                    #[must_use]
-                    pub fn about(mut self, about: impl IntoResettable<StyledStr>) -> Self {
+                    #[must_use] pub fn about(mut self, about: impl IntoResettable<StyledStr>) -> Self {
                         self.about = about.into_resettable().into_option();
                         self
                     }
-
                     /// Sets the program's description for the long help (`--help`).
-                    #[must_use]
-                    pub fn long_about(mut self, long_about: impl IntoResettable<StyledStr>) -> Self {
+                    #[must_use] pub fn long_about(mut self, long_about: impl IntoResettable<StyledStr>) -> Self {
                         self.long_about = long_about.into_resettable().into_option();
                         self
                     }
-
                     /// Free-form help text for after auto-generated short help (`-h`).
-                    #[must_use]
-                    pub fn after_help(mut self, help: impl IntoResettable<StyledStr>) -> Self {
+                    #[must_use] pub fn after_help(mut self, help: impl IntoResettable<StyledStr>) -> Self {
                         self.after_help = help.into_resettable().into_option();
                         self
                     }
-
                     /// Free-form help text for after auto-generated long help (`--help`).
-                    #[must_use]
-                    pub fn after_long_help(mut self, help: impl IntoResettable<StyledStr>) -> Self {
+                    #[must_use] pub fn after_long_help(mut self, help: impl IntoResettable<StyledStr>) -> Self {
                         self.after_long_help = help.into_resettable().into_option();
                         self
                     }
-
                     /// Free-form help text for before auto-generated short help (`-h`).
-                    #[must_use]
-                    pub fn before_help(mut self, help: impl IntoResettable<StyledStr>) -> Self {
+                    #[must_use] pub fn before_help(mut self, help: impl IntoResettable<StyledStr>) -> Self {
                         self.before_help = help.into_resettable().into_option();
                         self
                     }
-
                     /// Free-form help text for before auto-generated long help (`--help`).
-                    #[must_use]
-                    pub fn before_long_help(mut self, help: impl IntoResettable<StyledStr>) -> Self {
+                    #[must_use] pub fn before_long_help(mut self, help: impl IntoResettable<StyledStr>) -> Self {
                         self.before_long_help = help.into_resettable().into_option();
                         self
                     }
-
                     /// Sets the version for the short version (`-V`) and help messages.
-                    #[must_use]
-                    pub fn version(mut self, ver: impl IntoResettable<Str>) -> Self {
+                    #[must_use] pub fn version(mut self, ver: impl IntoResettable<Str>) -> Self {
                         self.version = ver.into_resettable().into_option();
                         self
                     }
-
                     /// Sets the version for the long version (`--version`) and help messages.
-                    #[must_use]
-                    pub fn long_version(mut self, ver: impl IntoResettable<Str>) -> Self {
+                    #[must_use] pub fn long_version(mut self, ver: impl IntoResettable<Str>) -> Self {
                         self.long_version = ver.into_resettable().into_option();
                         self
                     }
-
                     /// Overrides the `clap` generated usage string for help and error messages.
-                    #[must_use]
-                    pub fn override_usage(mut self, usage: impl IntoResettable<StyledStr>) -> Self {
+                    #[must_use] pub fn override_usage(mut self, usage: impl IntoResettable<StyledStr>) -> Self {
                         self.usage_str = usage.into_resettable().into_option();
                         self
                     }
-
                     /// Overrides the `clap` generated help message (both `-h` and `--help`).
-                    #[must_use]
-                    pub fn override_help(mut self, help: impl IntoResettable<StyledStr>) -> Self {
+                    #[must_use] pub fn override_help(mut self, help: impl IntoResettable<StyledStr>) -> Self {
                         self.help_str = help.into_resettable().into_option();
                         self
                     }
-
                     /// Sets the help template to be used, overriding the default format.
                     #[must_use]
                     #[cfg(feature = "help")]
@@ -3513,66 +3211,47 @@ pub mod clap
                         self
                     }
 
-                    #[inline]
-                    #[must_use]
-                    pub(crate) fn setting(mut self, setting: AppSettings) -> Self {
+                    #[inline] #[must_use] pub fn setting(mut self, setting: AppSettings) -> Self {
                         self.settings.set(setting);
                         self
                     }
 
-                    #[inline]
-                    #[must_use]
-                    pub(crate) fn unset_setting(mut self, setting: AppSettings) -> Self {
+                    #[inline] #[must_use] pub fn unset_setting(mut self, setting: AppSettings) -> Self {
                         self.settings.unset(setting);
                         self
                     }
 
-                    #[inline]
-                    #[must_use]
-                    pub(crate) fn global_setting(mut self, setting: AppSettings) -> Self {
+                    #[inline] #[must_use] pub fn global_setting(mut self, setting: AppSettings) -> Self {
                         self.settings.set(setting);
                         self.g_settings.set(setting);
                         self
                     }
 
-                    #[inline]
-                    #[must_use]
-                    pub(crate) fn unset_global_setting(mut self, setting: AppSettings) -> Self {
+                    #[inline] #[must_use] pub fn unset_global_setting(mut self, setting: AppSettings) -> Self {
                         self.settings.unset(setting);
                         self.g_settings.unset(setting);
                         self
                     }
-
                     /// Flatten subcommand help into the current command's help.
-                    #[inline]
-                    #[must_use]
-                    pub fn flatten_help(self, yes: bool) -> Self {
+                    #[inline] #[must_use] pub fn flatten_help(self, yes: bool) -> Self {
                         if yes {
                             self.setting(AppSettings::FlattenHelp)
                         } else {
                             self.unset_setting(AppSettings::FlattenHelp)
                         }
                     }
-
                     /// Set the default section heading for future args.
-                    #[inline]
-                    #[must_use]
-                    pub fn next_help_heading(mut self, heading: impl IntoResettable<Str>) -> Self {
+                    #[inline] #[must_use] pub fn next_help_heading(mut self, heading: impl IntoResettable<Str>) -> Self {
                         self.current_help_heading = heading.into_resettable().into_option();
                         self
                     }
-
                     /// Change the starting value for assigning future display orders for args.
-                    #[inline]
-                    #[must_use]
-                    pub fn next_display_order(mut self, disp_ord: impl IntoResettable<usize>) -> Self {
+                    #[inline] #[must_use] pub fn next_display_order(mut self, disp_ord: impl IntoResettable<usize>) -> Self {
                         self.current_disp_ord = disp_ord.into_resettable().into_option();
                         self
                     }
-
                     /// Exit gracefully if no arguments are present (e.g. `$ myprog`).
-                    #[inline]
-                    pub fn arg_required_else_help(self, yes: bool) -> Self {
+                    #[inline] pub fn arg_required_else_help(self, yes: bool) -> Self {
                         if yes {
                             self.setting(AppSettings::ArgRequiredElseHelp)
                         } else {
@@ -3618,10 +3297,8 @@ pub mod clap
                             self.unset_setting(AppSettings::TrailingVarArg)
                         }
                     }
-
                     /// Allows one to implement two styles of CLIs where positionals can be used out of order.
-                    #[inline]
-                    pub fn allow_missing_positional(self, yes: bool) -> Self {
+                    #[inline] pub fn allow_missing_positional(self, yes: bool) -> Self {
                         if yes {
                             self.setting(AppSettings::AllowMissingPositional)
                         } else {
@@ -3629,26 +3306,21 @@ pub mod clap
                         }
                     }
                 }
-
                 /// # Subcommand-specific Settings
-                impl Command {
+                impl Command 
+                {
                     /// Sets the short version of the subcommand flag without the preceding `-`.
-                    #[must_use]
-                    pub fn short_flag(mut self, short: impl IntoResettable<char>) -> Self {
+                    #[must_use] pub fn short_flag(mut self, short: impl IntoResettable<char>) -> Self {
                         self.short_flag = short.into_resettable().into_option();
                         self
                     }
-
                     /// Sets the long version of the subcommand flag without the preceding `--`.
-                    #[must_use]
-                    pub fn long_flag(mut self, long: impl Into<Str>) -> Self {
+                    #[must_use] pub fn long_flag(mut self, long: impl Into<Str>) -> Self {
                         self.long_flag = Some(long.into());
                         self
                     }
-
                     /// Sets a hidden alias to this subcommand.
-                    #[must_use]
-                    pub fn alias(mut self, name: impl IntoResettable<Str>) -> Self {
+                    #[must_use] pub fn alias(mut self, name: impl IntoResettable<Str>) -> Self {
                         if let Some(name) = name.into_resettable().into_option() {
                             self.aliases.push((name, false));
                         } else {
@@ -3656,10 +3328,8 @@ pub mod clap
                         }
                         self
                     }
-
                     /// Add an alias, which functions as  "hidden" short flag subcommand.
-                    #[must_use]
-                    pub fn short_flag_alias(mut self, name: impl IntoResettable<char>) -> Self {
+                    #[must_use] pub fn short_flag_alias(mut self, name: impl IntoResettable<char>) -> Self {
                         if let Some(name) = name.into_resettable().into_option() {
                             debug_assert!(name != '-', "short alias name cannot be `-`");
                             self.short_flag_aliases.push((name, false));
@@ -3668,10 +3338,8 @@ pub mod clap
                         }
                         self
                     }
-
                     /// Add an alias, which functions as a "hidden" long flag subcommand.
-                    #[must_use]
-                    pub fn long_flag_alias(mut self, name: impl IntoResettable<Str>) -> Self {
+                    #[must_use] pub fn long_flag_alias(mut self, name: impl IntoResettable<Str>) -> Self {
                         if let Some(name) = name.into_resettable().into_option() {
                             self.long_flag_aliases.push((name, false));
                         } else {
@@ -3679,37 +3347,29 @@ pub mod clap
                         }
                         self
                     }
-
                     /// Sets multiple hidden aliases to this subcommand.
-                    #[must_use]
-                    pub fn aliases(mut self, names: impl IntoIterator<Item = impl Into<Str>>) -> Self {
+                    #[must_use] pub fn aliases(mut self, names: impl IntoIterator<Item = impl Into<Str>>) -> Self {
                         self.aliases
                             .extend(names.into_iter().map(|n| (n.into(), false)));
                         self
                     }
-
                     /// Add aliases, which function as "hidden" short flag subcommands.
-                    #[must_use]
-                    pub fn short_flag_aliases(mut self, names: impl IntoIterator<Item = char>) -> Self {
+                    #[must_use] pub fn short_flag_aliases(mut self, names: impl IntoIterator<Item = char>) -> Self {
                         for s in names {
                             debug_assert!(s != '-', "short alias name cannot be `-`");
                             self.short_flag_aliases.push((s, false));
                         }
                         self
                     }
-
                     /// Add aliases, which function as "hidden" long flag subcommands.
-                    #[must_use]
-                    pub fn long_flag_aliases(mut self, names: impl IntoIterator<Item = impl Into<Str>>) -> Self {
+                    #[must_use] pub fn long_flag_aliases(mut self, names: impl IntoIterator<Item = impl Into<Str>>) -> Self {
                         for s in names {
                             self = self.long_flag_alias(s);
                         }
                         self
                     }
-
                     /// Sets a visible alias to this subcommand.
-                    #[must_use]
-                    pub fn visible_alias(mut self, name: impl IntoResettable<Str>) -> Self {
+                    #[must_use] pub fn visible_alias(mut self, name: impl IntoResettable<Str>) -> Self {
                         if let Some(name) = name.into_resettable().into_option() {
                             self.aliases.push((name, true));
                         } else {
@@ -3717,10 +3377,8 @@ pub mod clap
                         }
                         self
                     }
-
                     /// Add an alias, which functions as  "visible" short flag subcommand.
-                    #[must_use]
-                    pub fn visible_short_flag_alias(mut self, name: impl IntoResettable<char>) -> Self {
+                    #[must_use] pub fn visible_short_flag_alias(mut self, name: impl IntoResettable<char>) -> Self {
                         if let Some(name) = name.into_resettable().into_option() {
                             debug_assert!(name != '-', "short alias name cannot be `-`");
                             self.short_flag_aliases.push((name, true));
@@ -3729,10 +3387,8 @@ pub mod clap
                         }
                         self
                     }
-
                     /// Add an alias, which functions as a "visible" long flag subcommand.
-                    #[must_use]
-                    pub fn visible_long_flag_alias(mut self, name: impl IntoResettable<Str>) -> Self {
+                    #[must_use] pub fn visible_long_flag_alias(mut self, name: impl IntoResettable<Str>) -> Self {
                         if let Some(name) = name.into_resettable().into_option() {
                             self.long_flag_aliases.push((name, true));
                         } else {
@@ -3740,28 +3396,22 @@ pub mod clap
                         }
                         self
                     }
-
                     /// Sets multiple visible aliases to this subcommand.
-                    #[must_use]
-                    pub fn visible_aliases(mut self, names: impl IntoIterator<Item = impl Into<Str>>) -> Self {
+                    #[must_use] pub fn visible_aliases(mut self, names: impl IntoIterator<Item = impl Into<Str>>) -> Self {
                         self.aliases
                             .extend(names.into_iter().map(|n| (n.into(), true)));
                         self
                     }
-
                     /// Add aliases, which function as *visible* short flag subcommands.
-                    #[must_use]
-                    pub fn visible_short_flag_aliases(mut self, names: impl IntoIterator<Item = char>) -> Self {
+                    #[must_use] pub fn visible_short_flag_aliases(mut self, names: impl IntoIterator<Item = char>) -> Self {
                         for s in names {
                             debug_assert!(s != '-', "short alias name cannot be `-`");
                             self.short_flag_aliases.push((s, true));
                         }
                         self
                     }
-
                     /// Add aliases, which function as *visible* long flag subcommands.
-                    #[must_use]
-                    pub fn visible_long_flag_aliases(
+                    #[must_use] pub fn visible_long_flag_aliases(
                         mut self,
                         names: impl IntoIterator<Item = impl Into<Str>>,
                     ) -> Self {
@@ -3770,25 +3420,19 @@ pub mod clap
                         }
                         self
                     }
-
                     /// Set the placement of this subcommand within the help.
-                    #[inline]
-                    #[must_use]
-                    pub fn display_order(mut self, ord: impl IntoResettable<usize>) -> Self {
+                    #[inline] #[must_use] pub fn display_order(mut self, ord: impl IntoResettable<usize>) -> Self {
                         self.disp_ord = ord.into_resettable().into_option();
                         self
                     }
-
                     /// Specifies that this [`subcommand`] should be hidden from help messages.
-                    #[inline]
-                    pub fn hide(self, yes: bool) -> Self {
+                    #[inline] pub fn hide(self, yes: bool) -> Self {
                         if yes {
                             self.setting(AppSettings::Hidden)
                         } else {
                             self.unset_setting(AppSettings::Hidden)
                         }
                     }
-
                     /// If no [`subcommand`] is present at runtime, error and exit gracefully.
                     pub fn subcommand_required(self, yes: bool) -> Self {
                         if yes {
@@ -3797,7 +3441,6 @@ pub mod clap
                             self.unset_setting(AppSettings::SubcommandRequired)
                         }
                     }
-
                     /// Assume unexpected positional arguments are a [`subcommand`].
                     pub fn allow_external_subcommands(self, yes: bool) -> Self {
                         if yes {
@@ -3806,7 +3449,6 @@ pub mod clap
                             self.unset_setting(AppSettings::AllowExternalSubcommands)
                         }
                     }
-
                     /// Specifies how to parse external subcommand arguments.
                     pub fn external_subcommand_value_parser(
                         mut self,
@@ -3815,7 +3457,6 @@ pub mod clap
                         self.external_value_parser = parser.into_resettable().into_option();
                         self
                     }
-
                     /// Specifies that use of an argument prevents the use of [`subcommands`].
                     pub fn args_conflicts_with_subcommands(self, yes: bool) -> Self {
                         if yes {
@@ -3824,7 +3465,6 @@ pub mod clap
                             self.unset_setting(AppSettings::ArgsNegateSubcommands)
                         }
                     }
-
                     /// Prevent subcommands from being consumed as an arguments value.
                     pub fn subcommand_precedence_over_arg(self, yes: bool) -> Self {
                         if yes {
@@ -3833,7 +3473,6 @@ pub mod clap
                             self.unset_setting(AppSettings::SubcommandPrecedenceOverArg)
                         }
                     }
-
                     /// Allows [`subcommands`] to override all requirements of the parent command.
                     pub fn subcommand_negates_reqs(self, yes: bool) -> Self {
                         if yes {
@@ -3842,221 +3481,169 @@ pub mod clap
                             self.unset_setting(AppSettings::SubcommandsNegateReqs)
                         }
                     }
-
                     /// Multiple-personality program dispatched on the binary name (`argv[0]`)
-                    #[inline]
-                    pub fn multicall(self, yes: bool) -> Self {
+                    #[inline] pub fn multicall(self, yes: bool) -> Self {
                         if yes {
                             self.setting(AppSettings::Multicall)
                         } else {
                             self.unset_setting(AppSettings::Multicall)
                         }
                     }
-
                     /// Sets the value name used for subcommands when printing usage and help.
-                    #[must_use]
-                    pub fn subcommand_value_name(mut self, value_name: impl IntoResettable<Str>) -> Self {
+                    #[must_use] pub fn subcommand_value_name(mut self, value_name: impl IntoResettable<Str>) -> Self {
                         self.subcommand_value_name = value_name.into_resettable().into_option();
                         self
                     }
-
                     /// Sets the help heading used for subcommands when printing usage and help.
-                    #[must_use]
-                    pub fn subcommand_help_heading(mut self, heading: impl IntoResettable<Str>) -> Self {
+                    #[must_use] pub fn subcommand_help_heading(mut self, heading: impl IntoResettable<Str>) -> Self {
                         self.subcommand_heading = heading.into_resettable().into_option();
                         self
                     }
                 }
-
                 /// # Reflection
-                impl Command {
+                impl Command 
+                {
                     #[inline]
                     #[cfg(feature = "usage")]
-                    pub(crate) fn get_usage_name(&self) -> Option<&str> {
+                    pub fn get_usage_name(&self) -> Option<&str> {
                         self.usage_name.as_deref()
                     }
 
                     #[inline]
                     #[cfg(feature = "usage")]
-                    pub(crate) fn get_usage_name_fallback(&self) -> &str {
+                    pub fn get_usage_name_fallback(&self) -> &str {
                         self.get_usage_name()
                             .unwrap_or_else(|| self.get_bin_name_fallback())
                     }
 
                     #[inline]
                     #[cfg(not(feature = "usage"))]
-                    #[allow(dead_code)]
-                    pub(crate) fn get_usage_name_fallback(&self) -> &str {
+                    
+                    pub fn get_usage_name_fallback(&self) -> &str {
                         self.get_bin_name_fallback()
                     }
-
                     /// Get the name of the binary.
-                    #[inline]
-                    pub fn get_display_name(&self) -> Option<&str> {
+                    #[inline] pub fn get_display_name(&self) -> Option<&str> {
                         self.display_name.as_deref()
                     }
-
                     /// Get the name of the binary.
-                    #[inline]
-                    pub fn get_bin_name(&self) -> Option<&str> {
+                    #[inline] pub fn get_bin_name(&self) -> Option<&str> {
                         self.bin_name.as_deref()
                     }
-
                     /// Get the name of the binary.
-                    #[inline]
-                    pub(crate) fn get_bin_name_fallback(&self) -> &str {
+                    #[inline] pub fn get_bin_name_fallback(&self) -> &str {
                         self.bin_name.as_deref().unwrap_or_else(|| self.get_name())
                     }
-
                     /// Set binary name. Uses `&mut self` instead of `self`.
                     pub fn set_bin_name(&mut self, name: impl Into<String>) {
                         self.bin_name = Some(name.into());
                     }
-
                     /// Get the name of the cmd.
-                    #[inline]
-                    pub fn get_name(&self) -> &str {
+                    #[inline] pub fn get_name(&self) -> &str {
                         self.name.as_str()
                     }
 
                     #[inline]
                     #[cfg(debug_assertions)]
-                    pub(crate) fn get_name_str(&self) -> &Str {
+                    pub fn get_name_str(&self) -> &Str {
                         &self.name
                     }
-
                     /// Get all known names of the cmd (i.e. primary name and visible aliases).
                     pub fn get_name_and_visible_aliases(&self) -> Vec<&str> {
                         let mut names = vec![self.name.as_str()];
                         names.extend(self.get_visible_aliases());
                         names
                     }
-
                     /// Get the version of the cmd.
-                    #[inline]
-                    pub fn get_version(&self) -> Option<&str> {
+                    #[inline] pub fn get_version(&self) -> Option<&str> {
                         self.version.as_deref()
                     }
-
                     /// Get the long version of the cmd.
-                    #[inline]
-                    pub fn get_long_version(&self) -> Option<&str> {
+                    #[inline] pub fn get_long_version(&self) -> Option<&str> {
                         self.long_version.as_deref()
                     }
-
                     /// Get the placement within help
-                    #[inline]
-                    pub fn get_display_order(&self) -> usize {
+                    #[inline] pub fn get_display_order(&self) -> usize {
                         self.disp_ord.unwrap_or(999)
                     }
-
                     /// Get the authors of the cmd.
-                    #[inline]
-                    pub fn get_author(&self) -> Option<&str> {
+                    #[inline] pub fn get_author(&self) -> Option<&str> {
                         self.author.as_deref()
                     }
-
                     /// Get the short flag of the subcommand.
-                    #[inline]
-                    pub fn get_short_flag(&self) -> Option<char> {
+                    #[inline] pub fn get_short_flag(&self) -> Option<char> {
                         self.short_flag
                     }
-
                     /// Get the long flag of the subcommand.
-                    #[inline]
-                    pub fn get_long_flag(&self) -> Option<&str> {
+                    #[inline] pub fn get_long_flag(&self) -> Option<&str> {
                         self.long_flag.as_deref()
                     }
-
                     /// Get the help message specified via [`Command::about`].
                     ///
                     /// [`Command::about`]: Command::about()
-                    #[inline]
-                    pub fn get_about(&self) -> Option<&StyledStr> {
+                    #[inline] pub fn get_about(&self) -> Option<&StyledStr> {
                         self.about.as_ref()
                     }
-
                     /// Get the help message specified via [`Command::long_about`].
                     ///
                     /// [`Command::long_about`]: Command::long_about()
-                    #[inline]
-                    pub fn get_long_about(&self) -> Option<&StyledStr> {
+                    #[inline] pub fn get_long_about(&self) -> Option<&StyledStr> {
                         self.long_about.as_ref()
                     }
-
                     /// Get the custom section heading specified via [`Command::flatten_help`].
-                    #[inline]
-                    pub fn is_flatten_help_set(&self) -> bool {
+                    #[inline] pub fn is_flatten_help_set(&self) -> bool {
                         self.is_set(AppSettings::FlattenHelp)
                     }
-
                     /// Get the custom section heading specified via [`Command::next_help_heading`].
                     ///
                     /// [`Command::help_heading`]: Command::help_heading()
-                    #[inline]
-                    pub fn get_next_help_heading(&self) -> Option<&str> {
+                    #[inline] pub fn get_next_help_heading(&self) -> Option<&str> {
                         self.current_help_heading.as_deref()
                     }
-
                     /// Iterate through the *visible* aliases for this subcommand.
-                    #[inline]
-                    pub fn get_visible_aliases(&self) -> impl Iterator<Item = &str> + '_ {
+                    #[inline] pub fn get_visible_aliases(&self) -> impl Iterator<Item = &str> + '_ {
                         self.aliases
                             .iter()
                             .filter(|(_, vis)| *vis)
                             .map(|a| a.0.as_str())
                     }
-
                     /// Iterate through the *visible* short aliases for this subcommand.
-                    #[inline]
-                    pub fn get_visible_short_flag_aliases(&self) -> impl Iterator<Item = char> + '_ {
+                    #[inline] pub fn get_visible_short_flag_aliases(&self) -> impl Iterator<Item = char> + '_ {
                         self.short_flag_aliases
                             .iter()
                             .filter(|(_, vis)| *vis)
                             .map(|a| a.0)
                     }
-
                     /// Iterate through the *visible* long aliases for this subcommand.
-                    #[inline]
-                    pub fn get_visible_long_flag_aliases(&self) -> impl Iterator<Item = &str> + '_ {
+                    #[inline] pub fn get_visible_long_flag_aliases(&self) -> impl Iterator<Item = &str> + '_ {
                         self.long_flag_aliases
                             .iter()
                             .filter(|(_, vis)| *vis)
                             .map(|a| a.0.as_str())
                     }
-
                     /// Iterate through the set of *all* the aliases for this subcommand, both visible and hidden.
-                    #[inline]
-                    pub fn get_all_aliases(&self) -> impl Iterator<Item = &str> + '_ {
+                    #[inline] pub fn get_all_aliases(&self) -> impl Iterator<Item = &str> + '_ {
                         self.aliases.iter().map(|a| a.0.as_str())
                     }
-
                     /// Iterate through the set of *all* the short aliases for this subcommand, both visible and hidden.
-                    #[inline]
-                    pub fn get_all_short_flag_aliases(&self) -> impl Iterator<Item = char> + '_ {
+                    #[inline] pub fn get_all_short_flag_aliases(&self) -> impl Iterator<Item = char> + '_ {
                         self.short_flag_aliases.iter().map(|a| a.0)
                     }
-
                     /// Iterate through the set of *all* the long aliases for this subcommand, both visible and hidden.
-                    #[inline]
-                    pub fn get_all_long_flag_aliases(&self) -> impl Iterator<Item = &str> + '_ {
+                    #[inline] pub fn get_all_long_flag_aliases(&self) -> impl Iterator<Item = &str> + '_ {
                         self.long_flag_aliases.iter().map(|a| a.0.as_str())
                     }
-
                     /// Iterate through the *hidden* aliases for this subcommand.
-                    #[inline]
-                    pub fn get_aliases(&self) -> impl Iterator<Item = &str> + '_ {
+                    #[inline] pub fn get_aliases(&self) -> impl Iterator<Item = &str> + '_ {
                         self.aliases
                             .iter()
                             .filter(|(_, vis)| !*vis)
                             .map(|a| a.0.as_str())
                     }
 
-                    #[inline]
-                    pub(crate) fn is_set(&self, s: AppSettings) -> bool {
+                    #[inline] pub fn is_set(&self, s: AppSettings) -> bool {
                         self.settings.is_set(s) || self.g_settings.is_set(s)
                     }
-
                     /// Should we color the output?
                     pub fn get_color(&self) -> ColorChoice {
                         debug!("Command::color: Color setting...");
@@ -4076,108 +3663,76 @@ pub mod clap
                             ColorChoice::Never
                         }
                     }
-
                     /// Return the current `Styles` for the `Command`
-                    #[inline]
-                    pub fn get_styles(&self) -> &Styles {
+                    #[inline] pub fn get_styles(&self) -> &Styles {
                         self.app_ext.get().unwrap_or_default()
                     }
-
                     /// Iterate through the set of subcommands, getting a reference to each.
-                    #[inline]
-                    pub fn get_subcommands(&self) -> impl Iterator<Item = &Command> {
+                    #[inline] pub fn get_subcommands(&self) -> impl Iterator<Item = &Command> {
                         self.subcommands.iter()
                     }
-
                     /// Iterate through the set of subcommands, getting a mutable reference to each.
-                    #[inline]
-                    pub fn get_subcommands_mut(&mut self) -> impl Iterator<Item = &mut Command> {
+                    #[inline] pub fn get_subcommands_mut(&mut self) -> impl Iterator<Item = &mut Command> {
                         self.subcommands.iter_mut()
                     }
-
                     /// Returns `true` if this `Command` has subcommands.
-                    #[inline]
-                    pub fn has_subcommands(&self) -> bool {
+                    #[inline] pub fn has_subcommands(&self) -> bool {
                         !self.subcommands.is_empty()
                     }
-
                     /// Returns the help heading for listing subcommands.
-                    #[inline]
-                    pub fn get_subcommand_help_heading(&self) -> Option<&str> {
+                    #[inline] pub fn get_subcommand_help_heading(&self) -> Option<&str> {
                         self.subcommand_heading.as_deref()
                     }
-
                     /// Returns the subcommand value name.
-                    #[inline]
-                    pub fn get_subcommand_value_name(&self) -> Option<&str> {
+                    #[inline] pub fn get_subcommand_value_name(&self) -> Option<&str> {
                         self.subcommand_value_name.as_deref()
                     }
-
                     /// Returns the help heading for listing subcommands.
-                    #[inline]
-                    pub fn get_before_help(&self) -> Option<&StyledStr> {
+                    #[inline] pub fn get_before_help(&self) -> Option<&StyledStr> {
                         self.before_help.as_ref()
                     }
-
                     /// Returns the help heading for listing subcommands.
-                    #[inline]
-                    pub fn get_before_long_help(&self) -> Option<&StyledStr> {
+                    #[inline] pub fn get_before_long_help(&self) -> Option<&StyledStr> {
                         self.before_long_help.as_ref()
                     }
-
                     /// Returns the help heading for listing subcommands.
-                    #[inline]
-                    pub fn get_after_help(&self) -> Option<&StyledStr> {
+                    #[inline] pub fn get_after_help(&self) -> Option<&StyledStr> {
                         self.after_help.as_ref()
                     }
-
                     /// Returns the help heading for listing subcommands.
-                    #[inline]
-                    pub fn get_after_long_help(&self) -> Option<&StyledStr> {
+                    #[inline] pub fn get_after_long_help(&self) -> Option<&StyledStr> {
                         self.after_long_help.as_ref()
                     }
-
                     /// Find subcommand such that its name or one of aliases equals `name`.
-                    #[inline]
-                    pub fn find_subcommand(&self, name: impl AsRef<std::ffi::OsStr>) -> Option<&Command> {
+                    #[inline] pub fn find_subcommand(&self, name: impl AsRef<std::ffi::OsStr>) -> Option<&Command> {
                         let name = name.as_ref();
                         self.get_subcommands().find(|s| s.aliases_to(name))
                     }
-
                     /// Find subcommand such that its name or one of aliases equals `name`, returning a mutable reference to the subcommand.
-                    #[inline]
-                    pub fn find_subcommand_mut(
+                    #[inline] pub fn find_subcommand_mut(
                         &mut self,
                         name: impl AsRef<std::ffi::OsStr>,
                     ) -> Option<&mut Command> {
                         let name = name.as_ref();
                         self.get_subcommands_mut().find(|s| s.aliases_to(name))
                     }
-
                     /// Iterate through the set of groups.
-                    #[inline]
-                    pub fn get_groups(&self) -> impl Iterator<Item = &ArgGroup> {
+                    #[inline] pub fn get_groups(&self) -> impl Iterator<Item = &ArgGroup> {
                         self.groups.iter()
                     }
-
                     /// Iterate through the set of arguments.
-                    #[inline]
-                    pub fn get_arguments(&self) -> impl Iterator<Item = &Arg> {
+                    #[inline] pub fn get_arguments(&self) -> impl Iterator<Item = &Arg> {
                         self.args.args()
                     }
-
                     /// Iterate through the *positionals* arguments.
-                    #[inline]
-                    pub fn get_positionals(&self) -> impl Iterator<Item = &Arg> {
+                    #[inline] pub fn get_positionals(&self) -> impl Iterator<Item = &Arg> {
                         self.get_arguments().filter(|a| a.is_positional())
                     }
-
                     /// Iterate through the *options*.
                     pub fn get_opts(&self) -> impl Iterator<Item = &Arg> {
                         self.get_arguments()
                             .filter(|a| a.is_takes_value_set() && !a.is_positional())
                     }
-
                     /// Get a list of all arguments the given argument conflicts with.
                     pub fn get_arg_conflicts_with(&self, arg: &Arg) -> Vec<&Arg> // FIXME: This could probably have been an iterator
                     {
@@ -4201,7 +3756,6 @@ pub mod clap
                             result
                         }
                     }
-
                     /// Get a unique list of all arguments of all commands and continuous subcommands the given argument conflicts with.
                     fn get_global_arg_conflicts_with(&self, arg: &Arg) -> Vec<&Arg> // FIXME: This could probably have been an iterator
                     {
@@ -4223,7 +3777,6 @@ pub mod clap
                             })
                             .collect()
                     }
-
                     /// Get a list of subcommands which contain the provided Argument
                     fn get_subcommands_containing(&self, arg: &Arg) -> Vec<&Self> {
                         let mut vec = Vec::new();
@@ -4239,56 +3792,46 @@ pub mod clap
                         }
                         vec
                     }
-
                     /// Report whether [`Command::no_binary_name`] is set
                     pub fn is_no_binary_name_set(&self) -> bool {
                         self.is_set(AppSettings::NoBinaryName)
                     }
-
                     /// Report whether [`Command::ignore_errors`] is set
-                    pub(crate) fn is_ignore_errors_set(&self) -> bool {
+                    pub fn is_ignore_errors_set(&self) -> bool {
                         self.is_set(AppSettings::IgnoreErrors)
                     }
-
                     /// Report whether [`Command::dont_delimit_trailing_values`] is set
                     pub fn is_dont_delimit_trailing_values_set(&self) -> bool {
                         self.is_set(AppSettings::DontDelimitTrailingValues)
                     }
-
                     /// Report whether [`Command::disable_version_flag`] is set
                     pub fn is_disable_version_flag_set(&self) -> bool {
                         self.is_set(AppSettings::DisableVersionFlag)
                             || (self.version.is_none() && self.long_version.is_none())
                     }
-
                     /// Report whether [`Command::propagate_version`] is set
                     pub fn is_propagate_version_set(&self) -> bool {
                         self.is_set(AppSettings::PropagateVersion)
                     }
-
                     /// Report whether [`Command::next_line_help`] is set
                     pub fn is_next_line_help_set(&self) -> bool {
                         self.is_set(AppSettings::NextLineHelp)
                     }
-
                     /// Report whether [`Command::disable_help_flag`] is set
                     pub fn is_disable_help_flag_set(&self) -> bool {
                         self.is_set(AppSettings::DisableHelpFlag)
                     }
-
                     /// Report whether [`Command::disable_help_subcommand`] is set
                     pub fn is_disable_help_subcommand_set(&self) -> bool {
                         self.is_set(AppSettings::DisableHelpSubcommand)
                     }
-
                     /// Report whether [`Command::disable_colored_help`] is set
                     pub fn is_disable_colored_help_set(&self) -> bool {
                         self.is_set(AppSettings::DisableColoredHelp)
                     }
-
                     /// Report whether [`Command::help_expected`] is set
                     #[cfg(debug_assertions)]
-                    pub(crate) fn is_help_expected_set(&self) -> bool {
+                    pub fn is_help_expected_set(&self) -> bool {
                         self.is_set(AppSettings::HelpExpected)
                     }
 
@@ -4300,17 +3843,14 @@ pub mod clap
                     pub fn is_dont_collapse_args_in_usage_set(&self) -> bool {
                         true
                     }
-
                     /// Report whether [`Command::infer_long_args`] is set
-                    pub(crate) fn is_infer_long_args_set(&self) -> bool {
+                    pub fn is_infer_long_args_set(&self) -> bool {
                         self.is_set(AppSettings::InferLongArgs)
                     }
-
                     /// Report whether [`Command::infer_subcommands`] is set
-                    pub(crate) fn is_infer_subcommands_set(&self) -> bool {
+                    pub fn is_infer_subcommands_set(&self) -> bool {
                         self.is_set(AppSettings::InferSubcommands)
                     }
-
                     /// Report whether [`Command::arg_required_else_help`] is set
                     pub fn is_arg_required_else_help_set(&self) -> bool {
                         self.is_set(AppSettings::ArgRequiredElseHelp)
@@ -4324,7 +3864,7 @@ pub mod clap
                             note = "Replaced with `Arg::is_allow_hyphen_values_set`"
                         )
                     )]
-                    pub(crate) fn is_allow_hyphen_values_set(&self) -> bool {
+                    pub fn is_allow_hyphen_values_set(&self) -> bool {
                         self.is_set(AppSettings::AllowHyphenValues)
                     }
 
@@ -4348,27 +3888,22 @@ pub mod clap
                     pub fn is_trailing_var_arg_set(&self) -> bool {
                         self.is_set(AppSettings::TrailingVarArg)
                     }
-
                     /// Report whether [`Command::allow_missing_positional`] is set
                     pub fn is_allow_missing_positional_set(&self) -> bool {
                         self.is_set(AppSettings::AllowMissingPositional)
                     }
-
                     /// Report whether [`Command::hide`] is set
                     pub fn is_hide_set(&self) -> bool {
                         self.is_set(AppSettings::Hidden)
                     }
-
                     /// Report whether [`Command::subcommand_required`] is set
                     pub fn is_subcommand_required_set(&self) -> bool {
                         self.is_set(AppSettings::SubcommandRequired)
                     }
-
                     /// Report whether [`Command::allow_external_subcommands`] is set
                     pub fn is_allow_external_subcommands_set(&self) -> bool {
                         self.is_set(AppSettings::AllowExternalSubcommands)
                     }
-
                     /// Configured parser for values passed to an external subcommand.
                     pub fn get_external_subcommand_value_parser(&self) -> Option<&super::ValueParser> {
                         if !self.is_allow_external_subcommands_set() {
@@ -4378,7 +3913,6 @@ pub mod clap
                             Some(self.external_value_parser.as_ref().unwrap_or(&DEFAULT))
                         }
                     }
-
                     /// Report whether [`Command::args_conflicts_with_subcommands`] is set
                     pub fn is_args_conflicts_with_subcommands_set(&self) -> bool {
                         self.is_set(AppSettings::ArgsNegateSubcommands)
@@ -4388,61 +3922,56 @@ pub mod clap
                     pub fn is_args_override_self(&self) -> bool {
                         self.is_set(AppSettings::AllArgsOverrideSelf)
                     }
-
                     /// Report whether [`Command::subcommand_precedence_over_arg`] is set
                     pub fn is_subcommand_precedence_over_arg_set(&self) -> bool {
                         self.is_set(AppSettings::SubcommandPrecedenceOverArg)
                     }
-
                     /// Report whether [`Command::subcommand_negates_reqs`] is set
                     pub fn is_subcommand_negates_reqs_set(&self) -> bool {
                         self.is_set(AppSettings::SubcommandsNegateReqs)
                     }
-
                     /// Report whether [`Command::multicall`] is set
                     pub fn is_multicall_set(&self) -> bool {
                         self.is_set(AppSettings::Multicall)
                     }
-
                     /// Access an [`CommandExt`]
-                    #[cfg(feature = "unstable-ext")]
+                    
                     pub fn get<T: CommandExt + Extension>(&self) -> Option<&T> {
                         self.ext.get::<T>()
                     }
-
                     /// Remove an [`CommandExt`]
-                    #[cfg(feature = "unstable-ext")]
+                    
                     pub fn remove<T: CommandExt + Extension>(mut self) -> Option<T> {
                         self.ext.remove::<T>()
                     }
                 }
-
-                // Internally used only
-                impl Command {
-                    pub(crate) fn get_override_usage(&self) -> Option<&StyledStr> {
+                
+                impl Command 
+                {
+                    pub fn get_override_usage(&self) -> Option<&StyledStr> {
                         self.usage_str.as_ref()
                     }
 
-                    pub(crate) fn get_override_help(&self) -> Option<&StyledStr> {
+                    pub fn get_override_help(&self) -> Option<&StyledStr> {
                         self.help_str.as_ref()
                     }
 
                     #[cfg(feature = "help")]
-                    pub(crate) fn get_help_template(&self) -> Option<&StyledStr> {
+                    pub fn get_help_template(&self) -> Option<&StyledStr> {
                         self.template.as_ref()
                     }
 
                     #[cfg(feature = "help")]
-                    pub(crate) fn get_term_width(&self) -> Option<usize> {
+                    pub fn get_term_width(&self) -> Option<usize> {
                         self.app_ext.get::<TermWidth>().map(|e| e.0)
                     }
 
                     #[cfg(feature = "help")]
-                    pub(crate) fn get_max_term_width(&self) -> Option<usize> {
+                    pub fn get_max_term_width(&self) -> Option<usize> {
                         self.app_ext.get::<MaxTermWidth>().map(|e| e.0)
                     }
 
-                    pub(crate) fn get_keymap(&self) -> &MKeyMap {
+                    pub fn get_keymap(&self) -> &MKeyMap {
                         &self.args
                     }
 
@@ -4490,7 +4019,6 @@ pub mod clap
 
                         Ok(matcher.into_inner())
                     }
-
                     /// Prepare for introspecting on all included [`Command`]s
                     ///
                     /// Call this on the top-level [`Command`] when done building and before reading state for
@@ -4500,14 +4028,14 @@ pub mod clap
                         self._build_bin_names_internal();
                     }
 
-                    pub(crate) fn _build_recursive(&mut self, expand_help_tree: bool) {
+                    pub fn _build_recursive(&mut self, expand_help_tree: bool) {
                         self._build_self(expand_help_tree);
                         for subcmd in self.get_subcommands_mut() {
                             subcmd._build_recursive(expand_help_tree);
                         }
                     }
 
-                    pub(crate) fn _build_self(&mut self, expand_help_tree: bool) {
+                    pub fn _build_self(&mut self, expand_help_tree: bool) {
                         debug!("Command::_build: name={:?}", self.get_name());
                         if !self.settings.is_set(AppSettings::Built) {
                             if let Some(deferred) = self.deferred.take() {
@@ -4605,7 +4133,7 @@ pub mod clap
                         }
                     }
 
-                    pub(crate) fn _build_subcommand(&mut self, name: &str) -> Option<&mut Self> {
+                    pub fn _build_subcommand(&mut self, name: &str) -> Option<&mut Self> {
                         use std::fmt::Write;
 
                         let mut mid_string = String::from(" ");
@@ -4805,7 +4333,7 @@ pub mod clap
                         }
                     }
 
-                    pub(crate) fn _panic_on_missing_help(&self, help_required_globally: bool) {
+                    pub fn _panic_on_missing_help(&self, help_required_globally: bool) {
                         if self.is_set(AppSettings::HelpExpected) || help_required_globally {
                             let args_missing_help: Vec<Id> = self
                                 .args
@@ -4827,7 +4355,7 @@ pub mod clap
                     }
 
                     #[cfg(debug_assertions)]
-                    pub(crate) fn two_args_of<F>(&self, condition: F) -> Option<(&Arg, &Arg)>
+                    pub fn two_args_of<F>(&self, condition: F) -> Option<(&Arg, &Arg)>
                     where
                         F: Fn(&Arg) -> bool,
                     {
@@ -4842,9 +4370,8 @@ pub mod clap
                     {
                         two_elements_of(self.groups.iter().filter(|a| condition(a)))
                     }
-
                     /// Propagate global args
-                    pub(crate) fn _propagate_global_args(&mut self) {
+                    pub fn _propagate_global_args(&mut self) {
                         debug!("Command::_propagate_global_args:{}", self.name);
 
                         let autogenerated_help_subcommand = !self.is_disable_help_subcommand_set();
@@ -4877,9 +4404,8 @@ pub mod clap
                             }
                         }
                     }
-
                     /// Propagate settings
-                    pub(crate) fn _propagate(&mut self) {
+                    pub fn _propagate(&mut self) {
                         debug!("Command::_propagate:{}", self.name);
                         let mut subcommands = std::mem::take(&mut self.subcommands);
                         for sc in &mut subcommands {
@@ -4907,7 +4433,7 @@ pub mod clap
                         }
                     }
 
-                    pub(crate) fn _check_help_and_version(&mut self, expand_help_tree: bool) {
+                    pub fn _check_help_and_version(&mut self, expand_help_tree: bool) {
                         debug!(
                             "Command::_check_help_and_version:{} expand_help_tree={}",
                             self.name, expand_help_tree
@@ -4999,7 +4525,7 @@ pub mod clap
                         cmd
                     }
 
-                    pub(crate) fn _render_version(&self, use_long: bool) -> String {
+                    pub fn _render_version(&self, use_long: bool) -> String {
                         debug!("Command::_render_version");
 
                         let ver = if use_long {
@@ -5017,7 +4543,7 @@ pub mod clap
                         format!("{display_name} {ver}\n")
                     }
 
-                    pub(crate) fn format_group(&self, g: &Id) -> StyledStr {
+                    pub fn format_group(&self, g: &Id) -> StyledStr {
                         use std::fmt::Write as _;
 
                         let g_string = self
@@ -5041,26 +4567,25 @@ pub mod clap
                         styled
                     }
                 }
-
                 /// A workaround:
                 /// <https://github.com/rust-lang/rust/issues/34511#issuecomment-373423999>
-                pub(crate) trait Captures<'a> {}
+                pub trait Captures<'a> {}
                 impl<T> Captures<'_> for T {}
 
                 // Internal Query Methods
-                impl Command {
+                impl Command 
+                {
                     /// Iterate through the *flags* & *options* arguments.
                     #[cfg(any(feature = "usage", feature = "help"))]
-                    pub(crate) fn get_non_positionals(&self) -> impl Iterator<Item = &Arg> {
+                    pub fn get_non_positionals(&self) -> impl Iterator<Item = &Arg> {
                         self.get_arguments().filter(|a| !a.is_positional())
                     }
 
-                    pub(crate) fn find(&self, arg_id: &Id) -> Option<&Arg> {
+                    pub fn find(&self, arg_id: &Id) -> Option<&Arg> {
                         self.args.args().find(|a| a.get_id() == arg_id)
                     }
 
-                    #[inline]
-                    pub(crate) fn contains_short(&self, s: char) -> bool {
+                    #[inline] pub fn contains_short(&self, s: char) -> bool {
                         debug_assert!(
                             self.is_set(AppSettings::Built),
                             "If Command::_build hasn't been called, manually search through Arg shorts"
@@ -5069,43 +4594,35 @@ pub mod clap
                         self.args.contains(s)
                     }
 
-                    #[inline]
-                    pub(crate) fn set(&mut self, s: AppSettings) {
+                    #[inline] pub fn set(&mut self, s: AppSettings) {
                         self.settings.set(s);
                     }
 
-                    #[inline]
-                    pub(crate) fn has_positionals(&self) -> bool {
+                    #[inline] pub fn has_positionals(&self) -> bool {
                         self.get_positionals().next().is_some()
                     }
 
                     #[cfg(any(feature = "usage", feature = "help"))]
-                    pub(crate) fn has_visible_subcommands(&self) -> bool {
+                    pub fn has_visible_subcommands(&self) -> bool {
                         self.subcommands
                             .iter()
                             .any(|sc| sc.name != "help" && !sc.is_set(AppSettings::Hidden))
                     }
-
                     /// Check if this subcommand can be referred to as `name`. In other words,
                     /// check if `name` is the name of this subcommand or is one of its aliases.
-                    #[inline]
-                    pub(crate) fn aliases_to(&self, name: impl AsRef<std::ffi::OsStr>) -> bool {
+                    #[inline] pub fn aliases_to(&self, name: impl AsRef<std::ffi::OsStr>) -> bool {
                         let name = name.as_ref();
                         self.get_name() == name || self.get_all_aliases().any(|alias| alias == name)
                     }
-
                     /// Check if this subcommand can be referred to as `name`. In other words,
                     /// check if `name` is the name of this short flag subcommand or is one of its short flag aliases.
-                    #[inline]
-                    pub(crate) fn short_flag_aliases_to(&self, flag: char) -> bool {
+                    #[inline] pub fn short_flag_aliases_to(&self, flag: char) -> bool {
                         Some(flag) == self.short_flag
                             || self.get_all_short_flag_aliases().any(|alias| flag == alias)
                     }
-
                     /// Check if this subcommand can be referred to as `name`. In other words,
                     /// check if `name` is the name of this long flag subcommand or is one of its long flag aliases.
-                    #[inline]
-                    pub(crate) fn long_flag_aliases_to(&self, flag: &str) -> bool {
+                    #[inline] pub fn long_flag_aliases_to(&self, flag: &str) -> bool {
                         match self.long_flag.as_ref() {
                             Some(long_flag) => {
                                 long_flag == flag || self.get_all_long_flag_aliases().any(|alias| alias == flag)
@@ -5115,12 +4632,11 @@ pub mod clap
                     }
 
                     #[cfg(debug_assertions)]
-                    pub(crate) fn id_exists(&self, id: &Id) -> bool {
+                    pub fn id_exists(&self, id: &Id) -> bool {
                         self.args.args().any(|x| x.get_id() == id) || self.groups.iter().any(|x| x.id == *id)
                     }
-
                     /// Iterate through the groups this arg is member of.
-                    pub(crate) fn groups_for_arg<'a>(&'a self, arg: &Id) -> impl Iterator<Item = Id> + 'a {
+                    pub fn groups_for_arg<'a>(&'a self, arg: &Id) -> impl Iterator<Item = Id> + 'a {
                         debug!("Command::groups_for_arg: id={arg:?}");
                         let arg = arg.clone();
                         self.groups
@@ -5129,13 +4645,12 @@ pub mod clap
                             .map(|grp| grp.id.clone())
                     }
 
-                    pub(crate) fn find_group(&self, group_id: &Id) -> Option<&ArgGroup> {
+                    pub fn find_group(&self, group_id: &Id) -> Option<&ArgGroup> {
                         self.groups.iter().find(|g| g.id == *group_id)
                     }
-
                     /// Iterate through all the names of all subcommands (not recursively), including aliases.
                     /// Used for suggestions.
-                    pub(crate) fn all_subcommand_names(&self) -> impl Iterator<Item = &str> + Captures<'_> {
+                    pub fn all_subcommand_names(&self) -> impl Iterator<Item = &str> + Captures<'_> {
                         self.get_subcommands().flat_map(|sc| {
                             let name = sc.get_name();
                             let aliases = sc.get_all_aliases();
@@ -5143,7 +4658,7 @@ pub mod clap
                         })
                     }
 
-                    pub(crate) fn required_graph(&self) -> ChildGraph<Id> {
+                    pub fn required_graph(&self) -> ChildGraph<Id> {
                         let mut reqs = ChildGraph::with_capacity(5);
                         for a in self.args.args().filter(|a| a.is_required_set()) {
                             reqs.insert(a.get_id().clone());
@@ -5160,7 +4675,7 @@ pub mod clap
                         reqs
                     }
 
-                    pub(crate) fn unroll_args_in_group(&self, group: &Id) -> Vec<Id> {
+                    pub fn unroll_args_in_group(&self, group: &Id) -> Vec<Id> {
                         debug!("Command::unroll_args_in_group: group={group:?}");
                         let mut g_vec = vec![group];
                         let mut args = vec![];
@@ -5190,7 +4705,7 @@ pub mod clap
                         args
                     }
 
-                    pub(crate) fn unroll_arg_requires<F>(&self, func: F, arg: &Id) -> Vec<Id>
+                    pub fn unroll_arg_requires<F>(&self, func: F, arg: &Id) -> Vec<Id>
                     where
                         F: Fn(&(ArgPredicate, Id)) -> Option<Id>,
                     {
@@ -5219,22 +4734,20 @@ pub mod clap
 
                         args
                     }
-
                     /// Find a flag subcommand name by short flag or an alias
-                    pub(crate) fn find_short_subcmd(&self, c: char) -> Option<&str> {
+                    pub fn find_short_subcmd(&self, c: char) -> Option<&str> {
                         self.get_subcommands()
                             .find(|sc| sc.short_flag_aliases_to(c))
                             .map(|sc| sc.get_name())
                     }
-
                     /// Find a flag subcommand name by long flag or an alias
-                    pub(crate) fn find_long_subcmd(&self, long: &str) -> Option<&str> {
+                    pub fn find_long_subcmd(&self, long: &str) -> Option<&str> {
                         self.get_subcommands()
                             .find(|sc| sc.long_flag_aliases_to(long))
                             .map(|sc| sc.get_name())
                     }
 
-                    pub(crate) fn write_help_err(&self, mut use_long: bool) -> StyledStr {
+                    pub fn write_help_err(&self, mut use_long: bool) -> StyledStr {
                         debug!(
                             "Command::write_help_err: {}, use_long={:?}",
                             self.get_display_name().unwrap_or_else(|| self.get_name()),
@@ -5250,12 +4763,12 @@ pub mod clap
                         styled
                     }
 
-                    pub(crate) fn write_version_err(&self, use_long: bool) -> StyledStr {
+                    pub fn write_version_err(&self, use_long: bool) -> StyledStr {
                         let msg = self._render_version(use_long);
                         StyledStr::from(msg)
                     }
 
-                    pub(crate) fn long_help_exists(&self) -> bool {
+                    pub fn long_help_exists(&self) -> bool {
                         debug!("Command::long_help_exists: {}", self.long_help_exists);
                         self.long_help_exists
                     }
@@ -5286,7 +4799,7 @@ pub mod clap
                     }
 
                     // Should we color the help?
-                    pub(crate) fn color_help(&self) -> ColorChoice {
+                    pub fn color_help(&self) -> ColorChoice {
                         #[cfg(feature = "color")]
                         if self.is_disable_colored_help_set() {
                             return ColorChoice::Never;
@@ -5296,7 +4809,8 @@ pub mod clap
                     }
                 }
 
-                impl Default for Command {
+                impl Default for Command 
+                {
                     fn default() -> Self {
                         Self {
                             name: Default::default(),
@@ -5334,14 +4848,15 @@ pub mod clap
                             external_value_parser: Default::default(),
                             long_help_exists: false,
                             deferred: None,
-                            #[cfg(feature = "unstable-ext")]
+                            
                             ext: Default::default(),
                             app_ext: Default::default(),
                         }
                     }
                 }
 
-                impl Index<&'_ Id> for Command {
+                impl Index<&'_ Id> for Command 
+                {
                     type Output = Arg;
 
                     fn index(&self, key: &Id) -> &Self::Output {
@@ -5349,39 +4864,35 @@ pub mod clap
                     }
                 }
 
-                impl From<&'_ Command> for Command {
+                impl From<&'_ Command> for Command 
+                {
                     fn from(cmd: &'_ Command) -> Self {
                         cmd.clone()
                     }
                 }
 
-                impl fmt::Display for Command {
+                impl fmt::Display for Command 
+                {
                     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                         write!(f, "{}", self.name)
                     }
                 }
-
-                /// User-provided data that can be attached to an [`Arg`]
-                #[cfg(feature = "unstable-ext")]
+                /// User-provided data that can be attached to an [`Arg`]                
                 pub trait CommandExt: Extension {}
-
-                #[allow(dead_code)] // atm dependent on features enabled
-                pub(crate) trait AppExt: Extension {}
-
-                #[allow(dead_code)] // atm dependent on features enabled
+                
+                pub trait AppExt: Extension {}
+                
                 #[derive(Default, Copy, Clone, Debug)]
                 struct TermWidth(usize);
 
                 impl AppExt for TermWidth {}
-
-                #[allow(dead_code)] // atm dependent on features enabled
+                
                 #[derive(Default, Copy, Clone, Debug)]
                 struct MaxTermWidth(usize);
 
                 impl AppExt for MaxTermWidth {}
 
-                fn two_elements_of<I, T>(mut iter: I) -> Option<(T, T)>
-                where
+                fn two_elements_of<I, T>(mut iter: I) -> Option<(T, T)> where
                     I: Iterator<Item = T>,
                 {
                     let first = iter.next();
@@ -5400,18 +4911,22 @@ pub mod clap
                 {
                     *,
                 };
+                /*
                 use crate::util::AnyValue;
                 use crate::util::AnyValueId;
                 use crate::util::FlatMap;
+                */
 
                 #[derive(Default, Clone, Debug)]
-                pub(crate) struct Extensions {
+                pub struct Extensions
+                 {
                     extensions: FlatMap<AnyValueId, AnyValue>,
                 }
 
-                impl Extensions {
-                    #[allow(dead_code)]
-                    pub(crate) fn get<T: Extension>(&self) -> Option<&T> {
+                impl Extensions 
+                {
+                    
+                    pub fn get<T: Extension>(&self) -> Option<&T> {
                         let id = AnyValueId::of::<T>();
                         self.extensions.get(&id).map(|e| {
                             e.downcast_ref::<T>()
@@ -5419,15 +4934,15 @@ pub mod clap
                         })
                     }
 
-                    #[allow(dead_code)]
-                    pub(crate) fn set<T: Extension>(&mut self, tagged: T) -> bool {
+                    
+                    pub fn set<T: Extension>(&mut self, tagged: T) -> bool {
                         let value = AnyValue::new(tagged);
                         let id = value.type_id();
                         self.extensions.insert(id, value).is_some()
                     }
 
-                    #[allow(dead_code)]
-                    pub(crate) fn remove<T: Extension>(&mut self) -> Option<T> {
+                    
+                    pub fn remove<T: Extension>(&mut self) -> Option<T> {
                         let id = AnyValueId::of::<T>();
                         self.extensions.remove(&id).map(|e| {
                             e.downcast_into::<T>()
@@ -5435,14 +4950,13 @@ pub mod clap
                         })
                     }
 
-                    pub(crate) fn update(&mut self, other: &Self) {
+                    pub fn update(&mut self, other: &Self) {
                         for (key, value) in other.extensions.iter() {
                             self.extensions.insert(*key, value.clone());
                         }
                     }
                 }
-
-                #[allow(unreachable_pub)]
+                
                 pub trait Extension: std::fmt::Debug + Clone + std::any::Any + Send + Sync + 'static {}
 
                 impl<T> Extension for T where T: std::fmt::Debug + Clone + std::any::Any + Send + Sync + 'static {}
@@ -5456,59 +4970,53 @@ pub mod clap
                 };
                 use crate::builder::Str;
 
-                /// A UTF-8-encoded fixed string
-                ///
-                /// <div class="warning">
-                ///
-                /// **NOTE:** To support dynamic values (i.e. `OsString`), enable the `string`
-                /// feature
-                ///
-                /// </div>
+                /// A UTF-8-encoded fixed string.
                 #[derive(Default, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
-                pub struct OsStr {
+                pub struct OsStr 
+                {
                     name: Inner,
                 }
 
-                impl OsStr {
+                impl OsStr 
+                {
                     #[cfg(feature = "string")]
-                    pub(crate) fn from_string(name: std::ffi::OsString) -> Self {
+                    pub fn from_string(name: std::ffi::OsString) -> Self {
                         Self {
                             name: Inner::from_string(name),
                         }
                     }
 
                     #[cfg(feature = "string")]
-                    pub(crate) fn from_ref(name: &std::ffi::OsStr) -> Self {
+                    pub fn from_ref(name: &std::ffi::OsStr) -> Self {
                         Self {
                             name: Inner::from_ref(name),
                         }
                     }
 
-                    pub(crate) fn from_static_ref(name: &'static std::ffi::OsStr) -> Self {
+                    pub fn from_static_ref(name: &'static std::ffi::OsStr) -> Self {
                         Self {
                             name: Inner::from_static_ref(name),
                         }
                     }
-
                     /// Get the raw string as an `std::ffi::OsStr`
                     pub fn as_os_str(&self) -> &std::ffi::OsStr {
                         self.name.as_os_str()
                     }
-
                     /// Get the raw string as an `OsString`
                     pub fn to_os_string(&self) -> std::ffi::OsString {
                         self.as_os_str().to_owned()
                     }
                 }
 
-                impl From<&'_ OsStr> for OsStr {
+                impl From<&'_ OsStr> for OsStr 
+                {
                     fn from(id: &'_ OsStr) -> Self {
                         id.clone()
                     }
                 }
-
-                #[cfg(feature = "string")]
-                impl From<Str> for OsStr {
+                
+                impl From<Str> for OsStr 
+                {
                     fn from(id: Str) -> Self {
                         match id.into_inner() {
                             crate::builder::StrInner::Static(s) => Self::from_static_ref(std::ffi::OsStr::new(s)),
@@ -5516,92 +5024,94 @@ pub mod clap
                         }
                     }
                 }
-
-                #[cfg(not(feature = "string"))]
-                impl From<Str> for OsStr {
-                    fn from(id: Str) -> Self {
-                        Self::from_static_ref(std::ffi::OsStr::new(id.into_inner().0))
-                    }
-                }
-
-                impl From<&'_ Str> for OsStr {
+                
+                impl From<&'_ Str> for OsStr 
+                {
                     fn from(id: &'_ Str) -> Self {
                         id.clone().into()
                     }
                 }
-
-                #[cfg(feature = "string")]
-                impl From<std::ffi::OsString> for OsStr {
+                
+                impl From<std::ffi::OsString> for OsStr 
+                {
                     fn from(name: std::ffi::OsString) -> Self {
                         Self::from_string(name)
                     }
                 }
-
-                #[cfg(feature = "string")]
-                impl From<&'_ std::ffi::OsString> for OsStr {
+                
+                impl From<&'_ std::ffi::OsString> for OsStr 
+                {
                     fn from(name: &'_ std::ffi::OsString) -> Self {
                         Self::from_ref(name.as_os_str())
                     }
                 }
-
-                #[cfg(feature = "string")]
-                impl From<String> for OsStr {
+                
+                impl From<String> for OsStr 
+                {
                     fn from(name: String) -> Self {
                         Self::from_string(name.into())
                     }
                 }
-
-                #[cfg(feature = "string")]
-                impl From<&'_ String> for OsStr {
+                
+                impl From<&'_ String> for OsStr 
+                {
                     fn from(name: &'_ String) -> Self {
                         Self::from_ref(name.as_str().as_ref())
                     }
                 }
 
-                impl From<&'static std::ffi::OsStr> for OsStr {
+                impl From<&'static std::ffi::OsStr> for OsStr 
+                {
                     fn from(name: &'static std::ffi::OsStr) -> Self {
                         Self::from_static_ref(name)
                     }
                 }
 
-                impl From<&'_ &'static std::ffi::OsStr> for OsStr {
+                impl From<&'_ &'static std::ffi::OsStr> for OsStr 
+                {
                     fn from(name: &'_ &'static std::ffi::OsStr) -> Self {
                         Self::from_static_ref(name)
                     }
                 }
 
-                impl From<&'static str> for OsStr {
+                impl From<&'static str> for OsStr 
+                {
                     fn from(name: &'static str) -> Self {
                         Self::from_static_ref(name.as_ref())
                     }
                 }
 
-                impl From<&'_ &'static str> for OsStr {
+                impl From<&'_ &'static str> for OsStr 
+                {
                     fn from(name: &'_ &'static str) -> Self {
                         Self::from_static_ref((*name).as_ref())
                     }
                 }
 
-                impl From<OsStr> for std::ffi::OsString {
+                impl From<OsStr> for std::ffi::OsString 
+                {
                     fn from(name: OsStr) -> Self {
                         name.name.into_os_string()
                     }
                 }
 
-                impl From<OsStr> for std::path::PathBuf {
+                impl From<OsStr> for std::path::PathBuf 
+                {
                     fn from(name: OsStr) -> Self {
                         std::ffi::OsString::from(name).into()
                     }
                 }
 
-                impl std::fmt::Debug for OsStr {
+                impl std::fmt::Debug for OsStr 
+                {
                     #[inline]
                     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                         std::fmt::Debug::fmt(self.as_os_str(), f)
                     }
                 }
 
-                impl std::ops::Deref for OsStr {
+                impl std::ops::Deref for OsStr 
+                {
                     type Target = std::ffi::OsStr;
 
                     #[inline]
@@ -5610,167 +5120,164 @@ pub mod clap
                     }
                 }
 
-                impl AsRef<std::ffi::OsStr> for OsStr {
+                impl AsRef<std::ffi::OsStr> for OsStr 
+                {
                     #[inline]
                     fn as_ref(&self) -> &std::ffi::OsStr {
                         self.as_os_str()
                     }
                 }
 
-                impl AsRef<std::path::Path> for OsStr {
+                impl AsRef<std::path::Path> for OsStr 
+                {
                     #[inline]
                     fn as_ref(&self) -> &std::path::Path {
                         std::path::Path::new(self)
                     }
                 }
 
-                impl std::borrow::Borrow<std::ffi::OsStr> for OsStr {
+                impl std::borrow::Borrow<std::ffi::OsStr> for OsStr 
+                {
                     #[inline]
                     fn borrow(&self) -> &std::ffi::OsStr {
                         self.as_os_str()
                     }
                 }
 
-                impl PartialEq<str> for OsStr {
+                impl PartialEq<str> for OsStr 
+                {
                     #[inline]
                     fn eq(&self, other: &str) -> bool {
                         PartialEq::eq(self.as_os_str(), other)
                     }
                 }
-                impl PartialEq<OsStr> for str {
+                impl PartialEq<OsStr> for str 
+                {
                     #[inline]
                     fn eq(&self, other: &OsStr) -> bool {
                         PartialEq::eq(self, other.as_os_str())
                     }
                 }
 
-                impl PartialEq<&'_ str> for OsStr {
+                impl PartialEq<&'_ str> for OsStr 
+                {
                     #[inline]
                     fn eq(&self, other: &&str) -> bool {
                         PartialEq::eq(self.as_os_str(), *other)
                     }
                 }
-                impl PartialEq<OsStr> for &'_ str {
+                impl PartialEq<OsStr> for &'_ str 
+                {
                     #[inline]
                     fn eq(&self, other: &OsStr) -> bool {
                         PartialEq::eq(*self, other.as_os_str())
                     }
                 }
 
-                impl PartialEq<&'_ std::ffi::OsStr> for OsStr {
+                impl PartialEq<&'_ std::ffi::OsStr> for OsStr 
+                {
                     #[inline]
                     fn eq(&self, other: &&std::ffi::OsStr) -> bool {
                         PartialEq::eq(self.as_os_str(), *other)
                     }
                 }
-                impl PartialEq<OsStr> for &'_ std::ffi::OsStr {
+                impl PartialEq<OsStr> for &'_ std::ffi::OsStr 
+                {
                     #[inline]
                     fn eq(&self, other: &OsStr) -> bool {
                         PartialEq::eq(*self, other.as_os_str())
                     }
                 }
 
-                impl PartialEq<String> for OsStr {
+                impl PartialEq<String> for OsStr 
+                {
                     #[inline]
                     fn eq(&self, other: &String) -> bool {
                         PartialEq::eq(self.as_os_str(), other.as_str())
                     }
                 }
-                impl PartialEq<OsStr> for String {
+                impl PartialEq<OsStr> for String 
+                {
                     #[inline]
                     fn eq(&self, other: &OsStr) -> bool {
                         PartialEq::eq(self.as_str(), other.as_os_str())
                     }
                 }
 
-                impl PartialEq<std::ffi::OsString> for OsStr {
+                impl PartialEq<std::ffi::OsString> for OsStr 
+                {
                     #[inline]
                     fn eq(&self, other: &std::ffi::OsString) -> bool {
                         PartialEq::eq(self.as_os_str(), other.as_os_str())
                     }
                 }
-                impl PartialEq<OsStr> for std::ffi::OsString {
+                impl PartialEq<OsStr> for std::ffi::OsString 
+                {
                     #[inline]
                     fn eq(&self, other: &OsStr) -> bool {
                         PartialEq::eq(self.as_os_str(), other.as_os_str())
                     }
                 }
-
-                #[cfg(feature = "string")]
-                pub(crate) mod inner {
+                
+                pub mod inner 
+                {
                     #[derive(Clone)]
-                    pub(crate) enum Inner {
+                    pub enum Inner {
                         Static(&'static std::ffi::OsStr),
                         Owned(Box<std::ffi::OsStr>),
                     }
 
                     impl Inner {
-                        pub(crate) fn from_string(name: std::ffi::OsString) -> Self {
+                        pub fn from_string(name: std::ffi::OsString) -> Self {
                             Self::Owned(name.into_boxed_os_str())
                         }
 
-                        pub(crate) fn from_ref(name: &std::ffi::OsStr) -> Self {
+                        pub fn from_ref(name: &std::ffi::OsStr) -> Self {
                             Self::Owned(Box::from(name))
                         }
 
-                        pub(crate) fn from_static_ref(name: &'static std::ffi::OsStr) -> Self {
+                        pub fn from_static_ref(name: &'static std::ffi::OsStr) -> Self {
                             Self::Static(name)
                         }
 
-                        pub(crate) fn as_os_str(&self) -> &std::ffi::OsStr {
+                        pub fn as_os_str(&self) -> &std::ffi::OsStr {
                             match self {
                                 Self::Static(s) => s,
                                 Self::Owned(s) => s.as_ref(),
                             }
                         }
 
-                        pub(crate) fn into_os_string(self) -> std::ffi::OsString {
+                        pub fn into_os_string(self) -> std::ffi::OsString {
                             self.as_os_str().to_owned()
                         }
                     }
                 }
 
-                #[cfg(not(feature = "string"))]
-                pub(crate) mod inner {
-                    #[derive(Clone)]
-                    pub(crate) struct Inner(&'static std::ffi::OsStr);
+                pub use inner::Inner;
 
-                    impl Inner {
-                        pub(crate) fn from_static_ref(name: &'static std::ffi::OsStr) -> Self {
-                            Self(name)
-                        }
-
-                        pub(crate) fn as_os_str(&self) -> &std::ffi::OsStr {
-                            self.0
-                        }
-
-                        pub(crate) fn into_os_string(self) -> std::ffi::OsString {
-                            self.as_os_str().to_owned()
-                        }
-                    }
-                }
-
-                pub(crate) use inner::Inner;
-
-                impl Default for Inner {
+                impl Default for Inner 
+                {
                     fn default() -> Self {
                         Self::from_static_ref(std::ffi::OsStr::new(""))
                     }
                 }
 
-                impl PartialEq for Inner {
+                impl PartialEq for Inner 
+                {
                     fn eq(&self, other: &Inner) -> bool {
                         self.as_os_str() == other.as_os_str()
                     }
                 }
 
-                impl PartialOrd for Inner {
+                impl PartialOrd for Inner 
+                {
                     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
                         Some(self.cmp(other))
                     }
                 }
 
-                impl Ord for Inner {
+                impl Ord for Inner 
+                {
                     fn cmp(&self, other: &Inner) -> std::cmp::Ordering {
                         self.as_os_str().cmp(other.as_os_str())
                     }
@@ -5778,7 +5285,8 @@ pub mod clap
 
                 impl Eq for Inner {}
 
-                impl std::hash::Hash for Inner {
+                impl std::hash::Hash for Inner 
+                {
                     #[inline]
                     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
                         self.as_os_str().hash(state);
@@ -5792,21 +5300,24 @@ pub mod clap
                 {
                     *,
                 };
+                /*
                 use crate::builder::IntoResettable;
                 use crate::builder::Str;
                 use crate::builder::StyledStr;
                 use crate::util::eq_ignore_case;
-
+                */
                 /// A possible value of an argument.
                 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-                pub struct PossibleValue {
+                pub struct PossibleValue 
+                {
                     name: Str,
                     help: Option<StyledStr>,
                     aliases: Vec<Str>, // (name, visible)
                     hide: bool,
                 }
 
-                impl PossibleValue {
+                impl PossibleValue 
+                {
                     /// Create a [`PossibleValue`] with its name.
                     pub fn new(name: impl Into<Str>) -> Self {
                         PossibleValue {
@@ -5814,26 +5325,18 @@ pub mod clap
                             ..Default::default()
                         }
                     }
-
                     /// Sets the help description of the value.
-                    #[inline]
-                    #[must_use]
-                    pub fn help(mut self, help: impl IntoResettable<StyledStr>) -> Self {
+                    #[inline] #[must_use] pub fn help(mut self, help: impl IntoResettable<StyledStr>) -> Self {
                         self.help = help.into_resettable().into_option();
                         self
                     }
-
                     /// Hides this value from help and shell completions.
-                    #[inline]
-                    #[must_use]
-                    pub fn hide(mut self, yes: bool) -> Self {
+                    #[inline] #[must_use] pub fn hide(mut self, yes: bool) -> Self {
                         self.hide = yes;
                         self
                     }
-
                     /// Sets a *hidden* alias for this argument value.
-                    #[must_use]
-                    pub fn alias(mut self, name: impl IntoResettable<Str>) -> Self {
+                    #[must_use] pub fn alias(mut self, name: impl IntoResettable<Str>) -> Self {
                         if let Some(name) = name.into_resettable().into_option() {
                             self.aliases.push(name);
                         } else {
@@ -5841,43 +5344,33 @@ pub mod clap
                         }
                         self
                     }
-
                     /// Sets multiple *hidden* aliases for this argument value.
-                    #[must_use]
-                    pub fn aliases(mut self, names: impl IntoIterator<Item = impl Into<Str>>) -> Self {
+                    #[must_use] pub fn aliases(mut self, names: impl IntoIterator<Item = impl Into<Str>>) -> Self {
                         self.aliases.extend(names.into_iter().map(|a| a.into()));
                         self
                     }
                 }
-
                 /// Reflection
-                impl PossibleValue {
+                impl PossibleValue 
+                {
                     /// Get the name of the argument value
-                    #[inline]
-                    pub fn get_name(&self) -> &str {
+                    #[inline] pub fn get_name(&self) -> &str {
                         self.name.as_str()
                     }
-
                     /// Get the help specified for this argument, if any
-                    #[inline]
-                    pub fn get_help(&self) -> Option<&StyledStr> {
+                    #[inline] pub fn get_help(&self) -> Option<&StyledStr> {
                         self.help.as_ref()
                     }
-
                     /// Report if [`PossibleValue::hide`] is set
-                    #[inline]
-                    pub fn is_hide_set(&self) -> bool {
+                    #[inline] pub fn is_hide_set(&self) -> bool {
                         self.hide
                     }
-
                     /// Report if `PossibleValue` is not hidden and has a help message
-                    pub(crate) fn should_show_help(&self) -> bool {
+                    pub fn should_show_help(&self) -> bool {
                         !self.hide && self.help.is_some()
                     }
-
-                    /// Get the name if argument value is not hidden, `None` otherwise, but wrapped in quotes if it contains whitespace
-                    #[cfg(feature = "help")]
-                    pub(crate) fn get_visible_quoted_name(&self) -> Option<std::borrow::Cow<'_, str>> {
+                    /// Get the name if argument value is not hidden, `None` otherwise, but wrapped in quotes if it contains whitespace.
+                    pub fn get_visible_quoted_name(&self) -> Option<std::borrow::Cow<'_, str>> {
                         if !self.hide {
                             Some(if self.name.contains(char::is_whitespace) {
                                 format!("{:?}", self.name).into()
@@ -5888,12 +5381,10 @@ pub mod clap
                             None
                         }
                     }
-
                     /// Returns all valid values of the argument value.
                     pub fn get_name_and_aliases(&self) -> impl Iterator<Item = &str> + '_ {
                         std::iter::once(self.get_name()).chain(self.aliases.iter().map(|s| s.as_str()))
                     }
-
                     /// Tests if the value is valid for this argument value
                     pub fn matches(&self, value: &str, ignore_case: bool) -> bool {
                         if ignore_case {
@@ -5905,8 +5396,10 @@ pub mod clap
                     }
                 }
 
-                impl<S: Into<Str>> From<S> for PossibleValue {
-                    fn from(s: S) -> Self {
+                impl<S: Into<Str>> From<S> for PossibleValue 
+                {
+                    fn from(s: S) -> Self
+                    {
                         Self::new(s)
                     }
                 }
@@ -5920,85 +5413,90 @@ pub mod clap
                 };
                 /// Values per occurrence for an argument
                 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
-                pub struct ValueRange {
+                pub struct ValueRange 
+                {
                     start_inclusive: usize,
                     end_inclusive: usize,
                 }
 
-                impl ValueRange {
+                impl ValueRange 
+                {
                     /// Nor argument values, or a flag
-                    pub const EMPTY: Self = Self {
+                    pub const EMPTY: Self = Self 
+                    {
                         start_inclusive: 0,
                         end_inclusive: 0,
                     };
-
                     /// A single argument value, the most common case for options
-                    pub const SINGLE: Self = Self {
+                    pub const SINGLE: Self = Self 
+                    {
                         start_inclusive: 1,
                         end_inclusive: 1,
                     };
 
-                    #[cfg(debug_assertions)]
-                    pub(crate) const OPTIONAL: Self = Self {
-                        start_inclusive: 0,
-                        end_inclusive: 1,
-                    };
-
-                    pub(crate) const FULL: Self = Self {
+                    pub const FULL: Self = Self 
+                    {
                         start_inclusive: 0,
                         end_inclusive: usize::MAX,
                     };
-
                     /// Create a range.
-                    pub fn new(range: impl Into<Self>) -> Self {
+                    pub fn new(range: impl Into<Self>) -> Self 
+                    {
                         range.into()
                     }
 
-                    pub(crate) fn raw(start_inclusive: usize, end_inclusive: usize) -> Self {
+                    pub fn raw(start_inclusive: usize, end_inclusive: usize) -> Self 
+                    {
                         debug_assert!(start_inclusive <= end_inclusive);
                         Self {
                             start_inclusive,
                             end_inclusive,
                         }
                     }
-
                     /// Fewest number of values the argument accepts
-                    pub fn min_values(&self) -> usize {
+                    pub fn min_values(&self) -> usize 
+                    {
                         self.start_inclusive
                     }
-
                     /// Most number of values the argument accepts
-                    pub fn max_values(&self) -> usize {
+                    pub fn max_values(&self) -> usize 
+                    {
                         self.end_inclusive
                     }
-
                     /// Report whether the argument takes any values (ie is a flag).
-                    pub fn takes_values(&self) -> bool {
+                    pub fn takes_values(&self) -> bool 
+                    {
                         self.end_inclusive != 0
                     }
 
-                    pub(crate) fn is_unbounded(&self) -> bool {
+                    pub fn is_unbounded(&self) -> bool 
+                    {
                         self.end_inclusive == usize::MAX
                     }
 
-                    pub(crate) fn is_fixed(&self) -> bool {
+                    pub fn is_fixed(&self) -> bool 
+                    {
                         self.start_inclusive == self.end_inclusive
                     }
 
-                    pub(crate) fn is_multiple(&self) -> bool {
+                    pub fn is_multiple(&self) -> bool 
+                    {
                         self.start_inclusive != self.end_inclusive || 1 < self.start_inclusive
                     }
 
-                    pub(crate) fn num_values(&self) -> Option<usize> {
+                    pub fn num_values(&self) -> Option<usize> 
+                    {
                         self.is_fixed().then_some(self.start_inclusive)
                     }
 
-                    pub(crate) fn accepts_more(&self, current: usize) -> bool {
+                    pub fn accepts_more(&self, current: usize) -> bool 
+                    {
                         current < self.end_inclusive
                     }
                 }
 
-                impl std::ops::RangeBounds<usize> for ValueRange {
+                impl std::ops::RangeBounds<usize> for ValueRange 
+                {
                     fn start_bound(&self) -> std::ops::Bound<&usize> {
                         std::ops::Bound::Included(&self.start_inclusive)
                     }
@@ -6008,19 +5506,22 @@ pub mod clap
                     }
                 }
 
-                impl Default for ValueRange {
+                impl Default for ValueRange 
+                {
                     fn default() -> Self {
                         Self::SINGLE
                     }
                 }
 
-                impl From<usize> for ValueRange {
+                impl From<usize> for ValueRange 
+                {
                     fn from(fixed: usize) -> Self {
                         (fixed..=fixed).into()
                     }
                 }
 
-                impl From<std::ops::Range<usize>> for ValueRange {
+                impl From<std::ops::Range<usize>> for ValueRange 
+                {
                     fn from(range: std::ops::Range<usize>) -> Self {
                         let start_inclusive = range.start;
                         let end_inclusive = range.end.saturating_sub(1);
@@ -6028,13 +5529,15 @@ pub mod clap
                     }
                 }
 
-                impl From<std::ops::RangeFull> for ValueRange {
+                impl From<std::ops::RangeFull> for ValueRange 
+                {
                     fn from(_: std::ops::RangeFull) -> Self {
                         Self::FULL
                     }
                 }
 
-                impl From<std::ops::RangeFrom<usize>> for ValueRange {
+                impl From<std::ops::RangeFrom<usize>> for ValueRange 
+                {
                     fn from(range: std::ops::RangeFrom<usize>) -> Self {
                         let start_inclusive = range.start;
                         let end_inclusive = usize::MAX;
@@ -6042,7 +5545,8 @@ pub mod clap
                     }
                 }
 
-                impl From<std::ops::RangeTo<usize>> for ValueRange {
+                impl From<std::ops::RangeTo<usize>> for ValueRange 
+                {
                     fn from(range: std::ops::RangeTo<usize>) -> Self {
                         let start_inclusive = 0;
                         let end_inclusive = range.end.saturating_sub(1);
@@ -6050,7 +5554,8 @@ pub mod clap
                     }
                 }
 
-                impl From<std::ops::RangeInclusive<usize>> for ValueRange {
+                impl From<std::ops::RangeInclusive<usize>> for ValueRange 
+                {
                     fn from(range: std::ops::RangeInclusive<usize>) -> Self {
                         let start_inclusive = *range.start();
                         let end_inclusive = *range.end();
@@ -6058,7 +5563,8 @@ pub mod clap
                     }
                 }
 
-                impl From<std::ops::RangeToInclusive<usize>> for ValueRange {
+                impl From<std::ops::RangeToInclusive<usize>> for ValueRange 
+                {
                     fn from(range: std::ops::RangeToInclusive<usize>) -> Self {
                         let start_inclusive = 0;
                         let end_inclusive = range.end;
@@ -6066,7 +5572,8 @@ pub mod clap
                     }
                 }
 
-                impl std::fmt::Display for ValueRange {
+                impl std::fmt::Display for ValueRange 
+                {
                     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                         ok!(self.start_inclusive.fmt(f));
                         if self.is_fixed() {
@@ -6080,7 +5587,8 @@ pub mod clap
                     }
                 }
 
-                impl std::fmt::Debug for ValueRange {
+                impl std::fmt::Debug for ValueRange 
+                {
                     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                         write!(f, "{self}")
                     }
@@ -6093,26 +5601,28 @@ pub mod clap
                 {
                     *,
                 };
-                
+                /*
                 use crate::builder::ArgAction;
                 use crate::builder::OsStr;
                 use crate::builder::Str;
                 use crate::builder::StyledStr;
                 use crate::builder::ValueHint;
                 use crate::builder::ValueParser;
-                use crate::builder::ValueRange;
+                use crate::builder::ValueRange;*/
 
                 /// Clearable builder value.
                 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-                pub enum Resettable<T> {
+                pub enum Resettable<T> 
+                {
                     /// Overwrite builder value
                     Value(T),
                     /// Reset builder value
                     Reset,
                 }
 
-                impl<T> Resettable<T> {
-                    pub(crate) fn into_option(self) -> Option<T> {
+                impl<T> Resettable<T> 
+                {
+                    pub fn into_option(self) -> Option<T> {
                         match self {
                             Self::Value(t) => Some(t),
                             Self::Reset => None,
@@ -6120,13 +5630,15 @@ pub mod clap
                     }
                 }
 
-                impl<T> From<T> for Resettable<T> {
+                impl<T> From<T> for Resettable<T> 
+                {
                     fn from(other: T) -> Self {
                         Self::Value(other)
                     }
                 }
 
-                impl<T> From<Option<T>> for Resettable<T> {
+                impl<T> From<Option<T>> for Resettable<T> 
+                {
                     fn from(other: Option<T>) -> Self {
                         match other {
                             Some(inner) => Self::Value(inner),
@@ -6134,14 +5646,15 @@ pub mod clap
                         }
                     }
                 }
-
                 /// Convert to the intended resettable type
-                pub trait IntoResettable<T> {
+                pub trait IntoResettable<T> 
+                {
                     /// Convert to the intended resettable type
                     fn into_resettable(self) -> Resettable<T>;
                 }
 
-                impl IntoResettable<char> for Option<char> {
+                impl IntoResettable<char> for Option<char> 
+                {
                     fn into_resettable(self) -> Resettable<char> {
                         match self {
                             Some(s) => Resettable::Value(s),
@@ -6150,7 +5663,8 @@ pub mod clap
                     }
                 }
 
-                impl IntoResettable<usize> for Option<usize> {
+                impl IntoResettable<usize> for Option<usize> 
+                {
                     fn into_resettable(self) -> Resettable<usize> {
                         match self {
                             Some(s) => Resettable::Value(s),
@@ -6159,7 +5673,8 @@ pub mod clap
                     }
                 }
 
-                impl IntoResettable<ArgAction> for Option<ArgAction> {
+                impl IntoResettable<ArgAction> for Option<ArgAction> 
+                {
                     fn into_resettable(self) -> Resettable<ArgAction> {
                         match self {
                             Some(s) => Resettable::Value(s),
@@ -6168,7 +5683,8 @@ pub mod clap
                     }
                 }
 
-                impl IntoResettable<ValueHint> for Option<ValueHint> {
+                impl IntoResettable<ValueHint> for Option<ValueHint> 
+                {
                     fn into_resettable(self) -> Resettable<ValueHint> {
                         match self {
                             Some(s) => Resettable::Value(s),
@@ -6177,7 +5693,8 @@ pub mod clap
                     }
                 }
 
-                impl IntoResettable<ValueParser> for Option<ValueParser> {
+                impl IntoResettable<ValueParser> for Option<ValueParser> 
+                {
                     fn into_resettable(self) -> Resettable<ValueParser> {
                         match self {
                             Some(s) => Resettable::Value(s),
@@ -6186,7 +5703,8 @@ pub mod clap
                     }
                 }
 
-                impl IntoResettable<StyledStr> for Option<&'static str> {
+                impl IntoResettable<StyledStr> for Option<&'static str> 
+                {
                     fn into_resettable(self) -> Resettable<StyledStr> {
                         match self {
                             Some(s) => Resettable::Value(s.into()),
@@ -6195,7 +5713,8 @@ pub mod clap
                     }
                 }
 
-                impl IntoResettable<OsStr> for Option<&'static str> {
+                impl IntoResettable<OsStr> for Option<&'static str> 
+                {
                     fn into_resettable(self) -> Resettable<OsStr> {
                         match self {
                             Some(s) => Resettable::Value(s.into()),
@@ -6204,7 +5723,8 @@ pub mod clap
                     }
                 }
 
-                impl IntoResettable<Str> for Option<&'static str> {
+                impl IntoResettable<Str> for Option<&'static str> 
+                {
                     fn into_resettable(self) -> Resettable<Str> {
                         match self {
                             Some(s) => Resettable::Value(s.into()),
@@ -6213,73 +5733,85 @@ pub mod clap
                     }
                 }
 
-                impl<T> IntoResettable<T> for Resettable<T> {
+                impl<T> IntoResettable<T> for Resettable<T> 
+                {
                     fn into_resettable(self) -> Resettable<T> {
                         self
                     }
                 }
 
-                impl IntoResettable<char> for char {
+                impl IntoResettable<char> for char 
+                {
                     fn into_resettable(self) -> Resettable<char> {
                         Resettable::Value(self)
                     }
                 }
 
-                impl IntoResettable<usize> for usize {
+                impl IntoResettable<usize> for usize 
+                {
                     fn into_resettable(self) -> Resettable<usize> {
                         Resettable::Value(self)
                     }
                 }
 
-                impl IntoResettable<ArgAction> for ArgAction {
+                impl IntoResettable<ArgAction> for ArgAction 
+                {
                     fn into_resettable(self) -> Resettable<ArgAction> {
                         Resettable::Value(self)
                     }
                 }
 
-                impl IntoResettable<ValueHint> for ValueHint {
+                impl IntoResettable<ValueHint> for ValueHint 
+                {
                     fn into_resettable(self) -> Resettable<ValueHint> {
                         Resettable::Value(self)
                     }
                 }
 
-                impl<I: Into<ValueRange>> IntoResettable<ValueRange> for I {
+                impl<I: Into<ValueRange>> IntoResettable<ValueRange> for I 
+                {
                     fn into_resettable(self) -> Resettable<ValueRange> {
                         Resettable::Value(self.into())
                     }
                 }
 
-                impl<I: Into<ValueParser>> IntoResettable<ValueParser> for I {
+                impl<I: Into<ValueParser>> IntoResettable<ValueParser> for I 
+                {
                     fn into_resettable(self) -> Resettable<ValueParser> {
                         Resettable::Value(self.into())
                     }
                 }
 
-                impl<I: Into<String>> IntoResettable<String> for I {
+                impl<I: Into<String>> IntoResettable<String> for I 
+                {
                     fn into_resettable(self) -> Resettable<String> {
                         Resettable::Value(self.into())
                     }
                 }
 
-                impl<I: Into<StyledStr>> IntoResettable<StyledStr> for I {
+                impl<I: Into<StyledStr>> IntoResettable<StyledStr> for I 
+                {
                     fn into_resettable(self) -> Resettable<StyledStr> {
                         Resettable::Value(self.into())
                     }
                 }
 
-                impl<I: Into<OsStr>> IntoResettable<OsStr> for I {
+                impl<I: Into<OsStr>> IntoResettable<OsStr> for I 
+                {
                     fn into_resettable(self) -> Resettable<OsStr> {
                         Resettable::Value(self.into())
                     }
                 }
 
-                impl<I: Into<Str>> IntoResettable<Str> for I {
+                impl<I: Into<Str>> IntoResettable<Str> for I 
+                {
                     fn into_resettable(self) -> Resettable<Str> {
                         Resettable::Value(self.into())
                     }
                 }
 
-                impl<I: Into<crate::Id>> IntoResettable<crate::Id> for I {
+                impl<I: Into<crate::Id>> IntoResettable<crate::Id> for I 
+                {
                     fn into_resettable(self) -> Resettable<crate::Id> {
                         Resettable::Value(self.into())
                     }
@@ -6307,29 +5839,28 @@ pub mod clap
 
                 impl Str {
                     #[cfg(feature = "string")]
-                    pub(crate) fn from_string(name: String) -> Self {
+                    pub fn from_string(name: String) -> Self {
                         Self {
                             name: Inner::from_string(name),
                         }
                     }
 
                     #[cfg(feature = "string")]
-                    pub(crate) fn from_ref(name: &str) -> Self {
+                    pub fn from_ref(name: &str) -> Self {
                         Self {
                             name: Inner::from_ref(name),
                         }
                     }
 
-                    pub(crate) fn from_static_ref(name: &'static str) -> Self {
+                    pub fn from_static_ref(name: &'static str) -> Self {
                         Self {
                             name: Inner::from_static_ref(name),
                         }
                     }
 
-                    pub(crate) fn into_inner(self) -> Inner {
+                    pub fn into_inner(self) -> Inner {
                         self.name
                     }
-
                     /// Get the raw string of the `Str`
                     pub fn as_str(&self) -> &str {
                         self.name.as_str()
@@ -6341,15 +5872,13 @@ pub mod clap
                         id.clone()
                     }
                 }
-
-                #[cfg(feature = "string")]
+                
                 impl From<String> for Str {
                     fn from(name: String) -> Self {
                         Self::from_string(name)
                     }
                 }
-
-                #[cfg(feature = "string")]
+                
                 impl From<&'_ String> for Str {
                     fn from(name: &'_ String) -> Self {
                         Self::from_ref(name.as_str())
@@ -6514,36 +6043,35 @@ pub mod clap
                         PartialEq::eq(self.as_str(), other.as_str())
                     }
                 }
-
-                #[cfg(feature = "string")]
-                pub(crate) mod inner {
+                
+                pub mod inner {
                     #[derive(Clone)]
-                    pub(crate) enum Inner {
+                    pub enum Inner {
                         Static(&'static str),
                         Owned(Box<str>),
                     }
 
                     impl Inner {
-                        pub(crate) fn from_string(name: String) -> Self {
+                        pub fn from_string(name: String) -> Self {
                             Self::Owned(name.into_boxed_str())
                         }
 
-                        pub(crate) fn from_ref(name: &str) -> Self {
+                        pub fn from_ref(name: &str) -> Self {
                             Self::Owned(Box::from(name))
                         }
 
-                        pub(crate) fn from_static_ref(name: &'static str) -> Self {
+                        pub fn from_static_ref(name: &'static str) -> Self {
                             Self::Static(name)
                         }
 
-                        pub(crate) fn as_str(&self) -> &str {
+                        pub fn as_str(&self) -> &str {
                             match self {
                                 Self::Static(s) => s,
                                 Self::Owned(s) => s.as_ref(),
                             }
                         }
 
-                        pub(crate) fn into_string(self) -> String {
+                        pub fn into_string(self) -> String {
                             match self {
                                 Self::Static(s) => s.to_owned(),
                                 Self::Owned(s) => s.into(),
@@ -6553,26 +6081,26 @@ pub mod clap
                 }
 
                 #[cfg(not(feature = "string"))]
-                pub(crate) mod inner {
+                pub mod inner {
                     #[derive(Clone)]
-                    pub(crate) struct Inner(pub(crate) &'static str);
+                    pub struct Inner(pub &'static str);
 
                     impl Inner {
-                        pub(crate) fn from_static_ref(name: &'static str) -> Self {
+                        pub fn from_static_ref(name: &'static str) -> Self {
                             Self(name)
                         }
 
-                        pub(crate) fn as_str(&self) -> &str {
+                        pub fn as_str(&self) -> &str {
                             self.0
                         }
 
-                        pub(crate) fn into_string(self) -> String {
+                        pub fn into_string(self) -> String {
                             self.as_str().to_owned()
                         }
                     }
                 }
 
-                pub(crate) use inner::Inner;
+                pub use inner::Inner;
 
                 impl Default for Inner {
                     fn default() -> Self {
@@ -6614,35 +6142,33 @@ pub mod clap
                 {
                     *,
                 };
-                #![cfg_attr(not(feature = "usage"), allow(dead_code))]
 
                 /// Terminal-styling container.
                 #[derive(Clone, Default, Debug, PartialEq, Eq, PartialOrd, Ord)]
                 pub struct StyledStr(String);
 
-                impl StyledStr {
+                impl StyledStr 
+                {
                     /// Create an empty buffer
                     pub const fn new() -> Self {
                         Self(String::new())
                     }
-
                     /// Display using [ANSI Escape Code](https://en.wikipedia.org/wiki/ANSI_escape_code) styling
                     #[cfg(feature = "color")]
                     pub fn ansi(&self) -> impl std::fmt::Display + '_ {
                         self.0.as_str()
                     }
-
                     /// May allow the compiler to consolidate the `Drop`s for `msg`, reducing code size compared to
                     /// `styled.push_str(&msg)`
-                    pub(crate) fn push_string(&mut self, msg: String) {
+                    pub fn push_string(&mut self, msg: String) {
                         self.0.push_str(&msg);
                     }
 
-                    pub(crate) fn push_str(&mut self, msg: &str) {
+                    pub fn push_str(&mut self, msg: &str) {
                         self.0.push_str(msg);
                     }
 
-                    pub(crate) fn trim_start_lines(&mut self) {
+                    pub fn trim_start_lines(&mut self) {
                         if let Some(pos) = self.0.find('\n') {
                             let (leading, help) = self.0.split_at(pos + 1);
                             if leading.trim().is_empty() {
@@ -6651,17 +6177,17 @@ pub mod clap
                         }
                     }
 
-                    pub(crate) fn trim_end(&mut self) {
+                    pub fn trim_end(&mut self) {
                         self.0 = self.0.trim_end().to_owned();
                     }
 
                     #[cfg(feature = "help")]
-                    pub(crate) fn replace_newline_var(&mut self) {
+                    pub fn replace_newline_var(&mut self) {
                         self.0 = self.0.replace("{n}", "\n");
                     }
 
                     #[cfg(feature = "help")]
-                    pub(crate) fn indent(&mut self, initial: &str, trailing: &str) {
+                    pub fn indent(&mut self, initial: &str, trailing: &str) {
                         self.0.insert_str(0, initial);
 
                         let mut line_sep = "\n".to_owned();
@@ -6670,10 +6196,10 @@ pub mod clap
                     }
 
                     #[cfg(all(not(feature = "wrap_help"), feature = "help"))]
-                    pub(crate) fn wrap(&mut self, _hard_width: usize) {}
+                    pub fn wrap(&mut self, _hard_width: usize) {}
 
                     #[cfg(feature = "wrap_help")]
-                    pub(crate) fn wrap(&mut self, hard_width: usize) {
+                    pub fn wrap(&mut self, hard_width: usize) {
                         let mut new = String::with_capacity(self.0.len());
 
                         let mut last = 0;
@@ -6707,7 +6233,7 @@ pub mod clap
 
                     #[inline(never)]
                     #[cfg(feature = "help")]
-                    pub(crate) fn display_width(&self) -> usize {
+                    pub fn display_width(&self) -> usize {
                         let mut width = 0;
                         for c in self.iter_text() {
                             width += crate::output::display_width(c);
@@ -6716,50 +6242,53 @@ pub mod clap
                     }
 
                     #[cfg(feature = "help")]
-                    pub(crate) fn is_empty(&self) -> bool {
+                    pub fn is_empty(&self) -> bool {
                         self.0.is_empty()
                     }
 
                     #[cfg(feature = "help")]
-                    pub(crate) fn as_styled_str(&self) -> &str {
+                    pub fn as_styled_str(&self) -> &str {
                         &self.0
                     }
 
                     #[cfg(feature = "color")]
-                    pub(crate) fn iter_text(&self) -> impl Iterator<Item = &str> {
+                    pub fn iter_text(&self) -> impl Iterator<Item = &str> {
                         anstream::adapter::strip_str(&self.0)
                     }
 
                     #[cfg(not(feature = "color"))]
-                    pub(crate) fn iter_text(&self) -> impl Iterator<Item = &str> {
+                    pub fn iter_text(&self) -> impl Iterator<Item = &str> {
                         [self.0.as_str()].into_iter()
                     }
 
-                    pub(crate) fn push_styled(&mut self, other: &Self) {
+                    pub fn push_styled(&mut self, other: &Self) {
                         self.0.push_str(&other.0);
                     }
 
-                    pub(crate) fn write_to(&self, buffer: &mut dyn std::io::Write) -> std::io::Result<()> {
+                    pub fn write_to(&self, buffer: &mut dyn std::io::Write) -> std::io::Result<()> {
                         ok!(buffer.write_all(self.0.as_bytes()));
 
                         Ok(())
                     }
                 }
 
-                impl Default for &'_ StyledStr {
+                impl Default for &'_ StyledStr 
+                {
                     fn default() -> Self {
                         static DEFAULT: StyledStr = StyledStr::new();
                         &DEFAULT
                     }
                 }
 
-                impl From<String> for StyledStr {
+                impl From<String> for StyledStr 
+                {
                     fn from(name: String) -> Self {
                         StyledStr(name)
                     }
                 }
 
-                impl From<&'_ String> for StyledStr {
+                impl From<&'_ String> for StyledStr 
+                {
                     fn from(name: &'_ String) -> Self {
                         let mut styled = StyledStr::new();
                         styled.push_str(name);
@@ -6767,7 +6296,8 @@ pub mod clap
                     }
                 }
 
-                impl From<&'static str> for StyledStr {
+                impl From<&'static str> for StyledStr 
+                {
                     fn from(name: &'static str) -> Self {
                         let mut styled = StyledStr::new();
                         styled.push_str(name);
@@ -6775,13 +6305,15 @@ pub mod clap
                     }
                 }
 
-                impl From<&'_ &'static str> for StyledStr {
+                impl From<&'_ &'static str> for StyledStr 
+                {
                     fn from(name: &'_ &'static str) -> Self {
                         StyledStr::from(*name)
                     }
                 }
 
-                impl std::fmt::Write for StyledStr {
+                impl std::fmt::Write for StyledStr 
+                {
                     #[inline]
                     fn write_str(&mut self, s: &str) -> Result<(), std::fmt::Error> {
                         self.0.push_str(s);
@@ -6794,9 +6326,9 @@ pub mod clap
                         Ok(())
                     }
                 }
-
                 /// Color-unaware printing. Never uses coloring.
-                impl std::fmt::Display for StyledStr {
+                impl std::fmt::Display for StyledStr 
+                {
                     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                         for part in self.iter_text() {
                             part.fmt(f)?;
@@ -6843,7 +6375,6 @@ pub mod clap
                             invalid: Style::new(),
                         }
                     }
-
                     /// Default terminal styling
                     pub const fn styled() -> Self {
                         #[cfg(feature = "color")]
@@ -6865,49 +6396,42 @@ pub mod clap
                             Self::plain()
                         }
                     }
-
                     /// General Heading style, e.g. [`help_heading`][crate::Arg::help_heading]
                     #[inline]
                     pub const fn header(mut self, style: Style) -> Self {
                         self.header = style;
                         self
                     }
-
                     /// Error heading
                     #[inline]
                     pub const fn error(mut self, style: Style) -> Self {
                         self.error = style;
                         self
                     }
-
                     /// Usage heading
                     #[inline]
                     pub const fn usage(mut self, style: Style) -> Self {
                         self.usage = style;
                         self
                     }
-
                     /// Literal command-line syntax, e.g. `--help`
                     #[inline]
                     pub const fn literal(mut self, style: Style) -> Self {
                         self.literal = style;
                         self
                     }
-
                     /// Descriptions within command-line syntax, e.g. [`value_name`][crate::Arg::value_name]
                     #[inline]
                     pub const fn placeholder(mut self, style: Style) -> Self {
                         self.placeholder = style;
                         self
                     }
-
                     /// Highlight suggested usage
                     #[inline]
                     pub const fn valid(mut self, style: Style) -> Self {
                         self.valid = style;
                         self
                     }
-
                     /// Highlight invalid usage
                     #[inline]
                     pub const fn invalid(mut self, style: Style) -> Self {
@@ -6915,7 +6439,6 @@ pub mod clap
                         self
                     }
                 }
-
                 /// Reflection
                 impl Styles {
                     /// General Heading style, e.g. [`help_heading`][crate::Arg::help_heading]
@@ -6923,37 +6446,31 @@ pub mod clap
                     pub const fn get_header(&self) -> &Style {
                         &self.header
                     }
-
                     /// Error heading
                     #[inline(always)]
                     pub const fn get_error(&self) -> &Style {
                         &self.error
                     }
-
                     /// Usage heading
                     #[inline(always)]
                     pub const fn get_usage(&self) -> &Style {
                         &self.usage
                     }
-
                     /// Literal command-line syntax, e.g. `--help`
                     #[inline(always)]
                     pub const fn get_literal(&self) -> &Style {
                         &self.literal
                     }
-
                     /// Descriptions within command-line syntax, e.g. [`value_name`][crate::Arg::value_name]
                     #[inline(always)]
                     pub const fn get_placeholder(&self) -> &Style {
                         &self.placeholder
                     }
-
                     /// Highlight suggested usage
                     #[inline(always)]
                     pub const fn get_valid(&self) -> &Style {
                         &self.valid
                     }
-
                     /// Highlight invalid usage
                     #[inline(always)]
                     pub const fn get_invalid(&self) -> &Style {
@@ -7053,7 +6570,7 @@ pub mod clap
                     EmailAddress,
                 }
 
-                #[cfg(feature = "unstable-ext")]
+                
                 impl crate::builder::ArgExt for ValueHint {}
 
                 impl FromStr for ValueHint {
@@ -7118,22 +6635,18 @@ pub mod clap
                     {
                         Self(ValueParserInner::Other(Box::new(other)))
                     }
-
                     /// [`bool`] parser for argument values.
                     pub const fn bool() -> Self {
                         Self(ValueParserInner::Bool)
                     }
-
                     /// [`String`] parser for argument values.
                     pub const fn string() -> Self {
                         Self(ValueParserInner::String)
                     }
-
                     /// [`OsString`][std::ffi::OsString] parser for argument values.
                     pub const fn os_string() -> Self {
                         Self(ValueParserInner::OsString)
                     }
-
                     /// [`PathBuf`][std::path::PathBuf] parser for argument values.
                     pub const fn path_buf() -> Self {
                         Self(ValueParserInner::PathBuf)
@@ -7144,7 +6657,7 @@ pub mod clap
                     /// Parse into a `AnyValue`
                     ///
                     /// When `arg` is `None`, an external subcommand value is being parsed.
-                    pub(crate) fn parse_ref(
+                    pub fn parse_ref(
                         &self,
                         cmd: &crate::Command,
                         arg: Option<&crate::Arg>,
@@ -7153,12 +6666,10 @@ pub mod clap
                     ) -> Result<AnyValue, crate::Error> {
                         self.any_value_parser().parse_ref_(cmd, arg, value, source)
                     }
-
                     /// Describes the content of `AnyValue`
                     pub fn type_id(&self) -> AnyValueId {
                         self.any_value_parser().type_id()
                     }
-
                     /// Reflect on enumerated value properties
                     ///
                     /// Error checking should not be done with this; it is mostly targeted at user-facing
@@ -7179,7 +6690,6 @@ pub mod clap
                         }
                     }
                 }
-
                 /// Convert a [`TypedValueParser`] to [`ValueParser`].
                 impl<P> From<P> for ValueParser
                 where
@@ -7195,7 +6705,6 @@ pub mod clap
                         p.0
                     }
                 }
-
                 /// Create an `i64` [`ValueParser`] from a `N..M` range.
                 impl From<std::ops::Range<i64>> for ValueParser {
                     fn from(value: std::ops::Range<i64>) -> Self {
@@ -7203,7 +6712,6 @@ pub mod clap
                         Self::from(inner)
                     }
                 }
-
                 /// Create an `i64` [`ValueParser`] from a `N..=M` range.
                 impl From<std::ops::RangeInclusive<i64>> for ValueParser {
                     fn from(value: std::ops::RangeInclusive<i64>) -> Self {
@@ -7211,7 +6719,6 @@ pub mod clap
                         Self::from(inner)
                     }
                 }
-
                 /// Create an `i64` [`ValueParser`] from a `N..` range.
                 impl From<std::ops::RangeFrom<i64>> for ValueParser {
                     fn from(value: std::ops::RangeFrom<i64>) -> Self {
@@ -7219,7 +6726,6 @@ pub mod clap
                         Self::from(inner)
                     }
                 }
-
                 /// Create an `i64` [`ValueParser`] from a `..M` range.
                 impl From<std::ops::RangeTo<i64>> for ValueParser {
                     fn from(value: std::ops::RangeTo<i64>) -> Self {
@@ -7227,7 +6733,6 @@ pub mod clap
                         Self::from(inner)
                     }
                 }
-
                 /// Create an `i64` [`ValueParser`] from a `..=M` range.
                 impl From<std::ops::RangeToInclusive<i64>> for ValueParser {
                     fn from(value: std::ops::RangeToInclusive<i64>) -> Self {
@@ -7235,7 +6740,6 @@ pub mod clap
                         Self::from(inner)
                     }
                 }
-
                 /// Create an `i64` [`ValueParser`] from a `..` range.
                 impl From<std::ops::RangeFull> for ValueParser {
                     fn from(value: std::ops::RangeFull) -> Self {
@@ -7243,7 +6747,6 @@ pub mod clap
                         Self::from(inner)
                     }
                 }
-
                 /// Create a [`ValueParser`] with [`PossibleValuesParser`].
                 impl<P, const C: usize> From<[P; C]> for ValueParser
                 where
@@ -7254,7 +6757,6 @@ pub mod clap
                         Self::from(inner)
                     }
                 }
-
                 /// Create a [`ValueParser`] with [`PossibleValuesParser`].
                 impl<P> From<Vec<P>> for ValueParser
                 where
@@ -7289,7 +6791,6 @@ pub mod clap
                         })
                     }
                 }
-
                 /// A type-erased wrapper for [`TypedValueParser`].
                 trait AnyValueParser: Send + Sync + 'static {
                     fn parse_ref(
@@ -7308,7 +6809,6 @@ pub mod clap
                     ) -> Result<AnyValue, crate::Error> {
                         self.parse_ref(cmd, arg, value)
                     }
-
                     /// Describes the content of `AnyValue`
                     fn type_id(&self) -> AnyValueId;
 
@@ -7359,7 +6859,6 @@ pub mod clap
                         Box::new(self.clone())
                     }
                 }
-
                 /// Parse/validate argument values.
                 pub trait TypedValueParser: Clone + Send + Sync + 'static {
                     /// Argument's value type
@@ -7383,7 +6882,6 @@ pub mod clap
                     ) -> Result<Self::Value, crate::Error> {
                         self.parse_ref(cmd, arg, value)
                     }
-
                     /// Parse the argument value.
                     fn parse(
                         &self,
@@ -7393,7 +6891,6 @@ pub mod clap
                     ) -> Result<Self::Value, crate::Error> {
                         self.parse_ref(cmd, arg, &value)
                     }
-
                     /// Parse the argument value.
                     fn parse_(
                         &self,
@@ -7404,14 +6901,12 @@ pub mod clap
                     ) -> Result<Self::Value, crate::Error> {
                         self.parse(cmd, arg, value)
                     }
-
                     /// Reflect on enumerated value properties.
                     fn possible_values(
                         &self,
                     ) -> Option<Box<dyn Iterator<Item = crate::builder::PossibleValue> + '_>> {
                         None
                     }
-
                     /// Adapt a `TypedValueParser` from one value to another.
                     fn map<T, F>(self, func: F) -> MapValueParser<Self, F>
                     where
@@ -7420,7 +6915,6 @@ pub mod clap
                     {
                         MapValueParser::new(self, func)
                     }
-
                     /// Adapt a `TypedValueParser` from one value to another.
                     fn try_map<T, E, F>(self, func: F) -> TryMapValueParser<Self, F>
                     where
@@ -7461,7 +6955,6 @@ pub mod clap
                         Ok(value)
                     }
                 }
-
                 /// Implementation for [`ValueParser::string`]
                 #[derive(Copy, Clone, Debug)]
                 #[non_exhaustive]
@@ -7507,7 +7000,6 @@ pub mod clap
                         Self::new()
                     }
                 }
-
                 /// Implementation for [`ValueParser::os_string`]
                 #[derive(Copy, Clone, Debug)]
                 #[non_exhaustive]
@@ -7547,7 +7039,6 @@ pub mod clap
                         Self::new()
                     }
                 }
-
                 /// Implementation for [`ValueParser::path_buf`]
                 #[derive(Copy, Clone, Debug)]
                 #[non_exhaustive]
@@ -7595,7 +7086,6 @@ pub mod clap
                         Self::new()
                     }
                 }
-
                 /// Parse an [`ValueEnum`][crate::ValueEnum] value.
                 #[derive(Clone, Debug)]
                 pub struct EnumValueParser<E: crate::ValueEnum + Clone + Send + Sync + 'static>(
@@ -7674,7 +7164,6 @@ pub mod clap
                         Self::new()
                     }
                 }
-
                 /// Verify the value is from an enumerated set of [`PossibleValue`][crate::builder::PossibleValue].
                 #[derive(Clone, Debug)]
                 pub struct PossibleValuesParser(Vec<super::PossibleValue>);
@@ -7748,7 +7237,6 @@ pub mod clap
                         Self(values.into_iter().map(|t| t.into()).collect())
                     }
                 }
-
                 /// Parse number that fall within a range of values.
                 #[derive(Copy, Clone, Debug)]
                 pub struct RangedI64ValueParser<T: TryFrom<i64> + Clone + Send + Sync = i64> {
@@ -7761,7 +7249,6 @@ pub mod clap
                     pub fn new() -> Self {
                         Self::from(..)
                     }
-
                     /// Narrow the supported range
                     pub fn range<B: RangeBounds<i64>>(mut self, range: B) -> Self {
                         // Consideration: when the user does `value_parser!(u8).range()`
@@ -7836,8 +7323,7 @@ pub mod clap
                     }
                 }
 
-                impl<T: TryFrom<i64> + Clone + Send + Sync + 'static> TypedValueParser for RangedI64ValueParser<T>
-                where
+                impl<T: TryFrom<i64> + Clone + Send + Sync + 'static> TypedValueParser for RangedI64ValueParser<T> where
                     <T as TryFrom<i64>>::Error: Send + Sync + 'static + std::error::Error + ToString,
                 {
                     type Value = T;
@@ -7910,7 +7396,6 @@ pub mod clap
                         Self::new()
                     }
                 }
-
                 /// Parse number that fall within a range of values.
                 #[derive(Copy, Clone, Debug)]
                 pub struct RangedU64ValueParser<T: TryFrom<u64> = u64> {
@@ -7923,7 +7408,6 @@ pub mod clap
                     pub fn new() -> Self {
                         Self::from(..)
                     }
-
                     /// Narrow the supported range
                     pub fn range<B: RangeBounds<u64>>(mut self, range: B) -> Self {
                         // Consideration: when the user does `value_parser!(u8).range()`
@@ -7998,8 +7482,7 @@ pub mod clap
                     }
                 }
 
-                impl<T: TryFrom<u64> + Clone + Send + Sync + 'static> TypedValueParser for RangedU64ValueParser<T>
-                where
+                impl<T: TryFrom<u64> + Clone + Send + Sync + 'static> TypedValueParser for RangedU64ValueParser<T> where
                     <T as TryFrom<u64>>::Error: Send + Sync + 'static + std::error::Error + ToString,
                 {
                     type Value = T;
@@ -8070,7 +7553,6 @@ pub mod clap
                         Self::new()
                     }
                 }
-
                 /// Implementation for [`ValueParser::bool`].
                 #[derive(Copy, Clone, Debug)]
                 #[non_exhaustive]
@@ -8132,7 +7614,6 @@ pub mod clap
                         Self::new()
                     }
                 }
-
                 /// Parse false-like string values, everything else is `true`.
                 #[derive(Copy, Clone, Debug)]
                 #[non_exhaustive]
@@ -8188,7 +7669,6 @@ pub mod clap
                         Self::new()
                     }
                 }
-
                 /// Parse bool-like string values.
                 #[derive(Copy, Clone, Debug)]
                 #[non_exhaustive]
@@ -8246,7 +7726,6 @@ pub mod clap
                         Self::new()
                     }
                 }
-
                 /// Parse non-empty string values.
                 #[derive(Copy, Clone, Debug)]
                 #[non_exhaustive]
@@ -8291,7 +7770,6 @@ pub mod clap
                         Self::new()
                     }
                 }
-
                 /// Adapt a `TypedValueParser` from one value to another.
                 #[derive(Clone, Debug)]
                 pub struct MapValueParser<P, F> {
@@ -8299,8 +7777,7 @@ pub mod clap
                     func: F,
                 }
 
-                impl<P, F, T> MapValueParser<P, F>
-                where
+                impl<P, F, T> MapValueParser<P, F> where
                     P: TypedValueParser,
                     P::Value: Send + Sync + Clone,
                     F: Fn(P::Value) -> T + Clone,
@@ -8311,8 +7788,7 @@ pub mod clap
                     }
                 }
 
-                impl<P, F, T> TypedValueParser for MapValueParser<P, F>
-                where
+                impl<P, F, T> TypedValueParser for MapValueParser<P, F> where
                     P: TypedValueParser,
                     P::Value: Send + Sync + Clone,
                     F: Fn(P::Value) -> T + Clone + Send + Sync + 'static,
@@ -8348,7 +7824,6 @@ pub mod clap
                         self.parser.possible_values()
                     }
                 }
-
                 /// Adapt a `TypedValueParser` from one value to another.
                 #[derive(Clone, Debug)]
                 pub struct TryMapValueParser<P, F> {
@@ -8356,8 +7831,7 @@ pub mod clap
                     func: F,
                 }
 
-                impl<P, F, T, E> TryMapValueParser<P, F>
-                where
+                impl<P, F, T, E> TryMapValueParser<P, F> where
                     P: TypedValueParser,
                     P::Value: Send + Sync + Clone,
                     F: Fn(P::Value) -> Result<T, E> + Clone + Send + Sync + 'static,
@@ -8369,8 +7843,7 @@ pub mod clap
                     }
                 }
 
-                impl<P, F, T, E> TypedValueParser for TryMapValueParser<P, F>
-                where
+                impl<P, F, T, E> TypedValueParser for TryMapValueParser<P, F> where
                     P: TypedValueParser,
                     P::Value: Send + Sync + Clone,
                     F: Fn(P::Value) -> Result<T, E> + Clone + Send + Sync + 'static,
@@ -8402,7 +7875,6 @@ pub mod clap
                         self.parser.possible_values()
                     }
                 }
-
                 /// When encountered, report [`ErrorKind::UnknownArgument`][crate::error::ErrorKind::UnknownArgument].
                 #[derive(Clone, Debug)]
                 pub struct UnknownArgumentValueParser {
@@ -8418,7 +7890,6 @@ pub mod clap
                             suggestions: Default::default(),
                         }
                     }
-
                     /// Provide a general suggestion
                     pub fn suggest(text: impl Into<StyledStr>) -> Self {
                         Self {
@@ -8426,7 +7897,6 @@ pub mod clap
                             suggestions: vec![text.into()],
                         }
                     }
-
                     /// Extend the suggestions
                     pub fn and_suggest(mut self, text: impl Into<StyledStr>) -> Self {
                         self.suggestions.push(text.into());
@@ -8469,7 +7939,7 @@ pub mod clap
                                     false,
                                     crate::output::Usage::new(cmd).create_usage_with_title(&[]),
                                 );
-                                #[cfg(feature = "error-context")]
+                                
                                 let err = {
                                     debug_assert_eq!(
                                         err.get(crate::error::ContextKind::Suggested),
@@ -8486,7 +7956,6 @@ pub mod clap
                         }
                     }
                 }
-
                 /// Register a type with [`value_parser!`][crate::value_parser!].
                 pub trait ValueParserFactory {
                     /// Generated parser, usually [`ValueParser`].
@@ -8602,8 +8071,7 @@ pub mod clap
                         RangedI64ValueParser::new()
                     }
                 }
-                impl<T> ValueParserFactory for std::num::Saturating<T>
-                where
+                impl<T> ValueParserFactory for std::num::Saturating<T> where
                     T: ValueParserFactory,
                     <T as ValueParserFactory>::Parser: TypedValueParser<Value = T>,
                     T: Send + Sync + Clone,
@@ -8614,8 +8082,7 @@ pub mod clap
                         T::value_parser().map(std::num::Saturating)
                     }
                 }
-                impl<T> ValueParserFactory for std::num::Wrapping<T>
-                where
+                impl<T> ValueParserFactory for std::num::Wrapping<T> where
                     T: ValueParserFactory,
                     <T as ValueParserFactory>::Parser: TypedValueParser<Value = T>,
                     T: Send + Sync + Clone,
@@ -8625,8 +8092,7 @@ pub mod clap
                         T::value_parser().map(std::num::Wrapping)
                     }
                 }
-                impl<T> ValueParserFactory for Box<T>
-                where
+                impl<T> ValueParserFactory for Box<T> where
                     T: ValueParserFactory,
                     <T as ValueParserFactory>::Parser: TypedValueParser<Value = T>,
                     T: Send + Sync + Clone,
@@ -8636,8 +8102,7 @@ pub mod clap
                         T::value_parser().map(Box::new)
                     }
                 }
-                impl<T> ValueParserFactory for std::sync::Arc<T>
-                where
+                impl<T> ValueParserFactory for std::sync::Arc<T> where
                     T: ValueParserFactory,
                     <T as ValueParserFactory>::Parser: TypedValueParser<Value = T>,
                     T: Send + Sync + Clone,
@@ -8660,7 +8125,6 @@ pub mod clap
                         Self(Default::default())
                     }
                 }
-
                 /// Unstable [`ValueParser`]
                 ///
                 /// Implementation may change to more specific instance in the future
@@ -8784,7 +8248,6 @@ pub mod clap
                         }
                     }
                 }
-
                 /// Select a [`ValueParser`] implementation from the intended type.
                 #[macro_export]
                 macro_rules! value_parser {
@@ -8848,12 +8311,12 @@ pub mod clap
             pub use self::str::Str;
             pub use action::ArgAction;
             pub use arg::Arg;
-            #[cfg(feature = "unstable-ext")]
+            
             pub use arg::ArgExt;
             pub use arg_group::ArgGroup;
             pub use arg_predicate::ArgPredicate;
             pub use command::Command;
-            #[cfg(feature = "unstable-ext")]
+            
             pub use command::CommandExt;
             pub use os_str::OsStr;
             pub use possible_value::PossibleValue;
@@ -8885,10 +8348,10 @@ pub mod clap
             pub use value_parser::_AnonymousValueParser;
 
             #[allow(unused_imports)]
-            pub(crate) use self::str::Inner as StrInner;
-            pub(crate) use action::CountType;
-            pub(crate) use arg_settings::{ArgFlags, ArgSettings};
-            pub(crate) use command::AppExt;
+            pub use self::str::Inner as StrInner;
+            pub use action::CountType;
+            pub use arg_settings::{ArgFlags, ArgSettings};
+            pub use command::AppExt;
         }
 
         pub mod error
@@ -8898,7 +8361,7 @@ pub mod clap
             {
                 *,
             };
-            
+            /*
             // Std
             use std::{
                 borrow::Cow,
@@ -8918,8 +8381,8 @@ pub mod clap
             use crate::util::FlatMap;
             use crate::util::{color::ColorChoice, SUCCESS_CODE, USAGE_CODE};
             use crate::Command;
-
-            #[cfg(feature = "error-context")]
+            */
+            
             pub mod context
             {
                 use ::
@@ -8929,7 +8392,7 @@ pub mod clap
                 /// Semantics for a piece of error information
                 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
                 #[non_exhaustive]
-                #[cfg(feature = "error-context")]
+                
                 pub enum ContextKind {
                     /// The cause of the error
                     InvalidSubcommand,
@@ -8997,11 +8460,10 @@ pub mod clap
                         self.as_str().unwrap_or_default().fmt(f)
                     }
                 }
-
                 /// A piece of error information
                 #[derive(Clone, Debug, PartialEq, Eq)]
                 #[non_exhaustive]
-                #[cfg(feature = "error-context")]
+                
                 pub enum ContextValue {
                     /// [`ContextKind`] is self-sufficient, no additional information needed
                     None,
@@ -9054,9 +8516,9 @@ pub mod clap
                 use crate::builder::Command;
                 use crate::builder::StyledStr;
                 use crate::builder::Styles;
-                #[cfg(feature = "error-context")]
+                
                 use crate::error::ContextKind;
-                #[cfg(feature = "error-context")]
+                
                 use crate::error::ContextValue;
                 use crate::error::ErrorKind;
                 use crate::output::TAB;
@@ -9067,7 +8529,6 @@ pub mod clap
                     /// Stylize the error for the terminal
                     fn format_error(error: &crate::error::Error<Self>) -> StyledStr;
                 }
-
                 /// Report [`ErrorKind`]
                 ///
                 /// No context is included.
@@ -9099,15 +8560,14 @@ pub mod clap
                         styled
                     }
                 }
-
                 /// Richly formatted error context
                 ///
                 /// This follows the [rustc diagnostic style guide](https://rustc-dev-guide.rust-lang.org/diagnostics.html#suggestion-style-guide).
                 #[non_exhaustive]
-                #[cfg(feature = "error-context")]
+                
                 pub struct RichFormatter;
 
-                #[cfg(feature = "error-context")]
+                
                 impl ErrorFormatter for RichFormatter {
                     fn format_error(error: &crate::error::Error<Self>) -> StyledStr {
                         use std::fmt::Write as _;
@@ -9181,7 +8641,7 @@ pub mod clap
                 }
 
                 #[must_use]
-                #[cfg(feature = "error-context")]
+                
                 fn write_dynamic_context(
                     error: &crate::error::Error,
                     styled: &mut StyledStr,
@@ -9415,7 +8875,7 @@ pub mod clap
                     }
                 }
 
-                #[cfg(feature = "error-context")]
+                
                 fn write_values_list(
                     list_name: &'static str,
                     styled: &mut StyledStr,
@@ -9439,7 +8899,7 @@ pub mod clap
                     }
                 }
 
-                pub(crate) fn format_error_message(
+                pub fn format_error_message(
                     message: &str,
                     styles: &Styles,
                     cmd: Option<&Command>,
@@ -9456,7 +8916,6 @@ pub mod clap
                     }
                     styled
                 }
-
                 /// Returns the singular or plural form on the verb to be based on the argument's value.
                 fn singular_or_plural(n: usize) -> &'static str {
                     if n > 1 {
@@ -9471,7 +8930,7 @@ pub mod clap
                     styled.push_styled(usage);
                 }
 
-                pub(crate) fn get_help_flag(cmd: &Command) -> Option<Cow<'static, str>> {
+                pub fn get_help_flag(cmd: &Command) -> Option<Cow<'static, str>> {
                     if !cmd.is_disable_help_flag_set() {
                         Some(Cow::Borrowed("--help"))
                     } else if let Some(flag) = get_user_help_flag(cmd) {
@@ -9512,7 +8971,7 @@ pub mod clap
                     }
                 }
 
-                #[cfg(feature = "error-context")]
+                
                 fn did_you_mean(styled: &mut StyledStr, styles: &Styles, context: &str, possibles: &ContextValue) {
                     use std::fmt::Write as _;
 
@@ -9657,38 +9116,24 @@ pub mod clap
             pub use format::ErrorFormatter;
             pub use format::KindFormatter;
             pub use kind::ErrorKind;
-
-            #[cfg(feature = "error-context")]
             pub use context::ContextKind;
-            #[cfg(feature = "error-context")]
             pub use context::ContextValue;
-            #[cfg(feature = "error-context")]
-            pub use format::RichFormatter;
-
-            #[cfg(not(feature = "error-context"))]
-            pub use KindFormatter as DefaultFormatter;
-            #[cfg(feature = "error-context")]
+            pub use format::RichFormatter; 
             pub use RichFormatter as DefaultFormatter;
-
             /// Short hand for [`Result`] type
-            ///
-            /// [`Result`]: std::result::Result
             pub type Result<T, E = Error> = StdResult<T, E>;
-
-            /// Command Line Argument Parser Error
-            ///
-            /// See [`Command::error`] to create an error.
-            ///
-            /// [`Command::error`]: crate::Command::error
-            pub struct Error<F: ErrorFormatter = DefaultFormatter> {
+            /// Command Line Argument Parser Error.
+            pub struct Error<F: ErrorFormatter = DefaultFormatter> 
+            {
                 inner: Box<ErrorInner>,
                 phantom: std::marker::PhantomData<F>,
             }
 
             #[derive(Debug)]
-            struct ErrorInner {
+            struct ErrorInner 
+            {
                 kind: ErrorKind,
-                #[cfg(feature = "error-context")]
+                
                 context: FlatMap<ContextKind, ContextValue>,
                 message: Option<Message>,
                 source: Option<Box<dyn error::Error + Send + Sync>>,
@@ -9699,12 +9144,12 @@ pub mod clap
                 backtrace: Option<Backtrace>,
             }
 
-            impl<F: ErrorFormatter> Error<F> {
+            impl<F: ErrorFormatter> Error<F> 
+            {
                 /// Create an unformatted error.
                 pub fn raw(kind: ErrorKind, message: impl Display) -> Self {
                     Self::new(kind).set_message(message.to_string())
                 }
-
                 /// Format the existing message with the Command's context
                 #[must_use]
                 pub fn format(mut self, cmd: &mut Command) -> Self {
@@ -9715,13 +9160,12 @@ pub mod clap
                     }
                     self.with_cmd(cmd)
                 }
-
                 /// Create an error with a pre-defined message.
                 pub fn new(kind: ErrorKind) -> Self {
                     Self {
                         inner: Box::new(ErrorInner {
                             kind,
-                            #[cfg(feature = "error-context")]
+                            
                             context: FlatMap::new(),
                             message: None,
                             source: None,
@@ -9734,7 +9178,6 @@ pub mod clap
                         phantom: Default::default(),
                     }
                 }
-
                 /// Apply [`Command`]'s formatting to the error.
                 pub fn with_cmd(self, cmd: &Command) -> Self {
                     self.set_styles(cmd.get_styles().clone())
@@ -9742,7 +9185,6 @@ pub mod clap
                         .set_colored_help(cmd.color_help())
                         .set_help_flag(format::get_help_flag(cmd))
                 }
-
                 /// Apply an alternative formatter to the error.
                 pub fn apply<EF: ErrorFormatter>(self) -> Error<EF> {
                     Error {
@@ -9750,52 +9192,45 @@ pub mod clap
                         phantom: Default::default(),
                     }
                 }
-
                 /// Type of error for programmatic processing
                 pub fn kind(&self) -> ErrorKind {
                     self.inner.kind
                 }
-
                 /// Additional information to further qualify the error
-                #[cfg(feature = "error-context")]
+                
                 pub fn context(&self) -> impl Iterator<Item = (ContextKind, &ContextValue)> {
                     self.inner.context.iter().map(|(k, v)| (*k, v))
                 }
-
                 /// Lookup a piece of context
                 #[inline(never)]
-                #[cfg(feature = "error-context")]
+                
                 pub fn get(&self, kind: ContextKind) -> Option<&ContextValue> {
                     self.inner.context.get(&kind)
                 }
-
                 /// Insert a piece of context.
                 #[inline(never)]
-                #[cfg(feature = "error-context")]
+                
                 pub fn insert(&mut self, kind: ContextKind, value: ContextValue) -> Option<ContextValue> {
                     self.inner.context.insert(kind, value)
                 }
-
                 /// Remove a piece of context, return the old value if any.
                 #[inline(never)]
-                #[cfg(feature = "error-context")]
+                
                 pub fn remove(&mut self, kind: ContextKind) -> Option<ContextValue> {
                     self.inner.context.remove(&kind)
                 }
-
                 /// Should the message be written to `stdout` or not?
                 #[inline]
                 pub fn use_stderr(&self) -> bool {
                     self.stream() == Stream::Stderr
                 }
 
-                pub(crate) fn stream(&self) -> Stream {
+                pub fn stream(&self) -> Stream {
                     match self.kind() {
                         ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => Stream::Stdout,
                         _ => Stream::Stderr,
                     }
                 }
-
                 /// Returns the exit code that `.exit` will exit the process with..
                 pub fn exit_code(&self) -> i32 {
                     if self.use_stderr() {
@@ -9804,14 +9239,12 @@ pub mod clap
                         SUCCESS_CODE
                     }
                 }
-
                 /// Prints the error and exits..
                 pub fn exit(&self) -> ! {
                     // Swallow broken pipe errors
                     let _ = self.print();
                     std::process::exit(self.exit_code());
                 }
-
                 /// Prints formatted and colored error to `stdout` or `stderr` according to its error kind.
                 pub fn print(&self) -> io::Result<()> {
                     let style = self.formatted();
@@ -9826,7 +9259,6 @@ pub mod clap
                     let c = Colorizer::new(self.stream(), color_when).with_content(style.into_owned());
                     c.print()
                 }
-
                 /// Render the error message to a [`StyledStr`].
                 pub fn render(&self) -> StyledStr {
                     self.formatted().into_owned()
@@ -9837,40 +9269,39 @@ pub mod clap
                     Self::new(kind).set_message(styled).with_cmd(cmd)
                 }
 
-                pub(crate) fn set_message(mut self, message: impl Into<Message>) -> Self {
+                pub fn set_message(mut self, message: impl Into<Message>) -> Self {
                     self.inner.message = Some(message.into());
                     self
                 }
 
-                pub(crate) fn set_source(mut self, source: Box<dyn error::Error + Send + Sync>) -> Self {
+                pub fn set_source(mut self, source: Box<dyn error::Error + Send + Sync>) -> Self {
                     self.inner.source = Some(source);
                     self
                 }
 
-                pub(crate) fn set_styles(mut self, styles: Styles) -> Self {
+                pub fn set_styles(mut self, styles: Styles) -> Self {
                     self.inner.styles = styles;
                     self
                 }
 
-                pub(crate) fn set_color(mut self, color_when: ColorChoice) -> Self {
+                pub fn set_color(mut self, color_when: ColorChoice) -> Self {
                     self.inner.color_when = color_when;
                     self
                 }
 
-                pub(crate) fn set_colored_help(mut self, color_help_when: ColorChoice) -> Self {
+                pub fn set_colored_help(mut self, color_help_when: ColorChoice) -> Self {
                     self.inner.color_help_when = color_help_when;
                     self
                 }
 
-                pub(crate) fn set_help_flag(mut self, help_flag: Option<Cow<'static, str>>) -> Self {
+                pub fn set_help_flag(mut self, help_flag: Option<Cow<'static, str>>) -> Self {
                     self.inner.help_flag = help_flag;
                     self
                 }
-
                 /// Does not verify if `ContextKind` is already present
                 #[inline(never)]
-                #[cfg(feature = "error-context")]
-                pub(crate) fn insert_context_unchecked(
+                
+                pub fn insert_context_unchecked(
                     mut self,
                     kind: ContextKind,
                     value: ContextValue,
@@ -9878,11 +9309,10 @@ pub mod clap
                     self.inner.context.insert_unchecked(kind, value);
                     self
                 }
-
                 /// Does not verify if `ContextKind` is already present
                 #[inline(never)]
-                #[cfg(feature = "error-context")]
-                pub(crate) fn extend_context_unchecked<const N: usize>(
+                
+                pub fn extend_context_unchecked<const N: usize>(
                     mut self,
                     context: [(ContextKind, ContextValue); N],
                 ) -> Self {
@@ -9890,11 +9320,11 @@ pub mod clap
                     self
                 }
 
-                pub(crate) fn display_help(cmd: &Command, styled: StyledStr) -> Self {
+                pub fn display_help(cmd: &Command, styled: StyledStr) -> Self {
                     Self::for_app(ErrorKind::DisplayHelp, cmd, styled)
                 }
 
-                pub(crate) fn display_help_error(cmd: &Command, styled: StyledStr) -> Self {
+                pub fn display_help_error(cmd: &Command, styled: StyledStr) -> Self {
                     Self::for_app(
                         ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand,
                         cmd,
@@ -9902,11 +9332,11 @@ pub mod clap
                     )
                 }
 
-                pub(crate) fn display_version(cmd: &Command, styled: StyledStr) -> Self {
+                pub fn display_version(cmd: &Command, styled: StyledStr) -> Self {
                     Self::for_app(ErrorKind::DisplayVersion, cmd, styled)
                 }
 
-                pub(crate) fn argument_conflict(
+                pub fn argument_conflict(
                     cmd: &Command,
                     arg: String,
                     mut others: Vec<String>,
@@ -9914,7 +9344,7 @@ pub mod clap
                 ) -> Self {
                     let mut err = Self::new(ErrorKind::ArgumentConflict).with_cmd(cmd);
 
-                    #[cfg(feature = "error-context")]
+                    
                     {
                         let others = match others.len() {
                             0 => ContextValue::None,
@@ -9934,7 +9364,7 @@ pub mod clap
                     err
                 }
 
-                pub(crate) fn subcommand_conflict(
+                pub fn subcommand_conflict(
                     cmd: &Command,
                     sub: String,
                     mut others: Vec<String>,
@@ -9942,7 +9372,7 @@ pub mod clap
                 ) -> Self {
                     let mut err = Self::new(ErrorKind::ArgumentConflict).with_cmd(cmd);
 
-                    #[cfg(feature = "error-context")]
+                    
                     {
                         let others = match others.len() {
                             0 => ContextValue::None,
@@ -9962,14 +9392,14 @@ pub mod clap
                     err
                 }
 
-                pub(crate) fn empty_value(cmd: &Command, good_vals: &[String], arg: String) -> Self {
+                pub fn empty_value(cmd: &Command, good_vals: &[String], arg: String) -> Self {
                     Self::invalid_value(cmd, "".to_owned(), good_vals, arg)
                 }
 
-                pub(crate) fn no_equals(cmd: &Command, arg: String, usage: Option<StyledStr>) -> Self {
+                pub fn no_equals(cmd: &Command, arg: String, usage: Option<StyledStr>) -> Self {
                     let mut err = Self::new(ErrorKind::NoEquals).with_cmd(cmd);
 
-                    #[cfg(feature = "error-context")]
+                    
                     {
                         err = err
                             .extend_context_unchecked([(ContextKind::InvalidArg, ContextValue::String(arg))]);
@@ -9982,7 +9412,7 @@ pub mod clap
                     err
                 }
 
-                pub(crate) fn invalid_value(
+                pub fn invalid_value(
                     cmd: &Command,
                     bad_val: String,
                     good_vals: &[String],
@@ -9991,7 +9421,7 @@ pub mod clap
                     let suggestion = suggestions::did_you_mean(&bad_val, good_vals.iter()).pop();
                     let mut err = Self::new(ErrorKind::InvalidValue).with_cmd(cmd);
 
-                    #[cfg(feature = "error-context")]
+                    
                     {
                         err = err.extend_context_unchecked([
                             (ContextKind::InvalidArg, ContextValue::String(arg)),
@@ -10012,7 +9442,7 @@ pub mod clap
                     err
                 }
 
-                pub(crate) fn invalid_subcommand(
+                pub fn invalid_subcommand(
                     cmd: &Command,
                     subcmd: String,
                     did_you_mean: Vec<String>,
@@ -10026,7 +9456,7 @@ pub mod clap
                     let valid = &styles.get_valid();
                     let mut err = Self::new(ErrorKind::InvalidSubcommand).with_cmd(cmd);
 
-                    #[cfg(feature = "error-context")]
+                    
                     {
                         let mut suggestions = vec![];
                         if suggested_trailing_arg {
@@ -10058,14 +9488,14 @@ pub mod clap
                     err
                 }
 
-                pub(crate) fn unrecognized_subcommand(
+                pub fn unrecognized_subcommand(
                     cmd: &Command,
                     subcmd: String,
                     usage: Option<StyledStr>,
                 ) -> Self {
                     let mut err = Self::new(ErrorKind::InvalidSubcommand).with_cmd(cmd);
 
-                    #[cfg(feature = "error-context")]
+                    
                     {
                         err = err.extend_context_unchecked([(
                             ContextKind::InvalidSubcommand,
@@ -10080,14 +9510,14 @@ pub mod clap
                     err
                 }
 
-                pub(crate) fn missing_required_argument(
+                pub fn missing_required_argument(
                     cmd: &Command,
                     required: Vec<String>,
                     usage: Option<StyledStr>,
                 ) -> Self {
                     let mut err = Self::new(ErrorKind::MissingRequiredArgument).with_cmd(cmd);
 
-                    #[cfg(feature = "error-context")]
+                    
                     {
                         err = err.extend_context_unchecked([(
                             ContextKind::InvalidArg,
@@ -10102,7 +9532,7 @@ pub mod clap
                     err
                 }
 
-                pub(crate) fn missing_subcommand(
+                pub fn missing_subcommand(
                     cmd: &Command,
                     parent: String,
                     available: Vec<String>,
@@ -10110,7 +9540,7 @@ pub mod clap
                 ) -> Self {
                     let mut err = Self::new(ErrorKind::MissingSubcommand).with_cmd(cmd);
 
-                    #[cfg(feature = "error-context")]
+                    
                     {
                         err = err.extend_context_unchecked([
                             (ContextKind::InvalidSubcommand, ContextValue::String(parent)),
@@ -10128,10 +9558,10 @@ pub mod clap
                     err
                 }
 
-                pub(crate) fn invalid_utf8(cmd: &Command, usage: Option<StyledStr>) -> Self {
+                pub fn invalid_utf8(cmd: &Command, usage: Option<StyledStr>) -> Self {
                     let mut err = Self::new(ErrorKind::InvalidUtf8).with_cmd(cmd);
 
-                    #[cfg(feature = "error-context")]
+                    
                     {
                         if let Some(usage) = usage {
                             err = err
@@ -10142,7 +9572,7 @@ pub mod clap
                     err
                 }
 
-                pub(crate) fn too_many_values(
+                pub fn too_many_values(
                     cmd: &Command,
                     val: String,
                     arg: String,
@@ -10150,7 +9580,7 @@ pub mod clap
                 ) -> Self {
                     let mut err = Self::new(ErrorKind::TooManyValues).with_cmd(cmd);
 
-                    #[cfg(feature = "error-context")]
+                    
                     {
                         err = err.extend_context_unchecked([
                             (ContextKind::InvalidArg, ContextValue::String(arg)),
@@ -10165,7 +9595,7 @@ pub mod clap
                     err
                 }
 
-                pub(crate) fn too_few_values(
+                pub fn too_few_values(
                     cmd: &Command,
                     arg: String,
                     min_vals: usize,
@@ -10174,7 +9604,7 @@ pub mod clap
                 ) -> Self {
                     let mut err = Self::new(ErrorKind::TooFewValues).with_cmd(cmd);
 
-                    #[cfg(feature = "error-context")]
+                    
                     {
                         err = err.extend_context_unchecked([
                             (ContextKind::InvalidArg, ContextValue::String(arg)),
@@ -10196,14 +9626,14 @@ pub mod clap
                     err
                 }
 
-                pub(crate) fn value_validation(
+                pub fn value_validation(
                     arg: String,
                     val: String,
                     err: Box<dyn error::Error + Send + Sync>,
                 ) -> Self {
                     let mut err = Self::new(ErrorKind::ValueValidation).set_source(err);
 
-                    #[cfg(feature = "error-context")]
+                    
                     {
                         err = err.extend_context_unchecked([
                             (ContextKind::InvalidArg, ContextValue::String(arg)),
@@ -10214,7 +9644,7 @@ pub mod clap
                     err
                 }
 
-                pub(crate) fn wrong_number_of_values(
+                pub fn wrong_number_of_values(
                     cmd: &Command,
                     arg: String,
                     num_vals: usize,
@@ -10223,7 +9653,7 @@ pub mod clap
                 ) -> Self {
                     let mut err = Self::new(ErrorKind::WrongNumberOfValues).with_cmd(cmd);
 
-                    #[cfg(feature = "error-context")]
+                    
                     {
                         err = err.extend_context_unchecked([
                             (ContextKind::InvalidArg, ContextValue::String(arg)),
@@ -10245,7 +9675,7 @@ pub mod clap
                     err
                 }
 
-                pub(crate) fn unknown_argument(
+                pub fn unknown_argument(
                     cmd: &Command,
                     arg: String,
                     did_you_mean: Option<(String, Option<String>)>,
@@ -10258,7 +9688,7 @@ pub mod clap
                     let valid = &styles.get_valid();
                     let mut err = Self::new(ErrorKind::UnknownArgument).with_cmd(cmd);
 
-                    #[cfg(feature = "error-context")]
+                    
                     {
                         let mut suggestions = vec![];
                         if suggested_trailing_arg {
@@ -10301,7 +9731,7 @@ pub mod clap
                     err
                 }
 
-                pub(crate) fn unnecessary_double_dash(
+                pub fn unnecessary_double_dash(
                     cmd: &Command,
                     arg: String,
                     usage: Option<StyledStr>,
@@ -10312,7 +9742,7 @@ pub mod clap
                     let valid = &styles.get_valid();
                     let mut err = Self::new(ErrorKind::UnknownArgument).with_cmd(cmd);
 
-                    #[cfg(feature = "error-context")]
+                    
                     {
                         let mut styled_suggestion = StyledStr::new();
                         let _ = write!(
@@ -10346,32 +9776,37 @@ pub mod clap
                 }
             }
 
-            impl<F: ErrorFormatter> From<io::Error> for Error<F> {
+            impl<F: ErrorFormatter> From<io::Error> for Error<F> 
+            {
                 fn from(e: io::Error) -> Self {
                     Error::raw(ErrorKind::Io, e)
                 }
             }
 
-            impl<F: ErrorFormatter> From<fmt::Error> for Error<F> {
+            impl<F: ErrorFormatter> From<fmt::Error> for Error<F> 
+            {
                 fn from(e: fmt::Error) -> Self {
                     Error::raw(ErrorKind::Format, e)
                 }
             }
 
-            impl<F: ErrorFormatter> Debug for Error<F> {
+            impl<F: ErrorFormatter> Debug for Error<F> 
+            {
                 fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
                     self.inner.fmt(f)
                 }
             }
 
-            impl<F: ErrorFormatter> error::Error for Error<F> {
+            impl<F: ErrorFormatter> error::Error for Error<F> 
+            {
                 #[allow(trivial_casts)]
                 fn source(&self) -> Option<&(dyn error::Error + 'static)> {
                     self.inner.source.as_ref().map(|e| e.as_ref() as _)
                 }
             }
 
-            impl<F: ErrorFormatter> Display for Error<F> {
+            impl<F: ErrorFormatter> Display for Error<F> 
+            {
                 fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
                     // Assuming `self.message` already has a trailing newline, from `try_help` or similar
                     ok!(write!(f, "{}", self.formatted()));
@@ -10385,12 +9820,14 @@ pub mod clap
             }
 
             #[derive(Clone, Debug)]
-            pub(crate) enum Message {
+            pub enum Message 
+            {
                 Raw(String),
                 Formatted(StyledStr),
             }
 
-            impl Message {
+            impl Message 
+            {
                 fn format(&mut self, cmd: &Command, usage: Option<StyledStr>) {
                     match self {
                         Message::Raw(s) => {
@@ -10422,52 +9859,17 @@ pub mod clap
                 }
             }
 
-            impl From<String> for Message {
+            impl From<String> for Message 
+            {
                 fn from(inner: String) -> Self {
                     Self::Raw(inner)
                 }
             }
 
-            impl From<StyledStr> for Message {
+            impl From<StyledStr> for Message 
+            {
                 fn from(inner: StyledStr) -> Self {
                     Self::Formatted(inner)
-                }
-            }
-
-            #[cfg(feature = "debug")]
-            #[derive(Debug)]
-            struct Backtrace(backtrace::Backtrace);
-
-            #[cfg(feature = "debug")]
-            impl Backtrace {
-                fn new() -> Option<Self> {
-                    Some(Self(backtrace::Backtrace::new()))
-                }
-            }
-
-            #[cfg(feature = "debug")]
-            impl Display for Backtrace {
-                fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-                    // `backtrace::Backtrace` uses `Debug` instead of `Display`
-                    write!(f, "{:?}", self.0)
-                }
-            }
-
-            #[cfg(not(feature = "debug"))]
-            #[derive(Debug)]
-            struct Backtrace;
-
-            #[cfg(not(feature = "debug"))]
-            impl Backtrace {
-                fn new() -> Option<Self> {
-                    None
-                }
-            }
-
-            #[cfg(not(feature = "debug"))]
-            impl Display for Backtrace {
-                fn fmt(&self, _: &mut Formatter<'_>) -> fmt::Result {
-                    Ok(())
                 }
             }
         }
@@ -10503,13 +9905,13 @@ pub mod clap
                 use crate::INTERNAL_ERROR_MSG;
 
                 #[derive(Debug, Default)]
-                pub(crate) struct ArgMatcher {
+                pub struct ArgMatcher {
                     matches: ArgMatches,
                     pending: Option<PendingArg>,
                 }
 
                 impl ArgMatcher {
-                    pub(crate) fn new(_cmd: &Command) -> Self {
+                    pub fn new(_cmd: &Command) -> Self {
                         ArgMatcher {
                             matches: ArgMatches {
                                 #[cfg(debug_assertions)]
@@ -10529,11 +9931,11 @@ pub mod clap
                         }
                     }
 
-                    pub(crate) fn into_inner(self) -> ArgMatches {
+                    pub fn into_inner(self) -> ArgMatches {
                         self.matches
                     }
 
-                    pub(crate) fn propagate_globals(&mut self, global_arg_vec: &[Id]) {
+                    pub fn propagate_globals(&mut self, global_arg_vec: &[Id]) {
                         debug!("ArgMatcher::get_global_values: global_arg_vec={global_arg_vec:?}");
                         let mut vals_map = FlatMap::new();
                         self.fill_in_global_values(global_arg_vec, &mut vals_map);
@@ -10579,49 +9981,49 @@ pub mod clap
                         }
                     }
 
-                    pub(crate) fn get(&self, arg: &Id) -> Option<&MatchedArg> {
+                    pub fn get(&self, arg: &Id) -> Option<&MatchedArg> {
                         self.matches.args.get(arg)
                     }
 
-                    pub(crate) fn get_mut(&mut self, arg: &Id) -> Option<&mut MatchedArg> {
+                    pub fn get_mut(&mut self, arg: &Id) -> Option<&mut MatchedArg> {
                         self.matches.args.get_mut(arg)
                     }
 
-                    pub(crate) fn remove(&mut self, arg: &Id) -> bool {
+                    pub fn remove(&mut self, arg: &Id) -> bool {
                         self.matches.args.remove(arg).is_some()
                     }
 
-                    pub(crate) fn contains(&self, arg: &Id) -> bool {
+                    pub fn contains(&self, arg: &Id) -> bool {
                         self.matches.args.contains_key(arg)
                     }
 
-                    pub(crate) fn arg_ids(&self) -> std::slice::Iter<'_, Id> {
+                    pub fn arg_ids(&self) -> std::slice::Iter<'_, Id> {
                         self.matches.args.keys()
                     }
 
-                    pub(crate) fn args(&self) -> crate::util::flat_map::Iter<'_, Id, MatchedArg> {
+                    pub fn args(&self) -> crate::util::flat_map::Iter<'_, Id, MatchedArg> {
                         self.matches.args.iter()
                     }
 
-                    pub(crate) fn entry(&mut self, arg: Id) -> crate::util::Entry<'_, Id, MatchedArg> {
+                    pub fn entry(&mut self, arg: Id) -> crate::util::Entry<'_, Id, MatchedArg> {
                         self.matches.args.entry(arg)
                     }
 
-                    pub(crate) fn subcommand(&mut self, sc: SubCommand) {
+                    pub fn subcommand(&mut self, sc: SubCommand) {
                         self.matches.subcommand = Some(Box::new(sc));
                     }
 
-                    pub(crate) fn subcommand_name(&self) -> Option<&str> {
+                    pub fn subcommand_name(&self) -> Option<&str> {
                         self.matches.subcommand_name()
                     }
 
-                    pub(crate) fn check_explicit(&self, arg: &Id, predicate: &ArgPredicate) -> bool {
+                    pub fn check_explicit(&self, arg: &Id, predicate: &ArgPredicate) -> bool {
                         self.get(arg)
                             .map(|a| a.check_explicit(predicate))
                             .unwrap_or_default()
                     }
 
-                    pub(crate) fn start_custom_arg(&mut self, arg: &Arg, source: ValueSource) {
+                    pub fn start_custom_arg(&mut self, arg: &Arg, source: ValueSource) {
                         let id = arg.get_id().clone();
                         debug!("ArgMatcher::start_custom_arg: id={id:?}, source={source:?}");
                         let ma = self.entry(id).or_insert(MatchedArg::new_arg(arg));
@@ -10630,7 +10032,7 @@ pub mod clap
                         ma.new_val_group();
                     }
 
-                    pub(crate) fn start_custom_group(&mut self, id: Id, source: ValueSource) {
+                    pub fn start_custom_group(&mut self, id: Id, source: ValueSource) {
                         debug!("ArgMatcher::start_custom_arg: id={id:?}, source={source:?}");
                         let ma = self.entry(id).or_insert(MatchedArg::new_group());
                         debug_assert_eq!(ma.type_id(), None);
@@ -10638,7 +10040,7 @@ pub mod clap
                         ma.new_val_group();
                     }
 
-                    pub(crate) fn start_occurrence_of_external(&mut self, cmd: &Command) {
+                    pub fn start_occurrence_of_external(&mut self, cmd: &Command) {
                         let id = Id::from_static_ref(Id::EXTERNAL);
                         debug!("ArgMatcher::start_occurrence_of_external: id={id:?}");
                         let ma = self.entry(id).or_insert(MatchedArg::new_external(cmd));
@@ -10654,17 +10056,17 @@ pub mod clap
                         ma.new_val_group();
                     }
 
-                    pub(crate) fn add_val_to(&mut self, arg: &Id, val: AnyValue, raw_val: OsString) {
+                    pub fn add_val_to(&mut self, arg: &Id, val: AnyValue, raw_val: OsString) {
                         let ma = self.get_mut(arg).expect(INTERNAL_ERROR_MSG);
                         ma.append_val(val, raw_val);
                     }
 
-                    pub(crate) fn add_index_to(&mut self, arg: &Id, idx: usize) {
+                    pub fn add_index_to(&mut self, arg: &Id, idx: usize) {
                         let ma = self.get_mut(arg).expect(INTERNAL_ERROR_MSG);
                         ma.push_index(idx);
                     }
 
-                    pub(crate) fn needs_more_vals(&self, o: &Arg) -> bool {
+                    pub fn needs_more_vals(&self, o: &Arg) -> bool {
                         let num_pending = self
                             .pending
                             .as_ref()
@@ -10680,11 +10082,11 @@ pub mod clap
                         expected.accepts_more(num_pending)
                     }
 
-                    pub(crate) fn pending_arg_id(&self) -> Option<&Id> {
+                    pub fn pending_arg_id(&self) -> Option<&Id> {
                         self.pending.as_ref().map(|p| &p.id)
                     }
 
-                    pub(crate) fn pending_values_mut(
+                    pub fn pending_values_mut(
                         &mut self,
                         id: &Id,
                         ident: Option<Identifier>,
@@ -10706,14 +10108,14 @@ pub mod clap
                         &mut pending.raw_vals
                     }
 
-                    pub(crate) fn start_trailing(&mut self) {
+                    pub fn start_trailing(&mut self) {
                         if let Some(pending) = &mut self.pending {
                             // Allow asserting its started on subsequent calls
                             pending.trailing_idx.get_or_insert(pending.raw_vals.len());
                         }
                     }
 
-                    pub(crate) fn take_pending(&mut self) -> Option<PendingArg> {
+                    pub fn take_pending(&mut self) -> Option<PendingArg> {
                         self.pending.take()
                     }
                 }
@@ -10758,7 +10160,7 @@ pub mod clap
 
                 impl MatchesError {
                     #[cfg_attr(debug_assertions, track_caller)]
-                    pub(crate) fn unwrap<T>(id: &str, r: Result<T, MatchesError>) -> T {
+                    pub fn unwrap<T>(id: &str, r: Result<T, MatchesError>) -> T {
                         let err = match r {
                             Ok(t) => {
                                 return t;
@@ -10825,13 +10227,12 @@ pub mod clap
                     #[derive(Debug, Clone, Default, PartialEq, Eq)]
                     pub struct ArgMatches {
                         #[cfg(debug_assertions)]
-                        pub(crate) valid_args: Vec<Id>,
+                        pub valid_args: Vec<Id>,
                         #[cfg(debug_assertions)]
-                        pub(crate) valid_subcommands: Vec<Str>,
-                        pub(crate) args: FlatMap<Id, MatchedArg>,
-                        pub(crate) subcommand: Option<Box<SubCommand>>,
+                        pub valid_subcommands: Vec<Str>,
+                        pub args: FlatMap<Id, MatchedArg>,
+                        pub subcommand: Option<Box<SubCommand>>,
                     }
-
                     /// # Arguments
                     impl ArgMatches {
                         /// Gets the value of a specific option or positional argument.
@@ -10960,7 +10361,6 @@ pub mod clap
                             Some(i)
                         }
                     }
-
                     /// # Subcommands
                     impl ArgMatches {
                         /// The name and `ArgMatches` of the current [subcommand].
@@ -10999,7 +10399,6 @@ pub mod clap
                             }
                         }
                     }
-
                     /// # Advanced
                     impl ArgMatches {
                         /// Non-panicking version of [`ArgMatches::get_one`]
@@ -11279,11 +10678,10 @@ pub mod clap
                     }
 
                     #[derive(Debug, Clone, PartialEq, Eq)]
-                    pub(crate) struct SubCommand {
-                        pub(crate) name: String,
-                        pub(crate) matches: ArgMatches,
+                    pub struct SubCommand {
+                        pub name: String,
+                        pub matches: ArgMatches,
                     }
-
                     /// Iterate over [`Arg`][crate::Arg] and [`ArgGroup`][crate::ArgGroup] [`Id`]s via [`ArgMatches::ids`].
                     #[derive(Clone, Debug)]
                     pub struct IdsRef<'a> {
@@ -11308,7 +10706,6 @@ pub mod clap
                     }
 
                     impl ExactSizeIterator for IdsRef<'_> {}
-
                     /// Iterate over multiple values for an argument via [`ArgMatches::remove_many`].
                     #[derive(Clone, Debug)]
                     pub struct Values<T> {
@@ -11345,7 +10742,6 @@ pub mod clap
                     }
 
                     impl<T> ExactSizeIterator for Values<T> {}
-
                     /// Creates an empty iterator.
                     impl<T> Default for Values<T> {
                         fn default() -> Self {
@@ -11356,7 +10752,6 @@ pub mod clap
                             }
                         }
                     }
-
                     /// Iterate over multiple values for an argument via [`ArgMatches::get_many`].
                     #[derive(Clone, Debug)]
                     pub struct ValuesRef<'a, T> {
@@ -11393,7 +10788,6 @@ pub mod clap
                     }
 
                     impl<'a, T: 'a> ExactSizeIterator for ValuesRef<'a, T> {}
-
                     /// Creates an empty iterator.
                     impl<'a, T: 'a> Default for ValuesRef<'a, T> {
                         fn default() -> Self {
@@ -11404,7 +10798,6 @@ pub mod clap
                             }
                         }
                     }
-
                     /// Iterate over raw argument values via [`ArgMatches::get_raw`].
                     #[derive(Clone, Debug)]
                     pub struct RawValues<'a> {
@@ -11441,7 +10834,6 @@ pub mod clap
                     }
 
                     impl ExactSizeIterator for RawValues<'_> {}
-
                     /// Creates an empty iterator.
                     impl Default for RawValues<'_> {
                         fn default() -> Self {
@@ -11455,7 +10847,7 @@ pub mod clap
                     
                     #[derive(Clone, Debug)]
                     #[deprecated(since = "4.1.0", note = "Use Occurrences instead")]
-                    pub(crate) struct GroupedValues<'a> {
+                    pub struct GroupedValues<'a> {
                         #[allow(clippy::type_complexity)]
                         iter: Map<Iter<'a, Vec<AnyValue>>, fn(&Vec<AnyValue>) -> Vec<&str>>,
                         len: usize,
@@ -11492,7 +10884,6 @@ pub mod clap
 
                     #[allow(deprecated)]
                     impl ExactSizeIterator for GroupedValues<'_> {}
-
                     /// Creates an empty iterator. Used for `unwrap_or_default()`.
                     #[allow(deprecated)]
                     impl Default for GroupedValues<'_> {
@@ -11704,7 +11095,6 @@ pub mod clap
                     }
 
                     impl ExactSizeIterator for RawOccurrenceValues<'_> {}
-
                     /// Iterate over indices for where an argument appeared when parsing, via [`ArgMatches::indices_of`]
                     #[derive(Clone, Debug)]
                     pub struct Indices<'a> {
@@ -11740,7 +11130,6 @@ pub mod clap
                     }
 
                     impl ExactSizeIterator for Indices<'_> {}
-
                     /// Creates an empty iterator.
                     impl Default for Indices<'_> {
                         fn default() -> Self {
@@ -11786,7 +11175,7 @@ pub mod clap
                     use crate::INTERNAL_ERROR_MSG;
 
                     #[derive(Debug, Clone)]
-                    pub(crate) struct MatchedArg {
+                    pub struct MatchedArg {
                         source: Option<ValueSource>,
                         indices: Vec<usize>,
                         type_id: Option<AnyValueId>,
@@ -11796,7 +11185,7 @@ pub mod clap
                     }
 
                     impl MatchedArg {
-                        pub(crate) fn new_arg(arg: &crate::Arg) -> Self {
+                        pub fn new_arg(arg: &crate::Arg) -> Self {
                             let ignore_case = arg.is_ignore_case_set();
                             Self {
                                 source: None,
@@ -11808,7 +11197,7 @@ pub mod clap
                             }
                         }
 
-                        pub(crate) fn new_group() -> Self {
+                        pub fn new_group() -> Self {
                             let ignore_case = false;
                             Self {
                                 source: None,
@@ -11820,7 +11209,7 @@ pub mod clap
                             }
                         }
 
-                        pub(crate) fn new_external(cmd: &crate::Command) -> Self {
+                        pub fn new_external(cmd: &crate::Command) -> Self {
                             let ignore_case = false;
                             Self {
                                 source: None,
@@ -11836,57 +11225,57 @@ pub mod clap
                             }
                         }
 
-                        pub(crate) fn indices(&self) -> Cloned<Iter<'_, usize>> {
+                        pub fn indices(&self) -> Cloned<Iter<'_, usize>> {
                             self.indices.iter().cloned()
                         }
 
-                        pub(crate) fn get_index(&self, index: usize) -> Option<usize> {
+                        pub fn get_index(&self, index: usize) -> Option<usize> {
                             self.indices.get(index).cloned()
                         }
 
-                        pub(crate) fn push_index(&mut self, index: usize) {
+                        pub fn push_index(&mut self, index: usize) {
                             self.indices.push(index);
                         }
 
-                        pub(crate) fn vals(&self) -> Iter<'_, Vec<AnyValue>> {
+                        pub fn vals(&self) -> Iter<'_, Vec<AnyValue>> {
                             self.vals.iter()
                         }
 
-                        pub(crate) fn into_vals(self) -> Vec<Vec<AnyValue>> {
+                        pub fn into_vals(self) -> Vec<Vec<AnyValue>> {
                             self.vals
                         }
 
-                        pub(crate) fn vals_flatten(&self) -> Flatten<Iter<'_, Vec<AnyValue>>> {
+                        pub fn vals_flatten(&self) -> Flatten<Iter<'_, Vec<AnyValue>>> {
                             self.vals.iter().flatten()
                         }
 
-                        pub(crate) fn into_vals_flatten(self) -> Flatten<std::vec::IntoIter<Vec<AnyValue>>> {
+                        pub fn into_vals_flatten(self) -> Flatten<std::vec::IntoIter<Vec<AnyValue>>> {
                             self.vals.into_iter().flatten()
                         }
 
-                        pub(crate) fn raw_vals(&self) -> Iter<'_, Vec<OsString>> {
+                        pub fn raw_vals(&self) -> Iter<'_, Vec<OsString>> {
                             self.raw_vals.iter()
                         }
 
-                        pub(crate) fn raw_vals_flatten(&self) -> Flatten<Iter<'_, Vec<OsString>>> {
+                        pub fn raw_vals_flatten(&self) -> Flatten<Iter<'_, Vec<OsString>>> {
                             self.raw_vals.iter().flatten()
                         }
 
-                        pub(crate) fn first(&self) -> Option<&AnyValue> {
+                        pub fn first(&self) -> Option<&AnyValue> {
                             self.vals_flatten().next()
                         }
 
                         #[cfg(test)]
-                        pub(crate) fn first_raw(&self) -> Option<&OsString> {
+                        pub fn first_raw(&self) -> Option<&OsString> {
                             self.raw_vals_flatten().next()
                         }
 
-                        pub(crate) fn new_val_group(&mut self) {
+                        pub fn new_val_group(&mut self) {
                             self.vals.push(vec![]);
                             self.raw_vals.push(vec![]);
                         }
 
-                        pub(crate) fn append_val(&mut self, val: AnyValue, raw_val: OsString) {
+                        pub fn append_val(&mut self, val: AnyValue, raw_val: OsString) {
                             // We assume there is always a group created before.
                             self.vals.last_mut().expect(INTERNAL_ERROR_MSG).push(val);
                             self.raw_vals
@@ -11895,17 +11284,17 @@ pub mod clap
                                 .push(raw_val);
                         }
 
-                        pub(crate) fn num_vals(&self) -> usize {
+                        pub fn num_vals(&self) -> usize {
                             self.vals.iter().map(|v| v.len()).sum()
                         }
 
                         // Will be used later
-                        #[allow(dead_code)]
-                        pub(crate) fn num_vals_last_group(&self) -> usize {
+                        
+                        pub fn num_vals_last_group(&self) -> usize {
                             self.vals.last().map(|x| x.len()).unwrap_or(0)
                         }
 
-                        pub(crate) fn check_explicit(&self, predicate: &ArgPredicate) -> bool {
+                        pub fn check_explicit(&self, predicate: &ArgPredicate) -> bool {
                             if self.source.map(|s| !s.is_explicit()).unwrap_or(false) {
                                 return false;
                             }
@@ -11923,11 +11312,11 @@ pub mod clap
                             }
                         }
 
-                        pub(crate) fn source(&self) -> Option<ValueSource> {
+                        pub fn source(&self) -> Option<ValueSource> {
                             self.source
                         }
 
-                        pub(crate) fn set_source(&mut self, source: ValueSource) {
+                        pub fn set_source(&mut self, source: ValueSource) {
                             if let Some(existing) = self.source {
                                 self.source = Some(existing.max(source));
                             } else {
@@ -11935,11 +11324,11 @@ pub mod clap
                             }
                         }
 
-                        pub(crate) fn type_id(&self) -> Option<AnyValueId> {
+                        pub fn type_id(&self) -> Option<AnyValueId> {
                             self.type_id
                         }
 
-                        pub(crate) fn infer_type_id(&self, expected: AnyValueId) -> AnyValueId {
+                        pub fn infer_type_id(&self, expected: AnyValueId) -> AnyValueId {
                             self.type_id()
                                 .or_else(|| {
                                     self.vals_flatten()
@@ -11999,7 +11388,7 @@ pub mod clap
                     }
 
                     impl ValueSource {
-                        pub(crate) fn is_explicit(self) -> bool {
+                        pub fn is_explicit(self) -> bool {
                             self != Self::DefaultValue
                         }
                     }
@@ -12012,8 +11401,8 @@ pub mod clap
                 pub use arg_matches::{ArgMatches, Indices};
                 pub use value_source::ValueSource;
 
-                pub(crate) use arg_matches::SubCommand;
-                pub(crate) use matched_arg::MatchedArg;
+                pub use arg_matches::SubCommand;
+                pub use matched_arg::MatchedArg;
             }
 
             pub mod parser
@@ -12045,7 +11434,7 @@ pub mod clap
                 use crate::ArgAction;
                 use crate::INTERNAL_ERROR_MSG;
 
-                pub(crate) struct Parser<'cmd> {
+                pub struct Parser<'cmd> {
                     cmd: &'cmd mut Command,
                     cur_idx: Cell<usize>,
                     /// Index of the previous flag subcommand in a group of flags.
@@ -12057,7 +11446,7 @@ pub mod clap
 
                 // Initializing Methods
                 impl<'cmd> Parser<'cmd> {
-                    pub(crate) fn new(cmd: &'cmd mut Command) -> Self {
+                    pub fn new(cmd: &'cmd mut Command) -> Self {
                         Parser {
                             cmd,
                             cur_idx: Cell::new(0),
@@ -12071,7 +11460,7 @@ pub mod clap
                 impl<'cmd> Parser<'cmd> {
                     // The actual parsing function
                     #[allow(clippy::cognitive_complexity)]
-                    pub(crate) fn get_matches_with(
+                    pub fn get_matches_with(
                         &mut self,
                         matcher: &mut ArgMatcher,
                         raw_args: &mut clap_lex::RawArgs,
@@ -12098,7 +11487,7 @@ pub mod clap
 
                     // The actual parsing function
                     #[allow(clippy::cognitive_complexity)]
-                    pub(crate) fn parse(
+                    pub fn parse(
                         &mut self,
                         matcher: &mut ArgMatcher,
                         raw_args: &mut clap_lex::RawArgs,
@@ -13649,12 +13038,11 @@ pub mod clap
                 }
 
                 #[derive(Debug, PartialEq, Eq)]
-                pub(crate) enum ParseState {
+                pub enum ParseState {
                     ValuesDone,
                     Opt(Id),
                     Pos(Id),
                 }
-
                 /// Recoverable Parsing results.
                 #[derive(Debug, PartialEq, Clone)]
                 #[must_use]
@@ -13686,15 +13074,15 @@ pub mod clap
                 }
 
                 #[derive(Clone, Debug, PartialEq, Eq)]
-                pub(crate) struct PendingArg {
-                    pub(crate) id: Id,
-                    pub(crate) ident: Option<Identifier>,
-                    pub(crate) raw_vals: Vec<OsString>,
-                    pub(crate) trailing_idx: Option<usize>,
+                pub struct PendingArg {
+                    pub id: Id,
+                    pub ident: Option<Identifier>,
+                    pub raw_vals: Vec<OsString>,
+                    pub trailing_idx: Option<usize>,
                 }
 
                 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-                pub(crate) enum Identifier {
+                pub enum Identifier {
                     Short,
                     Long,
                     Index,
@@ -13720,18 +13108,18 @@ pub mod clap
                 use crate::util::Id;
                 use crate::INTERNAL_ERROR_MSG;
 
-                pub(crate) struct Validator<'cmd> {
+                pub struct Validator<'cmd> {
                     cmd: &'cmd Command,
                     required: ChildGraph<Id>,
                 }
 
                 impl<'cmd> Validator<'cmd> {
-                    pub(crate) fn new(cmd: &'cmd Command) -> Self {
+                    pub fn new(cmd: &'cmd Command) -> Self {
                         let required = cmd.required_graph();
                         Validator { cmd, required }
                     }
 
-                    pub(crate) fn validate(&mut self, matcher: &mut ArgMatcher) -> ClapResult<()> {
+                    pub fn validate(&mut self, matcher: &mut ArgMatcher) -> ClapResult<()> {
                         debug!("Validator::validate");
                         let conflicts = Conflicts::with_args(self.cmd, matcher);
                         let has_subcmd = matcher.subcommand_name().is_some();
@@ -14234,7 +13622,7 @@ pub mod clap
                     group.conflicts.clone()
                 }
 
-                pub(crate) fn get_possible_values_cli(a: &Arg) -> Vec<PossibleValue> {
+                pub fn get_possible_values_cli(a: &Arg) -> Vec<PossibleValue> {
                     if !a.is_takes_value_set() {
                         vec![]
                     } else {
@@ -14246,9 +13634,9 @@ pub mod clap
                 }
             }
             
-            pub(crate) mod features
+            pub mod features
             {
-                pub(crate) mod suggestions
+                pub mod suggestions
                 {
                     // Internal
                     use crate::builder::Command;
@@ -14257,7 +13645,7 @@ pub mod clap
                     /// Returns a Vec of all possible values that exceed a similarity threshold
                     /// sorted by ascending similarity, most similar comes last
                     #[cfg(feature = "suggestions")]
-                    pub(crate) fn did_you_mean<T, I>(v: &str, possible_values: I) -> Vec<String>
+                    pub fn did_you_mean<T, I>(v: &str, possible_values: I) -> Vec<String>
                     where
                         T: AsRef<str>,
                         I: IntoIterator<Item = T>,
@@ -14289,16 +13677,15 @@ pub mod clap
                     }
 
                     #[cfg(not(feature = "suggestions"))]
-                    pub(crate) fn did_you_mean<T, I>(_: &str, _: I) -> Vec<String>
+                    pub fn did_you_mean<T, I>(_: &str, _: I) -> Vec<String>
                     where
                         T: AsRef<str>,
                         I: IntoIterator<Item = T>,
                     {
                         Vec::new()
                     }
-
                     /// Returns a suffix that can be empty, or is the standard 'did you mean' phrase
-                    pub(crate) fn did_you_mean_flag<'a, 'help, I, T>(
+                    pub fn did_you_mean_flag<'a, 'help, I, T>(
                         arg: &str,
                         remaining_args: &[&std::ffi::OsStr],
                         longs: I,
@@ -14339,13 +13726,13 @@ pub mod clap
                 }
             }
 
-            pub(crate) use self::arg_matcher::ArgMatcher;
-            pub(crate) use self::matches::{MatchedArg, SubCommand};
-            pub(crate) use self::parser::Identifier;
-            pub(crate) use self::parser::Parser;
-            pub(crate) use self::parser::PendingArg;
-            pub(crate) use self::validator::get_possible_values_cli;
-            pub(crate) use self::validator::Validator;
+            pub use self::arg_matcher::ArgMatcher;
+            pub use self::matches::{MatchedArg, SubCommand};
+            pub use self::parser::Identifier;
+            pub use self::parser::Parser;
+            pub use self::parser::PendingArg;
+            pub use self::validator::get_possible_values_cli;
+            pub use self::validator::Validator;
 
             pub use self::matches::IdsRef;
             pub use self::matches::RawValues;
@@ -14387,11 +13774,7 @@ pub mod clap
         pub use crate::util::color::ColorChoice;
         pub use crate::util::Id;
 
-        /// Command Line Argument Parser Error
-        ///
-        /// See [`Command::error`] to create an error.
-        ///
-        /// [`Command::error`]: crate::Command::error
+        /// Command Line Argument Parser Error.
         pub type Error = error::Error<error::DefaultFormatter>;
 
         pub use crate::derive::{Args, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
@@ -14457,7 +13840,6 @@ pub mod clap
                     };
                     
                     use clap::{Arg, Command};
-
                     /// Gets all subcommands including child subcommands in the form of `("name", "bin_name")`.
                     ///
                     /// Subcommand `rustup toolchain install` would be converted to
@@ -14471,7 +13853,6 @@ pub mod clap
 
                         subcmds
                     }
-
                     /// Finds the subcommand [`clap::Command`] from the given [`clap::Command`] with the given path.
                     ///
                     /// <div class="warning">
@@ -14488,7 +13869,6 @@ pub mod clap
 
                         cmd
                     }
-
                     /// Gets subcommands of [`clap::Command`] in the form of `("name", "bin_name")`.
                     ///
                     /// Subcommand `rustup toolchain install` would be converted to
@@ -14520,7 +13900,6 @@ pub mod clap
 
                         subcmds
                     }
-
                     /// Gets all the short options, their visible aliases and flags of a [`clap::Command`].
                     /// Includes `h` and `V` depending on the [`clap::Command`] settings.
                     pub fn shorts_and_visible_aliases(p: &Command) -> Vec<char> {
@@ -14545,7 +13924,6 @@ pub mod clap
                             .flatten()
                             .collect()
                     }
-
                     /// Gets all the long options, their visible aliases and flags of a [`clap::Command`].
                     /// Includes `help` and `version` depending on the [`clap::Command`] settings.
                     pub fn longs_and_visible_aliases(p: &Command) -> Vec<String> {
@@ -14575,7 +13953,6 @@ pub mod clap
                             .flatten()
                             .collect()
                     }
-
                     /// Gets all the flags of a [`clap::Command`].
                     /// Includes `help` and `version` depending on the [`clap::Command`] settings.
                     pub fn flags(p: &Command) -> Vec<Arg> {
@@ -14585,7 +13962,6 @@ pub mod clap
                             .cloned()
                             .collect()
                     }
-
                     /// Get the possible values for completion
                     pub fn possible_values(a: &Arg) -> Option<Vec<clap::builder::PossibleValue>> {
                         if !a.get_num_args().expect("built").takes_values() {
@@ -14614,15 +13990,13 @@ pub mod clap
                     /// Generates output out of [`clap::Command`].
                     fn generate(&self, cmd: &Command, buf: &mut dyn Write);
                 }
-
                 /// Generate a completions file for a specified shell at compile-time.
                 pub fn generate_to<G, S, T>(
                     generator: G,
                     cmd: &mut Command,
                     bin_name: S,
                     out_dir: T,
-                ) -> Result<PathBuf, Error>
-                where
+                ) -> Result<PathBuf, Error> where
                     G: Generator,
                     S: Into<String>,
                     T: Into<OsString>,
@@ -14638,10 +14012,8 @@ pub mod clap
                     _generate::<G>(generator, cmd, &mut file);
                     Ok(path)
                 }
-
                 /// Generate a completions file for a specified shell at runtime.
-                pub fn generate<G, S>(generator: G, cmd: &mut Command, bin_name: S, buf: &mut dyn Write)
-                where
+                pub fn generate<G, S>(generator: G, cmd: &mut Command, bin_name: S, buf: &mut dyn Write)  where
                     G: Generator,
                     S: Into<String>,
                 {
@@ -14675,7 +14047,6 @@ pub mod clap
                     use clap::{Arg, Command, ValueHint};
 
                     use crate::generator::{utils, Generator};
-
                     /// Generate bash completion file
                     #[derive(Copy, Clone, PartialEq, Eq, Debug)]
                     pub struct Bash;
@@ -15132,7 +14503,6 @@ pub mod clap
                     use clap::{builder, Arg, Command, ValueHint};
 
                     use crate::generator::{utils, Generator};
-
                     /// Generate fish completion file
                     ///
                     /// Note: The fish generator currently only supports named options (-o/--option), not positional arguments.
@@ -15334,7 +14704,6 @@ pub mod clap
                             }
                         }
                     }
-
                     /// Print fish's helpers for easy handling subcommands.
                     fn gen_subcommand_helpers(
                         bin_name: &str,
@@ -16159,7 +15528,6 @@ pub mod clap
                             )
                         }
                     }
-
                     /// Escape help string inside single quotes and brackets
                     fn escape_help(string: &str) -> String {
                         string
@@ -16172,7 +15540,6 @@ pub mod clap
                             .replace('`', "\\`")
                             .replace('\n', " ")
                     }
-
                     /// Escape value string inside single quotes and parentheses
                     fn escape_value(string: &str) -> String {
                         string
@@ -16463,13 +15830,11 @@ pub mod clap
                             ..Default::default()
                         }
                     }
-
                     /// Set the help message of the completion candidate
                     pub fn help(mut self, help: Option<StyledStr>) -> Self {
                         self.help = help;
                         self
                     }
-
                     /// Only first for a given Id is shown
                     ///
                     /// To reduce the risk of conflicts, this should likely contain a namespace.
@@ -16477,7 +15842,6 @@ pub mod clap
                         self.id = id;
                         self
                     }
-
                     /// Group candidates by tag
                     ///
                     /// Future: these may become user-visible
@@ -16485,13 +15849,11 @@ pub mod clap
                         self.tag = tag;
                         self
                     }
-
                     /// Sort weight within a [`CompletionCandidate::tag`]
                     pub fn display_order(mut self, order: Option<usize>) -> Self {
                         self.display_order = order;
                         self
                     }
-
                     /// Set the visibility of the completion candidate
                     ///
                     /// Only shown when there is no visible candidate for completing the current argument.
@@ -16499,7 +15861,6 @@ pub mod clap
                         self.hidden = hidden;
                         self
                     }
-
                     /// Add a prefix to the value of completion candidate
                     ///
                     /// This is generally used for post-process by [`complete`][crate::engine::complete()] for
@@ -16512,34 +15873,28 @@ pub mod clap
                         self
                     }
                 }
-
                 /// Reflection API
                 impl CompletionCandidate {
                     /// Get the literal value being proposed for completion
                     pub fn get_value(&self) -> &OsStr {
                         &self.value
                     }
-
                     /// Get the help message of the completion candidate
                     pub fn get_help(&self) -> Option<&StyledStr> {
                         self.help.as_ref()
                     }
-
                     /// Get the id used for de-duplicating
                     pub fn get_id(&self) -> Option<&String> {
                         self.id.as_ref()
                     }
-
                     /// Get the grouping tag
                     pub fn get_tag(&self) -> Option<&StyledStr> {
                         self.tag.as_ref()
                     }
-
                     /// Get the grouping tag
                     pub fn get_display_order(&self) -> Option<usize> {
                         self.display_order
                     }
-
                     /// Get the visibility of the completion candidate
                     pub fn is_hide_set(&self) -> bool {
                         self.hidden
@@ -17022,7 +16377,6 @@ pub mod clap
 
                     values
                 }
-
                 /// Gets all the long options, their visible aliases and flags of a [`clap::Command`] with formatted `--` prefix.
                 /// Includes `help` and `version` depending on the [`clap::Command`] settings.
                 fn longs_and_visible_aliases(p: &clap::Command) -> Vec<CompletionCandidate> {
@@ -17039,7 +16393,6 @@ pub mod clap
                         .flatten()
                         .collect()
                 }
-
                 /// Gets all the long hidden aliases and flags of a [`clap::Command`].
                 fn hidden_longs_aliases(p: &clap::Command) -> Vec<CompletionCandidate> {
                     debug!("longs: name={}", p.get_name());
@@ -17055,7 +16408,6 @@ pub mod clap
                         .flatten()
                         .collect()
                 }
-
                 /// Gets all the short options, their visible aliases and flags of a [`clap::Command`].
                 /// Includes `h` and `V` depending on the [`clap::Command`] settings.
                 fn shorts_and_visible_aliases(p: &clap::Command) -> Vec<CompletionCandidate> {
@@ -17090,7 +16442,6 @@ pub mod clap
                         .display_order(Some(arg.get_display_order()))
                         .hide(arg.is_hide_set())
                 }
-
                 /// Get the possible values for completion
                 fn possible_values(a: &clap::Arg) -> Option<Vec<clap::builder::PossibleValue>> {
                     if !a.get_num_args().expect("built").takes_values() {
@@ -17101,7 +16452,6 @@ pub mod clap
                             .map(|pvs| pvs.collect())
                     }
                 }
-
                 /// Gets subcommands of [`clap::Command`] in the form of `("name", "bin_name")`.
                 ///
                 /// Subcommand `rustup toolchain install` would be converted to
@@ -17139,7 +16489,6 @@ pub mod clap
                         .display_order(Some(subcommand.get_display_order()))
                         .hide(subcommand.is_hide_set())
                 }
-
                 /// Parse the short flags and find the first `takes_values` option.
                 fn parse_shortflags<'c, 's>(
                     cmd: &'c clap::Command,
@@ -17178,7 +16527,6 @@ pub mod clap
 
                     (leading_flags, takes_value_opt, short)
                 }
-
                 /// Parse the positional arguments. Return the new state and the new positional index.
                 fn parse_positional<'a>(
                     cmd: &clap::Command,
@@ -17229,7 +16577,6 @@ pub mod clap
                         ),
                     }
                 }
-
                 /// Parse optional flag argument. Return new state
                 fn parse_opt_value(opt: &clap::Arg, count: usize) -> ParseState<'_> {
                     let range = opt.get_num_args().expect("built");
@@ -17288,7 +16635,6 @@ pub mod clap
                     {
                         Self(Arc::new(completer))
                     }
-
                     /// Candidates that match `current`
                     ///
                     /// See [`CompletionCandidate`] for more information.
@@ -17304,7 +16650,6 @@ pub mod clap
                 }
 
                 impl ArgExt for ArgValueCompleter {}
-
                 /// User-provided completion candidates for an [`Arg`][clap::Arg], see [`ArgValueCompleter`].
                 pub trait ValueCompleter: Send + Sync {
                     /// All potential candidates for an argument.
@@ -17321,7 +16666,6 @@ pub mod clap
                         self(current)
                     }
                 }
-
                 /// Extend [`Arg`][clap::Arg] with a [`ValueCandidates`].
                 #[derive(Clone)]
                 pub struct ArgValueCandidates(Arc<dyn ValueCandidates>);
@@ -17334,7 +16678,6 @@ pub mod clap
                     {
                         Self(Arc::new(completer))
                     }
-
                     /// All potential candidates for an argument.
                     ///
                     /// See [`CompletionCandidate`] for more information.
@@ -17350,7 +16693,6 @@ pub mod clap
                 }
 
                 impl ArgExt for ArgValueCandidates {}
-
                 /// Extend [`Command`][clap::Command] with a [`ValueCandidates`].
                 #[derive(Clone)]
                 pub struct SubcommandCandidates(Arc<dyn ValueCandidates>);
@@ -17363,7 +16705,6 @@ pub mod clap
                     {
                         Self(Arc::new(completer))
                     }
-
                     /// All potential candidates for an external subcommand.
                     ///
                     /// See [`CompletionCandidate`] for more information.
@@ -17379,7 +16720,6 @@ pub mod clap
                 }
 
                 impl CommandExt for SubcommandCandidates {}
-
                 /// User-provided completion candidates for an [`Arg`][clap::Arg], see [`ArgValueCandidates`].
                 pub trait ValueCandidates: Send + Sync {
                     /// All potential candidates for an argument.
@@ -17396,7 +16736,6 @@ pub mod clap
                         self()
                     }
                 }
-
                 /// Complete a value as a [`std::path::Path`].
                 pub struct PathCompleter {
                     current_dir: Option<std::path::PathBuf>,
@@ -17414,23 +16753,19 @@ pub mod clap
                             stdio: false,
                         }
                     }
-
                     /// Complete only files
                     pub fn file() -> Self {
                         Self::any().filter(|p| p.is_file())
                     }
-
                     /// Complete only directories
                     pub fn dir() -> Self {
                         Self::any().filter(|p| p.is_dir())
                     }
-
                     /// Include stdio (`-`)
                     pub fn stdio(mut self) -> Self {
                         self.stdio = true;
                         self
                     }
-
                     /// Select which paths should be completed
                     pub fn filter(
                         mut self,
@@ -17439,7 +16774,6 @@ pub mod clap
                         self.filter = Some(Box::new(filter));
                         self
                     }
-
                     /// Override [`std::env::current_dir`]
                     pub fn current_dir(mut self, path: impl Into<std::path::PathBuf>) -> Self {
                         self.current_dir = Some(path.into());
@@ -17469,7 +16803,7 @@ pub mod clap
                     }
                 }
 
-                pub(crate) fn complete_path(
+                pub fn complete_path(
                     value_os: &OsStr,
                     current_dir: Option<&std::path::Path>,
                     is_wanted: &dyn Fn(&std::path::Path) -> bool,
@@ -17678,7 +17012,6 @@ pub mod clap
                         Ok(())
                     }
                 }
-
                 /// Type of completion attempted that caused a completion function to be called
                 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
                 #[non_exhaustive]
@@ -17715,7 +17048,6 @@ pub mod clap
                         Self::Normal
                     }
                 }
-
                 /// Elvish completion adapter
                 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
                 pub struct Elvish;
@@ -17777,7 +17109,6 @@ pub mod clap
                         Ok(())
                     }
                 }
-
                 /// Fish completion adapter
                 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
                 pub struct Fish;
@@ -17830,7 +17161,6 @@ pub mod clap
                         Ok(())
                     }
                 }
-
                 /// Powershell completion adapter
                 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
                 pub struct Powershell;
@@ -17915,7 +17245,6 @@ pub mod clap
                         Ok(())
                     }
                 }
-
                 /// Zsh completion adapter
                 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
                 pub struct Zsh;
@@ -18012,7 +17341,6 @@ pub mod clap
                     fn escape_value(string: &str) -> String {
                         string.replace('\\', "\\\\").replace(':', "\\:")
                     }
-
                     /// Escape help string
                     fn escape_help(string: &str) -> String {
                         string.replace('\\', "\\\\")
@@ -18045,25 +17373,21 @@ pub mod clap
                         shells: Shells::builtins(),
                     }
                 }
-
                 /// Override the environment variable used for enabling completions
                 pub fn var(mut self, var: &'static str) -> Self {
                     self.var = var;
                     self
                 }
-
                 /// Override the name of the binary to complete.
                 pub fn bin(mut self, bin: impl Into<String>) -> Self {
                     self.bin = Some(bin.into());
                     self
                 }
-
                 /// Override the binary to call to get completions.
                 pub fn completer(mut self, completer: impl Into<String>) -> Self {
                     self.completer = Some(completer.into());
                     self
                 }
-
                 /// Override the shells supported for completions
                 pub fn shells(mut self, shells: Shells<'s>) -> Self {
                     self.shells = shells;
@@ -18086,7 +17410,6 @@ pub mod clap
                         std::process::exit(0)
                     }
                 }
-
                 /// Process the completion request
                 ///
                 /// **Warning:** `stdout` should not be written to before or after this has run.
@@ -18199,7 +17522,6 @@ pub mod clap
                     Ok(())
                 }
             }
-
             /// Collection of shell-specific completers
             pub struct Shells<'s>(pub &'s [&'s dyn EnvCompleter]);
 
@@ -18208,23 +17530,19 @@ pub mod clap
                 pub const fn builtins() -> Self {
                     Self(&[&Bash, &Elvish, &Fish, &Powershell, &Zsh])
                 }
-
                 /// Find the specified [`EnvCompleter`]
                 pub fn completer(&self, name: &str) -> Option<&dyn EnvCompleter> {
                     self.0.iter().copied().find(|c| c.is(name))
                 }
-
                 /// Collect all [`EnvCompleter::name`]s
                 pub fn names(&self) -> impl Iterator<Item = &'static str> + 's {
                     self.0.iter().map(|c| c.name())
                 }
-
                 /// Iterate over [`EnvCompleter`]s
                 pub fn iter(&self) -> impl Iterator<Item = &dyn EnvCompleter> {
                     self.0.iter().copied()
                 }
             }
-
             /// Shell-integration for completions.
             pub trait EnvCompleter {
                 /// Canonical name for this shell.
@@ -18353,15 +17671,15 @@ pub mod clap
             use crate::utils::Sp;
 
             #[derive(Clone)]
-            pub(crate) struct ClapAttr {
-                pub(crate) kind: Sp<AttrKind>,
-                pub(crate) name: Ident,
-                pub(crate) magic: Option<MagicAttrName>,
-                pub(crate) value: Option<AttrValue>,
+            pub struct ClapAttr {
+                pub kind: Sp<AttrKind>,
+                pub name: Ident,
+                pub magic: Option<MagicAttrName>,
+                pub value: Option<AttrValue>,
             }
 
             impl ClapAttr {
-                pub(crate) fn parse_all(all_attrs: &[Attribute]) -> Result<Vec<Self>, syn::Error> {
+                pub fn parse_all(all_attrs: &[Attribute]) -> Result<Vec<Self>, syn::Error> {
                     let mut parsed = Vec::new();
                     for attr in all_attrs {
                         let kind = if attr.path().is_ident("clap") {
@@ -18389,13 +17707,13 @@ pub mod clap
                     Ok(parsed)
                 }
 
-                pub(crate) fn value_or_abort(&self) -> Result<&AttrValue, syn::Error> {
+                pub fn value_or_abort(&self) -> Result<&AttrValue, syn::Error> {
                     self.value
                         .as_ref()
                         .ok_or_else(|| format_err!(self.name, "attribute `{}` requires a value", self.name))
                 }
 
-                pub(crate) fn lit_str_or_abort(&self) -> Result<&LitStr, syn::Error> {
+                pub fn lit_str_or_abort(&self) -> Result<&LitStr, syn::Error> {
                     let value = self.value_or_abort()?;
                     match value {
                         AttrValue::LitStr(tokens) => Ok(tokens),
@@ -18481,7 +17799,7 @@ pub mod clap
             }
 
             #[derive(Copy, Clone, PartialEq, Eq)]
-            pub(crate) enum MagicAttrName {
+            pub enum MagicAttrName {
                 Short,
                 Long,
                 ValueParser,
@@ -18511,7 +17829,7 @@ pub mod clap
 
             #[derive(Clone)]
             #[allow(clippy::large_enum_variant)]
-            pub(crate) enum AttrValue {
+            pub enum AttrValue {
                 LitStr(LitStr),
                 Expr(Expr),
                 Call(Vec<Expr>),
@@ -18531,7 +17849,7 @@ pub mod clap
             }
 
             #[derive(Copy, Clone, PartialEq, Eq)]
-            pub(crate) enum AttrKind {
+            pub enum AttrKind {
                 Clap,
                 StructOpt,
                 Command,
@@ -18541,7 +17859,7 @@ pub mod clap
             }
 
             impl AttrKind {
-                pub(crate) fn as_str(&self) -> &'static str {
+                pub fn as_str(&self) -> &'static str {
                     match self {
                         Self::Clap => "clap",
                         Self::StructOpt => "structopt",
@@ -18603,7 +17921,7 @@ pub mod clap
                 use crate::item::{Item, Kind, Name};
                 use crate::utils::{inner_type, sub_type, Sp, Ty};
 
-                pub(crate) fn derive_args(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
+                pub fn derive_args(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
                     let ident = &input.ident;
 
                     match input.data {
@@ -18636,7 +17954,7 @@ pub mod clap
                     }
                 }
 
-                pub(crate) fn gen_for_struct(
+                pub fn gen_for_struct(
                     item: &Item,
                     item_name: &Ident,
                     generics: &Generics,
@@ -18744,10 +18062,9 @@ pub mod clap
                         }
                     })
                 }
-
                 /// Generate a block of code to add arguments/subcommands corresponding to
                 /// the `fields` to an cmd.
-                pub(crate) fn gen_augment(
+                pub fn gen_augment(
                     fields: &[(&Field, Item)],
                     app_var: &Ident,
                     parent_item: &Item,
@@ -19021,7 +18338,7 @@ pub mod clap
                     }})
                 }
 
-                pub(crate) fn gen_constructor(fields: &[(&Field, Item)]) -> Result<TokenStream, syn::Error> {
+                pub fn gen_constructor(fields: &[(&Field, Item)]) -> Result<TokenStream, syn::Error> {
                     let fields = fields.iter().map(|(field, item)| {
                         let field_name = field.ident.as_ref().unwrap();
                         let kind = item.kind();
@@ -19132,7 +18449,7 @@ pub mod clap
                     }})
                 }
 
-                pub(crate) fn gen_updater(
+                pub fn gen_updater(
                     fields: &[(&Field, Item)],
                     use_self: bool,
                 ) -> Result<TokenStream, syn::Error> {
@@ -19343,19 +18660,19 @@ pub mod clap
                 }
 
                 #[cfg(feature = "raw-deprecated")]
-                pub(crate) fn raw_deprecated() -> TokenStream {
+                pub fn raw_deprecated() -> TokenStream {
                     quote! {}
                 }
 
                 #[cfg(not(feature = "raw-deprecated"))]
-                pub(crate) fn raw_deprecated() -> TokenStream {
+                pub fn raw_deprecated() -> TokenStream {
                     quote! {
                         #![allow(deprecated)]  // Assuming any deprecation in here will be related to a deprecation in `Args`
 
                     }
                 }
 
-                pub(crate) fn collect_args_fields<'a>(
+                pub fn collect_args_fields<'a>(
                     item: &'a Item,
                     fields: &'a FieldsNamed,
                 ) -> Result<Vec<(&'a Field, Item)>, syn::Error> {
@@ -19396,7 +18713,7 @@ pub mod clap
 
                 use crate::item::Item;
 
-                pub(crate) fn gen_for_struct(
+                pub fn gen_for_struct(
                     item: &Item,
                     item_name: &Ident,
                     generics: &Generics,
@@ -19444,7 +18761,7 @@ pub mod clap
                     Ok(tokens)
                 }
 
-                pub(crate) fn gen_for_enum(
+                pub fn gen_for_enum(
                     item: &Item,
                     item_name: &Ident,
                     generics: &Generics,
@@ -19529,7 +18846,7 @@ pub mod clap
                 use crate::item::Item;
                 use crate::item::Name;
 
-                pub(crate) fn derive_parser(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
+                pub fn derive_parser(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
                     let ident = &input.ident;
                     let pkg_name = std::env::var("CARGO_PKG_NAME").ok().unwrap_or_default();
 
@@ -19651,7 +18968,7 @@ pub mod clap
                 use crate::item::{Item, Kind, Name};
                 use crate::utils::{is_simple_ty, subty_if_name};
 
-                pub(crate) fn derive_subcommand(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
+                pub fn derive_subcommand(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
                     let ident = &input.ident;
 
                     match input.data {
@@ -19673,7 +18990,7 @@ pub mod clap
                     }
                 }
 
-                pub(crate) fn gen_for_enum(
+                pub fn gen_for_enum(
                     item: &Item,
                     item_name: &Ident,
                     generics: &Generics,
@@ -20327,7 +19644,7 @@ pub mod clap
 
                 use crate::item::{Item, Kind, Name};
 
-                pub(crate) fn derive_value_enum(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
+                pub fn derive_value_enum(input: &DeriveInput) -> Result<TokenStream, syn::Error> {
                     let ident = &input.ident;
 
                     match input.data {
@@ -20346,7 +19663,7 @@ pub mod clap
                     }
                 }
 
-                pub(crate) fn gen_for_enum(
+                pub fn gen_for_enum(
                     item: &Item,
                     item_name: &Ident,
                     variants: &[(&Variant, Item)],
@@ -20442,10 +19759,10 @@ pub mod clap
                 }
             }
             
-            pub(crate) use self::parser::derive_parser;
-            pub(crate) use args::derive_args;
-            pub(crate) use subcommand::derive_subcommand;
-            pub(crate) use value_enum::derive_value_enum;
+            pub use self::parser::derive_parser;
+            pub use args::derive_args;
+            pub use subcommand::derive_subcommand;
+            pub use value_enum::derive_value_enum;
         }
 
         pub mod dummies
@@ -20460,7 +19777,7 @@ pub mod clap
             use quote::quote;
 
             #[must_use]
-            pub(crate) fn parser(name: &Ident) -> proc_macro2::TokenStream {
+            pub fn parser(name: &Ident) -> proc_macro2::TokenStream {
                 let into_app = into_app(name);
                 quote!(
                     #[automatically_derived]
@@ -20470,7 +19787,7 @@ pub mod clap
             }
 
             #[must_use]
-            pub(crate) fn into_app(name: &Ident) -> proc_macro2::TokenStream {
+            pub fn into_app(name: &Ident) -> proc_macro2::TokenStream {
                 quote! {
                     #[automatically_derived]
                     impl clap::CommandFactory for #name {
@@ -20485,7 +19802,7 @@ pub mod clap
             }
 
             #[must_use]
-            pub(crate) fn from_arg_matches(name: &Ident) -> proc_macro2::TokenStream {
+            pub fn from_arg_matches(name: &Ident) -> proc_macro2::TokenStream {
                 quote! {
                     #[automatically_derived]
                     impl clap::FromArgMatches for #name {
@@ -20500,7 +19817,7 @@ pub mod clap
             }
 
             #[must_use]
-            pub(crate) fn subcommand(name: &Ident) -> proc_macro2::TokenStream {
+            pub fn subcommand(name: &Ident) -> proc_macro2::TokenStream {
                 let from_arg_matches = from_arg_matches(name);
                 quote! {
                     #[automatically_derived]
@@ -20520,7 +19837,7 @@ pub mod clap
             }
 
             #[must_use]
-            pub(crate) fn args(name: &Ident) -> proc_macro2::TokenStream {
+            pub fn args(name: &Ident) -> proc_macro2::TokenStream {
                 let from_arg_matches = from_arg_matches(name);
                 quote! {
                     #[automatically_derived]
@@ -20537,7 +19854,7 @@ pub mod clap
             }
 
             #[must_use]
-            pub(crate) fn value_enum(name: &Ident) -> proc_macro2::TokenStream {
+            pub fn value_enum(name: &Ident) -> proc_macro2::TokenStream {
                 quote! {
                     #[automatically_derived]
                     impl clap::ValueEnum for #name {
@@ -20587,13 +19904,13 @@ pub mod clap
             use crate::utils::{extract_doc_comment, format_doc_comment, inner_type, is_simple_ty, Sp, Ty};
 
             /// Default casing style for generated arguments.
-            pub(crate) const DEFAULT_CASING: CasingStyle = CasingStyle::Kebab;
+            pub const DEFAULT_CASING: CasingStyle = CasingStyle::Kebab;
 
             /// Default casing style for environment variables
-            pub(crate) const DEFAULT_ENV_CASING: CasingStyle = CasingStyle::ScreamingSnake;
+            pub const DEFAULT_ENV_CASING: CasingStyle = CasingStyle::ScreamingSnake;
 
             #[derive(Clone)]
-            pub(crate) struct Item {
+            pub struct Item {
                 name: Name,
                 casing: Sp<CasingStyle>,
                 env_casing: Sp<CasingStyle>,
@@ -20616,7 +19933,7 @@ pub mod clap
             }
 
             impl Item {
-                pub(crate) fn from_args_struct(input: &DeriveInput, name: Name) -> Result<Self, syn::Error> {
+                pub fn from_args_struct(input: &DeriveInput, name: Name) -> Result<Self, syn::Error> {
                     let ident = input.ident.clone();
                     let span = input.ident.span();
                     let attrs = &input.attrs;
@@ -20633,7 +19950,7 @@ pub mod clap
                     Ok(res)
                 }
 
-                pub(crate) fn from_subcommand_enum(
+                pub fn from_subcommand_enum(
                     input: &DeriveInput,
                     name: Name,
                 ) -> Result<Self, syn::Error> {
@@ -20653,7 +19970,7 @@ pub mod clap
                     Ok(res)
                 }
 
-                pub(crate) fn from_value_enum(input: &DeriveInput, name: Name) -> Result<Self, syn::Error> {
+                pub fn from_value_enum(input: &DeriveInput, name: Name) -> Result<Self, syn::Error> {
                     let ident = input.ident.clone();
                     let span = input.ident.span();
                     let attrs = &input.attrs;
@@ -20679,7 +19996,7 @@ pub mod clap
                     Ok(res)
                 }
 
-                pub(crate) fn from_subcommand_variant(
+                pub fn from_subcommand_variant(
                     variant: &Variant,
                     struct_casing: Sp<CasingStyle>,
                     env_casing: Sp<CasingStyle>,
@@ -20733,7 +20050,7 @@ pub mod clap
                     Ok(res)
                 }
 
-                pub(crate) fn from_value_enum_variant(
+                pub fn from_value_enum_variant(
                     variant: &Variant,
                     argument_casing: Sp<CasingStyle>,
                     env_casing: Sp<CasingStyle>,
@@ -20759,7 +20076,7 @@ pub mod clap
                     Ok(res)
                 }
 
-                pub(crate) fn from_args_field(
+                pub fn from_args_field(
                     field: &Field,
                     struct_casing: Sp<CasingStyle>,
                     env_casing: Sp<CasingStyle>,
@@ -21507,14 +20824,13 @@ pub mod clap
                     Ok(())
                 }
 
-                pub(crate) fn find_default_method(&self) -> Option<&Method> {
+                pub fn find_default_method(&self) -> Option<&Method> {
                     self.methods
                         .iter()
                         .find(|m| m.name == "default_value" || m.name == "default_value_os")
                 }
-
                 /// generate methods from attributes on top of struct or enum
-                pub(crate) fn initial_top_level_methods(&self) -> TokenStream {
+                pub fn initial_top_level_methods(&self) -> TokenStream {
                     let next_display_order = self.next_display_order.as_ref().into_iter();
                     let next_help_heading = self.next_help_heading.as_ref().into_iter();
                     quote!(
@@ -21523,57 +20839,56 @@ pub mod clap
                     )
                 }
 
-                pub(crate) fn final_top_level_methods(&self) -> TokenStream {
+                pub fn final_top_level_methods(&self) -> TokenStream {
                     let methods = &self.methods;
                     let doc_comment = &self.doc_comment;
 
                     quote!( #(#doc_comment)* #(#methods)*)
                 }
-
                 /// generate methods on top of a field
-                pub(crate) fn field_methods(&self) -> TokenStream {
+                pub fn field_methods(&self) -> TokenStream {
                     let methods = &self.methods;
                     let doc_comment = &self.doc_comment;
                     quote!( #(#doc_comment)* #(#methods)* )
                 }
 
-                pub(crate) fn group_id(&self) -> &Name {
+                pub fn group_id(&self) -> &Name {
                     &self.group_id
                 }
 
-                pub(crate) fn group_methods(&self) -> TokenStream {
+                pub fn group_methods(&self) -> TokenStream {
                     let group_methods = &self.group_methods;
                     quote!( #(#group_methods)* )
                 }
 
-                pub(crate) fn deprecations(&self) -> TokenStream {
+                pub fn deprecations(&self) -> TokenStream {
                     let deprecations = &self.deprecations;
                     quote!( #(#deprecations)* )
                 }
 
-                pub(crate) fn next_display_order(&self) -> TokenStream {
+                pub fn next_display_order(&self) -> TokenStream {
                     let next_display_order = self.next_display_order.as_ref().into_iter();
                     quote!( #(#next_display_order)* )
                 }
 
-                pub(crate) fn next_help_heading(&self) -> TokenStream {
+                pub fn next_help_heading(&self) -> TokenStream {
                     let next_help_heading = self.next_help_heading.as_ref().into_iter();
                     quote!( #(#next_help_heading)* )
                 }
 
-                pub(crate) fn id(&self) -> &Name {
+                pub fn id(&self) -> &Name {
                     &self.name
                 }
 
-                pub(crate) fn cased_name(&self) -> TokenStream {
+                pub fn cased_name(&self) -> TokenStream {
                     self.name.clone().translate(*self.casing)
                 }
 
-                pub(crate) fn value_name(&self) -> TokenStream {
+                pub fn value_name(&self) -> TokenStream {
                     self.name.clone().translate(CasingStyle::ScreamingSnake)
                 }
 
-                pub(crate) fn value_parser(&self, field_type: &Type) -> Method {
+                pub fn value_parser(&self, field_type: &Type) -> Method {
                     self.value_parser
                         .clone()
                         .map(|p| {
@@ -21596,7 +20911,7 @@ pub mod clap
                         })
                 }
 
-                pub(crate) fn action(&self, field_type: &Type) -> Method {
+                pub fn action(&self, field_type: &Type) -> Method {
                     self.action
                         .clone()
                         .map(|p| p.resolve(field_type))
@@ -21615,29 +20930,29 @@ pub mod clap
                         })
                 }
 
-                pub(crate) fn kind(&self) -> Sp<Kind> {
+                pub fn kind(&self) -> Sp<Kind> {
                     self.kind.clone()
                 }
 
-                pub(crate) fn is_positional(&self) -> bool {
+                pub fn is_positional(&self) -> bool {
                     self.is_positional
                 }
 
-                pub(crate) fn casing(&self) -> Sp<CasingStyle> {
+                pub fn casing(&self) -> Sp<CasingStyle> {
                     self.casing
                 }
 
-                pub(crate) fn env_casing(&self) -> Sp<CasingStyle> {
+                pub fn env_casing(&self) -> Sp<CasingStyle> {
                     self.env_casing
                 }
 
-                pub(crate) fn has_explicit_methods(&self) -> bool {
+                pub fn has_explicit_methods(&self) -> bool {
                     self.methods
                         .iter()
                         .any(|m| m.name != "help" && m.name != "long_help")
                 }
 
-                pub(crate) fn skip_group(&self) -> bool {
+                pub fn skip_group(&self) -> bool {
                     self.skip_group
                 }
             }
@@ -21675,20 +20990,20 @@ pub mod clap
             }
 
             #[derive(Clone)]
-            pub(crate) enum Action {
+            pub enum Action {
                 Explicit(Method),
                 Implicit(Ident),
             }
 
             impl Action {
-                pub(crate) fn resolve(self, _field_type: &Type) -> Method {
+                pub fn resolve(self, _field_type: &Type) -> Method {
                     match self {
                         Self::Explicit(method) => method,
                         Self::Implicit(ident) => default_action(_field_type, ident.span()),
                     }
                 }
 
-                pub(crate) fn span(&self) -> Span {
+                pub fn span(&self) -> Span {
                     match self {
                         Self::Explicit(method) => method.name.span(),
                         Self::Implicit(ident) => ident.span(),
@@ -21728,7 +21043,7 @@ pub mod clap
 
             #[allow(clippy::large_enum_variant)]
             #[derive(Clone)]
-            pub(crate) enum Kind {
+            pub enum Kind {
                 Arg(Sp<Ty>),
                 Command(Sp<Ty>),
                 Value,
@@ -21740,7 +21055,7 @@ pub mod clap
             }
 
             impl Kind {
-                pub(crate) fn name(&self) -> &'static str {
+                pub fn name(&self) -> &'static str {
                     match self {
                         Self::Arg(_) => "arg",
                         Self::Command(_) => "command",
@@ -21753,7 +21068,7 @@ pub mod clap
                     }
                 }
 
-                pub(crate) fn attr_kind(&self) -> AttrKind {
+                pub fn attr_kind(&self) -> AttrKind {
                     match self {
                         Self::Arg(_) => AttrKind::Arg,
                         Self::Command(_) => AttrKind::Command,
@@ -21766,7 +21081,7 @@ pub mod clap
                     }
                 }
 
-                pub(crate) fn ty(&self) -> Option<&Sp<Ty>> {
+                pub fn ty(&self) -> Option<&Sp<Ty>> {
                     match self {
                         Self::Arg(ty)
                         | Self::Command(ty)
@@ -21779,13 +21094,13 @@ pub mod clap
             }
 
             #[derive(Clone)]
-            pub(crate) struct Method {
+            pub struct Method {
                 name: Ident,
                 args: TokenStream,
             }
 
             impl Method {
-                pub(crate) fn new(name: Ident, args: TokenStream) -> Self {
+                pub fn new(name: Ident, args: TokenStream) -> Self {
                     Method { name, args }
                 }
 
@@ -21816,7 +21131,7 @@ pub mod clap
                     Ok(Some(Method::new(ident, quote!(#lit))))
                 }
 
-                pub(crate) fn args(&self) -> &TokenStream {
+                pub fn args(&self) -> &TokenStream {
                     &self.args
                 }
             }
@@ -21832,11 +21147,11 @@ pub mod clap
             }
 
             #[derive(Clone)]
-            pub(crate) struct Deprecation {
-                pub(crate) span: Span,
-                pub(crate) id: &'static str,
-                pub(crate) version: &'static str,
-                pub(crate) description: String,
+            pub struct Deprecation {
+                pub span: Span,
+                pub id: &'static str,
+                pub version: &'static str,
+                pub description: String,
             }
 
             impl Deprecation {
@@ -21897,7 +21212,6 @@ pub mod clap
                 }
                 Ok(())
             }
-
             /// replace all `:` with `, ` when not inside the `<>`
             ///
             /// `"author1:author2:author3" => "author1, author2, author3"`
@@ -21922,10 +21236,9 @@ pub mod clap
 
                 res
             }
-
             /// Defines the casing for the attributes long representation.
             #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-            pub(crate) enum CasingStyle {
+            pub enum CasingStyle {
                 /// Indicate word boundaries with uppercase letter, excluding the first word.
                 Camel,
                 /// Keep all letters lowercase and indicate word boundaries with hyphens.
@@ -21969,13 +21282,13 @@ pub mod clap
             }
 
             #[derive(Clone)]
-            pub(crate) enum Name {
+            pub enum Name {
                 Derived(Ident),
                 Assigned(TokenStream),
             }
 
             impl Name {
-                pub(crate) fn translate(self, style: CasingStyle) -> TokenStream {
+                pub fn translate(self, style: CasingStyle) -> TokenStream {
                     use CasingStyle::{Camel, Kebab, Lower, Pascal, ScreamingSnake, Snake, Upper, Verbatim};
 
                     match self {
@@ -21997,7 +21310,7 @@ pub mod clap
                     }
                 }
 
-                pub(crate) fn translate_char(self, style: CasingStyle) -> TokenStream {
+                pub fn translate_char(self, style: CasingStyle) -> TokenStream {
                     use CasingStyle::{Camel, Kebab, Lower, Pascal, ScreamingSnake, Snake, Upper, Verbatim};
 
                     match self {
@@ -22048,12 +21361,12 @@ pub mod clap
                 {
                     *,
                 };
-                pub(crate) trait SpanError {
+                pub trait SpanError {
                     #[allow(non_snake_case)]
                     fn EXPECTED_Span_OR_ToTokens<D: std::fmt::Display>(&self, msg: D) -> syn::Error;
                 }
 
-                pub(crate) trait ToTokensError {
+                pub trait ToTokensError {
                     #[allow(non_snake_case)]
                     fn EXPECTED_Span_OR_ToTokens<D: std::fmt::Display>(&self, msg: D) -> syn::Error;
                 }
@@ -22083,7 +21396,7 @@ pub mod clap
                 #[cfg(feature = "unstable-markdown")]
                 use markdown::parse_markdown;
 
-                pub(crate) fn extract_doc_comment(attrs: &[syn::Attribute]) -> Vec<String> {
+                pub fn extract_doc_comment(attrs: &[syn::Attribute]) -> Vec<String> {
                     // multiline comments (`/** ... */`) may have LFs (`\n`) in them,
                     // we need to split so we could handle the lines correctly
                     //
@@ -22127,7 +21440,7 @@ pub mod clap
                     lines
                 }
 
-                pub(crate) fn format_doc_comment(
+                pub fn format_doc_comment(
                     lines: &[String],
                     preprocess: bool,
                     force_long: bool,
@@ -22501,21 +21814,21 @@ pub mod clap
 
                 /// An entity with a span attached.
                 #[derive(Debug, Copy, Clone)]
-                pub(crate) struct Sp<T> {
+                pub struct Sp<T> {
                     val: T,
                     span: Span,
                 }
 
                 impl<T> Sp<T> {
-                    pub(crate) fn new(val: T, span: Span) -> Self {
+                    pub fn new(val: T, span: Span) -> Self {
                         Sp { val, span }
                     }
 
-                    pub(crate) fn get(&self) -> &T {
+                    pub fn get(&self) -> &T {
                         &self.val
                     }
 
-                    pub(crate) fn span(&self) -> Span {
+                    pub fn span(&self) -> Span {
                         self.span
                     }
                 }
@@ -22601,7 +21914,7 @@ pub mod clap
                 };
 
                 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-                pub(crate) enum Ty {
+                pub enum Ty {
                     Unit,
                     Vec,
                     VecVec,
@@ -22613,7 +21926,7 @@ pub mod clap
                 }
 
                 impl Ty {
-                    pub(crate) fn from_syn_ty(ty: &Type) -> Sp<Self> {
+                    pub fn from_syn_ty(ty: &Type) -> Sp<Self> {
                         use self::Ty::{Option, OptionOption, OptionVec, OptionVecVec, Other, Unit, Vec, VecVec};
                         let t = |kind| Sp::new(kind, ty.span());
 
@@ -22634,7 +21947,7 @@ pub mod clap
                         }
                     }
 
-                    pub(crate) fn as_str(&self) -> &'static str {
+                    pub fn as_str(&self) -> &'static str {
                         match self {
                             Self::Unit => "()",
                             Self::Vec => "Vec<T>",
@@ -22648,7 +21961,7 @@ pub mod clap
                     }
                 }
 
-                pub(crate) fn inner_type(field_ty: &Type) -> &Type {
+                pub fn inner_type(field_ty: &Type) -> &Type {
                     let ty = Ty::from_syn_ty(field_ty);
                     match *ty {
                         Ty::Vec | Ty::Option => sub_type(field_ty).unwrap_or(field_ty),
@@ -22663,7 +21976,7 @@ pub mod clap
                     }
                 }
 
-                pub(crate) fn sub_type(ty: &Type) -> Option<&Type> {
+                pub fn sub_type(ty: &Type) -> Option<&Type> {
                     subty_if(ty, |_| true)
                 }
 
@@ -22685,8 +21998,7 @@ pub mod clap
                     }
                 }
 
-                fn subty_if<F>(ty: &Type, f: F) -> Option<&Type>
-                where
+                fn subty_if<F>(ty: &Type, f: F) -> Option<&Type> where
                     F: FnOnce(&PathSegment) -> bool,
                 {
                     only_last_segment(ty)
@@ -22706,11 +22018,11 @@ pub mod clap
                         })
                 }
 
-                pub(crate) fn subty_if_name<'a>(ty: &'a Type, name: &str) -> Option<&'a Type> {
+                pub fn subty_if_name<'a>(ty: &'a Type, name: &str) -> Option<&'a Type> {
                     subty_if(ty, |seg| seg.ident == name)
                 }
 
-                pub(crate) fn is_simple_ty(ty: &Type, name: &str) -> bool {
+                pub fn is_simple_ty(ty: &Type, name: &str) -> bool {
                     only_last_segment(ty)
                         .map(|segment| {
                             if let PathArguments::None = segment.arguments {
@@ -22734,8 +22046,7 @@ pub mod clap
                     }
                 }
 
-                fn only_one<I, T>(mut iter: I) -> Option<T>
-                where
+                fn only_one<I, T>(mut iter: I) -> Option<T> where
                     I: Iterator<Item = T>,
                 {
                     iter.next().filter(|_| iter.next().is_none())
@@ -22759,10 +22070,10 @@ pub mod clap
             }
 
 
-            pub(crate) use doc_comments::extract_doc_comment;
-            pub(crate) use doc_comments::format_doc_comment;
+            pub use doc_comments::extract_doc_comment;
+            pub use doc_comments::format_doc_comment;
 
-            pub(crate) use self::
+            pub use self::
             {
                 spanned::Sp,
                 ty::{inner_type, is_simple_ty, sub_type, subty_if_name, Ty},
@@ -22780,7 +22091,6 @@ pub mod clap
                 })
                 .into()
         }
-
         /// Generates the `Parser` implementation.
         ///
         /// This is far less verbose than defining the `clap::Command` struct manually,
@@ -22817,7 +22127,6 @@ pub mod clap
                 })
                 .into()
         }
-
         /// Generates the `Subcommand` impl.
         #[proc_macro_derive(Subcommand, attributes(clap, command, arg, group))]
         pub fn subcommand(input: TokenStream) -> TokenStream {
@@ -22829,7 +22138,6 @@ pub mod clap
                 })
                 .into()
         }
-
         /// Generates the `Args` impl.
         #[proc_macro_derive(Args, attributes(clap, command, arg, group))]
         pub fn args(input: TokenStream) -> TokenStream {
@@ -22975,13 +22283,12 @@ pub mod clap
                     }
                 }
             }
-
             /// Split an `OsStr`
             ///
             /// # Safety
             ///
             /// `index` must be at a valid UTF-8 boundary
-            pub(crate) unsafe fn split_at(os: &OsStr, index: usize) -> (&OsStr, &OsStr) {
+            pub unsafe fn split_at(os: &OsStr, index: usize) -> (&OsStr, &OsStr) {
                 unsafe {
                     let bytes = os.as_encoded_bytes();
                     let (first, second) = bytes.split_at(index);
@@ -23017,41 +22324,34 @@ pub mod clap
                 let iter = iter.into_iter();
                 Self::from(iter)
             }
-
             /// Create a cursor for walking the arguments.
             pub fn cursor(&self) -> ArgCursor {
                 ArgCursor::new()
             }
-
             /// Advance the cursor, returning the next [`ParsedArg`]
             pub fn next(&self, cursor: &mut ArgCursor) -> Option<ParsedArg<'_>> {
                 self.next_os(cursor).map(ParsedArg::new)
             }
-
             /// Advance the cursor, returning a raw argument value.
             pub fn next_os(&self, cursor: &mut ArgCursor) -> Option<&OsStr> {
                 let next = self.items.get(cursor.cursor).map(|s| s.as_os_str());
                 cursor.cursor = cursor.cursor.saturating_add(1);
                 next
             }
-
             /// Return the next [`ParsedArg`]
             pub fn peek(&self, cursor: &ArgCursor) -> Option<ParsedArg<'_>> {
                 self.peek_os(cursor).map(ParsedArg::new)
             }
-
             /// Return a raw argument value.
             pub fn peek_os(&self, cursor: &ArgCursor) -> Option<&OsStr> {
                 self.items.get(cursor.cursor).map(|s| s.as_os_str())
             }
-
             /// Return all remaining raw arguments, advancing the cursor to the end.
             pub fn remaining(&self, cursor: &mut ArgCursor) -> impl Iterator<Item = &OsStr> {
                 let remaining = self.items[cursor.cursor..].iter().map(|s| s.as_os_str());
                 cursor.cursor = self.items.len();
                 remaining
             }
-
             /// Adjust the cursor's position
             pub fn seek(&self, cursor: &mut ArgCursor, pos: SeekFrom) {
                 let pos = match pos {
@@ -23062,7 +22362,6 @@ pub mod clap
                 let pos = (pos as usize).min(self.items.len());
                 cursor.cursor = pos;
             }
-
             /// Inject arguments before the [`RawArgs::next`]
             pub fn insert(
                 &mut self,
@@ -23074,7 +22373,6 @@ pub mod clap
                     insert_items.into_iter().map(Into::into),
                 );
             }
-
             /// Any remaining args?
             pub fn is_end(&self, cursor: &ArgCursor) -> bool {
                 self.peek_os(cursor).is_none()
@@ -23092,7 +22390,6 @@ pub mod clap
                 }
             }
         }
-
         /// Position within [`RawArgs`]
         #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
         pub struct ArgCursor {
@@ -23104,7 +22401,6 @@ pub mod clap
                 Self { cursor: 0 }
             }
         }
-
         /// Command-line Argument
         #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub struct ParsedArg<'s> {
@@ -23115,22 +22411,18 @@ pub mod clap
             fn new(inner: &'s OsStr) -> Self {
                 Self { inner }
             }
-
             /// Argument is length of 0
             pub fn is_empty(&self) -> bool {
                 self.inner.is_empty()
             }
-
             /// Does the argument look like a stdio argument (`-`)
             pub fn is_stdio(&self) -> bool {
                 self.inner == "-"
             }
-
             /// Does the argument look like an argument escape (`--`)
             pub fn is_escape(&self) -> bool {
                 self.inner == "--"
             }
-
             /// Does the argument look like a negative number?
             ///
             /// This won't parse the number in full but attempts to see if this looks
@@ -23141,7 +22433,6 @@ pub mod clap
                     .and_then(|s| Some(is_number(s.strip_prefix('-')?)))
                     .unwrap_or_default()
             }
-
             /// Treat as a long-flag
             pub fn to_long(&self) -> Option<(Result<&str, &OsStr>, Option<&OsStr>)> {
                 let raw = self.inner;
@@ -23159,12 +22450,10 @@ pub mod clap
                 let flag = flag.to_str().ok_or(flag);
                 Some((flag, value))
             }
-
             /// Can treat as a long-flag
             pub fn is_long(&self) -> bool {
                 self.inner.starts_with("--") && !self.is_escape()
             }
-
             /// Treat as a short-flag
             pub fn to_short(&self) -> Option<ShortFlags<'_>> {
                 if let Some(remainder_os) = self.inner.strip_prefix("-") {
@@ -23180,12 +22469,10 @@ pub mod clap
                     None
                 }
             }
-
             /// Can treat as a short-flag
             pub fn is_short(&self) -> bool {
                 self.inner.starts_with("-") && !self.is_stdio() && !self.inner.starts_with("--")
             }
-
             /// Treat as a value
             ///
             /// <div class="warning">
@@ -23196,7 +22483,6 @@ pub mod clap
             pub fn to_value_os(&self) -> &OsStr {
                 self.inner
             }
-
             /// Treat as a value
             ///
             /// <div class="warning">
@@ -23207,7 +22493,6 @@ pub mod clap
             pub fn to_value(&self) -> Result<&str, &OsStr> {
                 self.inner.to_str().ok_or(self.inner)
             }
-
             /// Safely print an argument that may contain non-UTF8 content
             ///
             /// This may perform lossy conversion, depending on the platform. If you would like an implementation which escapes the path please use Debug instead.
@@ -23215,7 +22500,6 @@ pub mod clap
                 self.inner.to_string_lossy()
             }
         }
-
         /// Walk through short flags within a [`ParsedArg`]
         #[derive(Clone, Debug)]
         pub struct ShortFlags<'s> {
@@ -23234,7 +22518,6 @@ pub mod clap
                     invalid_suffix,
                 }
             }
-
             /// Move the iterator forward by `n` short flags
             pub fn advance_by(&mut self, n: usize) -> Result<(), usize> {
                 for i in 0..n {
@@ -23242,19 +22525,16 @@ pub mod clap
                 }
                 Ok(())
             }
-
             /// No short flags left
             pub fn is_empty(&self) -> bool {
                 self.invalid_suffix.is_none() && self.utf8_prefix.as_str().is_empty()
             }
-
             /// Does the short flag look like a number
             ///
             /// Ideally call this before doing any iterator
             pub fn is_negative_number(&self) -> bool {
                 self.invalid_suffix.is_none() && is_number(self.utf8_prefix.as_str())
             }
-
             /// Advance the iterator, returning the next short flag on success
             ///
             /// On error, returns the invalid-UTF8 value
@@ -23270,7 +22550,6 @@ pub mod clap
 
                 None
             }
-
             /// Advance the iterator, returning everything left as a value
             pub fn next_value_os(&mut self) -> Option<&'s OsStr> {
                 if let Some((index, _)) = self.utf8_prefix.next() {
@@ -23367,8 +22646,6 @@ pub mod errno
             {
                 *,
             };
-            
-
             use core::str;
             use libc::{self, c_int, size_t, strerror_r, strlen};
 
@@ -23540,25 +22817,19 @@ pub mod errno
         #[cfg(unix)] pub use self::unix::{ * };
         #[cfg(windows)] pub use self::windows::{ * };
     }
-
+    /*
     use core::fmt;
     #[cfg(feature = "std")]
     use std::error::Error;
     #[cfg(feature = "std")]
     use std::io;
-
+    */
     /// Wraps a platform-specific error code.
-    ///
-    /// The `Display` instance maps the code to a human-readable string. It
-    /// calls [`strerror_r`][1] under POSIX, and [`FormatMessageW`][2] on
-    /// Windows.
-    ///
-    /// [1]: http://pubs.opengroup.org/onlinepubs/009695399/functions/strerror.html
-    /// [2]: https://msdn.microsoft.com/en-us/library/windows/desktop/ms679351%28v=vs.85%29.aspx
     #[derive(Copy, Clone, Eq, Ord, PartialEq, PartialOrd, Hash)]
     pub struct Errno(pub i32);
 
-    impl fmt::Debug for Errno {
+    impl fmt::Debug for Errno 
+    {
         fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
             sys::with_description(*self, |desc| {
                 fmt.debug_struct("Errno")
@@ -23569,7 +22840,8 @@ pub mod errno
         }
     }
 
-    impl fmt::Display for Errno {
+    impl fmt::Display for Errno 
+    {
         fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
             sys::with_description(*self, |desc| match desc {
                 Ok(desc) => fmt.write_str(desc),
@@ -23584,14 +22856,15 @@ pub mod errno
         }
     }
 
-    impl From<Errno> for i32 {
+    impl From<Errno> for i32 
+    {
         fn from(e: Errno) -> Self {
             e.0
         }
     }
 
-    #[cfg(feature = "std")]
-    impl Error for Errno {
+    impl Error for Errno 
+    {
         // TODO: Remove when MSRV >= 1.27
         #[allow(deprecated)]
         fn description(&self) -> &str {
@@ -23599,20 +22872,20 @@ pub mod errno
         }
     }
 
-    #[cfg(feature = "std")]
-    impl From<Errno> for io::Error {
+    impl From<Errno> for io::Error 
+    {
         fn from(errno: Errno) -> Self {
             io::Error::from_raw_os_error(errno.0)
         }
     }
-
     /// Returns the platform-specific value of `errno`.
-    pub fn errno() -> Errno {
+    pub fn errno() -> Errno 
+    {
         sys::errno()
     }
-
     /// Sets the platform-specific value of `errno`.
-    pub fn set_errno(err: Errno) {
+    pub fn set_errno(err: Errno) 
+    {
         sys::set_errno(err)
     }
 }
@@ -23637,7 +22910,6 @@ pub mod exec
     use std::fmt;
     use std::ptr;
     use std::os::unix::ffi::OsStrExt;
-
     /// Represents an error calling `exec`.
     ///
     /// This is marked `#[must_use]`, which is unusual for error types.
@@ -23686,7 +22958,6 @@ pub mod exec
             Error::BadArgument(err)
         }
     }
-
     /// Like `try!`, but it just returns the error directly without wrapping it
     /// in `Err`.  For functions that only return if something goes wrong.
     macro_rules! exec_try {
@@ -23697,7 +22968,6 @@ pub mod exec
             }
         };
     }
-
     /// Run `program` with `args`, completely replacing the currently running program.
     pub fn execvp<S, I>(program: S, args: I) -> Error
         where S: AsRef<OsStr>, I: IntoIterator, I::Item: AsRef<OsStr>
@@ -23727,7 +22997,6 @@ pub mod exec
             panic!("execvp returned unexpectedly")
         }
     }
-
     /// Build a command to execute.  This has an API which is deliberately similar to `std::process::Command`.
     pub struct Command {
         /// The program name and arguments, in typical C `argv` style.
@@ -23742,13 +23011,11 @@ pub mod exec
                 argv: vec!(program.as_ref().to_owned()),
             }
         }
-
         /// Add an argument to the command builder.  This can be chained.
         pub fn arg<S: AsRef<OsStr>>(&mut self, arg: S) -> &mut Command {
             self.argv.push(arg.as_ref().to_owned());
             self
         }
-
         /// Add multiple arguments to the command builder.
         pub fn args<S: AsRef<OsStr>>(&mut self, args: &[S]) -> &mut Command {
             for arg in args {
@@ -23756,7 +23023,6 @@ pub mod exec
             }
             self
         }
-
         /// Execute the command we built.  If this function succeeds, it will never return.
         pub fn exec(&mut self) -> Error {
             execvp(&self.argv[0], &self.argv)
@@ -23787,7 +23053,6 @@ pub mod glob
     use MatchResult::{EntirePatternDoesntMatch, Match, SubPatternDoesntMatch};
     use PatternToken::AnyExcept;
     use PatternToken::{AnyChar, AnyRecursiveSequence, AnySequence, AnyWithin, Char};
-
     /// An iterator that yields `Path`s from the filesystem that match a particular pattern.
     #[derive(Debug)]
     pub struct Paths {
@@ -23797,14 +23062,12 @@ pub mod glob
         todo: Vec<Result<(PathWrapper, usize), GlobError>>,
         scope: Option<PathWrapper>,
     }
-
     /// Return an iterator that produces all the `Path`s that match the given
     /// pattern using default match options, which may be absolute or relative to
     /// the current working directory.
     pub fn glob(pattern: &str) -> Result<Paths, PatternError> {
         glob_with(pattern, MatchOptions::new())
     }
-
     /// Return an iterator that produces all the `Path`s that match the given
     /// pattern using the specified match options, which may be absolute or relative
     /// to the current working directory.
@@ -23904,7 +23167,6 @@ pub mod glob
             scope: Some(scope),
         })
     }
-
     /// A glob iteration error.
     #[derive(Debug)]
     pub struct GlobError {
@@ -23917,12 +23179,10 @@ pub mod glob
         pub fn path(&self) -> &Path {
             &self.path
         }
-
         /// The error in question.
         pub fn error(&self) -> &io::Error {
             &self.error
         }
-
         /// Consumes self, returning the _raw_ underlying `io::Error`
         pub fn into_error(self) -> io::Error {
             self.error
@@ -23999,7 +23259,6 @@ pub mod glob
             self.path.as_ref()
         }
     }
-
     /// An alias for a glob iteration result.
     ///
     /// This represents either a matched path or a glob iteration error,
@@ -24116,7 +23375,6 @@ pub mod glob
             }
         }
     }
-
     /// A pattern parsing error.
     #[derive(Debug)]
     #[allow(missing_copy_implementations)]
@@ -24143,7 +23401,6 @@ pub mod glob
             )
         }
     }
-
     /// A compiled Unix shell style pattern.
     ///
     /// - `?` matches any single character.
@@ -24179,7 +23436,6 @@ pub mod glob
         tokens: Vec<PatternToken>,
         is_recursive: bool,
     }
-
     /// Show the original glob pattern.
     impl fmt::Display for Pattern {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -24341,7 +23597,6 @@ pub mod glob
                 is_recursive,
             })
         }
-
         /// Escape metacharacters within the given string by surrounding them in
         /// brackets. The resulting string will, when compiled into a `Pattern`,
         /// match the input string and nothing else.
@@ -24363,26 +23618,22 @@ pub mod glob
             }
             escaped
         }
-
         /// Return if the given `str` matches this `Pattern` using the default
         /// match options (i.e. `MatchOptions::new()`).
         pub fn matches(&self, str: &str) -> bool {
             self.matches_with(str, MatchOptions::new())
         }
-
         /// Return if the given `Path`, when converted to a `str`, matches this
         /// `Pattern` using the default match options (i.e. `MatchOptions::new()`).
         pub fn matches_path(&self, path: &Path) -> bool {
             // FIXME (#9639): This needs to handle non-utf8 paths
             path.to_str().map_or(false, |s| self.matches(s))
         }
-
         /// Return if the given `str` matches this `Pattern` using the specified
         /// match options.
         pub fn matches_with(&self, str: &str, options: MatchOptions) -> bool {
             self.matches_from(true, str.chars(), 0, options) == Match
         }
-
         /// Return if the given `Path`, when converted to a `str`, matches this
         /// `Pattern` using the specified match options.
         pub fn matches_path_with(&self, path: &Path, options: MatchOptions) -> bool {
@@ -24390,7 +23641,6 @@ pub mod glob
             path.to_str()
                 .map_or(false, |s| self.matches_with(s, options))
         }
-
         /// Access the original glob pattern.
         pub fn as_str(&self) -> &str {
             &self.original
@@ -24639,7 +23889,6 @@ pub mod glob
 
         false
     }
-
     /// A helper function to determine if two chars are (possibly case-insensitively) equal.
     fn chars_eq(a: char, b: char, case_sensitive: bool) -> bool {
         if cfg!(windows) && path::is_separator(a) && path::is_separator(b) {
@@ -24651,7 +23900,6 @@ pub mod glob
             a == b
         }
     }
-
     /// Configuration options to modify the behaviour of `Pattern::matches_with(..)`.
     #[allow(missing_copy_implementations)]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
@@ -24771,7 +24019,6 @@ pub mod lineread
 
             Some(ch)
         }
-
         /// Returns a character sequence escaped for user-facing display.
         ///
         /// Escape is formatted as `\e`.
@@ -24796,7 +24043,6 @@ pub mod lineread
 
             res
         }
-
         /// Returns a meta sequence for the given character.
         pub fn meta(ch: char) -> String {
             let mut s = String::with_capacity(ch.len_utf8() + 1);
@@ -24808,7 +24054,6 @@ pub mod lineread
         fn contains_any(s: &str, strs: &[&str]) -> bool {
             strs.iter().any(|a| s.contains(a))
         }
-
         /// Returns whether the character is printable.
         ///
         /// That is, not NUL or a control character (other than Tab or Newline).
@@ -24825,17 +24070,14 @@ pub mod lineread
 
             c != '\0' && c as u32 <= CTRL_MAX
         }
-
         /// Returns a control character for the given character.
         pub fn ctrl(c: char) -> char {
             ((c as u8) & CTRL_MASK) as char
         }
-
         /// Returns the printable character corresponding to the given control character.
         pub fn unctrl(c: char) -> char {
             ((c as u8) | CTRL_BIT) as char
         }
-
         /// Returns the lowercase character corresponding to the given control character.
         pub fn unctrl_lower(c: char) -> char {
             unctrl(c).to_ascii_lowercase()
@@ -24867,7 +24109,6 @@ pub mod lineread
                     /// Execute a given key sequence
                     Macro(Cow<'static, str>),
                 }
-
                 /// List of all command names
                 pub static COMMANDS: &[&str] = &[ $( $str ),+ ];
 
@@ -24891,7 +24132,6 @@ pub mod lineread
                         Command::opt_from_str(name)
                             .unwrap_or_else(|| Command::Custom(Borrowed(name)))
                     }
-
                     /// Constructs a command from a non-`'static` string-like type.
                     ///
                     /// If the string does not refer to a built-in command, a value
@@ -24996,7 +24236,6 @@ pub mod lineread
             /// Rotate the kill ring and yank the new top
             YankPop => "yank-pop",
         }
-
         /// Describes the category of a command
         ///
         /// A command's category determines how particular operations behave
@@ -25071,7 +24310,6 @@ pub mod lineread
             /// Completion suffix; replaces append character
             pub suffix: Suffix,
         }
-
         /// Specifies an optional suffix to override the default value
         #[derive(Copy, Clone, Debug, Eq, PartialEq)]
         pub enum Suffix {
@@ -25093,7 +24331,6 @@ pub mod lineread
                     suffix: Suffix::default(),
                 }
             }
-
             /// Returns the full completion string, including suffix, using the given
             /// default suffix if one is not assigned to this completion.
             pub fn completion(&self, def_suffix: Option<char>) -> Cow<str> {
@@ -25105,7 +24342,6 @@ pub mod lineread
 
                 s
             }
-
             /// Returns the display string, including suffix
             pub fn display(&self) -> Cow<str> {
                 let mut s = Borrowed(self.display_str());
@@ -25116,7 +24352,6 @@ pub mod lineread
 
                 s
             }
-
             /// Returns the number of characters displayed
             pub fn display_chars(&self) -> usize {
                 let n = self.display_str().chars().count();
@@ -25139,7 +24374,6 @@ pub mod lineread
                     _ => false
                 }
             }
-
             /// Returns whether the `Suffix` value is the `Some(_)` variant.
             pub fn is_some(&self) -> bool {
                 match *self {
@@ -25147,7 +24381,6 @@ pub mod lineread
                     _ => false
                 }
             }
-
             /// Returns whether the `Suffix` value is the `None` variant.
             pub fn is_none(&self) -> bool {
                 match *self {
@@ -25155,7 +24388,6 @@ pub mod lineread
                     _ => false
                 }
             }
-
             /// Returns an `Option<char>`, using the given value in place of `Default`.
             pub fn with_default(self, default: Option<char>) -> Option<char> {
                 match self {
@@ -25171,7 +24403,6 @@ pub mod lineread
                 Suffix::Default
             }
         }
-
         /// Performs completion for `Prompter` when triggered by a user input sequence
         pub trait Completer<Term: Terminal>: Send + Sync {
             /// Returns the set of possible completions for the prefix `word`.
@@ -25185,18 +24416,15 @@ pub mod lineread
             fn word_start(&self, line: &str, end: usize, prompter: &Prompter<Term>) -> usize {
                 word_break_start(&line[..end], prompter.word_break_chars())
             }
-
             /// Quotes a possible completion for insertion into input.
             ///
             /// The default implementation returns the word, as is.
             fn quote<'a>(&self, word: &'a str) -> Cow<'a, str> { Borrowed(word) }
-
             /// Unquotes a piece of user input before searching for completions.
             ///
             /// The default implementation returns the word, as is.
             fn unquote<'a>(&self, word: &'a str) -> Cow<'a, str> { Borrowed(word) }
         }
-
         /// `Completer` type that performs no completion
         ///
         /// This is the default `Completer` for a new `Prompter` instance.
@@ -25206,7 +24434,6 @@ pub mod lineread
             fn complete(&self, _word: &str, _reader: &Prompter<Term>,
                     _start: usize, _end: usize) -> Option<Vec<Completion>> { None }
         }
-
         /// Performs completion by searching for filenames matching the word prefix.
         pub struct PathCompleter;
 
@@ -25228,7 +24455,6 @@ pub mod lineread
                 unescape(word)
             }
         }
-
         /// Returns a sorted list of paths whose prefix matches the given path.
         pub fn complete_path(path: &str) -> Vec<Completion> {
             let (base_dir, fname) = split_path(path);
@@ -25274,7 +24500,6 @@ pub mod lineread
             res.sort_by(|a, b| a.display_str().cmp(b.display_str()));
             res
         }
-
         /// Returns the start position of the word that ends at the end of the string.
         pub fn word_break_start(s: &str, word_break: &str) -> usize {
             let mut start = s.len();
@@ -25288,7 +24513,6 @@ pub mod lineread
 
             start
         }
-
         /// Returns the start position of a word with non-word characters escaped by
         /// backslash (`\\`).
         pub fn escaped_word_start(s: &str) -> usize {
@@ -25329,7 +24553,6 @@ pub mod lineread
 
             start
         }
-
         /// Escapes a word by prefixing a backslash (`\\`) to non-word characters.
         pub fn escape(s: &str) -> Cow<str> {
             let n = s.chars().filter(|&ch| needs_escape(ch)).count();
@@ -25349,7 +24572,6 @@ pub mod lineread
                 Owned(res)
             }
         }
-
         /// Unescapes a word by removing the backslash (`\\`) from escaped characters.
         pub fn unescape(s: &str) -> Cow<str> {
             if s.contains('\\') {
@@ -25447,13 +24669,11 @@ pub mod lineread
             /// The default terminal style
             Default,
         }
-
         /// A trait for providing style information for a line of text.
         pub trait Highlighter {
             /// Takes the current line buffer and returns a list of styled ranges.
             fn highlight(&self, line: &str) -> Vec<(Range<usize>, Style)>;
         }
-
         /// Style reset sequence
         pub const RESET_STYLE: &str = "\x1b[0m";
     }
@@ -25498,14 +24718,12 @@ pub mod lineread
             /// Set variable; `set name value`
             SetVariable(String, String),
         }
-
         /// Parses the named file and returns contained directives.
         ///
         /// If the file cannot be opened, `None` is returned and an error is printed
         /// to `stderr`. If any errors are encountered during parsing, they are printed
         /// to `stderr`.
-        pub fn parse_file<P: ?Sized>(filename: &P) -> Option<Vec<Directive>>
-                where P: AsRef<Path> {
+        pub fn parse_file<P: ?Sized>(filename: &P) -> Option<Vec<Directive>> where P: AsRef<Path> {
             let filename = filename.as_ref();
 
             let mut f = match File::open(filename) {
@@ -25525,12 +24743,10 @@ pub mod lineread
 
             Some(parse_text(filename, &buf))
         }
-
         /// Parses some text and returns contained directives.
         ///
         /// If any errors are encountered during parsing, they are printed to `stderr`.
-        pub fn parse_text<P: ?Sized>(name: &P, line: &str) -> Vec<Directive>
-                where P: AsRef<Path> {
+        pub fn parse_text<P: ?Sized>(name: &P, line: &str) -> Vec<Directive> where P: AsRef<Path> {
             let mut p = Parser::new(name.as_ref(), line);
             p.parse()
         }
@@ -26074,7 +25290,6 @@ pub mod lineread
                     highlighter: None,
                 })
             }
-
             /// Acquires the read lock and returns a `Reader` instance.
             ///
             /// The `Reader` instance allows exclusive access to variables, bindings,
@@ -26082,7 +25297,6 @@ pub mod lineread
             pub fn lock_reader(&self) -> Reader<Term> {
                 Reader::new(self, self.lock_read())
             }
-
             /// Acquires the write lock and returns a `Writer` instance.
             ///
             /// If a `read_line` call is in progress, this method will move the cursor
@@ -26096,7 +25310,6 @@ pub mod lineread
             pub fn lock_writer_append(&self) -> io::Result<Writer<Term>> {
                 Writer::with_lock(self.lock_write(), false)
             }
-
             /// Acquires the write lock and returns a `Writer` instance.
             ///
             /// If a `read_line` call is in progress, this method will erase the prompt,
@@ -26116,7 +25329,7 @@ pub mod lineread
                     self.read.lock().expect("Interface::lock_read"))
             }
 
-            pub(crate) fn lock_write(&self) -> WriteLock<Term> {
+            pub fn lock_write(&self) -> WriteLock<Term> {
                 WriteLock::new(
                     self.term.lock_write(),
                     self.write.lock().expect("Interface::lock_write"),
@@ -26124,11 +25337,10 @@ pub mod lineread
                 )
             }
 
-            pub(crate) fn lock_write_data(&self) -> MutexGuard<Write> {
+            pub fn lock_write_data(&self) -> MutexGuard<Write> {
                 self.write.lock().expect("Interface::lock_write_data")
             }
         }
-
         /// ## Locking
         ///
         /// The following methods internally acquire the read lock.
@@ -26156,7 +25368,6 @@ pub mod lineread
             pub fn read_line(&self) -> io::Result<ReadResult> {
                 self.lock_reader().read_line()
             }
-
             /// Performs one step of the interactive `read_line` loop.
             ///
             /// This method can be used to drive the `read_line` process asynchronously.
@@ -26178,7 +25389,6 @@ pub mod lineread
                     -> io::Result<Option<ReadResult>> {
                 self.lock_reader().read_line_step(timeout)
             }
-
             /// Cancels an in-progress `read_line` operation.
             ///
             /// This method will reset internal data structures to their original state
@@ -26194,24 +25404,20 @@ pub mod lineread
             pub fn cancel_read_line(&self) -> io::Result<()> {
                 self.lock_reader().cancel_read_line()
             }
-
             /// Returns a clone of the current completer instance.
             pub fn completer(&self) -> Arc<dyn Completer<Term>> {
                 self.lock_reader().completer().clone()
             }
-
             /// Replaces the current completer, returning the previous instance.
             pub fn set_completer(&self, completer: Arc<dyn Completer<Term>>)
                     -> Arc<dyn Completer<Term>> {
                 self.lock_reader().set_completer(completer)
             }
-
             /// Returns the value of the named variable or `None`
             /// if no such variable exists.
             pub fn get_variable(&self, name: &str) -> Option<Variable> {
                 self.lock_reader().get_variable(name)
             }
-
             /// Sets the value of the named variable and returns the previous
             /// value.
             ///
@@ -26220,27 +25426,22 @@ pub mod lineread
             pub fn set_variable(&self, name: &str, value: &str) -> Option<Variable> {
                 self.lock_reader().set_variable(name, value)
             }
-
             /// Returns whether the given `Signal` is ignored.
             pub fn ignore_signal(&self, signal: Signal) -> bool {
                 self.lock_reader().ignore_signal(signal)
             }
-
             /// Sets whether the given `Signal` will be ignored.
             pub fn set_ignore_signal(&self, signal: Signal, set: bool) {
                 self.lock_reader().set_ignore_signal(signal, set)
             }
-
             /// Returns whether the given `Signal` is reported.
             pub fn report_signal(&self, signal: Signal) -> bool {
                 self.lock_reader().report_signal(signal)
             }
-
             /// Sets whether the given `Signal` is reported.
             pub fn set_report_signal(&self, signal: Signal, set: bool) {
                 self.lock_reader().set_report_signal(signal, set)
             }
-
             /// Binds a sequence to a command.
             ///
             /// Returns the previously bound command.
@@ -26248,7 +25449,6 @@ pub mod lineread
                     where T: Into<Cow<'static, str>> {
                 self.lock_reader().bind_sequence(seq, cmd)
             }
-
             /// Binds a sequence to a command, if and only if the given sequence
             /// is not already bound to a command.
             ///
@@ -26257,14 +25457,12 @@ pub mod lineread
                     where T: Into<Cow<'static, str>> {
                 self.lock_reader().bind_sequence_if_unbound(seq, cmd)
             }
-
             /// Removes a binding for the given sequence.
             ///
             /// Returns the previously bound command.
             pub fn unbind_sequence(&self, seq: &str) -> Option<Command> {
                 self.lock_reader().unbind_sequence(seq)
             }
-
             /// Defines a named function to which sequences may be bound.
             ///
             /// The name should consist of lowercase ASCII letters and numbers,
@@ -26276,25 +25474,21 @@ pub mod lineread
                     -> Option<Arc<dyn Function<Term>>> where T: Into<Cow<'static, str>> {
                 self.lock_reader().define_function(name, cmd)
             }
-
             /// Removes a function defined with the given name.
             ///
             /// Returns the defined function.
             pub fn remove_function(&self, name: &str) -> Option<Arc<dyn Function<Term>>> {
                 self.lock_reader().remove_function(name)
             }
-
             /// Evaluates a series of configuration directives.
             pub fn evaluate_directives(&self, dirs: Vec<Directive>) {
                 self.lock_reader().evaluate_directives(&self.term, dirs)
             }
-
             /// Evaluates a single configuration directive.
             pub fn evaluate_directive(&self, dir: Directive) {
                 self.lock_reader().evaluate_directive(&self.term, dir)
             }
         }
-
         /// ## Locking
         ///
         /// The following methods internally acquire the write lock.
@@ -26307,12 +25501,10 @@ pub mod lineread
             pub fn buffer(&self) -> String {
                 self.lock_write().buffer.to_owned()
             }
-
             /// Returns the current number of history entries.
             pub fn history_len(&self) -> usize {
                 self.lock_write().history_len()
             }
-
             /// Returns the maximum number of history entries.
             ///
             /// Not to be confused with [`history_len`], which returns the *current*
@@ -26322,7 +25514,6 @@ pub mod lineread
             pub fn history_size(&self) -> usize {
                 self.lock_write().history_size()
             }
-
             /// Save history entries to the specified file.
             ///
             /// If the file does not exist, it is created and all history entries are
@@ -26403,7 +25594,6 @@ pub mod lineread
 
                 self.append_history_to(&file, w)
             }
-
             /// Load history entries from the specified file.
             pub fn load_history<P: AsRef<Path>>(&self, path: P) -> io::Result<()> {
                 let mut writer = self.lock_write();
@@ -26419,7 +25609,6 @@ pub mod lineread
 
                 Ok(())
             }
-
             /// Writes formatted text to the terminal display.
             ///
             /// This method enables `Interface` to be used as the receiver to
@@ -26449,7 +25638,6 @@ pub mod lineread
                 self.lock_writer_erase()?.write_str(line)
             }
         }
-
         /// ## Locking
         ///
         /// The following methods internally acquire both the read and write locks.
@@ -26468,7 +25656,6 @@ pub mod lineread
             pub fn set_prompt(&self, prompt: &str) -> io::Result<()> {
                 self.lock_reader().set_prompt(prompt)
             }
-
             /// Sets the input buffer to the given string.
             ///
             /// # Notes
@@ -26478,7 +25665,6 @@ pub mod lineread
             pub fn set_buffer(&self, buf: &str) -> io::Result<()> {
                 self.lock_reader().set_buffer(buf)
             }
-
             /// Sets the cursor position in the input buffer.
             ///
             /// # Panics
@@ -26499,21 +25685,18 @@ pub mod lineread
             pub fn add_history(&self, line: String) {
                 self.lock_reader().add_history(line);
             }
-
             /// Adds a line to history, unless it is identical to the most recent entry.
             ///
             /// If a `read_line` call is in progress, this method has no effect.
             pub fn add_history_unique(&self, line: String) {
                 self.lock_reader().add_history_unique(line);
             }
-
             /// Removes all history entries.
             ///
             /// If a `read_line` call is in progress, this method has no effect.
             pub fn clear_history(&self) {
                 self.lock_reader().clear_history();
             }
-
             /// Removes the history entry at the given index.
             ///
             /// If the index is out of bounds, this method has no effect.
@@ -26522,7 +25705,6 @@ pub mod lineread
             pub fn remove_history(&self, idx: usize) {
                 self.lock_reader().remove_history(idx);
             }
-
             /// Sets the maximum number of history entries.
             ///
             /// If `n` is less than the current number of history entries,
@@ -26532,14 +25714,12 @@ pub mod lineread
             pub fn set_history_size(&self, n: usize) {
                 self.lock_reader().set_history_size(n);
             }
-
             /// Truncates history to the only the most recent `n` entries.
             ///
             /// If a `read_line` call is in progress, this method has no effect.
             pub fn truncate_history(&self, n: usize) {
                 self.lock_reader().truncate_history(n);
             }
-
             /// Sets the syntax highlighter for the input line.
             pub fn set_highlighter(&mut self, highlighter: Arc<dyn Highlighter + Send + Sync>) {
                 self.highlighter = Some(highlighter);
@@ -26597,7 +25777,6 @@ pub mod lineread
             input: Vec<u8>,
             resize: Option<Size>,
         }
-
         /// Holds the lock on read operations of a `MemoryTerminal`.
         pub struct MemoryReadGuard<'a>(MutexGuard<'a, Reader>);
 
@@ -26609,7 +25788,6 @@ pub mod lineread
             pub fn new() -> MemoryTerminal {
                 MemoryTerminal::default()
             }
-
             /// Returns a new `MemoryTerminal` with the given buffer size.
             ///
             /// # Panics
@@ -26621,27 +25799,22 @@ pub mod lineread
                     write: Arc::new(Mutex::new(Writer::new(size))),
                 }
             }
-
             /// Clears the terminal buffer and places the cursor at `(0, 0)`.
             pub fn clear_all(&self) {
                 self.lock_writer().clear_all();
             }
-
             /// Clears all characters beginning at the cursor and ending at buffer end.
             pub fn clear_to_end(&self) {
                 self.lock_writer().clear_to_end();
             }
-
             /// Clears the input buffer.
             pub fn clear_input(&self) {
                 self.lock_reader().clear_input();
             }
-
             /// Returns whether any input remains to be read.
             pub fn has_input(&self) -> bool {
                 self.lock_reader().has_input()
             }
-
             /// Returns an iterator over lines in the buffer.
             ///
             /// # Notes
@@ -26656,42 +25829,34 @@ pub mod lineread
                     line: 0,
                 }
             }
-
             /// Moves the cursor up `n` cells.
             pub fn move_up(&self, n: usize) {
                 self.lock_writer().move_up(n);
             }
-
             /// Moves the cursor down `n` cells.
             pub fn move_down(&self, n: usize) {
                 self.lock_writer().move_down(n);
             }
-
             /// Moves the cursor left `n` cells.
             pub fn move_left(&self, n: usize) {
                 self.lock_writer().move_left(n);
             }
-
             /// Moves the cursor right `n` cells.
             pub fn move_right(&self, n: usize) {
                 self.lock_writer().move_right(n);
             }
-
             /// Moves the cursor to the first column of the current line.
             pub fn move_to_first_column(&self) {
                 self.lock_writer().move_to_first_column()
             }
-
             /// Pushes a character sequence to the back of the input queue.
             pub fn push_input(&self, s: &str) {
                 self.lock_reader().push_input(s.as_bytes());
             }
-
             /// Reads some input from the input buffer.
             pub fn read_input(&self, buf: &mut [u8]) -> usize {
                 self.lock_reader().read_input(buf)
             }
-
             /// Changes the size of the terminal buffer.
             /// The buffer will be truncated or filled with spaces, as necessary.
             ///
@@ -26703,34 +25868,28 @@ pub mod lineread
                 self.lock_writer().resize(new_size);
                 self.lock_reader().resize(new_size);
             }
-
             /// Moves the contents of the buffer up `n` lines.
             /// The first `n` lines of text will be erased.
             pub fn scroll_up(&self, n: usize) {
                 self.lock_writer().scroll_up(n);
             }
-
             /// Returns the `(line, column)` position of the cursor.
             pub fn cursor(&self) -> (usize, usize) {
                 let r = self.lock_writer();
                 (r.line, r.col)
             }
-
             /// Sets the cursor mode.
             pub fn set_cursor_mode(&self, mode: CursorMode) {
                 self.lock_writer().set_cursor_mode(mode);
             }
-
             /// Returns the cursor mode.
             pub fn cursor_mode(&self) -> CursorMode {
                 self.lock_writer().cursor_mode()
             }
-
             /// Returns the size of the terminal buffer.
             pub fn size(&self) -> Size {
                 self.lock_writer().size
             }
-
             /// Writes some text into the buffer.
             ///
             /// If the text extends beyond the length of the current line without a
@@ -26922,7 +26081,6 @@ pub mod lineread
                 self.line * self.size.columns + self.col
             }
         }
-
         /// Iterator over lines in a `MemoryTerminal` buffer.
         ///
         /// Note that while this value behaves as an iterator, it cannot implement
@@ -26945,7 +26103,6 @@ pub mod lineread
                     Some(&self.writer.memory[start..end])
                 }
             }
-
             /// Returns the number of lines remaining in the iterator.
             pub fn lines_remaining(&self) -> usize {
                 self.writer.size.lines - self.line
@@ -27111,16 +26268,15 @@ pub mod lineread
         /// [`Interface`]: ../interface/struct.Interface.html
         /// [`read_line`]: ../interface/struct.Interface.html#method.read_line
         pub struct Prompter<'a, 'b: 'a, Term: 'b + Terminal> {
-            pub(crate) read: &'a mut ReadLock<'b, Term>,
+            pub read: &'a mut ReadLock<'b, Term>,
             write: WriteLock<'b, Term>,
         }
 
         impl<'a, 'b: 'a, Term: 'b + Terminal> Prompter<'a, 'b, Term> {
-            pub(crate) fn new(read: &'a mut ReadLock<'b, Term>, write: WriteLock<'b, Term>)
+            pub fn new(read: &'a mut ReadLock<'b, Term>, write: WriteLock<'b, Term>)
                     -> Prompter<'a, 'b, Term> {
                 Prompter{read, write}
             }
-
             /// Returns a `Writer` instance using the currently held write lock.
             ///
             /// This method will move the cursor to a new line after the prompt,
@@ -27133,7 +26289,6 @@ pub mod lineread
             pub fn writer_append<'c>(&'c mut self) -> io::Result<Writer<'c, 'b, Term>> {
                 Writer::with_ref(&mut self.write, false)
             }
-
             /// Returns a `Writer` instance using the currently held write lock.
             ///
             /// This method will erase the prompt, allowing output to be written
@@ -27146,21 +26301,20 @@ pub mod lineread
             pub fn writer_erase<'c>(&'c mut self) -> io::Result<Writer<'c, 'b, Term>> {
                 Writer::with_ref(&mut self.write, true)
             }
-
             /// Resets input state at the start of `read_line`
             fn reset_input(&mut self) {
                 self.read.reset_data();
                 self.write.reset_data();
             }
 
-            pub(crate) fn start_read_line(&mut self) -> io::Result<()> {
+            pub fn start_read_line(&mut self) -> io::Result<()> {
                 self.read.state = InputState::NewSequence;
                 self.write.is_prompt_drawn = true;
                 self.write.update_size()?;
                 self.write.draw_prompt()
             }
 
-            pub(crate) fn end_read_line(&mut self) -> io::Result<()> {
+            pub fn end_read_line(&mut self) -> io::Result<()> {
                 self.write.expire_blink()?;
 
                 if self.read.overwrite_mode {
@@ -27178,7 +26332,7 @@ pub mod lineread
                 Ok(())
             }
 
-            pub(crate) fn handle_input(&mut self, ch: char) -> io::Result<Option<ReadResult>> {
+            pub fn handle_input(&mut self, ch: char) -> io::Result<Option<ReadResult>> {
                 self.write.expire_blink()?;
 
                 match self.read.state {
@@ -27305,12 +26459,10 @@ pub mod lineread
 
                 Ok(None)
             }
-
             /// Returns the current buffer.
             pub fn buffer(&self) -> &str {
                 &self.write.buffer
             }
-
             /// Returns the "backup" buffer.
             ///
             /// When the user is currently editing a history entry, the backup buffer
@@ -27318,31 +26470,26 @@ pub mod lineread
             pub fn backup_buffer(&self) -> &str {
                 &self.write.backup_buffer
             }
-
             /// Returns the command `Category` of the most recently executed command.
             ///
             /// Some commands may use this to influence behavior of repeated commands.
             pub fn last_command_category(&self) -> Category {
                 self.read.last_cmd
             }
-
             /// Returns the set of characters that indicate a word break.
             pub fn word_break_chars(&self) -> &str {
                 &self.read.word_break
             }
-
             /// Sets the buffer to the given value.
             ///
             /// The cursor is moved to the end of the buffer.
             pub fn set_buffer(&mut self, buf: &str) -> io::Result<()> {
                 self.write.set_buffer(buf)
             }
-
             /// Returns the current position of the cursor.
             pub fn cursor(&self) -> usize {
                 self.write.cursor
             }
-
             /// Sets the cursor to the given position within the buffer.
             ///
             /// # Panics
@@ -27351,7 +26498,6 @@ pub mod lineread
             pub fn set_cursor(&mut self, pos: usize) -> io::Result<()> {
                 self.write.set_cursor(pos)
             }
-
             /// Sets the prompt that will be displayed when `read_line` is called.
             ///
             /// # Notes
@@ -27362,44 +26508,36 @@ pub mod lineread
             pub fn set_prompt(&mut self, prompt: &str) -> io::Result<()> {
                 self.write.set_prompt(prompt)
             }
-
             /// Returns the size of the terminal at the last draw operation.
             pub fn screen_size(&self) -> Size {
                 self.write.screen_size
             }
-
             /// Returns whether a numerical argument was explicitly supplied by the user.
             pub fn explicit_arg(&self) -> bool {
                 self.write.explicit_arg
             }
-
             /// Returns the current input sequence.
             pub fn sequence(&self) -> &str {
                 &self.read.sequence
             }
-
             /// Returns an iterator over bound sequences
             pub fn bindings(&self) -> BindingIter {
                 self.read.bindings()
             }
-
             /// Returns an iterator over variable values.
             pub fn variables(&self) -> VariableIter {
                 self.read.variables()
             }
-
             /// Returns an iterator over history entries
             pub fn history(&self) -> HistoryIter {
                 self.write.history()
             }
-
             /// Returns the index into history currently being edited.
             ///
             /// If the user is not editing a line of history, `None` is returned.
             pub fn history_index(&self) -> Option<usize> {
                 self.write.history_index
             }
-
             /// Returns the current number of history entries.
             pub fn history_len(&self) -> usize {
                 self.write.history.len()
@@ -27412,7 +26550,6 @@ pub mod lineread
             fn prev_history(&mut self, n: usize) -> io::Result<()> {
                 self.write.prev_history(n)
             }
-
             /// Selects the history entry currently being edited by the user.
             ///
             /// Setting the entry to `None` will result in editing the input buffer.
@@ -27423,7 +26560,6 @@ pub mod lineread
             pub fn select_history_entry(&mut self, new: Option<usize>) -> io::Result<()> {
                 self.write.select_history_entry(new)
             }
-
             /// Returns the current set of completions.
             ///
             /// Unless the most recent command executed was one operating on completion
@@ -27431,7 +26567,6 @@ pub mod lineread
             pub fn completions(&self) -> Option<&[Completion]> {
                 self.read.completions.as_ref().map(|v| &v[..])
             }
-
             /// Sets the current set of completions.
             ///
             /// This completion set is accessed by commands such as `complete` and
@@ -27443,7 +26578,6 @@ pub mod lineread
             pub fn set_completions(&mut self, completions: Option<Vec<Completion>>) {
                 self.read.completions = completions;
             }
-
             /// Attempts to execute the current sequence.
             ///
             /// If no bindings match and the sequence contains only printable characters,
@@ -27497,7 +26631,6 @@ pub mod lineread
 
                 Ok(())
             }
-
             /// Execute the command `SelfInsert` on the first character in the input
             /// sequence, if it is printable. Then, queue the remaining characters
             /// so they may be reinterpreted.
@@ -27958,7 +27091,6 @@ pub mod lineread
 
                 Ok(())
             }
-
             /// Accepts the current input buffer as user input.
             ///
             /// This method may be called by a [`Function`] implementation, immediately
@@ -27977,7 +27109,6 @@ pub mod lineread
                 self.write.is_prompt_drawn = false;
                 Ok(())
             }
-
             /// Moves the cursor to the given position, waits for 500 milliseconds
             /// (or until next user input), then restores the original cursor position.
             ///
@@ -28020,7 +27151,7 @@ pub mod lineread
                 }
             }
 
-            pub(crate) fn check_expire_timeout(&mut self) -> io::Result<()> {
+            pub fn check_expire_timeout(&mut self) -> io::Result<()> {
                 let now = Instant::now();
 
                 self.check_expire_blink(now)?;
@@ -28314,7 +27445,7 @@ pub mod lineread
                 self.write.end_search_history()
             }
 
-            pub(crate) fn handle_resize(&mut self, size: Size) -> io::Result<()> {
+            pub fn handle_resize(&mut self, size: Size) -> io::Result<()> {
                 self.expire_blink()?;
 
                 if self.is_paging_completions() {
@@ -28327,7 +27458,7 @@ pub mod lineread
                 self.write.redraw_prompt(p)
             }
 
-            pub(crate) fn handle_signal(&mut self, signal: Signal) -> io::Result<()> {
+            pub fn handle_signal(&mut self, signal: Signal) -> io::Result<()> {
                 self.expire_blink()?;
 
                 match signal {
@@ -28363,7 +27494,6 @@ pub mod lineread
                     &self.write.buffer, self.write.cursor, &self.read.word_break);
                 self.write.move_to(pos)
             }
-
             /// Deletes a range of text from the input buffer.
             ///
             /// # Panics
@@ -28372,7 +27502,6 @@ pub mod lineread
             pub fn delete_range<R: RangeArgument<usize>>(&mut self, range: R) -> io::Result<()> {
                 self.write.delete_range(range)
             }
-
             /// Deletes a range from the buffer and adds the removed text to the
             /// kill ring.
             ///
@@ -28429,7 +27558,6 @@ pub mod lineread
                 }
                 self.push_kill_ring(s);
             }
-
             /// Transposes two regions of the buffer, `src` and `dest`.
             /// The cursor is placed at the end of the new location of `src`.
             ///
@@ -28441,7 +27569,6 @@ pub mod lineread
                     -> io::Result<()> {
                 self.write.transpose_range(src, dest)
             }
-
             /// Insert text from the front of the kill ring at the current cursor position.
             /// The cursor is placed at the end of the new text.
             pub fn yank(&mut self) -> io::Result<()> {
@@ -28454,7 +27581,6 @@ pub mod lineread
 
                 Ok(())
             }
-
             /// Rotates the kill ring and replaces yanked text with the new front.
             ///
             /// If the previous operation was not `yank`, this has no effect.
@@ -28472,7 +27598,6 @@ pub mod lineread
 
                 Ok(())
             }
-
             /// Overwrite `n` characters; assumes `n >= 1`
             fn overwrite(&mut self, n: usize, ch: char) -> io::Result<()> {
                 let start = self.write.cursor;
@@ -28529,7 +27654,6 @@ pub mod lineread
 
                 Ok(())
             }
-
             /// Insert a given character at the current cursor position `n` times.
             ///
             /// The cursor position remains the same.
@@ -28541,14 +27665,12 @@ pub mod lineread
 
                 Ok(())
             }
-
             /// Insert a string at the current cursor position.
             ///
             /// The cursor is placed at the end of the new string.
             pub fn insert_str(&mut self, s: &str) -> io::Result<()> {
                 self.write.insert_str(s)
             }
-
             /// Replaces a range in the buffer and redraws.
             ///
             /// The cursor is placed at the start of the range.
@@ -28558,7 +27680,6 @@ pub mod lineread
                 let len = self.write.buffer.len();
                 self.write.move_from(len)
             }
-
             /// Replaces a range in the buffer and redraws.
             ///
             /// The cursor is placed at the end of the new string.
@@ -28569,7 +27690,6 @@ pub mod lineread
                 let len = self.write.buffer.len();
                 self.write.move_from(len)
             }
-
             /// Replaces a range in the buffer and redraws.
             ///
             /// The cursor position is set to start of range, on-screen cursor remains
@@ -28655,7 +27775,7 @@ pub mod lineread
             lock: ReadLock<'a, Term>,
         }
 
-        pub(crate) struct Read<Term: Terminal> {
+        pub struct Read<Term: Terminal> {
             /// Application name
             pub application: Cow<'static, str>,
 
@@ -28711,11 +27831,10 @@ pub mod lineread
             pub max_wait_duration: Option<Duration>,
         }
 
-        pub(crate) struct ReadLock<'a, Term: 'a + Terminal> {
+        pub struct ReadLock<'a, Term: 'a + Terminal> {
             term: Box<dyn TerminalReader<Term> + 'a>,
             data: MutexGuard<'a, Read<Term>>,
         }
-
         /// Returned from [`read_line`] to indicate user input
         ///
         /// [`read_line`]: ../interface/struct.Interface.html#method.read_line
@@ -28730,7 +27849,7 @@ pub mod lineread
         }
 
         #[derive(Copy, Clone, Debug)]
-        pub(crate) enum InputState {
+        pub enum InputState {
             Inactive,
             NewSequence,
             ContinueSequence{
@@ -28748,11 +27867,10 @@ pub mod lineread
         }
 
         impl<'a, Term: 'a + Terminal> Reader<'a, Term> {
-            pub(crate) fn new(iface: &'a Interface<Term>, lock: ReadLock<'a, Term>)
+            pub fn new(iface: &'a Interface<Term>, lock: ReadLock<'a, Term>)
                     -> Reader<'a, Term> {
                 Reader{iface, lock}
             }
-
             /// Interactively reads a line from the terminal device.
             ///
             /// User input is collected until one of the following conditions is met:
@@ -28775,7 +27893,6 @@ pub mod lineread
                     }
                 }
             }
-
             /// Performs one step of the interactive `read_line` loop.
             ///
             /// This method can be used to drive the `read_line` process asynchronously.
@@ -28803,7 +27920,6 @@ pub mod lineread
 
                 res
             }
-
             /// Cancels an in-progress `read_line` operation.
             ///
             /// This method will reset internal data structures to their original state
@@ -28919,7 +28035,6 @@ pub mod lineread
                     _ => false
                 }
             }
-
             /// Sets the input buffer to the given string.
             ///
             /// This method internally acquires the `Interface` write lock.
@@ -28936,7 +28051,6 @@ pub mod lineread
                     Ok(())
                 }
             }
-
             /// Sets the cursor position in the input buffer.
             ///
             /// This method internally acquires the `Interface` write lock.
@@ -28952,7 +28066,6 @@ pub mod lineread
                     Ok(())
                 }
             }
-
             /// Sets the prompt that will be displayed when `read_line` is called.
             ///
             /// This method internally acquires the `Interface` write lock.
@@ -28965,7 +28078,6 @@ pub mod lineread
             pub fn set_prompt(&mut self, prompt: &str) -> io::Result<()> {
                 self.prompter().set_prompt(prompt)
             }
-
             /// Adds a line to history.
             ///
             /// This method internally acquires the `Interface` write lock.
@@ -28976,7 +28088,6 @@ pub mod lineread
                     self.iface.lock_write().add_history(line);
                 }
             }
-
             /// Adds a line to history, unless it is identical to the most recent entry.
             ///
             /// This method internally acquires the `Interface` write lock.
@@ -28987,7 +28098,6 @@ pub mod lineread
                     self.iface.lock_write().add_history_unique(line);
                 }
             }
-
             /// Removes all history entries.
             ///
             /// This method internally acquires the `Interface` write lock.
@@ -28998,7 +28108,6 @@ pub mod lineread
                     self.iface.lock_write().clear_history();
                 }
             }
-
             /// Removes the history entry at the given index.
             ///
             /// This method internally acquires the `Interface` write lock.
@@ -29011,7 +28120,6 @@ pub mod lineread
                     self.iface.lock_write().remove_history(idx);
                 }
             }
-
             /// Sets the maximum number of history entries.
             ///
             /// This method internally acquires the `Interface` write lock.
@@ -29025,7 +28133,6 @@ pub mod lineread
                     self.iface.lock_write().set_history_size(n);
                 }
             }
-
             /// Truncates history to the only the most recent `n` entries.
             ///
             /// This method internally acquires the `Interface` write lock.
@@ -29036,35 +28143,29 @@ pub mod lineread
                     self.iface.lock_write().truncate_history(n);
                 }
             }
-
             /// Returns the application name
             pub fn application(&self) -> &str {
                 &self.lock.application
             }
-
             /// Sets the application name
             pub fn set_application<T>(&mut self, application: T)
                     where T: Into<Cow<'static, str>> {
                 self.lock.application = application.into();
             }
-
             /// Returns a reference to the current completer instance.
             pub fn completer(&self) -> &Arc<dyn Completer<Term>> {
                 &self.lock.completer
             }
-
             /// Replaces the current completer, returning the previous instance.
             pub fn set_completer(&mut self, completer: Arc<dyn Completer<Term>>)
                     -> Arc<dyn Completer<Term>> {
                 replace(&mut self.lock.completer, completer)
             }
-
             /// Returns the value of the named variable or `None`
             /// if no such variable exists.
             pub fn get_variable(&self, name: &str) -> Option<Variable> {
                 self.lock.get_variable(name)
             }
-
             /// Sets the value of the named variable and returns the previous
             /// value.
             ///
@@ -29073,12 +28174,10 @@ pub mod lineread
             pub fn set_variable(&mut self, name: &str, value: &str) -> Option<Variable> {
                 self.lock.set_variable(name, value)
             }
-
             /// Returns an iterator over stored variables.
             pub fn variables(&self) -> VariableIter {
                 self.lock.variables.iter()
             }
-
             /// Returns whether to "blink" matching opening parenthesis character
             /// when a closing parenthesis character is entered.
             ///
@@ -29086,17 +28185,14 @@ pub mod lineread
             pub fn blink_matching_paren(&self) -> bool {
                 self.lock.blink_matching_paren
             }
-
             /// Sets the `blink-matching-paren` variable.
             pub fn set_blink_matching_paren(&mut self, set: bool) {
                 self.lock.blink_matching_paren = set;
             }
-
             /// Returns whether `lineread` will catch certain signals.
             pub fn catch_signals(&self) -> bool {
                 self.lock.catch_signals
             }
-
             /// Sets whether `lineread` will catch certain signals.
             ///
             /// This setting is `true` by default. It can be disabled to allow the
@@ -29104,12 +28200,10 @@ pub mod lineread
             pub fn set_catch_signals(&mut self, enabled: bool) {
                 self.lock.catch_signals = enabled;
             }
-
             /// Returns whether the given `Signal` is ignored.
             pub fn ignore_signal(&self, signal: Signal) -> bool {
                 self.lock.ignore_signals.contains(signal)
             }
-
             /// Sets whether the given `Signal` will be ignored.
             pub fn set_ignore_signal(&mut self, signal: Signal, set: bool) {
                 if set {
@@ -29119,12 +28213,10 @@ pub mod lineread
                     self.lock.ignore_signals.remove(signal);
                 }
             }
-
             /// Returns whether the given `Signal` is to be reported.
             pub fn report_signal(&self, signal: Signal) -> bool {
                 self.lock.report_signals.contains(signal)
             }
-
             /// Sets whether to report the given `Signal`.
             ///
             /// When a reported signal is received via the terminal, it will be returned
@@ -29137,19 +28229,16 @@ pub mod lineread
                     self.lock.report_signals.remove(signal);
                 }
             }
-
             /// Returns whether Tab completion is disabled.
             ///
             /// The default value is `false`.
             pub fn disable_completion(&self) -> bool {
                 self.lock.disable_completion
             }
-
             /// Sets the `disable-completion` variable.
             pub fn set_disable_completion(&mut self, disable: bool) {
                 self.lock.disable_completion = disable;
             }
-
             /// When certain control characters are pressed, a character sequence
             /// equivalent to this character will be echoed.
             ///
@@ -29157,22 +28246,18 @@ pub mod lineread
             pub fn echo_control_characters(&self) -> bool {
                 self.lock.echo_control_characters
             }
-
             /// Sets the `echo-control-characters` variable.
             pub fn set_echo_control_characters(&mut self, echo: bool) {
                 self.lock.echo_control_characters = echo;
             }
-
             /// Returns the character, if any, that is appended to a successful completion.
             pub fn completion_append_character(&self) -> Option<char> {
                 self.lock.completion_append_character
             }
-
             /// Sets the character, if any, that is appended to a successful completion.
             pub fn set_completion_append_character(&mut self, ch: Option<char>) {
                 self.lock.completion_append_character = ch;
             }
-
             /// Returns the width of completion listing display.
             ///
             /// If this value is greater than the terminal width, terminal width is used
@@ -29182,12 +28267,10 @@ pub mod lineread
             pub fn completion_display_width(&self) -> usize {
                 self.lock.completion_display_width
             }
-
             /// Sets the `completion-display-width` variable.
             pub fn set_completion_display_width(&mut self, n: usize) {
                 self.lock.completion_display_width = n;
             }
-
             /// Returns the minimum number of completion items that require user
             /// confirmation before listing.
             ///
@@ -29195,12 +28278,10 @@ pub mod lineread
             pub fn completion_query_items(&self) -> usize {
                 self.lock.completion_query_items
             }
-
             /// Sets the `completion-query-items` variable.
             pub fn set_completion_query_items(&mut self, n: usize) {
                 self.lock.completion_query_items = n;
             }
-
             /// Returns the timeout to wait for further user input when an ambiguous
             /// sequence has been entered. If the value is `None`, wait is indefinite.
             ///
@@ -29208,24 +28289,20 @@ pub mod lineread
             pub fn keyseq_timeout(&self) -> Option<Duration> {
                 self.lock.keyseq_timeout
             }
-
             /// Sets the `keyseq-timeout` variable.
             pub fn set_keyseq_timeout(&mut self, timeout: Option<Duration>) {
                 self.lock.keyseq_timeout = timeout;
             }
-
             /// Returns whether to list possible completions one page at a time.
             ///
             /// The default value is `true`.
             pub fn page_completions(&self) -> bool {
                 self.lock.page_completions
             }
-
             /// Sets the `page-completions` variable.
             pub fn set_page_completions(&mut self, set: bool) {
                 self.lock.page_completions = set;
             }
-
             /// Returns whether to list completions horizontally, rather than down
             /// the screen.
             ///
@@ -29233,39 +28310,32 @@ pub mod lineread
             pub fn print_completions_horizontally(&self) -> bool {
                 self.lock.print_completions_horizontally
             }
-
             /// Sets the `print-completions-horizontally` variable.
             pub fn set_print_completions_horizontally(&mut self, set: bool) {
                 self.lock.print_completions_horizontally = set;
             }
-
             /// Returns the set of characters that delimit strings.
             pub fn string_chars(&self) -> &str {
                 &self.lock.string_chars
             }
-
             /// Sets the set of characters that delimit strings.
             pub fn set_string_chars<T>(&mut self, chars: T)
                     where T: Into<Cow<'static, str>> {
                 self.lock.string_chars = chars.into();
             }
-
             /// Returns the set of characters that indicate a word break.
             pub fn word_break_chars(&self) -> &str {
                 &self.lock.word_break
             }
-
             /// Sets the set of characters that indicate a word break.
             pub fn set_word_break_chars<T>(&mut self, chars: T)
                     where T: Into<Cow<'static, str>> {
                 self.lock.word_break = chars.into();
             }
-
             /// Returns an iterator over bound sequences
             pub fn bindings(&self) -> BindingIter {
                 self.lock.bindings()
             }
-
             /// Binds a sequence to a command.
             ///
             /// Returns the previously bound command.
@@ -29273,7 +28343,6 @@ pub mod lineread
                     where T: Into<Cow<'static, str>> {
                 self.lock.bind_sequence(seq, cmd)
             }
-
             /// Binds a sequence to a command, if and only if the given sequence
             /// is not already bound to a command.
             ///
@@ -29282,14 +28351,12 @@ pub mod lineread
                     where T: Into<Cow<'static, str>> {
                 self.lock.bind_sequence_if_unbound(seq, cmd)
             }
-
             /// Removes a binding for the given sequence.
             ///
             /// Returns the previously bound command.
             pub fn unbind_sequence(&mut self, seq: &str) -> Option<Command> {
                 self.lock.unbind_sequence(seq)
             }
-
             /// Defines a named function to which sequences may be bound.
             ///
             /// The name should consist of lowercase ASCII letters and numbers,
@@ -29301,7 +28368,6 @@ pub mod lineread
                     -> Option<Arc<dyn Function<Term>>> where T: Into<Cow<'static, str>> {
                 self.lock.define_function(name, cmd)
             }
-
             /// Removes a function defined with the given name.
             ///
             /// Returns the defined function.
@@ -29309,11 +28375,11 @@ pub mod lineread
                 self.lock.remove_function(name)
             }
 
-            pub(crate) fn evaluate_directives(&mut self, term: &Term, dirs: Vec<Directive>) {
+            pub fn evaluate_directives(&mut self, term: &Term, dirs: Vec<Directive>) {
                 self.lock.data.evaluate_directives(term, dirs)
             }
 
-            pub(crate) fn evaluate_directive(&mut self, term: &Term, dir: Directive) {
+            pub fn evaluate_directive(&mut self, term: &Term, dir: Directive) {
                 self.lock.data.evaluate_directive(term, dir)
             }
 
@@ -29337,7 +28403,6 @@ pub mod lineread
                     -> ReadLock<'a, Term> {
                 ReadLock{term, data}
             }
-
             /// Reads the next character of input.
             ///
             /// Performs a non-blocking read from the terminal, if necessary.
@@ -29585,16 +28650,14 @@ pub mod lineread
                     self.evaluate_directives(term, dirs);
                 }
             }
-
             /// Evaluates a series of configuration directives.
-            pub(crate) fn evaluate_directives(&mut self, term: &Term, dirs: Vec<Directive>) {
+            pub fn evaluate_directives(&mut self, term: &Term, dirs: Vec<Directive>) {
                 for dir in dirs {
                     self.evaluate_directive(term, dir);
                 }
             }
-
             /// Evaluates a single configuration directive.
-            pub(crate) fn evaluate_directive(&mut self, term: &Term, dir: Directive) {
+            pub fn evaluate_directive(&mut self, term: &Term, dir: Directive) {
                 match dir {
                     Directive::Bind(seq, cmd) => {
                         self.bind_sequence(seq, cmd);
@@ -29628,7 +28691,6 @@ pub mod lineread
                 match_name(term.name(), value)
             }
         }
-
         /// Iterator over `Reader` bindings
         pub struct BindingIter<'a>(slice::Iter<'a, (Cow<'static, str>, Command)>);
 
@@ -29799,7 +28861,6 @@ pub mod lineread
                     horizontal: horizontal,
                 }
             }
-
             /// Returns whether more lines are present in the table.
             pub fn has_more(&self) -> bool {
                 self.offset < self.rows
@@ -29840,7 +28901,6 @@ pub mod lineread
                 })
             }
         }
-
         /// Represents a single line of the table.
         pub struct Line<'a, S: 'a> {
             strings: &'a [S],
@@ -29863,7 +28923,6 @@ pub mod lineread
                 Some((width, s))
             }
         }
-
         /// Formats a series of strings into columns, fitting within a given screen width.
         /// Returns the size of each resulting column, including spacing.
         pub fn format_columns<S: AsRef<str>>(strs: &[S], screen_width: usize,
@@ -29974,7 +29033,6 @@ pub mod lineread
             /// A signal was received while waiting for input
             Signal(Signal),
         }
-
         /// Defines a low-level interface to the terminal
         pub trait Terminal: Sized + Send + Sync {
             // TODO: When generic associated types are implemented (and stabilized),
@@ -30003,7 +29061,6 @@ pub mod lineread
             /// The lock must not be released until the returned value is dropped.
             fn lock_write<'a>(&'a self) -> Box<dyn TerminalWriter<Self> + 'a>;
         }
-
         /// Holds a lock on `Terminal` read operations
         pub trait TerminalReader<Term: Terminal> {
             /// Prepares the terminal for line reading and editing operations.
@@ -30056,7 +29113,6 @@ pub mod lineread
             /// Returns `Ok(false)` if the timeout expires before input becomes available.
             fn wait_for_input(&mut self, timeout: Option<Duration>) -> io::Result<bool>;
         }
-
         /// Holds a lock on `Terminal` write operations
         pub trait TerminalWriter<Term: Terminal> {
             /// Returns the size of the terminal window
@@ -30118,7 +29174,6 @@ pub mod lineread
             pub fn new() -> io::Result<DefaultTerminal> {
                 mortal::Terminal::new().map(DefaultTerminal)
             }
-
             /// Opens access to the terminal device associated with standard error.
             pub fn stderr() -> io::Result<DefaultTerminal> {
                 mortal::Terminal::stderr().map(DefaultTerminal)
@@ -30274,7 +29329,6 @@ pub mod lineread
 
             Cow::Owned(virt)
         }
-
         /// Returns the longest common prefix of a set of strings.
         ///
         /// If no common prefix exists, `None` is returned.
@@ -30302,7 +29356,6 @@ pub mod lineread
 
             Some(pfx)
         }
-
         /// Returns a string consisting of a `char`, repeated `n` times.
         pub fn repeat_char(ch: char, n: usize) -> String {
             let mut buf = [0; 4];
@@ -30310,13 +29363,11 @@ pub mod lineread
 
             s.repeat(n)
         }
-
         /// Implemented for built-in range types
         // Waiting for stabilization of `std` trait of the same name
         pub trait RangeArgument<T> {
             /// Returns the start of range, if present.
             fn start(&self) -> Option<&T> { None }
-
             /// Returns the end of range, if present.
             fn end(&self) -> Option<&T> { None }
         }
@@ -30463,7 +29514,6 @@ pub mod lineread
                 start..end
             }
         }
-
         /// Returns the first character in the buffer, if it contains any valid characters.
         pub fn first_char(buf: &[u8]) -> io::Result<Option<char>> {
             match from_utf8(buf) {
@@ -30537,8 +29587,7 @@ pub mod lineread
             }
         }
 
-        pub fn drop_while<I, T, F>(iter: &mut I, mut f: F)
-                where I: Iterator<Item=T> + Clone, F: FnMut(T) -> bool {
+        pub fn drop_while<I, T, F>(iter: &mut I, mut f: F)  where I: Iterator<Item=T> + Clone, F: FnMut(T) -> bool {
             loop {
                 let mut clone = iter.clone();
 
@@ -30630,7 +29679,6 @@ pub mod lineread
             vars: &'a Variables,
             n: usize,
         }
-
         /// Represents a `Reader` variable of a given type
         #[derive(Clone, Debug)]
         pub enum Variable {
@@ -30687,7 +29735,7 @@ pub mod lineread
                     |$gr:ident| $getter:expr , |$sr:ident, $v:ident| $setter:expr ) , )+ ) => {
                 static VARIABLE_NAMES: &[&str] = &[ $( $name ),+ ];
 
-                pub(crate) struct Variables {
+                pub struct Variables {
                     $( pub $field : $ty ),*
                 }
 
@@ -30869,7 +29917,7 @@ pub mod lineread
         };
 
         /// Duration to wait for input when "blinking"
-        pub(crate) const BLINK_DURATION: Duration = Duration::from_millis(500);
+        pub const BLINK_DURATION: Duration = Duration::from_millis(500);
 
         const COMPLETE_MORE: &'static str = "--More--";
 
@@ -30915,7 +29963,7 @@ pub mod lineread
         }
 
         #[derive(Debug)]
-        pub(crate) struct Write {
+        pub struct Write {
             /// Input buffer
             pub buffer: String,
             /// Original buffer entered before searching through history
@@ -30970,7 +30018,7 @@ pub mod lineread
             pub screen_size: Size,
         }
 
-        pub(crate) struct WriteLock<'a, Term: 'a + Terminal> {
+        pub struct WriteLock<'a, Term: 'a + Terminal> {
             term: Box<dyn TerminalWriter<Term> + 'a>,
             data: MutexGuard<'a, Write>,
             highlighter: Option<Arc<dyn Highlighter + Send + Sync>>,
@@ -31053,7 +30101,6 @@ pub mod lineread
 
                 Ok(())
             }
-
             /// Draws the prompt and current input, assuming the cursor is at column 0
             pub fn draw_prompt(&mut self) -> io::Result<()> {
                 self.draw_prompt_prefix()?;
@@ -31164,7 +30211,6 @@ pub mod lineread
                 self.prompt_type = new_prompt;
                 self.draw_prompt_suffix()
             }
-
             /// Draws a portion of the buffer, starting from the given cursor position
             pub fn draw_buffer(&mut self, pos: usize) -> io::Result<()> {
                 let (_, col) = self.line_col(pos);
@@ -31183,7 +30229,6 @@ pub mod lineread
 
                 Ok(())
             }
-
             /// Draw some text with the cursor beginning at the given column.
             fn draw_text(&mut self, start_col: usize, text: &str) -> io::Result<()> {
                 self.draw_text_impl(start_col, text, Display{
@@ -31714,7 +30759,6 @@ pub mod lineread
 
                 Ok(())
             }
-
             /// Deletes a range from the buffer; the cursor is moved to the end
             /// of the given range.
             pub fn delete_range<R: RangeArgument<usize>>(&mut self, range: R) -> io::Result<()> {
@@ -31876,7 +30920,6 @@ pub mod lineread
             pub fn clear_to_screen_end(&mut self) -> io::Result<()> {
                 self.term.clear_to_screen_end()
             }
-
             /// Draws a new buffer on the screen. Cursor position is assumed to be `0`.
             pub fn new_buffer(&mut self) -> io::Result<()> {
                 self.draw_buffer(0)?;
@@ -31895,14 +30938,13 @@ pub mod lineread
                 self.term.clear_to_screen_end()
             }
 
-            pub(crate) fn clear_prompt(&mut self) -> io::Result<()> {
+            pub fn clear_prompt(&mut self) -> io::Result<()> {
                 let (line, _) = self.line_col(self.cursor);
 
                 self.term.move_up(line)?;
                 self.term.move_to_first_column()?;
                 self.term.clear_to_screen_end()
             }
-
             /// Move back to true cursor position from some other position
             pub fn move_from(&mut self, pos: usize) -> io::Result<()> {
                 let (lines, cols) = self.move_delta(pos, self.cursor, &self.buffer);
@@ -31927,7 +30969,6 @@ pub mod lineread
             pub fn move_right(&mut self, n: usize) -> io::Result<()> {
                 self.term.move_right(n)
             }
-
             /// Moves from `old` to `new` cursor position, using the given buffer
             /// as current input.
             fn move_delta(&self, old: usize, new: usize, buf: &str) -> (isize, isize) {
@@ -31993,19 +31034,17 @@ pub mod lineread
                 Ok(Writer{write})
             }
 
-            pub(crate) fn with_lock(write: WriteLock<'b, Term>, clear: bool) -> io::Result<Self> {
+            pub fn with_lock(write: WriteLock<'b, Term>, clear: bool) -> io::Result<Self> {
                 Writer::new(WriterImpl::Mutex(write), clear)
             }
 
-            pub(crate) fn with_ref(write: &'a mut WriteLock<'b, Term>, clear: bool) -> io::Result<Self> {
+            pub fn with_ref(write: &'a mut WriteLock<'b, Term>, clear: bool) -> io::Result<Self> {
                 Writer::new(WriterImpl::MutRef(write), clear)
             }
-
             /// Returns an iterator over history entries.
             pub fn history(&self) -> HistoryIter {
                 self.write.history()
             }
-
             /// Writes some text to the terminal device.
             ///
             /// Before the `Writer` is dropped, any output written should be followed
@@ -32014,7 +31053,6 @@ pub mod lineread
             pub fn write_str(&mut self, s: &str) -> io::Result<()> {
                 self.write.write_str(s)
             }
-
             /// Writes formatted text to the terminal display.
             ///
             /// This method enables `Interface` to be used as the receiver to
@@ -32182,12 +31220,11 @@ pub mod lineread
                 col - start_col
             }
         }
-
         /// Maximum value of digit input
         const NUMBER_MAX: i32 = 1_000_000;
 
         #[derive(Copy, Clone, Debug)]
-        pub(crate) enum Digit {
+        pub enum Digit {
             None,
             NegNone,
             Num(i32),
@@ -32234,7 +31271,7 @@ pub mod lineread
         }
 
         #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-        pub(crate) enum PromptType {
+        pub enum PromptType {
             Normal,
             Number,
             Search,
@@ -32243,7 +31280,7 @@ pub mod lineread
         }
 
         impl PromptType {
-            pub(crate) fn is_normal(&self) -> bool {
+            pub fn is_normal(&self) -> bool {
                 *self == PromptType::Normal
             }
         }
@@ -32267,7 +31304,6 @@ pub mod lineread
                 }
             }
         }
-
         /// Iterator over `Interface` history entries
         pub struct HistoryIter<'a>(vec_deque::Iter<'a, String>);
 
@@ -32300,7 +31336,7 @@ pub mod lineread
         }
 
         #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-        pub(crate) enum DisplaySequence {
+        pub enum DisplaySequence {
             Char(char),
             Escape(char),
             End,
@@ -32336,13 +31372,13 @@ pub mod lineread
         }
 
         #[derive(Copy, Clone, Debug, Default)]
-        pub(crate) struct Display {
+        pub struct Display {
             allow_tab: bool,
             allow_newline: bool,
             allow_escape: bool,
         }
 
-        pub(crate) fn display(ch: char, style: Display) -> DisplaySequence {
+        pub fn display(ch: char, style: Display) -> DisplaySequence {
             match ch {
                 '\t' if style.allow_tab => DisplaySequence::Char(ch),
                 '\n' if style.allow_newline => DisplaySequence::Char(ch),
@@ -32354,7 +31390,7 @@ pub mod lineread
             }
         }
 
-        pub(crate) fn display_str<'a>(s: &'a str, style: Display) -> Cow<'a, str> {
+        pub fn display_str<'a>(s: &'a str, style: Display) -> Cow<'a, str> {
             if s.chars().all(|ch| display(ch, style) == DisplaySequence::Char(ch)) {
                 Borrowed(s)
             } else {
@@ -32489,7 +31525,6 @@ pub mod pest
             continued_line: Option<String>,
             parse_attempts: Option<ParseAttempts<R>>,
         }
-
         /// Different kinds of parsing errors.
         #[derive(Clone, Debug, Eq, Hash, PartialEq)]
         #[cfg_attr(feature = "std", derive(thiserror::Error))]
@@ -32507,7 +31542,6 @@ pub mod pest
                 message: String,
             },
         }
-
         /// Where an `Error` has occurred.
         #[derive(Clone, Debug, Eq, Hash, PartialEq)]
         pub enum InputLocation {
@@ -32516,7 +31550,6 @@ pub mod pest
             /// `Error` was created by `Error::new_from_span`
             Span((usize, usize)),
         }
-
         /// Line/column where an `Error` has occurred.
         #[derive(Clone, Debug, Eq, Hash, PartialEq)]
         pub enum LineColLocation {
@@ -32538,7 +31571,6 @@ pub mod pest
                 Self::Span(start.line_col(), end.line_col())
             }
         }
-
         /// Function mapping rule to its helper message defined by user.
         pub type RuleToMessageFn<R> = Box<dyn Fn(&R) -> Option<String>>;
         /// Function mapping string element to bool denoting whether it's a whitespace defined by user.
@@ -32627,9 +31659,8 @@ pub mod pest
                     parse_attempts: None,
                 }
             }
-
             /// Wrapper function to track `parse_attempts` as a result of `state` function call in `parser_state.rs`.
-            pub(crate) fn new_from_pos_with_parsing_attempts(
+            pub fn new_from_pos_with_parsing_attempts(
                 variant: ErrorVariant<R>,
                 pos: Position<'_>,
                 parse_attempts: ParseAttempts<R>,
@@ -32638,7 +31669,6 @@ pub mod pest
                 error.parse_attempts = Some(parse_attempts);
                 error
             }
-
             /// Creates `Error` from `ErrorVariant` and `Span`.
             pub fn new_from_span(variant: ErrorVariant<R>, span: Span<'_>) -> Error<R> {
                 let end = span.end_pos();
@@ -32678,24 +31708,20 @@ pub mod pest
                     parse_attempts: None,
                 }
             }
-
             /// Returns `Error` variant with `path` which is shown when formatted with `Display`.
             pub fn with_path(mut self, path: &str) -> Error<R> {
                 self.path = Some(path.to_owned());
 
                 self
             }
-
             /// Returns the path set using [`Error::with_path()`].
             pub fn path(&self) -> Option<&str> {
                 self.path.as_deref()
             }
-
             /// Returns the line that the error is on.
             pub fn line(&self) -> &str {
                 self.line.as_str()
             }
-
             /// Renames all `Rule`s if this is a [`ParsingError`]. It does nothing when called on a [`CustomError`].
             pub fn renamed_rules<F>(mut self, f: F) -> Error<R>
             where
@@ -32716,12 +31742,10 @@ pub mod pest
 
                 self
             }
-
             /// Get detailed information about errored rules sequence.
             pub fn parse_attempts(&self) -> Option<ParseAttempts<R>> {
                 self.parse_attempts.clone()
             }
-
             /// Get error message based on parsing attempts.
             pub fn parse_attempts_error(
                 &self,
@@ -32911,7 +31935,7 @@ pub mod pest
                 }
             }
 
-            pub(crate) fn format(&self) -> String {
+            pub fn format(&self) -> String {
                 let spacing = self.spacing();
                 let path = self
                     .path
@@ -33038,7 +32062,7 @@ pub mod pest
 
             #[derive(thiserror::Error, Debug)]
             #[error("Failure to parse at {:?}", self.0.line_col)]
-            pub(crate) struct MietteAdapter<R: RuleType>(pub(crate) Error<R>);
+            pub struct MietteAdapter<R: RuleType>(pub Error<R>);
 
             impl<R: RuleType> Diagnostic for MietteAdapter<R> {
                 fn source_code(&self) -> Option<&dyn SourceCode> {
@@ -33265,7 +32289,6 @@ pub mod pest
 
                     LineIndex { line_offsets }
                 }
-
                 /// Returns (line, col) of pos.
                 ///
                 /// The pos is a byte offset, start from 0, e.g. "ab" is 2, "你好" is 6
@@ -33351,7 +32374,6 @@ pub mod pest
                         _ => unreachable!(),
                     }
                 }
-
                 /// Captures a slice from the `&str` defined by the token `Pair`.
                 #[inline]
                 pub fn as_str(&self) -> &'i str {
@@ -33361,19 +32383,16 @@ pub mod pest
                     // Generated positions always come from Positions and are UTF-8 borders.
                     &self.input[start..end]
                 }
-
                 /// Returns the input string of the `Pair`.
                 pub fn get_input(&self) -> &'i str {
                     self.input
                 }
-
                 /// Returns the `Span` defined by the `Pair`, consuming it.
                 #[inline]
                 #[deprecated(since = "2.0.0", note = "Please use `as_span` instead")]
                 pub fn into_span(self) -> Span<'i> {
                     self.as_span()
                 }
-
                 /// Returns the `Span` defined by the `Pair`, **without** consuming it.
                 #[inline]
                 pub fn as_span(&self) -> Span<'i> {
@@ -33382,7 +32401,6 @@ pub mod pest
 
                     Span::new_internal(self.input, start, end)
                 }
-
                 /// Get current node tag
                 #[inline]
                 pub fn as_node_tag(&self) -> Option<&str> {
@@ -33391,7 +32409,6 @@ pub mod pest
                         _ => None,
                     }
                 }
-
                 /// Returns the inner `Pairs` between the `Pair`, consuming it.
                 #[inline]
                 pub fn into_inner(self) -> Pairs<'i, R> {
@@ -33405,7 +32422,6 @@ pub mod pest
                         pair,
                     )
                 }
-
                 /// Returns the `Tokens` for the `Pair`.
                 #[inline]
                 pub fn tokens(self) -> Tokens<'i, R> {
@@ -33413,13 +32429,11 @@ pub mod pest
 
                     tokens::new(self.queue, self.input, self.start, end + 1)
                 }
-
                 /// Generates a string that stores the lexical information of `self` in a pretty-printed JSON format.
                 #[cfg(feature = "pretty-print")]
                 pub fn to_json(&self) -> String {
                     ::serde_json::to_string_pretty(self).expect("Failed to pretty-print Pair to json.")
                 }
-
                 /// Returns the `line`, `col` of this pair start.
                 pub fn line_col(&self) -> (usize, usize) {
                     let pos = self.pos(self.start);
@@ -33517,8 +32531,7 @@ pub mod pest
 
             #[cfg(feature = "pretty-print")]
             impl<'i, R: RuleType> ::serde::Serialize for Pair<'i, R> {
-                fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-                where
+                fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where
                     S: ::serde::Serializer,
                 {
                     let start = self.pos(self.start);
@@ -33649,12 +32662,10 @@ pub mod pest
                         ""
                     }
                 }
-
                 /// Returns the input string of `Pairs`.
                 pub fn get_input(&self) -> &'i str {
                     self.input
                 }
-
                 /// Captures inner token `Pair`s and concatenates resulting `&str`s. This does not capture
                 /// the input between token `Pair`s.
                 #[inline]
@@ -33662,7 +32673,6 @@ pub mod pest
                     self.clone()
                         .fold(String::new(), |string, pair| string + pair.as_str())
                 }
-
                 /// Flattens the `Pairs`.
                 #[inline]
                 pub fn flatten(self) -> FlatPairs<'i, R> {
@@ -33674,14 +32684,12 @@ pub mod pest
                         self.end,
                     )
                 }
-
                 /// Finds the first pair that has its node or branch tagged with the provided
                 /// label. Searches in the flattened [`Pairs`] iterator.
                 #[inline]
                 pub fn find_first_tagged(&self, tag: &'i str) -> Option<Pair<'i, R>> {
                     self.clone().find_tagged(tag).next()
                 }
-
                 /// Returns the iterator over pairs that have their node or branch tagged
                 /// with the provided label. The iterator is built from a flattened [`Pairs`] iterator.
                 #[inline]
@@ -33692,13 +32700,11 @@ pub mod pest
                     self.flatten()
                         .filter(move |pair: &Pair<'i, R>| matches!(pair.as_node_tag(), Some(nt) if nt == tag))
                 }
-
                 /// Returns the `Tokens` for the `Pairs`.
                 #[inline]
                 pub fn tokens(self) -> Tokens<'i, R> {
                     tokens::new(self.queue, self.input, self.start, self.end)
                 }
-
                 /// Peek at the first inner `Pair` without changing the position of this iterator.
                 #[inline]
                 pub fn peek(&self) -> Option<Pair<'i, R>> {
@@ -33713,7 +32719,6 @@ pub mod pest
                         None
                     }
                 }
-
                 /// Generates a string that stores the lexical information of `self` in a pretty-printed JSON format.
                 #[cfg(feature = "pretty-print")]
                 pub fn to_json(&self) -> String {
@@ -33832,8 +32837,7 @@ pub mod pest
 
             #[cfg(feature = "pretty-print")]
             impl<'i, R: RuleType> ::serde::Serialize for Pairs<'i, R> {
-                fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-                where
+                fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where
                     S: ::serde::Serializer,
                 {
                     let start = self.pos(self.start);
@@ -34034,7 +33038,7 @@ pub mod pest
         pub use self::flat_pairs::FlatPairs;
         pub use self::pair::Pair;
         pub use self::pairs::Pairs;
-        pub(crate) use self::queueable_token::QueueableToken;
+        pub use self::queueable_token::QueueableToken;
         pub use self::tokens::Tokens;
     }
 
@@ -34167,7 +33171,6 @@ pub mod pest
                 consumes_to!($rules, $tokens, [ $( $names $calls ),* ]);
             };
         }
-
         /// Testing tool that compares produced tokens.
         #[macro_export]
         macro_rules! parses_to {
@@ -34211,7 +33214,6 @@ pub mod pest
                 }
             };
         }
-
         /// Testing tool that compares produced errors.
         #[macro_export]
         macro_rules! fails_with {
@@ -34319,7 +33321,6 @@ pub mod pest
             /// No lookahead (i.e. it will consume input).
             None,
         }
-
         /// The current atomicity of a [`ParserState`].
         ///
         /// [`ParserState`]: struct.ParserState.html
@@ -34337,7 +33338,6 @@ pub mod pest
             /// implicit whitespace is enabled
             NonAtomic,
         }
-
         /// Type alias to simplify specifying the return value of chained closures.
         pub type ParseResult<S> = Result<S, S>;
 
@@ -34408,7 +33408,6 @@ pub mod pest
                 }
             }
         }
-
         /// Number of call stacks that may result from a sequence of rules parsing.
         const CALL_STACK_INITIAL_CAPACITY: usize = 20;
         /// Max (un)expected number of tokens that we may see on the parsing error position.
@@ -34439,7 +33438,6 @@ pub mod pest
                 }
             }
         }
-
         /// Rules call stack.
         /// Contains sequence of rule calls that resulted in new parsing attempt.
         #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -34477,7 +33475,6 @@ pub mod pest
                 }
             }
         }
-
         /// Structure that tracks all the parsing attempts made on the max position.
         #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
         pub struct ParseAttempts<R> {
@@ -34509,7 +33506,6 @@ pub mod pest
                     enabled: ERROR_DETAIL.load(Ordering::Relaxed),
                 }
             }
-
             /// Get number of currently present call stacks.
             fn call_stacks_number(&self) -> usize {
                 self.call_stacks.len()
@@ -34532,7 +33528,6 @@ pub mod pest
                     .into_iter()
                     .collect()
             }
-
             /// Retrieve call stacks.
             pub fn call_stacks(&self) -> Vec<RulesCallStack<R>> {
                 self.call_stacks
@@ -34542,7 +33537,6 @@ pub mod pest
                     .into_iter()
                     .collect()
             }
-
             /// In case we've tried to parse a rule, which start position is bigger than previous
             /// `max_position` it means that we've advanced in our parsing and found better candidate.
             ///
@@ -34586,7 +33580,6 @@ pub mod pest
                     }
                 }
             }
-
             /// If `expected` flag is set to false, it means we've successfully parsed token being in the
             /// state of negative lookahead and want to track `token` in the `unexpected_tokens`. Otherwise,
             /// we want to track it the `expected_tokens`. Let's call chosen vec a `target_vec`.
@@ -34637,7 +33630,6 @@ pub mod pest
                         .push(RulesCallStack::new(ParseAttempt::Token));
                 }
             }
-
             /// Reset state in case we've successfully parsed some token in
             /// `match_string` or `match_insensetive`.
             fn nullify_expected_tokens(&mut self, new_max_position: usize) {
@@ -34653,7 +33645,6 @@ pub mod pest
                 Self::new()
             }
         }
-
         /// The complete state of a [`Parser`].
         #[derive(Debug)]
         pub struct ParserState<'i, R: RuleType> {
@@ -34702,7 +33693,6 @@ pub mod pest
             /// successfully parse "create" + "user" (and not "table").
             parse_attempts: ParseAttempts<R>,
         }
-
         /// Creates a `ParserState` from a `&str`, supplying it to a closure `f`.
         #[allow(clippy::perf)]
         pub fn state<'i, R: RuleType, F>(input: &'i str, f: F) -> Result<pairs::Pairs<'i, R>, Error<R>>
@@ -34764,17 +33754,14 @@ pub mod pest
                     parse_attempts: ParseAttempts::new(),
                 })
             }
-
             /// Get all parse attempts after process of parsing is finished.
             pub fn get_parse_attempts(&self) -> &ParseAttempts<R> {
                 &self.parse_attempts
             }
-
             /// Returns a reference to the current `Position` of the `ParserState`.
             pub fn position(&self) -> &Position<'i> {
                 &self.position
             }
-
             /// Returns the current atomicity of the `ParserState`.
             pub fn atomicity(&self) -> Atomicity {
                 self.atomicity
@@ -34793,7 +33780,6 @@ pub mod pest
             fn reached_call_limit(&self) -> bool {
                 self.call_tracker.limit_reached()
             }
-
             /// Wrapper needed to generate tokens. This will associate the `R` type rule to the closure meant to match the rule.
             #[inline]
             pub fn rule<F>(mut self: Box<Self>, rule: R, f: F) -> ParseResult<Box<Self>>
@@ -34921,7 +33907,6 @@ pub mod pest
                     }
                 }
             }
-
             /// Tag current node.
             #[inline]
             pub fn tag_node(mut self: Box<Self>, tag: &'i str) -> ParseResult<Box<Self>> {
@@ -34930,7 +33915,6 @@ pub mod pest
                 }
                 Ok(self)
             }
-
             /// Get number of allowed rules attempts + prohibited rules attempts.
             fn attempts_at(&self, pos: usize) -> usize {
                 if self.attempt_pos == pos {
@@ -34981,7 +33965,6 @@ pub mod pest
                     attempts.push(rule);
                 }
             }
-
             /// Starts a sequence of transformations provided by `f` from the `Box<ParserState>`.
             #[inline]
             pub fn sequence<F>(mut self: Box<Self>, f: F) -> ParseResult<Box<Self>>
@@ -35004,7 +33987,6 @@ pub mod pest
                     }
                 }
             }
-
             /// Repeatedly applies the transformation provided by `f` from the `Box<ParserState>`.
             #[inline]
             pub fn repeat<F>(mut self: Box<Self>, mut f: F) -> ParseResult<Box<Self>>
@@ -35021,7 +34003,6 @@ pub mod pest
                     };
                 }
             }
-
             /// Optionally applies the transformation provided by `f` from the `Box<ParserState>`.
             #[inline]
             pub fn optional<F>(mut self: Box<Self>, f: F) -> ParseResult<Box<Self>>
@@ -35033,7 +34014,6 @@ pub mod pest
                     Ok(state) | Err(state) => Ok(state),
                 }
             }
-
             /// Generic function to handle result of char/string/range parsing in order to track (un)expected tokens.
             fn handle_token_parse_result(
                 &mut self,
@@ -35057,7 +34037,6 @@ pub mod pest
                         .try_add_new_token(token, start_position, current_pos, false);
                 }
             }
-
             /// Attempts to match a single character based on a filter function.
             #[inline]
             pub fn match_char_by<F>(mut self: Box<Self>, f: F) -> ParseResult<Box<Self>>
@@ -35076,7 +34055,6 @@ pub mod pest
                     Err(self)
                 }
             }
-
             /// Attempts to match the given string.
             #[inline]
             pub fn match_string(mut self: Box<Self>, string: &str) -> ParseResult<Box<Self>> {
@@ -35094,7 +34072,6 @@ pub mod pest
                     Err(self)
                 }
             }
-
             /// Attempts to case-insensitively match the given string. 
             #[inline]
             pub fn match_insensitive(mut self: Box<Self>, string: &str) -> ParseResult<Box<Self>> {
@@ -35112,7 +34089,6 @@ pub mod pest
                     Err(self)
                 }
             }
-
             /// Attempts to match a single character from the given range.
             #[inline]
             pub fn match_range(mut self: Box<Self>, range: Range<char>) -> ParseResult<Box<Self>> {
@@ -35131,7 +34107,6 @@ pub mod pest
                     Err(self)
                 }
             }
-
             /// Attempts to skip `n` characters forward.
             #[inline]
             pub fn skip(mut self: Box<Self>, n: usize) -> ParseResult<Box<Self>> {
@@ -35141,14 +34116,12 @@ pub mod pest
                     Err(self)
                 }
             }
-
             /// Attempts to skip forward until one of the given strings is found.
             #[inline]
             pub fn skip_until(mut self: Box<Self>, strings: &[&str]) -> ParseResult<Box<Self>> {
                 self.position.skip_until(strings);
                 Ok(self)
             }
-
             /// Attempts to match the start of the input.
             #[inline]
             pub fn start_of_input(self: Box<Self>) -> ParseResult<Box<Self>> {
@@ -35158,7 +34131,6 @@ pub mod pest
                     Err(self)
                 }
             }
-
             /// Attempts to match the end of the input.
             #[inline]
             pub fn end_of_input(self: Box<Self>) -> ParseResult<Box<Self>> {
@@ -35168,7 +34140,6 @@ pub mod pest
                     Err(self)
                 }
             }
-
             /// Starts a lookahead transformation provided by `f` from the `Box<ParserState>`.
             #[inline]
             pub fn lookahead<F>(mut self: Box<Self>, is_positive: bool, f: F) -> ParseResult<Box<Self>>
@@ -35216,7 +34187,6 @@ pub mod pest
                     }
                 }
             }
-
             /// Transformation which stops `Token`s from being generated according to `is_atomic`.
             #[inline]
             pub fn atomic<F>(mut self: Box<Self>, atomicity: Atomicity, f: F) -> ParseResult<Box<Self>>
@@ -35254,7 +34224,6 @@ pub mod pest
                     }
                 }
             }
-
             /// Evaluates the result of closure `f` and pushes the span of the input consumed from before
             /// `f` is called to after `f` is called to the stack. 
             #[inline]
@@ -35276,7 +34245,6 @@ pub mod pest
                     Err(state) => Err(state),
                 }
             }
-
             /// Peeks the top of the stack and attempts to match the string.
             #[inline]
             pub fn stack_peek(self: Box<Self>) -> ParseResult<Box<Self>> {
@@ -35287,7 +34255,6 @@ pub mod pest
                     .as_str();
                 self.match_string(string)
             }
-
             /// Pops the top of the stack and attempts to match the string.
             #[inline]
             pub fn stack_pop(mut self: Box<Self>) -> ParseResult<Box<Self>> {
@@ -35298,7 +34265,6 @@ pub mod pest
                     .as_str();
                 self.match_string(string)
             }
-
             /// Matches part of the state of the stack.
             #[inline]
             pub fn stack_match_peek_slice(
@@ -35332,13 +34298,11 @@ pub mod pest
                     Err(self)
                 }
             }
-
             /// Matches the full state of the stack.
             #[inline]
             pub fn stack_match_peek(self: Box<Self>) -> ParseResult<Box<Self>> {
                 self.stack_match_peek_slice(0, None, MatchDir::TopToBottom)
             }
-
             /// Matches the full state of the stack.
             #[inline]
             pub fn stack_match_pop(mut self: Box<Self>) -> ParseResult<Box<Self>> {
@@ -35358,7 +34322,6 @@ pub mod pest
                     Err(self)
                 }
             }
-
             /// Drops the top of the stack.
             #[inline]
             pub fn stack_drop(mut self: Box<Self>) -> ParseResult<Box<Self>> {
@@ -35367,7 +34330,6 @@ pub mod pest
                     None => Err(self),
                 }
             }
-
             /// Restores the original state of the `ParserState` when `f` returns an `Err`.
             #[inline]
             pub fn restore_on_err<F>(self: Box<Self>, f: F) -> ParseResult<Box<Self>>
@@ -35379,36 +34341,31 @@ pub mod pest
                     Err(state) => Err(state.restore()),
                 }
             }
-
             /// Mark the current state as a checkpoint and return the `Box`.
             #[inline]
-            pub(crate) fn checkpoint(mut self: Box<Self>) -> Box<Self> {
+            pub fn checkpoint(mut self: Box<Self>) -> Box<Self> {
                 self.stack.snapshot();
                 self
             }
-
             /// The checkpoint was cleared successfully so remove it without touching other stack state.
             #[inline]
-            pub(crate) fn checkpoint_ok(mut self: Box<Self>) -> Box<Self> {
+            pub fn checkpoint_ok(mut self: Box<Self>) -> Box<Self> {
                 self.stack.clear_snapshot();
                 self
             }
-
             /// Restore the current state to the most recent checkpoint.
             #[inline]
-            pub(crate) fn restore(mut self: Box<Self>) -> Box<Self> {
+            pub fn restore(mut self: Box<Self>) -> Box<Self> {
                 self.stack.restore();
                 self
             }
         }
-
         /// Helper function used only in case stack operations (PUSH/POP) are used in grammar.
         fn constrain_idxs(start: i32, end: Option<i32>, len: usize) -> Option<Range<usize>> {
             let start_norm = normalize_index(start, len)?;
             let end_norm = end.map_or(Some(len), |e| normalize_index(e, len))?;
             Some(start_norm..end_norm)
         }
-
         /// `constrain_idxs` helper function.
         fn normalize_index(i: i32, len: usize) -> Option<usize> {
             if i > len as i32 {
@@ -35452,29 +34409,25 @@ pub mod pest
 
         impl<'i> Position<'i> {
             /// Create a new `Position` without checking invariants. (Checked with `debug_assertions`.)
-            pub(crate) fn new_internal(input: &str, pos: usize) -> Position<'_> {
+            pub fn new_internal(input: &str, pos: usize) -> Position<'_> {
                 debug_assert!(input.get(pos..).is_some());
                 Position { input, pos }
             }
-
             /// Attempts to create a new `Position` at the given position.
             pub fn new(input: &str, pos: usize) -> Option<Position<'_>> {
                 input.get(pos..).map(|_| Position { input, pos })
             }
-
             /// Creates a `Position` at the start of a `&str`.
             #[inline]
             pub fn from_start(input: &'i str) -> Position<'i> {
                 // Position 0 is always safe because it's always a valid UTF-8 border.
                 Position { input, pos: 0 }
             }
-
             /// Returns the byte position of this `Position` as a `usize`.
             #[inline]
             pub fn pos(&self) -> usize {
                 self.pos
             }
-
             /// Creates a `Span` from two `Position`s.
             #[inline]
             pub fn span(&self, other: &Position<'i>) -> span::Span<'i> {
@@ -35487,7 +34440,6 @@ pub mod pest
                     panic!("span created from positions from different inputs")
                 }
             }
-
             /// Returns the line and column number of this `Position`.
             #[inline]
             pub fn line_col(&self) -> (usize, usize) {
@@ -35532,7 +34484,6 @@ pub mod pest
 
                 line_col
             }
-
             /// Returns the entire line of the input that contains this `Position`.
             #[inline]
             pub fn line_of(&self) -> &'i str {
@@ -35543,7 +34494,7 @@ pub mod pest
                 &self.input[self.find_line_start()..self.find_line_end()]
             }
 
-            pub(crate) fn find_line_start(&self) -> usize {
+            pub fn find_line_start(&self) -> usize {
                 if self.input.is_empty() {
                     return 0;
                 };
@@ -35560,7 +34511,7 @@ pub mod pest
                 }
             }
 
-            pub(crate) fn find_line_end(&self) -> usize {
+            pub fn find_line_end(&self) -> usize {
                 if self.input.is_empty() {
                     0
                 } else if self.pos == self.input.len() - 1 {
@@ -35578,23 +34529,20 @@ pub mod pest
                     }
                 }
             }
-
             /// Returns `true` when the `Position` points to the start of the input `&str`.
             #[inline]
-            pub(crate) fn at_start(&self) -> bool {
+            pub fn at_start(&self) -> bool {
                 self.pos == 0
             }
-
             /// Returns `true` when the `Position` points to the end of the input `&str`.
             #[inline]
-            pub(crate) fn at_end(&self) -> bool {
+            pub fn at_end(&self) -> bool {
                 self.pos == self.input.len()
             }
-
             /// Skips `n` `char`s from the `Position` and returns `true` if the skip was possible or `false`
             /// otherwise. If the return value is `false`, `pos` will not be updated.
             #[inline]
-            pub(crate) fn skip(&mut self, n: usize) -> bool {
+            pub fn skip(&mut self, n: usize) -> bool {
                 let skipped = {
                     let mut len = 0;
                     // Position's pos is always a UTF-8 border.
@@ -35612,11 +34560,10 @@ pub mod pest
                 self.pos += skipped;
                 true
             }
-
             /// Goes back `n` `char`s from the `Position` and returns `true` if the skip was possible or `false`
             /// otherwise. If the return value is `false`, `pos` will not be updated.
             #[inline]
-            pub(crate) fn skip_back(&mut self, n: usize) -> bool {
+            pub fn skip_back(&mut self, n: usize) -> bool {
                 let skipped = {
                     let mut len = 0;
                     // Position's pos is always a UTF-8 border.
@@ -35634,11 +34581,10 @@ pub mod pest
                 self.pos -= skipped;
                 true
             }
-
             /// Skips until one of the given `strings` is found. If none of the `strings` can be found,
             /// this function will return `false` but its `pos` will *still* be updated.
             #[inline]
-            pub(crate) fn skip_until(&mut self, strings: &[&str]) -> bool {
+            pub fn skip_until(&mut self, strings: &[&str]) -> bool {
                 #[cfg(not(feature = "memchr"))]
                 {
                     self.skip_until_basic(strings)
@@ -35712,19 +34658,17 @@ pub mod pest
                 self.pos = self.input.len();
                 false
             }
-
             /// Matches the char at the `Position` against a specified character and returns `true` if a match
             /// was made. If no match was made, returns `false`.
             /// `pos` will not be updated in either case.
             #[inline]
-            pub(crate) fn match_char(&self, c: char) -> bool {
+            pub fn match_char(&self, c: char) -> bool {
                 matches!(self.input[self.pos..].chars().next(), Some(cc) if c == cc)
             }
-
             /// Matches the char at the `Position` against a filter function and returns `true` if a match
             /// was made. If no match was made, returns `false` and `pos` will not be updated.
             #[inline]
-            pub(crate) fn match_char_by<F>(&mut self, f: F) -> bool
+            pub fn match_char_by<F>(&mut self, f: F) -> bool
             where
                 F: FnOnce(char) -> bool,
             {
@@ -35739,11 +34683,10 @@ pub mod pest
                     false
                 }
             }
-
             /// Matches `string` from the `Position` and returns `true` if a match was made or `false`
             /// otherwise. If no match was made, `pos` will not be updated.
             #[inline]
-            pub(crate) fn match_string(&mut self, string: &str) -> bool {
+            pub fn match_string(&mut self, string: &str) -> bool {
                 let to = self.pos + string.len();
 
                 if Some(string.as_bytes()) == self.input.as_bytes().get(self.pos..to) {
@@ -35753,11 +34696,10 @@ pub mod pest
                     false
                 }
             }
-
             /// Case-insensitively matches `string` from the `Position` and returns `true` if a match was
             /// made or `false` otherwise. If no match was made, `pos` will not be updated.
             #[inline]
-            pub(crate) fn match_insensitive(&mut self, string: &str) -> bool {
+            pub fn match_insensitive(&mut self, string: &str) -> bool {
                 let matched = {
                     let slice = &self.input[self.pos..];
                     if let Some(slice) = slice.get(0..string.len()) {
@@ -35774,11 +34716,10 @@ pub mod pest
                     false
                 }
             }
-
             /// Matches `char` `range` from the `Position` and returns `true` if a match was made or `false`
             /// otherwise. If no match was made, `pos` will not be updated.
             #[inline]
-            pub(crate) fn match_range(&mut self, range: Range<char>) -> bool {
+            pub fn match_range(&mut self, range: Range<char>) -> bool {
                 if let Some(c) = self.input[self.pos..].chars().next() {
                     if range.start <= c && c <= range.end {
                         self.pos += c.len_utf8();
@@ -35887,7 +34828,6 @@ pub mod pest
                     next: None,
                 }
             }
-
             /// Defines `rule` as a postfix unary operator.
             pub fn postfix(rule: R) -> Self {
                 Self {
@@ -35896,7 +34836,6 @@ pub mod pest
                     next: None,
                 }
             }
-
             /// Defines `rule` as an infix binary operator with associativity `assoc`.
             pub fn infix(rule: R, assoc: Assoc) -> Self {
                 Self {
@@ -35923,7 +34862,6 @@ pub mod pest
                 self
             }
         }
-
         /// Struct containing operators and precedences, which can perform [Pratt parsing][1] on
         /// primary, prefix, postfix and infix expressions over [`Pairs`].
         pub struct PrattParser<R: RuleType> {
@@ -35951,7 +34889,6 @@ pub mod pest
                     has_infix: false,
                 }
             }
-
             /// Add `op` to `PrattParser`.
             pub fn op(mut self, op: Op<R>) -> Self {
                 self.prec += PREC_STEP;
@@ -35967,7 +34904,6 @@ pub mod pest
                 }
                 self
             }
-
             /// Maps primary expressions with a closure `primary`.
             pub fn map_primary<'pratt, 'a, 'i, X, T>(
                 &'pratt self,
@@ -36019,7 +34955,6 @@ pub mod pest
                 self.prefix = Some(Box::new(prefix));
                 self
             }
-
             /// Maps postfix operators with closure `postfix`.
             pub fn map_postfix<X>(mut self, postfix: X) -> Self
             where
@@ -36028,7 +34963,6 @@ pub mod pest
                 self.postfix = Some(Box::new(postfix));
                 self
             }
-
             /// Maps infix operators with a closure `infix`.
             pub fn map_infix<X>(mut self, infix: X) -> Self
             where
@@ -36037,7 +34971,6 @@ pub mod pest
                 self.infix = Some(Box::new(infix));
                 self
             }
-
             /// The last method to call on the provided pairs to execute the Pratt
             /// parser (previously defined using [`map_primary`], [`map_prefix`], [`map_postfix`],
             /// and [`map_infix`] methods).
@@ -36057,7 +34990,6 @@ pub mod pest
                 }
                 lhs
             }
-
             /// Null-Denotation
             ///
             /// "the action that should happen when the symbol is encountered
@@ -36076,7 +35008,6 @@ pub mod pest
                     _ => panic!("Expected prefix or primary expression, found {}", pair),
                 }
             }
-
             /// Left-Denotation
             ///
             /// "the action that should happen when the symbol is encountered
@@ -36101,7 +35032,6 @@ pub mod pest
                     _ => panic!("Expected postfix or infix expression, found {}", pair),
                 }
             }
-
             /// Left-Binding-Power
             ///
             /// "describes the symbol's precedence in infix form (most notably, operator precedence)"
@@ -36196,7 +35126,6 @@ pub mod pest
                 );
             };
         }
-
         /// Associativity of an [`Operator`].
         #[derive(Clone, Copy, Debug, Eq, PartialEq)]
         pub enum Assoc {
@@ -36205,7 +35134,6 @@ pub mod pest
             /// Right `Operator` associativity
             Right,
         }
-
         /// Infix operator used in [`PrecClimber`].
         #[derive(Debug)]
         pub struct Operator<R: RuleType> {
@@ -36241,7 +35169,6 @@ pub mod pest
                 self
             }
         }
-
         /// List of operators and precedences, which can perform [precedence climbing] on infix expressions contained in a [`Pairs`].
         #[derive(Debug)]
         pub struct PrecClimber<R: Clone + 'static> {
@@ -36266,7 +35193,6 @@ pub mod pest
                     .find(|(r, _, _)| r == rule)
                     .map(|(_, precedence, assoc)| (*precedence, *assoc))
             }
-
             /// Creates a new `PrecClimber` from the `Operator`s contained in `ops`.
             pub fn new(ops: Vec<Operator<R>>) -> PrecClimber<R> {
                 let ops = ops
@@ -36293,7 +35219,6 @@ pub mod pest
                     ops: Cow::Owned(ops),
                 }
             }
-
             /// Performs the precedence climbing algorithm on the `pairs` in a similar manner to map-reduce.
             pub fn climb<'i, P, F, G, T>(&self, mut pairs: P, mut primary: F, mut infix: G) -> T
             where
@@ -36388,11 +35313,10 @@ pub mod pest
 
         impl<'i> Span<'i> {
             /// Create a new `Span` without checking invariants. (Checked with `debug_assertions`.)
-            pub(crate) fn new_internal(input: &str, start: usize, end: usize) -> Span<'_> {
+            pub fn new_internal(input: &str, start: usize, end: usize) -> Span<'_> {
                 debug_assert!(input.get(start..end).is_some());
                 Span { input, start, end }
             }
-
             /// Attempts to create a new span. Will return `None` if `input[start..end]` is an invalid index
             /// into `input`.
             pub fn new(input: &str, start: usize, end: usize) -> Option<Span<'_>> {
@@ -36402,7 +35326,6 @@ pub mod pest
                     None
                 }
             }
-
             /// Attempts to create a new span based on a sub-range.
             pub fn get(&self, range: impl RangeBounds<usize>) -> Option<Span<'i>> {
                 let start = match range.start_bound() {
@@ -36422,31 +35345,26 @@ pub mod pest
                     end: self.start + end,
                 })
             }
-
             /// Returns the `Span`'s start byte position as a `usize`.
             #[inline]
             pub fn start(&self) -> usize {
                 self.start
             }
-
             /// Returns the `Span`'s end byte position as a `usize`.
             #[inline]
             pub fn end(&self) -> usize {
                 self.end
             }
-
             /// Returns the `Span`'s start `Position`.
             #[inline]
             pub fn start_pos(&self) -> position::Position<'i> {
                 position::Position::new_internal(self.input, self.start)
             }
-
             /// Returns the `Span`'s end `Position`.
             #[inline]
             pub fn end_pos(&self) -> position::Position<'i> {
                 position::Position::new_internal(self.input, self.end)
             }
-
             /// Splits the `Span` into a pair of `Position`s.
             #[inline]
             pub fn split(self) -> (position::Position<'i>, position::Position<'i>) {
@@ -36455,19 +35373,16 @@ pub mod pest
 
                 (pos1, pos2)
             }
-
             /// Captures a slice from the `&str` defined by the `Span`.
             #[inline]
             pub fn as_str(&self) -> &'i str {
                 // Span's start and end positions are always a UTF-8 borders.
                 &self.input[self.start..self.end]
             }
-
             /// Returns the input string of the `Span`.
             pub fn get_input(&self) -> &'i str {
                 self.input
             }
-
             /// Iterates over all lines (partially) covered by this span. Yielding a `&str` for each line.
             #[inline]
             pub fn lines(&self) -> Lines<'_> {
@@ -36475,7 +35390,6 @@ pub mod pest
                     inner: self.lines_span(),
                 }
             }
-
             /// Iterates over all lines (partially) covered by this span. Yielding a `Span` for each line.
             pub fn lines_span(&self) -> LinesSpan<'_> {
                 LinesSpan {
@@ -36510,7 +35424,6 @@ pub mod pest
                 self.end.hash(state);
             }
         }
-
         /// Merges two spans into one.
         pub fn merge_spans<'i>(a: &Span<'i>, b: &Span<'i>) -> Option<Span<'i>> {
             if a.end() >= b.start() && a.start() <= b.end() {
@@ -36525,7 +35438,6 @@ pub mod pest
                 None
             }
         }
-
         /// Line iterator for Spans, created by [`Span::lines_span()`].
         pub struct LinesSpan<'i> {
             span: &'i Span<'i>,
@@ -36549,7 +35461,6 @@ pub mod pest
                 Span::new(self.span.input, line_start, self.pos)
             }
         }
-
         /// Line iterator for Spans, created by [`Span::lines()`].
         pub struct Lines<'i> {
             inner: LinesSpan<'i>,
@@ -36619,23 +35530,19 @@ pub mod pest
                     lengths: vec![],
                 }
             }
-
             /// Returns `true` if the stack is currently empty.
-            #[allow(dead_code)]
+            
             pub fn is_empty(&self) -> bool {
                 self.cache.is_empty()
             }
-
             /// Returns the top-most `&T` in the `Stack`.
             pub fn peek(&self) -> Option<&T> {
                 self.cache.last()
             }
-
             /// Pushes a `T` onto the `Stack`.
             pub fn push(&mut self, elem: T) {
                 self.cache.push(elem);
             }
-
             /// Pops the top-most `T` from the `Stack`.
             pub fn pop(&mut self) -> Option<T> {
                 let len = self.cache.len();
@@ -36651,17 +35558,14 @@ pub mod pest
                 }
                 popped
             }
-
             /// Returns the size of the stack
             pub fn len(&self) -> usize {
                 self.cache.len()
             }
-
             /// Takes a snapshot of the current `Stack`.
             pub fn snapshot(&mut self) {
                 self.lengths.push((self.cache.len(), self.cache.len()))
             }
-
             /// The parsing after the last snapshot was successful so clearing it.
             pub fn clear_snapshot(&mut self) {
                 if let Some((len, unpopped)) = self.lengths.pop() {
@@ -36669,7 +35573,6 @@ pub mod pest
                     self.popped.truncate(self.popped.len() - (len - unpopped));
                 }
             }
-
             /// Rewinds the `Stack` to the most recent `snapshot()`. If no `snapshot()` has been taken, this
             /// function return the stack to its initial state.
             pub fn restore(&mut self) {
@@ -54998,7 +53901,6 @@ pub mod pest
                 ("Zanabazar_Square", ZANABAZAR_SQUARE),
             ];
         }
-
         /// Return all available unicode property names
         pub fn unicode_property_names() -> Box<dyn Iterator<Item = &'static str>> {
             Box::new(
@@ -55032,7 +53934,6 @@ pub mod pest
             None
         }
     }
-
     /// A trait which parser rules must implement.
     pub trait RuleType: Copy + Debug + Eq + Hash + Ord {}
 
@@ -55046,27 +53947,21 @@ pub mod rusqlite
     {
         *,
     };
-    
-    
-
+    /*
     pub use libsqlite3_sys as ffi;
-
     use std::cell::RefCell;
     use std::default::Default;
     use std::ffi::{CStr, CString};
     use std::fmt;
     use std::os::raw::{c_char, c_int};
-
     use std::path::Path;
     use std::result;
     use std::str;
     use std::sync::{Arc, Mutex};
-
     use crate::cache::StatementCache;
     use crate::inner_connection::InnerConnection;
     use crate::raw_statement::RawStatement;
     use crate::types::ValueRef;
-
     pub use crate::cache::CachedStatement;
     #[cfg(feature = "column_decltype")]
     pub use crate::column::Column;
@@ -55085,7 +53980,7 @@ pub mod rusqlite
     #[cfg(feature = "rusqlite-macros")]
     #[doc(hidden)]
     pub use rusqlite_macros::__bind;
-
+    */
     mod error
     {
         use ::
@@ -55178,7 +54073,7 @@ pub mod rusqlite
             /// [`create_scalar_function`](crate::Connection::create_scalar_function)).
             #[cfg(feature = "functions")]
             #[cfg_attr(docsrs, doc(cfg(feature = "functions")))]
-            #[allow(dead_code)]
+            
             UserFunctionError(Box<dyn error::Error + Send + Sync + 'static>),
 
             /// Error available for the implementors of the
@@ -55192,7 +54087,7 @@ pub mod rusqlite
             /// [`create_module`](crate::Connection::create_module)).
             #[cfg(feature = "vtab")]
             #[cfg_attr(docsrs, doc(cfg(feature = "vtab")))]
-            #[allow(dead_code)]
+            
             ModuleError(String),
 
             /// An unwinding panic occurs in a UDF (user-defined function).
@@ -55492,7 +54387,6 @@ pub mod rusqlite
                     _ => None,
                 }
             }
-
             /// Returns the underlying SQLite error code if this is
             /// [`Error::SqliteFailure`].
             #[inline]
@@ -55555,7 +54449,6 @@ pub mod rusqlite
                 Ok(())
             }
         }
-
         /// Transform Rust error to SQLite error (message and code).
         /// # Safety
         /// This function is unsafe because it uses raw pointer
@@ -55575,8 +54468,7 @@ pub mod rusqlite
             }
         }
     }
-
-    #[cfg(not(feature = "loadable_extension"))]
+    
     pub mod auto_extension
     {
         //! Automatic extension loading
@@ -55624,7 +54516,6 @@ pub mod rusqlite
                 _ => ffi::SQLITE_OK,
             }
         }
-
         /// Register au auto-extension
         ///
         /// # Safety
@@ -55636,20 +54527,16 @@ pub mod rusqlite
         pub unsafe fn register_auto_extension(ax: RawAutoExtension) -> Result<()> {
             check(ffi::sqlite3_auto_extension(Some(ax)))
         }
-
         /// Unregister the initialization routine
         pub fn cancel_auto_extension(ax: RawAutoExtension) -> bool {
             unsafe { ffi::sqlite3_cancel_auto_extension(Some(ax)) == 1 }
         }
-
         /// Disable all automatic extensions previously registered
         pub fn reset_auto_extension() {
             unsafe { ffi::sqlite3_reset_auto_extension() }
         }
     }
-
-    #[cfg(feature = "backup")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "backup")))]
+    
     pub mod backup
     {
         //! Online SQLite backup API.
@@ -55711,7 +54598,6 @@ pub mod rusqlite
                     More => unreachable!(),
                 }
             }
-
             /// Restore the given source path into the
             /// `name` database. If `progress` is not `None`, it will be
             /// called periodically until the restore completes.
@@ -55758,7 +54644,6 @@ pub mod rusqlite
                 }
             }
         }
-
         /// Possible successful results of calling
         /// [`Backup::step`].
         #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -55779,7 +54664,6 @@ pub mod rusqlite
             /// database. This is not a fatal error - the step can be retried.
             Locked,
         }
-
         /// Struct specifying the progress of a backup. The
         /// percentage completion can be calculated as `(pagecount - remaining) /
         /// pagecount`. The progress of a backup is as of the last call to
@@ -55793,7 +54677,6 @@ pub mod rusqlite
             /// Total number of pages in the source database.
             pub pagecount: c_int,
         }
-
         /// A handle to an online backup.
         pub struct Backup<'a, 'b> {
             phantom_from: PhantomData<&'a Connection>,
@@ -55815,7 +54698,6 @@ pub mod rusqlite
             pub fn new<'a, 'b>(from: &'a Connection, to: &'b mut Connection) -> Result<Backup<'a, 'b>> {
                 Backup::new_with_names(from, DatabaseName::Main, to, DatabaseName::Main)
             }
-
             /// Attempt to create a new handle that will allow backups from the
             /// `from_name` database of `from` to the `to_name` database of `to`. Note
             /// that `to` is a `&mut` - this is because SQLite forbids any API calls on
@@ -55855,7 +54737,6 @@ pub mod rusqlite
                     b,
                 })
             }
-
             /// Gets the progress of the backup as of the last call to
             /// [`step`](Backup::step).
             #[inline]
@@ -55868,7 +54749,6 @@ pub mod rusqlite
                     }
                 }
             }
-
             /// Attempts to back up the given number of pages. If `num_pages` is
             /// negative, will attempt to back up all remaining pages. This will hold a
             /// lock on the source database for the duration, so it is probably not
@@ -55895,7 +54775,6 @@ pub mod rusqlite
                     _ => self.to.decode_result(rc).map(|_| More),
                 }
             }
-
             /// Attempts to run the entire backup. Will call
             /// [`step(pages_per_step)`](Backup::step) as many times as necessary,
             /// sleeping for `pause_between_pages` between each call to give the
@@ -55942,9 +54821,7 @@ pub mod rusqlite
             }
         }
     }
-
-    #[cfg(feature = "blob")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "blob")))]
+    
     pub mod blob
     {
         //! Incremental BLOB I/O.
@@ -56021,7 +54898,6 @@ pub mod rusqlite
                         )
                     })
                 }
-
                 /// An alias for `write_at` provided for compatibility with the conceptually
                 /// equivalent [`std::os::unix::FileExt::write_all_at`][write_all_at]
                 /// function from libstd:
@@ -56031,7 +54907,6 @@ pub mod rusqlite
                 pub fn write_all_at(&mut self, buf: &[u8], write_start: usize) -> Result<()> {
                     self.write_at(buf, write_start)
                 }
-
                 /// Read as much as possible from `offset` to `offset + buf.len()` out of
                 /// `self`, writing into `buf`. On success, returns the number of bytes
                 /// written.
@@ -56055,7 +54930,6 @@ pub mod rusqlite
                         unsafe { from_raw_parts_mut(buf.as_mut_ptr().cast(), buf.len()) };
                     self.raw_read_at(as_uninit, read_start).map(|s| s.len())
                 }
-
                 /// Read as much as possible from `offset` to `offset + buf.len()` out of
                 /// `self`, writing into `buf`. On success, returns the portion of `buf`
                 /// which was initialized by this call.
@@ -56128,7 +55002,6 @@ pub mod rusqlite
                         Ok(from_raw_parts_mut(buf.as_mut_ptr().cast::<u8>(), read_len))
                     }
                 }
-
                 /// Equivalent to [`Blob::read_at`], but returns a `BlobSizeError` if `buf`
                 /// is not fully initialized.
                 #[inline]
@@ -56140,7 +55013,6 @@ pub mod rusqlite
                         Ok(())
                     }
                 }
-
                 /// Equivalent to [`Blob::raw_read_at`], but returns a `BlobSizeError` if
                 /// `buf` is not fully initialized.
                 #[inline]
@@ -56159,7 +55031,6 @@ pub mod rusqlite
                 }
             }
         }
-
         /// Handle to an open BLOB. See
         /// [`rusqlite::blob`](crate::blob) documentation for in-depth discussion.
         pub struct Blob<'conn> {
@@ -56226,28 +55097,24 @@ pub mod rusqlite
                 self.pos = 0;
                 Ok(())
             }
-
             /// Return the size in bytes of the BLOB.
             #[inline]
             #[must_use]
             pub fn size(&self) -> i32 {
                 unsafe { ffi::sqlite3_blob_bytes(self.blob) }
             }
-
             /// Return the current size in bytes of the BLOB.
             #[inline]
             #[must_use]
             pub fn len(&self) -> usize {
                 self.size().try_into().unwrap()
             }
-
             /// Return true if the BLOB is empty.
             #[inline]
             #[must_use]
             pub fn is_empty(&self) -> bool {
                 self.size() == 0
             }
-
             /// Close a BLOB handle.
             ///
             /// Calling `close` explicitly is not required (the BLOB will be closed
@@ -56364,7 +55231,6 @@ pub mod rusqlite
                 self.close_();
             }
         }
-
         /// BLOB of length N that is filled with zeroes.
         ///
         /// Zeroblobs are intended to serve as placeholders for BLOBs whose content is
@@ -56424,7 +55290,6 @@ pub mod rusqlite
                     .expect("too big");
                 self.db.borrow_mut().busy_timeout(ms)
             }
-
             /// Register a callback to handle `SQLITE_BUSY` errors.
             ///
             /// If the busy callback is `None`, then `SQLITE_BUSY` is returned
@@ -56494,28 +55359,24 @@ pub mod rusqlite
             pub fn prepare_cached(&self, sql: &str) -> Result<CachedStatement<'_>> {
                 self.cache.get(self, sql)
             }
-
             /// Set the maximum number of cached prepared statements this connection
             /// will hold.
             #[inline]
             pub fn set_prepared_statement_cache_capacity(&self, capacity: usize) {
                 self.cache.set_capacity(capacity);
             }
-
             /// Remove/finalize all prepared statements currently in the cache.
             #[inline]
             pub fn flush_prepared_statement_cache(&self) {
                 self.cache.flush();
             }
         }
-
         /// Prepared statements LRU cache.
         #[derive(Debug)]
         pub struct StatementCache(RefCell<LruCache<Arc<str>, RawStatement>>);
 
         #[allow(clippy::non_send_fields_in_send_ty)]
         unsafe impl Send for StatementCache {}
-
         /// Cacheable statement.
         ///
         /// Statement will return automatically to the cache by default.
@@ -56560,7 +55421,6 @@ pub mod rusqlite
                     cache,
                 }
             }
-
             /// Discard the statement, preventing it from being returned to its
             /// [`Connection`]'s collection of cached statements.
             #[inline]
@@ -56629,9 +55489,7 @@ pub mod rusqlite
             }
         }
     }
-
-    #[cfg(feature = "collation")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "collation")))]
+    
     mod collation
     {
         //! Add, remove, or modify a collation
@@ -56665,7 +55523,6 @@ pub mod rusqlite
                     .borrow_mut()
                     .create_collation(collation_name, x_compare)
             }
-
             /// Collation needed callback
             #[inline]
             pub fn collation_needed(
@@ -56674,7 +55531,6 @@ pub mod rusqlite
             ) -> Result<()> {
                 self.db.borrow_mut().collation_needed(x_coll_needed)
             }
-
             /// Remove collation.
             #[inline]
             pub fn remove_collation(&self, collation_name: &str) -> Result<()> {
@@ -56835,7 +55691,6 @@ pub mod rusqlite
             pub fn name(&self) -> &str {
                 self.name
             }
-
             /// Returns the type of the column (`None` for expression).
             #[inline]
             #[must_use]
@@ -56855,13 +55710,11 @@ pub mod rusqlite
                 }
                 cols
             }
-
             /// Return the number of columns in the result set returned by the prepared statement.
             #[inline]
             pub fn column_count(&self) -> usize {
                 self.stmt.column_count()
             }
-
             /// Check that column name reference lifetime is limited:
             /// https://www.sqlite.org/c3ref/column_name.html
             #[inline]
@@ -56870,7 +55723,6 @@ pub mod rusqlite
                 // without checking first.
                 self.column_name(col).expect("Column out of bounds")
             }
-
             /// Returns the name assigned to a particular column in the result set returned by the prepared statement.
             #[inline]
             pub fn column_name(&self, col: usize) -> Result<&str> {
@@ -56884,7 +55736,6 @@ pub mod rusqlite
                             .expect("Invalid UTF-8 sequence in column name")
                     })
             }
-
             /// Returns the column index in the result set for a given column name.
             #[inline]
             pub fn column_index(&self, name: &str) -> Result<usize> {
@@ -56899,7 +55750,6 @@ pub mod rusqlite
                 }
                 Err(Error::InvalidColumnName(String::from(name)))
             }
-
             /// Returns a slice describing the columns of the result of the query.
             pub fn columns(&self) -> Vec<Column> {
                 let n = self.column_count();
@@ -57027,7 +55877,6 @@ pub mod rusqlite
                     Ok(val != 0)
                 }
             }
-
             /// Make configuration changes to a database connection
             ///
             /// - `SQLITE_DBCONFIG_ENABLE_FKEY`: `false` to disable FK enforcement,
@@ -57058,8 +55907,7 @@ pub mod rusqlite
             }
         }
     }
-
-    #[cfg(any(feature = "functions", feature = "vtab"))]
+    
     mod context
     {
         //! Code related to `sqlite3_context` common to `functions` and `vtab` modules.
@@ -57152,9 +56000,7 @@ pub mod rusqlite
             }
         }
     }
-
-    #[cfg(feature = "functions")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "functions")))]
+    
     pub mod functions
     {
         //! Create or redefine SQL functions.
@@ -57198,7 +56044,6 @@ pub mod rusqlite
         unsafe extern "C" fn free_boxed_value<T>(p: *mut c_void) {
             drop(Box::from_raw(p.cast::<T>()));
         }
-
         /// Context is a wrapper for the SQLite function
         /// evaluation context.
         pub struct Context<'a> {
@@ -57213,14 +56058,12 @@ pub mod rusqlite
             pub fn len(&self) -> usize {
                 self.args.len()
             }
-
             /// Returns `true` when there is no argument.
             #[inline]
             #[must_use]
             pub fn is_empty(&self) -> bool {
                 self.args.is_empty()
             }
-
             /// Returns the `idx`th argument as a `T`.
             ///
             /// # Failure
@@ -57246,7 +56089,6 @@ pub mod rusqlite
                     }
                 })
             }
-
             /// Returns the `idx`th argument as a `ValueRef`.
             ///
             /// # Failure
@@ -57259,7 +56101,6 @@ pub mod rusqlite
                 let arg = self.args[idx];
                 unsafe { ValueRef::from_value(arg) }
             }
-
             /// Returns the `idx`th argument as a `SqlFnArg`.
             /// To be used when the SQL function result is one of its arguments.
             #[inline]
@@ -57268,7 +56109,6 @@ pub mod rusqlite
                 assert!(idx < self.len());
                 SqlFnArg { idx }
             }
-
             /// Returns the subtype of `idx`th argument.
             ///
             /// # Failure
@@ -57279,7 +56119,6 @@ pub mod rusqlite
                 let arg = self.args[idx];
                 unsafe { ffi::sqlite3_value_subtype(arg) }
             }
-
             /// Fetch or insert the auxiliary data associated with a particular
             /// parameter. This is intended to be an easier-to-use way of fetching it
             /// compared to calling [`get_aux`](Context::get_aux) and
@@ -57303,7 +56142,6 @@ pub mod rusqlite
                     )
                 }
             }
-
             /// Sets the auxiliary data associated with a particular parameter. See
             /// `https://www.sqlite.org/c3ref/get_auxdata.html` for a discussion of
             /// this feature, or the unit tests of this module for an example.
@@ -57322,7 +56160,6 @@ pub mod rusqlite
                 };
                 Ok(orig)
             }
-
             /// Gets the auxiliary data that was associated with a given parameter via
             /// [`set_aux`](Context::set_aux). Returns `Ok(None)` if no data has been
             /// associated, and Ok(Some(v)) if it has. Returns an error if the
@@ -57338,7 +56175,6 @@ pub mod rusqlite
                         .map_err(|_| Error::GetAuxWrongType)
                 }
             }
-
             /// Get the db connection handle via [sqlite3_context_db_handle](https://www.sqlite.org/c3ref/context_db_handle.html)
             ///
             /// # Safety
@@ -57353,7 +56189,6 @@ pub mod rusqlite
                 })
             }
         }
-
         /// A reference to a connection handle with a lifetime bound to something.
         pub struct ConnectionRef<'ctx> {
             // comes from Connection::from_handle(sqlite3_context_db_handle(...))
@@ -57394,7 +56229,6 @@ pub mod rusqlite
                 ToSql::to_sql(&self.0).map(|o| (o, self.1))
             }
         }
-
         /// n-th arg of an SQL scalar function
         pub struct SqlFnArg {
             idx: usize,
@@ -57423,7 +56257,6 @@ pub mod rusqlite
                 Err(err) => report_error(ctx, err),
             };
         }
-
         /// Aggregate is the callback interface for user-defined
         /// aggregate function.
         ///
@@ -57455,7 +56288,6 @@ pub mod rusqlite
             /// The passed context will have no arguments.
             fn finalize(&self, ctx: &mut Context<'_>, acc: Option<A>) -> Result<T>;
         }
-
         /// `WindowAggregate` is the callback interface for
         /// user-defined aggregate window function.
         #[cfg(feature = "window")]
@@ -57526,7 +56358,6 @@ pub mod rusqlite
                     .borrow_mut()
                     .create_scalar_function(fn_name, n_arg, flags, x_func)
             }
-
             /// Attach a user-defined aggregate function to this database connection.
             #[inline]
             pub fn create_aggregate_function<A, D, T>(
@@ -57545,7 +56376,6 @@ pub mod rusqlite
                     .borrow_mut()
                     .create_aggregate_function(fn_name, n_arg, flags, aggr)
             }
-
             /// Attach a user-defined aggregate window function to this database connection.
             #[cfg(feature = "window")]
             #[cfg_attr(docsrs, doc(cfg(feature = "window")))]
@@ -57566,7 +56396,6 @@ pub mod rusqlite
                     .borrow_mut()
                     .create_window_function(fn_name, n_arg, flags, aggr)
             }
-
             /// Removes a user-defined function from this database connection.
             #[inline]
             pub fn remove_function(&self, fn_name: &str, n_arg: c_int) -> Result<()> {
@@ -57880,9 +56709,7 @@ pub mod rusqlite
             sql_result(ctx, &[], t);
         }
     }
-
-    #[cfg(feature = "hooks")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "hooks")))]
+    
     pub mod hooks
     {
         //! Commit, Data Change and Rollback Notification Callbacks
@@ -57956,7 +56783,6 @@ pub mod rusqlite
                     }
                 }
             }
-
             /// An accessor to access the old values of the row being deleted/updated during the preupdate callback.
             #[derive(Debug)]
             pub struct PreUpdateOldValueAccessor {
@@ -57969,7 +56795,6 @@ pub mod rusqlite
                 pub fn get_column_count(&self) -> i32 {
                     unsafe { ffi::sqlite3_preupdate_count(self.db) }
                 }
-
                 /// Get the depth of the query that triggered the preupdate hook.
                 /// Returns 0 if the preupdate callback was invoked as a result of
                 /// a direct insert, update, or delete operation;
@@ -57978,12 +56803,10 @@ pub mod rusqlite
                 pub fn get_query_depth(&self) -> i32 {
                     unsafe { ffi::sqlite3_preupdate_depth(self.db) }
                 }
-
                 /// Get the row id of the row being updated/deleted.
                 pub fn get_old_row_id(&self) -> i64 {
                     self.old_row_id
                 }
-
                 /// Get the value of the row being updated/deleted at the specified index.
                 pub fn get_old_column_value(&self, i: i32) -> Result<ValueRef> {
                     let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
@@ -57993,7 +56816,6 @@ pub mod rusqlite
                     }
                 }
             }
-
             /// An accessor to access the new values of the row being inserted/updated
             /// during the preupdate callback.
             #[derive(Debug)]
@@ -58007,7 +56829,6 @@ pub mod rusqlite
                 pub fn get_column_count(&self) -> i32 {
                     unsafe { ffi::sqlite3_preupdate_count(self.db) }
                 }
-
                 /// Get the depth of the query that triggered the preupdate hook.
                 /// Returns 0 if the preupdate callback was invoked as a result of
                 /// a direct insert, update, or delete operation;
@@ -58016,12 +56837,10 @@ pub mod rusqlite
                 pub fn get_query_depth(&self) -> i32 {
                     unsafe { ffi::sqlite3_preupdate_depth(self.db) }
                 }
-
                 /// Get the row id of the row being inserted/updated.
                 pub fn get_new_row_id(&self) -> i64 {
                     self.new_row_id
                 }
-
                 /// Get the value of the row being updated/deleted at the specified index.
                 pub fn get_new_column_value(&self, i: i32) -> Result<ValueRef> {
                     let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
@@ -58043,8 +56862,7 @@ pub mod rusqlite
                 /// - a variant of the PreUpdateCase enum which allows access to extra functions depending
                 /// on whether it's an update, delete or insert.
                 #[inline]
-                pub fn preupdate_hook<F>(&self, hook: Option<F>)
-                where
+                pub fn preupdate_hook<F>(&self, hook: Option<F>)  where
                     F: FnMut(Action, &str, &str, &PreUpdateCase) + Send + 'static,
                 {
                     self.db.borrow_mut().preupdate_hook(hook);
@@ -58057,8 +56875,7 @@ pub mod rusqlite
                     self.preupdate_hook(None::<fn(Action, &str, &str, &PreUpdateCase)>);
                 }
                 
-                fn preupdate_hook<F>(&mut self, hook: Option<F>)
-                where
+                fn preupdate_hook<F>(&mut self, hook: Option<F>)  where
                     F: FnMut(Action, &str, &str, &PreUpdateCase) + Send + 'static,
                 {
                     unsafe extern "C" fn call_boxed_closure<F>(
@@ -58135,7 +56952,6 @@ pub mod rusqlite
                 }
             }
         }
-
         /// Action Codes
         #[derive(Clone, Copy, Debug, Eq, PartialEq)]
         #[repr(i32)]
@@ -58163,7 +56979,6 @@ pub mod rusqlite
                 }
             }
         }
-
         /// The context received by an authorizer hook.
         ///
         /// See <https://sqlite.org/c3ref/set_authorizer.html> for more info.
@@ -58179,7 +56994,6 @@ pub mod rusqlite
             /// `None` if the access attempt was made by top-level SQL code.
             pub accessor: Option<&'c str>,
         }
-
         /// Actions and arguments found within a statement during
         /// preparation.
         ///
@@ -58417,7 +57231,7 @@ pub mod rusqlite
             }
         }
 
-        pub(crate) type BoxedAuthorizer =
+        pub type BoxedAuthorizer =
             Box<dyn for<'c> FnMut(AuthContext<'c>) -> Authorization + Send + 'static>;
 
         /// A transaction operation.
@@ -58441,7 +57255,6 @@ pub mod rusqlite
                 }
             }
         }
-
         /// [`authorizer`](Connection::authorizer) return code
         #[derive(Clone, Copy, Debug, Eq, PartialEq)]
         #[non_exhaustive]
@@ -58476,7 +57289,6 @@ pub mod rusqlite
             {
                 self.db.borrow_mut().commit_hook(hook);
             }
-
             /// Register a callback function to be invoked whenever
             /// a transaction is committed.
             #[inline]
@@ -58486,7 +57298,6 @@ pub mod rusqlite
             {
                 self.db.borrow_mut().rollback_hook(hook);
             }
-
             /// Register a callback function to be invoked whenever
             /// a row is updated, inserted or deleted in a rowid table.
             ///
@@ -58504,7 +57315,6 @@ pub mod rusqlite
             {
                 self.db.borrow_mut().update_hook(hook);
             }
-
             /// Register a query progress callback.
             ///
             /// The parameter `num_ops` is the approximate number of virtual machine
@@ -58519,7 +57329,6 @@ pub mod rusqlite
             {
                 self.db.borrow_mut().progress_handler(num_ops, handler);
             }
-
             /// Register an authorizer callback that's invoked
             /// as a statement is being prepared.
             #[inline]
@@ -58590,8 +57399,7 @@ pub mod rusqlite
             where
                 F: FnMut() + Send + 'static,
             {
-                unsafe extern "C" fn call_boxed_closure<F>(p_arg: *mut c_void)
-                where
+                unsafe extern "C" fn call_boxed_closure<F>(p_arg: *mut c_void)  where
                     F: FnMut(),
                 {
                     drop(catch_unwind(|| {
@@ -59252,9 +58060,7 @@ pub mod rusqlite
             }
         }
     }
-
-    #[cfg(feature = "limits")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "limits")))]
+    
     pub mod limits
     {
         //! Run-Time Limits
@@ -59318,7 +58124,6 @@ pub mod rusqlite
                 let c = self.db.borrow();
                 unsafe { ffi::sqlite3_limit(c.db(), limit as c_int, -1) }
             }
-
             /// Changes the [`Limit`] to `new_val`, returning the prior
             /// value of the limit.
             #[inline]
@@ -59326,48 +58131,6 @@ pub mod rusqlite
             pub fn set_limit(&self, limit: Limit, new_val: i32) -> i32 {
                 let c = self.db.borrow_mut();
                 unsafe { ffi::sqlite3_limit(c.db(), limit as c_int, new_val) }
-            }
-        }
-    }
-
-    #[cfg(feature = "load_extension")]
-    mod load_extension_guard
-    {
-        use ::
-        {
-            *,
-        };
-        use crate::{Connection, Result};
-
-        /// RAII guard temporarily enabling SQLite extensions to be loaded.
-        #[cfg_attr(docsrs, doc(cfg(feature = "load_extension")))]
-        pub struct LoadExtensionGuard<'conn> {
-            conn: &'conn Connection,
-        }
-
-        impl LoadExtensionGuard<'_> {
-            /// Attempt to enable loading extensions. Loading extensions will be
-            /// disabled when this guard goes out of scope. Cannot be meaningfully
-            /// nested.
-            ///
-            /// # Safety
-            ///
-            /// You must not run untrusted queries while extension loading is enabled.
-            ///
-            /// See the safety comment on [`Connection::load_extension_enable`] for more
-            /// details.
-            #[inline]
-            pub unsafe fn new(conn: &Connection) -> Result<LoadExtensionGuard<'_>> {
-                conn.load_extension_enable()
-                    .map(|_| LoadExtensionGuard { conn })
-            }
-        }
-
-        #[allow(unused_must_use)]
-        impl Drop for LoadExtensionGuard<'_> {
-            #[inline]
-            fn drop(&mut self) {
-                self.conn.load_extension_disable();
             }
         }
     }
@@ -59732,7 +58495,6 @@ pub mod rusqlite
                 query.push_pragma(schema_name, pragma_name)?;
                 self.query_row(&query, [], f)
             }
-
             /// Query the current rows/values of `pragma_name`.
             ///
             /// Prefer [PRAGMA function](https://sqlite.org/pragma.html#pragfunc) introduced in SQLite 3.20:
@@ -59756,7 +58518,6 @@ pub mod rusqlite
                 }
                 Ok(())
             }
-
             /// Query the current value(s) of `pragma_name` associated to
             /// `pragma_value`.
             ///
@@ -59793,7 +58554,6 @@ pub mod rusqlite
                 }
                 Ok(())
             }
-
             /// Set a new value to `pragma_name`.
             ///
             /// Some pragmas will return the updated value which cannot be retrieved
@@ -59816,7 +58576,6 @@ pub mod rusqlite
                 sql.push_value(&pragma_value)?;
                 self.execute_batch(&sql)
             }
-
             /// Set a new value to `pragma_name` and return the updated value.
             ///
             /// Only few pragmas automatically return the updated value.
@@ -59922,12 +58681,12 @@ pub mod rusqlite
             }
 
             #[inline]
-            pub(crate) fn set_statement_cache_key(&mut self, p: impl Into<Arc<str>>) {
+            pub fn set_statement_cache_key(&mut self, p: impl Into<Arc<str>>) {
                 self.statement_cache_key = Some(p.into());
             }
 
             #[inline]
-            pub(crate) fn statement_cache_key(&self) -> Option<Arc<str>> {
+            pub fn statement_cache_key(&self) -> Option<Arc<str>> {
                 self.statement_cache_key.clone()
             }
 
@@ -60081,7 +58840,7 @@ pub mod rusqlite
             }
 
             #[inline]
-            pub(crate) fn expanded_sql(&self) -> Option<SqliteMallocString> {
+            pub fn expanded_sql(&self) -> Option<SqliteMallocString> {
                 unsafe { SqliteMallocString::from_raw(ffi::sqlite3_expanded_sql(self.ptr)) }
             }
 
@@ -60134,7 +58893,7 @@ pub mod rusqlite
         /// A handle for the resulting rows of a query.
         #[must_use = "Rows is lazy and will do nothing unless consumed"]
         pub struct Rows<'stmt> {
-            pub(crate) stmt: Option<&'stmt Statement<'stmt>>,
+            pub stmt: Option<&'stmt Statement<'stmt>>,
             row: Option<Row<'stmt>>,
         }
 
@@ -60147,7 +58906,6 @@ pub mod rusqlite
                     Ok(())
                 }
             }
-
             /// Attempt to get the next row from the query. Returns `Ok(Some(Row))` if
             /// there is another row, `Err(...)` if there was an error
             /// getting the next row, and `Ok(None)` if all rows have been retrieved.
@@ -60156,7 +58914,6 @@ pub mod rusqlite
                 self.advance()?;
                 Ok((*self).get())
             }
-
             /// Map over this `Rows`, converting it to a [`Map`], which implements `FallibleIterator`.
             #[inline]
             pub fn map<F, B>(self, f: F) -> Map<'stmt, F>
@@ -60165,7 +58922,6 @@ pub mod rusqlite
             {
                 Map { rows: self, f }
             }
-
             /// Map over this `Rows`, converting it to a [`MappedRows`], which implements `Iterator`.
             #[inline]
             pub fn mapped<F, B>(self, f: F) -> MappedRows<'stmt, F>
@@ -60174,7 +58930,6 @@ pub mod rusqlite
             {
                 MappedRows { rows: self, map: f }
             }
-
             /// Map over this `Rows` with a fallible function, converting it to a
             /// [`AndThenRows`], which implements `Iterator` (instead of
             /// `FallibleStreamingIterator`).
@@ -60185,7 +58940,6 @@ pub mod rusqlite
             {
                 AndThenRows { rows: self, map: f }
             }
-
             /// Give access to the underlying statement
             #[must_use]
             pub fn as_ref(&self) -> Option<&Statement<'stmt>> {
@@ -60195,7 +58949,7 @@ pub mod rusqlite
 
         impl<'stmt> Rows<'stmt> {
             #[inline]
-            pub(crate) fn new(stmt: &'stmt Statement<'stmt>) -> Rows<'stmt> {
+            pub fn new(stmt: &'stmt Statement<'stmt>) -> Rows<'stmt> {
                 Rows {
                     stmt: Some(stmt),
                     row: None,
@@ -60203,7 +58957,7 @@ pub mod rusqlite
             }
 
             #[inline]
-            pub(crate) fn get_expected_row(&mut self) -> Result<&Row<'stmt>> {
+            pub fn get_expected_row(&mut self) -> Result<&Row<'stmt>> {
                 match self.next()? {
                     Some(row) => Ok(row),
                     None => Err(Error::QueryReturnedNoRows),
@@ -60218,7 +58972,6 @@ pub mod rusqlite
                 self.reset();
             }
         }
-
         /// `F` is used to transform the _streaming_ iterator into a _fallible_iterator.
         #[must_use = "iterators are lazy and do nothing unless consumed"]
         pub struct Map<'stmt, F> {
@@ -60241,7 +58994,6 @@ pub mod rusqlite
                 }
             }
         }
-
         /// An iterator over the mapped resulting rows of a query.
         #[must_use = "iterators are lazy and do nothing unless consumed"]
         pub struct MappedRows<'stmt, F> {
@@ -60264,7 +59016,6 @@ pub mod rusqlite
                     .map(|row_result| row_result.and_then(map))
             }
         }
-
         /// An iterator over the mapped resulting rows of a query, with an Error type unifying with Error.
         #[must_use = "iterators are lazy and do nothing unless consumed"]
         pub struct AndThenRows<'stmt, F> {
@@ -60288,7 +59039,6 @@ pub mod rusqlite
                     .map(|row_result| row_result.map_err(E::from).and_then(map))
             }
         }
-
         /// `FallibleStreamingIterator` differs from the standard library's `Iterator`
         /// in two ways:
         /// * each call to `next` (`sqlite3_step`) can fail.
@@ -60328,10 +59078,9 @@ pub mod rusqlite
                 self.row.as_ref()
             }
         }
-
         /// A single result row of a query.
         pub struct Row<'stmt> {
-            pub(crate) stmt: &'stmt Statement<'stmt>,
+            pub stmt: &'stmt Statement<'stmt>,
         }
 
         impl<'stmt> Row<'stmt> {
@@ -60351,7 +59100,6 @@ pub mod rusqlite
             pub fn get_unwrap<I: RowIndex, T: FromSql>(&self, idx: I) -> T {
                 self.get(idx).unwrap()
             }
-
             /// Get the value of a particular column of the result row.
             ///
             /// ## Failure
@@ -60387,7 +59135,6 @@ pub mod rusqlite
                     }
                 })
             }
-
             /// Get the value of a particular column of the result row as a `ValueRef`,
             /// allowing data to be read out of a row without copying.
             ///
@@ -60411,7 +59158,6 @@ pub mod rusqlite
                 let val_ref = self.stmt.value_ref(idx);
                 Ok(val_ref)
             }
-
             /// Get the value of a particular column of the result row as a `ValueRef`,
             /// allowing data to be read out of a row without copying.
             ///
@@ -60438,7 +59184,6 @@ pub mod rusqlite
                 self.stmt
             }
         }
-
         /// Debug `Row` like an ordered `Map<Result<&str>, Result<(Type, ValueRef)>>`
         /// with column name as key except that for `Type::Blob` only its size is
         /// printed (not its content).
@@ -60486,7 +59231,6 @@ pub mod rusqlite
             impl Sealed for usize {}
             impl Sealed for &str {}
         }
-
         /// A trait implemented by types that can index into columns of a row.
         pub trait RowIndex: sealed::Sealed {
             /// Returns the index of the appropriate column, or `None` if no such
@@ -60547,9 +59291,7 @@ pub mod rusqlite
         tuples_try_from_row!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P);
 
     }
-
-    #[cfg(feature = "serialize")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "serialize")))]
+    
     pub mod serialize
     {
         //! Serialize a database.
@@ -60572,7 +59314,6 @@ pub mod rusqlite
             ptr: NonNull<u8>,
             sz: usize,
         }
-
         /// Owned serialized database
         pub struct OwnedData {
             ptr: NonNull<u8>,
@@ -60601,7 +59342,6 @@ pub mod rusqlite
                 }
             }
         }
-
         /// Serialized database
         pub enum Data<'conn> {
             /// Shared (SQLITE_SERIALIZE_NOCOPY) serialized database
@@ -60653,7 +59393,6 @@ pub mod rusqlite
                     })
                 })
             }
-
             /// Deserialize a database.
             pub fn deserialize(
                 &mut self,
@@ -60691,8 +59430,7 @@ pub mod rusqlite
             }
         }
     }
-    #[cfg(feature = "session")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "session")))]
+    
     pub mod session
     {
         //! [Session Extension](https://sqlite.org/sessionintro.html)
@@ -60737,7 +59475,6 @@ pub mod rusqlite
             pub fn new(db: &Connection) -> Result<Session<'_>> {
                 Session::new_with_name(db, DatabaseName::Main)
             }
-
             /// Create a new session object
             #[inline]
             pub fn new_with_name<'conn>(
@@ -60757,7 +59494,6 @@ pub mod rusqlite
                     filter: None,
                 })
             }
-
             /// Set a table filter
             pub fn table_filter<F>(&mut self, filter: Option<F>)
             where
@@ -60798,7 +59534,6 @@ pub mod rusqlite
                     }
                 };
             }
-
             /// Attach a table. `None` means all tables.
             pub fn attach(&mut self, table: Option<&str>) -> Result<()> {
                 let table = if let Some(table) = table {
@@ -60809,7 +59544,6 @@ pub mod rusqlite
                 let table = table.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
                 check(unsafe { ffi::sqlite3session_attach(self.s, table) })
             }
-
             /// Generate a Changeset
             pub fn changeset(&mut self) -> Result<Changeset> {
                 let mut n = 0;
@@ -60817,7 +59551,6 @@ pub mod rusqlite
                 check(unsafe { ffi::sqlite3session_changeset(self.s, &mut n, &mut cs) })?;
                 Ok(Changeset { cs, n })
             }
-
             /// Write the set of changes represented by this session to `output`.
             #[inline]
             pub fn changeset_strm(&mut self, output: &mut dyn Write) -> Result<()> {
@@ -60830,7 +59563,6 @@ pub mod rusqlite
                     )
                 })
             }
-
             /// Generate a Patchset
             #[inline]
             pub fn patchset(&mut self) -> Result<Changeset> {
@@ -60840,7 +59572,6 @@ pub mod rusqlite
                 // TODO Validate: same struct
                 Ok(Changeset { cs: ps, n })
             }
-
             /// Write the set of patches represented by this session to `output`.
             #[inline]
             pub fn patchset_strm(&mut self, output: &mut dyn Write) -> Result<()> {
@@ -60853,7 +59584,6 @@ pub mod rusqlite
                     )
                 })
             }
-
             /// Load the difference between tables.
             pub fn diff(&mut self, from: DatabaseName<'_>, table: &str) -> Result<()> {
                 let from = from.as_cstring()?;
@@ -60872,19 +59602,16 @@ pub mod rusqlite
                 }
                 Ok(())
             }
-
             /// Test if a changeset has recorded any changes
             #[inline]
             pub fn is_empty(&self) -> bool {
                 unsafe { ffi::sqlite3session_isempty(self.s) != 0 }
             }
-
             /// Query the current state of the session
             #[inline]
             pub fn is_enabled(&self) -> bool {
                 unsafe { ffi::sqlite3session_enable(self.s, -1) != 0 }
             }
-
             /// Enable or disable the recording of changes
             #[inline]
             pub fn set_enabled(&mut self, enabled: bool) {
@@ -60892,13 +59619,11 @@ pub mod rusqlite
                     ffi::sqlite3session_enable(self.s, c_int::from(enabled));
                 }
             }
-
             /// Query the current state of the indirect flag
             #[inline]
             pub fn is_indirect(&self) -> bool {
                 unsafe { ffi::sqlite3session_indirect(self.s, -1) != 0 }
             }
-
             /// Set or clear the indirect change flag
             #[inline]
             pub fn set_indirect(&mut self, indirect: bool) {
@@ -60917,7 +59642,6 @@ pub mod rusqlite
                 unsafe { ffi::sqlite3session_delete(self.s) };
             }
         }
-
         /// Invert a changeset
         #[inline]
         pub fn invert_strm(input: &mut dyn Read, output: &mut dyn Write) -> Result<()> {
@@ -60932,7 +59656,6 @@ pub mod rusqlite
                 )
             })
         }
-
         /// Combine two changesets
         #[inline]
         pub fn concat_strm(
@@ -60954,7 +59677,6 @@ pub mod rusqlite
                 )
             })
         }
-
         /// Changeset or Patchset
         pub struct Changeset {
             cs: *mut c_void,
@@ -60972,7 +59694,6 @@ pub mod rusqlite
                 })?;
                 Ok(Changeset { cs, n })
             }
-
             /// Create an iterator to traverse a changeset
             #[inline]
             pub fn iter(&self) -> Result<ChangesetIter<'_>> {
@@ -60984,7 +59705,6 @@ pub mod rusqlite
                     item: None,
                 })
             }
-
             /// Concatenate two changeset objects
             #[inline]
             pub fn concat(a: &Changeset, b: &Changeset) -> Result<Changeset> {
@@ -61005,7 +59725,6 @@ pub mod rusqlite
                 }
             }
         }
-
         /// Cursor for iterating over the elements of a changeset
         /// or patchset.
         pub struct ChangesetIter<'changeset> {
@@ -61059,7 +59778,6 @@ pub mod rusqlite
                 self.item.as_ref()
             }
         }
-
         /// Operation
         pub struct Operation<'item> {
             table_name: &'item str,
@@ -61074,19 +59792,16 @@ pub mod rusqlite
             pub fn table_name(&self) -> &str {
                 self.table_name
             }
-
             /// Returns the number of columns in table
             #[inline]
             pub fn number_of_columns(&self) -> i32 {
                 self.number_of_columns
             }
-
             /// Returns the action code.
             #[inline]
             pub fn code(&self) -> Action {
                 self.code
             }
-
             /// Returns `true` for an 'indirect' change.
             #[inline]
             pub fn indirect(&self) -> bool {
@@ -61102,7 +59817,6 @@ pub mod rusqlite
                 }
             }
         }
-
         /// An item passed to a conflict-handler by
         /// [`Connection::apply`](Connection::apply), or an item generated by
         /// [`ChangesetIter::next`](ChangesetIter::next).
@@ -61132,7 +59846,6 @@ pub mod rusqlite
                     }
                 }
             }
-
             /// Determine the number of foreign key constraint violations
             ///
             /// May only be called with an `SQLITE_CHANGESET_FOREIGN_KEY` conflict
@@ -61145,7 +59858,6 @@ pub mod rusqlite
                     Ok(p_out)
                 }
             }
-
             /// Obtain new.* Values
             ///
             /// May only be called if the type of change is either `SQLITE_UPDATE` or
@@ -61162,7 +59874,6 @@ pub mod rusqlite
                     }
                 }
             }
-
             /// Obtain old.* Values
             ///
             /// May only be called if the type of change is either `SQLITE_DELETE` or
@@ -61179,7 +59890,6 @@ pub mod rusqlite
                     }
                 }
             }
-
             /// Obtain the current operation
             #[inline]
             pub fn op(&self) -> Result<Operation<'_>> {
@@ -61205,7 +59915,6 @@ pub mod rusqlite
                     indirect: indirect != 0,
                 })
             }
-
             /// Obtain the primary key definition of a table
             #[inline]
             pub fn pk(&self) -> Result<&[u8]> {
@@ -61221,7 +59930,6 @@ pub mod rusqlite
                 }
             }
         }
-
         /// Used to combine two or more changesets or
         /// patchsets
         pub struct Changegroup {
@@ -61236,13 +59944,11 @@ pub mod rusqlite
                 check(unsafe { ffi::sqlite3changegroup_new(&mut cg) })?;
                 Ok(Changegroup { cg })
             }
-
             /// Add a changeset
             #[inline]
             pub fn add(&mut self, cs: &Changeset) -> Result<()> {
                 check(unsafe { ffi::sqlite3changegroup_add(self.cg, cs.n, cs.cs) })
             }
-
             /// Add a changeset read from `input` to this change group.
             #[inline]
             pub fn add_stream(&mut self, input: &mut dyn Read) -> Result<()> {
@@ -61255,7 +59961,6 @@ pub mod rusqlite
                     )
                 })
             }
-
             /// Obtain a composite Changeset
             #[inline]
             pub fn output(&mut self) -> Result<Changeset> {
@@ -61264,7 +59969,6 @@ pub mod rusqlite
                 check(unsafe { ffi::sqlite3changegroup_output(self.cg, &mut n, &mut output) })?;
                 Ok(Changeset { cs: output, n })
             }
-
             /// Write the combined set of changes to `output`.
             #[inline]
             pub fn output_strm(&mut self, output: &mut dyn Write) -> Result<()> {
@@ -61321,7 +60025,6 @@ pub mod rusqlite
                     }
                 })
             }
-
             /// Apply a changeset to a database
             pub fn apply_strm<F, C>(
                 &self,
@@ -61361,7 +60064,6 @@ pub mod rusqlite
                 })
             }
         }
-
         /// Constants passed to the conflict handler
         /// See [here](https://sqlite.org/session.html#SQLITE_CHANGESET_CONFLICT) for details.
         #[allow(missing_docs)]
@@ -61389,7 +60091,6 @@ pub mod rusqlite
                 }
             }
         }
-
         /// Constants returned by the conflict handler
         /// See [here](https://sqlite.org/session.html#SQLITE_CHANGESET_ABORT) for details.
         #[allow(missing_docs)]
@@ -61498,7 +60199,7 @@ pub mod rusqlite
         /// A prepared statement.
         pub struct Statement<'conn> {
             conn: &'conn Connection,
-            pub(crate) stmt: RawStatement,
+            pub stmt: RawStatement,
         }
 
         impl Statement<'_> {
@@ -61508,7 +60209,6 @@ pub mod rusqlite
                 params.__bind_in(self)?;
                 self.execute_with_bound_parameters()
             }
-
             /// Execute an INSERT and return the ROWID.
             #[inline]
             pub fn insert<P: Params>(&mut self, params: P) -> Result<i64> {
@@ -61518,14 +60218,12 @@ pub mod rusqlite
                     _ => Err(Error::StatementChangedRows(changes)),
                 }
             }
-
             /// Execute the prepared statement, returning a handle to the resulting rows.
             #[inline]
             pub fn query<P: Params>(&mut self, params: P) -> Result<Rows<'_>> {
                 params.__bind_in(self)?;
                 Ok(Rows::new(self))
             }
-
             /// Executes the prepared statement and maps a function over the resulting
             /// rows, returning an iterator over the mapped function results.
             pub fn query_map<T, P, F>(&mut self, params: P, f: F) -> Result<MappedRows<'_, F>>
@@ -61535,7 +60233,6 @@ pub mod rusqlite
             {
                 self.query(params).map(|rows| rows.mapped(f))
             }
-
             /// Executes the prepared statement and maps a function over the resulting
             /// rows, where the function returns a `Result` with `Error` type
             /// implementing `std::convert::From<Error>` (so errors can be unified).
@@ -61548,7 +60245,6 @@ pub mod rusqlite
             {
                 self.query(params).map(|rows| rows.and_then(f))
             }
-
             /// Return `true` if a query in the SQL statement it executes returns one
             /// or more rows and `false` if the SQL returns an empty set.
             #[inline]
@@ -61557,7 +60253,6 @@ pub mod rusqlite
                 let exists = rows.next()?.is_some();
                 Ok(exists)
             }
-
             /// Convenience method to execute a query that is expected to return a single row.
             pub fn query_row<T, P, F>(&mut self, params: P, f: F) -> Result<T>
             where
@@ -61568,19 +60263,16 @@ pub mod rusqlite
 
                 rows.get_expected_row().and_then(f)
             }
-
             /// Consumes the statement.
             #[inline]
             pub fn finalize(mut self) -> Result<()> {
                 self.finalize_()
             }
-
             /// Return the (one-based) index of an SQL parameter given its name.
             #[inline]
             pub fn parameter_index(&self, name: &str) -> Result<Option<usize>> {
                 Ok(self.stmt.bind_parameter_index(name))
             }
-
             /// Return the SQL parameter name given its (one-based) index (the inverse
             /// of [`Statement::parameter_index`]).
             #[inline]
@@ -61592,7 +60284,7 @@ pub mod rusqlite
             }
 
             #[inline]
-            pub(crate) fn bind_parameters<P>(&mut self, params: P) -> Result<()>
+            pub fn bind_parameters<P>(&mut self, params: P) -> Result<()>
             where
                 P: IntoIterator,
                 P::Item: ToSql,
@@ -61614,7 +60306,7 @@ pub mod rusqlite
             }
 
             #[inline]
-            pub(crate) fn ensure_parameter_count(&self, n: usize) -> Result<()> {
+            pub fn ensure_parameter_count(&self, n: usize) -> Result<()> {
                 let count = self.parameter_count();
                 if count != n {
                     Err(Error::InvalidParameterCount(n, count))
@@ -61624,7 +60316,7 @@ pub mod rusqlite
             }
 
             #[inline]
-            pub(crate) fn bind_parameters_named<T: ?Sized + ToSql>(
+            pub fn bind_parameters_named<T: ?Sized + ToSql>(
                 &mut self,
                 params: &[(&str, &T)],
             ) -> Result<()> {
@@ -61638,13 +60330,11 @@ pub mod rusqlite
                 }
                 Ok(())
             }
-
             /// Return the number of parameters that can be bound to this statement.
             #[inline]
             pub fn parameter_count(&self) -> usize {
                 self.stmt.bind_parameter_count()
             }
-
             /// Low level API to directly bind a parameter to a given index.
             #[inline]
             pub fn raw_bind_parameter<T: ToSql>(
@@ -61656,14 +60346,12 @@ pub mod rusqlite
                 // correctly takes `&mut self`.
                 self.bind_parameter(&param, one_based_col_index)
             }
-
             /// Low level API to execute a statement given that all parameters were
             /// bound explicitly with the [`Statement::raw_bind_parameter`] API.
             #[inline]
             pub fn raw_execute(&mut self) -> Result<usize> {
                 self.execute_with_bound_parameters()
             }
-
             /// Low level API to get `Rows` for this query given that all parameters
             /// were bound explicitly with the [`Statement::raw_bind_parameter`] API.
             #[inline]
@@ -61772,7 +60460,6 @@ pub mod rusqlite
             fn check_update(&self) -> Result<()> {
                 Ok(())
             }
-
             /// Returns a string containing the SQL text of prepared statement with
             /// bound parameters expanded.
             pub fn expanded_sql(&self) -> Option<String> {
@@ -61780,20 +60467,17 @@ pub mod rusqlite
                     .expanded_sql()
                     .map(|s| s.to_string_lossy().to_string())
             }
-
             /// Get the value for one of the status counters for this statement.
             #[inline]
             pub fn get_status(&self, status: StatementStatus) -> i32 {
                 self.stmt.get_status(status, false)
             }
-
             /// Reset the value of one of the status counters for this statement,
             #[inline]
             /// returning the value it had before resetting.
             pub fn reset_status(&self, status: StatementStatus) -> i32 {
                 self.stmt.get_status(status, true)
             }
-
             /// Returns 1 if the prepared statement is an EXPLAIN statement,
             /// or 2 if the statement is an EXPLAIN QUERY PLAN,
             /// or 0 if it is an ordinary statement or a NULL pointer.
@@ -61803,7 +60487,6 @@ pub mod rusqlite
             pub fn is_explain(&self) -> i32 {
                 self.stmt.is_explain()
             }
-
             /// Returns true if the statement is read only.
             #[inline]
             pub fn readonly(&self) -> bool {
@@ -61812,7 +60495,7 @@ pub mod rusqlite
 
             #[cfg(feature = "extra_check")]
             #[inline]
-            pub(crate) fn check_no_tail(&self) -> Result<()> {
+            pub fn check_no_tail(&self) -> Result<()> {
                 if self.stmt.has_tail() {
                     Err(Error::MultipleStatement)
                 } else {
@@ -61823,20 +60506,18 @@ pub mod rusqlite
             #[cfg(not(feature = "extra_check"))]
             #[inline]
             #[allow(clippy::unnecessary_wraps)]
-            pub(crate) fn check_no_tail(&self) -> Result<()> {
+            pub fn check_no_tail(&self) -> Result<()> {
                 Ok(())
             }
-
             /// Safety: This is unsafe, because using `sqlite3_stmt` after the
             /// connection has closed is illegal, but `RawStatement` does not enforce
             /// this, as it loses our protective `'conn` lifetime bound.
             #[inline]
-            pub(crate) unsafe fn into_raw(mut self) -> RawStatement {
+            pub unsafe fn into_raw(mut self) -> RawStatement {
                 let mut stmt = RawStatement::new(ptr::null_mut(), 0);
                 mem::swap(&mut stmt, &mut self.stmt);
                 stmt
             }
-
             /// Reset all bindings
             pub fn clear_bindings(&mut self) {
                 self.stmt.clear_bindings();
@@ -61945,7 +60626,6 @@ pub mod rusqlite
                 }
             }
         }
-
         /// Prepared statement status counters.
         ///
         /// See `https://www.sqlite.org/c3ref/c_stmtstatus_counter.html`
@@ -61977,9 +60657,7 @@ pub mod rusqlite
             MemUsed = 99,
         }
     }
-
-    #[cfg(feature = "trace")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "trace")))]
+    
     pub mod trace
     {
         //! Tracing and profiling functions. Error and warning log.
@@ -62039,7 +60717,6 @@ pub mod rusqlite
                 Err(crate::error::error_from_sqlite_code(rc, None))
             }
         }
-
         /// Write a message into the error log established by
         /// `config_log`.
         #[inline]
@@ -62074,7 +60751,6 @@ pub mod rusqlite
                     },
                 }
             }
-
             /// Register or clear a callback function that can be
             /// used for profiling the execution of SQL statements.
             ///
@@ -62134,7 +60810,6 @@ pub mod rusqlite
             /// while the transaction is underway.
             Exclusive,
         }
-
         /// Options for how a Transaction or Savepoint should behave when it is dropped.
         #[derive(Copy, Clone, Debug, PartialEq, Eq)]
         #[non_exhaustive]
@@ -62152,14 +60827,12 @@ pub mod rusqlite
             /// Panic. Used to enforce intentional behavior during development.
             Panic,
         }
-
         /// Represents a transaction on a database connection.
         #[derive(Debug)]
         pub struct Transaction<'conn> {
             conn: &'conn Connection,
             drop_behavior: DropBehavior,
         }
-
         /// Represents a savepoint on a database connection.
         #[derive(Debug)]
         pub struct Savepoint<'conn> {
@@ -62180,7 +60853,6 @@ pub mod rusqlite
             pub fn new(conn: &mut Connection, behavior: TransactionBehavior) -> Result<Transaction<'_>> {
                 Self::new_unchecked(conn, behavior)
             }
-
             /// Begin a new transaction, failing if a transaction is open.
             ///
             /// If a transaction is already open, this will return an error. Where
@@ -62201,19 +60873,16 @@ pub mod rusqlite
                     drop_behavior: DropBehavior::Rollback,
                 })
             }
-
             /// Starts a new [savepoint](http://www.sqlite.org/lang_savepoint.html), allowing nested transactions.
             #[inline]
             pub fn savepoint(&mut self) -> Result<Savepoint<'_>> {
                 Savepoint::new_(self.conn)
             }
-
             /// Create a new savepoint with a custom savepoint name. See `savepoint()`.
             #[inline]
             pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint<'_>> {
                 Savepoint::with_name_(self.conn, name)
             }
-
             /// Get the current setting for what happens to the transaction when it is
             /// dropped.
             #[inline]
@@ -62221,14 +60890,12 @@ pub mod rusqlite
             pub fn drop_behavior(&self) -> DropBehavior {
                 self.drop_behavior
             }
-
             /// Configure the transaction to perform the specified action when it is
             /// dropped.
             #[inline]
             pub fn set_drop_behavior(&mut self, drop_behavior: DropBehavior) {
                 self.drop_behavior = drop_behavior;
             }
-
             /// A convenience method which consumes and commits a transaction.
             #[inline]
             pub fn commit(mut self) -> Result<()> {
@@ -62240,7 +60907,6 @@ pub mod rusqlite
                 self.conn.execute_batch("COMMIT")?;
                 Ok(())
             }
-
             /// A convenience method which consumes and rolls back a transaction.
             #[inline]
             pub fn rollback(mut self) -> Result<()> {
@@ -62252,7 +60918,6 @@ pub mod rusqlite
                 self.conn.execute_batch("ROLLBACK")?;
                 Ok(())
             }
-
             /// Consumes the transaction, committing or rolling back according to the
             /// current setting (see `drop_behavior`).
             ///
@@ -62311,31 +60976,26 @@ pub mod rusqlite
             fn new_(conn: &Connection) -> Result<Savepoint<'_>> {
                 Savepoint::with_name_(conn, "_rusqlite_sp")
             }
-
             /// Begin a new savepoint. Can be nested.
             #[inline]
             pub fn new(conn: &mut Connection) -> Result<Savepoint<'_>> {
                 Savepoint::new_(conn)
             }
-
             /// Begin a new savepoint with a user-provided savepoint name.
             #[inline]
             pub fn with_name<T: Into<String>>(conn: &mut Connection, name: T) -> Result<Savepoint<'_>> {
                 Savepoint::with_name_(conn, name)
             }
-
             /// Begin a nested savepoint.
             #[inline]
             pub fn savepoint(&mut self) -> Result<Savepoint<'_>> {
                 Savepoint::new_(self.conn)
             }
-
             /// Begin a nested savepoint with a user-provided savepoint name.
             #[inline]
             pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint<'_>> {
                 Savepoint::with_name_(self.conn, name)
             }
-
             /// Get the current setting for what happens to the savepoint when it is
             /// dropped.
             #[inline]
@@ -62343,14 +61003,12 @@ pub mod rusqlite
             pub fn drop_behavior(&self) -> DropBehavior {
                 self.drop_behavior
             }
-
             /// Configure the savepoint to perform the specified action when it is
             /// dropped.
             #[inline]
             pub fn set_drop_behavior(&mut self, drop_behavior: DropBehavior) {
                 self.drop_behavior = drop_behavior;
             }
-
             /// A convenience method which consumes and commits a savepoint.
             #[inline]
             pub fn commit(mut self) -> Result<()> {
@@ -62363,7 +61021,6 @@ pub mod rusqlite
                 self.committed = true;
                 Ok(())
             }
-
             /// A convenience method which rolls back a savepoint.
             ///
             /// ## Note
@@ -62375,7 +61032,6 @@ pub mod rusqlite
                 self.conn
                     .execute_batch(&format!("ROLLBACK TO {}", self.name))
             }
-
             /// Consumes the savepoint, committing or rolling back according to the
             /// current setting (see `drop_behavior`).
             ///
@@ -62418,7 +61074,6 @@ pub mod rusqlite
                 self.finish_();
             }
         }
-
         /// Transaction state of a database
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         #[non_exhaustive]
@@ -62439,7 +61094,6 @@ pub mod rusqlite
             pub fn transaction(&mut self) -> Result<Transaction<'_>> {
                 Transaction::new(self, self.transaction_behavior)
             }
-
             /// Begin a new transaction with a specified behavior.
             #[inline]
             pub fn transaction_with_behavior(
@@ -62448,24 +61102,20 @@ pub mod rusqlite
             ) -> Result<Transaction<'_>> {
                 Transaction::new(self, behavior)
             }
-
             /// Begin a new transaction with the default behavior (DEFERRED).
             pub fn unchecked_transaction(&self) -> Result<Transaction<'_>> {
                 Transaction::new_unchecked(self, self.transaction_behavior)
             }
-
             /// Begin a new savepoint with the default behavior (DEFERRED).
             #[inline]
             pub fn savepoint(&mut self) -> Result<Savepoint<'_>> {
                 Savepoint::new(self)
             }
-
             /// Begin a new savepoint with a specified name.
             #[inline]
             pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint<'_>> {
                 Savepoint::with_name(self, name)
             }
-
             /// Determine the transaction state of a database
             #[cfg(feature = "modern_sqlite")] // 3.37.0
             #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
@@ -62475,7 +61125,6 @@ pub mod rusqlite
             ) -> Result<TransactionState> {
                 self.db.borrow().txn_state(db_name)
             }
-
             /// Set the default transaction behavior for the connection.
             pub fn set_transaction_behavior(&mut self, behavior: TransactionBehavior) {
                 self.transaction_behavior = behavior;
@@ -62490,16 +61139,14 @@ pub mod rusqlite
         {
             *,
         };
-        
+        /*
         pub use self::from_sql::{FromSql, FromSqlError, FromSqlResult};
         pub use self::to_sql::{ToSql, ToSqlOutput};
         pub use self::value::Value;
         pub use self::value_ref::ValueRef;
 
         use std::fmt;
-
-        #[cfg(feature = "chrono")]
-        #[cfg_attr(docsrs, doc(cfg(feature = "chrono")))]
+        */
         pub mod chrono
         {
             //! Convert most of the [Time Strings](http://sqlite.org/lang_datefunc.html) to chrono types.
@@ -62507,24 +61154,24 @@ pub mod rusqlite
             {
                 *,
             };
-            
-
+            /*
             use chrono::{DateTime, FixedOffset, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 
             use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
             use crate::Result;
-
+            */
             /// ISO 8601 calendar date without timezone => "YYYY-MM-DD"
-            impl ToSql for NaiveDate {
+            impl ToSql for NaiveDate 
+            {
                 #[inline]
                 fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
                     let date_str = self.format("%F").to_string();
                     Ok(ToSqlOutput::from(date_str))
                 }
             }
-
             /// "YYYY-MM-DD" => ISO 8601 calendar date without timezone.
-            impl FromSql for NaiveDate {
+            impl FromSql for NaiveDate 
+            {
                 #[inline]
                 fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
                     value
@@ -62535,18 +61182,18 @@ pub mod rusqlite
                         })
                 }
             }
-
             /// ISO 8601 time without timezone => "HH:MM:SS.SSS"
-            impl ToSql for NaiveTime {
+            impl ToSql for NaiveTime 
+            {
                 #[inline]
                 fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
                     let date_str = self.format("%T%.f").to_string();
                     Ok(ToSqlOutput::from(date_str))
                 }
             }
-
             /// "HH:MM"/"HH:MM:SS"/"HH:MM:SS.SSS" => ISO 8601 time without timezone.
-            impl FromSql for NaiveTime {
+            impl FromSql for NaiveTime 
+            {
                 fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
                     value.as_str().and_then(|s| {
                         let fmt = match s.len() {
@@ -62561,21 +61208,21 @@ pub mod rusqlite
                     })
                 }
             }
-
             /// ISO 8601 combined date and time without timezone =>
             /// "YYYY-MM-DD HH:MM:SS.SSS"
-            impl ToSql for NaiveDateTime {
+            impl ToSql for NaiveDateTime 
+            {
                 #[inline]
                 fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
                     let date_str = self.format("%F %T%.f").to_string();
                     Ok(ToSqlOutput::from(date_str))
                 }
             }
-
             /// "YYYY-MM-DD HH:MM:SS"/"YYYY-MM-DD HH:MM:SS.SSS" => ISO 8601 combined date
             /// and time without timezone. ("YYYY-MM-DDTHH:MM:SS"/"YYYY-MM-DDTHH:MM:SS.SSS"
             /// also supported)
-            impl FromSql for NaiveDateTime {
+            impl FromSql for NaiveDateTime 
+            {
                 fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
                     value.as_str().and_then(|s| {
                         let fmt = if s.len() >= 11 && s.as_bytes()[10] == b'T' {
@@ -62591,39 +61238,39 @@ pub mod rusqlite
                     })
                 }
             }
-
             /// UTC time => UTC RFC3339 timestamp
             /// ("YYYY-MM-DD HH:MM:SS.SSS+00:00").
-            impl ToSql for DateTime<Utc> {
+            impl ToSql for DateTime<Utc> 
+            {
                 #[inline]
                 fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
                     let date_str = self.format("%F %T%.f%:z").to_string();
                     Ok(ToSqlOutput::from(date_str))
                 }
             }
-
             /// Local time => UTC RFC3339 timestamp
             /// ("YYYY-MM-DD HH:MM:SS.SSS+00:00").
-            impl ToSql for DateTime<Local> {
+            impl ToSql for DateTime<Local> 
+            {
                 #[inline]
                 fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
                     let date_str = self.with_timezone(&Utc).format("%F %T%.f%:z").to_string();
                     Ok(ToSqlOutput::from(date_str))
                 }
             }
-
             /// Date and time with time zone => RFC3339 timestamp
             /// ("YYYY-MM-DD HH:MM:SS.SSS[+-]HH:MM").
-            impl ToSql for DateTime<FixedOffset> {
+            impl ToSql for DateTime<FixedOffset> 
+            {
                 #[inline]
                 fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
                     let date_str = self.format("%F %T%.f%:z").to_string();
                     Ok(ToSqlOutput::from(date_str))
                 }
             }
-
             /// RFC3339 ("YYYY-MM-DD HH:MM:SS.SSS[+-]HH:MM") into `DateTime<Utc>`.
-            impl FromSql for DateTime<Utc> {
+            impl FromSql for DateTime<Utc> 
+            {
                 fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
                     {
                         // Try to parse value as rfc3339 first.
@@ -62644,18 +61291,18 @@ pub mod rusqlite
                     NaiveDateTime::column_result(value).map(|dt| Utc.from_utc_datetime(&dt))
                 }
             }
-
             /// RFC3339 ("YYYY-MM-DD HH:MM:SS.SSS[+-]HH:MM") into `DateTime<Local>`.
-            impl FromSql for DateTime<Local> {
+            impl FromSql for DateTime<Local> 
+            {
                 #[inline]
                 fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
                     let utc_dt = DateTime::<Utc>::column_result(value)?;
                     Ok(utc_dt.with_timezone(&Local))
                 }
             }
-
             /// RFC3339 ("YYYY-MM-DD HH:MM:SS.SSS[+-]HH:MM") into `DateTime<FixedOffset>`.
-            impl FromSql for DateTime<FixedOffset> {
+            impl FromSql for DateTime<FixedOffset> 
+            {
                 #[inline]
                 fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
                     let s = String::column_result(value)?;
@@ -62672,14 +61319,17 @@ pub mod rusqlite
             {
                 *,
             };
+            /*
             use super::{Value, ValueRef};
             use std::error::Error;
             use std::fmt;
+            */
 
             /// Enum listing possible errors from [`FromSql`] trait.
             #[derive(Debug)]
             #[non_exhaustive]
-            pub enum FromSqlError {
+            pub enum FromSqlError 
+            {
                 /// Error when an SQLite value is requested, but the type of the result
                 /// cannot be converted to the requested Rust type.
                 InvalidType,
@@ -62701,7 +61351,8 @@ pub mod rusqlite
                 Other(Box<dyn Error + Send + Sync + 'static>),
             }
 
-            impl PartialEq for FromSqlError {
+            impl PartialEq for FromSqlError 
+            {
                 fn eq(&self, other: &FromSqlError) -> bool {
                     match (self, other) {
                         (FromSqlError::InvalidType, FromSqlError::InvalidType) => true,
@@ -62721,7 +61372,8 @@ pub mod rusqlite
                 }
             }
 
-            impl fmt::Display for FromSqlError {
+            impl fmt::Display for FromSqlError 
+            {
                 fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                     match *self {
                         FromSqlError::InvalidType => write!(f, "Invalid type"),
@@ -62740,7 +61392,8 @@ pub mod rusqlite
                 }
             }
 
-            impl Error for FromSqlError {
+            impl Error for FromSqlError 
+            {
                 fn source(&self) -> Option<&(dyn Error + 'static)> {
                     if let FromSqlError::Other(ref err) = self {
                         Some(&**err)
@@ -62749,12 +61402,12 @@ pub mod rusqlite
                     }
                 }
             }
-
             /// Result type for implementors of the [`FromSql`] trait.
             pub type FromSqlResult<T> = Result<T, FromSqlError>;
 
             /// A trait for types that can be created from a SQLite value.
-            pub trait FromSql: Sized {
+            pub trait FromSql: Sized 
+            {
                 /// Converts SQLite value into Rust value.
                 fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self>;
             }
@@ -62783,7 +61436,7 @@ pub mod rusqlite
             from_sql_integral!(i8);
             from_sql_integral!(i16);
             from_sql_integral!(i32);
-            // from_sql_integral!(i64); // Not needed because the native type is i64.
+            
             from_sql_integral!(isize);
             from_sql_integral!(u8);
             from_sql_integral!(u16);
@@ -62796,25 +61449,23 @@ pub mod rusqlite
             from_sql_integral!(non_zero std::num::NonZeroI16, i16);
             from_sql_integral!(non_zero std::num::NonZeroI32, i32);
             from_sql_integral!(non_zero std::num::NonZeroI64, i64);
-            #[cfg(feature = "i128_blob")]
-            #[cfg_attr(docsrs, doc(cfg(feature = "i128_blob")))]
-            from_sql_integral!(non_zero std::num::NonZeroI128, i128);
 
             from_sql_integral!(non_zero std::num::NonZeroUsize, usize);
             from_sql_integral!(non_zero std::num::NonZeroU8, u8);
             from_sql_integral!(non_zero std::num::NonZeroU16, u16);
             from_sql_integral!(non_zero std::num::NonZeroU32, u32);
             from_sql_integral!(non_zero std::num::NonZeroU64, u64);
-            // std::num::NonZeroU128 is not supported since u128 isn't either
 
-            impl FromSql for i64 {
+            impl FromSql for i64 
+            {
                 #[inline]
                 fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
                     value.as_i64()
                 }
             }
 
-            impl FromSql for f32 {
+            impl FromSql for f32 
+            {
                 #[inline]
                 fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
                     match value {
@@ -62825,7 +61476,8 @@ pub mod rusqlite
                 }
             }
 
-            impl FromSql for f64 {
+            impl FromSql for f64 
+            {
                 #[inline]
                 fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
                     match value {
@@ -62836,49 +61488,56 @@ pub mod rusqlite
                 }
             }
 
-            impl FromSql for bool {
+            impl FromSql for bool 
+            {
                 #[inline]
                 fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
                     i64::column_result(value).map(|i| i != 0)
                 }
             }
 
-            impl FromSql for String {
+            impl FromSql for String 
+            {
                 #[inline]
                 fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
                     value.as_str().map(ToString::to_string)
                 }
             }
 
-            impl FromSql for Box<str> {
+            impl FromSql for Box<str> 
+            {
                 #[inline]
                 fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
                     value.as_str().map(Into::into)
                 }
             }
 
-            impl FromSql for std::rc::Rc<str> {
+            impl FromSql for std::rc::Rc<str> 
+            {
                 #[inline]
                 fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
                     value.as_str().map(Into::into)
                 }
             }
 
-            impl FromSql for std::sync::Arc<str> {
+            impl FromSql for std::sync::Arc<str> 
+            {
                 #[inline]
                 fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
                     value.as_str().map(Into::into)
                 }
             }
 
-            impl FromSql for Vec<u8> {
+            impl FromSql for Vec<u8> 
+            {
                 #[inline]
                 fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
                     value.as_blob().map(<[u8]>::to_vec)
                 }
             }
 
-            impl<const N: usize> FromSql for [u8; N] {
+            impl<const N: usize> FromSql for [u8; N] 
+            {
                 #[inline]
                 fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
                     let slice = value.as_blob()?;
@@ -62889,19 +61548,9 @@ pub mod rusqlite
                 }
             }
 
-            #[cfg(feature = "i128_blob")]
-            #[cfg_attr(docsrs, doc(cfg(feature = "i128_blob")))]
-            impl FromSql for i128 {
-                #[inline]
-                fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-                    let bytes = <[u8; 16]>::column_result(value)?;
-                    Ok(i128::from_be_bytes(bytes) ^ (1_i128 << 127))
-                }
-            }
-
             #[cfg(feature = "uuid")]
-            #[cfg_attr(docsrs, doc(cfg(feature = "uuid")))]
-            impl FromSql for uuid::Uuid {
+            impl FromSql for uuid::Uuid 
+            {
                 #[inline]
                 fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
                     let bytes = <[u8; 16]>::column_result(value)?;
@@ -62909,7 +61558,8 @@ pub mod rusqlite
                 }
             }
 
-            impl<T: FromSql> FromSql for Option<T> {
+            impl<T: FromSql> FromSql for Option<T> 
+            {
                 #[inline]
                 fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
                     match value {
@@ -62919,88 +61569,15 @@ pub mod rusqlite
                 }
             }
 
-            impl FromSql for Value {
+            impl FromSql for Value 
+            {
                 #[inline]
                 fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
                     Ok(value.into())
                 }
             }
         }
-
-        #[cfg(feature = "serde_json")]
-        #[cfg_attr(docsrs, doc(cfg(feature = "serde_json")))]
-        pub mod serde_json
-        {
-            //! [`ToSql`] and [`FromSql`] implementation for JSON `Value`.
-            use ::
-            {
-                *,
-            };
-            
-
-            use serde_json::{Number, Value};
-
-            use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
-            use crate::{Error, Result};
-
-            /// Serialize JSON `Value` to text:
-            ///
-            ///
-            /// | JSON   | SQLite    |
-            /// |----------|---------|
-            /// | Null     | NULL    |
-            /// | Bool     | 'true' / 'false' |
-            /// | Number   | INT or REAL except u64 |
-            /// | _ | TEXT |
-            impl ToSql for Value {
-                #[inline]
-                fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-                    match self {
-                        Value::Null => Ok(ToSqlOutput::Borrowed(ValueRef::Null)),
-                        Value::Number(n) if n.is_i64() => Ok(ToSqlOutput::from(n.as_i64().unwrap())),
-                        Value::Number(n) if n.is_f64() => Ok(ToSqlOutput::from(n.as_f64().unwrap())),
-                        _ => serde_json::to_string(self)
-                            .map(ToSqlOutput::from)
-                            .map_err(|err| Error::ToSqlConversionFailure(err.into())),
-                    }
-                }
-            }
-
-            /// Deserialize SQLite value to JSON `Value`:
-            ///
-            /// | SQLite   | JSON    |
-            /// |----------|---------|
-            /// | NULL     | Null    |
-            /// | 'null'   | Null    |
-            /// | 'true'   | Bool    |
-            /// | 1        | Number  |
-            /// | 0.1      | Number  |
-            /// | '"text"' | String  |
-            /// | 'text'   | _Error_ |
-            /// | '[0, 1]' | Array   |
-            /// | '{"x": 1}' | Object  |
-            impl FromSql for Value {
-                #[inline]
-                fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-                    match value {
-                        ValueRef::Text(s) => serde_json::from_slice(s), // KO for b"text"
-                        ValueRef::Blob(b) => serde_json::from_slice(b),
-                        ValueRef::Integer(i) => Ok(Value::Number(Number::from(i))),
-                        ValueRef::Real(f) => {
-                            match Number::from_f64(f) {
-                                Some(n) => Ok(Value::Number(n)),
-                                _ => return Err(FromSqlError::InvalidType), // FIXME
-                            }
-                        }
-                        ValueRef::Null => Ok(Value::Null),
-                    }
-                    .map_err(|err| FromSqlError::Other(Box::new(err)))
-                }
-            }
-        }
-
-        #[cfg(feature = "time")]
-        #[cfg_attr(docsrs, doc(cfg(feature = "time")))]
+        
         pub mod time
         {
             //! Convert formats 1-10 in [Time Values](https://sqlite.org/lang_datefunc.html#time_values) to time types.
@@ -63081,7 +61658,6 @@ pub mod rusqlite
                     })
                 }
             }
-
             /// ISO 8601 calendar date without timezone => "YYYY-MM-DD"
             impl ToSql for Date {
                 #[inline]
@@ -63092,7 +61668,6 @@ pub mod rusqlite
                     Ok(ToSqlOutput::from(date_str))
                 }
             }
-
             /// "YYYY-MM-DD" => ISO 8601 calendar date without timezone.
             impl FromSql for Date {
                 #[inline]
@@ -63102,7 +61677,6 @@ pub mod rusqlite
                     })
                 }
             }
-
             /// ISO 8601 time without timezone => "HH:MM:SS.SSS"
             impl ToSql for Time {
                 #[inline]
@@ -63113,7 +61687,6 @@ pub mod rusqlite
                     Ok(ToSqlOutput::from(time_str))
                 }
             }
-
             /// "HH:MM"/"HH:MM:SS"/"HH:MM:SS.SSS" => ISO 8601 time without timezone.
             impl FromSql for Time {
                 #[inline]
@@ -63123,7 +61696,6 @@ pub mod rusqlite
                     })
                 }
             }
-
             /// ISO 8601 combined date and time without timezone => "YYYY-MM-DD HH:MM:SS.SSS"
             impl ToSql for PrimitiveDateTime {
                 #[inline]
@@ -63134,7 +61706,6 @@ pub mod rusqlite
                     Ok(ToSqlOutput::from(date_time_str))
                 }
             }
-
             /// YYYY-MM-DD HH:MM
             /// YYYY-MM-DDTHH:MM
             /// YYYY-MM-DD HH:MM:SS
@@ -63279,7 +61850,6 @@ pub mod rusqlite
                     })
                 }
             }
-
             /// A trait for types that can be converted into SQLite values. Returns
             /// [`Error::ToSqlConversionFailure`] if the conversion fails.
             pub trait ToSql {
@@ -63470,8 +62040,6 @@ pub mod rusqlite
             }
         }
         
-        #[cfg(feature = "url")]
-        #[cfg_attr(docsrs, doc(cfg(feature = "url")))]
         pub mod url
         {
             //! [`ToSql`] and [`FromSql`] implementation for [`url::Url`].
@@ -63491,7 +62059,6 @@ pub mod rusqlite
                     Ok(ToSqlOutput::from(self.as_str()))
                 }
             }
-
             /// Deserialize text to `Url`.
             impl FromSql for Url {
                 #[inline]
@@ -63554,20 +62121,7 @@ pub mod rusqlite
                     Value::Integer(i as i64)
                 }
             }
-
-            #[cfg(feature = "i128_blob")]
-            #[cfg_attr(docsrs, doc(cfg(feature = "i128_blob")))]
-            impl From<i128> for Value {
-                #[inline]
-                fn from(i: i128) -> Value {
-                    // We store these biased (e.g. with the most significant bit flipped)
-                    // so that comparisons with negative numbers work properly.
-                    Value::Blob(i128::to_be_bytes(i ^ (1_i128 << 127)).to_vec())
-                }
-            }
-
-            #[cfg(feature = "uuid")]
-            #[cfg_attr(docsrs, doc(cfg(feature = "uuid")))]
+            
             impl From<uuid::Uuid> for Value {
                 #[inline]
                 fn from(id: uuid::Uuid) -> Value {
@@ -63709,7 +62263,6 @@ pub mod rusqlite
                         _ => Err(FromSqlError::InvalidType),
                     }
                 }
-
                 /// If `self` is case `Null` returns None.
                 /// If `self` is case `Integer`, returns the integral value.
                 /// Otherwise, returns [`Err(Error::InvalidColumnType)`](crate::Error::InvalidColumnType).
@@ -63721,7 +62274,6 @@ pub mod rusqlite
                         _ => Err(FromSqlError::InvalidType),
                     }
                 }
-
                 /// If `self` is case `Real`, returns the floating point value. Otherwise,
                 /// returns [`Err(Error::InvalidColumnType)`](crate::Error::InvalidColumnType).
                 #[inline]
@@ -63731,7 +62283,6 @@ pub mod rusqlite
                         _ => Err(FromSqlError::InvalidType),
                     }
                 }
-
                 /// If `self` is case `Null` returns None.
                 /// If `self` is case `Real`, returns the floating point value.
                 /// Otherwise, returns [`Err(Error::InvalidColumnType)`](crate::Error::InvalidColumnType).
@@ -63743,7 +62294,6 @@ pub mod rusqlite
                         _ => Err(FromSqlError::InvalidType),
                     }
                 }
-
                 /// If `self` is case `Text`, returns the string value. Otherwise, returns
                 /// [`Err(Error::InvalidColumnType)`](crate::Error::InvalidColumnType).
                 #[inline]
@@ -63755,7 +62305,6 @@ pub mod rusqlite
                         _ => Err(FromSqlError::InvalidType),
                     }
                 }
-
                 /// If `self` is case `Null` returns None.
                 /// If `self` is case `Text`, returns the string value.
                 /// Otherwise, returns [`Err(Error::InvalidColumnType)`](crate::Error::InvalidColumnType).
@@ -63769,7 +62318,6 @@ pub mod rusqlite
                         _ => Err(FromSqlError::InvalidType),
                     }
                 }
-
                 /// If `self` is case `Blob`, returns the byte slice. Otherwise, returns
                 /// [`Err(Error::InvalidColumnType)`](crate::Error::InvalidColumnType).
                 #[inline]
@@ -63779,7 +62327,6 @@ pub mod rusqlite
                         _ => Err(FromSqlError::InvalidType),
                     }
                 }
-
                 /// If `self` is case `Null` returns None.
                 /// If `self` is case `Blob`, returns the byte slice.
                 /// Otherwise, returns [`Err(Error::InvalidColumnType)`](crate::Error::InvalidColumnType).
@@ -63791,7 +62338,6 @@ pub mod rusqlite
                         _ => Err(FromSqlError::InvalidType),
                     }
                 }
-
                 /// Returns the byte slice that makes up this `ValueRef` if it's either
                 /// [`ValueRef::Blob`] or [`ValueRef::Text`].
                 #[inline]
@@ -63801,7 +62347,6 @@ pub mod rusqlite
                         _ => Err(FromSqlError::InvalidType),
                     }
                 }
-
                 /// If `self` is case `Null` returns None.
                 /// If `self` is [`ValueRef::Blob`] or [`ValueRef::Text`] returns the byte
                 /// slice that makes up this value
@@ -63879,7 +62424,7 @@ pub mod rusqlite
                 feature = "preupdate_hook"
             ))]
             impl<'a> ValueRef<'a> {
-                pub(crate) unsafe fn from_value(value: *mut crate::ffi::sqlite3_value) -> ValueRef<'a> {
+                pub unsafe fn from_value(value: *mut crate::ffi::sqlite3_value) -> ValueRef<'a> {
                     use crate::ffi;
                     use std::slice::from_raw_parts;
 
@@ -63927,16 +62472,13 @@ pub mod rusqlite
                 // TODO sqlite3_value_frombind // 3.28.0
             }
         }
-        
-
         /// Empty struct that can be used to fill in a query parameter as `NULL`.
         #[derive(Copy, Clone)]
         pub struct Null;
-
         /// SQLite data types.
-        /// See [Fundamental Datatypes](https://sqlite.org/c3ref/c_blob.html).
         #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-        pub enum Type {
+        pub enum Type 
+        {
             /// NULL
             Null,
             /// 64-bit signed integer
@@ -63949,7 +62491,8 @@ pub mod rusqlite
             Blob,
         }
 
-        impl fmt::Display for Type {
+        impl fmt::Display for Type 
+        {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 match *self {
                     Type::Null => f.pad("Null"),
@@ -63961,8 +62504,7 @@ pub mod rusqlite
             }
         }
     }
-
-    #[cfg(feature = "unlock_notify")]
+    
     mod unlock_notify
     {
         //! [Unlock Notification](http://sqlite.org/unlock_notify.html)
@@ -64011,7 +62553,6 @@ pub mod rusqlite
         fn unpoison<T>(r: Result<T, std::sync::PoisonError<T>>) -> T {
             r.unwrap_or_else(std::sync::PoisonError::into_inner)
         }
-
         /// This function is an unlock-notify callback
         unsafe extern "C" fn unlock_notify_cb(ap_arg: *mut *mut c_void, n_arg: c_int) {
             use std::slice::from_raw_parts;
@@ -64026,7 +62567,6 @@ pub mod rusqlite
                 || (rc & 0xFF) == ffi::SQLITE_LOCKED
                     && ffi::sqlite3_extended_errcode(db) == ffi::SQLITE_LOCKED_SHAREDCACHE
         }
-
         /// This function assumes that an SQLite API call (either `sqlite3_prepare_v2()`
         /// or `sqlite3_step()`) has just returned `SQLITE_LOCKED`. The argument is the
         /// associated database connection.
@@ -64076,7 +62616,6 @@ pub mod rusqlite
         pub fn version_number() -> i32 {
             unsafe { ffi::sqlite3_libversion_number() }
         }
-
         /// Returns the SQLite version as a string; e.g., `"3.16.2"` for version 3.16.2.
         ///
         /// See [`sqlite3_libversion()`](https://www.sqlite.org/c3ref/libversion.html).
@@ -64092,8 +62631,7 @@ pub mod rusqlite
                 .expect("SQLite version string is not valid UTF8 ?!")
         }
     }
-    #[cfg(feature = "vtab")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "vtab")))]
+    
     pub mod vtab
     {
         //! Create virtual tables.
@@ -64101,7 +62639,7 @@ pub mod rusqlite
         {
             *,
         };
-        
+        /*
         use std::borrow::Cow::{self, Borrowed, Owned};
         use std::marker::PhantomData;
         use std::os::raw::{c_char, c_int, c_void};
@@ -64115,6 +62653,7 @@ pub mod rusqlite
         use crate::types::{FromSql, FromSqlError, ToSql, ValueRef};
         use crate::util::alloc;
         use crate::{str_to_cstring, Connection, Error, InnerConnection, Result};
+        */
 
         // let conn: Connection = ...;
         // let mod: Module = ...; // VTab builder
@@ -64166,7 +62705,6 @@ pub mod rusqlite
             /// See [SQLite doc](https://sqlite.org/vtab.html#eponymous_only_virtual_tables)
             EponymousOnly,
         }
-
         /// Virtual table module
         ///
         /// (See [SQLite doc](https://sqlite.org/c3ref/module.html))
@@ -64229,7 +62767,6 @@ pub mod rusqlite
             }
             };
         }
-
         /// Create a modifiable virtual table implementation.
         ///
         /// Step 2 of [Creating New Virtual Table Implementations](https://sqlite.org/vtab.html#creating_new_virtual_table_implementations).
@@ -64247,7 +62784,6 @@ pub mod rusqlite
                 }
             }
         }
-
         /// Create a read-only virtual table implementation.
         ///
         /// Step 2 of [Creating New Virtual Table Implementations](https://sqlite.org/vtab.html#creating_new_virtual_table_implementations).
@@ -64267,7 +62803,6 @@ pub mod rusqlite
                 }
             }
         }
-
         /// Create an eponymous only virtual table implementation.
         ///
         /// Step 2 of [Creating New Virtual Table Implementations](https://sqlite.org/vtab.html#creating_new_virtual_table_implementations).
@@ -64276,7 +62811,6 @@ pub mod rusqlite
             //  For eponymous-only virtual tables, the xCreate method is NULL
             module!('vtab, T, T::Cursor, None, None, None)
         }
-
         /// Virtual table configuration options
         #[repr(i32)]
         #[non_exhaustive]
@@ -64291,7 +62825,6 @@ pub mod rusqlite
             /// Equivalent to SQLITE_VTAB_USES_ALL_SCHEMAS
             UsesAllSchemas = 4,
         }
-
         /// `feature = "vtab"`
         pub struct VTabConnection(*mut ffi::sqlite3);
 
@@ -64320,7 +62853,6 @@ pub mod rusqlite
                 self.0
             }
         }
-
         /// Eponymous-only virtual table instance trait.
         pub unsafe trait VTab<'vtab>: Sized {
             /// Client data passed to [`Connection::create_module`].
@@ -64345,7 +62877,6 @@ pub mod rusqlite
             /// (See [SQLite doc](https://sqlite.org/vtab.html#the_xopen_method))
             fn open(&'vtab mut self) -> Result<Self::Cursor>;
         }
-
         /// Read-only virtual table instance trait.
         ///
         /// (See [SQLite doc](https://sqlite.org/c3ref/vtab.html))
@@ -64368,7 +62899,6 @@ pub mod rusqlite
             ) -> Result<(String, Self)> {
                 Self::connect(db, aux, args)
             }
-
             /// Destroy the underlying table implementation. This method undoes the work
             /// of [`create`](CreateVTab::create).
             ///
@@ -64378,7 +62908,6 @@ pub mod rusqlite
                 Ok(())
             }
         }
-
         /// Writable virtual table instance trait.
         ///
         /// (See [SQLite doc](https://sqlite.org/vtab.html#xupdate))
@@ -64395,7 +62924,6 @@ pub mod rusqlite
             /// args[2]: ...`
             fn update(&mut self, args: &Values<'_>) -> Result<()>;
         }
-
         /// Index constraint operator.
         /// See [Virtual Table Constraint Operator Codes](https://sqlite.org/c3ref/c_index_constraint_eq.html) for details.
         #[derive(Debug, Eq, PartialEq)]
@@ -64421,7 +62949,8 @@ pub mod rusqlite
             SQLITE_INDEX_CONSTRAINT_FUNCTION(u8), // 3.25.0
         }
 
-        impl From<u8> for IndexConstraintOp {
+        impl From<u8> for IndexConstraintOp 
+        {
             fn from(code: u8) -> IndexConstraintOp {
                 match code {
                     2 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_EQ,
@@ -64445,7 +62974,8 @@ pub mod rusqlite
             }
         }
 
-        bitflags::bitflags! {
+        bitflags::bitflags! 
+        {
             /// Virtual table scan flags
             /// See [Function Flags](https://sqlite.org/c3ref/c_index_scan_unique.html) for details.
             #[repr(C)]
@@ -64457,7 +62987,6 @@ pub mod rusqlite
                 const SQLITE_INDEX_SCAN_UNIQUE  = ffi::SQLITE_INDEX_SCAN_UNIQUE;
             }
         }
-
         /// Pass information into and receive the reply from the
         /// [`VTab::best_index`] method.
         ///
@@ -64465,7 +62994,8 @@ pub mod rusqlite
         #[derive(Debug)]
         pub struct IndexInfo(*mut ffi::sqlite3_index_info);
 
-        impl IndexInfo {
+        impl IndexInfo
+        {
             /// Iterate on index constraint and its associated usage.
             #[inline]
             pub fn constraints_and_usages(&mut self) -> IndexConstraintAndUsageIter<'_> {
@@ -64478,7 +63008,6 @@ pub mod rusqlite
                     iter: constraints.iter().zip(constraint_usages.iter_mut()),
                 }
             }
-
             /// Record WHERE clause constraints.
             #[inline]
             #[must_use]
@@ -64489,7 +63018,6 @@ pub mod rusqlite
                     iter: constraints.iter(),
                 }
             }
-
             /// Information about the ORDER BY clause.
             #[inline]
             #[must_use]
@@ -64500,14 +63028,12 @@ pub mod rusqlite
                     iter: order_bys.iter(),
                 }
             }
-
             /// Number of terms in the ORDER BY clause
             #[inline]
             #[must_use]
             pub fn num_of_order_by(&self) -> usize {
                 unsafe { (*self.0).nOrderBy as usize }
             }
-
             /// Information about what parameters to pass to [`VTabCursor::filter`].
             #[inline]
             pub fn constraint_usage(&mut self, constraint_idx: usize) -> IndexConstraintUsage<'_> {
@@ -64516,7 +63042,6 @@ pub mod rusqlite
                 };
                 IndexConstraintUsage(&mut constraint_usages[constraint_idx])
             }
-
             /// Number used to identify the index
             #[inline]
             pub fn set_idx_num(&mut self, idx_num: c_int) {
@@ -64524,7 +63049,6 @@ pub mod rusqlite
                     (*self.0).idxNum = idx_num;
                 }
             }
-
             /// String used to identify the index
             pub fn set_idx_str(&mut self, idx_str: &str) {
                 unsafe {
@@ -64532,7 +63056,6 @@ pub mod rusqlite
                     (*self.0).needToFreeIdxStr = 1;
                 }
             }
-
             /// True if output is already ordered
             #[inline]
             pub fn set_order_by_consumed(&mut self, order_by_consumed: bool) {
@@ -64540,7 +63063,6 @@ pub mod rusqlite
                     (*self.0).orderByConsumed = order_by_consumed as c_int;
                 }
             }
-
             /// Estimated cost of using this index
             #[inline]
             pub fn set_estimated_cost(&mut self, estimated_ost: f64) {
@@ -64548,7 +63070,6 @@ pub mod rusqlite
                     (*self.0).estimatedCost = estimated_ost;
                 }
             }
-
             /// Estimated number of rows returned.
             #[inline]
             pub fn set_estimated_rows(&mut self, estimated_rows: i64) {
@@ -64556,22 +63077,17 @@ pub mod rusqlite
                     (*self.0).estimatedRows = estimated_rows;
                 }
             }
-
             /// Mask of SQLITE_INDEX_SCAN_* flags.
             #[inline]
             pub fn set_idx_flags(&mut self, flags: IndexFlags) {
                 unsafe { (*self.0).idxFlags = flags.bits() };
             }
-
             /// Mask of columns used by statement
             #[inline]
             pub fn col_used(&self) -> u64 {
                 unsafe { (*self.0).colUsed }
             }
-
             /// Determine the collation for a virtual table constraint
-            #[cfg(feature = "modern_sqlite")] // SQLite >= 3.22.0
-            #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
             pub fn collation(&self, constraint_idx: usize) -> Result<&str> {
                 use std::ffi::CStr;
                 let idx = constraint_idx as c_int;
@@ -64585,7 +63101,6 @@ pub mod rusqlite
                 Ok(unsafe { CStr::from_ptr(collation) }.to_str()?)
             }
         }
-
         /// Iterate on index constraint and its associated usage.
         pub struct IndexConstraintAndUsageIter<'a> {
             iter: std::iter::Zip<
@@ -64609,7 +63124,6 @@ pub mod rusqlite
                 self.iter.size_hint()
             }
         }
-
         /// `feature = "vtab"`
         pub struct IndexConstraintIter<'a> {
             iter: slice::Iter<'a, ffi::sqlite3_index_constraint>,
@@ -64628,7 +63142,6 @@ pub mod rusqlite
                 self.iter.size_hint()
             }
         }
-
         /// WHERE clause constraint.
         pub struct IndexConstraint<'a>(&'a ffi::sqlite3_index_constraint);
 
@@ -64639,14 +63152,12 @@ pub mod rusqlite
             pub fn column(&self) -> c_int {
                 self.0.iColumn
             }
-
             /// Constraint operator
             #[inline]
             #[must_use]
             pub fn operator(&self) -> IndexConstraintOp {
                 IndexConstraintOp::from(self.0.op)
             }
-
             /// True if this constraint is usable
             #[inline]
             #[must_use]
@@ -64654,7 +63165,6 @@ pub mod rusqlite
                 self.0.usable != 0
             }
         }
-
         /// Information about what parameters to pass to
         /// [`VTabCursor::filter`].
         pub struct IndexConstraintUsage<'a>(&'a mut ffi::sqlite3_index_constraint_usage);
@@ -64666,14 +63176,12 @@ pub mod rusqlite
             pub fn set_argv_index(&mut self, argv_index: c_int) {
                 self.0.argvIndex = argv_index;
             }
-
             /// if `omit`, do not code a test for this constraint
             #[inline]
             pub fn set_omit(&mut self, omit: bool) {
                 self.0.omit = omit as std::os::raw::c_uchar;
             }
         }
-
         /// `feature = "vtab"`
         pub struct OrderByIter<'a> {
             iter: slice::Iter<'a, ffi::sqlite3_index_orderby>,
@@ -64692,7 +63200,6 @@ pub mod rusqlite
                 self.iter.size_hint()
             }
         }
-
         /// A column of the ORDER BY clause.
         pub struct OrderBy<'a>(&'a ffi::sqlite3_index_orderby);
 
@@ -64703,7 +63210,6 @@ pub mod rusqlite
             pub fn column(&self) -> c_int {
                 self.0.iColumn
             }
-
             /// True for DESC.  False for ASC.
             #[inline]
             #[must_use]
@@ -64711,7 +63217,6 @@ pub mod rusqlite
                 self.0.desc != 0
             }
         }
-
         /// Virtual table cursor trait.
         pub unsafe trait VTabCursor: Sized {
             /// Begin a search of a virtual table.
@@ -64733,7 +63238,6 @@ pub mod rusqlite
             /// (See [SQLite doc](https://sqlite.org/vtab.html#the_xrowid_method))
             fn rowid(&self) -> Result<i64>;
         }
-
         /// Context is used by [`VTabCursor::column`] to specify the
         /// cell value.
         pub struct Context(*mut ffi::sqlite3_context);
@@ -64749,28 +63253,26 @@ pub mod rusqlite
 
             // TODO sqlite3_vtab_nochange (http://sqlite.org/c3ref/vtab_nochange.html) // 3.22.0 & xColumn
         }
-
         /// Wrapper to [`VTabCursor::filter`] arguments, the values
         /// requested by [`VTab::best_index`].
         pub struct Values<'a> {
             args: &'a [*mut ffi::sqlite3_value],
         }
 
-        impl Values<'_> {
+        impl Values<'_>
+        {
             /// Returns the number of values.
             #[inline]
             #[must_use]
             pub fn len(&self) -> usize {
                 self.args.len()
             }
-
             /// Returns `true` if there is no value.
             #[inline]
             #[must_use]
             pub fn is_empty(&self) -> bool {
                 self.args.is_empty()
             }
-
             /// Returns value at `idx`
             pub fn get<T: FromSql>(&self, idx: usize) -> Result<T> {
                 let arg = self.args[idx];
@@ -64789,8 +63291,6 @@ pub mod rusqlite
 
             // `sqlite3_value_type` returns `SQLITE_NULL` for pointer.
             // So it seems not possible to enhance `ValueRef::from_value`.
-            #[cfg(feature = "array")]
-            #[cfg_attr(docsrs, doc(cfg(feature = "array")))]
             fn get_array(&self, idx: usize) -> Option<array::Array> {
                 use crate::types::Value;
                 let arg = self.args[idx];
@@ -64805,7 +63305,6 @@ pub mod rusqlite
                     })
                 }
             }
-
             /// Turns `Values` into an iterator.
             #[inline]
             #[must_use]
@@ -64826,7 +63325,6 @@ pub mod rusqlite
                 self.iter()
             }
         }
-
         /// [`Values`] iterator.
         pub struct ValueIter<'a> {
             iter: slice::Iter<'a, *mut ffi::sqlite3_value>,
@@ -64905,7 +63403,6 @@ pub mod rusqlite
                 self.decode_result(r)
             }
         }
-
         /// Escape double-quote (`"`) character occurrences by
         /// doubling them (`""`).
         #[must_use]
@@ -64950,7 +63447,6 @@ pub mod rusqlite
                 None
             }
         }
-
         /// `<param_name>=['"]?<param_value>['"]?` => `(<param_name>, <param_value>)`
         pub fn parameter(c_slice: &[u8]) -> Result<(&str, &str)> {
             let arg = std::str::from_utf8(c_slice)?.trim();
@@ -65264,11 +63760,8 @@ pub mod rusqlite
                 }
             }
         }
-
-        /// Virtual table cursors can set an error message by assigning a string to
-        /// `zErrMsg`.
-        #[cold]
-        unsafe fn cursor_error<T>(cursor: *mut ffi::sqlite3_vtab_cursor, result: Result<T>) -> c_int {
+        /// Virtual table cursors can set an error message by assigning a string to `zErrMsg`.
+        #[cold] unsafe fn cursor_error<T>(cursor: *mut ffi::sqlite3_vtab_cursor, result: Result<T>) -> c_int {
             match result {
                 Ok(_) => ffi::SQLITE_OK,
                 Err(Error::SqliteFailure(err, s)) => {
@@ -65283,21 +63776,16 @@ pub mod rusqlite
                 }
             }
         }
-
-        /// Virtual tables methods can set an error message by assigning a string to
-        /// `zErrMsg`.
-        #[cold]
-        unsafe fn set_err_msg(vtab: *mut ffi::sqlite3_vtab, err_msg: &str) {
+        /// Virtual tables methods can set an error message by assigning a string to `zErrMsg`.
+        #[cold] unsafe fn set_err_msg(vtab: *mut ffi::sqlite3_vtab, err_msg: &str) {
             if !(*vtab).zErrMsg.is_null() {
                 ffi::sqlite3_free((*vtab).zErrMsg.cast::<c_void>());
             }
             (*vtab).zErrMsg = alloc(err_msg);
         }
-
         /// To raise an error, the `column` method should use this method to set the
         /// error message and return the error code.
-        #[cold]
-        unsafe fn result_error<T>(ctx: *mut ffi::sqlite3_context, result: Result<T>) -> c_int {
+        #[cold] unsafe fn result_error<T>(ctx: *mut ffi::sqlite3_context, result: Result<T>) -> c_int {
             match result {
                 Ok(_) => ffi::SQLITE_OK,
                 Err(Error::SqliteFailure(err, s)) => {
@@ -65326,9 +63814,7 @@ pub mod rusqlite
                 }
             }
         }
-
-        #[cfg(feature = "array")]
-        #[cfg_attr(docsrs, doc(cfg(feature = "array")))]
+        
         pub mod array
         {
             //! Array Virtual Table.
@@ -65351,12 +63837,11 @@ pub mod rusqlite
 
             // http://sqlite.org/bindptr.html
 
-            pub(crate) const ARRAY_TYPE: *const c_char = c"rarray".as_ptr();
+            pub const ARRAY_TYPE: *const c_char = c"rarray".as_ptr();
 
-            pub(crate) unsafe extern "C" fn free_array(p: *mut c_void) {
+            pub unsafe extern "C" fn free_array(p: *mut c_void) {
                 drop(Rc::from_raw(p as *const Vec<Value>));
             }
-
             /// Array parameter / pointer
             pub type Array = Rc<Vec<Value>>;
 
@@ -65366,7 +63851,6 @@ pub mod rusqlite
                     Ok(ToSqlOutput::Array(self.clone()))
                 }
             }
-
             /// Register the "rarray" module.
             pub fn load_module(conn: &Connection) -> Result<()> {
                 let aux: Option<()> = None;
@@ -65431,7 +63915,6 @@ pub mod rusqlite
                     Ok(ArrayTabCursor::new())
                 }
             }
-
             /// A cursor for the Array virtual table
             #[repr(C)]
             struct ArrayTabCursor<'vtab> {
@@ -65500,9 +63983,6 @@ pub mod rusqlite
                 }
             }
         }
-
-        #[cfg(feature = "csvtab")]
-        #[cfg_attr(docsrs, doc(cfg(feature = "csvtab")))]
         pub mod csvtab
         {
             //! CSV Virtual Table.
@@ -65530,7 +64010,6 @@ pub mod rusqlite
                 let aux: Option<()> = None;
                 conn.create_module("csv", read_only_module::<CsvTab>(), aux)
             }
-
             /// An instance of the CSV virtual table
             #[repr(C)]
             struct CsvTab {
@@ -65726,7 +64205,6 @@ pub mod rusqlite
             impl CreateVTab<'_> for CsvTab {
                 const KIND: VTabKind = VTabKind::Default;
             }
-
             /// A cursor for the CSV virtual table
             #[repr(C)]
             struct CsvTabCursor<'vtab> {
@@ -65753,7 +64231,6 @@ pub mod rusqlite
                         phantom: PhantomData,
                     }
                 }
-
                 /// Accessor to the associated virtual table.
                 fn vtab(&self) -> &CsvTab {
                     unsafe { &*(self.base.pVtab as *const CsvTab) }
@@ -65820,8 +64297,6 @@ pub mod rusqlite
                 }
             }
         }
-        #[cfg(feature = "series")]
-        #[cfg_attr(docsrs, doc(cfg(feature = "series")))]
         pub mod series
         {
             //! Generate series virtual table.
@@ -65871,7 +64346,6 @@ pub mod rusqlite
                     const BOTH  = QueryPlanFlags::START.bits() | QueryPlanFlags::STOP.bits();
                 }
             }
-
             /// An instance of the Series virtual table
             #[repr(C)]
             struct SeriesTab {
@@ -65985,7 +64459,6 @@ pub mod rusqlite
                     Ok(SeriesTabCursor::new())
                 }
             }
-
             /// A cursor for the Series virtual table
             #[repr(C)]
             struct SeriesTabCursor<'vtab> {
@@ -66104,7 +64577,7 @@ pub mod rusqlite
                 }
             }
         }
-        #[cfg(all(test, feature = "modern_sqlite"))]
+        
         mod vtablog
         {
             //! Port of C [vtablog](http://www.sqlite.org/cgi/src/finfo?name=ext/misc/vtablog.c)
@@ -66130,7 +64603,6 @@ pub mod rusqlite
                 let aux: Option<()> = None;
                 conn.create_module("vtablog", update_module::<VTabLog>(), aux)
             }
-
             /// An instance of the vtablog virtual table
             #[repr(C)]
             struct VTabLog {
@@ -66285,7 +64757,6 @@ pub mod rusqlite
                     Ok(())
                 }
             }
-
             /// A cursor for the Series virtual table
             #[repr(C)]
             struct VTabLogCursor<'vtab> {
@@ -66381,14 +64852,14 @@ pub mod rusqlite
         }
     }
 
-    pub(crate) mod util
+    pub mod util
     {
         use ::
         {
             *,
         };
         // Internal utilities
-        pub(crate) mod param_cache
+        pub mod param_cache
         {
             use ::
             {
@@ -66402,11 +64873,10 @@ pub mod rusqlite
             #[derive(Default, Clone, Debug)]
             // BTreeMap seems to do better here unless we want to pull in a custom hash
             // function.
-            pub(crate) struct ParamIndexCache(RefCell<BTreeMap<SmallCString, usize>>);
+            pub struct ParamIndexCache(RefCell<BTreeMap<SmallCString, usize>>);
 
             impl ParamIndexCache {
-                pub fn get_or_insert_with<F>(&self, s: &str, func: F) -> Option<usize>
-                where
+                pub fn get_or_insert_with<F>(&self, s: &str, func: F) -> Option<usize> where
                     F: FnOnce(&std::ffi::CStr) -> Option<usize>,
                 {
                     let mut cache = self.0.borrow_mut();
@@ -66422,7 +64892,7 @@ pub mod rusqlite
                     Some(val)
                 }
             }
-        } pub(crate) use param_cache::ParamIndexCache;
+        } pub use param_cache::ParamIndexCache;
 
         pub mod small_cstr
         {
@@ -66437,7 +64907,7 @@ pub mod rusqlite
             /// small enough. Also guarantees it's input is UTF-8 -- used for cases where we
             /// need to pass a NUL-terminated string to SQLite, and we have a `&str`.
             #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-            pub(crate) struct SmallCString(SmallVec<[u8; 16]>);
+            pub struct SmallCString(SmallVec<[u8; 16]>);
 
             impl SmallCString {
                 #[inline]
@@ -66459,7 +64929,6 @@ pub mod rusqlite
                     // Constructor takes a &str so this is safe.
                     unsafe { std::str::from_utf8_unchecked(self.as_bytes_without_nul()) }
                 }
-
                 /// Get the bytes not including the NUL terminator. E.g. the bytes which
                 /// make up our `str`:
                 /// - `SmallCString::new("foo").as_bytes_without_nul() == b"foo"`
@@ -66469,7 +64938,6 @@ pub mod rusqlite
                     self.debug_checks();
                     &self.0[..self.len()]
                 }
-
                 /// Get the bytes behind this str *including* the NUL terminator. This
                 /// should never return an empty slice.
                 #[inline]
@@ -66559,7 +65027,7 @@ pub mod rusqlite
                     self.as_str()
                 }
             }
-        } pub(crate) use small_cstr::SmallCString;
+        } pub use small_cstr::SmallCString;
         
         // Doesn't use any modern features or vtab stuff, but is only used by them.
         mod sqlite_string
@@ -66576,10 +65044,9 @@ pub mod rusqlite
 
             // Space to hold this string must be obtained
             // from an SQLite memory allocation function
-            pub(crate) fn alloc(s: &str) -> *mut c_char {
+            pub fn alloc(s: &str) -> *mut c_char {
                 SqliteMallocString::from_str(s).into_raw()
             }
-
             /// A string we own that's allocated on the SQLite heap. Automatically calls
             /// `sqlite3_free` when dropped, unless `into_raw` (or `into_inner`) is called
             /// on it. If constructed from a rust string, `sqlite3_malloc` is used.
@@ -66596,7 +65063,7 @@ pub mod rusqlite
             /// NULs are modified, and outgoing strings which are non-UTF8 are modified.
             /// This seems unavoidable -- it tries very hard to not panic.
             #[repr(transparent)]
-            pub(crate) struct SqliteMallocString {
+            pub struct SqliteMallocString {
                 ptr: NonNull<c_char>,
                 _boo: PhantomData<Box<[c_char]>>,
             }
@@ -66610,53 +65077,48 @@ pub mod rusqlite
                 /// SAFETY: Caller must be certain that `m` a nul-terminated c string
                 /// allocated by `sqlite3_malloc`, and that SQLite expects us to free it!
                 #[inline]
-                pub(crate) unsafe fn from_raw_nonnull(ptr: NonNull<c_char>) -> Self {
+                pub unsafe fn from_raw_nonnull(ptr: NonNull<c_char>) -> Self {
                     Self {
                         ptr,
                         _boo: PhantomData,
                     }
                 }
-
                 /// SAFETY: Caller must be certain that `m` a nul-terminated c string
                 /// allocated by `sqlite3_malloc`, and that SQLite expects us to free it!
                 #[inline]
-                pub(crate) unsafe fn from_raw(ptr: *mut c_char) -> Option<Self> {
+                pub unsafe fn from_raw(ptr: *mut c_char) -> Option<Self> {
                     NonNull::new(ptr).map(|p| Self::from_raw_nonnull(p))
                 }
-
                 /// Get the pointer behind `self`. After this is called, we no longer manage
                 /// it.
                 #[inline]
-                pub(crate) fn into_inner(self) -> NonNull<c_char> {
+                pub fn into_inner(self) -> NonNull<c_char> {
                     let p = self.ptr;
                     std::mem::forget(self);
                     p
                 }
-
                 /// Get the pointer behind `self`. After this is called, we no longer manage
                 /// it.
                 #[inline]
-                pub(crate) fn into_raw(self) -> *mut c_char {
+                pub fn into_raw(self) -> *mut c_char {
                     self.into_inner().as_ptr()
                 }
-
                 /// Borrow the pointer behind `self`. We still manage it when this function
                 /// returns. If you want to relinquish ownership, use `into_raw`.
                 #[inline]
-                pub(crate) fn as_ptr(&self) -> *const c_char {
+                pub fn as_ptr(&self) -> *const c_char {
                     self.ptr.as_ptr()
                 }
 
                 #[inline]
-                pub(crate) fn as_cstr(&self) -> &std::ffi::CStr {
+                pub fn as_cstr(&self) -> &std::ffi::CStr {
                     unsafe { std::ffi::CStr::from_ptr(self.as_ptr()) }
                 }
 
                 #[inline]
-                pub(crate) fn to_string_lossy(&self) -> std::borrow::Cow<'_, str> {
+                pub fn to_string_lossy(&self) -> std::borrow::Cow<'_, str> {
                     self.as_cstr().to_string_lossy()
                 }
-
                 /// Convert `s` into a SQLite string.
                 ///
                 /// This should almost never be done except for cases like error messages or
@@ -66672,7 +65134,7 @@ pub mod rusqlite
                 ///
                 /// This means it's safe to use in extern "C" functions even outside
                 /// `catch_unwind`.
-                pub(crate) fn from_str(s: &str) -> Self {
+                pub fn from_str(s: &str) -> Self {
                     let s = if s.as_bytes().contains(&0) {
                         std::borrow::Cow::Owned(make_nonnull(s))
                     } else {
@@ -66742,16 +65204,14 @@ pub mod rusqlite
                     self.to_string_lossy().fmt(f)
                 }
             }
-        } pub(crate) use sqlite_string::{alloc, SqliteMallocString};
+        } pub use sqlite_string::{alloc, SqliteMallocString};
     }
-    pub(crate) use util::SmallCString;
-
-    // Number of cached prepared statements we'll hold on to.
-    const STATEMENT_CACHE_DEFAULT_CAPACITY: usize = 16;
-
+    pub use util::SmallCString;
+    /// Number of cached prepared statements we'll hold on to.
+    pub const STATEMENT_CACHE_DEFAULT_CAPACITY: usize = 16;
     /// A macro making it more convenient to longer lists of parameters as a `&[&dyn ToSql]`.
-    #[macro_export]
-    macro_rules! params {
+    #[macro_export] macro_rules! params 
+    {
         () => {
             &[] as &[&dyn $crate::ToSql]
         };
@@ -66759,10 +65219,9 @@ pub mod rusqlite
             &[$(&$param as &dyn $crate::ToSql),+] as &[&dyn $crate::ToSql]
         };
     }
-
     /// A macro making it more convenient to pass lists of named parameters as a `&[(&str, &dyn ToSql)]`.
-    #[macro_export]
-    macro_rules! named_params {
+    #[macro_export] macro_rules! named_params 
+    {
         () => {
             &[] as &[(&str, &dyn $crate::ToSql)]
         };
@@ -66772,40 +65231,29 @@ pub mod rusqlite
             &[$(($param_name, &$param_val as &dyn $crate::ToSql)),+] as &[(&str, &dyn $crate::ToSql)]
         };
     }
-
     /// Captured identifiers in SQL.
-    #[cfg(feature = "rusqlite-macros")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "rusqlite-macros")))]
-    #[macro_export]
-    macro_rules! prepare_and_bind {
+    #[macro_export] macro_rules! prepare_and_bind 
+    {
         ($conn:expr, $sql:literal) => {{
             let mut stmt = $conn.prepare($sql)?;
             $crate::__bind!(stmt $sql);
             stmt
         }};
     }
-
     /// Captured identifiers in SQL
-    ///
-    /// * only SQLite `$x` / `@x` / `:x` syntax works (Rust `&x` syntax does not
-    ///   work).
-    /// * `$x.y` expression does not work.
-    #[cfg(feature = "rusqlite-macros")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "rusqlite-macros")))]
-    #[macro_export]
-    macro_rules! prepare_cached_and_bind {
+    #[macro_export] macro_rules! prepare_cached_and_bind 
+    {
         ($conn:expr, $sql:literal) => {{
             let mut stmt = $conn.prepare_cached($sql)?;
             $crate::__bind!(stmt $sql);
             stmt
         }};
     }
-
     /// A typedef of the result returned by many methods.
     pub type Result<T, E = Error> = result::Result<T, E>;
-
     /// See the [method documentation](#tymethod.optional).
-    pub trait OptionalExtension<T> {
+    pub trait OptionalExtension<T> 
+    {
         /// Converts a `Result<T>` into a `Result<Option<T>>`.
         ///
         /// By default, Rusqlite treats 0 rows being returned from a query that is
@@ -66814,7 +65262,8 @@ pub mod rusqlite
         fn optional(self) -> Result<Option<T>>;
     }
 
-    impl<T> OptionalExtension<T> for Result<T> {
+    impl<T> OptionalExtension<T> for Result<T> 
+    {
         fn optional(self) -> Result<Option<T>> {
             match self {
                 Ok(value) => Ok(Some(value)),
@@ -66824,21 +65273,18 @@ pub mod rusqlite
         }
     }
 
-    unsafe fn errmsg_to_string(errmsg: *const c_char) -> String {
+    unsafe fn errmsg_to_string(errmsg: *const c_char) -> String 
+    {
         CStr::from_ptr(errmsg).to_string_lossy().into_owned()
     }
 
-    fn str_to_cstring(s: &str) -> Result<SmallCString> {
+    fn str_to_cstring(s: &str) -> Result<SmallCString> 
+    {
         Ok(SmallCString::new(s)?)
     }
-
-    /// Returns `Ok((string ptr, len as c_int, SQLITE_STATIC | SQLITE_TRANSIENT))`
-    /// normally.
-    /// Returns error if the string is too large for sqlite.
-    /// The `sqlite3_destructor_type` item is always `SQLITE_TRANSIENT` unless
-    /// the string was empty (in which case it's `SQLITE_STATIC`, and the ptr is
-    /// static).
-    fn str_for_sqlite(s: &[u8]) -> Result<(*const c_char, c_int, ffi::sqlite3_destructor_type)> {
+    /// Returns `Ok((string ptr, len as c_int, SQLITE_STATIC | SQLITE_TRANSIENT))` normally.
+    fn str_for_sqlite(s: &[u8]) -> Result<(*const c_char, c_int, ffi::sqlite3_destructor_type)> 
+    {
         let len = len_as_c_int(s.len())?;
         let (ptr, dtor_info) = if len != 0 {
             (s.as_ptr().cast::<c_char>(), ffi::SQLITE_TRANSIENT())
@@ -66849,9 +65295,9 @@ pub mod rusqlite
         Ok((ptr, len, dtor_info))
     }
 
-    // Helper to cast to c_int safely, returning the correct error type if the cast
-    // failed.
-    fn len_as_c_int(len: usize) -> Result<c_int> {
+    // Helper to cast to c_int safely, returning the correct error type if the cast failed.
+    fn len_as_c_int(len: usize) -> Result<c_int> 
+    {
         if len >= (c_int::MAX as usize) {
             Err(Error::SqliteFailure(
                 ffi::Error::new(ffi::SQLITE_TOOBIG),
@@ -66863,20 +65309,22 @@ pub mod rusqlite
     }
 
     #[cfg(unix)]
-    fn path_to_cstring(p: &Path) -> Result<CString> {
+    fn path_to_cstring(p: &Path) -> Result<CString> 
+    {
         use std::os::unix::ffi::OsStrExt;
         Ok(CString::new(p.as_os_str().as_bytes())?)
     }
 
     #[cfg(not(unix))]
-    fn path_to_cstring(p: &Path) -> Result<CString> {
+    fn path_to_cstring(p: &Path) -> Result<CString> 
+    {
         let s = p.to_str().ok_or_else(|| Error::InvalidPath(p.to_owned()))?;
         Ok(CString::new(s)?)
     }
-
     /// Name for a database within a SQLite connection.
     #[derive(Copy, Clone, Debug)]
-    pub enum DatabaseName<'a> {
+    pub enum DatabaseName<'a> 
+    {
         /// The main database.
         Main,
 
@@ -66886,16 +65334,13 @@ pub mod rusqlite
         /// A database that has been attached via "ATTACH DATABASE ...".
         Attached(&'a str),
     }
-
     /// Shorthand for [`DatabaseName::Main`].
     pub const MAIN_DB: DatabaseName<'static> = DatabaseName::Main;
-
     /// Shorthand for [`DatabaseName::Temp`].
     pub const TEMP_DB: DatabaseName<'static> = DatabaseName::Temp;
-
-    // Currently DatabaseName is only used by the backup and blob mods, so hide
-    // this (private) impl to avoid dead code warnings.
-    impl DatabaseName<'_> {
+    
+    impl DatabaseName<'_> 
+    {
         #[inline]
         fn as_cstring(&self) -> Result<SmallCString> {
             use self::DatabaseName::{Attached, Main, Temp};
@@ -66906,9 +65351,9 @@ pub mod rusqlite
             }
         }
     }
-
     /// A connection to a SQLite database.
-    pub struct Connection {
+    pub struct Connection
+    {
         db: RefCell<InnerConnection>,
         cache: StatementCache,
         transaction_behavior: TransactionBehavior,
@@ -66916,28 +65361,28 @@ pub mod rusqlite
 
     unsafe impl Send for Connection {}
 
-    impl Drop for Connection {
+    impl Drop for Connection 
+    {
         #[inline]
         fn drop(&mut self) {
             self.flush_prepared_statement_cache();
         }
     }
 
-    impl Connection {
+    impl Connection 
+    {
         /// Open a new connection to a SQLite database.
         #[inline]
         pub fn open<P: AsRef<Path>>(path: P) -> Result<Connection> {
             let flags = OpenFlags::default();
             Connection::open_with_flags(path, flags)
         }
-
         /// Open a new connection to an in-memory SQLite database.
         #[inline]
         pub fn open_in_memory() -> Result<Connection> {
             let flags = OpenFlags::default();
             Connection::open_in_memory_with_flags(flags)
         }
-
         /// Open a new connection to a SQLite database.
         #[inline]
         pub fn open_with_flags<P: AsRef<Path>>(path: P, flags: OpenFlags) -> Result<Connection> {
@@ -66948,7 +65393,6 @@ pub mod rusqlite
                 transaction_behavior: TransactionBehavior::Deferred,
             })
         }
-
         /// Open a new connection to a SQLite database using the specific flags and vfs name.
         #[inline]
         pub fn open_with_flags_and_vfs<P: AsRef<Path>>(
@@ -66964,19 +65408,16 @@ pub mod rusqlite
                 transaction_behavior: TransactionBehavior::Deferred,
             })
         }
-
         /// Open a new connection to an in-memory SQLite database.
         #[inline]
         pub fn open_in_memory_with_flags(flags: OpenFlags) -> Result<Connection> {
             Connection::open_with_flags(":memory:", flags)
         }
-
         /// Open a new connection to an in-memory SQLite database using the specific flags and vfs name.
         #[inline]
         pub fn open_in_memory_with_flags_and_vfs(flags: OpenFlags, vfs: &str) -> Result<Connection> {
             Connection::open_with_flags_and_vfs(":memory:", flags, vfs)
         }
-
         /// Convenience method to run multiple SQL statements (that cannot take any parameters).
         pub fn execute_batch(&self, sql: &str) -> Result<()> {
             let mut sql = sql;
@@ -66994,14 +65435,12 @@ pub mod rusqlite
             }
             Ok(())
         }
-
         /// Convenience method to prepare and execute a single SQL statement.
         #[inline]
         pub fn execute<P: Params>(&self, sql: &str, params: P) -> Result<usize> {
             self.prepare(sql)
                 .and_then(|mut stmt| stmt.check_no_tail().and_then(|()| stmt.execute(params)))
         }
-
         /// Returns the path to the database file, if one exists and is known.
         #[inline]
         pub fn path(&self) -> Option<&str> {
@@ -67016,20 +65455,17 @@ pub mod rusqlite
                 }
             }
         }
-
         /// Attempts to free as much heap memory as possible from the database connection.
         #[inline]
         #[cfg(feature = "release_memory")]
         pub fn release_memory(&self) -> Result<()> {
             self.db.borrow_mut().release_memory()
         }
-
         /// Get the SQLite rowid of the most recent successful INSERT.
         #[inline]
         pub fn last_insert_rowid(&self) -> i64 {
             self.db.borrow_mut().last_insert_rowid()
         }
-
         /// Convenience method to execute a query that is expected to return a single row.
         #[inline]
         pub fn query_row<T, P, F>(&self, sql: &str, params: P, f: F) -> Result<T>
@@ -67044,10 +65480,9 @@ pub mod rusqlite
 
         // https://sqlite.org/tclsqlite.html#onecolumn
         #[cfg(test)]
-        pub(crate) fn one_column<T: types::FromSql>(&self, sql: &str) -> Result<T> {
+        pub fn one_column<T: types::FromSql>(&self, sql: &str) -> Result<T> {
             self.query_row(sql, [], |r| r.get(0))
         }
-
         /// Convenience method to execute a query that is expected to return a
         /// single row, and execute a mapping via `f` on that returned row with
         /// the possibility of failure.
@@ -67064,19 +65499,16 @@ pub mod rusqlite
 
             rows.get_expected_row().map_err(E::from).and_then(f)
         }
-
         /// Prepare a SQL statement for execution.
         #[inline]
         pub fn prepare(&self, sql: &str) -> Result<Statement<'_>> {
             self.prepare_with_flags(sql, PrepFlags::default())
         }
-
         /// Prepare a SQL statement for execution.
         #[inline]
         pub fn prepare_with_flags(&self, sql: &str, flags: PrepFlags) -> Result<Statement<'_>> {
             self.db.borrow_mut().prepare(self, sql, flags)
         }
-
         /// Close the SQLite connection.
         #[inline]
         pub fn close(self) -> Result<(), (Connection, Error)> {
@@ -67084,7 +65516,6 @@ pub mod rusqlite
             let r = self.db.borrow_mut().close();
             r.map_err(move |err| (self, err))
         }
-
         /// Enable loading of SQLite extensions from both SQL queries and Rust.
         #[cfg(feature = "load_extension")]
         #[cfg_attr(docsrs, doc(cfg(feature = "load_extension")))]
@@ -67092,7 +65523,6 @@ pub mod rusqlite
         pub unsafe fn load_extension_enable(&self) -> Result<()> {
             self.db.borrow_mut().enable_load_extension(1)
         }
-
         /// Disable loading of SQLite extensions.
         #[cfg(feature = "load_extension")]
         #[cfg_attr(docsrs, doc(cfg(feature = "load_extension")))]
@@ -67101,7 +65531,6 @@ pub mod rusqlite
             // It's always safe to turn off extension loading.
             unsafe { self.db.borrow_mut().enable_load_extension(0) }
         }
-
         /// Load the SQLite extension at `dylib_path`. `dylib_path` is passed
         /// through to `sqlite3_load_extension`, which may attempt OS-specific
         /// modifications if the file cannot be loaded directly.
@@ -67117,7 +65546,6 @@ pub mod rusqlite
                 .borrow_mut()
                 .load_extension(dylib_path.as_ref(), entry_point)
         }
-
         /// Get access to the underlying SQLite database connection handle.
         ///
         /// # Warning
@@ -67135,7 +65563,6 @@ pub mod rusqlite
         pub unsafe fn handle(&self) -> *mut ffi::sqlite3 {
             self.db.borrow().db()
         }
-
         /// Create a `Connection` from a raw handle.
         ///
         /// The underlying SQLite database connection handle will not be closed when
@@ -67153,7 +65580,6 @@ pub mod rusqlite
                 transaction_behavior: TransactionBehavior::Deferred,
             })
         }
-
         /// Helper to register an SQLite extension written in Rust.
         /// For [persistent](https://sqlite.org/loadext.html#persistent_loadable_extensions) extension,
         /// `init` should return `Ok(true)`.
@@ -67180,7 +65606,6 @@ pub mod rusqlite
                 _ => ffi::SQLITE_OK,
             }
         }
-
         /// Create a `Connection` from a raw owned handle.
         ///
         /// The returned connection will attempt to close the inner connection
@@ -67202,7 +65627,6 @@ pub mod rusqlite
                 transaction_behavior: TransactionBehavior::Deferred,
             })
         }
-
         /// Get access to a handle that can be used to interrupt long-running
         /// queries from another thread.
         #[inline]
@@ -67214,7 +65638,6 @@ pub mod rusqlite
         fn decode_result(&self, code: c_int) -> Result<()> {
             self.db.borrow().decode_result(code)
         }
-
         /// Return the number of rows modified, inserted or deleted by the most
         /// recently completed INSERT, UPDATE or DELETE statement on the database
         /// connection.
@@ -67224,7 +65647,6 @@ pub mod rusqlite
         pub fn changes(&self) -> u64 {
             self.db.borrow().changes()
         }
-
         /// Return the total number of rows modified, inserted or deleted by all
         /// completed INSERT, UPDATE or DELETE statements since the database
         /// connection was opened, including those executed as part of trigger programs.
@@ -67234,30 +65656,25 @@ pub mod rusqlite
         pub fn total_changes(&self) -> u64 {
             self.db.borrow().total_changes()
         }
-
         /// Test for auto-commit mode.
         /// Autocommit mode is on by default.
         #[inline]
         pub fn is_autocommit(&self) -> bool {
             self.db.borrow().is_autocommit()
         }
-
         /// Determine if all associated prepared statements have been reset.
         #[inline]
         pub fn is_busy(&self) -> bool {
             self.db.borrow().is_busy()
         }
-
         /// Flush caches to disk mid-transaction
         pub fn cache_flush(&self) -> Result<()> {
             self.db.borrow_mut().cache_flush()
         }
-
         /// Determine if a database is read-only
         pub fn is_readonly(&self, db_name: DatabaseName<'_>) -> Result<bool> {
             self.db.borrow().db_readonly(db_name)
         }
-
         /// Return the schema name for a database connection
         ///
         /// ## Failure
@@ -67276,7 +65693,6 @@ pub mod rusqlite
                 }
             }
         }
-
         /// Determine whether an interrupt is currently in effect
         #[cfg(feature = "modern_sqlite")] // 3.41.0
         #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
@@ -67285,32 +65701,33 @@ pub mod rusqlite
         }
     }
 
-    impl fmt::Debug for Connection {
+    impl fmt::Debug for Connection 
+    {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             f.debug_struct("Connection")
                 .field("path", &self.path())
                 .finish()
         }
     }
-
     /// Batch iterator
     #[derive(Debug)]
-    pub struct Batch<'conn, 'sql> {
+    pub struct Batch<'conn, 'sql> 
+    {
         conn: &'conn Connection,
         sql: &'sql str,
         tail: usize,
     }
 
-    impl<'conn, 'sql> Batch<'conn, 'sql> {
+    impl<'conn, 'sql> Batch<'conn, 'sql> 
+    {
         /// Constructor
         pub fn new(conn: &'conn Connection, sql: &'sql str) -> Batch<'conn, 'sql> {
             Batch { conn, sql, tail: 0 }
         }
-
         /// Iterates on each batch statements.
         ///
         /// Returns `Ok(None)` when batch is completed.
-        #[allow(clippy::should_implement_trait)] // fallible iterator
+         // fallible iterator
         pub fn next(&mut self) -> Result<Option<Statement<'conn>>> {
             while self.tail < self.sql.len() {
                 let sql = &self.sql[self.tail..];
@@ -67330,7 +65747,8 @@ pub mod rusqlite
         }
     }
 
-    impl<'conn> Iterator for Batch<'conn, '_> {
+    impl<'conn> Iterator for Batch<'conn, '_> 
+    {
         type Item = Result<Statement<'conn>>;
 
         fn next(&mut self) -> Option<Result<Statement<'conn>>> {
@@ -67338,7 +65756,8 @@ pub mod rusqlite
         }
     }
 
-    bitflags::bitflags! {
+    bitflags::bitflags! 
+    {
         /// Flags for opening SQLite database connections. See
         /// [sqlite3_open_v2](https://www.sqlite.org/c3ref/open.html) for details.
         ///
@@ -67410,7 +65829,8 @@ pub mod rusqlite
         }
     }
 
-    impl Default for OpenFlags {
+    impl Default for OpenFlags 
+    {
         #[inline]
         fn default() -> OpenFlags {
             // Note: update the `Connection::open` and top-level `OpenFlags` docs if
@@ -67422,7 +65842,8 @@ pub mod rusqlite
         }
     }
 
-    bitflags::bitflags! {
+    bitflags::bitflags! 
+    {
         /// Prepare flags. See
         /// [sqlite3_prepare_v3](https://sqlite.org/c3ref/c_prepare_normalize.html) for details.
         #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -67434,16 +65855,17 @@ pub mod rusqlite
             const SQLITE_PREPARE_NO_VTAB = 0x04;
         }
     }
-
     /// Allows interrupting a long-running computation.
-    pub struct InterruptHandle {
+    pub struct InterruptHandle 
+    {
         db_lock: Arc<Mutex<*mut ffi::sqlite3>>,
     }
 
     unsafe impl Send for InterruptHandle {}
     unsafe impl Sync for InterruptHandle {}
 
-    impl InterruptHandle {
+    impl InterruptHandle 
+    {
         /// Interrupt the query currently executing on another thread. This will
         /// cause that query to fail with a `SQLITE3_INTERRUPT` error.
         pub fn interrupt(&self) {
@@ -67462,8 +65884,6 @@ pub mod yaml_rust
     {
         *,
     };
-    
-    extern crate linked_hash_map;
 
     pub mod emitter
     {
@@ -67471,24 +65891,30 @@ pub mod yaml_rust
         {
             *,
         };
+        /*
         use std::convert::From;
         use std::error::Error;
         use std::fmt::{self, Display};
         use crate::yaml::{Hash, Yaml};
+        */
+        pub type EmitResult = Result<(), EmitError>;
 
         #[derive(Copy, Clone, Debug)]
-        pub enum EmitError {
+        pub enum EmitError 
+        {
             FmtError(fmt::Error),
             BadHashmapKey,
         }
 
-        impl Error for EmitError {
+        impl Error for EmitError 
+        {
             fn cause(&self) -> Option<&dyn Error> {
                 None
             }
         }
 
-        impl Display for EmitError {
+        impl Display for EmitError 
+        {
             fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 match *self {
                     EmitError::FmtError(ref err) => Display::fmt(err, formatter),
@@ -67497,24 +65923,24 @@ pub mod yaml_rust
             }
         }
 
-        impl From<fmt::Error> for EmitError {
+        impl From<fmt::Error> for EmitError 
+        {
             fn from(f: fmt::Error) -> Self {
                 EmitError::FmtError(f)
             }
         }
 
-        pub struct YamlEmitter<'a> {
+        pub struct YamlEmitter<'a> 
+        {
             writer: &'a mut dyn fmt::Write,
             best_indent: usize,
             compact: bool,
 
             level: isize,
         }
-
-        pub type EmitResult = Result<(), EmitError>;
-
-        // from serialize::json
-        fn escape_str(wr: &mut dyn fmt::Write, v: &str) -> Result<(), fmt::Error> {
+        
+        pub fn escape_str(wr: &mut dyn fmt::Write, v: &str) -> Result<(), fmt::Error> 
+        {
             wr.write_str("\"")?;
 
             let mut start = 0;
@@ -67576,7 +66002,8 @@ pub mod yaml_rust
             Ok(())
         }
 
-        impl<'a> YamlEmitter<'a> {
+        impl<'a> YamlEmitter<'a> 
+        {
             pub fn new(writer: &'a mut dyn fmt::Write) -> YamlEmitter {
                 YamlEmitter {
                     writer,
@@ -67585,7 +66012,6 @@ pub mod yaml_rust
                     level: -1,
                 }
             }
-
             /// Set 'compact inline notation' on or off, as described for block
             /// [sequences](http://www.yaml.org/spec/1.2/spec.html#id2797382)
             /// and
@@ -67597,7 +66023,6 @@ pub mod yaml_rust
             pub fn compact(&mut self, compact: bool) {
                 self.compact = compact;
             }
-
             /// Determine if this emitter is using 'compact inline notation'.
             pub fn is_compact(&self) -> bool {
                 self.compact
@@ -67708,7 +66133,6 @@ pub mod yaml_rust
                 }
                 Ok(())
             }
-
             /// Emit a yaml as a hash or array value: i.e., which should appear
             /// following a ":" or "-", either after a space, or on a new line.
             /// If `inline` is true, then the preceding characters are distinct
@@ -67744,22 +66168,8 @@ pub mod yaml_rust
                 }
             }
         }
-
         /// Check if the string requires quoting.
-        /// Strings starting with any of the following characters must be quoted.
-        /// :, &, *, ?, |, -, <, >, =, !, %, @
-        /// Strings containing any of the following characters must be quoted.
-        /// {, }, [, ], ,, #, `
-        ///
-        /// If the string contains any of the following control characters, it must be escaped with double quotes:
-        /// \0, \x01, \x02, \x03, \x04, \x05, \x06, \a, \b, \t, \n, \v, \f, \r, \x0e, \x0f, \x10, \x11, \x12, \x13, \x14, \x15, \x16, \x17, \x18, \x19, \x1a, \e, \x1c, \x1d, \x1e, \x1f, \N, \_, \L, \P
-        ///
-        /// Finally, there are other cases when the strings must be quoted, no matter if you're using single or double quotes:
-        /// * When the string is true or false (otherwise, it would be treated as a boolean value);
-        /// * When the string is null or ~ (otherwise, it would be considered as a null value);
-        /// * When the string looks like a number, such as integers (e.g. 2, 14, etc.), floats (e.g. 2.6, 14.9) and exponential numbers (e.g. 12e7, etc.) (otherwise, it would be treated as a numeric value);
-        /// * When the string looks like a date (e.g. 2014-12-31) (otherwise it would be automatically converted into a Unix timestamp).
-        fn need_quotes(string: &str) -> bool {
+        pub fn need_quotes(string: &str) -> bool {
             fn need_quotes_spaces(string: &str) -> bool {
                 string.starts_with(' ') || string.ends_with(' ')
             }
@@ -67844,7 +66254,6 @@ pub mod yaml_rust
             FlowMappingEmptyValue,
             End,
         }
-
         /// `Event` is used with the low-level event base parsing API,
         /// see `EventReceiver` trait.
         #[derive(Clone, PartialEq, Debug, Eq)]
@@ -68949,7 +67358,7 @@ pub mod yaml_rust
             fn ch_is(&self, c: char) -> bool {
                 self.buffer[0] == c
             }
-            #[allow(dead_code)]
+            
             #[inline]
             fn eof(&self) -> bool {
                 self.ch_is('\0')
@@ -70765,9 +69174,19 @@ pub mod linked_hash_map
     {
         *,
     };
-    
+    /*
+    use std::borrow::Borrow;
+    use std::cmp::Ordering;
+    use std::collections::hash_map::{self, HashMap};
+    use std::fmt;
+    use std::hash::{BuildHasher, Hash, Hasher};
+    use std::iter;
+    use std::marker;
+    use std::mem;
+    use std::ops::{Index, IndexMut};
+    use std::ptr::{self, addr_of_mut};
+    */
     // Optional Serde support
-    #[cfg(feature = "serde_impl")]
     pub mod serde
     {
         //! An optional implementation of serialization/deserialization.
@@ -70877,7 +69296,6 @@ pub mod linked_hash_map
         }
     }
     // Optional Heapsize support
-    #[cfg(feature = "heapsize_impl")]
     mod heapsize
     {
         use ::
@@ -70938,17 +69356,6 @@ pub mod linked_hash_map
         }
     }
 
-    use std::borrow::Borrow;
-    use std::cmp::Ordering;
-    use std::collections::hash_map::{self, HashMap};
-    use std::fmt;
-    use std::hash::{BuildHasher, Hash, Hasher};
-    use std::iter;
-    use std::marker;
-    use std::mem;
-    use std::ops::{Index, IndexMut};
-    use std::ptr::{self, addr_of_mut};
-
     struct KeyRef<K> {
         k: *const K,
     }
@@ -70959,7 +69366,6 @@ pub mod linked_hash_map
         key: K,
         value: V,
     }
-
     /// A linked hash map.
     pub struct LinkedHashMap<K, V, S = hash_map::RandomState> {
         map: HashMap<KeyRef<K>, *mut Node<K, V>, S>,
@@ -70992,8 +69398,7 @@ pub mod linked_hash_map
         }
     }
 
-    impl<K, Q: ?Sized> Borrow<Qey<Q>> for KeyRef<K>
-    where
+    impl<K, Q: ?Sized> Borrow<Qey<Q>> for KeyRef<K> where
         K: Borrow<Q>,
     {
         fn borrow(&self) -> &Qey<Q> {
@@ -71028,7 +69433,6 @@ pub mod linked_hash_map
         pub fn new() -> Self {
             Self::with_map(HashMap::new())
         }
-
         /// Creates an empty linked hash map with the given initial capacity.
         pub fn with_capacity(capacity: usize) -> Self {
             Self::with_map(HashMap::with_capacity(capacity))
@@ -71097,28 +69501,23 @@ pub mod linked_hash_map
                 free: ptr::null_mut(),
             }
         }
-
         /// Creates an empty linked hash map with the given initial hash builder.
         pub fn with_hasher(hash_builder: S) -> Self {
             Self::with_map(HashMap::with_hasher(hash_builder))
         }
-
         /// Creates an empty linked hash map with the given initial capacity and hash builder.
         pub fn with_capacity_and_hasher(capacity: usize, hash_builder: S) -> Self {
             Self::with_map(HashMap::with_capacity_and_hasher(capacity, hash_builder))
         }
-
         /// Reserves capacity for at least `additional` more elements to be inserted into the map.
         pub fn reserve(&mut self, additional: usize) {
             self.map.reserve(additional);
         }
-
         /// Shrinks the capacity of the map as much as possible.
         pub fn shrink_to_fit(&mut self) {
             self.map.shrink_to_fit();
             self.clear_free_list();
         }
-
         /// Gets the given key's corresponding entry in the map for in-place manipulation.
         pub fn entry(&mut self, k: K) -> Entry<K, V, S> {
             let self_ptr: *mut Self = self;
@@ -71133,7 +69532,6 @@ pub mod linked_hash_map
 
             Entry::Vacant(VacantEntry { key: k, map: self })
         }
-
         /// Returns an iterator visiting all entries in insertion order.
         pub fn entries(&mut self) -> Entries<K, V, S> {
             let head = if !self.head.is_null() {
@@ -71148,7 +69546,6 @@ pub mod linked_hash_map
                 marker: marker::PhantomData,
             }
         }
-
         /// Inserts a key-value pair into the map. If the key already existed, the old value is returned.
         pub fn insert(&mut self, k: K, v: V) -> Option<V> {
             self.ensure_guard_node();
@@ -71187,7 +69584,6 @@ pub mod linked_hash_map
             }
             old_val
         }
-
         /// Checks if the map contains the given key.
         pub fn contains_key<Q: ?Sized>(&self, k: &Q) -> bool
         where
@@ -71196,7 +69592,6 @@ pub mod linked_hash_map
         {
             self.map.contains_key(Qey::from_ref(k))
         }
-
         /// Returns the value corresponding to the key in the map.
         pub fn get<Q: ?Sized>(&self, k: &Q) -> Option<&V>
         where
@@ -71207,7 +69602,6 @@ pub mod linked_hash_map
                 .get(Qey::from_ref(k))
                 .map(|e| unsafe { &(**e).value })
         }
-
         /// Returns the mutable reference corresponding to the key in the map.
         pub fn get_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut V>
         where
@@ -71218,7 +69612,6 @@ pub mod linked_hash_map
                 .get(Qey::from_ref(k))
                 .map(|e| unsafe { &mut (**e).value })
         }
-
         /// Returns the value corresponding to the key in the map.
         pub fn get_refresh<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut V>
         where
@@ -71235,7 +69628,6 @@ pub mod linked_hash_map
             }
             value
         }
-
         /// Removes and returns the value corresponding to the key from the map.
         pub fn remove<Q: ?Sized>(&mut self, k: &Q) -> Option<V>
         where
@@ -71255,12 +69647,10 @@ pub mod linked_hash_map
                 }
             })
         }
-
         /// Returns the maximum number of key-value pairs the map can hold without reallocating.
         pub fn capacity(&self) -> usize {
             self.map.capacity()
         }
-
         /// Removes the first entry.
         #[inline]
         pub fn pop_front(&mut self) -> Option<(K, V)> {
@@ -71278,7 +69668,6 @@ pub mod linked_hash_map
                     (e.key, e.value)
                 })
         }
-
         /// Gets the first entry.
         #[inline]
         pub fn front(&self) -> Option<(&K, &V)> {
@@ -71292,7 +69681,6 @@ pub mod linked_hash_map
                 })
                 .map(|e| unsafe { (&(**e).key, &(**e).value) })
         }
-
         /// Removes the last entry.
         #[inline]
         pub fn pop_back(&mut self) -> Option<(K, V)> {
@@ -71310,7 +69698,6 @@ pub mod linked_hash_map
                     (e.key, e.value)
                 })
         }
-
         /// Gets the last entry.
         #[inline]
         pub fn back(&self) -> Option<(&K, &V)> {
@@ -71324,22 +69711,18 @@ pub mod linked_hash_map
                 })
                 .map(|e| unsafe { (&(**e).key, &(**e).value) })
         }
-
         /// Returns the number of key-value pairs in the map.
         pub fn len(&self) -> usize {
             self.map.len()
         }
-
         /// Returns whether the map is currently empty.
         pub fn is_empty(&self) -> bool {
             self.len() == 0
         }
-
         /// Returns a reference to the map's hasher.
         pub fn hasher(&self) -> &S {
             self.map.hasher()
         }
-
         /// Clears the map of all key-value pairs.
         pub fn clear(&mut self) {
             self.map.clear();
@@ -71352,7 +69735,6 @@ pub mod linked_hash_map
                 }
             }
         }
-
         /// Returns a double-ended iterator visiting all key-value pairs in order of insertion.
         pub fn iter(&self) -> Iter<K, V> {
             let head = if self.head.is_null() {
@@ -71367,7 +69749,6 @@ pub mod linked_hash_map
                 marker: marker::PhantomData,
             }
         }
-
         /// Returns a double-ended iterator visiting all key-value pairs in order of insertion.
         pub fn iter_mut(&mut self) -> IterMut<K, V> {
             let head = if self.head.is_null() {
@@ -71382,7 +69763,6 @@ pub mod linked_hash_map
                 marker: marker::PhantomData,
             }
         }
-
         /// Clears the map, returning all key-value pairs as an iterator.
         pub fn drain(&mut self) -> Drain<K, V> {
             let len = self.len();
@@ -71425,20 +69805,17 @@ pub mod linked_hash_map
                 marker: marker::PhantomData,
             }
         }
-
         /// Returns a double-ended iterator visiting all key in order of insertion.
         pub fn keys(&self) -> Keys<K, V> {
             Keys { inner: self.iter() }
         }
-
         /// Returns a double-ended iterator visiting all values in order of insertion.
         pub fn values(&self) -> Values<K, V> {
             Values { inner: self.iter() }
         }
     }
 
-    impl<'a, K, V, S, Q: ?Sized> Index<&'a Q> for LinkedHashMap<K, V, S>
-    where
+    impl<'a, K, V, S, Q: ?Sized> Index<&'a Q> for LinkedHashMap<K, V, S> where
         K: Hash + Eq + Borrow<Q>,
         S: BuildHasher,
         Q: Eq + Hash,
@@ -71450,8 +69827,7 @@ pub mod linked_hash_map
         }
     }
 
-    impl<'a, K, V, S, Q: ?Sized> IndexMut<&'a Q> for LinkedHashMap<K, V, S>
-    where
+    impl<'a, K, V, S, Q: ?Sized> IndexMut<&'a Q> for LinkedHashMap<K, V, S> where
         K: Hash + Eq + Borrow<Q>,
         S: BuildHasher,
         Q: Eq + Hash,
@@ -71483,8 +69859,7 @@ pub mod linked_hash_map
         }
     }
 
-    impl<'a, K, V, S> Extend<(&'a K, &'a V)> for LinkedHashMap<K, V, S>
-    where
+    impl<'a, K, V, S> Extend<(&'a K, &'a V)> for LinkedHashMap<K, V, S> where
         K: 'a + Hash + Eq + Copy,
         V: 'a + Copy,
         S: BuildHasher,
@@ -71577,7 +69952,6 @@ pub mod linked_hash_map
             self.clear_free_list();
         }
     }
-
     /// An insertion-order iterator over a `LinkedHashMap`'s entries, with immutable references to the
     /// values.
     pub struct Iter<'a, K: 'a, V: 'a> {
@@ -71586,7 +69960,6 @@ pub mod linked_hash_map
         remaining: usize,
         marker: marker::PhantomData<(&'a K, &'a V)>,
     }
-
     /// An insertion-order iterator over a `LinkedHashMap`'s entries, with mutable references to the
     /// values.
     pub struct IterMut<'a, K: 'a, V: 'a> {
@@ -71595,7 +69968,6 @@ pub mod linked_hash_map
         remaining: usize,
         marker: marker::PhantomData<(&'a K, &'a mut V)>,
     }
-
     /// A consuming insertion-order iterator over a `LinkedHashMap`'s entries.
     pub struct IntoIter<K, V> {
         head: *mut Node<K, V>,
@@ -71603,7 +69975,6 @@ pub mod linked_hash_map
         remaining: usize,
         marker: marker::PhantomData<(K, V)>,
     }
-
     /// A draining insertion-order iterator over a `LinkedHashMap`'s entries.
     pub struct Drain<'a, K, V> {
         head: *mut Node<K, V>,
@@ -71611,7 +69982,6 @@ pub mod linked_hash_map
         remaining: usize,
         marker: marker::PhantomData<&'a mut (K, V)>,
     }
-
     /// An insertion-order iterator over a `LinkedHashMap`'s entries represented as
     /// an `OccupiedEntry`.
     pub struct Entries<'a, K: 'a, V: 'a, S: 'a = hash_map::RandomState> {
@@ -71621,85 +69991,75 @@ pub mod linked_hash_map
         marker: marker::PhantomData<(&'a K, &'a mut V, &'a S)>,
     }
 
-    unsafe impl<'a, K, V> Send for Iter<'a, K, V>
-    where
+    unsafe impl<'a, K, V> Send for Iter<'a, K, V> where
         K: Send,
         V: Send,
     {
     }
 
-    unsafe impl<'a, K, V> Send for IterMut<'a, K, V>
-    where
+    unsafe impl<'a, K, V> Send for IterMut<'a, K, V> where
+    K: Send,
+    V: Send,
+    {
+    }
+
+    unsafe impl<'a, K, V> Send for Drain<'a, K, V> where
         K: Send,
         V: Send,
     {
     }
 
-    unsafe impl<'a, K, V> Send for Drain<'a, K, V>
-    where
+    unsafe impl<K, V> Send for IntoIter<K, V> where
         K: Send,
         V: Send,
     {
     }
 
-    unsafe impl<K, V> Send for IntoIter<K, V>
-    where
-        K: Send,
-        V: Send,
-    {
-    }
-
-    unsafe impl<'a, K, V, S> Send for Entries<'a, K, V, S>
-    where
+    unsafe impl<'a, K, V, S> Send for Entries<'a, K, V, S> where
         K: Send,
         V: Send,
         S: Send,
     {
     }
 
-    unsafe impl<'a, K, V> Sync for Iter<'a, K, V>
-    where
+    unsafe impl<'a, K, V> Sync for Iter<'a, K, V> where
         K: Sync,
         V: Sync,
     {
     }
 
-    unsafe impl<'a, K, V> Sync for IterMut<'a, K, V>
-    where
+    unsafe impl<'a, K, V> Sync for IterMut<'a, K, V> where
         K: Sync,
         V: Sync,
     {
     }
 
-    unsafe impl<'a, K, V> Sync for Drain<'a, K, V>
-    where
+    unsafe impl<'a, K, V> Sync for Drain<'a, K, V> where
         K: Sync,
         V: Sync,
     {
     }
-    unsafe impl<K, V> Sync for IntoIter<K, V>
-    where
+    unsafe impl<K, V> Sync for IntoIter<K, V> where
         K: Sync,
         V: Sync,
     {
     }
 
-    unsafe impl<'a, K, V, S> Sync for Entries<'a, K, V, S>
-    where
+    unsafe impl<'a, K, V, S> Sync for Entries<'a, K, V, S> where
         K: Sync,
         V: Sync,
         S: Sync,
     {
     }
 
-    impl<'a, K, V> Clone for Iter<'a, K, V> {
+    impl<'a, K, V> Clone for Iter<'a, K, V> 
+    {
         fn clone(&self) -> Self {
             Iter { ..*self }
         }
     }
 
-    impl<K, V> Clone for IntoIter<K, V>
-    where
+    impl<K, V> Clone for IntoIter<K, V> where
         K: Clone,
         V: Clone,
     {
@@ -71739,7 +70099,8 @@ pub mod linked_hash_map
         }
     }
 
-    impl<'a, K, V> Iterator for Iter<'a, K, V> {
+    impl<'a, K, V> Iterator for Iter<'a, K, V> 
+    {
         type Item = (&'a K, &'a V);
 
         fn next(&mut self) -> Option<(&'a K, &'a V)> {
@@ -71760,7 +70121,8 @@ pub mod linked_hash_map
         }
     }
 
-    impl<'a, K, V> Iterator for IterMut<'a, K, V> {
+    impl<'a, K, V> Iterator for IterMut<'a, K, V> 
+    {
         type Item = (&'a K, &'a mut V);
 
         fn next(&mut self) -> Option<(&'a K, &'a mut V)> {
@@ -71781,7 +70143,8 @@ pub mod linked_hash_map
         }
     }
 
-    impl<K, V> Iterator for IntoIter<K, V> {
+    impl<K, V> Iterator for IntoIter<K, V> 
+    {
         type Item = (K, V);
 
         fn next(&mut self) -> Option<(K, V)> {
@@ -71802,7 +70165,8 @@ pub mod linked_hash_map
         }
     }
 
-    impl<'a, K, V> Iterator for Drain<'a, K, V> {
+    impl<'a, K, V> Iterator for Drain<'a, K, V> 
+    {
         type Item = (K, V);
 
         fn next(&mut self) -> Option<(K, V)> {
@@ -71826,7 +70190,8 @@ pub mod linked_hash_map
         }
     }
 
-    impl<'a, K, V> DoubleEndedIterator for Drain<'a, K, V> {
+    impl<'a, K, V> DoubleEndedIterator for Drain<'a, K, V> 
+    {
         fn next_back(&mut self) -> Option<(K, V)> {
             if self.remaining == 0 {
                 return None;
@@ -71844,13 +70209,15 @@ pub mod linked_hash_map
         }
     }
 
-    impl<'a, K, V> ExactSizeIterator for Drain<'a, K, V> {
+    impl<'a, K, V> ExactSizeIterator for Drain<'a, K, V> 
+    {
         fn len(&self) -> usize {
             self.remaining
         }
     }
 
-    impl<'a, K, V, S: BuildHasher> Iterator for Entries<'a, K, V, S> {
+    impl<'a, K, V, S: BuildHasher> Iterator for Entries<'a, K, V, S> 
+    {
         type Item = OccupiedEntry<'a, K, V, S>;
 
         fn next(&mut self) -> Option<OccupiedEntry<'a, K, V, S>> {
@@ -71876,7 +70243,8 @@ pub mod linked_hash_map
         }
     }
 
-    impl<'a, K, V> DoubleEndedIterator for Iter<'a, K, V> {
+    impl<'a, K, V> DoubleEndedIterator for Iter<'a, K, V> 
+    {
         fn next_back(&mut self) -> Option<(&'a K, &'a V)> {
             if self.head == self.tail {
                 None
@@ -71890,7 +70258,8 @@ pub mod linked_hash_map
         }
     }
 
-    impl<'a, K, V> DoubleEndedIterator for IterMut<'a, K, V> {
+    impl<'a, K, V> DoubleEndedIterator for IterMut<'a, K, V> 
+    {
         fn next_back(&mut self) -> Option<(&'a K, &'a mut V)> {
             if self.head == self.tail {
                 None
@@ -71904,7 +70273,8 @@ pub mod linked_hash_map
         }
     }
 
-    impl<K, V> DoubleEndedIterator for IntoIter<K, V> {
+    impl<K, V> DoubleEndedIterator for IntoIter<K, V> 
+    {
         fn next_back(&mut self) -> Option<(K, V)> {
             if self.remaining == 0 {
                 return None;
@@ -71919,25 +70289,29 @@ pub mod linked_hash_map
         }
     }
 
-    impl<'a, K, V> ExactSizeIterator for Iter<'a, K, V> {
+    impl<'a, K, V> ExactSizeIterator for Iter<'a, K, V> 
+    {
         fn len(&self) -> usize {
             self.remaining
         }
     }
 
-    impl<'a, K, V> ExactSizeIterator for IterMut<'a, K, V> {
+    impl<'a, K, V> ExactSizeIterator for IterMut<'a, K, V> 
+    {
         fn len(&self) -> usize {
             self.remaining
         }
     }
 
-    impl<K, V> ExactSizeIterator for IntoIter<K, V> {
+    impl<K, V> ExactSizeIterator for IntoIter<K, V> 
+    {
         fn len(&self) -> usize {
             self.remaining
         }
     }
 
-    impl<K, V> Drop for IntoIter<K, V> {
+    impl<K, V> Drop for IntoIter<K, V> 
+    {
         fn drop(&mut self) {
             for _ in 0..self.remaining {
                 unsafe {
@@ -71949,18 +70323,20 @@ pub mod linked_hash_map
         }
     }
 
-    impl<'a, K, V> Drop for Drain<'a, K, V> {
+    impl<'a, K, V> Drop for Drain<'a, K, V> 
+    {
         fn drop(&mut self) {
             for _ in self {}
         }
     }
-
     /// An insertion-order iterator over a `LinkedHashMap`'s keys.
-    pub struct Keys<'a, K: 'a, V: 'a> {
+    pub struct Keys<'a, K: 'a, V: 'a> 
+    {
         inner: Iter<'a, K, V>,
     }
 
-    impl<'a, K, V> Clone for Keys<'a, K, V> {
+    impl<'a, K, V> Clone for Keys<'a, K, V> 
+    {
         fn clone(&self) -> Self {
             Keys {
                 inner: self.inner.clone(),
@@ -71968,7 +70344,8 @@ pub mod linked_hash_map
         }
     }
 
-    impl<'a, K, V> Iterator for Keys<'a, K, V> {
+    impl<'a, K, V> Iterator for Keys<'a, K, V> 
+    {
         type Item = &'a K;
 
         #[inline]
@@ -71981,25 +70358,28 @@ pub mod linked_hash_map
         }
     }
 
-    impl<'a, K, V> DoubleEndedIterator for Keys<'a, K, V> {
+    impl<'a, K, V> DoubleEndedIterator for Keys<'a, K, V> 
+    {
         #[inline]
         fn next_back(&mut self) -> Option<&'a K> {
             self.inner.next_back().map(|e| e.0)
         }
     }
 
-    impl<'a, K, V> ExactSizeIterator for Keys<'a, K, V> {
+    impl<'a, K, V> ExactSizeIterator for Keys<'a, K, V> 
+    {
         fn len(&self) -> usize {
             self.inner.len()
         }
     }
-
     /// An insertion-order iterator over a `LinkedHashMap`'s values.
-    pub struct Values<'a, K: 'a, V: 'a> {
+    pub struct Values<'a, K: 'a, V: 'a> 
+    {
         inner: Iter<'a, K, V>,
     }
 
-    impl<'a, K, V> Clone for Values<'a, K, V> {
+    impl<'a, K, V> Clone for Values<'a, K, V> 
+    {
         fn clone(&self) -> Self {
             Values {
                 inner: self.inner.clone(),
@@ -72007,7 +70387,8 @@ pub mod linked_hash_map
         }
     }
 
-    impl<'a, K, V> Iterator for Values<'a, K, V> {
+    impl<'a, K, V> Iterator for Values<'a, K, V> 
+    {
         type Item = &'a V;
 
         #[inline]
@@ -72020,20 +70401,23 @@ pub mod linked_hash_map
         }
     }
 
-    impl<'a, K, V> DoubleEndedIterator for Values<'a, K, V> {
+    impl<'a, K, V> DoubleEndedIterator for Values<'a, K, V> 
+    {
         #[inline]
         fn next_back(&mut self) -> Option<&'a V> {
             self.inner.next_back().map(|e| e.1)
         }
     }
 
-    impl<'a, K, V> ExactSizeIterator for Values<'a, K, V> {
+    impl<'a, K, V> ExactSizeIterator for Values<'a, K, V> 
+    {
         fn len(&self) -> usize {
             self.inner.len()
         }
     }
 
-    impl<'a, K: Hash + Eq, V, S: BuildHasher> IntoIterator for &'a LinkedHashMap<K, V, S> {
+    impl<'a, K: Hash + Eq, V, S: BuildHasher> IntoIterator for &'a LinkedHashMap<K, V, S> 
+    {
         type Item = (&'a K, &'a V);
         type IntoIter = Iter<'a, K, V>;
         fn into_iter(self) -> Iter<'a, K, V> {
@@ -72041,7 +70425,8 @@ pub mod linked_hash_map
         }
     }
 
-    impl<'a, K: Hash + Eq, V, S: BuildHasher> IntoIterator for &'a mut LinkedHashMap<K, V, S> {
+    impl<'a, K: Hash + Eq, V, S: BuildHasher> IntoIterator for &'a mut LinkedHashMap<K, V, S> 
+    {
         type Item = (&'a K, &'a mut V);
         type IntoIter = IterMut<'a, K, V>;
         fn into_iter(self) -> IterMut<'a, K, V> {
@@ -72049,7 +70434,8 @@ pub mod linked_hash_map
         }
     }
 
-    impl<K: Hash + Eq, V, S: BuildHasher> IntoIterator for LinkedHashMap<K, V, S> {
+    impl<K: Hash + Eq, V, S: BuildHasher> IntoIterator for LinkedHashMap<K, V, S> 
+    {
         type Item = (K, V);
         type IntoIter = IntoIter<K, V>;
         fn into_iter(mut self) -> IntoIter<K, V> {
@@ -72078,29 +70464,30 @@ pub mod linked_hash_map
             }
         }
     }
-
     /// A view into a single location in a map, which may be vacant or occupied.
-    pub enum Entry<'a, K: 'a, V: 'a, S: 'a = hash_map::RandomState> {
+    pub enum Entry<'a, K: 'a, V: 'a, S: 'a = hash_map::RandomState> 
+    {
         /// An occupied Entry.
         Occupied(OccupiedEntry<'a, K, V, S>),
         /// A vacant Entry.
         Vacant(VacantEntry<'a, K, V, S>),
     }
-
     /// A view into a single occupied location in a `LinkedHashMap`.
-    pub struct OccupiedEntry<'a, K: 'a, V: 'a, S: 'a = hash_map::RandomState> {
+    pub struct OccupiedEntry<'a, K: 'a, V: 'a, S: 'a = hash_map::RandomState> 
+    {
         entry: *mut Node<K, V>,
         map: *mut LinkedHashMap<K, V, S>,
         marker: marker::PhantomData<&'a K>,
     }
-
     /// A view into a single empty location in a `LinkedHashMap`.
-    pub struct VacantEntry<'a, K: 'a, V: 'a, S: 'a = hash_map::RandomState> {
+    pub struct VacantEntry<'a, K: 'a, V: 'a, S: 'a = hash_map::RandomState> 
+    {
         key: K,
         map: &'a mut LinkedHashMap<K, V, S>,
     }
 
-    impl<'a, K: Hash + Eq, V, S: BuildHasher> Entry<'a, K, V, S> {
+    impl<'a, K: Hash + Eq, V, S: BuildHasher> Entry<'a, K, V, S> 
+    {
         /// Returns the entry key.
         pub fn key(&self) -> &K {
             match *self {
@@ -72108,7 +70495,6 @@ pub mod linked_hash_map
                 Entry::Vacant(ref e) => e.key(),
             }
         }
-
         /// Ensures a value is in the entry by inserting the default if empty, and returns a mutable reference to the value in the entry.
         pub fn or_insert(self, default: V) -> &'a mut V {
             match self {
@@ -72116,7 +70502,6 @@ pub mod linked_hash_map
                 Entry::Vacant(entry) => entry.insert(default),
             }
         }
-
         /// Ensures a value is in the entry by inserting the result of the default function if empty,
         /// and returns a mutable reference to the value in the entry.
         pub fn or_insert_with<F: FnOnce() -> V>(self, default: F) -> &'a mut V {
@@ -72125,7 +70510,6 @@ pub mod linked_hash_map
                 Entry::Vacant(entry) => entry.insert(default()),
             }
         }
-
         /// Provides in-place mutable access to an occupied entry before any potential inserts into the map.
         pub fn and_modify<F>(self, f: F) -> Self
         where
@@ -72139,7 +70523,6 @@ pub mod linked_hash_map
                 Entry::Vacant(entry) => Entry::Vacant(entry),
             }
         }
-
         /// Ensures a value is in the entry by inserting the default value if empty, and returns a mutable reference to the value in the entry.
         pub fn or_default(self) -> &'a mut V
         where
@@ -72152,28 +70535,25 @@ pub mod linked_hash_map
         }
     }
 
-    impl<'a, K: Hash + Eq, V, S: BuildHasher> OccupiedEntry<'a, K, V, S> {
+    impl<'a, K: Hash + Eq, V, S: BuildHasher> OccupiedEntry<'a, K, V, S> 
+    {
         /// Gets a reference to the entry key.
         pub fn key(&self) -> &K {
             unsafe { &(*self.entry).key }
         }
-
         /// Gets a reference to the value in the entry.
         pub fn get(&self) -> &V {
             unsafe { &(*self.entry).value }
         }
-
         /// Gets a mutable reference to the value in the entry.
         pub fn get_mut(&mut self) -> &mut V {
             unsafe { &mut (*self.entry).value }
         }
-
         /// Converts the OccupiedEntry into a mutable reference to the value in the entry
         /// with a lifetime bound to the map itself
         pub fn into_mut(self) -> &'a mut V {
             unsafe { &mut (*self.entry).value }
         }
-
         /// Sets the value of the entry, and returns the entry's old value
         pub fn insert(&mut self, value: V) -> V {
             unsafe {
@@ -72189,19 +70569,18 @@ pub mod linked_hash_map
                 old_val
             }
         }
-
         /// Takes the value out of the entry, and returns it
         pub fn remove(self) -> V {
             unsafe { (*self.map).remove(&(*self.entry).key) }.unwrap()
         }
     }
 
-    impl<'a, K: 'a + Hash + Eq, V: 'a, S: BuildHasher> VacantEntry<'a, K, V, S> {
+    impl<'a, K: 'a + Hash + Eq, V: 'a, S: BuildHasher> VacantEntry<'a, K, V, S> 
+    {
         /// Gets a reference to the entry key.
         pub fn key(&self) -> &K {
             &self.key
         }
-
         /// Sets the value of the entry with the VacantEntry's key, and returns a mutable reference to it
         pub fn insert(self, value: V) -> &'a mut V {
             self.map.ensure_guard_node();
@@ -72228,20 +70607,324 @@ pub mod linked_hash_map
     }
 }
 
-#[macro_use] mod tlog
-{
-    use ::
-    {
-        *,
-    };
-}
-
 #[macro_use] pub mod tools
 {
     use ::
     {
         *,
     };
+    
+    pub fn is_signal_handler_enabled() -> bool
+    {
+        env::var("CICADA_ENABLE_SIG_HANDLER").map_or(false, |x| x == "1")
+    }
+
+    pub fn get_user_name() -> String
+    {
+        match env::var("USER")
+        {
+            Ok(x) => { return x; }
+            Err(e) => { log!("cicada: env USER error: {}", e); }
+        }
+
+        let cmd_result = execute::run("whoami");
+        return cmd_result.stdout.trim().to_string();
+    }
+
+    pub fn get_user_home() -> String
+    {
+        match env::var("HOME")
+        {
+            Ok(x) => x,
+            Err(e) =>
+            {
+                println_stderr!("cicada: env HOME error: {}", e);
+                String::new()
+            }
+        }
+    }
+
+    pub fn get_config_dir() -> String
+    {
+        if let Ok(x) = env::var("XDG_CONFIG_HOME")
+        {
+            format!("{}/cicada", x)
+        }
+        else
+        {
+            let home = get_user_home();
+            format!("{}/.config/cicada", home)
+        }
+    }
+
+    pub fn get_user_completer_dir() -> String
+    {
+        let dir_config = get_config_dir();
+        format!("{}/completers", dir_config)
+    }
+
+    pub fn unquote(s: &str) -> String
+    {
+        let args = parsers::parser_line::line_to_plain_tokens(s);
+        if args.is_empty() { return String::new(); }
+
+        args[0].clone()
+    }
+
+    pub fn is_env(line: &str) -> bool
+    {
+        re_contains(line, r"^[a-zA-Z_][a-zA-Z0-9_]*=.*$")
+    }
+    
+    pub fn extend_bangbang(sh: &shell::Shell, line: &mut String)
+    {
+        if !re_contains(line, r"!!") { return; }
+        if sh.previous_cmd.is_empty() { return; }
+
+        let re = Regex::new(r"!!").unwrap();
+        let mut replaced = false;
+        let mut new_line = String::new();
+        let linfo = parsers::parser_line::parse_line(line);
+        for (sep, token) in linfo.tokens
+        {
+            if !sep.is_empty() { new_line.push_str(&sep); }
+
+            if re_contains(&token, r"!!") && sep != "'"
+            {
+                let line2 = token.clone();
+                let result = re.replace_all(&line2, sh.previous_cmd.as_str());
+                new_line.push_str(&result);
+                replaced = true;
+            }
+            else {
+                new_line.push_str(&token);
+            }
+
+            if !sep.is_empty() {
+                new_line.push_str(&sep);
+            }
+            new_line.push(' ');
+        }
+
+        *line = new_line.trim_end().to_string();
+        // print full line after extending
+        if replaced {
+            println!("{}", line);
+        }
+    }
+
+    pub fn wrap_sep_string(sep: &str, s: &str) -> String {
+        let mut _token = String::new();
+        let mut met_subsep = false;
+        // let set previous_subsep to any char except '`' or '"'
+        let mut previous_subsep = 'N';
+        for c in s.chars() {
+            // handle cmds like: export DIR=`brew --prefix openssl`/include
+            // or like: export foo="hello world"
+            if sep.is_empty() && (c == '`' || c == '"') {
+                if !met_subsep {
+                    met_subsep = true;
+                    previous_subsep = c;
+                } else if c == previous_subsep {
+                    met_subsep = false;
+                    previous_subsep = 'N';
+                }
+            }
+            if c.to_string() == sep {
+                _token.push('\\');
+            }
+            if c == ' ' && sep.is_empty() && !met_subsep {
+                _token.push('\\');
+            }
+            _token.push(c);
+        }
+        format!("{}{}{}", sep, _token, sep)
+    }
+
+    pub fn env_args_to_command_line() -> String {
+        let mut result = String::new();
+        let env_args = env::args();
+        if env_args.len() <= 1 {
+            return result;
+        }
+        for (i, arg) in env_args.enumerate() {
+            if i == 0 || arg == "-c" {
+                continue;
+            }
+            result.push_str(arg.as_str());
+        }
+        result
+    }
+
+    extern "C" {
+        fn gethostname(name: *mut libc::c_char, size: libc::size_t) -> libc::c_int;
+    }
+
+    /// via: https://gist.github.com/conradkleinespel/6c8174aee28fa22bfe26
+    pub fn get_hostname() -> String {
+        let len = 255;
+        let mut buf = Vec::<u8>::with_capacity(len);
+
+        let ptr = buf.as_mut_slice().as_mut_ptr();
+
+        let err = unsafe { gethostname(ptr as *mut libc::c_char, len as libc::size_t) } as i32;
+
+        match err {
+            0 => {
+                let real_len;
+                let mut i = 0;
+                loop {
+                    let byte = unsafe { *(((ptr as u64) + (i as u64)) as *const u8) };
+                    if byte == 0 {
+                        real_len = i;
+                        break;
+                    }
+
+                    i += 1;
+                }
+                unsafe { buf.set_len(real_len) }
+                String::from_utf8_lossy(buf.as_slice()).into_owned()
+            }
+            _ => String::from("unknown"),
+        }
+    }
+
+    pub fn is_arithmetic(line: &str) -> bool {
+        if !re_contains(line, r"[0-9]+") {
+            return false;
+        }
+        if !re_contains(line, r"\+|\-|\*|/|\^") {
+            return false;
+        }
+        re_contains(line, r"^[ 0-9\.\(\)\+\-\*/\^]+[\.0-9 \)]$")
+    }
+
+    pub fn create_raw_fd_from_file(file_name: &str, append: bool) -> Result<i32, String> {
+        let mut oos = OpenOptions::new();
+        if append {
+            oos.append(true);
+        } else {
+            oos.write(true);
+            oos.truncate(true);
+        }
+        match oos.create(true).open(file_name) {
+            Ok(x) => {
+                let fd = x.into_raw_fd();
+                Ok(fd)
+            }
+            Err(e) => Err(format!("{}", e)),
+        }
+    }
+
+    pub fn get_fd_from_file(file_name: &str) -> i32 {
+        let path = Path::new(file_name);
+        let display = path.display();
+        let file = match File::open(path) {
+            Err(why) => {
+                println_stderr!("cicada: {}: {}", display, why);
+                return -1;
+            }
+            Ok(file) => file,
+        };
+        file.into_raw_fd()
+    }
+
+    pub fn escape_path(path: &str) -> String {
+        let re = Regex::new(r##"(?P<c>[!\(\)<>,\?\]\[\{\} \\'"`*\^#|$&;])"##).unwrap();
+        return re.replace_all(path, "\\$c").to_string();
+    }
+
+    pub fn get_current_dir() -> String {
+        let mut current_dir = PathBuf::new();
+        match env::current_dir() {
+            Ok(x) => current_dir = x,
+            Err(e) => {
+                println_stderr!("env current_dir() failed: {}", e);
+            }
+        }
+        let mut str_current_dir = "";
+        match current_dir.to_str() {
+            Some(x) => str_current_dir = x,
+            None => {
+                println_stderr!("current_dir to str failed.");
+            }
+        }
+        str_current_dir.to_string()
+    }
+
+    pub fn split_into_fields(
+        sh: &shell::Shell,
+        line: &str,
+        envs: &HashMap<String, String>,
+    ) -> Vec<String> {
+        let ifs_chars;
+        if envs.contains_key("IFS") {
+            ifs_chars = envs[&"IFS".to_string()].chars().collect();
+        } else if let Some(x) = sh.get_env("IFS") {
+            ifs_chars = x.chars().collect();
+        } else if let Ok(x) = env::var("IFS") {
+            ifs_chars = x.chars().collect();
+        } else {
+            ifs_chars = vec![];
+        }
+
+        if ifs_chars.is_empty() {
+            return line
+                .split(&[' ', '\t', '\n'][..])
+                .map(|x| x.to_string())
+                .collect();
+        } else {
+            return line.split(&ifs_chars[..]).map(|x| x.to_string()).collect();
+        }
+    }
+
+    pub fn is_builtin(s: &str) -> bool {
+        let builtins = [
+            "alias", "bg", "cd", "cinfo", "exec", "exit", "export", "fg",
+            "history", "jobs", "read", "source", "ulimit", "unalias", "vox",
+            "minfd", "set", "unset", "unpath",
+        ];
+        builtins.contains(&s)
+    }
+
+    pub fn init_path_env() {
+        // order matters. took from `runc spec`
+        let mut paths: Vec<String> = vec![];
+        for x in [
+            "/usr/local/sbin",
+            "/usr/local/bin",
+            "/usr/sbin",
+            "/usr/bin",
+            "/sbin",
+            "/bin",
+        ] {
+            if Path::new(x).exists() {
+                paths.push(x.to_string());
+            }
+        }
+
+        if let Ok(env_path) = env::var("PATH") {
+            for x in env_path.split(":") {
+                if !paths.contains(&x.to_string()) {
+                    paths.push(x.to_string());
+                }
+            }
+        }
+        let paths = paths.join(":");
+        env::set_var("PATH", paths);
+    }
+
+    pub fn is_shell_altering_command(line: &str) -> bool {
+        let line = line.trim();
+        if re_contains(line, r"^[A-Za-z_][A-Za-z0-9_]*=.*$") {
+            return true;
+        }
+        line.starts_with("alias ")
+            || line.starts_with("export ")
+            || line.starts_with("unalias ")
+            || line.starts_with("unset ")
+            || line.starts_with("source ")
+    }
 }
 
 pub mod builtins
@@ -74513,7 +73196,6 @@ pub mod completers
         fn needs_expand_home(line: &str) -> bool {
             libs::re::re_contains(line, r"( +~ +)|( +~/)|(^ *~/)|( +~ *$)")
         }
-
         /// Returns a sorted list of paths whose prefix matches the given path.
         pub fn complete_path(word: &str, for_dir: bool) -> Vec<Completion> {
             let is_env = is_env_prefix(word);
@@ -74612,7 +73294,6 @@ pub mod completers
                 None => (prefix.to_string(), String::new(), path.to_string()),
             }
         }
-
         /// Returns a sorted list of paths whose prefix matches the given path.
         fn complete_bin(sh: &shell::Shell, path: &str) -> Vec<Completion> {
             let mut res = Vec::new();
@@ -75103,7 +73784,6 @@ pub mod core
         }
         None
     }
-
     /// Run a pipeline (e.g. `echo hi | wc -l`)
     /// returns: (is-terminal-given, command-result)
     pub fn run_pipeline(
@@ -75244,7 +73924,6 @@ pub mod core
         }
         (term_given, cmd_result)
     }
-
     /// Run a single command.
     /// e.g. the `sort -k2` part of `ps ax | sort -k2 | head`
     #[allow(clippy::needless_range_loop)]
@@ -75760,7 +74439,6 @@ pub mod execute
     use crate::parsers;
     use crate::shell::{self, Shell};
     use crate::types::{CommandLine, CommandResult, Tokens};
-
     /// Entry point for non-ttys (e.g. Cmd-N on MacVim)
     pub fn run_procs_for_non_tty(sh: &mut Shell) {
         let mut buffer = String::new();
@@ -75839,7 +74517,6 @@ pub mod execute
             sh.set_env(name, value);
         }
     }
-
     /// Run simple command or pipeline without using `&&`, `||`, `;`.
     /// example 1: `ls`
     /// example 2: `ls | wc`
@@ -76262,7 +74939,6 @@ pub mod highlight
         static ref AVAILABLE_COMMANDS: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
         static ref ALIASES: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
     }
-
     /// Initialize the available commands cache by scanning PATH directories
     pub fn init_command_cache() {
         let commands = scan_available_commands();
@@ -76270,7 +74946,6 @@ pub mod highlight
             *cache = commands;
         }
     }
-
     /// Update aliases in the highlighter's cache
     pub fn update_aliases(sh: &shell::Shell) {
         if let Ok(mut aliases) = ALIASES.lock() {
@@ -77094,7 +75769,6 @@ pub mod libs
         extern "C" {
             fn ioctl(fd: c_int, request: c_ulong, ...) -> c_int;
         }
-
         /// Runs the ioctl command. Returns (0, 0) if all of the streams are not to a terminal, or
         /// there is an error. (0, 0) is an invalid size to have anyway, which is why
         /// it can be used as a nil value.
@@ -77115,7 +75789,6 @@ pub mod libs
             }
             window
         }
-
         /// Query the current processes's output (`stdout`), input (`stdin`), and error (`stderr`) in that order, 
         ///in the attempt to dtermine terminal width.
         pub fn dimensions() -> Option<(usize, usize)> {
@@ -77311,7 +75984,6 @@ pub mod parsers
             }
             result
         }
-
         /// Parse command line for multiple commands. Examples:
         /// >>> line_to_cmds("echo foo && echo bar; echo end");
         /// vec!["echo foo", "&&", "echo bar", ";", "echo end"]
@@ -77420,7 +76092,6 @@ pub mod parsers
             }
             result
         }
-
         /// parse command line to tokens
         /// >>> parse_line("echo 'hi yoo' | grep \"hi\"");
         /// LineInfo {
@@ -79337,7 +78008,6 @@ pub mod shell
             }
             None
         }
-
         /// Update existing *ENV Variable* if such name exists in ENVs,
         /// otherwise, we define a local *Shell Variable*, which would not
         /// be exported into child processes.
@@ -79348,7 +78018,6 @@ pub mod shell
                 self.envs.insert(name.to_string(), value.to_string());
             }
         }
-
         /// get *Shell Variable*, or *ENV Variable*.
         pub fn get_env(&self, name: &str) -> Option<String> {
             match self.envs.get(name) {
@@ -79361,7 +78030,6 @@ pub mod shell
                 }
             }
         }
-
         /// Remove environment variable, function from the environment of
         /// the currently running process
         pub fn remove_env(&mut self, name: &str) -> bool {
@@ -80543,7 +79211,7 @@ pub mod types
         }
     }
 
-    #[allow(dead_code)]
+    
     #[derive(Clone, Debug, Default)]
     pub struct CommandResult {
         pub gid: i32,
@@ -80581,7 +79249,7 @@ pub mod types
         }
     }
 
-    #[allow(dead_code)]
+    
     #[derive(Clone, Debug, Default)]
     pub struct CommandOptions {
         pub background: bool,
@@ -80859,4 +79527,4 @@ fn main()
     }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 80862
+// 79530
