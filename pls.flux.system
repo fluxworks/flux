@@ -287,11 +287,12 @@ pub mod char
 }
 
 pub mod collections
-{   
+{
     pub use std::collections::{ * };
 
     use ::
     { 
+        iter::{ FromIterator },
         *,
     };
     /// Utilities for manipulating raw input sequences representing the result of a `SequenceMap::find` operation.
@@ -334,38 +335,36 @@ pub mod collections
     impl<'a, K, V> OccupiedEntry<'a, K, V>
     {
         /// Returns a borrowed reference to the entry key.
-        pub fn key(&self) -> &K {
+        pub fn key(&self) -> &K 
+        {
             &self.map.sequences[self.index].0
+        
         }
-
         /// Returns a borrowed reference to the entry value.
-        pub fn get(&self) -> &V {
+        pub fn get(&self) -> &V 
+        {
             &self.map.sequences[self.index].1
         }
-
         /// Returns a mutable reference to the entry value.
-        pub fn get_mut(&mut self) -> &mut V {
+        pub fn get_mut(&mut self) -> &mut V 
+        {
             &mut self.map.sequences[self.index].1
         }
-
-        /// Converts the `OccupiedEntry` into a mutable reference whose lifetime
-        /// is bound to the `SequenceMap`.
-        pub fn into_mut(self) -> &'a mut V {
+        /// Converts the `OccupiedEntry` into a mutable reference whose lifetime is bound to the `SequenceMap`.
+        pub fn into_mut(self) -> &'a mut V 
+        {
             &mut self.map.sequences[self.index].1
         }
-
         /// Replaces the entry value with the given value, returning the previous value.
-        pub fn insert(&mut self, value: V) -> V {
-            replace(self.get_mut(), value)
-        }
-
+        pub fn insert(&mut self, value: V) -> V { ::mem::replace(self.get_mut(), value) }
         /// Removes the entry and returns the value.
-        pub fn remove(self) -> V {
+        pub fn remove(self) -> V 
+        {
             self.map.sequences.remove(self.index).1
         }
-
         /// Removes the entry and returns the key-value pair.
-        pub fn remove_entry(self) -> (K, V) {
+        pub fn remove_entry(self) -> (K, V) 
+        {
             self.map.sequences.remove(self.index)
         }
     }
@@ -490,37 +489,30 @@ pub mod collections
     impl<K: AsRef<str>, V> SequenceMap<K, V>
     {
         /// Creates an empty `SequenceMap`.
-        pub fn new() -> SequenceMap<K, V> {
+        pub fn new() -> SequenceMap<K, V> 
+        {
             SequenceMap::with_capacity(0)
         }
-
         /// Creates an empty `SequenceMap` with allocated capacity for `n` elements.
-        pub fn with_capacity(n: usize) -> SequenceMap<K, V> {
+        pub fn with_capacity(n: usize) -> SequenceMap<K, V> 
+        {
             SequenceMap{
                 sequences: Vec::with_capacity(n),
             }
         }
-
         /// Returns a slice of all contained sequences, sorted by key.
-        pub fn sequences(&self) -> &[(K, V)] {
+        pub fn sequences(&self) -> &[(K, V)] 
+        {
             &self.sequences
         }
-
         /// Returns a mutable slice of all contained sequences, sorted by key.
-        ///
-        /// # Note
-        ///
-        /// Elements must remain sorted by key for the proper functioning of
-        /// `SequenceMap` operations. If keys are modified, the caller must ensure
-        /// that the slice is sorted.
-        pub fn sequences_mut(&mut self) -> &mut [(K, V)] {
+        pub fn sequences_mut(&mut self) -> &mut [(K, V)] 
+        {
             &mut self.sequences
         }
-
         /// Returns an `Entry` for the given key.
-        ///
-        /// This API matches the entry API for the standard `HashMap` collection.
-        pub fn entry(&mut self, key: K) -> Entry<K, V> {
+        pub fn entry(&mut self, key: K) -> Entry<K, V> 
+        {
             match self.search(key.as_ref()) {
                 Ok(n) => Entry::Occupied(OccupiedEntry{
                     map: self,
@@ -533,9 +525,9 @@ pub mod collections
                 })
             }
         }
-
         /// Performs a search for a partial or complete sequence match.
-        pub fn find(&self, key: &str) -> FindResult<&V> {
+        pub fn find(&self, key: &str) -> FindResult<&V> 
+        {
             let (n, found) = match self.search(key) {
                 Ok(n) => (n, true),
                 Err(n) => (n, false)
@@ -551,46 +543,46 @@ pub mod collections
                 (true, true) => FindResult::Undecided(&self.sequences[n].1),
             }
         }
-
         /// Returns the corresponding value for the given sequence.
-        pub fn get(&self, key: &str) -> Option<&V> {
+        pub fn get(&self, key: &str) -> Option<&V> 
+        {
             match self.search(key) {
                 Ok(n) => Some(&self.sequences[n].1),
                 Err(_) => None
             }
         }
-
         /// Returns a mutable reference to the corresponding value for the given sequence.
-        pub fn get_mut(&mut self, key: &str) -> Option<&mut V> {
+        pub fn get_mut(&mut self, key: &str) -> Option<&mut V> 
+        {
             match self.search(key) {
                 Ok(n) => Some(&mut self.sequences[n].1),
                 Err(_) => None
             }
         }
-
         /// Inserts a key-value pair into the map.
-        ///
-        /// If the key already exists in the map, the new value will replace the old
-        /// value and the old value will be returned.
-        pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-            match self.search(key.as_ref()) {
-                Ok(n) => Some(replace(&mut self.sequences[n], (key, value)).1),
-                Err(n) => {
+        pub fn insert(&mut self, key: K, value: V) -> Option<V> 
+        {
+            match self.search(key.as_ref()) 
+            {
+                Ok(n) => Some( ::mem::replace(&mut self.sequences[n], (key, value)).1),
+                Err(n) =>
+                {
                     self.sequences.insert(n, (key, value));
                     None
                 }
             }
         }
-
         /// Removes a key-value pair from the map.
-        pub fn remove(&mut self, key: &str) -> Option<(K, V)> {
+        pub fn remove(&mut self, key: &str) -> Option<(K, V)> 
+        {
             match self.search(key) {
                 Ok(n) => Some(self.sequences.remove(n)),
                 Err(_) => None
             }
         }
 
-        fn search(&self, key: &str) -> Result<usize, usize> {
+        fn search(&self, key: &str) -> Result<usize, usize> 
+        {
             self.sequences.binary_search_by_key(&key, |&(ref k, _)| &k.as_ref())
         }
     }
@@ -598,14 +590,10 @@ pub mod collections
     impl<K: AsRef<str>, V> From<Vec<(K, V)>> for SequenceMap<K, V>
     {
         /// Creates a `SequenceMap` from a `Vec` of key-value pairs.
-        ///
-        /// The input `Vec` will be sorted and deduplicated.
-        ///
-        /// If two elements exist with the same key, the first element is used.
-        fn from(mut sequences: Vec<(K, V)>) -> SequenceMap<K, V> {
+        fn from(mut sequences: Vec<(K, V)>) -> SequenceMap<K, V>
+        {
             sequences.sort_by(|a, b| a.0.as_ref().cmp(b.0.as_ref()));
             sequences.dedup_by(|a, b| a.0.as_ref() == b.0.as_ref());
-
             SequenceMap{sequences}
         }
     }
@@ -613,13 +601,13 @@ pub mod collections
     impl<K: AsRef<str>, V> FromIterator<(K, V)> for SequenceMap<K, V>
     {
         /// Creates a `SequenceMap` from an iterator of key-value pairs.
-        ///
-        /// If two elements exist with the same key, the last element is used.
-        fn from_iter<I: IntoIterator<Item=(K, V)>>(iter: I) -> Self {
+        fn from_iter<I: IntoIterator<Item=(K, V)>>(iter: I) -> Self
+        {
             let iter = iter.into_iter();
             let mut map = SequenceMap::with_capacity(iter.size_hint().0);
 
-            for (k, v) in iter {
+            for (k, v) in iter
+            {
                 map.insert(k, v);
             }
 
@@ -1372,13 +1360,16 @@ pub mod ffi
     pub use std::ffi::{ * };
     use ::
     {
+        command::{ Category },
         io::{ self, BufRead, BufReader, BufWriter, Read as _, Seek, SeekFrom, Write as _, },
+        prompt::{ Prompter },
         reader::{ Read, Reader },
         writer::{ Write, Writer },
         terminal::{ Terminals },
+        sync::{ Mutex },
         *,
     };
-    /// The main interface to input reading and other terminal operations
+    /// The main interface to input reading and other terminal operations.
     pub struct Interface<Term:Terminals>
     {
         term: Term,
@@ -1411,7 +1402,7 @@ pub mod ffi
         fn execute(&self, prompter: &mut Prompter<T>, count: i32, _ch: char) -> ::io::Result<()>
         {
             let buf = prompter.buffer();
-            let linfo = parser_line::parse_line(buf);
+            let linfo = ::parsers::line::parse(buf);
 
             if linfo.is_complete { prompter.accept_input() }
             else if count > 0
@@ -1433,13 +1424,13 @@ pub mod filter
 {
     use ::
     {
+        borrow::{ Cow },
+        reader::{START_INVISIBLE, END_INVISIBLE},
         *,
     };
 
     pub fn visible(s: &str) -> Cow<str>
     {
-        use ::reader::{START_INVISIBLE, END_INVISIBLE};
-
         if !s.contains(START_INVISIBLE) { return Cow::Borrowed(s); }
 
         let mut virt = String::new();
@@ -1508,6 +1499,9 @@ pub mod history
 {
     use ::
     {
+        collections::{ HashMap },
+        ffi::{ Interface },
+        path::{ Path },
         *,
     };
 
@@ -1531,7 +1525,7 @@ pub mod history
         let history_table = get_history_table();
         let hfile = get_history_file();
 
-        if !Path::new(&hfile).exists() { init_db(&hfile, &history_table); }
+        if !Path::new(&hfile).exists() { ::database::initialize(&hfile, &history_table); }
 
         let mut delete_dups = true;
 
@@ -1684,13 +1678,20 @@ pub mod mem
     pub use std::mem::{ * };
 }
 
+pub mod net
+{
+    pub use std::net::{ * };
+}
+
 pub mod now
 {
     use ::
     {
+        shell::{ Shell },
+        types::{ CommandResult },
         *,
     };
-
+    
     pub fn run_command_line(sh: &mut Shell, line: &str, tty: bool, capture: bool) -> Vec<CommandResult>
     {
         let mut cr_list = Vec::new();
@@ -1710,7 +1711,7 @@ pub mod now
             if sep == "||" && status == 0 { break; }
 
             let cmd = token.clone();
-            let cr = run_proc(sh, &cmd, tty, capture);
+            let cr = ::process::run(sh, &cmd, tty, capture);
             status = cr.status;
             sh.previous_status = status;
             cr_list.push(cr);
@@ -1737,9 +1738,1023 @@ pub mod now
     }
 }
 
+pub mod num
+{
+    pub use std::num::{ * };
+
+    pub trait NotAllOnesHelper
+    {
+        type Type;
+    }
+
+    pub type NotAllOnes<T> = <T as NotAllOnesHelper>::Type;
+
+    impl NotAllOnesHelper for u32 { type Type = U32NotAllOnes; }
+
+    impl NotAllOnesHelper for i32 { type Type = I32NotAllOnes; }
+    
+    impl NotAllOnesHelper for u64 { type Type = U64NotAllOnes; }
+    
+    impl NotAllOnesHelper for i64 { type Type = I64NotAllOnes; }
+}
+
 pub mod ops 
 {
     pub use std::ops::{ * };
+}
+
+pub mod os
+{
+    pub mod raw
+    {
+        pub use std::os::raw::{ * };
+    }
+
+    pub mod fd
+    {
+        //! Owned and borrowed Unix-like file descriptors.
+        /// Implementations for `AsRawFd` etc. for network types.
+        pub mod net
+        {
+            use ::
+            {
+                os::fd::
+                {
+                    owned::{ OwnedFd },
+                    raw::{ AsRawFd, FromRawFd, IntoRawFd, RawFd },
+                },
+                sys::common::{ AsInner, FromInner, IntoInner },
+                *,
+            };
+
+            macro_rules! impl_as_raw_fd
+            {
+                ($($t:ident)*) => {$
+                (
+                    impl AsRawFd for net::$t 
+                    {
+                        #[inline] fn as_raw_fd(&self) -> RawFd { self.as_inner().socket().as_raw_fd() }
+                    }
+                )*};
+            }
+            impl_as_raw_fd! { TcpStream TcpListener UdpSocket }
+
+            macro_rules! impl_from_raw_fd 
+            {
+                ($($t:ident)*) => {$(
+                    impl FromRawFd for net::$t {
+                        #[inline]
+                        unsafe fn from_raw_fd(fd: RawFd) -> net::$t {
+                            unsafe {
+                                let socket = sys::net::Socket::from_inner(FromInner::from_inner(OwnedFd::from_raw_fd(fd)));
+                                net::$t::from_inner(sys::net::$t::from_inner(socket))
+                            }
+                        }
+                    }
+                )*};
+            }
+            impl_from_raw_fd! { TcpStream TcpListener UdpSocket }
+
+            macro_rules! impl_into_raw_fd
+            {
+                ($($t:ident)*) => {$(
+                    impl IntoRawFd for net::$t {
+                        #[inline]
+                        fn into_raw_fd(self) -> RawFd {
+                            self.into_inner().into_socket().into_inner().into_inner().into_raw_fd()
+                        }
+                    }
+                )*};
+            }
+            impl_into_raw_fd! { TcpStream TcpListener UdpSocket }
+        }
+        /// `OwnedFd`, `AsFd`, etc.
+        pub mod owned
+        {
+            use ::
+            {
+                marker::PhantomData,
+                mem::ManuallyDrop,
+                sys::common::{AsInner, FromInner, IntoInner},
+                *,
+            };
+            
+            type ValidRawFd = num::NotAllOnes<RawFd>;
+
+            /// A borrowed file descriptor.
+            #[repr( transparent )] #[derive( Copy, Clone )]
+            pub struct BorrowedFd<'fd>
+            {
+                fd: ValidRawFd,
+                _phantom: PhantomData<&'fd OwnedFd>,
+            }
+            /// An owned file descriptor.
+            #[repr(transparent)]
+            pub struct OwnedFd
+            {
+                fd: ValidRawFd,
+            }
+
+            impl BorrowedFd<'_>
+            {
+                /// Returns a `BorrowedFd` holding the given raw file descriptor.
+                #[inline] #[track_caller] pub const unsafe fn borrow_raw(fd: RawFd) -> Self
+                {
+                    Self { fd: ValidRawFd::new(fd).expect("fd != -1"), _phantom: PhantomData }
+                }
+            }
+
+            impl OwnedFd
+            {
+                /// Creates a new `OwnedFd` instance that shares the same underlying file description as the existing `OwnedFd` instance.
+                pub fn try_clone(&self) -> crte::io::Result<Self> { self.as_fd().try_clone_to_owned() }
+            }
+
+            impl BorrowedFd<'_>
+            {
+                /// Creates a new `OwnedFd` instance that shares the same underlying file description as the existing `BorrowedFd` instance.
+                pub fn try_clone_to_owned(&self) -> crate::io::Result<OwnedFd>
+                {
+                    let cmd = libc::F_DUPFD_CLOEXEC;
+                    let cmd = libc::F_DUPFD;
+                    let fd = cvt(unsafe { libc::fcntl(self.as_raw_fd(), cmd, 3) })?;
+                    Ok(unsafe { OwnedFd::from_raw_fd(fd) })
+                }
+            }
+            
+            impl AsRawFd for BorrowedFd<'_>
+            {
+                #[inline] fn as_raw_fd(&self) -> RawFd { self.fd.as_inner() }
+            }
+            
+            impl AsRawFd for OwnedFd
+            {
+                 fn as_raw_fd(&self) -> RawFd { self.fd.as_inner() }
+            }
+            
+            impl IntoRawFd for OwnedFd
+            {
+                #[inline] fn into_raw_fd(self) -> RawFd { ManuallyDrop::new(self).fd.as_inner() }
+            }
+            
+            impl FromRawFd for OwnedFd
+            {
+                /// Constructs a new instance of `Self` from the given raw file descriptor.
+                #[inline] #[track_caller]
+                unsafe fn from_raw_fd(fd: RawFd) -> Self { Self { fd: ValidRawFd::new(fd).expect("fd != -1") } }
+            }
+            
+            impl Drop for OwnedFd
+            {
+                #[inline] fn drop(&mut self)
+                {
+                    unsafe
+                    {
+                        ::sys::fs::debug_assert_fd_is_open(self.fd.as_inner());
+                        let _ = libc::close(self.fd.as_inner());
+                    }
+                }
+            }
+            
+            impl fmt::Debug for BorrowedFd<'_>
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    f.debug_struct("BorrowedFd").field("fd", &self.fd).finish()
+                }
+            }
+            
+            impl fmt::Debug for OwnedFd
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    f.debug_struct("OwnedFd").field("fd", &self.fd).finish()
+                }
+            }
+
+            macro_rules! impl_is_terminal
+            {
+                ($($t:ty),*$(,)?) => {$
+                (
+                    impl ::sealed::Sealed for $t {}
+                    
+                    impl ::io::IsTerminal for $t
+                    {
+                        #[inline] fn is_terminal(&self) -> bool { ::sys::io::is_terminal(self) }
+                    }
+                )*}
+            }
+
+            impl_is_terminal!(BorrowedFd<'_>, OwnedFd);
+            /// A trait to borrow the file descriptor from an underlying object.
+            pub trait AsFd
+            {
+                /// Borrows the file descriptor.
+                fn as_fd(&self) -> BorrowedFd<'_>;
+            }
+            
+            impl<T: AsFd + ?Sized> AsFd for &T
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_> { T::as_fd(self) }
+            }
+            
+            impl<T: AsFd + ?Sized> AsFd for &mut T
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_> { T::as_fd(self) }
+            }
+            
+            impl AsFd for BorrowedFd<'_>
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_> { *self }
+            }
+
+            impl AsFd for OwnedFd
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_> { unsafe { BorrowedFd::borrow_raw(self.as_raw_fd()) } }
+            }
+            
+            impl AsFd for fs::File
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_>
+                {
+                    self.as_inner().as_fd()
+                }
+            }
+            
+            impl From<fs::File> for OwnedFd
+            {
+                /// Takes ownership of a [`File`](fs::File)'s underlying file descriptor.
+                #[inline] fn from(file: fs::File) -> OwnedFd
+                {
+                    file.into_inner().into_inner().into_inner()
+                }
+            }
+            
+            impl From<OwnedFd> for fs::File
+            {
+                /// Returns a [`File`](fs::File) that takes ownership of the given file descriptor.
+                #[inline] fn from(owned_fd: OwnedFd) -> Self
+                {
+                    Self::from_inner(FromInner::from_inner(FromInner::from_inner(owned_fd)))
+                }
+            }
+            
+            impl AsFd for ::net::TcpStream
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_>
+                {
+                    self.as_inner().socket().as_fd()
+                }
+            }
+            
+            impl From<::net::TcpStream> for OwnedFd
+            {
+                /// Takes ownership of a [`TcpStream`](::net::TcpStream)'s socket file descriptor.
+                #[inline] fn from(tcp_stream: ::net::TcpStream) -> OwnedFd
+                {
+                    tcp_stream.into_inner().into_socket().into_inner().into_inner().into()
+                }
+            }
+            
+            impl From<OwnedFd> for ::net::TcpStream
+            {
+                #[inline] fn from(owned_fd: OwnedFd) -> Self
+                {
+                    Self::from_inner(FromInner::from_inner(FromInner::from_inner(FromInner::from_inner(
+                        owned_fd,
+                    ))))
+                }
+            }
+            
+            impl AsFd for ::net::TcpListener
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_>
+                {
+                    self.as_inner().socket().as_fd()
+                }
+            }
+            
+            impl From<::net::TcpListener> for OwnedFd
+            {
+                /// Takes ownership of a [`TcpListener`](::net::TcpListener)'s socket file descriptor.
+                #[inline] fn from(tcp_listener: ::net::TcpListener) -> OwnedFd
+                {
+                    tcp_listener.into_inner().into_socket().into_inner().into_inner().into()
+                }
+            }
+            
+            impl From<OwnedFd> for ::net::TcpListener
+            {
+                #[inline] fn from(owned_fd: OwnedFd) -> Self
+                {
+                    Self::from_inner(FromInner::from_inner(FromInner::from_inner(FromInner::from_inner(
+                        owned_fd,
+                    ))))
+                }
+            }
+            
+            impl AsFd for ::net::UdpSocket
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_>
+                {
+                    self.as_inner().socket().as_fd()
+                }
+            }
+            
+            impl From<::net::UdpSocket> for OwnedFd
+            {
+                /// Takes ownership of a [`UdpSocket`](::net::UdpSocket)'s file descriptor.
+                #[inline] fn from(udp_socket: ::net::UdpSocket) -> OwnedFd
+                {
+                    udp_socket.into_inner().into_socket().into_inner().into_inner().into()
+                }
+            }
+            
+            impl From<OwnedFd> for ::net::UdpSocket
+            {
+                #[inline] fn from(owned_fd: OwnedFd) -> Self
+                {
+                    Self::from_inner(FromInner::from_inner(FromInner::from_inner(FromInner::from_inner(
+                        owned_fd,
+                    ))))
+                }
+            }
+            /// This impl allows implementing traits that require `AsFd` on Arc.
+            impl<T: AsFd + ?Sized> AsFd for ::sync::Arc<T>
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_> 
+                {
+                    (**self).as_fd()
+                }
+            }
+            
+            impl<T: AsFd + ?Sized> AsFd for ::rc::Rc<T> 
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_> 
+                {
+                    (**self).as_fd()
+                }
+            }
+            
+            impl<T: AsFd + ?Sized> AsFd for ::rc::UniqueRc<T> 
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_> 
+                {
+                    (**self).as_fd()
+                }
+            }
+            
+            impl<T: AsFd + ?Sized> AsFd for Box<T> 
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_> 
+                {
+                    (**self).as_fd()
+                }
+            }
+            
+            impl AsFd for io::Stdin 
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_> 
+                {
+                    unsafe { BorrowedFd::borrow_raw(0) }
+                }
+            }
+            
+            impl<'a> AsFd for io::StdinLock<'a> 
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_> 
+                {
+                    // SAFETY: user code should not close stdin out from under the standard library
+                    unsafe { BorrowedFd::borrow_raw(0) }
+                }
+            }
+            
+            impl AsFd for io::Stdout 
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_> 
+                {
+                    unsafe { BorrowedFd::borrow_raw(1) }
+                }
+            }
+            
+            impl<'a> AsFd for io::StdoutLock<'a> 
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_> 
+                {
+                    // SAFETY: user code should not close stdout out from under the standard library
+                    unsafe { BorrowedFd::borrow_raw(1) }
+                }
+            }
+            
+            impl AsFd for io::Stderr 
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_> 
+                {
+                    unsafe { BorrowedFd::borrow_raw(2) }
+                }
+            }
+            
+            impl<'a> AsFd for io::StderrLock<'a> 
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_> 
+                {
+                    // SAFETY: user code should not close stderr out from under the standard library
+                    unsafe { BorrowedFd::borrow_raw(2) }
+                }
+            }
+            
+            impl AsFd for io::PipeReader 
+            {
+                fn as_fd(&self) -> BorrowedFd<'_> 
+                {
+                    self.0.as_fd()
+                }
+            }
+            
+            impl From<io::PipeReader> for OwnedFd 
+            {
+                fn from(pipe: io::PipeReader) -> Self 
+                {
+                    pipe.0.into_inner()
+                }
+            }
+            
+            impl AsFd for io::PipeWriter 
+            {
+                fn as_fd(&self) -> BorrowedFd<'_> 
+                {
+                    self.0.as_fd()
+                }
+            }
+            
+            impl From<io::PipeWriter> for OwnedFd 
+            {
+                fn from(pipe: io::PipeWriter) -> Self 
+                {
+                    pipe.0.into_inner()
+                }
+            }
+            
+            impl From<OwnedFd> for io::PipeReader
+            {
+                fn from(owned_fd: OwnedFd) -> Self {
+                    Self(FromInner::from_inner(owned_fd))
+                }
+            }
+            
+            impl From<OwnedFd> for io::PipeWriter
+            {
+                fn from(owned_fd: OwnedFd) -> Self
+                {
+                    Self(FromInner::from_inner(owned_fd))
+                }
+            }
+        } pub use  self::owned::*;
+        /// `RawFd`, `AsRawFd`, etc.
+        pub mod raw
+        {
+            use ::
+            {
+                os::
+                {
+                    raw,
+                    unix::
+                    {
+                        io::{ AsFd, OwnedFd },
+                    },
+                }
+                sys::common::{AsInner, FromInner, IntoInner},
+                *,
+            };
+            /// Raw file descriptors.
+            pub type RawFd = raw::c_int;
+            /// A trait to extract the raw file descriptor from an underlying object.
+            pub trait AsRawFd
+            {
+                /// Extracts the raw file descriptor.
+                fn as_raw_fd(&self) -> RawFd;
+            }
+            /// A trait to express the ability to construct an object from a raw file descriptor.
+            pub trait FromRawFd
+            {
+                /// Constructs a new instance of `Self` from the given raw file descriptor.
+                unsafe fn from_raw_fd(fd: RawFd) -> Self;
+            }
+            /// A trait to express the ability to consume an object and acquire ownership of its raw file descriptor.
+            pub trait IntoRawFd
+            {
+                /// Consumes this object, returning the raw underlying file descriptor.
+                fn into_raw_fd(self) -> RawFd;
+            }
+            
+            impl AsRawFd for RawFd 
+            {
+                #[inline] fn as_raw_fd(&self) -> RawFd 
+                {
+                    *self
+                }
+            }
+            
+            impl IntoRawFd for RawFd 
+            {
+                #[inline] fn into_raw_fd(self) -> RawFd 
+                {
+                    self
+                }
+            }
+            
+            impl FromRawFd for RawFd 
+            {
+                #[inline] unsafe fn from_raw_fd(fd: RawFd) -> RawFd 
+                {
+                    fd
+                }
+            }
+            
+            impl AsRawFd for fs::File 
+            {
+                #[inline] fn as_raw_fd(&self) -> RawFd 
+                {
+                    self.as_inner().as_raw_fd()
+                }
+            }
+            
+            impl FromRawFd for fs::File 
+            {
+                #[inline] unsafe fn from_raw_fd(fd: RawFd) -> fs::File 
+                {
+                    unsafe { fs::File::from(OwnedFd::from_raw_fd(fd)) }
+                }
+            }
+            
+            impl IntoRawFd for fs::File 
+            {
+                #[inline] fn into_raw_fd(self) -> RawFd 
+                {
+                    self.into_inner().into_inner().into_raw_fd()
+                }
+            }
+            
+            impl AsRawFd for io::Stdin 
+            {
+                #[inline] fn as_raw_fd(&self) -> RawFd 
+                {
+                    libc::STDIN_FILENO
+                }
+            }
+            
+            impl AsRawFd for io::Stdout 
+            {
+                #[inline] fn as_raw_fd(&self) -> RawFd 
+                {
+                    libc::STDOUT_FILENO
+                }
+            }
+            
+            impl AsRawFd for io::Stderr 
+            {
+                #[inline] fn as_raw_fd(&self) -> RawFd 
+                {
+                    libc::STDERR_FILENO
+                }
+            }
+            
+            impl<'a> AsRawFd for io::StdinLock<'a> 
+            {
+                #[inline] fn as_raw_fd(&self) -> RawFd 
+                {
+                    libc::STDIN_FILENO
+                }
+            }
+            
+            impl<'a> AsRawFd for io::StdoutLock<'a> 
+            {
+                #[inline] fn as_raw_fd(&self) -> RawFd 
+                {
+                    libc::STDOUT_FILENO
+                }
+            }
+            
+            impl<'a> AsRawFd for io::StderrLock<'a> 
+            {
+                #[inline] fn as_raw_fd(&self) -> RawFd 
+                {
+                    libc::STDERR_FILENO
+                }
+            }
+            /// This impl allows implementing traits that require `AsRawFd` on Arc.
+            impl<T: AsRawFd> AsRawFd for ::sync::Arc<T> 
+            {
+                #[inline] fn as_raw_fd(&self) -> RawFd 
+                {
+                    (**self).as_raw_fd()
+                }
+            }
+            
+            impl<T: AsRawFd> AsRawFd for ::rc::Rc<T> 
+            {
+                #[inline] fn as_raw_fd(&self) -> RawFd 
+                {
+                    (**self).as_raw_fd()
+                }
+            }
+            
+            impl<T: AsRawFd + ?Sized> AsRawFd for ::rc::UniqueRc<T> 
+            {
+                #[inline] fn as_raw_fd(&self) -> RawFd 
+                {
+                    (**self).as_raw_fd()
+                }
+            }
+            
+            impl<T: AsRawFd> AsRawFd for Box<T> 
+            {
+                #[inline] fn as_raw_fd(&self) -> RawFd 
+                {
+                    (**self).as_raw_fd()
+                }
+            }
+            
+            impl AsRawFd for io::PipeReader 
+            {
+                fn as_raw_fd(&self) -> RawFd 
+                {
+                    self.0.as_raw_fd()
+                }
+            }
+            
+            impl FromRawFd for io::PipeReader 
+            {
+                unsafe fn from_raw_fd(raw_fd: RawFd) -> Self 
+                {
+                    Self::from_inner(unsafe { FromRawFd::from_raw_fd(raw_fd) })
+                }
+            }
+            
+            impl IntoRawFd for io::PipeReader 
+            {
+                fn into_raw_fd(self) -> RawFd 
+                {
+                    self.0.into_raw_fd()
+                }
+            }
+            
+            impl AsRawFd for io::PipeWriter 
+            {
+                fn as_raw_fd(&self) -> RawFd 
+                {
+                    self.0.as_raw_fd()
+                }
+            }
+            
+            impl FromRawFd for io::PipeWriter 
+            {
+                unsafe fn from_raw_fd(raw_fd: RawFd) -> Self 
+                {
+                    Self::from_inner(unsafe { FromRawFd::from_raw_fd(raw_fd) })
+                }
+            }
+            
+            impl IntoRawFd for io::PipeWriter 
+            {
+                fn into_raw_fd(self) -> RawFd 
+                {
+                    self.0.into_raw_fd()
+                }
+            }
+        } pub use self::raw::*;
+    }
+
+    pub mod net
+    {
+        //! Linux and Android-specific networking functionality.
+        pub mod addr
+        {
+            //! Linux and Android-specific extensions to socket addresses.
+            use ::
+            {
+                os::unix::net::{ SocketAddr },
+                sealed::{ Sealed },
+                *,
+            };
+            /// Platform-specific extensions to [`SocketAddr`].
+            pub trait SocketAddrExt: Sealed
+            {
+                /// Creates a Unix socket address in the abstract namespace.
+                fn from_abstract_name<N>(name: N) -> ::io::Result<SocketAddr> where N: AsRef<[u8]>;
+
+                /// Returns the contents of this address if it is in the abstract namespace.
+                fn as_abstract_name(&self) -> Option<&[u8]>;
+            }
+        }
+        
+        pub mod socket
+        {
+            //! Linux and Android-specific socket functionality.
+            use ::
+            {
+                os::unix::net,
+                sealed::{ Sealed },
+                sys::common::{ AsInner },
+                *,
+            };
+            /// Linux-specific functionality for `AF_UNIX` sockets [`UnixDatagram`] and [`UnixStream`].
+            pub trait UnixSocketExt: Sealed
+            {
+                /// Query the current setting of socket option `SO_PASSCRED`.
+                fn passcred(&self) -> io::Result<bool>;
+                /// Enable or disable socket option `SO_PASSCRED`.
+                fn set_passcred(&self, passcred: bool) -> io::Result<()>;
+            }
+            
+            impl UnixSocketExt for net::UnixDatagram
+            {
+                fn passcred(&self) -> io::Result<bool> { self.as_inner().passcred() }
+                fn set_passcred(&self, passcred: bool) -> io::Result<()> { self.as_inner().set_passcred(passcred) }
+            }
+            
+            impl UnixSocketExt for net::UnixStream
+            {
+                fn passcred(&self) -> io::Result<bool> { self.as_inner().passcred() }
+                fn set_passcred(&self, passcred: bool) -> io::Result<()> { self.as_inner().set_passcred(passcred) }
+            }
+        }
+        
+        pub mod tcp
+        {
+            //! Linux and Android-specific tcp extensions to primitives in the [`std::net`] module.
+            use ::
+            {
+                sealed::{ Sealed },
+                sys::common::{ AsInner },
+                *,
+            };
+            /// Os-specific extensions for [`TcpStream`]
+            pub trait TcpStreamExt: Sealed
+            {
+                /// Enable or disable `TCP_QUICKACK`.
+                fn set_quickack(&self, quickack: bool) -> io::Result<()>;
+                /// Gets the value of the `TCP_QUICKACK` option on this socket.
+                fn quickack(&self) -> io::Result<bool>;
+                /// A socket listener will be awakened solely when data arrives.
+                fn set_deferaccept(&self, accept: u32) -> io::Result<()>;
+                /// Gets the accept delay value (in seconds) of the `TCP_DEFER_ACCEPT` option.
+                fn deferaccept(&self) -> io::Result<u32>;
+            }
+            
+            impl Sealed for net::TcpStream {}
+            
+            impl TcpStreamExt for net::TcpStream
+            {
+                fn set_quickack(&self, quickack: bool) -> io::Result<()> { self.as_inner().as_inner().set_quickack(quickack) }
+
+                fn quickack(&self) -> io::Result<bool> { self.as_inner().as_inner().quickack() }
+                
+                fn set_deferaccept(&self, accept: u32) -> io::Result<()> { self.as_inner().as_inner().set_deferaccept(accept) }
+                
+                fn deferaccept(&self) -> io::Result<u32> { self.as_inner().as_inner().deferaccept() }
+            }
+        }
+    }
+
+    pub mod uefi
+    {
+        pub mod env
+        {
+            //! UEFI-specific extensions to the primitives in `std::env` module
+            use ::
+            {
+                ffi::{ c_void },
+                ptr::{ NonNull },
+                sync::atomic::{ Atomic, AtomicBool, AtomicPtr, Ordering },
+                *,
+            };
+            
+            use crate::ffi::c_void;
+            use crate::ptr::NonNull;
+            use crate::sync::atomic::{Atomic, AtomicBool, AtomicPtr, Ordering};
+
+            static mut SYSTEM_TABLE:Option<()> = None;
+            static mut IMAGE_HANDLE:Option<()> = None;
+            static mut BOOT_SERVICES_FLAG:Option<bool> = None;
+            /*
+            static SYSTEM_TABLE: Atomic<*mut c_void> = AtomicPtr::new(crate::ptr::null_mut());
+            static IMAGE_HANDLE: Atomic<*mut c_void> = AtomicPtr::new(crate::ptr::null_mut());
+            // Flag to check if BootServices are still valid.
+            // Start with assuming that they are not available
+            static BOOT_SERVICES_FLAG: Atomic<bool> = AtomicBool::new(false);
+            */
+            /// Initializes the global System Table and Image Handle pointers.
+            pub(crate) unsafe fn init_globals(handle: NonNull<()>, system_table: NonNull<()>) {}
+            /// Gets the SystemTable Pointer.
+            pub fn system_table() -> NonNull<()>
+            {
+                unsafe
+                {
+                    NonNull( () )
+                }
+            }
+            /// Gets the ImageHandle Pointer.
+            pub fn image_handle() -> NonNull<()>
+            {
+                unsafe
+                {
+                    NonNull( () )
+                }
+            }
+
+            /// Gets the BootServices Pointer.
+            pub fn boot_services() -> Option<NonNull<()>>
+            {
+                None
+            }
+            /// Gets the SystemTable Pointer.
+            pub(crate) fn try_system_table() -> Option<NonNull<()>>
+            {
+                None
+            }
+            /// Gets the SystemHandle Pointer.
+            pub(crate) fn try_image_handle() -> Option<NonNull<()>>
+            {
+                None
+            }
+
+            pub(crate) fn disable_boot_services() {}
+        }
+
+        pub mod ffi
+        {
+            use ::
+            {
+                *,
+            };
+        }
+    }
+
+    pub mod unix
+    {
+        //! Platform-specific extensions to `std` for Unix platforms.
+        use ::
+        {
+            *,
+        };
+        
+        mod platform 
+        {
+            
+        }
+
+        pub mod ffi
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod fs
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod io
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod net
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod process
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod raw
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod thread
+        {
+            use ::
+            {
+                *,
+            };
+        }
+        /// A prelude for conveniently writing platform-specific code.
+        pub mod prelude
+        {
+            pub use super::ffi::{OsStrExt, OsStringExt};
+            pub use super::fs::DirEntryExt;
+            pub use super::fs::FileExt;
+            pub use super::fs::{FileTypeExt, MetadataExt, OpenOptionsExt, PermissionsExt};
+            pub use super::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd, RawFd};
+            pub use super::process::{CommandExt, ExitStatusExt};
+            pub use super::thread::JoinHandleExt;
+        }
+    }
+    
+    pub mod windows
+    {
+        use ::
+        {
+            *
+        };
+        //! Platform-specific extensions to `std` for Windows.
+        
+        
+        mod platform 
+        {
+            
+        }
+
+        pub mod ffi
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod fs
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod io
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod net
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod process
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod raw
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod thread
+        {
+            use ::
+            {
+                *,
+            };
+        }
+        /// A prelude for conveniently writing platform-specific code.
+        pub mod prelude
+        {
+            pub use super::ffi::{OsStrExt, OsStringExt};
+            pub use super::fs::FileExt;
+            pub use super::fs::{MetadataExt, OpenOptionsExt};
+            pub use super::io::
+            {
+                AsHandle, AsSocket, BorrowedHandle, BorrowedSocket, FromRawHandle, FromRawSocket,
+                HandleOrInvalid, IntoRawHandle, IntoRawSocket, OwnedHandle, OwnedSocket,
+            };
+            pub use super::io::{AsRawHandle, AsRawSocket, RawHandle, RawSocket};
+        }
+    }
 }
 
 pub mod parsers
@@ -4961,6 +5976,12 @@ pub mod scripts
     }
 }
 
+pub mod sealed
+{
+    /// This trait being unreachable from outside the crate prevents outside implementations of our extension traits.
+    pub trait Sealed {}
+}
+
 pub mod shell
 {
     use ::
@@ -5112,6 +6133,44 @@ pub mod sync
 {
     pub use std::sync::{ * };
 } use std::sync::Arc;
+
+pub mod system
+{
+    pub mod common
+    {
+        use ::
+        {
+            *,
+        };
+        /// A trait for viewing representations from std types.
+        pub trait AsInner<Inner: ?Sized> { fn as_inner(&self) -> &Inner; }
+        /// A trait for viewing representations from std types.
+        pub trait AsInnerMut<Inner: ?Sized> { fn as_inner_mut(&mut self) -> &mut Inner; }
+        /// A trait for extracting representations from std types.
+        pub trait IntoInner<Inner> { fn into_inner(self) -> Inner; }
+        /// A trait for creating std types from internal representations.
+        pub trait FromInner<Inner> { fn from_inner(inner: Inner) -> Self; }
+        /// Computes (value*numer)/denom without overflow,
+        /// as long as both (numer*denom) and the overall result fit into i64.
+        pub fn mul_div_u64(value: u64, numer: u64, denom: u64) -> u64
+        {
+            let q = value / denom;
+            let r = value % denom;
+            q * numer + r * numer / denom
+        }
+
+        pub fn ignore_notfound<T>(result: ::io::Result<T>) -> ::io::Result<()>
+        {
+            match result
+            {
+                Err(err) if err.kind() == ::io::ErrorKind::NotFound => Ok(()),
+                Ok(_) => Ok(()),
+                Err(err) => Err(err),
+            }
+        }
+    }
+
+} pub use self::system as sys;
 
 pub mod task
 {
@@ -7416,4 +8475,4 @@ fn main()
     }
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 7419
+// 8478
