@@ -662,7 +662,6 @@ pub mod command
                     Command::opt_from_str(name)
                         .unwrap_or_else(|| Command::Custom(Borrowed(name)))
                 }
-
                 /// Constructs a command from a non-`'static` string-like type.
                 ///
                 /// If the string does not refer to a built-in command, a value
@@ -1873,7 +1872,7 @@ pub mod os
             impl BorrowedFd<'_>
             {
                 /// Creates a new `OwnedFd` instance that shares the same underlying file description as the existing `BorrowedFd` instance.
-                pub fn try_clone_to_owned(&self) -> crate::io::Result<OwnedFd>
+                pub fn try_clone_to_owned(&self) -> ::io::Result<OwnedFd>
                 {
                     let cmd = libc::F_DUPFD_CLOEXEC;
                     let cmd = libc::F_DUPFD;
@@ -2222,7 +2221,7 @@ pub mod os
                     {
                         io::{ AsFd, OwnedFd },
                     },
-                }
+                },
                 sys::common::{AsInner, FromInner, IntoInner},
                 *,
             };
@@ -2526,13 +2525,9 @@ pub mod os
             {
                 ffi::{ c_void },
                 ptr::{ NonNull },
-                sync::atomic::{ Atomic, AtomicBool, AtomicPtr, Ordering },
+                sync::atomic::{ AtomicBool, AtomicPtr, Ordering },
                 *,
             };
-            
-            use crate::ffi::c_void;
-            use crate::ptr::NonNull;
-            use crate::sync::atomic::{Atomic, AtomicBool, AtomicPtr, Ordering};
 
             static mut SYSTEM_TABLE:Option<()> = None;
             static mut IMAGE_HANDLE:Option<()> = None;
@@ -2545,7 +2540,7 @@ pub mod os
             static BOOT_SERVICES_FLAG: Atomic<bool> = AtomicBool::new(false);
             */
             /// Initializes the global System Table and Image Handle pointers.
-            pub(crate) unsafe fn init_globals(handle: NonNull<()>, system_table: NonNull<()>) {}
+            pub unsafe fn init_globals(handle: NonNull<()>, system_table: NonNull<()>) {}
             /// Gets the SystemTable Pointer.
             pub fn system_table() -> NonNull<()>
             {
@@ -2569,17 +2564,17 @@ pub mod os
                 None
             }
             /// Gets the SystemTable Pointer.
-            pub(crate) fn try_system_table() -> Option<NonNull<()>>
+            pub fn try_system_table() -> Option<NonNull<()>>
             {
                 None
             }
             /// Gets the SystemHandle Pointer.
-            pub(crate) fn try_image_handle() -> Option<NonNull<()>>
+            pub fn try_image_handle() -> Option<NonNull<()>>
             {
                 None
             }
 
-            pub(crate) fn disable_boot_services() {}
+            pub fn disable_boot_services() {}
         }
 
         pub mod ffi
@@ -2630,57 +2625,2237 @@ pub mod os
 
         pub mod net
         {
+            //! Unix-specific networking functionality.
             use ::
             {
                 *,
             };
+            
+            pub mod addr
+            {
+                use ::
+                {
+                    ffi::OsStr, 
+                    os::net::linux_ext, 
+                    os::unix::ffi::OsStrExt, 
+                    path::Path, 
+                    sealed::Sealed, 
+                    sys::cvt, 
+                    *,
+                };
+
+                mod libc
+                {
+                    pub use ::ffi::c_int;
+                    pub type socklen_t = u32;
+                    pub struct sockaddr;
+                    #[derive(Clone)]
+                    pub struct sockaddr_un
+                    {
+                        pub sun_path: [u8; 1],
+                    }
+                }
+
+                const SUN_PATH_OFFSET: usize = mem::offset_of!(libc::sockaddr_un, sun_path);
+
+                pub(super) fn sockaddr_un(path: &Path) -> io::Result<(libc::sockaddr_un, libc::socklen_t)> 
+                {
+                    let mut addr: libc::sockaddr_un = unsafe { mem::zeroed() };
+                    addr.sun_family = libc::AF_UNIX as libc::sa_family_t;
+
+                    let bytes = path.as_os_str().as_bytes();
+
+                    if bytes.contains(&0) 
+                    {
+                        return Err(io::const_error!(
+                            io::ErrorKind::InvalidInput,
+                            "paths must not contain interior null bytes",
+                        ));
+                    }
+
+                    if bytes.len() >= addr.sun_path.len() 
+                    {
+                        return Err(io::const_error!(
+                            io::ErrorKind::InvalidInput,
+                            "path must be shorter than SUN_LEN",
+                        ));
+                    }
+                    
+                    unsafe 
+                    {
+                        ptr::copy_nonoverlapping(bytes.as_ptr(), addr.sun_path.as_mut_ptr().cast(), bytes.len())
+                    };
+
+                    let mut len = SUN_PATH_OFFSET + bytes.len();
+                    match bytes.get(0) {
+                        Some(&0) | None => {}
+                        Some(_) => len += 1,
+                    }\
+
+                    Ok((addr, len as libc::socklen_t))
+                }
+
+                enum AddressKind<'a>
+                {
+                    Unnamed,
+                    Pathname(&'a Path),
+                    Abstract(&'a [u8]),
+                }
+                /// An address associated with a Unix socket.
+                #[derive(Clone)]
+                pub struct SocketAddr
+                {
+                    pub(super) addr: libc::sockaddr_un,
+                    pub(super) len: libc::socklen_t,
+                }
+
+                impl SocketAddr
+                {
+                    pub(super) fn new<F>(f: F) -> io::Result<SocketAddr> where
+                    F: FnOnce(*mut libc::sockaddr, *mut libc::socklen_t) -> libc::c_int,
+                    {
+                        unsafe 
+                        {
+                            let mut addr: libc::sockaddr_un = mem::zeroed();
+                            let mut len = size_of::<libc::sockaddr_un>() as libc::socklen_t;
+                            cvt(f((&raw mut addr) as *mut _, &mut len))?;
+                            SocketAddr::from_parts(addr, len)
+                        }
+                    }
+
+                    pub(super) fn from_parts
+                    (
+                        addr: libc::sockaddr_un,
+                        mut len: libc::socklen_t,
+                    ) -> io::Result<SocketAddr> 
+                    {
+                        if cfg!(target_os = "openbsd")
+                        {
+                            let sun_path: &[u8] =
+                                unsafe { mem::transmute::<&[libc::c_char], &[u8]>(&addr.sun_path) };
+                            len = core::slice::memchr::memchr(0, sun_path)
+                                .map_or(len, |new_len| (new_len + SUN_PATH_OFFSET) as libc::socklen_t);
+                        }
+
+                        if len == 0 {
+                            len = SUN_PATH_OFFSET as libc::socklen_t;
+                        } else if addr.sun_family != libc::AF_UNIX as libc::sa_family_t {
+                            return Err(io::const_error!(
+                                io::ErrorKind::InvalidInput,
+                                "file descriptor did not correspond to a Unix socket",
+                            ));
+                        }
+
+                        Ok(SocketAddr { addr, len })
+                    }
+                    /// Constructs a `SockAddr` with the family `AF_UNIX` and the provided path.
+                    pub fn from_pathname<P>(path: P) -> io::Result<SocketAddr> where
+                    P: AsRef<Path>,
+                    {
+                        sockaddr_un(path.as_ref()).map(|(addr, len)| SocketAddr { addr, len })
+                    }
+                    /// Returns `true` if the address is unnamed.
+                    #[must_use]                    
+                    pub fn is_unnamed(&self) -> bool 
+                    {
+                        matches!(self.address(), AddressKind::Unnamed)
+                    }
+                    /// Returns the contents of this address if it is a `pathname` address.                    
+                    #[must_use]
+                    pub fn as_pathname(&self) -> Option<&Path> 
+                    {
+                        if let AddressKind::Pathname(path) = self.address() { Some(path) } else { None }
+                    }
+
+                    fn address(&self) -> AddressKind<'_> 
+                    {
+                        let len = self.len as usize - SUN_PATH_OFFSET;
+                        let path = unsafe { mem::transmute::<&[libc::c_char], &[u8]>(&self.addr.sun_path) };
+                        
+                        if len == 0
+                            || (cfg!(not(any(target_os = "linux", target_os = "android")))
+                                && self.addr.sun_path[0] == 0)
+                        {
+                            AddressKind::Unnamed
+                        } else if self.addr.sun_path[0] == 0 {
+                            AddressKind::Abstract(&path[1..len])
+                        } else {
+                            AddressKind::Pathname(OsStr::from_bytes(&path[..len - 1]).as_ref())
+                        }
+                    }
+                }
+                
+                impl Sealed for SocketAddr {}
+                
+                impl linux_ext::addr::SocketAddrExt for SocketAddr 
+                {
+                    fn as_abstract_name(&self) -> Option<&[u8]>
+                    {
+                        if let AddressKind::Abstract(name) = self.address() { Some(name) } else { None }
+                    }
+
+                    fn from_abstract_name<N>(name: N) -> crate::io::Result<Self> where
+                    N: AsRef<[u8]>
+                    {
+                        let name = name.as_ref();
+                        unsafe
+                        {
+                            let mut addr: libc::sockaddr_un = mem::zeroed();
+                            addr.sun_family = libc::AF_UNIX as libc::sa_family_t;
+
+                            if name.len() + 1 > addr.sun_path.len() {
+                                return Err(io::const_error!(
+                                    io::ErrorKind::InvalidInput,
+                                    "abstract socket name must be shorter than SUN_LEN",
+                                ));
+                            }
+
+                            crate::ptr::copy_nonoverlapping(
+                                name.as_ptr(),
+                                addr.sun_path.as_mut_ptr().add(1) as *mut u8,
+                                name.len(),
+                            );
+                            let len = (SUN_PATH_OFFSET + 1 + name.len()) as libc::socklen_t;
+                            SocketAddr::from_parts(addr, len)
+                        }
+                    }
+                }
+                
+                impl fmt::Debug for SocketAddr 
+                {
+                    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result 
+                    {
+                        match self.address() 
+                        {
+                            AddressKind::Unnamed => write!(fmt, "(unnamed)"),
+                            AddressKind::Abstract(name) => write!(fmt, "\"{}\" (abstract)", name.escape_ascii()),
+                            AddressKind::Pathname(path) => write!(fmt, "{path:?} (pathname)"),
+                        }
+                    }
+                }
+            } pub use self::addr::*;
+
+            pub mod ancillary
+            {
+                use ::
+                {
+                    io::{self, IoSlice, IoSliceMut},
+                    marker::PhantomData,
+                    mem::zeroed,
+                    os::unix::io::RawFd,
+                    path::Path,
+                    ptr::{eq, read_unaligned},
+                    slice::from_raw_parts,
+                    sys::net::Socket,
+                    *,
+                }; use super::{SocketAddr, sockaddr_un};
+                
+                pub(super) fn recv_vectored_with_ancillary_from
+                (
+                    socket: &Socket,
+                    bufs: &mut [IoSliceMut<'_>],
+                    ancillary: &mut SocketAncillary<'_>,
+                ) -> io::Result<(usize, bool, io::Result<SocketAddr>)> 
+                {
+                    unsafe
+                    {
+                        let mut msg_name: libc::sockaddr_un = zeroed();
+                        let mut msg: libc::msghdr = zeroed();
+                        msg.msg_name = (&raw mut msg_name) as *mut _;
+                        msg.msg_namelen = size_of::<libc::sockaddr_un>() as libc::socklen_t;
+                        msg.msg_iov = bufs.as_mut_ptr().cast();
+                        msg.msg_iovlen = bufs.len() as _;
+                        msg.msg_controllen = ancillary.buffer.len() as _;
+                        // macos requires that the control pointer is null when the len is 0.
+                        if msg.msg_controllen > 0 {
+                            msg.msg_control = ancillary.buffer.as_mut_ptr().cast();
+                        }
+
+                        let count = socket.recv_msg(&mut msg)?;
+
+                        ancillary.length = msg.msg_controllen as usize;
+                        ancillary.truncated = msg.msg_flags & libc::MSG_CTRUNC == libc::MSG_CTRUNC;
+
+                        let truncated = msg.msg_flags & libc::MSG_TRUNC == libc::MSG_TRUNC;
+                        let addr = SocketAddr::from_parts(msg_name, msg.msg_namelen);
+
+                        Ok((count, truncated, addr))
+                    }
+                }
+
+                pub(super) fn send_vectored_with_ancillary_to
+                (
+                    socket: &Socket,
+                    path: Option<&Path>,
+                    bufs: &[IoSlice<'_>],
+                    ancillary: &mut SocketAncillary<'_>,
+                ) -> io::Result<usize> 
+                {
+                    unsafe 
+                    {
+                        let (mut msg_name, msg_namelen) = if let Some(path) = path { sockaddr_un(path)? } else { (zeroed(), 0) };
+
+                        let mut msg: libc::msghdr = zeroed();
+                        msg.msg_name = (&raw mut msg_name) as *mut _;
+                        msg.msg_namelen = msg_namelen;
+                        msg.msg_iov = bufs.as_ptr() as *mut _;
+                        msg.msg_iovlen = bufs.len() as _;
+                        msg.msg_controllen = ancillary.length as _;
+                        // macos requires that the control pointer is null when the len is 0.
+                        if msg.msg_controllen > 0 {
+                            msg.msg_control = ancillary.buffer.as_mut_ptr().cast();
+                        }
+
+                        ancillary.truncated = false;
+
+                        socket.send_msg(&mut msg)
+                    }
+                }
+
+                fn add_to_ancillary_data<T>
+                (
+                    buffer: &mut [u8],
+                    length: &mut usize,
+                    source: &[T],
+                    cmsg_level: libc::c_int,
+                    cmsg_type: libc::c_int,
+                ) -> bool 
+                {
+                    let cmsg_size = source.len().checked_mul(size_of::<T>());
+                    let source_len = if let Some(source_len) = cmsg_size {
+                        if let Ok(source_len) = u32::try_from(source_len) {
+                            source_len
+                        } else {
+                            return false;
+                        }
+                    } else {
+                        return false;
+                    };
+
+                    unsafe {
+                        let additional_space = libc::CMSG_SPACE(source_len) as usize;
+
+                        let new_length = if let Some(new_length) = additional_space.checked_add(*length) {
+                            new_length
+                        } else {
+                            return false;
+                        };
+
+                        if new_length > buffer.len() {
+                            return false;
+                        }
+
+                        buffer[*length..new_length].fill(0);
+
+                        *length = new_length;
+
+                        let mut msg: libc::msghdr = zeroed();
+                        msg.msg_control = buffer.as_mut_ptr().cast();
+                        msg.msg_controllen = *length as _;
+
+                        let mut cmsg = libc::CMSG_FIRSTHDR(&msg);
+                        let mut previous_cmsg = cmsg;
+                        while !cmsg.is_null() 
+                        {
+                            previous_cmsg = cmsg;
+                            cmsg = libc::CMSG_NXTHDR(&msg, cmsg);
+                            if eq(cmsg, previous_cmsg) {
+                                break;
+                            }
+                        }
+
+                        if previous_cmsg.is_null() { return false; }
+
+                        (*previous_cmsg).cmsg_level = cmsg_level;
+                        (*previous_cmsg).cmsg_type = cmsg_type;
+                        (*previous_cmsg).cmsg_len = libc::CMSG_LEN(source_len) as _;
+
+                        let data = libc::CMSG_DATA(previous_cmsg).cast();
+
+                        libc::memcpy(data, source.as_ptr().cast(), source_len as usize);
+                    }
+                    true
+                }
+
+                struct AncillaryDataIter<'a, T>
+                {
+                    data: &'a [u8],
+                    phantom: PhantomData<T>,
+                }
+
+                impl<'a, T> AncillaryDataIter<'a, T>
+                {
+                    /// Creates `AncillaryDataIter` struct to iterate through the data unit in the control message.
+                    unsafe fn new(data: &'a [u8]) -> AncillaryDataIter<'a, T>
+                    {
+                        AncillaryDataIter { data, phantom: PhantomData }
+                    }
+                }
+
+                impl<'a, T> Iterator for AncillaryDataIter<'a, T>
+                {
+                    type Item = T;
+
+                    fn next(&mut self) -> Option<T> 
+                    {
+                        if size_of::<T>() <= self.data.len() 
+                        {
+                            unsafe
+                            {
+                                let unit = read_unaligned(self.data.as_ptr().cast());
+                                self.data = &self.data[size_of::<T>()..];
+                                Some(unit)
+                            }
+                        }
+                        else { None }
+                    }
+                }
+
+                #[derive(Clone)]
+                pub struct SocketCred(());
+
+                /// Unix credential.
+                #[derive(Clone)]
+                pub struct SocketCred(libc::ucred);
+                
+                impl SocketCred
+                {
+                    /// Creates a Unix credential struct.
+                    #[must_use] pub fn new() -> SocketCred
+                    {
+                        SocketCred(libc::ucred { pid: 0, uid: 0, gid: 0 })
+                    }
+
+                    /// Set the PID.
+                    pub fn set_pid(&mut self, pid: libc::pid_t)
+                    {
+                        self.0.pid = pid;
+                    }
+
+                    /// Gets the current PID.
+                    #[must_use]
+                    pub fn get_pid(&self) -> libc::pid_t
+                    {
+                        self.0.pid
+                    }
+
+                    /// Set the UID.
+                    pub fn set_uid(&mut self, uid: libc::uid_t)
+                    {
+                        self.0.uid = uid;
+                    }
+
+                    /// Gets the current UID.
+                    #[must_use] pub fn get_uid(&self) -> libc::uid_t
+                    {
+                        self.0.uid
+                    }
+                    /// Set the GID.                    
+                    pub fn set_gid(&mut self, gid: libc::gid_t)
+                    {
+                        self.0.gid = gid;
+                    }
+                    /// Gets the current GID.
+                    #[must_use] pub fn get_gid(&self) -> libc::gid_t
+                    {
+                        self.0.gid
+                    }
+                }
+                
+                impl SocketCred
+                {
+                    /// Creates a Unix credential struct.
+                    #[must_use] pub fn new() -> SocketCred
+                    {
+                        SocketCred(libc::sockcred2
+                        {
+                            sc_version: 0,
+                            sc_pid: 0,
+                            sc_uid: 0,
+                            sc_euid: 0,
+                            sc_gid: 0,
+                            sc_egid: 0,
+                            sc_ngroups: 0,
+                            sc_groups: [0; 1],
+                        })
+                    }
+                    /// Set the PID.
+                    pub fn set_pid(&mut self, pid: libc::pid_t) { self.0.sc_pid = pid; }
+                    /// Gets the current PID.
+                    #[must_use] pub fn get_pid(&self) -> libc::pid_t { self.0.sc_pid }
+                    /// Set the UID.                    
+                    pub fn set_uid(&mut self, uid: libc::uid_t) { self.0.sc_euid = uid; }
+                    /// Gets the current UID.
+                    #[must_use] pub fn get_uid(&self) -> libc::uid_t
+                    { self.0.sc_euid }
+                    /// Set the GID.
+                    pub fn set_gid(&mut self, gid: libc::gid_t)
+                    { self.0.sc_egid = gid; }
+                    /// Gets the current GID.
+                    #[must_use]
+                    pub fn get_gid(&self) -> libc::gid_t { self.0.sc_egid }
+                }
+                
+                impl SocketCred
+                {
+                    /// Creates a Unix credential struct.    
+                    pub fn new() -> SocketCred
+                    {
+                        SocketCred(libc::sockcred
+                        {
+                            sc_pid: 0,
+                            sc_uid: 0,
+                            sc_euid: 0,
+                            sc_gid: 0,
+                            sc_egid: 0,
+                            sc_ngroups: 0,
+                            sc_groups: [0u32; 1],
+                        })
+                    }
+
+                    /// Set the PID.
+                    pub fn set_pid(&mut self, pid: libc::pid_t) { self.0.sc_pid = pid; }
+                    /// Gets the current PID.
+                    #[must_use]
+                    pub fn get_pid(&self) -> libc::pid_t { self.0.sc_pid }
+                    /// Set the UID.
+                    pub fn set_uid(&mut self, uid: libc::uid_t) { self.0.sc_uid = uid; }
+                    /// Gets the current UID.
+                    #[must_use]
+                    pub fn get_uid(&self) -> libc::uid_t { self.0.sc_uid }
+                    /// Set the GID.
+                    pub fn set_gid(&mut self, gid: libc::gid_t) { self.0.sc_gid = gid; }
+                    /// Gets the current GID.
+                    #[must_use]
+                    pub fn get_gid(&self) -> libc::gid_t { self.0.sc_gid }
+                }
+                /// This control message contains file descriptors.
+                pub struct ScmRights<'a>(AncillaryDataIter<'a, RawFd>);
+                
+                impl<'a> Iterator for ScmRights<'a>
+                {
+                    type Item = RawFd;
+
+                    fn next(&mut self) -> Option<RawFd>
+                    {
+                        self.0.next()
+                    }
+                }
+                
+                pub struct ScmCredentials<'a>(AncillaryDataIter<'a, ()>);
+                /// This control message contains unix credentials.
+                pub struct ScmCredentials<'a>(AncillaryDataIter<'a, libc::ucred>);
+                
+                impl<'a> Iterator for ScmCredentials<'a>
+                {
+                    type Item = SocketCred;
+
+                    fn next(&mut self) -> Option<SocketCred>
+                    {
+                        Some(SocketCred(self.0.next()?))
+                    }
+                }
+                /// The error type which is returned from parsing the type a control message.
+                #[non_exhaustive] #[derive(Debug)]
+                pub enum AncillaryError
+                {
+                    Unknown { cmsg_level: i32, cmsg_type: i32 },
+                }
+                /// This enum represent one control message of variable type.
+                pub enum AncillaryData<'a>
+                {
+                    ScmRights(ScmRights<'a>),
+                    ScmCredentials(ScmCredentials<'a>),
+                }
+
+                impl<'a> AncillaryData<'a>
+                {
+                    /// Creates an `AncillaryData::ScmRights` variant.
+                    unsafe fn as_rights(data: &'a [u8]) -> Self
+                    {
+                        let ancillary_data_iter = AncillaryDataIter::new(data);
+                        let scm_rights = ScmRights(ancillary_data_iter);
+                        AncillaryData::ScmRights(scm_rights)
+                    }
+
+                    /// Creates an `AncillaryData::ScmCredentials` variant.
+                    unsafe fn as_credentials(data: &'a [u8]) -> Self
+                    {
+                        let ancillary_data_iter = AncillaryDataIter::new(data);
+                        let scm_credentials = ScmCredentials(ancillary_data_iter);
+                        AncillaryData::ScmCredentials(scm_credentials)
+                    }
+
+                    fn try_from_cmsghdr(cmsg: &'a libc::cmsghdr) -> Result<Self, AncillaryError>
+                    {
+                        unsafe
+                        {
+                            let cmsg_len_zero = libc::CMSG_LEN(0) as usize;
+                            let data_len = (*cmsg).cmsg_len as usize - cmsg_len_zero;
+                            let data = libc::CMSG_DATA(cmsg).cast();
+                            let data = from_raw_parts(data, data_len);
+
+                            match (*cmsg).cmsg_level
+                            {
+                                libc::SOL_SOCKET => match (*cmsg).cmsg_type
+                                {
+                                    libc::SCM_RIGHTS => Ok(AncillaryData::as_rights(data)),
+                                    libc::SCM_CREDENTIALS => Ok(AncillaryData::as_credentials(data)),
+                                    cmsg_type =>
+                                    {
+                                        Err(AncillaryError::Unknown { cmsg_level: libc::SOL_SOCKET, cmsg_type })
+                                    }
+                                },
+                                
+                                cmsg_level => 
+                                {
+                                    Err(AncillaryError::Unknown { cmsg_level, cmsg_type: (*cmsg).cmsg_type })
+                                }
+                            }
+                        }
+                    }
+                }
+                /// This struct is used to iterate through the control messages.
+                #[must_use = "iterators are lazy and do nothing unless consumed"]
+                pub struct Messages<'a>
+                {
+                    buffer: &'a [u8],
+                    current: Option<&'a libc::cmsghdr>,
+                }
+                
+                impl<'a> Iterator for Messages<'a>
+                {
+                    type Item = Result<AncillaryData<'a>, AncillaryError>;
+
+                    fn next(&mut self) -> Option<Self::Item>
+                    {
+                        unsafe
+                        {
+                            let mut msg: libc::msghdr = zeroed();
+                            msg.msg_control = self.buffer.as_ptr() as *mut _;
+                            msg.msg_controllen = self.buffer.len() as _;
+
+                            let cmsg = if let Some(current) = self.current
+                            {
+                                libc::CMSG_NXTHDR(&msg, current)
+                            }
+                            else { libc::CMSG_FIRSTHDR(&msg) };
+
+                            let cmsg = cmsg.as_ref()?;
+                            
+                            if let Some(current) = self.current
+                            {
+                                if eq(current, cmsg) { return None; }
+                            }
+
+                            self.current = Some(cmsg);
+                            let ancillary_result = AncillaryData::try_from_cmsghdr(cmsg);
+                            Some(ancillary_result)
+                        }
+                    }
+                }
+                /// A Unix socket Ancillary data struct.
+                #[derive(Debug)]
+                pub struct SocketAncillary<'a>
+                {
+                    buffer: &'a mut [u8],
+                    length: usize,
+                    truncated: bool,
+                }
+
+                impl<'a> SocketAncillary<'a>
+                {
+                    /// Creates an ancillary data with the given buffer.
+                    pub fn new(buffer: &'a mut [u8]) -> Self
+                    {
+                        SocketAncillary { buffer, length: 0, truncated: false }
+                    }
+
+                    /// Returns the capacity of the buffer.
+                    #[must_use] pub fn capacity(&self) -> usize
+                    {
+                        self.buffer.len()
+                    }
+                    /// Returns `true` if the ancillary data is empty.
+                    #[must_use] pub fn is_empty(&self) -> bool
+                    {
+                        self.length == 0
+                    }
+                    /// Returns the number of used bytes.
+                    #[must_use] pub fn len(&self) -> usize
+                    {
+                        self.length
+                    }
+                    /// Returns the iterator of the control messages.
+                    pub fn messages(&self) -> Messages<'_>
+                    {
+                        Messages { buffer: &self.buffer[..self.length], current: None }
+                    }
+                    /// Is `true` if during a recv operation the ancillary was truncated.
+                    #[must_use]
+                    pub fn truncated(&self) -> bool
+                    {
+                        self.truncated
+                    }
+                    /// Add file descriptors to the ancillary data.
+                    pub fn add_fds(&mut self, fds: &[RawFd]) -> bool
+                    {
+                        self.truncated = false;
+                        add_to_ancillary_data(
+                            &mut self.buffer,
+                            &mut self.length,
+                            fds,
+                            libc::SOL_SOCKET,
+                            libc::SCM_RIGHTS,
+                        )
+                    }
+                    /// Add credentials to the ancillary data.
+                    pub fn add_creds(&mut self, creds: &[SocketCred]) -> bool
+                    {
+                        self.truncated = false;
+                        add_to_ancillary_data
+                        (
+                            &mut self.buffer,
+                            &mut self.length,
+                            creds,
+                            libc::SOL_SOCKET,
+                        )
+                    }
+                    /// Clears the ancillary data, removing all values.
+                    pub fn clear(&mut self)
+                    {
+                        self.length = 0;
+                        self.truncated = false;
+                    }
+                }
+            } pub use self::ancillary::*;
+
+            pub mod datagram
+            {
+                use ::
+                {
+                    *,
+                };
+                #[cfg(any(
+                    target_os = "linux",
+                    target_os = "android",
+                    target_os = "dragonfly",
+                    target_os = "freebsd",
+                    target_os = "openbsd",
+                    target_os = "netbsd",
+                    target_os = "solaris",
+                    target_os = "illumos",
+                    target_os = "haiku",
+                    target_os = "nto",
+                    target_os = "cygwin"
+                ))]
+                use libc::MSG_NOSIGNAL;
+                
+                use super::{ sockaddr_un, SocketAddr, SocketAncillary, recv_vectored_with_ancillary_from, send_vectored_with_ancillary_to};
+                use crate::io::{IoSlice, IoSliceMut};
+                use crate::net::Shutdown;
+                use crate::os::unix::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd, RawFd};
+                use crate::path::Path;
+                use crate::sealed::Sealed;
+                use crate::sys::cvt;
+                use crate::sys::net::Socket;
+                use crate::sys_common::{AsInner, FromInner, IntoInner};
+                use crate::time::Duration;
+                use crate::{fmt, io};
+                
+                /// A Unix datagram socket.
+                pub struct UnixDatagram(Socket);
+                /// Allows extension traits within `std`.                
+                impl Sealed for UnixDatagram {}
+                
+                impl fmt::Debug for UnixDatagram
+                {
+                    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result
+                    {
+                        let mut builder = fmt.debug_struct("UnixDatagram");
+                        builder.field("fd", self.0.as_inner());
+                        if let Ok(addr) = self.local_addr() {
+                            builder.field("local", &addr);
+                        }
+                        if let Ok(addr) = self.peer_addr() {
+                            builder.field("peer", &addr);
+                        }
+                        builder.finish()
+                    }
+                }
+
+                impl UnixDatagram {
+                    /// Creates a Unix datagram socket bound to the given path.
+                    ///
+                    /// # Examples
+                    ///
+                    /// ```no_run
+                    /// use std::os::unix::net::UnixDatagram;
+                    ///
+                    /// let sock = match UnixDatagram::bind("/path/to/the/socket") {
+                    ///     Ok(sock) => sock,
+                    ///     Err(e) => {
+                    ///         println!("Couldn't bind: {e:?}");
+                    ///         return
+                    ///     }
+                    /// };
+                    /// ```
+                    
+                    pub fn bind<P: AsRef<Path>>(path: P) -> io::Result<UnixDatagram> {
+                        unsafe {
+                            let socket = UnixDatagram::unbound()?;
+                            let (addr, len) = sockaddr_un(path.as_ref())?;
+
+                            cvt(libc::bind(socket.as_raw_fd(), (&raw const addr) as *const _, len as _))?;
+
+                            Ok(socket)
+                        }
+                    }
+
+                    /// Creates a Unix datagram socket bound to an address.
+                    ///
+                    /// # Examples
+                    ///
+                    /// ```no_run
+                    /// use std::os::unix::net::{UnixDatagram};
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let sock1 = UnixDatagram::bind("path/to/socket")?;
+                    ///     let addr = sock1.local_addr()?;
+                    ///
+                    ///     let sock2 = match UnixDatagram::bind_addr(&addr) {
+                    ///         Ok(sock) => sock,
+                    ///         Err(err) => {
+                    ///             println!("Couldn't bind: {err:?}");
+                    ///             return Err(err);
+                    ///         }
+                    ///     };
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    
+                    pub fn bind_addr(socket_addr: &SocketAddr) -> io::Result<UnixDatagram> {
+                        unsafe {
+                            let socket = UnixDatagram::unbound()?;
+                            cvt(libc::bind(
+                                socket.as_raw_fd(),
+                                (&raw const socket_addr.addr) as *const _,
+                                socket_addr.len as _,
+                            ))?;
+                            Ok(socket)
+                        }
+                    }
+
+                    /// Creates a Unix Datagram socket which is not bound to any address.
+                    ///
+                    /// # Examples
+                    ///
+                    /// ```no_run
+                    /// use std::os::unix::net::UnixDatagram;
+                    ///
+                    /// let sock = match UnixDatagram::unbound() {
+                    ///     Ok(sock) => sock,
+                    ///     Err(e) => {
+                    ///         println!("Couldn't unbound: {e:?}");
+                    ///         return
+                    ///     }
+                    /// };
+                    /// ```
+                    
+                    pub fn unbound() -> io::Result<UnixDatagram> {
+                        let inner = Socket::new_raw(libc::AF_UNIX, libc::SOCK_DGRAM)?;
+                        Ok(UnixDatagram(inner))
+                    }
+
+                    /// Creates an unnamed pair of connected sockets.
+                    ///
+                    /// Returns two `UnixDatagrams`s which are connected to each other.
+                    ///
+                    /// # Examples
+                    ///
+                    /// ```no_run
+                    /// use std::os::unix::net::UnixDatagram;
+                    ///
+                    /// let (sock1, sock2) = match UnixDatagram::pair() {
+                    ///     Ok((sock1, sock2)) => (sock1, sock2),
+                    ///     Err(e) => {
+                    ///         println!("Couldn't unbound: {e:?}");
+                    ///         return
+                    ///     }
+                    /// };
+                    /// ```
+                    
+                    pub fn pair() -> io::Result<(UnixDatagram, UnixDatagram)> {
+                        let (i1, i2) = Socket::new_pair(libc::AF_UNIX, libc::SOCK_DGRAM)?;
+                        Ok((UnixDatagram(i1), UnixDatagram(i2)))
+                    }
+
+                    /// Connects the socket to the specified path address.
+                    ///
+                    /// The [`send`] method may be used to send data to the specified address.
+                    /// [`recv`] and [`recv_from`] will only receive data from that address.
+                    ///
+                    /// [`send`]: UnixDatagram::send
+                    /// [`recv`]: UnixDatagram::recv
+                    /// [`recv_from`]: UnixDatagram::recv_from
+                    ///
+                    /// # Examples
+                    ///
+                    /// ```no_run
+                    /// use std::os::unix::net::UnixDatagram;
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let sock = UnixDatagram::unbound()?;
+                    ///     match sock.connect("/path/to/the/socket") {
+                    ///         Ok(sock) => sock,
+                    ///         Err(e) => {
+                    ///             println!("Couldn't connect: {e:?}");
+                    ///             return Err(e)
+                    ///         }
+                    ///     };
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    
+                    pub fn connect<P: AsRef<Path>>(&self, path: P) -> io::Result<()> {
+                        unsafe {
+                            let (addr, len) = sockaddr_un(path.as_ref())?;
+
+                            cvt(libc::connect(self.as_raw_fd(), (&raw const addr) as *const _, len))?;
+                        }
+                        Ok(())
+                    }
+
+                    /// Connects the socket to an address.
+                    ///
+                    /// # Examples
+                    ///
+                    /// ```no_run
+                    /// use std::os::unix::net::{UnixDatagram};
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let bound = UnixDatagram::bind("/path/to/socket")?;
+                    ///     let addr = bound.local_addr()?;
+                    ///
+                    ///     let sock = UnixDatagram::unbound()?;
+                    ///     match sock.connect_addr(&addr) {
+                    ///         Ok(sock) => sock,
+                    ///         Err(e) => {
+                    ///             println!("Couldn't connect: {e:?}");
+                    ///             return Err(e)
+                    ///         }
+                    ///     };
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    
+                    pub fn connect_addr(&self, socket_addr: &SocketAddr) -> io::Result<()> {
+                        unsafe {
+                            cvt(libc::connect(
+                                self.as_raw_fd(),
+                                (&raw const socket_addr.addr) as *const _,
+                                socket_addr.len,
+                            ))?;
+                        }
+                        Ok(())
+                    }
+
+                    /// Creates a new independently owned handle to the underlying socket.
+                    ///
+                    /// The returned `UnixDatagram` is a reference to the same socket that this
+                    /// object references. Both handles can be used to accept incoming
+                    /// connections and options set on one side will affect the other.
+                    ///
+                    /// # Examples
+                    ///
+                    /// ```no_run
+                    /// use std::os::unix::net::UnixDatagram;
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let sock = UnixDatagram::bind("/path/to/the/socket")?;
+                    ///     let sock_copy = sock.try_clone().expect("try_clone failed");
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    
+                    pub fn try_clone(&self) -> io::Result<UnixDatagram> {
+                        self.0.duplicate().map(UnixDatagram)
+                    }
+
+                    /// Returns the address of this socket.
+                    ///
+                    /// # Examples
+                    ///
+                    /// ```no_run
+                    /// use std::os::unix::net::UnixDatagram;
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let sock = UnixDatagram::bind("/path/to/the/socket")?;
+                    ///     let addr = sock.local_addr().expect("Couldn't get local address");
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    
+                    pub fn local_addr(&self) -> io::Result<SocketAddr> {
+                        SocketAddr::new(|addr, len| unsafe { libc::getsockname(self.as_raw_fd(), addr, len) })
+                    }
+
+                    /// Returns the address of this socket's peer.
+                    ///
+                    /// The [`connect`] method will connect the socket to a peer.
+                    ///
+                    /// [`connect`]: UnixDatagram::connect
+                    ///
+                    /// # Examples
+                    ///
+                    /// ```no_run
+                    /// use std::os::unix::net::UnixDatagram;
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let sock = UnixDatagram::unbound()?;
+                    ///     sock.connect("/path/to/the/socket")?;
+                    ///
+                    ///     let addr = sock.peer_addr().expect("Couldn't get peer address");
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    
+                    pub fn peer_addr(&self) -> io::Result<SocketAddr> {
+                        SocketAddr::new(|addr, len| unsafe { libc::getpeername(self.as_raw_fd(), addr, len) })
+                    }
+
+                    fn recv_from_flags(
+                        &self,
+                        buf: &mut [u8],
+                        flags: core::ffi::c_int,
+                    ) -> io::Result<(usize, SocketAddr)> {
+                        let mut count = 0;
+                        let addr = SocketAddr::new(|addr, len| unsafe {
+                            count = libc::recvfrom(
+                                self.as_raw_fd(),
+                                buf.as_mut_ptr() as *mut _,
+                                buf.len(),
+                                flags,
+                                addr,
+                                len,
+                            );
+                            if count > 0 {
+                                1
+                            } else if count == 0 {
+                                0
+                            } else {
+                                -1
+                            }
+                        })?;
+
+                        Ok((count as usize, addr))
+                    }
+
+                    /// Receives data from the socket.
+                    ///
+                    /// On success, returns the number of bytes read and the address from
+                    /// whence the data came.
+                    ///
+                    /// # Examples
+                    ///
+                    /// ```no_run
+                    /// use std::os::unix::net::UnixDatagram;
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let sock = UnixDatagram::unbound()?;
+                    ///     let mut buf = vec![0; 10];
+                    ///     let (size, sender) = sock.recv_from(buf.as_mut_slice())?;
+                    ///     println!("received {size} bytes from {sender:?}");
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    
+                    pub fn recv_from(&self, buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
+                        self.recv_from_flags(buf, 0)
+                    }
+
+                    /// Receives data from the socket.
+                    ///
+                    /// On success, returns the number of bytes read.
+                    ///
+                    /// # Examples
+                    ///
+                    /// ```no_run
+                    /// use std::os::unix::net::UnixDatagram;
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let sock = UnixDatagram::bind("/path/to/the/socket")?;
+                    ///     let mut buf = vec![0; 10];
+                    ///     sock.recv(buf.as_mut_slice()).expect("recv function failed");
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    
+                    pub fn recv(&self, buf: &mut [u8]) -> io::Result<usize> {
+                        self.0.read(buf)
+                    }
+
+                    /// Receives data and ancillary data from socket.
+                    ///
+                    /// On success, returns the number of bytes read, if the data was truncated and the address from whence the msg came.
+                    ///
+                    /// # Examples
+                    ///
+                    #[cfg_attr(any(target_os = "android", target_os = "linux"), doc = "```no_run")]
+                    #[cfg_attr(not(any(target_os = "android", target_os = "linux")), doc = "```ignore")]
+                    /// #![feature(unix_socket_ancillary_data)]
+                    /// use std::os::unix::net::{UnixDatagram, SocketAncillary, AncillaryData};
+                    /// use std::io::IoSliceMut;
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let sock = UnixDatagram::unbound()?;
+                    ///     let mut buf1 = [1; 8];
+                    ///     let mut buf2 = [2; 16];
+                    ///     let mut buf3 = [3; 8];
+                    ///     let mut bufs = &mut [
+                    ///         IoSliceMut::new(&mut buf1),
+                    ///         IoSliceMut::new(&mut buf2),
+                    ///         IoSliceMut::new(&mut buf3),
+                    ///     ][..];
+                    ///     let mut fds = [0; 8];
+                    ///     let mut ancillary_buffer = [0; 128];
+                    ///     let mut ancillary = SocketAncillary::new(&mut ancillary_buffer[..]);
+                    ///     let (size, _truncated, sender) = sock.recv_vectored_with_ancillary_from(bufs, &mut ancillary)?;
+                    ///     println!("received {size}");
+                    ///     for ancillary_result in ancillary.messages() {
+                    ///         if let AncillaryData::ScmRights(scm_rights) = ancillary_result.unwrap() {
+                    ///             for fd in scm_rights {
+                    ///                 println!("receive file descriptor: {fd}");
+                    ///             }
+                    ///         }
+                    ///     }
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    #[cfg(any(doc, target_os = "android", target_os = "linux"))]
+                    
+                    pub fn recv_vectored_with_ancillary_from(
+                        &self,
+                        bufs: &mut [IoSliceMut<'_>],
+                        ancillary: &mut SocketAncillary<'_>,
+                    ) -> io::Result<(usize, bool, SocketAddr)> {
+                        let (count, truncated, addr) = recv_vectored_with_ancillary_from(&self.0, bufs, ancillary)?;
+                        let addr = addr?;
+
+                        Ok((count, truncated, addr))
+                    }
+
+                    /// Receives data and ancillary data from socket.
+                    ///
+                    /// On success, returns the number of bytes read and if the data was truncated.
+                    ///
+                    /// # Examples
+                    ///
+                    #[cfg_attr(any(target_os = "android", target_os = "linux"), doc = "```no_run")]
+                    #[cfg_attr(not(any(target_os = "android", target_os = "linux")), doc = "```ignore")]
+                    /// #![feature(unix_socket_ancillary_data)]
+                    /// use std::os::unix::net::{UnixDatagram, SocketAncillary, AncillaryData};
+                    /// use std::io::IoSliceMut;
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let sock = UnixDatagram::unbound()?;
+                    ///     let mut buf1 = [1; 8];
+                    ///     let mut buf2 = [2; 16];
+                    ///     let mut buf3 = [3; 8];
+                    ///     let mut bufs = &mut [
+                    ///         IoSliceMut::new(&mut buf1),
+                    ///         IoSliceMut::new(&mut buf2),
+                    ///         IoSliceMut::new(&mut buf3),
+                    ///     ][..];
+                    ///     let mut fds = [0; 8];
+                    ///     let mut ancillary_buffer = [0; 128];
+                    ///     let mut ancillary = SocketAncillary::new(&mut ancillary_buffer[..]);
+                    ///     let (size, _truncated) = sock.recv_vectored_with_ancillary(bufs, &mut ancillary)?;
+                    ///     println!("received {size}");
+                    ///     for ancillary_result in ancillary.messages() {
+                    ///         if let AncillaryData::ScmRights(scm_rights) = ancillary_result.unwrap() {
+                    ///             for fd in scm_rights {
+                    ///                 println!("receive file descriptor: {fd}");
+                    ///             }
+                    ///         }
+                    ///     }
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    #[cfg(any(doc, target_os = "android", target_os = "linux"))]
+                    
+                    pub fn recv_vectored_with_ancillary(
+                        &self,
+                        bufs: &mut [IoSliceMut<'_>],
+                        ancillary: &mut SocketAncillary<'_>,
+                    ) -> io::Result<(usize, bool)> {
+                        let (count, truncated, addr) = recv_vectored_with_ancillary_from(&self.0, bufs, ancillary)?;
+                        addr?;
+
+                        Ok((count, truncated))
+                    }
+
+                    /// Sends data on the socket to the specified address.
+                    ///
+                    /// On success, returns the number of bytes written.
+                    ///
+                    /// # Examples
+                    ///
+                    /// ```no_run
+                    /// use std::os::unix::net::UnixDatagram;
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let sock = UnixDatagram::unbound()?;
+                    ///     sock.send_to(b"omelette au fromage", "/some/sock").expect("send_to function failed");
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    
+                    pub fn send_to<P: AsRef<Path>>(&self, buf: &[u8], path: P) -> io::Result<usize> {
+                        unsafe {
+                            let (addr, len) = sockaddr_un(path.as_ref())?;
+
+                            let count = cvt(libc::sendto(
+                                self.as_raw_fd(),
+                                buf.as_ptr() as *const _,
+                                buf.len(),
+                                MSG_NOSIGNAL,
+                                (&raw const addr) as *const _,
+                                len,
+                            ))?;
+                            Ok(count as usize)
+                        }
+                    }
+
+                    /// Sends data on the socket to the specified [SocketAddr].
+                    ///
+                    /// On success, returns the number of bytes written.
+                    ///
+                    /// [SocketAddr]: crate::os::unix::net::SocketAddr
+                    ///
+                    /// # Examples
+                    ///
+                    /// ```no_run
+                    /// use std::os::unix::net::{UnixDatagram};
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let bound = UnixDatagram::bind("/path/to/socket")?;
+                    ///     let addr = bound.local_addr()?;
+                    ///
+                    ///     let sock = UnixDatagram::unbound()?;
+                    ///     sock.send_to_addr(b"bacon egg and cheese", &addr).expect("send_to_addr function failed");
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    
+                    pub fn send_to_addr(&self, buf: &[u8], socket_addr: &SocketAddr) -> io::Result<usize> {
+                        unsafe {
+                            let count = cvt(libc::sendto(
+                                self.as_raw_fd(),
+                                buf.as_ptr() as *const _,
+                                buf.len(),
+                                MSG_NOSIGNAL,
+                                (&raw const socket_addr.addr) as *const _,
+                                socket_addr.len,
+                            ))?;
+                            Ok(count as usize)
+                        }
+                    }
+
+                    /// Sends data on the socket to the socket's peer.
+                    ///
+                    /// The peer address may be set by the `connect` method, and this method
+                    /// will return an error if the socket has not already been connected.
+                    ///
+                    /// On success, returns the number of bytes written.
+                    ///
+                    /// # Examples
+                    ///
+                    /// ```no_run
+                    /// use std::os::unix::net::UnixDatagram;
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let sock = UnixDatagram::unbound()?;
+                    ///     sock.connect("/some/sock").expect("Couldn't connect");
+                    ///     sock.send(b"omelette au fromage").expect("send_to function failed");
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    
+                    pub fn send(&self, buf: &[u8]) -> io::Result<usize> {
+                        self.0.write(buf)
+                    }
+
+                    /// Sends data and ancillary data on the socket to the specified address.
+                    ///
+                    /// On success, returns the number of bytes written.
+                    ///
+                    /// # Examples
+                    ///
+                    #[cfg_attr(any(target_os = "android", target_os = "linux"), doc = "```no_run")]
+                    #[cfg_attr(not(any(target_os = "android", target_os = "linux")), doc = "```ignore")]
+                    /// #![feature(unix_socket_ancillary_data)]
+                    /// use std::os::unix::net::{UnixDatagram, SocketAncillary};
+                    /// use std::io::IoSlice;
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let sock = UnixDatagram::unbound()?;
+                    ///     let buf1 = [1; 8];
+                    ///     let buf2 = [2; 16];
+                    ///     let buf3 = [3; 8];
+                    ///     let bufs = &[
+                    ///         IoSlice::new(&buf1),
+                    ///         IoSlice::new(&buf2),
+                    ///         IoSlice::new(&buf3),
+                    ///     ][..];
+                    ///     let fds = [0, 1, 2];
+                    ///     let mut ancillary_buffer = [0; 128];
+                    ///     let mut ancillary = SocketAncillary::new(&mut ancillary_buffer[..]);
+                    ///     ancillary.add_fds(&fds[..]);
+                    ///     sock.send_vectored_with_ancillary_to(bufs, &mut ancillary, "/some/sock")
+                    ///         .expect("send_vectored_with_ancillary_to function failed");
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    #[cfg(any(doc, target_os = "android", target_os = "linux"))]
+                    
+                    pub fn send_vectored_with_ancillary_to<P: AsRef<Path>>(
+                        &self,
+                        bufs: &[IoSlice<'_>],
+                        ancillary: &mut SocketAncillary<'_>,
+                        path: P,
+                    ) -> io::Result<usize> {
+                        send_vectored_with_ancillary_to(&self.0, Some(path.as_ref()), bufs, ancillary)
+                    }
+
+                    /// Sends data and ancillary data on the socket.
+                    ///
+                    /// On success, returns the number of bytes written.
+                    ///
+                    /// # Examples
+                    ///
+                    #[cfg_attr(any(target_os = "android", target_os = "linux"), doc = "```no_run")]
+                    #[cfg_attr(not(any(target_os = "android", target_os = "linux")), doc = "```ignore")]
+                    /// #![feature(unix_socket_ancillary_data)]
+                    /// use std::os::unix::net::{UnixDatagram, SocketAncillary};
+                    /// use std::io::IoSlice;
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let sock = UnixDatagram::unbound()?;
+                    ///     let buf1 = [1; 8];
+                    ///     let buf2 = [2; 16];
+                    ///     let buf3 = [3; 8];
+                    ///     let bufs = &[
+                    ///         IoSlice::new(&buf1),
+                    ///         IoSlice::new(&buf2),
+                    ///         IoSlice::new(&buf3),
+                    ///     ][..];
+                    ///     let fds = [0, 1, 2];
+                    ///     let mut ancillary_buffer = [0; 128];
+                    ///     let mut ancillary = SocketAncillary::new(&mut ancillary_buffer[..]);
+                    ///     ancillary.add_fds(&fds[..]);
+                    ///     sock.send_vectored_with_ancillary(bufs, &mut ancillary)
+                    ///         .expect("send_vectored_with_ancillary function failed");
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    #[cfg(any(doc, target_os = "android", target_os = "linux"))]
+                    
+                    pub fn send_vectored_with_ancillary(
+                        &self,
+                        bufs: &[IoSlice<'_>],
+                        ancillary: &mut SocketAncillary<'_>,
+                    ) -> io::Result<usize> {
+                        send_vectored_with_ancillary_to(&self.0, None, bufs, ancillary)
+                    }
+
+                    /// Sets the read timeout for the socket.
+                    ///
+                    /// If the provided value is [`None`], then [`recv`] and [`recv_from`] calls will
+                    /// block indefinitely. An [`Err`] is returned if the zero [`Duration`]
+                    /// is passed to this method.
+                    ///
+                    /// [`recv`]: UnixDatagram::recv
+                    /// [`recv_from`]: UnixDatagram::recv_from
+                    ///
+                    /// # Examples
+                    ///
+                    /// ```
+                    /// use std::os::unix::net::UnixDatagram;
+                    /// use std::time::Duration;
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let sock = UnixDatagram::unbound()?;
+                    ///     sock.set_read_timeout(Some(Duration::new(1, 0)))
+                    ///         .expect("set_read_timeout function failed");
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    ///
+                    /// An [`Err`] is returned if the zero [`Duration`] is passed to this
+                    /// method:
+                    ///
+                    /// ```no_run
+                    /// use std::io;
+                    /// use std::os::unix::net::UnixDatagram;
+                    /// use std::time::Duration;
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let socket = UnixDatagram::unbound()?;
+                    ///     let result = socket.set_read_timeout(Some(Duration::new(0, 0)));
+                    ///     let err = result.unwrap_err();
+                    ///     assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    
+                    pub fn set_read_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
+                        self.0.set_timeout(timeout, libc::SO_RCVTIMEO)
+                    }
+
+                    /// Sets the write timeout for the socket.
+                    ///
+                    /// If the provided value is [`None`], then [`send`] and [`send_to`] calls will
+                    /// block indefinitely. An [`Err`] is returned if the zero [`Duration`] is passed to this
+                    /// method.
+                    ///
+                    /// [`send`]: UnixDatagram::send
+                    /// [`send_to`]: UnixDatagram::send_to
+                    ///
+                    /// # Examples
+                    ///
+                    /// ```
+                    /// use std::os::unix::net::UnixDatagram;
+                    /// use std::time::Duration;
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let sock = UnixDatagram::unbound()?;
+                    ///     sock.set_write_timeout(Some(Duration::new(1, 0)))
+                    ///         .expect("set_write_timeout function failed");
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    ///
+                    /// An [`Err`] is returned if the zero [`Duration`] is passed to this
+                    /// method:
+                    ///
+                    /// ```no_run
+                    /// use std::io;
+                    /// use std::os::unix::net::UnixDatagram;
+                    /// use std::time::Duration;
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let socket = UnixDatagram::unbound()?;
+                    ///     let result = socket.set_write_timeout(Some(Duration::new(0, 0)));
+                    ///     let err = result.unwrap_err();
+                    ///     assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    
+                    pub fn set_write_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
+                        self.0.set_timeout(timeout, libc::SO_SNDTIMEO)
+                    }
+
+                    /// Returns the read timeout of this socket.
+                    ///
+                    /// # Examples
+                    ///
+                    /// ```
+                    /// use std::os::unix::net::UnixDatagram;
+                    /// use std::time::Duration;
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let sock = UnixDatagram::unbound()?;
+                    ///     sock.set_read_timeout(Some(Duration::new(1, 0)))
+                    ///         .expect("set_read_timeout function failed");
+                    ///     assert_eq!(sock.read_timeout()?, Some(Duration::new(1, 0)));
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    
+                    pub fn read_timeout(&self) -> io::Result<Option<Duration>> {
+                        self.0.timeout(libc::SO_RCVTIMEO)
+                    }
+
+                    /// Returns the write timeout of this socket.
+                    ///
+                    /// # Examples
+                    ///
+                    /// ```
+                    /// use std::os::unix::net::UnixDatagram;
+                    /// use std::time::Duration;
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let sock = UnixDatagram::unbound()?;
+                    ///     sock.set_write_timeout(Some(Duration::new(1, 0)))
+                    ///         .expect("set_write_timeout function failed");
+                    ///     assert_eq!(sock.write_timeout()?, Some(Duration::new(1, 0)));
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    
+                    pub fn write_timeout(&self) -> io::Result<Option<Duration>> {
+                        self.0.timeout(libc::SO_SNDTIMEO)
+                    }
+
+                    /// Moves the socket into or out of nonblocking mode.
+                    ///
+                    /// # Examples
+                    ///
+                    /// ```
+                    /// use std::os::unix::net::UnixDatagram;
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let sock = UnixDatagram::unbound()?;
+                    ///     sock.set_nonblocking(true).expect("set_nonblocking function failed");
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    
+                    pub fn set_nonblocking(&self, nonblocking: bool) -> io::Result<()> {
+                        self.0.set_nonblocking(nonblocking)
+                    }
+
+                    /// Set the id of the socket for network filtering purpose
+                    ///
+                    #[cfg_attr(
+                        any(target_os = "linux", target_os = "freebsd", target_os = "openbsd"),
+                        doc = "```no_run"
+                    )]
+                    #[cfg_attr(
+                        not(any(target_os = "linux", target_os = "freebsd", target_os = "openbsd")),
+                        doc = "```ignore"
+                    )]
+                    /// #![feature(unix_set_mark)]
+                    /// use std::os::unix::net::UnixDatagram;
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let sock = UnixDatagram::unbound()?;
+                    ///     sock.set_mark(32)?;
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    #[cfg(any(doc, target_os = "linux", target_os = "freebsd", target_os = "openbsd",))]
+                    
+                    pub fn set_mark(&self, mark: u32) -> io::Result<()> {
+                        self.0.set_mark(mark)
+                    }
+
+                    /// Returns the value of the `SO_ERROR` option.
+                    ///
+                    /// # Examples
+                    ///
+                    /// ```no_run
+                    /// use std::os::unix::net::UnixDatagram;
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let sock = UnixDatagram::unbound()?;
+                    ///     if let Ok(Some(err)) = sock.take_error() {
+                    ///         println!("Got error: {err:?}");
+                    ///     }
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    
+                    pub fn take_error(&self) -> io::Result<Option<io::Error>> {
+                        self.0.take_error()
+                    }
+
+                    /// Shut down the read, write, or both halves of this connection.
+                    ///
+                    /// This function will cause all pending and future I/O calls on the
+                    /// specified portions to immediately return with an appropriate value
+                    /// (see the documentation of [`Shutdown`]).
+                    ///
+                    /// ```no_run
+                    /// use std::os::unix::net::UnixDatagram;
+                    /// use std::net::Shutdown;
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let sock = UnixDatagram::unbound()?;
+                    ///     sock.shutdown(Shutdown::Both).expect("shutdown function failed");
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    
+                    pub fn shutdown(&self, how: Shutdown) -> io::Result<()> {
+                        self.0.shutdown(how)
+                    }
+
+                    /// Receives data on the socket from the remote address to which it is
+                    /// connected, without removing that data from the queue. On success,
+                    /// returns the number of bytes peeked.
+                    ///
+                    /// Successive calls return the same data. This is accomplished by passing
+                    /// `MSG_PEEK` as a flag to the underlying `recv` system call.
+                    ///
+                    /// # Examples
+                    ///
+                    /// ```no_run
+                    /// #![feature(unix_socket_peek)]
+                    ///
+                    /// use std::os::unix::net::UnixDatagram;
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let socket = UnixDatagram::bind("/tmp/sock")?;
+                    ///     let mut buf = [0; 10];
+                    ///     let len = socket.peek(&mut buf).expect("peek failed");
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    
+                    pub fn peek(&self, buf: &mut [u8]) -> io::Result<usize> {
+                        self.0.peek(buf)
+                    }
+
+                    /// Receives a single datagram message on the socket, without removing it from the
+                    /// queue. On success, returns the number of bytes read and the origin.
+                    ///
+                    /// The function must be called with valid byte array `buf` of sufficient size to
+                    /// hold the message bytes. If a message is too long to fit in the supplied buffer,
+                    /// excess bytes may be discarded.
+                    ///
+                    /// Successive calls return the same data. This is accomplished by passing
+                    /// `MSG_PEEK` as a flag to the underlying `recvfrom` system call.
+                    ///
+                    /// Do not use this function to implement busy waiting, instead use `libc::poll` to
+                    /// synchronize IO events on one or more sockets.
+                    ///
+                    /// # Examples
+                    ///
+                    /// ```no_run
+                    /// #![feature(unix_socket_peek)]
+                    ///
+                    /// use std::os::unix::net::UnixDatagram;
+                    ///
+                    /// fn main() -> std::io::Result<()> {
+                    ///     let socket = UnixDatagram::bind("/tmp/sock")?;
+                    ///     let mut buf = [0; 10];
+                    ///     let (len, addr) = socket.peek_from(&mut buf).expect("peek failed");
+                    ///     Ok(())
+                    /// }
+                    /// ```
+                    
+                    pub fn peek_from(&self, buf: &mut [u8]) -> io::Result<(usize, SocketAddr)> {
+                        self.recv_from_flags(buf, libc::MSG_PEEK)
+                    }
+                }
+
+                
+                impl AsRawFd for UnixDatagram {
+                    #[inline]
+                    fn as_raw_fd(&self) -> RawFd {
+                        self.0.as_inner().as_raw_fd()
+                    }
+                }
+
+                
+                impl FromRawFd for UnixDatagram {
+                    #[inline]
+                    unsafe fn from_raw_fd(fd: RawFd) -> UnixDatagram {
+                        UnixDatagram(Socket::from_inner(FromInner::from_inner(OwnedFd::from_raw_fd(fd))))
+                    }
+                }
+
+                
+                impl IntoRawFd for UnixDatagram {
+                    #[inline]
+                    fn into_raw_fd(self) -> RawFd {
+                        self.0.into_inner().into_inner().into_raw_fd()
+                    }
+                }
+
+                
+                impl AsFd for UnixDatagram {
+                    #[inline]
+                    fn as_fd(&self) -> BorrowedFd<'_> {
+                        self.0.as_inner().as_fd()
+                    }
+                }
+
+                
+                impl From<UnixDatagram> for OwnedFd {
+                    /// Takes ownership of a [`UnixDatagram`]'s socket file descriptor.
+                    #[inline]
+                    fn from(unix_datagram: UnixDatagram) -> OwnedFd {
+                        unsafe { OwnedFd::from_raw_fd(unix_datagram.into_raw_fd()) }
+                    }
+                }
+
+                
+                impl From<OwnedFd> for UnixDatagram {
+                    #[inline]
+                    fn from(owned: OwnedFd) -> Self {
+                        unsafe { Self::from_raw_fd(owned.into_raw_fd()) }
+                    }
+                }
+
+                impl AsInner<Socket> for UnixDatagram {
+                    #[inline]
+                    fn as_inner(&self) -> &Socket {
+                        &self.0
+                    }
+                }
+            } pub use self::datagram::*;
+
+            pub mod listener
+            {
+                use ::
+                {
+                    *,
+                };
+            } pub use self::listener::*;
+
+            pub mod stream
+            {
+                use ::
+                {
+                    *,
+                };
+            } pub use self::stream::*;
+
+            pub mod ucred
+            {
+                use ::
+                {
+                    *,
+                };
+                
+                // NOTE: Code in this file is heavily based on work done in PR 13 from the tokio-uds repository on
+//       GitHub.
+//
+//       For reference, the link is here: https://github.com/tokio-rs/tokio-uds/pull/13
+//       Credit to Martin Habovštiak (GitHub username Kixunil) and contributors for this work.
+
+use libc::{gid_t, pid_t, uid_t};
+
+/// Credentials for a UNIX process for credentials passing.
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct UCred {
+    /// The UID part of the peer credential. This is the effective UID of the process at the domain
+    /// socket's endpoint.
+    pub uid: uid_t,
+    /// The GID part of the peer credential. This is the effective GID of the process at the domain
+    /// socket's endpoint.
+    pub gid: gid_t,
+    /// The PID part of the peer credential. This field is optional because the PID part of the
+    /// peer credentials is not supported on every platform. On platforms where the mechanism to
+    /// discover the PID exists, this field will be populated to the PID of the process at the
+    /// domain socket's endpoint. Otherwise, it will be set to None.
+    pub pid: Option<pid_t>,
+}
+
+#[cfg(target_vendor = "apple")]
+pub(super) use self::impl_apple::peer_cred;
+#[cfg(any(
+    target_os = "dragonfly",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "nto"
+))]
+pub(super) use self::impl_bsd::peer_cred;
+#[cfg(any(target_os = "android", target_os = "linux", target_os = "cygwin"))]
+pub(super) use self::impl_linux::peer_cred;
+
+#[cfg(any(target_os = "linux", target_os = "android", target_os = "cygwin"))]
+mod impl_linux {
+    use libc::{SO_PEERCRED, SOL_SOCKET, c_void, getsockopt, socklen_t, ucred};
+
+    use super::UCred;
+    use crate::io;
+    use crate::os::unix::io::AsRawFd;
+    use crate::os::unix::net::UnixStream;
+
+    pub fn peer_cred(socket: &UnixStream) -> io::Result<UCred> {
+        let ucred_size = size_of::<ucred>();
+
+        // Trivial sanity checks.
+        assert!(size_of::<u32>() <= size_of::<usize>());
+        assert!(ucred_size <= u32::MAX as usize);
+
+        let mut ucred_size = ucred_size as socklen_t;
+        let mut ucred: ucred = ucred { pid: 1, uid: 1, gid: 1 };
+
+        unsafe {
+            let ret = getsockopt(
+                socket.as_raw_fd(),
+                SOL_SOCKET,
+                SO_PEERCRED,
+                (&raw mut ucred) as *mut c_void,
+                &mut ucred_size,
+            );
+
+            if ret == 0 && ucred_size as usize == size_of::<ucred>() {
+                Ok(UCred { uid: ucred.uid, gid: ucred.gid, pid: Some(ucred.pid) })
+            } else {
+                Err(io::Error::last_os_error())
+            }
+        }
+    }
+}
+
+#[cfg(any(
+    target_os = "dragonfly",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "nto",
+))]
+mod impl_bsd {
+    use super::UCred;
+    use crate::io;
+    use crate::os::unix::io::AsRawFd;
+    use crate::os::unix::net::UnixStream;
+
+    pub fn peer_cred(socket: &UnixStream) -> io::Result<UCred> {
+        let mut cred = UCred { uid: 1, gid: 1, pid: None };
+        unsafe {
+            let ret = libc::getpeereid(socket.as_raw_fd(), &mut cred.uid, &mut cred.gid);
+
+            if ret == 0 { Ok(cred) } else { Err(io::Error::last_os_error()) }
+        }
+    }
+}
+
+#[cfg(target_vendor = "apple")]
+mod impl_apple {
+    use libc::{LOCAL_PEERPID, SOL_LOCAL, c_void, getpeereid, getsockopt, pid_t, socklen_t};
+
+    use super::UCred;
+    use crate::io;
+    use crate::os::unix::io::AsRawFd;
+    use crate::os::unix::net::UnixStream;
+
+    pub fn peer_cred(socket: &UnixStream) -> io::Result<UCred> {
+        let mut cred = UCred { uid: 1, gid: 1, pid: None };
+        unsafe {
+            let ret = getpeereid(socket.as_raw_fd(), &mut cred.uid, &mut cred.gid);
+
+            if ret != 0 {
+                return Err(io::Error::last_os_error());
+            }
+
+            let mut pid: pid_t = 1;
+            let mut pid_size = size_of::<pid_t>() as socklen_t;
+
+            let ret = getsockopt(
+                socket.as_raw_fd(),
+                SOL_LOCAL,
+                LOCAL_PEERPID,
+                (&raw mut pid) as *mut c_void,
+                &mut pid_size,
+            );
+
+            if ret == 0 && pid_size as usize == size_of::<pid_t>() {
+                cred.pid = Some(pid);
+                Ok(cred)
+            } else {
+                Err(io::Error::last_os_error())
+            }
+        }
+    }
+}
+
+            } pub use self::ucred::*;
         }
 
         pub mod process
         {
+            //! Unix-specific extensions to primitives in the [`std::process`] module.
             use ::
             {
+                ffi::OsStr,
+                os::unix::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd, RawFd},
+                sealed::Sealed,
+                sys_common::{AsInner, AsInnerMut, FromInner, IntoInner},
                 *,
             };
+            
+            type UserId = u32;
+            type GroupId = u32;
+            /// Unix-specific extensions to the [`process::Command`] builder.
+            pub trait CommandExt: Sealed
+            {
+                /// Sets the child process's user ID.                
+                fn uid(&mut self, id: UserId) -> &mut process::Command;
+                /// Similar to `uid`, but sets the group ID of the child process.
+                fn gid(&mut self, id: GroupId) -> &mut process::Command;
+                /// Sets the supplementary group IDs for the calling process.
+                fn groups(&mut self, groups: &[GroupId]) -> &mut process::Command;
+                /// Schedules a closure to be run just before the `exec` function is invoked.
+                unsafe fn pre_exec<F>(&mut self, f: F) -> &mut process::Command where
+                F: FnMut() -> io::Result<()> + Send + Sync + 'static;
+                /// Schedules a closure to be run just before the `exec` function is invoked.
+                unsafe fn before_exec<F>(&mut self, f: F) -> &mut process::Command where
+                F: FnMut() -> io::Result<()> + Send + Sync + 'static
+                {
+                    unsafe { self.pre_exec(f) }
+                }
+                /// Performs all the required setup by this `Command`, followed by calling the `execvp` syscall.
+                #[must_use]
+                fn exec(&mut self) -> io::Error;
+                /// Set executable argument
+                fn arg0<S>(&mut self, arg: S) -> &mut process::Command where S: AsRef<OsStr>;
+                /// Sets the process group ID (PGID) of the child process.
+                fn process_group(&mut self, pgroup: i32) -> &mut process::Command;
+            }
+
+            impl CommandExt for process::Command
+            {
+                fn uid(&mut self, id: UserId) -> &mut process::Command
+                {
+                    self.as_inner_mut().uid(id);
+                    self
+                }
+
+                fn gid(&mut self, id: GroupId) -> &mut process::Command
+                {
+                    self.as_inner_mut().gid(id);
+                    self
+                }
+
+                fn groups(&mut self, groups: &[GroupId]) -> &mut process::Command
+                {
+                    self.as_inner_mut().groups(groups);
+                    self
+                }
+
+                unsafe fn pre_exec<F>(&mut self, f: F) -> &mut process::Command where
+                F: FnMut() -> io::Result<()> + Send + Sync + 'static,
+                {
+                    self.as_inner_mut().pre_exec(Box::new(f));
+                    self
+                }
+
+                fn exec(&mut self) -> io::Error
+                {
+                    self.as_inner_mut().exec(sys::process::Stdio::Inherit)
+                }
+
+                fn arg0<S>(&mut self, arg: S) -> &mut process::Command where
+                S: AsRef<OsStr>,
+                {
+                    self.as_inner_mut().set_arg_0(arg.as_ref());
+                    self
+                }
+
+                fn process_group(&mut self, pgroup: i32) -> &mut process::Command
+                {
+                    self.as_inner_mut().pgroup(pgroup);
+                    self
+                }
+            }
+            /// Unix-specific extensions to [`process::ExitStatus`] and [`ExitStatusError`](process::ExitStatusError).
+            pub trait ExitStatusExt: Sealed
+            {
+                /// Creates a new `ExitStatus` or `ExitStatusError` from the raw underlying integer status value from `wait.    
+                fn from_raw(raw: i32) -> Self;
+                /// If the process was terminated by a signal, returns that signal.
+                fn signal(&self) -> Option<i32>;
+                /// If the process was terminated by a signal, says whether it dumped core.
+                fn core_dumped(&self) -> bool;
+                /// If the process was stopped by a signal, returns that signal.
+                fn stopped_signal(&self) -> Option<i32>;
+                /// Whether the process was continued from a stopped status.
+                fn continued(&self) -> bool;
+                /// Returns the underlying raw `wait` status.
+                fn into_raw(self) -> i32;
+            }
+            
+            impl ExitStatusExt for process::ExitStatus
+            {
+                fn from_raw(raw: i32) -> Self 
+                {
+                    process::ExitStatus::from_inner(From::from(raw))
+                }
+
+                fn signal(&self) -> Option<i32> 
+                {
+                    self.as_inner().signal()
+                }
+
+                fn core_dumped(&self) -> bool 
+                {
+                    self.as_inner().core_dumped()
+                }
+
+                fn stopped_signal(&self) -> Option<i32> 
+                {
+                    self.as_inner().stopped_signal()
+                }
+
+                fn continued(&self) -> bool 
+                {
+                    self.as_inner().continued()
+                }
+
+                fn into_raw(self) -> i32 
+                {
+                    self.as_inner().into_raw().into()
+                }
+            }
+            
+            impl ExitStatusExt for process::ExitStatusError
+            {
+                fn from_raw(raw: i32) -> Self 
+                {
+                    process::ExitStatus::from_raw(raw)
+                    .exit_ok()
+                    .expect_err("<ExitStatusError as ExitStatusExt>::from_raw(0) but zero is not an error")
+                }
+
+                fn signal(&self) -> Option<i32> 
+                {
+                    self.into_status().signal()
+                }
+
+                fn core_dumped(&self) -> bool 
+                {
+                    self.into_status().core_dumped()
+                }
+
+                fn stopped_signal(&self) -> Option<i32> 
+                {
+                    self.into_status().stopped_signal()
+                }
+
+                fn continued(&self) -> bool 
+                {
+                    self.into_status().continued()
+                }
+
+                fn into_raw(self) -> i32 
+                {
+                    self.into_status().into_raw()
+                }
+            }
+            
+            impl FromRawFd for process::Stdio
+            {
+                #[inline] unsafe fn from_raw_fd(fd: RawFd) -> process::Stdio
+                {
+                    let fd = sys::fd::FileDesc::from_raw_fd(fd);
+                    let io = sys::process::Stdio::Fd(fd);
+                    process::Stdio::from_inner(io)
+                }
+            }
+
+            impl From<OwnedFd> for process::Stdio
+            {
+                /// Takes ownership of a file descriptor and returns a [`Stdio`](process::Stdio) that can attach a stream to it.
+                #[inline] fn from(fd: OwnedFd) -> process::Stdio
+                {
+                    let fd = sys::fd::FileDesc::from_inner(fd);
+                    let io = sys::process::Stdio::Fd(fd);
+                    process::Stdio::from_inner(io)
+                }
+            }
+            
+            impl AsRawFd for process::ChildStdin
+            {
+                #[inline] fn as_raw_fd(&self) -> RawFd 
+                {
+                    self.as_inner().as_raw_fd()
+                }
+            }
+
+            impl AsRawFd for process::ChildStdout 
+            {
+                #[inline] fn as_raw_fd(&self) -> RawFd 
+                {
+                    self.as_inner().as_raw_fd()
+                }
+            }
+
+            impl AsRawFd for process::ChildStderr 
+            {
+                #[inline] fn as_raw_fd(&self) -> RawFd 
+                {
+                    self.as_inner().as_raw_fd()
+                }
+            }
+
+            impl IntoRawFd for process::ChildStdin 
+            {
+                #[inline] fn into_raw_fd(self) -> RawFd 
+                {
+                    self.into_inner().into_inner().into_raw_fd()
+                }
+            }
+
+            impl IntoRawFd for process::ChildStdout 
+            {
+                #[inline] fn into_raw_fd(self) -> RawFd 
+                {
+                    self.into_inner().into_inner().into_raw_fd()
+                }
+            }
+
+            impl IntoRawFd for process::ChildStderr 
+            {
+                #[inline] fn into_raw_fd(self) -> RawFd 
+                {
+                    self.into_inner().into_inner().into_raw_fd()
+                }
+            }
+
+            impl AsFd for crate::process::ChildStdin 
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_> 
+                {
+                    self.as_inner().as_fd()
+                }
+            }
+
+            impl From<crate::process::ChildStdin> for OwnedFd 
+            {
+                /// Takes ownership of a [`ChildStdin`](crate::process::ChildStdin)'s file descriptor.
+                #[inline] fn from(child_stdin: crate::process::ChildStdin) -> OwnedFd 
+                {
+                    child_stdin.into_inner().into_inner().into_inner()
+                }
+            }
+            /// Creates a `ChildStdin` from the provided `OwnedFd`.
+            impl From<OwnedFd> for process::ChildStdin 
+            {
+                #[inline] fn from(fd: OwnedFd) -> process::ChildStdin 
+                {
+                    let fd = sys::fd::FileDesc::from_inner(fd);
+                    let pipe = sys::pipe::AnonPipe::from_inner(fd);
+                    process::ChildStdin::from_inner(pipe)
+                }
+            }
+
+            impl AsFd for crate::process::ChildStdout 
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_> 
+                {
+                    self.as_inner().as_fd()
+                }
+            }
+
+            impl From<crate::process::ChildStdout> for OwnedFd 
+            {
+                /// Takes ownership of a [`ChildStdout`](crate::process::ChildStdout)'s file descriptor.
+                #[inline] fn from(child_stdout: crate::process::ChildStdout) -> OwnedFd 
+                {
+                    child_stdout.into_inner().into_inner().into_inner()
+                }
+            }
+            /// Creates a `ChildStdout` from the provided `OwnedFd`.
+            impl From<OwnedFd> for process::ChildStdout 
+            {
+                #[inline] fn from(fd: OwnedFd) -> process::ChildStdout 
+                {
+                    let fd = sys::fd::FileDesc::from_inner(fd);
+                    let pipe = sys::pipe::AnonPipe::from_inner(fd);
+                    process::ChildStdout::from_inner(pipe)
+                }
+            }
+
+            impl AsFd for crate::process::ChildStderr 
+            {
+                #[inline] fn as_fd(&self) -> BorrowedFd<'_> 
+                {
+                    self.as_inner().as_fd()
+                }
+            }
+
+            impl From<crate::process::ChildStderr> for OwnedFd 
+            {
+                /// Takes ownership of a [`ChildStderr`](crate::process::ChildStderr)'s file descriptor.
+                #[inline] fn from(child_stderr: crate::process::ChildStderr) -> OwnedFd 
+                {
+                    child_stderr.into_inner().into_inner().into_inner()
+                }
+            }
+            /// Creates a `ChildStderr` from the provided `OwnedFd`.
+            impl From<OwnedFd> for process::ChildStderr 
+            {
+                #[inline] fn from(fd: OwnedFd) -> process::ChildStderr 
+                {
+                    let fd = sys::fd::FileDesc::from_inner(fd);
+                    let pipe = sys::pipe::AnonPipe::from_inner(fd);
+                    process::ChildStderr::from_inner(pipe)
+                }
+            }
+            /// Returns the OS-assigned process identifier associated with this process's parent.
+            #[must_use] pub fn parent_id() -> u32 
+            {
+                crate::sys::os::getppid()
+            }
         }
 
         pub mod raw
         {
+            //! Unix-specific primitives available on all unix platforms.
             use ::
             {
                 *,
             };
+            
+            pub use super::platform::raw::pthread_t;
+            pub use super::platform::raw::{blkcnt_t, time_t};
+            pub use super::platform::raw::{blksize_t, dev_t, ino_t, mode_t, nlink_t, off_t};
+
+            pub type uid_t = u32;
+            pub type gid_t = u32;
+            pub type pid_t = i32;
         }
 
         pub mod thread
         {
+            //! Unix-specific extensions to primitives in the [`std::thread`] module.
             use ::
             {
+                os::unix::raw::pthread_t,
+                sys::common::{AsInner, IntoInner},
+                thread::JoinHandle,
                 *,
             };
+            
+            pub type RawPthread = pthread_t;
+
+            /// Unix-specific extensions to [`JoinHandle`].
+            pub trait JoinHandleExt
+            {
+                /// Extracts the raw pthread_t without taking ownership
+                fn as_pthread_t(&self) -> RawPthread;
+                /// Consumes the thread, returning the raw pthread_t.
+                fn into_pthread_t(self) -> RawPthread;
+            }
+            
+            impl<T> JoinHandleExt for JoinHandle<T>
+            {
+                fn as_pthread_t(&self) -> RawPthread { self.as_inner().id() as RawPthread }
+
+                fn into_pthread_t(self) -> RawPthread { self.into_inner().into_id() as RawPthread }
+            }
         }
         /// A prelude for conveniently writing platform-specific code.
         pub mod prelude
         {
-            pub use super::ffi::{OsStrExt, OsStringExt};
+            pub use super::ffi::{ OsStrExt, OsStringExt };
             pub use super::fs::DirEntryExt;
             pub use super::fs::FileExt;
-            pub use super::fs::{FileTypeExt, MetadataExt, OpenOptionsExt, PermissionsExt};
-            pub use super::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd, RawFd};
-            pub use super::process::{CommandExt, ExitStatusExt};
+            pub use super::fs::{ FileTypeExt, MetadataExt, OpenOptionsExt, PermissionsExt };
+            pub use super::io::{ AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd, RawFd };
+            pub use super::process::{ CommandExt, ExitStatusExt };
             pub use super::thread::JoinHandleExt;
         }
     }
     
     pub mod windows
     {
+        //! Platform-specific extensions to `std` for Windows.
         use ::
         {
             *
         };
-        //! Platform-specific extensions to `std` for Windows.
-        
-        
+
         mod platform 
         {
             
@@ -2688,26 +4863,1433 @@ pub mod os
 
         pub mod ffi
         {
+            //! Windows-specific extensions to primitives in the [`std::ffi`] module.
             use ::
             {
+                ffi::{ OsStr, OsString },
+                sealed::Sealed,
+                sys::os_str::Buf,
+                sys::common::
+                {
+                    wtf8::{ EncodeWide, Wtf8Buf },
+                    AsInner, FromInner,
+                },
                 *,
             };
+            /// Windows-specific extensions to [`OsString`].
+            pub trait OsStringExt: Sealed
+            {
+                /// Creates an `OsString` from a potentially ill-formed UTF-16 slice of 16-bit code units.
+                fn from_wide(wide: &[u16]) -> Self;
+            }
+            
+            impl OsStringExt for OsString 
+            {
+                fn from_wide(wide: &[u16]) -> OsString 
+                {
+                    FromInner::from_inner(Buf { inner: Wtf8Buf::from_wide(wide) })
+                }
+            }
+            /// Windows-specific extensions to [`OsStr`].
+            pub trait OsStrExt: Sealed
+            {
+                /// Re-encodes an `OsStr` as a wide character sequence, i.e., potentially ill-formed UTF-16.
+                fn encode_wide(&self) -> EncodeWide<'_>;
+            }
+            
+            impl OsStrExt for OsStr 
+            {
+                #[inline] fn encode_wide(&self) -> EncodeWide<'_> 
+                {
+                    self.as_inner().inner.encode_wide()
+                }
+            }
         }
 
         pub mod fs
         {
+            //! Windows-specific extensions to primitives in the [`std::fs`] module.
             use ::
             {
+                fs::{self, Metadata, OpenOptions},
+                path::Path,
+                sealed::Sealed,
+                sys::common::{AsInner, AsInnerMut, IntoInner},
+                time::SystemTime,
                 *,
             };
+            /// Windows-specific extensions to [`fs::File`].
+            pub trait FileExt
+            {
+                /// Seeks to a given position and reads a number of bytes.
+                fn seek_read(&self, buf: &mut [u8], offset: u64) -> io::Result<usize>;
+                /// Seeks to a given position and writes a number of bytes.
+                fn seek_write(&self, buf: &[u8], offset: u64) -> io::Result<usize>;
+            }
+            
+            impl FileExt for fs::File
+            {
+                fn seek_read(&self, buf: &mut [u8], offset: u64) -> io::Result<usize>
+                {
+                    self.as_inner().read_at(buf, offset)
+                }
+
+                fn seek_write(&self, buf: &[u8], offset: u64) -> io::Result<usize>
+                {
+                    self.as_inner().write_at(buf, offset)
+                }
+            }
+            /// Windows-specific extensions to [`fs::OpenOptions`].
+            pub trait OpenOptionsExt
+            {
+                /// Overrides the `dwDesiredAccess` argument to the call to [`CreateFile`] with the specified value.
+                fn access_mode(&mut self, access: u32) -> &mut Self;
+                /// Overrides the `dwShareMode` argument to the call to [`CreateFile`] with the specified value.
+                fn share_mode(&mut self, val: u32) -> &mut Self;
+                /// Sets extra flags for the `dwFileFlags` argument to the call to
+                /// [`CreateFile2`] to the specified value (or combines it with
+                /// `attributes` and `security_qos_flags` to set the `dwFlagsAndAttributes`
+                /// for [`CreateFile`]).
+                fn custom_flags(&mut self, flags: u32) -> &mut Self;
+                /// Sets the `dwFileAttributes` argument to the call to [`CreateFile2`] to
+                /// the specified value (or combines it with `custom_flags` and
+                /// `security_qos_flags` to set the `dwFlagsAndAttributes` for
+                /// [`CreateFile`]).
+                fn attributes(&mut self, val: u32) -> &mut Self;
+                /// Sets the `dwSecurityQosFlags` argument to the call to [`CreateFile2`] to
+                /// the specified value (or combines it with `custom_flags` and `attributes`
+                /// to set the `dwFlagsAndAttributes` for [`CreateFile`]).
+                fn security_qos_flags(&mut self, flags: u32) -> &mut Self;
+            }
+            
+            impl OpenOptionsExt for OpenOptions
+            {
+                fn access_mode(&mut self, access: u32) -> &mut OpenOptions
+                {
+                    self.as_inner_mut().access_mode(access);
+                    self
+                }
+
+                fn share_mode(&mut self, share: u32) -> &mut OpenOptions 
+                {
+                    self.as_inner_mut().share_mode(share);
+                    self
+                }
+
+                fn custom_flags(&mut self, flags: u32) -> &mut OpenOptions 
+                {
+                    self.as_inner_mut().custom_flags(flags);
+                    self
+                }
+
+                fn attributes(&mut self, attributes: u32) -> &mut OpenOptions 
+                {
+                    self.as_inner_mut().attributes(attributes);
+                    self
+                }
+
+                fn security_qos_flags(&mut self, flags: u32) -> &mut OpenOptions 
+                {
+                    self.as_inner_mut().security_qos_flags(flags);
+                    self
+                }
+            }
+            /// Windows-specific extensions to [`fs::Metadata`].
+            pub trait MetadataExt
+            {
+                /// Returns the value of the `dwFileAttributes` field of this metadata.
+                fn file_attributes(&self) -> u32;
+                /// Returns the value of the `ftCreationTime` field of this metadata.
+                fn creation_time(&self) -> u64;
+                /// Returns the value of the `ftLastAccessTime` field of this metadata.
+                fn last_access_time(&self) -> u64;
+                /// Returns the value of the `ftLastWriteTime` field of this metadata.
+                fn last_write_time(&self) -> u64;
+                /// Returns the value of the `nFileSize` fields of this metadata.
+                fn file_size(&self) -> u64;
+                /// Returns the value of the `dwVolumeSerialNumber` field of this metadata.
+                fn volume_serial_number(&self) -> Option<u32>;
+                /// Returns the value of the `nNumberOfLinks` field of this metadata.
+                fn number_of_links(&self) -> Option<u32>;
+                /// Returns the value of the `nFileIndex` fields of this metadata.
+                fn file_index(&self) -> Option<u64>;
+                /// Returns the value of the `ChangeTime` fields of this metadata.
+                fn change_time(&self) -> Option<u64>;
+            }
+            
+            impl MetadataExt for Metadata
+            {
+                fn file_attributes(&self) -> u32 
+                {
+                    self.as_inner().attrs()
+                }
+
+                fn creation_time(&self) -> u64 
+                {
+                    self.as_inner().created_u64()
+                }
+
+                fn last_access_time(&self) -> u64 
+                {
+                    self.as_inner().accessed_u64()
+                }
+
+                fn last_write_time(&self) -> u64 
+                {
+                    self.as_inner().modified_u64()
+                }
+
+                fn file_size(&self) -> u64 {
+                    self.as_inner().size()
+                }
+                fn volume_serial_number(&self) -> Option<u32> 
+                {
+                    self.as_inner().volume_serial_number()
+                }
+
+                fn number_of_links(&self) -> Option<u32> 
+                {
+                    self.as_inner().number_of_links()
+                }
+
+                fn file_index(&self) -> Option<u64> 
+                {
+                    self.as_inner().file_index()
+                }
+
+                fn change_time(&self) -> Option<u64> 
+                {
+                    self.as_inner().changed_u64()
+                }
+
+            }
+            /// Windows-specific extensions to [`fs::FileType`].
+            pub trait FileTypeExt: Sealed
+            {
+                /// Returns `true` if this file type is a symbolic link that is also a directory.
+                fn is_symlink_dir(&self) -> bool;
+                /// Returns `true` if this file type is a symbolic link that is also a file.
+                fn is_symlink_file(&self) -> bool;
+            }
+            
+            impl Sealed for fs::FileType {}
+            
+            impl FileTypeExt for fs::FileType
+            {
+                fn is_symlink_dir(&self) -> bool { self.as_inner().is_symlink_dir() }
+                fn is_symlink_file(&self) -> bool { self.as_inner().is_symlink_file() }
+            }
+            /// Windows-specific extensions to [`fs::FileTimes`].
+            pub trait FileTimesExt: Sealed
+            {
+                /// Set the creation time of a file.
+                fn set_created(self, t: SystemTime) -> Self;
+            }
+            
+            impl FileTimesExt for fs::FileTimes 
+            {
+                fn set_created(mut self, t: SystemTime) -> Self
+                {
+                    self.as_inner_mut().set_created(t.into_inner());
+                    self
+                }
+            }
+            /// Creates a new symlink to a non-directory file on the filesystem.
+            pub fn symlink_file<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()>
+            {
+                sys::fs::symlink_inner(original.as_ref(), link.as_ref(), false)
+            }
+            /// Creates a new symlink to a directory on the filesystem.
+            pub fn symlink_dir<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()>
+            {
+                sys::fs::symlink_inner(original.as_ref(), link.as_ref(), true)
+            }
+            /// Creates a junction point.
+            pub fn junction_point<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()>
+            {
+                sys::fs::junction_point(original.as_ref(), link.as_ref())
+            }
         }
 
         pub mod io
         {
+            //! Windows-specific extensions to general I/O primitives.
             use ::
             {
                 *,
             };
+            
+            mod handle
+            {
+                //! Owned and borrowed OS handles.
+                use ::
+                {
+                    marker::{ PhantomData },
+                    mem::{ ManuallyDrop },
+                    sys::common::{ AsInner, FromInner, IntoInner },
+                    *,
+                }; use super::raw::{AsRawHandle, FromRawHandle, IntoRawHandle, RawHandle};
+                /// A borrowed handle.
+                 #[repr(transparent)] #[derive(Copy, Clone)]
+                 pub struct BorrowedHandle<'handle>
+                 {
+                    handle: RawHandle,
+                    _phantom: PhantomData<&'handle OwnedHandle>,
+                }
+                /// An owned handle.
+                #[repr(transparent)]
+                pub struct OwnedHandle
+                {
+                    handle: RawHandle,
+                }
+                /// FFI type for handles in return values or out parameters, where `NULL` is used
+                /// as a sentry value to indicate errors, such as in the return value of `CreateThread`.
+                #[repr(transparent)] #[derive(Debug)]
+                pub struct HandleOrNull(RawHandle);
+                /// FFI type for handles in return values or out parameters, where `INVALID_HANDLE_VALUE` is used
+                /// as a sentry value to indicate errors, such as in the return value of `CreateFileW`.
+                #[repr(transparent)] #[derive(Debug)]
+                pub struct HandleOrInvalid(RawHandle);
+                
+                unsafe impl Send for OwnedHandle {}
+                
+                unsafe impl Send for HandleOrNull {}
+                
+                unsafe impl Send for HandleOrInvalid {}
+                
+                unsafe impl Send for BorrowedHandle<'_> {}
+                
+                unsafe impl Sync for OwnedHandle {}
+                
+                unsafe impl Sync for HandleOrNull {}
+                
+                unsafe impl Sync for HandleOrInvalid {}
+                
+                unsafe impl Sync for BorrowedHandle<'_> {}
+
+                impl BorrowedHandle<'_>
+                {
+                    /// Returns a `BorrowedHandle` holding the given raw handle.
+                    #[inline] pub const unsafe fn borrow_raw(handle: RawHandle) -> Self
+                    {
+                        Self { handle, _phantom: PhantomData }
+                    }
+                }
+                
+                impl TryFrom<HandleOrNull> for OwnedHandle
+                {
+                    type Error = NullHandleError;
+
+                    #[inline] fn try_from(handle_or_null: HandleOrNull) -> Result<Self, NullHandleError>
+                    {
+                        let handle_or_null = ManuallyDrop::new(handle_or_null);
+                        if handle_or_null.is_valid() {
+                            // SAFETY: The handle is not null.
+                            Ok(unsafe { OwnedHandle::from_raw_handle(handle_or_null.0) })
+                        } else {
+                            Err(NullHandleError(()))
+                        }
+                    }
+                }
+                
+                impl Drop for HandleOrNull
+                {
+                    #[inline] fn drop(&mut self)
+                    {
+                        if self.is_valid() {
+                            unsafe {
+                                let _ = sys::c::CloseHandle(self.0);
+                            }
+                        }
+                    }
+                }
+
+                impl OwnedHandle
+                {
+                    /// Creates a new `OwnedHandle` instance that shares the same underlying
+                    /// object as the existing `OwnedHandle` instance.
+                    pub fn try_clone(&self) -> ::io::Result<Self> 
+                    {
+                        self.as_handle().try_clone_to_owned()
+                    }
+                }
+
+                impl BorrowedHandle<'_> 
+                {
+                    /// Creates a new `OwnedHandle` instance that shares the same underlying
+                    /// object as the existing `BorrowedHandle` instance.
+                    pub fn try_clone_to_owned(&self) -> ::io::Result<OwnedHandle> 
+                    {
+                        self.duplicate(0, false, ::sys::c::DUPLICATE_SAME_ACCESS)
+                    }
+
+                    pub fn duplicate(
+                        &self,
+                        access: u32,
+                        inherit: bool,
+                        options: u32,
+                    ) -> io::Result<OwnedHandle> 
+                    {
+                        let handle = self.as_raw_handle();
+                        if handle.is_null() {
+                            return unsafe { Ok(OwnedHandle::from_raw_handle(handle)) };
+                        }
+
+                        let mut ret = ::ptr::null_mut();
+                        cvt(unsafe 
+                        {
+                            let cur_proc = ::sys::c::GetCurrentProcess();
+                            ::sys::c::DuplicateHandle(
+                                cur_proc,
+                                handle,
+                                cur_proc,
+                                &mut ret,
+                                access,
+                                inherit as ::sys::c::BOOL,
+                                options,
+                            )
+                        })?;
+                        unsafe { Ok(OwnedHandle::from_raw_handle(ret)) }
+                    }
+                }
+                
+                impl TryFrom<HandleOrInvalid> for OwnedHandle 
+                {
+                    type Error = InvalidHandleError;
+
+                    #[inline] fn try_from(handle_or_invalid: HandleOrInvalid) -> Result<Self, InvalidHandleError>
+                    {
+                        let handle_or_invalid = ManuallyDrop::new(handle_or_invalid);
+                        if handle_or_invalid.is_valid() 
+                        {
+                            // SAFETY: The handle is not invalid.
+                            Ok(unsafe { OwnedHandle::from_raw_handle(handle_or_invalid.0) })
+                        }
+                        else
+                        {
+                            Err(InvalidHandleError(()))
+                        }
+                    }
+                }
+                
+                impl Drop for HandleOrInvalid 
+                {
+                    #[inline] fn drop(&mut self) 
+                    {
+                        if self.is_valid() 
+                        {
+                            unsafe 
+                            {
+                                let _ = ::sys::c::CloseHandle(self.0);
+                            }
+                        }
+                    }
+                }
+                /// This is the error type used by [`HandleOrNull`] when attempting to convert
+                /// into a handle, to indicate that the value is null.
+                #[derive(Debug, Clone, PartialEq, Eq)]
+                pub struct NullHandleError(());
+
+                
+                impl fmt::Display for NullHandleError 
+                {
+                    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result 
+                    {
+                        "A HandleOrNull could not be converted to a handle because it was null".fmt(fmt)
+                    }
+                }
+                
+                impl ::error::Error for NullHandleError {}
+                /// This is the error type used by [`HandleOrInvalid`] when attempting to
+                /// convert into a handle, to indicate that the value is
+                /// `INVALID_HANDLE_VALUE`.
+                #[derive(Debug, Clone, PartialEq, Eq)]
+                pub struct InvalidHandleError(());
+
+                
+                impl fmt::Display for InvalidHandleError 
+                {
+                    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result 
+                    {
+                        "A HandleOrInvalid could not be converted to a handle because it was INVALID_HANDLE_VALUE"
+                            .fmt(fmt)
+                    }
+                }
+                
+                impl ::error::Error for InvalidHandleError {}
+                
+                impl AsRawHandle for BorrowedHandle<'_> 
+                {
+                    #[inline] fn as_raw_handle(&self) -> RawHandle 
+                    {
+                        self.handle
+                    }
+                }
+                
+                impl AsRawHandle for OwnedHandle 
+                {
+                    #[inline] fn as_raw_handle(&self) -> RawHandle 
+                    {
+                        self.handle
+                    }
+                }
+                
+                impl IntoRawHandle for OwnedHandle 
+                {
+                    #[inline] fn into_raw_handle(self) -> RawHandle 
+                    {
+                        ManuallyDrop::new(self).handle
+                    }
+                }
+                
+                impl FromRawHandle for OwnedHandle 
+                {
+                    #[inline] unsafe fn from_raw_handle(handle: RawHandle) -> Self 
+                    {
+                        Self { handle }
+                    }
+                }
+
+                impl HandleOrNull 
+                {
+                    /// Constructs a new instance of `Self` from the given `RawHandle` returned
+                    /// from a Windows API that uses null to indicate failure, such as
+                    /// `CreateThread`.
+                    #[inline] pub unsafe fn from_raw_handle(handle: RawHandle) -> Self
+                    {
+                        Self(handle)
+                    }
+
+                    fn is_valid(&self) -> bool { !self.0.is_null() }
+                }
+
+                impl HandleOrInvalid
+                {
+                    /// Constructs a new instance of `Self` from the given `RawHandle` returned
+                    /// from a Windows API that uses `INVALID_HANDLE_VALUE` to indicate
+                    /// failure, such as `CreateFileW`.
+                    #[inline] pub unsafe fn from_raw_handle(handle: RawHandle) -> Self
+                    {
+                        Self(handle)
+                    }
+
+                    fn is_valid(&self) -> bool { self.0 != sys::c::INVALID_HANDLE_VALUE }
+                }
+                
+                impl Drop for OwnedHandle
+                {
+                    #[inline] fn drop(&mut self)
+                    {
+                        unsafe 
+                        {
+                            let _ = sys::c::CloseHandle(self.handle);
+                        }
+                    }
+                }
+                
+                impl fmt::Debug for BorrowedHandle<'_> 
+                {
+                    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result 
+                    {
+                        f.debug_struct("BorrowedHandle").field("handle", &self.handle).finish()
+                    }
+                }
+                
+                impl fmt::Debug for OwnedHandle 
+                {
+                    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result 
+                    {
+                        f.debug_struct("OwnedHandle").field("handle", &self.handle).finish()
+                    }
+                }
+
+                macro_rules! impl_is_terminal 
+                {
+                    ($($t:ty),*$(,)?) => {$(
+                        
+                        impl crate::sealed::Sealed for $t {}
+
+                        
+                        impl ::io::IsTerminal for $t 
+                        {
+                            #[inline]
+                            fn is_terminal(&self) -> bool 
+                            {
+                                crate::sys::io::is_terminal(self)
+                            }
+                        }
+                    )*}
+                }
+
+                impl_is_terminal!(BorrowedHandle<'_>, OwnedHandle);
+                /// A trait to borrow the handle from an underlying object.
+                pub trait AsHandle
+                {
+                    /// Borrows the handle.
+                    fn as_handle(&self) -> BorrowedHandle<'_>;
+                }
+                
+                impl<T: AsHandle + ?Sized> AsHandle for &T 
+                {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> 
+                    {
+                        T::as_handle(self)
+                    }
+                }
+                
+                impl<T: AsHandle + ?Sized> AsHandle for &mut T 
+                {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> 
+                    {
+                        T::as_handle(self)
+                    }
+                }
+                /// This impl allows implementing traits that require `AsHandle` on Arc.
+                impl<T: AsHandle + ?Sized> AsHandle for crate::sync::Arc<T> 
+                {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> 
+                    {
+                        (**self).as_handle()
+                    }
+                }
+                
+                impl<T: AsHandle + ?Sized> AsHandle for crate::rc::Rc<T> 
+                {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> 
+                    {
+                        (**self).as_handle()
+                    }
+                }
+                
+                impl<T: AsHandle + ?Sized> AsHandle for crate::rc::UniqueRc<T> 
+                {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> 
+                    {
+                        (**self).as_handle()
+                    }
+                }
+                
+                impl<T: AsHandle + ?Sized> AsHandle for Box<T> 
+                {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> 
+                    {
+                        (**self).as_handle()
+                    }
+                }
+                
+                impl AsHandle for BorrowedHandle<'_> 
+                {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> 
+                    {
+                        *self
+                    }
+                }
+                
+                impl AsHandle for OwnedHandle 
+                {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> 
+                    {
+                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
+                    }
+                }
+                
+                impl AsHandle for fs::File 
+                {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> 
+                    {
+                        self.as_inner().as_handle()
+                    }
+                }
+                
+                impl From<fs::File> for OwnedHandle 
+                {
+                    /// Takes ownership of a [`File`](fs::File)'s underlying file handle.
+                    #[inline] fn from(file: fs::File) -> OwnedHandle 
+                    {
+                        file.into_inner().into_inner().into_inner()
+                    }
+                }
+                
+                impl From<OwnedHandle> for fs::File 
+                {
+                    /// Returns a [`File`](fs::File) that takes ownership of the given handle.
+                    #[inline] fn from(owned: OwnedHandle) -> Self 
+                    {
+                        Self::from_inner(FromInner::from_inner(FromInner::from_inner(owned)))
+                    }
+                }
+                
+                impl AsHandle for ::io::Stdin 
+                {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> 
+                    {
+                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
+                    }
+                }
+                
+                impl<'a> AsHandle for ::io::StdinLock<'a> 
+                {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> 
+                    {
+                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
+                    }
+                }
+                
+                impl AsHandle for ::io::Stdout 
+                {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> 
+                    {
+                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
+                    }
+                }
+                
+                impl<'a> AsHandle for ::io::StdoutLock<'a> 
+                {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> 
+                    {
+                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
+                    }
+                }
+                
+                impl AsHandle for ::io::Stderr 
+                {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> 
+                    {
+                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
+                    }
+                }
+                
+                impl<'a> AsHandle for ::io::StderrLock<'a> 
+                {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> 
+                    {
+                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
+                    }
+                }
+                
+                impl AsHandle for ::process::ChildStdin 
+                {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> 
+                    {
+                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
+                    }
+                }
+                
+                impl From<::process::ChildStdin> for OwnedHandle 
+                {
+                    /// Takes ownership of a [`ChildStdin`](::process::ChildStdin)'s file handle.
+                    #[inline] fn from(child_stdin: ::process::ChildStdin) -> OwnedHandle 
+                    {
+                        unsafe { OwnedHandle::from_raw_handle(child_stdin.into_raw_handle()) }
+                    }
+                }
+                
+                impl AsHandle for ::process::ChildStdout 
+                {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> 
+                    {
+                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
+                    }
+                }
+                
+                impl From<::process::ChildStdout> for OwnedHandle 
+                {
+                    /// Takes ownership of a [`ChildStdout`](::process::ChildStdout)'s file handle.
+                    #[inline] fn from(child_stdout: ::process::ChildStdout) -> OwnedHandle 
+                    {
+                        unsafe { OwnedHandle::from_raw_handle(child_stdout.into_raw_handle()) }
+                    }
+                }
+                
+                impl AsHandle for ::process::ChildStderr 
+                {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> 
+                    {
+                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
+                    }
+                }
+                
+                impl From<::process::ChildStderr> for OwnedHandle 
+                {
+                    /// Takes ownership of a [`ChildStderr`](::process::ChildStderr)'s file handle.
+                    #[inline] fn from(child_stderr: ::process::ChildStderr) -> OwnedHandle 
+                    {
+                        unsafe { OwnedHandle::from_raw_handle(child_stderr.into_raw_handle()) }
+                    }
+                }
+                
+                impl<T> AsHandle for ::thread::JoinHandle<T> 
+                {
+                    #[inline] fn as_handle(&self) -> BorrowedHandle<'_> 
+                    {
+                        unsafe { BorrowedHandle::borrow_raw(self.as_raw_handle()) }
+                    }
+                }
+                
+                impl<T> From<::thread::JoinHandle<T>> for OwnedHandle 
+                {
+                    #[inline] fn from(join_handle: ::thread::JoinHandle<T>) -> OwnedHandle 
+                    {
+                        join_handle.into_inner().into_handle().into_inner()
+                    }
+                }
+                
+                impl AsHandle for io::PipeReader 
+                {
+                    fn as_handle(&self) -> BorrowedHandle<'_> 
+                    {
+                        self.0.as_handle()
+                    }
+                }
+                
+                impl From<io::PipeReader> for OwnedHandle 
+                {
+                    fn from(pipe: io::PipeReader) -> Self 
+                    {
+                        pipe.into_inner().into_inner()
+                    }
+                }
+                
+                impl AsHandle for io::PipeWriter 
+                {
+                    fn as_handle(&self) -> BorrowedHandle<'_> 
+                    {
+                        self.0.as_handle()
+                    }
+                }
+                
+                impl From<io::PipeWriter> for OwnedHandle 
+                {
+                    fn from(pipe: io::PipeWriter) -> Self 
+                    {
+                        pipe.into_inner().into_inner()
+                    }
+                }
+                
+                impl From<OwnedHandle> for io::PipeReader 
+                {
+                    fn from(owned_handle: OwnedHandle) -> Self 
+                    {
+                        Self::from_inner(FromInner::from_inner(owned_handle))
+                    }
+                }
+                
+                impl From<OwnedHandle> for io::PipeWriter 
+                {
+                    fn from(owned_handle: OwnedHandle) -> Self 
+                    {
+                        Self::from_inner(FromInner::from_inner(owned_handle))
+                    }
+                }
+            } pub use self::handle::*;
+
+            mod raw
+            {
+                //! Windows-specific extensions to general I/O primitives.
+                use ::
+                {
+                    os::windows::io::{ AsHandle, AsSocket },
+                    os::windows::io::{ OwnedHandle, OwnedSocket },
+                    os::windows::raw,
+                    sys::common::{ AsInner, FromInner, IntoInner },
+                    *,
+                };
+                /// Raw HANDLEs.
+                pub type RawHandle = raw::HANDLE;
+                /// Raw SOCKETs.
+                pub type RawSocket = raw::SOCKET;
+                /// Extracts raw handles.
+                pub trait AsRawHandle
+                {
+                    /// Extracts the raw handle.
+                    fn as_raw_handle(&self) -> RawHandle;
+                }
+                /// Constructs I/O objects from raw handles.
+                pub trait FromRawHandle
+                {
+                    /// Constructs a new I/O object from the specified raw handle.
+                    unsafe fn from_raw_handle(handle: RawHandle) -> Self;
+                }
+                /// A trait to express the ability to consume an object and acquire ownership of its raw `HANDLE`.
+                pub trait IntoRawHandle
+                {
+                    /// Consumes this object, returning the raw underlying handle.
+                    #[must_use = "losing the raw handle may leak resources"]
+                    fn into_raw_handle(self) -> RawHandle;
+                }
+               
+                impl AsRawHandle for fs::File 
+                {
+                    #[inline] fn as_raw_handle(&self) -> RawHandle 
+                    {
+                        self.as_inner().as_raw_handle() as RawHandle
+                    }
+                }
+               
+                impl AsRawHandle for io::Stdin 
+                {
+                    fn as_raw_handle(&self) -> RawHandle 
+                    {
+                        stdio_handle(unsafe { sys::c::GetStdHandle(sys::c::STD_INPUT_HANDLE) as RawHandle })
+                    }
+                }
+               
+                impl AsRawHandle for io::Stdout 
+                {
+                    fn as_raw_handle(&self) -> RawHandle 
+                    {
+                        stdio_handle(unsafe { sys::c::GetStdHandle(sys::c::STD_OUTPUT_HANDLE) as RawHandle })
+                    }
+                }
+               
+                impl AsRawHandle for io::Stderr 
+                {
+                    fn as_raw_handle(&self) -> RawHandle 
+                    {
+                        stdio_handle(unsafe { sys::c::GetStdHandle(sys::c::STD_ERROR_HANDLE) as RawHandle })
+                    }
+                }
+               
+                impl<'a> AsRawHandle for io::StdinLock<'a> 
+                {
+                    fn as_raw_handle(&self) -> RawHandle 
+                    {
+                        stdio_handle(unsafe { sys::c::GetStdHandle(sys::c::STD_INPUT_HANDLE) as RawHandle })
+                    }
+                }
+               
+                impl<'a> AsRawHandle for io::StdoutLock<'a> 
+                {
+                    fn as_raw_handle(&self) -> RawHandle 
+                    {
+                        stdio_handle(unsafe { sys::c::GetStdHandle(sys::c::STD_OUTPUT_HANDLE) as RawHandle })
+                    }
+                }
+               
+                impl<'a> AsRawHandle for io::StderrLock<'a> 
+                {
+                    fn as_raw_handle(&self) -> RawHandle 
+                    {
+                        stdio_handle(unsafe { sys::c::GetStdHandle(sys::c::STD_ERROR_HANDLE) as RawHandle })
+                    }
+                }
+                
+                fn stdio_handle(raw: RawHandle) -> RawHandle 
+                {
+                    if raw == sys::c::INVALID_HANDLE_VALUE { ptr::null_mut() } else { raw }
+                }
+               
+                impl FromRawHandle for fs::File 
+                {
+                    #[inline] unsafe fn from_raw_handle(handle: RawHandle) -> fs::File 
+                    {
+                        unsafe 
+                        {
+                            let handle = handle as sys::c::HANDLE;
+                            fs::File::from_inner(sys::fs::File::from_inner(FromInner::from_inner(
+                                OwnedHandle::from_raw_handle(handle),
+                            )))
+                        }
+                    }
+                }
+               
+                impl IntoRawHandle for fs::File 
+                {
+                    #[inline] fn into_raw_handle(self) -> RawHandle 
+                    {
+                        self.into_inner().into_raw_handle() as *mut _
+                    }
+                }
+                /// Extracts raw sockets.
+                pub trait AsRawSocket 
+                {
+                    /// Extracts the raw socket.
+                    fn as_raw_socket(&self) -> RawSocket;
+                }
+                /// Creates I/O objects from raw sockets.                
+                pub trait FromRawSocket 
+                {
+                    /// Constructs a new I/O object from the specified raw socket.
+                    unsafe fn from_raw_socket(sock: RawSocket) -> Self;
+                }
+                /// A trait to express the ability to consume an object and acquire ownership of its raw `SOCKET`.
+                pub trait IntoRawSocket 
+                {
+                    /// Consumes this object, returning the raw underlying socket.
+                    #[must_use = "losing the raw socket may leak resources"]
+                    fn into_raw_socket(self) -> RawSocket;
+                }
+               
+                impl AsRawSocket for net::TcpStream 
+                {
+                    #[inline] fn as_raw_socket(&self) -> RawSocket 
+                    {
+                        self.as_inner().socket().as_raw_socket()
+                    }
+                }
+                
+                impl AsRawSocket for net::TcpListener 
+                {
+                    #[inline] fn as_raw_socket(&self) -> RawSocket 
+                    {
+                        self.as_inner().socket().as_raw_socket()
+                    }
+                }
+                
+                impl AsRawSocket for net::UdpSocket 
+                {
+                    #[inline] fn as_raw_socket(&self) -> RawSocket 
+                    {
+                        self.as_inner().socket().as_raw_socket()
+                    }
+                }
+               
+                impl FromRawSocket for net::TcpStream 
+                {
+                    #[inline] unsafe fn from_raw_socket(sock: RawSocket) -> net::TcpStream 
+                    {
+                        unsafe {
+                            let sock = sys::net::Socket::from_inner(OwnedSocket::from_raw_socket(sock));
+                            net::TcpStream::from_inner(sys::net::TcpStream::from_inner(sock))
+                        }
+                    }
+                }
+                
+                impl FromRawSocket for net::TcpListener 
+                {
+                    #[inline] unsafe fn from_raw_socket(sock: RawSocket) -> net::TcpListener 
+                    {
+                        unsafe {
+                            let sock = sys::net::Socket::from_inner(OwnedSocket::from_raw_socket(sock));
+                            net::TcpListener::from_inner(sys::net::TcpListener::from_inner(sock))
+                        }
+                    }
+                }
+                
+                impl FromRawSocket for net::UdpSocket 
+                {
+                    #[inline] unsafe fn from_raw_socket(sock: RawSocket) -> net::UdpSocket 
+                    {
+                        unsafe {
+                            let sock = sys::net::Socket::from_inner(OwnedSocket::from_raw_socket(sock));
+                            net::UdpSocket::from_inner(sys::net::UdpSocket::from_inner(sock))
+                        }
+                    }
+                }
+               
+                impl IntoRawSocket for net::TcpStream 
+                {
+                    #[inline] fn into_raw_socket(self) -> RawSocket 
+                    {
+                        self.into_inner().into_socket().into_inner().into_raw_socket()
+                    }
+                }
+               
+                impl IntoRawSocket for net::TcpListener 
+                {
+                    #[inline] fn into_raw_socket(self) -> RawSocket 
+                    {
+                        self.into_inner().into_socket().into_inner().into_raw_socket()
+                    }
+                }
+               
+                impl IntoRawSocket for net::UdpSocket 
+                {
+                    #[inline] fn into_raw_socket(self) -> RawSocket 
+                    {
+                        self.into_inner().into_socket().into_inner().into_raw_socket()
+                    }
+                }
+               
+                impl AsRawHandle for io::PipeReader 
+                {
+                    fn as_raw_handle(&self) -> RawHandle 
+                    {
+                        self.0.as_raw_handle()
+                    }
+                }
+               
+                impl FromRawHandle for io::PipeReader 
+                {
+                    unsafe fn from_raw_handle(raw_handle: RawHandle) -> Self 
+                    {
+                        unsafe { Self::from_inner(FromRawHandle::from_raw_handle(raw_handle)) }
+                    }
+                }
+               
+                impl IntoRawHandle for io::PipeReader 
+                {
+                    fn into_raw_handle(self) -> RawHandle 
+                    {
+                        self.0.into_raw_handle()
+                    }
+                }
+               
+                impl AsRawHandle for io::PipeWriter 
+                {
+                    fn as_raw_handle(&self) -> RawHandle 
+                    {
+                        self.0.as_raw_handle()
+                    }
+                }
+               
+                impl FromRawHandle for io::PipeWriter 
+                {
+                    unsafe fn from_raw_handle(raw_handle: RawHandle) -> Self 
+                    {
+                        unsafe { Self::from_inner(FromRawHandle::from_raw_handle(raw_handle)) }
+                    }
+                }
+               
+                impl IntoRawHandle for io::PipeWriter 
+                {
+                    fn into_raw_handle(self) -> RawHandle 
+                    {
+                        self.0.into_raw_handle()
+                    }
+                }
+            } pub use self::raw::*;
+
+            mod socket
+            {
+                //! Owned and borrowed OS sockets.
+                use ::
+                {
+                    marker::PhantomData,
+                    mem::{self, ManuallyDrop},
+                    sys::cvt,
+                    *,
+                }; use super::raw::{ AsRawSocket, FromRawSocket, IntoRawSocket, RawSocket };
+                
+                type ValidRawSocket = core::num::niche_types::NotAllOnes<RawSocket>;
+                /// A borrowed socket.
+                #[repr(transparent)] #[rustc_nonnull_optimization_guaranteed] #[derive(Copy, Clone)]
+                pub struct BorrowedSocket<'socket> 
+                {
+                    socket: ValidRawSocket,
+                    _phantom: PhantomData<&'socket OwnedSocket>,
+                }
+                /// An owned socket.
+                #[repr(transparent)] #[rustc_nonnull_optimization_guaranteed]
+                pub struct OwnedSocket 
+                {
+                    socket: ValidRawSocket,
+                }
+
+                impl BorrowedSocket<'_> 
+                {
+                    /// Returns a `BorrowedSocket` holding the given raw socket.
+                    #[inline] #[track_caller] pub const unsafe fn borrow_raw(socket: RawSocket) -> Self
+                    {
+                        Self { socket: ValidRawSocket::new(socket).expect("socket != -1"), _phantom: PhantomData }
+                    }
+                }
+
+                impl OwnedSocket
+                {
+                    /// Creates a new `OwnedSocket` instance that shares the same underlying object as the existing `OwnedSocket` instance.
+                    pub fn try_clone(&self) -> io::Result<Self> 
+                    {
+                        self.as_socket().try_clone_to_owned()
+                    }
+                    
+                    pub fn set_no_inherit(&self) -> io::Result<()> 
+                    {
+                        cvt(unsafe 
+                        {
+                            sys::c::SetHandleInformation(
+                                self.as_raw_socket() as sys::c::HANDLE,
+                                sys::c::HANDLE_FLAG_INHERIT,
+                                0,
+                            )
+                        })
+                        .map(drop)
+                    }
+                }
+
+                impl BorrowedSocket<'_> 
+                {
+                    /// Creates a new `OwnedSocket` instance that shares the same underlying
+                    /// object as the existing `BorrowedSocket` instance.
+                    pub fn try_clone_to_owned(&self) -> io::Result<OwnedSocket> 
+                    {
+                        let mut info = unsafe { mem::zeroed::<sys::c::WSAPROTOCOL_INFOW>() };
+                        let result = unsafe 
+                        {
+                            sys::c::WSADuplicateSocketW(
+                                self.as_raw_socket() as sys::c::SOCKET,
+                                sys::c::GetCurrentProcessId(),
+                                &mut info,
+                            )
+                        };
+                        sys::net::cvt(result)?;
+                        let socket = unsafe 
+                        {
+                            sys::c::WSASocketW(
+                                info.iAddressFamily,
+                                info.iSocketType,
+                                info.iProtocol,
+                                &info,
+                                0,
+                                sys::c::WSA_FLAG_OVERLAPPED | sys::c::WSA_FLAG_NO_HANDLE_INHERIT,
+                            )
+                        };
+
+                        if socket != sys::c::INVALID_SOCKET 
+                        {
+                            unsafe { Ok(OwnedSocket::from_raw_socket(socket as RawSocket)) }
+                        }
+                        
+                        else 
+                        {
+                            let error = unsafe { sys::c::WSAGetLastError() };
+
+                            if error != sys::c::WSAEPROTOTYPE && error != sys::c::WSAEINVAL 
+                            {
+                                return Err(io::Error::from_raw_os_error(error));
+                            }
+
+                            let socket = unsafe 
+                            {
+                                sys::c::WSASocketW(
+                                    info.iAddressFamily,
+                                    info.iSocketType,
+                                    info.iProtocol,
+                                    &info,
+                                    0,
+                                    sys::c::WSA_FLAG_OVERLAPPED,
+                                )
+                            };
+
+                            if socket == sys::c::INVALID_SOCKET 
+                            {
+                                return Err(last_error());
+                            }
+
+                            unsafe 
+                            {
+                                let socket = OwnedSocket::from_raw_socket(socket as RawSocket);
+                                socket.set_no_inherit()?;
+                                Ok(socket)
+                            }
+                        }
+                    }
+                }
+                /// Returns the last error from the Windows socket interface.
+                fn last_error() -> io::Error 
+                {
+                    io::Error::from_raw_os_error(unsafe { sys::c::WSAGetLastError() })
+                }
+               
+                impl AsRawSocket for BorrowedSocket<'_> 
+                {
+                    #[inline] fn as_raw_socket(&self) -> RawSocket 
+                    {
+                        self.socket.as_inner()
+                    }
+                }
+               
+                impl AsRawSocket for OwnedSocket 
+                {
+                    #[inline] fn as_raw_socket(&self) -> RawSocket 
+                    {
+                        self.socket.as_inner()
+                    }
+                }
+               
+                impl IntoRawSocket for OwnedSocket 
+                {
+                    #[inline] fn into_raw_socket(self) -> RawSocket 
+                    {
+                        ManuallyDrop::new(self).socket.as_inner()
+                    }
+                }
+               
+                impl FromRawSocket for OwnedSocket 
+                {
+                    #[inline] #[track_caller]
+                    unsafe fn from_raw_socket(socket: RawSocket) -> Self 
+                    {
+                        Self { socket: ValidRawSocket::new(socket).expect("socket != -1") }
+                    }
+                }
+               
+                impl Drop for OwnedSocket 
+                {
+                    #[inline] fn drop(&mut self) 
+                    {
+                        unsafe 
+                        {
+                            let _ = sys::c::closesocket(self.socket.as_inner() as sys::c::SOCKET);
+                        }
+                    }
+                }
+               
+                impl fmt::Debug for BorrowedSocket<'_> 
+                {
+                    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result 
+                    {
+                        f.debug_struct("BorrowedSocket").field("socket", &self.socket).finish()
+                    }
+                }
+               
+                impl fmt::Debug for OwnedSocket 
+                {
+                    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result 
+                    {
+                        f.debug_struct("OwnedSocket").field("socket", &self.socket).finish()
+                    }
+                }
+                /// A trait to borrow the socket from an underlying object.
+                pub trait AsSocket 
+                {
+                    /// Borrows the socket.
+                    fn as_socket(&self) -> BorrowedSocket<'_>;
+                }
+                
+                impl<T: AsSocket> AsSocket for &T 
+                {
+                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> 
+                    {
+                        T::as_socket(self)
+                    }
+                }
+                
+                impl<T: AsSocket> AsSocket for &mut T 
+                {
+                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> 
+                    {
+                        T::as_socket(self)
+                    }
+                }               
+                /// This impl allows implementing traits that require `AsSocket` on Arc.
+                impl<T: AsSocket> AsSocket for crate::sync::Arc<T> 
+                {
+                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> 
+                    {
+                        (**self).as_socket()
+                    }
+                }
+                
+                impl<T: AsSocket> AsSocket for crate::rc::Rc<T> 
+                {
+                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> 
+                    {
+                        (**self).as_socket()
+                    }
+                }
+                
+                impl<T: AsSocket + ?Sized> AsSocket for crate::rc::UniqueRc<T> 
+                {
+                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> 
+                    {
+                        (**self).as_socket()
+                    }
+                }
+                
+                impl<T: AsSocket> AsSocket for Box<T> 
+                {
+                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> 
+                    {
+                        (**self).as_socket()
+                    }
+                }
+               
+                impl AsSocket for BorrowedSocket<'_> 
+                {
+                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> 
+                    {
+                        *self
+                    }
+                }
+               
+                impl AsSocket for OwnedSocket 
+                {
+                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> 
+                    {
+                        // Safety: `OwnedSocket` and `BorrowedSocket` have the same validity
+                        // invariants, and the `BorrowedSocket` is bounded by the lifetime
+                        // of `&self`.
+                        unsafe { BorrowedSocket::borrow_raw(self.as_raw_socket()) }
+                    }
+                }
+               
+                impl AsSocket for crate::net::TcpStream 
+                {
+                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> 
+                    {
+                        unsafe { BorrowedSocket::borrow_raw(self.as_raw_socket()) }
+                    }
+                }
+               
+                impl From<crate::net::TcpStream> for OwnedSocket 
+                {
+                    /// Takes ownership of a [`TcpStream`](crate::net::TcpStream)'s socket.
+                    #[inline] fn from(tcp_stream: crate::net::TcpStream) -> OwnedSocket 
+                    {
+                        unsafe { OwnedSocket::from_raw_socket(tcp_stream.into_raw_socket()) }
+                    }
+                }
+               
+                impl From<OwnedSocket> for crate::net::TcpStream 
+                {
+                    #[inline] fn from(owned: OwnedSocket) -> Self 
+                    {
+                        unsafe { Self::from_raw_socket(owned.into_raw_socket()) }
+                    }
+                }
+               
+                impl AsSocket for crate::net::TcpListener 
+                {
+                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> 
+                    {
+                        unsafe { BorrowedSocket::borrow_raw(self.as_raw_socket()) }
+                    }
+                }
+               
+                impl From<crate::net::TcpListener> for OwnedSocket 
+                {
+                    /// Takes ownership of a [`TcpListener`](crate::net::TcpListener)'s socket.
+                    #[inline] fn from(tcp_listener: crate::net::TcpListener) -> OwnedSocket 
+                    {
+                        unsafe { OwnedSocket::from_raw_socket(tcp_listener.into_raw_socket()) }
+                    }
+                }
+               
+                impl From<OwnedSocket> for crate::net::TcpListener 
+                {
+                    #[inline] fn from(owned: OwnedSocket) -> Self 
+                    {
+                        unsafe { Self::from_raw_socket(owned.into_raw_socket()) }
+                    }
+                }
+               
+                impl AsSocket for crate::net::UdpSocket 
+                {
+                    #[inline] fn as_socket(&self) -> BorrowedSocket<'_> 
+                    {
+                        unsafe { BorrowedSocket::borrow_raw(self.as_raw_socket()) }
+                    }
+                }
+               
+                impl From<crate::net::UdpSocket> for OwnedSocket 
+                {
+                    /// Takes ownership of a [`UdpSocket`](crate::net::UdpSocket)'s underlying socket.
+                    #[inline] fn from(udp_socket: crate::net::UdpSocket) -> OwnedSocket 
+                    {
+                        unsafe { OwnedSocket::from_raw_socket(udp_socket.into_raw_socket()) }
+                    }
+                }
+               
+                impl From<OwnedSocket> for crate::net::UdpSocket 
+                {
+                    #[inline] fn from(owned: OwnedSocket) -> Self 
+                    {
+                        unsafe { Self::from_raw_socket(owned.into_raw_socket()) }
+                    }
+                }
+            } pub use self::socket::*;
+            
         }
 
         pub mod net
@@ -8474,5 +12056,7 @@ fn main()
         if sig_handler_enabled { signals::block(); }
     }
 }
+// #\[stable\(feature = ".+", since = ".+"\)\]
+// #\[unstable\(feature = ".+", issue = ".+"\)\]
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 8478
+// 12062
