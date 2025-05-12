@@ -85,6 +85,17 @@ extern crate unicode_width;
             }
         );
     }
+
+    #[macro_export] macro_rules! constant_error
+    {
+        ($kind:expr, $message:expr $(,)?) => 
+        {
+            ::hint::must_use( ::io::Error::from_static_message
+            (
+                const { & ::io::SimpleMessage { kind: $kind, message: $message } },
+            ))
+        };
+    }
 }
 
 pub mod borrow
@@ -283,6 +294,15 @@ pub mod char
     {
         use unicode_width::UnicodeWidthChar;
         ch.width()
+    }
+    /// Returns a string consisting of a `char`, repeated `n` times.
+    // pub fn repeat_char(ch: char, n: usize) -> String
+    pub fn repeat(ch: char, n: usize) -> String
+    {
+        let mut buf = [0; 4];
+        let s = ch.encode_utf8(&mut buf);
+
+        s.repeat(n)
     }
 }
 
@@ -1583,6 +1603,14 @@ pub mod history
 pub mod io
 {
     pub use std::io::{ * };
+
+    pub fn default_read_vectored<F>(read: F, bufs: &mut [IoSliceMut<'_>]) -> Result<usize> where
+    F: FnOnce(&mut [u8]) -> Result<usize>,
+    {
+        let buf = bufs.iter_mut().find(|b| !b.is_empty()).map_or(&mut [][..], |b| &mut **b);
+        read(buf)
+    }
+
 } use std::io::Write as _;
 
 pub mod is
@@ -1670,6 +1698,62 @@ pub mod is
 pub mod iter
 {
     pub use std::iter::{ * };
+
+    pub fn drop_while<I, T, F>(iter: &mut I, mut f: F) where I: Iterator<Item=T> + Clone, F: FnMut(T) -> bool
+    {
+        loop
+        {
+            let mut clone = iter.clone();
+
+            match clone.next()
+            {
+                None => break,
+                Some(t) =>
+                {
+                    if f(t) { *iter = clone; } else { break; }
+                }
+            }
+        }
+    }
+}
+
+pub mod lines
+{
+    use ::
+    {
+        parsers::locust::{ self },
+        types::{ CommandResult },
+        *,
+    };
+    /*
+    pub fn run_lines(sh: &mut shell::Shell, lines: &str, args: &Vec<String>, capture: bool) -> Vec<CommandResult> */
+    pub fn run(sh: &mut shell::Shell, lines: &str, args: &Vec<String>, capture: bool) -> Vec<CommandResult>
+    {
+        let mut cr_list = Vec::new();
+        match locust::parse(lines)
+       {
+            Ok(pairs_exp) =>
+            {
+                for pair in pairs_exp
+                {
+                    let (mut _cr_list, _cont, _brk) = run_exp(sh, pair, args, false, capture);
+                    cr_list.append(&mut _cr_list);
+                }
+            }
+
+            Err(e) =>
+            {
+                println_stderr!("syntax error: {:?}", e);
+                return cr_list;
+            }
+        }
+        cr_list
+    }
+}
+
+pub mod marker
+{
+    pub use std::marker::{ * };
 }
 
 pub mod mem
@@ -2469,12 +2553,14 @@ pub mod os
             impl UnixSocketExt for net::UnixDatagram
             {
                 fn passcred(&self) -> io::Result<bool> { self.as_inner().passcred() }
+                
                 fn set_passcred(&self, passcred: bool) -> io::Result<()> { self.as_inner().set_passcred(passcred) }
             }
             
             impl UnixSocketExt for net::UnixStream
             {
                 fn passcred(&self) -> io::Result<bool> { self.as_inner().passcred() }
+                
                 fn set_passcred(&self, passcred: bool) -> io::Result<()> { self.as_inner().set_passcred(passcred) }
             }
         }
@@ -2609,18 +2695,361 @@ pub mod os
 
         pub mod fs
         {
+            //! Unix-specific extensions to primitives in the [`std::fs`] module.
             use ::
             {
+                ffi::OsStr,
+                fs::{self, OpenOptions, Permissions},
+                os::unix::io::{AsFd, AsRawFd},
+                path::Path,
+                sealed::Sealed,
+                sys::common::{AsInner, AsInnerMut, FromInner},
+                io::{ Read, Write},
                 *,
-            };
+            }; 
+            use super::platform::fs::MetadataExt as _;
+            /// Unix-specific extensions to [`fs::File`].
+            pub trait FileExt
+            {
+                /// Reads a number of bytes starting from a given offset.
+                fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<usize>;
+
+                /// Like `read_at`, except that it reads into a slice of buffers.
+                fn read_vectored_at(&self, bufs: &mut [io::IoSliceMut<'_>], offset: u64) -> io::Result<usize> {
+                    io::default_read_vectored(|b| self.read_at(b, offset), bufs)
+                }
+
+                /// Reads the exact number of bytes required to fill `buf` from the given offset.
+                fn read_exact_at(&self, mut buf: &mut [u8], mut offset: u64) -> io::Result<()> {
+                    while !buf.is_empty() {
+                        match self.read_at(buf, offset) {
+                            Ok(0) => break,
+                            Ok(n) => {
+                                let tmp = buf;
+                                buf = &mut tmp[n..];
+                                offset += n as u64;
+                            }
+                            Err(ref e) if e.is_interrupted() => {}
+                            Err(e) => return Err(e),
+                        }
+                    }
+                    if !buf.is_empty() { Err(io::Error::READ_EXACT_EOF) } else { Ok(()) }
+                }
+
+                /// Writes a number of bytes starting from a given offset.
+                fn write_at(&self, buf: &[u8], offset: u64) -> io::Result<usize>;
+
+                /// Like `write_at`, except that it writes from a slice of buffers.
+                
+                fn write_vectored_at(&self, bufs: &[io::IoSlice<'_>], offset: u64) -> io::Result<usize> {
+                    ::io::default_write_vectored(|b| self.write_at(b, offset), bufs)
+                }
+
+                /// Attempts to write an entire buffer starting from a given offset.
+                fn write_all_at(&self, mut buf: &[u8], mut offset: u64) -> io::Result<()> {
+                    while !buf.is_empty() {
+                        match self.write_at(buf, offset) {
+                            Ok(0) => {
+                                return Err(io::Error::WRITE_ALL_EOF);
+                            }
+                            Ok(n) => {
+                                buf = &buf[n..];
+                                offset += n as u64
+                            }
+                            Err(ref e) if e.is_interrupted() => {}
+                            Err(e) => return Err(e),
+                        }
+                    }
+                    Ok(())
+                }
+            }
+            
+            impl FileExt for fs::File 
+            {
+                fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<usize> {
+                    self.as_inner().read_at(buf, offset)
+                }
+                
+                fn read_vectored_at(&self, bufs: &mut [io::IoSliceMut<'_>], offset: u64) -> io::Result<usize> {
+                    self.as_inner().read_vectored_at(bufs, offset)
+                }
+                
+                fn write_at(&self, buf: &[u8], offset: u64) -> io::Result<usize> {
+                    self.as_inner().write_at(buf, offset)
+                }
+                
+                fn write_vectored_at(&self, bufs: &[io::IoSlice<'_>], offset: u64) -> io::Result<usize> {
+                    self.as_inner().write_vectored_at(bufs, offset)
+                }
+            }
+
+            /// Unix-specific extensions to [`fs::Permissions`].
+            pub trait PermissionsExt {
+                /// Returns the mode permission bits
+                
+                fn mode(&self) -> u32;
+
+                /// Sets the mode permission bits.
+                
+                fn set_mode(&mut self, mode: u32);
+
+                /// Creates a new instance from the given mode permission bits.
+                fn from_mode(mode: u32) -> Self;
+            }
+            
+            impl PermissionsExt for Permissions {
+                fn mode(&self) -> u32 {
+                    self.as_inner().mode()
+                }
+
+                fn set_mode(&mut self, mode: u32) {
+                    *self = Permissions::from_inner(FromInner::from_inner(mode));
+                }
+
+                fn from_mode(mode: u32) -> Permissions {
+                    Permissions::from_inner(FromInner::from_inner(mode))
+                }
+            }
+
+            /// Unix-specific extensions to [`fs::OpenOptions`]. 
+            pub trait OpenOptionsExt {
+                /// Sets the mode bits that a new file will be created with.
+                fn mode(&mut self, mode: u32) -> &mut Self;
+
+                /// Pass custom flags to the `flags` argument of `open`.
+                fn custom_flags(&mut self, flags: i32) -> &mut Self;
+            }
+            
+            impl OpenOptionsExt for OpenOptions 
+            {
+                fn mode(&mut self, mode: u32) -> &mut OpenOptions 
+                {
+                    self.as_inner_mut().mode(mode);
+                    self
+                }
+
+                fn custom_flags(&mut self, flags: i32) -> &mut OpenOptions 
+                {
+                    self.as_inner_mut().custom_flags(flags);
+                    self
+                }
+            }
+
+            /// Unix-specific extensions to [`fs::Metadata`].            
+            pub trait MetadataExt 
+            {
+                /// Returns the ID of the device containing the file.
+                fn dev(&self) -> u64;
+                /// Returns the inode number.
+                fn ino(&self) -> u64;
+                /// Returns the rights applied to this file.
+                fn mode(&self) -> u32;
+                /// Returns the number of hard links pointing to this file.
+                fn nlink(&self) -> u64;
+                /// Returns the user ID of the owner of this file.
+                fn uid(&self) -> u32;
+                /// Returns the group ID of the owner of this file.
+                fn gid(&self) -> u32;
+                /// Returns the device ID of this file (if it is a special one).
+                fn rdev(&self) -> u64;
+                /// Returns the total size of this file in bytes.
+                fn size(&self) -> u64;
+                /// Returns the last access time of the file, in seconds since Unix Epoch.
+                fn atime(&self) -> i64;
+                /// Returns the last access time of the file, in nanoseconds since [`atime`].
+                fn atime_nsec(&self) -> i64;
+                /// Returns the last modification time of the file, in seconds since Unix Epoch.
+                fn mtime(&self) -> i64;
+                /// Returns the last modification time of the file, in nanoseconds since [`mtime`].
+                fn mtime_nsec(&self) -> i64;
+                /// Returns the last status change time of the file, in seconds since Unix Epoch.
+                fn ctime(&self) -> i64;
+                /// Returns the last status change time of the file, in nanoseconds since [`ctime`].
+                fn ctime_nsec(&self) -> i64;
+                /// Returns the block size for filesystem I/O.
+                fn blksize(&self) -> u64;
+                /// Returns the number of blocks allocated to the file, in 512-byte units.
+                fn blocks(&self) -> u64;
+            }
+            
+            impl MetadataExt for fs::Metadata {
+                fn dev(&self) -> u64 {
+                    self.st_dev()
+                }
+                
+                fn ino(&self) -> u64 {
+                    self.st_ino()
+                }
+                
+                fn mode(&self) -> u32 {
+                    self.st_mode()
+                }
+                
+                fn nlink(&self) -> u64 {
+                    self.st_nlink()
+                }
+                
+                fn uid(&self) -> u32 {
+                    self.st_uid()
+                }
+                
+                fn gid(&self) -> u32 {
+                    self.st_gid()
+                }
+                
+                fn rdev(&self) -> u64 {
+                    self.st_rdev()
+                }
+                
+                fn size(&self) -> u64 {
+                    self.st_size()
+                }
+                
+                fn atime(&self) -> i64 {
+                    self.st_atime()
+                }
+                
+                fn atime_nsec(&self) -> i64 {
+                    self.st_atime_nsec()
+                }
+                
+                fn mtime(&self) -> i64 {
+                    self.st_mtime()
+                }
+                
+                fn mtime_nsec(&self) -> i64 {
+                    self.st_mtime_nsec()
+                }
+                
+                fn ctime(&self) -> i64 {
+                    self.st_ctime()
+                }
+                
+                fn ctime_nsec(&self) -> i64 {
+                    self.st_ctime_nsec()
+                }
+                
+                fn blksize(&self) -> u64 {
+                    self.st_blksize()
+                }
+                
+                fn blocks(&self) -> u64 {
+                    self.st_blocks()
+                }
+            }
+
+            /// Unix-specific extensions for [`fs::FileType`].
+            pub trait FileTypeExt {
+                /// Returns `true` if this file type is a block device.
+                fn is_block_device(&self) -> bool;
+                /// Returns `true` if this file type is a char device.
+                fn is_char_device(&self) -> bool;
+                /// Returns `true` if this file type is a fifo.
+                fn is_fifo(&self) -> bool;
+                /// Returns `true` if this file type is a socket.
+                fn is_socket(&self) -> bool;
+            }
+            
+            impl FileTypeExt for fs::FileType {
+                fn is_block_device(&self) -> bool {
+                    self.as_inner().is(libc::S_IFBLK)
+                }
+                
+                fn is_char_device(&self) -> bool {
+                    self.as_inner().is(libc::S_IFCHR)
+                }
+                
+                fn is_fifo(&self) -> bool {
+                    self.as_inner().is(libc::S_IFIFO)
+                }
+                
+                fn is_socket(&self) -> bool {
+                    self.as_inner().is(libc::S_IFSOCK)
+                }
+            }
+
+            /// Unix-specific extension methods for [`fs::DirEntry`].            
+            pub trait DirEntryExt {
+                /// Returns the underlying `d_ino` field in the contained `dirent`
+                /// structure.
+                fn ino(&self) -> u64;
+            }
+            
+            impl DirEntryExt for fs::DirEntry {
+                fn ino(&self) -> u64 {
+                    self.as_inner().ino()
+                }
+            }
+
+            /// Sealed Unix-specific extension methods for [`fs::DirEntry`]. 
+            pub trait DirEntryExt2: Sealed {
+                /// Returns a reference to the underlying `OsStr` of this entry's filename.
+                fn file_name_ref(&self) -> &OsStr;
+            }
+
+            /// Allows extension traits within `std`.            
+            impl Sealed for fs::DirEntry {}
+            
+            impl DirEntryExt2 for fs::DirEntry {
+                fn file_name_ref(&self) -> &OsStr {
+                    self.as_inner().file_name_os_str()
+                }
+            }
+
+            /// Creates a new symbolic link on the filesystem.
+            pub fn symlink<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()> {
+                sys::fs::symlink(original.as_ref(), link.as_ref())
+            }
+
+            /// Unix-specific extensions to [`fs::DirBuilder`].            
+            pub trait DirBuilderExt {
+                fn mode(&mut self, mode: u32) -> &mut Self;
+            }
+            
+            impl DirBuilderExt for fs::DirBuilder {
+                fn mode(&mut self, mode: u32) -> &mut fs::DirBuilder {
+                    self.as_inner_mut().set_mode(mode);
+                    self
+                }
+            }
+
+            /// Change the owner and group of the specified path.
+            
+            pub fn chown<P: AsRef<Path>>(dir: P, uid: Option<u32>, gid: Option<u32>) -> io::Result<()> {
+                sys::fs::chown(dir.as_ref(), uid.unwrap_or(u32::MAX), gid.unwrap_or(u32::MAX))
+            }
+
+            /// Change the owner and group of the file referenced by the specified open file descriptor.
+            
+            pub fn fchown<F: AsFd>(fd: F, uid: Option<u32>, gid: Option<u32>) -> io::Result<()> {
+                sys::fs::fchown(fd.as_fd().as_raw_fd(), uid.unwrap_or(u32::MAX), gid.unwrap_or(u32::MAX))
+            }
+
+            /// Change the owner and group of the specified path, without dereferencing symbolic links.
+            pub fn lchown<P: AsRef<Path>>(dir: P, uid: Option<u32>, gid: Option<u32>) -> io::Result<()> {
+                sys::fs::lchown(dir.as_ref(), uid.unwrap_or(u32::MAX), gid.unwrap_or(u32::MAX))
+            }
+
+            /// Change the root directory of the current process to the specified path.
+            pub fn chroot<P: AsRef<Path>>(dir: P) -> io::Result<()> {
+                sys::fs::chroot(dir.as_ref())
+            }
+
+            /// Create a FIFO special file at the specified path with the specified mode.
+            pub fn mkfifo<P: AsRef<Path>>(path: P, permissions: Permissions) -> io::Result<()> {
+                sys::fs::mkfifo(path.as_ref(), permissions.mode())
+            }
         }
 
         pub mod io
         {
+            //! Unix-specific extensions to general I/O primitives.
             use ::
             {
                 *,
             };
+
+            pub use ::os::fd::*;
         }
 
         pub mod net
@@ -2657,7 +3086,7 @@ pub mod os
                 }
 
                 const SUN_PATH_OFFSET: usize = mem::offset_of!(libc::sockaddr_un, sun_path);
-
+                
                 pub(super) fn sockaddr_un(path: &Path) -> io::Result<(libc::sockaddr_un, libc::socklen_t)> 
                 {
                     let mut addr: libc::sockaddr_un = unsafe { mem::zeroed() };
@@ -2667,7 +3096,7 @@ pub mod os
 
                     if bytes.contains(&0) 
                     {
-                        return Err(io::const_error!(
+                        return Err( constant_error!(
                             io::ErrorKind::InvalidInput,
                             "paths must not contain interior null bytes",
                         ));
@@ -2675,7 +3104,7 @@ pub mod os
 
                     if bytes.len() >= addr.sun_path.len() 
                     {
-                        return Err(io::const_error!(
+                        return Err( constant_error!(
                             io::ErrorKind::InvalidInput,
                             "path must be shorter than SUN_LEN",
                         ));
@@ -2683,14 +3112,14 @@ pub mod os
                     
                     unsafe 
                     {
-                        ptr::copy_nonoverlapping(bytes.as_ptr(), addr.sun_path.as_mut_ptr().cast(), bytes.len())
+                        ::ptr::copy_nonoverlapping(bytes.as_ptr(), addr.sun_path.as_mut_ptr().cast(), bytes.len())
                     };
 
                     let mut len = SUN_PATH_OFFSET + bytes.len();
                     match bytes.get(0) {
                         Some(&0) | None => {}
                         Some(_) => len += 1,
-                    }\
+                    }
 
                     Ok((addr, len as libc::socklen_t))
                 }
@@ -2740,7 +3169,7 @@ pub mod os
                         if len == 0 {
                             len = SUN_PATH_OFFSET as libc::socklen_t;
                         } else if addr.sun_family != libc::AF_UNIX as libc::sa_family_t {
-                            return Err(io::const_error!(
+                            return Err( constant_error!(
                                 io::ErrorKind::InvalidInput,
                                 "file descriptor did not correspond to a Unix socket",
                             ));
@@ -2804,7 +3233,7 @@ pub mod os
                             addr.sun_family = libc::AF_UNIX as libc::sa_family_t;
 
                             if name.len() + 1 > addr.sun_path.len() {
-                                return Err(io::const_error!(
+                                return Err( constant_error!(
                                     io::ErrorKind::InvalidInput,
                                     "abstract socket name must be shorter than SUN_LEN",
                                 ));
@@ -3010,10 +3439,6 @@ pub mod os
                         else { None }
                     }
                 }
-
-                #[derive(Clone)]
-                pub struct SocketCred(());
-
                 /// Unix credential.
                 #[derive(Clone)]
                 pub struct SocketCred(libc::ucred);
@@ -3142,7 +3567,6 @@ pub mod os
                     }
                 }
                 
-                pub struct ScmCredentials<'a>(AncillaryDataIter<'a, ()>);
                 /// This control message contains unix credentials.
                 pub struct ScmCredentials<'a>(AncillaryDataIter<'a, libc::ucred>);
                 
@@ -3334,6 +3758,16 @@ pub mod os
             {
                 use ::
                 {
+                    io::{IoSlice, IoSliceMut},
+                    net::Shutdown,
+                    os::unix::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd, RawFd},
+                    path::Path,
+                    sealed::Sealed,
+                    sys::cvt,
+                    sys::net::Socket,
+                    sys::common::{AsInner, FromInner, IntoInner},
+                    time::Duration
+                    ,
                     *,
                 };
                 #[cfg(any(
@@ -3352,17 +3786,6 @@ pub mod os
                 use libc::MSG_NOSIGNAL;
                 
                 use super::{ sockaddr_un, SocketAddr, SocketAncillary, recv_vectored_with_ancillary_from, send_vectored_with_ancillary_to};
-                use crate::io::{IoSlice, IoSliceMut};
-                use crate::net::Shutdown;
-                use crate::os::unix::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd, RawFd};
-                use crate::path::Path;
-                use crate::sealed::Sealed;
-                use crate::sys::cvt;
-                use crate::sys::net::Socket;
-                use crate::sys_common::{AsInner, FromInner, IntoInner};
-                use crate::time::Duration;
-                use crate::{fmt, io};
-                
                 /// A Unix datagram socket.
                 pub struct UnixDatagram(Socket);
                 /// Allows extension traits within `std`.                
@@ -3384,7 +3807,8 @@ pub mod os
                     }
                 }
 
-                impl UnixDatagram {
+                impl UnixDatagram 
+                {
                     /// Creates a Unix datagram socket bound to the given path.
                     ///
                     /// # Examples
@@ -4241,59 +4665,60 @@ pub mod os
                         self.recv_from_flags(buf, libc::MSG_PEEK)
                     }
                 }
-
                 
-                impl AsRawFd for UnixDatagram {
-                    #[inline]
-                    fn as_raw_fd(&self) -> RawFd {
+                impl AsRawFd for UnixDatagram 
+                {
+                    #[inline] fn as_raw_fd(&self) -> RawFd 
+                    {
                         self.0.as_inner().as_raw_fd()
                     }
                 }
-
                 
-                impl FromRawFd for UnixDatagram {
-                    #[inline]
-                    unsafe fn from_raw_fd(fd: RawFd) -> UnixDatagram {
+                impl FromRawFd for UnixDatagram 
+                {
+                    #[inline] unsafe fn from_raw_fd(fd: RawFd) -> UnixDatagram 
+                    {
                         UnixDatagram(Socket::from_inner(FromInner::from_inner(OwnedFd::from_raw_fd(fd))))
                     }
                 }
-
                 
-                impl IntoRawFd for UnixDatagram {
-                    #[inline]
-                    fn into_raw_fd(self) -> RawFd {
+                impl IntoRawFd for UnixDatagram 
+                {
+                    #[inline] fn into_raw_fd(self) -> RawFd 
+                    {
                         self.0.into_inner().into_inner().into_raw_fd()
                     }
                 }
-
                 
-                impl AsFd for UnixDatagram {
-                    #[inline]
-                    fn as_fd(&self) -> BorrowedFd<'_> {
+                impl AsFd for UnixDatagram 
+                {
+                    #[inline] fn as_fd(&self) -> BorrowedFd<'_> 
+                    {
                         self.0.as_inner().as_fd()
                     }
                 }
-
                 
-                impl From<UnixDatagram> for OwnedFd {
+                impl From<UnixDatagram> for OwnedFd 
+                {
                     /// Takes ownership of a [`UnixDatagram`]'s socket file descriptor.
-                    #[inline]
-                    fn from(unix_datagram: UnixDatagram) -> OwnedFd {
+                    #[inline] fn from(unix_datagram: UnixDatagram) -> OwnedFd 
+                    {
                         unsafe { OwnedFd::from_raw_fd(unix_datagram.into_raw_fd()) }
                     }
                 }
-
                 
-                impl From<OwnedFd> for UnixDatagram {
-                    #[inline]
-                    fn from(owned: OwnedFd) -> Self {
+                impl From<OwnedFd> for UnixDatagram 
+                {
+                    #[inline] fn from(owned: OwnedFd) -> Self 
+                    {
                         unsafe { Self::from_raw_fd(owned.into_raw_fd()) }
                     }
                 }
 
-                impl AsInner<Socket> for UnixDatagram {
-                    #[inline]
-                    fn as_inner(&self) -> &Socket {
+                impl AsInner<Socket> for UnixDatagram 
+                {
+                    #[inline] fn as_inner(&self) -> &Socket 
+                    {
                         &self.0
                     }
                 }
@@ -4303,161 +4728,561 @@ pub mod os
             {
                 use ::
                 {
+                    os::unix::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd, RawFd},
+                    path::Path,
+                    sys::cvt,
+                    sys::net::Socket,
+                    sys::common::{AsInner, FromInner, IntoInner},
                     *,
                 };
+
+                use super::{SocketAddr, UnixStream, sockaddr_un};
+                /// A structure representing a Unix domain socket server.
+                pub struct UnixListener(Socket);
+
+                
+                impl fmt::Debug for UnixListener 
+                {
+                    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result 
+                    {
+                        let mut builder = fmt.debug_struct("UnixListener");
+                        builder.field("fd", self.0.as_inner());
+                        if let Ok(addr) = self.local_addr() {
+                            builder.field("local", &addr);
+                        }
+                        builder.finish()
+                    }
+                }
+
+                impl UnixListener 
+                {
+                    /// Creates a new `UnixListener` bound to the specified socket.                    
+                    pub fn bind<P: AsRef<Path>>(path: P) -> io::Result<UnixListener> 
+                    {
+                        unsafe 
+                        {
+                            let inner = Socket::new_raw(libc::AF_UNIX, libc::SOCK_STREAM)?;
+                            let (addr, len) = sockaddr_un(path.as_ref())?;
+                            #[cfg(any(
+                                target_os = "windows",
+                                target_os = "redox",
+                                target_os = "espidf",
+                                target_os = "horizon"
+                            ))]
+                            const backlog: core::ffi::c_int = 128;
+                            #[cfg(any(
+                                target_os = "linux",
+                                target_os = "freebsd",
+                                target_os = "openbsd",
+                                target_vendor = "apple",
+                            ))]
+                            const backlog: core::ffi::c_int = -1;
+
+                            cvt(libc::bind(inner.as_inner().as_raw_fd(), (&raw const addr) as *const _, len as _))?;
+                            cvt(libc::listen(inner.as_inner().as_raw_fd(), backlog))?;
+
+                            Ok(UnixListener(inner))
+                        }
+                    }
+
+                    /// Creates a new `UnixListener` bound to the specified [`socket address`].
+                    
+                    pub fn bind_addr(socket_addr: &SocketAddr) -> io::Result<UnixListener> 
+                    {
+                        unsafe {
+                            let inner = Socket::new_raw(libc::AF_UNIX, libc::SOCK_STREAM)?;
+                            #[cfg(target_os = "linux")]
+                            const backlog: core::ffi::c_int = -1;
+                            #[cfg(not(target_os = "linux"))]
+                            const backlog: core::ffi::c_int = 128;
+                            cvt(libc::bind(
+                                inner.as_raw_fd(),
+                                (&raw const socket_addr.addr) as *const _,
+                                socket_addr.len as _,
+                            ))?;
+                            cvt(libc::listen(inner.as_raw_fd(), backlog))?;
+                            Ok(UnixListener(inner))
+                        }
+                    }
+
+                    /// Accepts a new incoming connection to this listener.
+                    
+                    pub fn accept(&self) -> io::Result<(UnixStream, SocketAddr)> 
+                    {
+                        let mut storage: libc::sockaddr_un = unsafe { mem::zeroed() };
+                        let mut len = size_of_val(&storage) as libc::socklen_t;
+                        let sock = self.0.accept((&raw mut storage) as *mut _, &mut len)?;
+                        let addr = SocketAddr::from_parts(storage, len)?;
+                        Ok((UnixStream(sock), addr))
+                    }
+
+                    /// Creates a new independently owned handle to the underlying socket.
+                    
+                    pub fn try_clone(&self) -> io::Result<UnixListener> 
+                    {
+                        self.0.duplicate().map(UnixListener)
+                    }
+
+                    /// Returns the local socket address of this listener.
+                    
+                    pub fn local_addr(&self) -> io::Result<SocketAddr> 
+                    {
+                        SocketAddr::new(|addr, len| unsafe { libc::getsockname(self.as_raw_fd(), addr, len) })
+                    }
+
+                    /// Moves the socket into or out of nonblocking mode.
+                    
+                    pub fn set_nonblocking(&self, nonblocking: bool) -> io::Result<()> 
+                    {
+                        self.0.set_nonblocking(nonblocking)
+                    }
+
+                    /// Returns the value of the `SO_ERROR` option.
+                    /// # Platform specific
+                    /// On Redox this always returns `None`.
+                    
+                    pub fn take_error(&self) -> io::Result<Option<io::Error>> 
+                    {
+                        self.0.take_error()
+                    }
+
+                    /// Returns an iterator over incoming connections.
+                    
+                    pub fn incoming(&self) -> Incoming<'_> 
+                    {
+                        Incoming { listener: self }
+                    }
+                }
+
+                
+                impl AsRawFd for UnixListener 
+                {
+                    #[inline] fn as_raw_fd(&self) -> RawFd 
+                    {
+                        self.0.as_inner().as_raw_fd()
+                    }
+                }
+
+                
+                impl FromRawFd for UnixListener 
+                {
+                    #[inline] unsafe fn from_raw_fd(fd: RawFd) -> UnixListener 
+                    {
+                        UnixListener(Socket::from_inner(FromInner::from_inner(OwnedFd::from_raw_fd(fd))))
+                    }
+                }
+
+                
+                impl IntoRawFd for UnixListener 
+                {
+                    #[inline] fn into_raw_fd(self) -> RawFd 
+                    {
+                        self.0.into_inner().into_inner().into_raw_fd()
+                    }
+                }
+
+                
+                impl AsFd for UnixListener 
+                {
+                    #[inline] fn as_fd(&self) -> BorrowedFd<'_> 
+                    {
+                        self.0.as_inner().as_fd()
+                    }
+                }
+
+                
+                impl From<OwnedFd> for UnixListener 
+                {
+                    #[inline] fn from(fd: OwnedFd) -> UnixListener 
+                    {
+                        UnixListener(Socket::from_inner(FromInner::from_inner(fd)))
+                    }
+                }
+
+                
+                impl From<UnixListener> for OwnedFd 
+                {
+                    /// Takes ownership of a [`UnixListener`]'s socket file descriptor.
+                    #[inline] fn from(listener: UnixListener) -> OwnedFd 
+                    {
+                        listener.0.into_inner().into_inner()
+                    }
+                }
+                
+                impl<'a> IntoIterator for &'a UnixListener 
+                {
+                    type Item = io::Result<UnixStream>;
+                    type IntoIter = Incoming<'a>;
+
+                    fn into_iter(self) -> Incoming<'a> 
+                    {
+                        self.incoming()
+                    }
+                }
+
+                /// An iterator over incoming connections to a [`UnixListener`].
+                #[derive(Debug)]
+                #[must_use = "iterators are lazy and do nothing unless consumed"]
+                
+                pub struct Incoming<'a> 
+                {
+                    listener: &'a UnixListener,
+                }
+                
+                impl<'a> Iterator for Incoming<'a> 
+                {
+                    type Item = io::Result<UnixStream>;
+
+                    fn next(&mut self) -> Option<io::Result<UnixStream>> 
+                    {
+                        Some(self.listener.accept().map(|s| s.0))
+                    }
+
+                    fn size_hint(&self) -> (usize, Option<usize>) 
+                    {
+                        (usize::MAX, None)
+                    }
+                }
             } pub use self::listener::*;
 
             pub mod stream
             {
                 use ::
                 {
+                    fmt,
+                    io::{self, IoSlice, IoSliceMut},
+                    net::Shutdown,
+                    os::unix::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, IntoRawFd, OwnedFd, RawFd},
+                    path::Path,
+                    sealed::Sealed,
+                    sys::cvt,
+                    sys::net::Socket,
+                    sys_common::{AsInner, FromInner},
+                    time::Duration,
                     *,
                 };
+
+                use super::
+                {
+                    SocketAddr, sockaddr_un, SocketAncillary, recv_vectored_with_ancillary_from, 
+                    send_vectored_with_ancillary_to, UCred, peer_cred
+                };
+                /// A Unix stream socket.
+                pub struct UnixStream(pub(super) Socket);
+
+                /// Allows extension traits within `std`.
+                impl Sealed for UnixStream {}
+                
+                impl fmt::Debug for UnixStream 
+                {
+                    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+                        let mut builder = fmt.debug_struct("UnixStream");
+                        builder.field("fd", self.0.as_inner());
+                        if let Ok(addr) = self.local_addr() {
+                            builder.field("local", &addr);
+                        }
+                        if let Ok(addr) = self.peer_addr() {
+                            builder.field("peer", &addr);
+                        }
+                        builder.finish()
+                    }
+                }
+
+                impl UnixStream 
+                {
+                    /// Connects to the socket named by `path`.
+                    pub fn connect<P: AsRef<Path>>(path: P) -> io::Result<UnixStream> {
+                        unsafe {
+                            let inner = Socket::new_raw(libc::AF_UNIX, libc::SOCK_STREAM)?;
+                            let (addr, len) = sockaddr_un(path.as_ref())?;
+
+                            cvt(libc::connect(inner.as_raw_fd(), (&raw const addr) as *const _, len))?;
+                            Ok(UnixStream(inner))
+                        }
+                    }
+
+                    /// Connects to the socket specified by [`address`].
+                    pub fn connect_addr(socket_addr: &SocketAddr) -> io::Result<UnixStream> {
+                        unsafe {
+                            let inner = Socket::new_raw(libc::AF_UNIX, libc::SOCK_STREAM)?;
+                            cvt(libc::connect(
+                                inner.as_raw_fd(),
+                                (&raw const socket_addr.addr) as *const _,
+                                socket_addr.len,
+                            ))?;
+                            Ok(UnixStream(inner))
+                        }
+                    }
+
+                    /// Creates an unnamed pair of connected sockets.
+                    pub fn pair() -> io::Result<(UnixStream, UnixStream)> {
+                        let (i1, i2) = Socket::new_pair(libc::AF_UNIX, libc::SOCK_STREAM)?;
+                        Ok((UnixStream(i1), UnixStream(i2)))
+                    }
+
+                    /// Creates a new independently owned handle to the underlying socket.
+                    pub fn try_clone(&self) -> io::Result<UnixStream> {
+                        self.0.duplicate().map(UnixStream)
+                    }
+
+                    /// Returns the socket address of the local half of this connection.
+                    pub fn local_addr(&self) -> io::Result<SocketAddr> {
+                        SocketAddr::new(|addr, len| unsafe { libc::getsockname(self.as_raw_fd(), addr, len) })
+                    }
+
+                    /// Returns the socket address of the remote half of this connection.
+                    pub fn peer_addr(&self) -> io::Result<SocketAddr> {
+                        SocketAddr::new(|addr, len| unsafe { libc::getpeername(self.as_raw_fd(), addr, len) })
+                    }
+
+                    /// Gets the peer credentials for this Unix domain socket.
+                    pub fn peer_cred(&self) -> io::Result<UCred> {
+                        peer_cred(self)
+                    }
+
+                    /// Sets the read timeout for the socket.
+                    pub fn set_read_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
+                        self.0.set_timeout(timeout, libc::SO_RCVTIMEO)
+                    }
+
+                    /// Sets the write timeout for the socket.
+                    pub fn set_write_timeout(&self, timeout: Option<Duration>) -> io::Result<()> {
+                        self.0.set_timeout(timeout, libc::SO_SNDTIMEO)
+                    }
+
+                    /// Returns the read timeout of this socket.
+                    pub fn read_timeout(&self) -> io::Result<Option<Duration>> {
+                        self.0.timeout(libc::SO_RCVTIMEO)
+                    }
+
+                    /// Returns the write timeout of this socket.
+                    pub fn write_timeout(&self) -> io::Result<Option<Duration>> {
+                        self.0.timeout(libc::SO_SNDTIMEO)
+                    }
+
+                    /// Moves the socket into or out of nonblocking mode.
+                    
+                    pub fn set_nonblocking(&self, nonblocking: bool) -> io::Result<()> {
+                        self.0.set_nonblocking(nonblocking)
+                    }
+
+                    /// Set the id of the socket for network filtering purpose.
+                    pub fn set_mark(&self, mark: u32) -> io::Result<()> {
+                        self.0.set_mark(mark)
+                    }
+
+                    /// Returns the value of the `SO_ERROR` option.
+                    pub fn take_error(&self) -> io::Result<Option<io::Error>> {
+                        self.0.take_error()
+                    }
+
+                    /// Shuts down the read, write, or both halves of this connection.
+                    pub fn shutdown(&self, how: Shutdown) -> io::Result<()> {
+                        self.0.shutdown(how)
+                    }
+
+                    /// Receives data on the socket from the remote address to which it is
+                    /// connected, without removing that data from the queue.
+                    pub fn peek(&self, buf: &mut [u8]) -> io::Result<usize> {
+                        self.0.peek(buf)
+                    }
+
+                    /// Receives data and ancillary data from socket.
+                    pub fn recv_vectored_with_ancillary(
+                        &self,
+                        bufs: &mut [IoSliceMut<'_>],
+                        ancillary: &mut SocketAncillary<'_>,
+                    ) -> io::Result<usize> {
+                        let (count, _, _) = recv_vectored_with_ancillary_from(&self.0, bufs, ancillary)?;
+
+                        Ok(count)
+                    }
+
+                    /// Sends data and ancillary data on the socket.
+                    pub fn send_vectored_with_ancillary(
+                        &self,
+                        bufs: &[IoSlice<'_>],
+                        ancillary: &mut SocketAncillary<'_>,
+                    ) -> io::Result<usize> {
+                        send_vectored_with_ancillary_to(&self.0, None, bufs, ancillary)
+                    }
+                }
+
+                
+                impl io::Read for UnixStream
+                {
+                    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+                        io::Read::read(&mut &*self, buf)
+                    }
+
+                    fn read_buf(&mut self, buf: io::BorrowedCursor<'_>) -> io::Result<()> {
+                        io::Read::read_buf(&mut &*self, buf)
+                    }
+
+                    fn read_vectored(&mut self, bufs: &mut [IoSliceMut<'_>]) -> io::Result<usize> {
+                        io::Read::read_vectored(&mut &*self, bufs)
+                    }
+
+                    #[inline] fn is_read_vectored(&self) -> bool {
+                        io::Read::is_read_vectored(&&*self)
+                    }
+                }
+                
+                impl<'a> io::Read for &'a UnixStream
+                {
+                    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+                        self.0.read(buf)
+                    }
+
+                    fn read_buf(&mut self, buf: io::BorrowedCursor<'_>) -> io::Result<()> {
+                        self.0.read_buf(buf)
+                    }
+
+                    fn read_vectored(&mut self, bufs: &mut [IoSliceMut<'_>]) -> io::Result<usize> {
+                        self.0.read_vectored(bufs)
+                    }
+
+                    #[inline] fn is_read_vectored(&self) -> bool {
+                        self.0.is_read_vectored()
+                    }
+                }
+
+                
+                impl io::Write for UnixStream 
+                {
+                    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+                        io::Write::write(&mut &*self, buf)
+                    }
+
+                    fn write_vectored(&mut self, bufs: &[IoSlice<'_>]) -> io::Result<usize> {
+                        io::Write::write_vectored(&mut &*self, bufs)
+                    }
+
+                    #[inline] fn is_write_vectored(&self) -> bool {
+                        /*io::Write::is_write_vectored(&&*self) */
+                        false
+                    }
+
+                    fn flush(&mut self) -> io::Result<()> {
+                        io::Write::flush(&mut &*self)
+                    }
+                }
+                
+                impl<'a> io::Write for &'a UnixStream 
+                {
+                    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+                        self.0.write(buf)
+                    }
+
+                    fn write_vectored(&mut self, bufs: &[IoSlice<'_>]) -> io::Result<usize> {
+                        self.0.write_vectored(bufs)
+                    }
+
+                    #[inline] fn is_write_vectored(&self) -> bool {
+                        //self.0.is_write_vectored()
+                        false
+                    }
+
+                    #[inline] fn flush(&mut self) -> io::Result<()> {
+                        Ok(())
+                    }
+                }
+
+                
+                impl AsRawFd for UnixStream 
+                {
+                    #[inline] fn as_raw_fd(&self) -> RawFd 
+                    {
+                        self.0.as_raw_fd()
+                    }
+                }
+
+                
+                impl FromRawFd for UnixStream 
+                {
+                    #[inline] unsafe fn from_raw_fd(fd: RawFd) -> UnixStream 
+                    {
+                        UnixStream(Socket::from_inner(FromInner::from_inner(OwnedFd::from_raw_fd(fd))))
+                    }
+                }
+
+                
+                impl IntoRawFd for UnixStream 
+                {
+                    #[inline] fn into_raw_fd(self) -> RawFd 
+                    {
+                        self.0.into_raw_fd()
+                    }
+                }
+
+                
+                impl AsFd for UnixStream 
+                {
+                    #[inline] fn as_fd(&self) -> BorrowedFd<'_> 
+                    {
+                        self.0.as_fd()
+                    }
+                }
+
+                
+                impl From<UnixStream> for OwnedFd 
+                {
+                    /// Takes ownership of a [`UnixStream`]'s socket file descriptor.
+                    #[inline] fn from(unix_stream: UnixStream) -> OwnedFd 
+                    {
+                        unsafe { OwnedFd::from_raw_fd(unix_stream.into_raw_fd()) }
+                    }
+                }
+
+                
+                impl From<OwnedFd> for UnixStream 
+                {
+                    #[inline] fn from(owned: OwnedFd) -> Self 
+                    {
+                        unsafe { Self::from_raw_fd(owned.into_raw_fd()) }
+                    }
+                }
+
+                impl AsInner<Socket> for UnixStream 
+                {
+                    #[inline] fn as_inner(&self) -> &Socket 
+                    {
+                        &self.0
+                    }
+                }
             } pub use self::stream::*;
 
             pub mod ucred
             {
                 use ::
                 {
+                    libc::{gid_t, pid_t, uid_t},
+                    os::unix::io::AsRawFd,
+                    os::unix::net::UnixStream,
                     *,
                 };
+                /// Credentials for a UNIX process for credentials passing.
+                #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+                pub struct UCred
+                {
+                    /// The UID part of the peer credential.
+                    pub uid: uid_t,
+                    /// The GID part of the peer credential.
+                    pub gid: gid_t,
+                    /// The PID part of the peer credential.
+                    pub pid: Option<pid_t>,
+                }
                 
-                // NOTE: Code in this file is heavily based on work done in PR 13 from the tokio-uds repository on
-//       GitHub.
-//
-//       For reference, the link is here: https://github.com/tokio-rs/tokio-uds/pull/13
-//       Credit to Martin Habovštiak (GitHub username Kixunil) and contributors for this work.
+                pub fn peer_cred(socket: &UnixStream) -> io::Result<UCred>
+                {
+                    unsafe
+                    {
+                        let mut cred = UCred { uid: 1, gid: 1, pid: None };
+                        let ret = libc::getpeereid(socket.as_raw_fd(), &mut cred.uid, &mut cred.gid);
 
-use libc::{gid_t, pid_t, uid_t};
-
-/// Credentials for a UNIX process for credentials passing.
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct UCred {
-    /// The UID part of the peer credential. This is the effective UID of the process at the domain
-    /// socket's endpoint.
-    pub uid: uid_t,
-    /// The GID part of the peer credential. This is the effective GID of the process at the domain
-    /// socket's endpoint.
-    pub gid: gid_t,
-    /// The PID part of the peer credential. This field is optional because the PID part of the
-    /// peer credentials is not supported on every platform. On platforms where the mechanism to
-    /// discover the PID exists, this field will be populated to the PID of the process at the
-    /// domain socket's endpoint. Otherwise, it will be set to None.
-    pub pid: Option<pid_t>,
-}
-
-#[cfg(target_vendor = "apple")]
-pub(super) use self::impl_apple::peer_cred;
-#[cfg(any(
-    target_os = "dragonfly",
-    target_os = "freebsd",
-    target_os = "openbsd",
-    target_os = "netbsd",
-    target_os = "nto"
-))]
-pub(super) use self::impl_bsd::peer_cred;
-#[cfg(any(target_os = "android", target_os = "linux", target_os = "cygwin"))]
-pub(super) use self::impl_linux::peer_cred;
-
-#[cfg(any(target_os = "linux", target_os = "android", target_os = "cygwin"))]
-mod impl_linux {
-    use libc::{SO_PEERCRED, SOL_SOCKET, c_void, getsockopt, socklen_t, ucred};
-
-    use super::UCred;
-    use crate::io;
-    use crate::os::unix::io::AsRawFd;
-    use crate::os::unix::net::UnixStream;
-
-    pub fn peer_cred(socket: &UnixStream) -> io::Result<UCred> {
-        let ucred_size = size_of::<ucred>();
-
-        // Trivial sanity checks.
-        assert!(size_of::<u32>() <= size_of::<usize>());
-        assert!(ucred_size <= u32::MAX as usize);
-
-        let mut ucred_size = ucred_size as socklen_t;
-        let mut ucred: ucred = ucred { pid: 1, uid: 1, gid: 1 };
-
-        unsafe {
-            let ret = getsockopt(
-                socket.as_raw_fd(),
-                SOL_SOCKET,
-                SO_PEERCRED,
-                (&raw mut ucred) as *mut c_void,
-                &mut ucred_size,
-            );
-
-            if ret == 0 && ucred_size as usize == size_of::<ucred>() {
-                Ok(UCred { uid: ucred.uid, gid: ucred.gid, pid: Some(ucred.pid) })
-            } else {
-                Err(io::Error::last_os_error())
-            }
-        }
-    }
-}
-
-#[cfg(any(
-    target_os = "dragonfly",
-    target_os = "freebsd",
-    target_os = "openbsd",
-    target_os = "netbsd",
-    target_os = "nto",
-))]
-mod impl_bsd {
-    use super::UCred;
-    use crate::io;
-    use crate::os::unix::io::AsRawFd;
-    use crate::os::unix::net::UnixStream;
-
-    pub fn peer_cred(socket: &UnixStream) -> io::Result<UCred> {
-        let mut cred = UCred { uid: 1, gid: 1, pid: None };
-        unsafe {
-            let ret = libc::getpeereid(socket.as_raw_fd(), &mut cred.uid, &mut cred.gid);
-
-            if ret == 0 { Ok(cred) } else { Err(io::Error::last_os_error()) }
-        }
-    }
-}
-
-#[cfg(target_vendor = "apple")]
-mod impl_apple {
-    use libc::{LOCAL_PEERPID, SOL_LOCAL, c_void, getpeereid, getsockopt, pid_t, socklen_t};
-
-    use super::UCred;
-    use crate::io;
-    use crate::os::unix::io::AsRawFd;
-    use crate::os::unix::net::UnixStream;
-
-    pub fn peer_cred(socket: &UnixStream) -> io::Result<UCred> {
-        let mut cred = UCred { uid: 1, gid: 1, pid: None };
-        unsafe {
-            let ret = getpeereid(socket.as_raw_fd(), &mut cred.uid, &mut cred.gid);
-
-            if ret != 0 {
-                return Err(io::Error::last_os_error());
-            }
-
-            let mut pid: pid_t = 1;
-            let mut pid_size = size_of::<pid_t>() as socklen_t;
-
-            let ret = getsockopt(
-                socket.as_raw_fd(),
-                SOL_LOCAL,
-                LOCAL_PEERPID,
-                (&raw mut pid) as *mut c_void,
-                &mut pid_size,
-            );
-
-            if ret == 0 && pid_size as usize == size_of::<pid_t>() {
-                cred.pid = Some(pid);
-                Ok(cred)
-            } else {
-                Err(io::Error::last_os_error())
-            }
-        }
-    }
-}
+                        if ret == 0 { Ok(cred) } else { Err(io::Error::last_os_error()) }
+                    }
+                }
 
             } pub use self::ucred::*;
         }
@@ -5042,6 +5867,7 @@ mod impl_apple {
                 fn file_size(&self) -> u64 {
                     self.as_inner().size()
                 }
+                
                 fn volume_serial_number(&self) -> Option<u32> 
                 {
                     self.as_inner().volume_serial_number()
@@ -5077,6 +5903,7 @@ mod impl_apple {
             impl FileTypeExt for fs::FileType
             {
                 fn is_symlink_dir(&self) -> bool { self.as_inner().is_symlink_dir() }
+                
                 fn is_symlink_file(&self) -> bool { self.as_inner().is_symlink_file() }
             }
             /// Windows-specific extensions to [`fs::FileTimes`].
@@ -6788,6 +7615,518 @@ pub mod parsers
             LineInfo { tokens: result, is_complete: is_line_complete }
         }
     }
+
+    pub mod rc
+    {
+        //! Parses configuration files in the format of GNU Readline `inputrc`
+        use ::
+        {
+            char::{ from_u32, ctrl, meta, parse_char_name },
+            command::{ Command },
+            fs::File,
+            io::{stderr, Read, Write},
+            path::Path,
+            str::{Chars, Lines},
+            *,
+        };
+        /// Parsed configuration directive
+        #[derive(Clone, Debug)]
+        pub enum Directive 
+        {
+            /// Bind construct; `"input-sequence": command-or-macro`
+            Bind(String, Command),
+            /// Conditional construct;
+            Conditional
+            {
+                /// Value name; if `None`, value refers to application name
+                name: Option<String>,
+                /// Value to compare
+                value: String,
+                /// Group of directives evaluated when condition is true
+                then_group: Vec<Directive>,
+                /// Group of directives evaluated when condition is false
+                else_group: Vec<Directive>,
+            },
+            /// Set variable; `set name value`
+            SetVariable(String, String),
+        }
+        /// Parses the named file and returns contained directives.
+        pub fn parse_file<P: ?Sized>(filename: &P) -> Option<Vec<Directive>>
+                where P: AsRef<Path> {
+            let filename = filename.as_ref();
+
+            let mut f = match File::open(filename) {
+                Ok(f) => f,
+                Err(e) => {
+                    let _ = writeln!(stderr(), "linefeed: {}: {}", filename.display(), e);
+                    return None;
+                }
+            };
+
+            let mut buf = String::new();
+
+            if let Err(e) = f.read_to_string(&mut buf) {
+                let _ = writeln!(stderr(), "{}: {}", filename.display(), e);
+                return None;
+            }
+
+            Some(parse_text(filename, &buf))
+        }
+
+        /// Parses some text and returns contained directives.
+        ///
+        /// If any errors are encountered during parsing, they are printed to `stderr`.
+        pub fn parse_text<P: ?Sized>(name: &P, line: &str) -> Vec<Directive>
+                where P: AsRef<Path> {
+            let mut p = Parser::new(name.as_ref(), line);
+            p.parse()
+        }
+
+        struct Parser<'a> {
+            lines: Lines<'a>,
+            filename: &'a Path,
+            line_num: usize,
+        }
+
+        enum Token<'a> {
+            /// Colon; `:`
+            Colon,
+            /// Equal; `=`
+            Equal,
+            /// Conditional or other special directive; `$word`
+            SpecialWord(&'a str),
+            /// Double-quoted string; `"foo"`
+            String(String),
+            /// Bare word; `foo`
+            Word(&'a str),
+            /// Invalid token
+            Invalid,
+        }
+
+        impl<'a> Parser<'a> {
+            pub fn new(filename: &'a Path, text: &'a str) -> Parser<'a> {
+                Parser{
+                    lines: text.lines(),
+                    filename: filename,
+                    line_num: 0,
+                }
+            }
+
+            fn next_line(&mut self) -> Option<&'a str> {
+                self.lines.next().map(|line| {
+                    self.line_num += 1;
+                    line.trim()
+                })
+            }
+
+            fn parse(&mut self) -> Vec<Directive> {
+                let mut dirs = Vec::new();
+
+                while let Some(line) = self.next_line() {
+                    if line.starts_with('#') {
+                        continue;
+                    }
+
+                    let mut tokens = Tokens::new(line);
+
+                    if let Some(Token::SpecialWord("include")) = tokens.next() {
+                        let path = tokens.line;
+
+                        if let Some(d) = parse_file(Path::new(path)) {
+                            dirs.extend(d);
+                        }
+
+                        continue;
+                    }
+
+                    if let Some(dir) = self.parse_line(line) {
+                        dirs.push(dir);
+                    }
+                }
+
+                dirs
+            }
+
+            fn parse_conditional(&mut self) -> (Vec<Directive>, Vec<Directive>) {
+                let mut then_group = Vec::new();
+                let mut else_group = Vec::new();
+                let mut parse_else = false;
+
+                loop {
+                    let line = match self.next_line() {
+                        Some(line) => line,
+                        None => {
+                            self.error("missing $endif directive");
+                            break;
+                        }
+                    };
+
+                    if line.starts_with('#') {
+                        continue;
+                    }
+
+                    let mut tokens = Tokens::new(line);
+
+                    let start = match tokens.next() {
+                        Some(tok) => tok,
+                        None => continue
+                    };
+
+                    match start {
+                        Token::SpecialWord("else") => {
+                            if parse_else {
+                                self.error("duplicate $else directive");
+                            } else {
+                                parse_else = true;
+                            }
+                        }
+                        Token::SpecialWord("endif") => {
+                            break;
+                        }
+                        _ => {
+                            if let Some(dir) = self.parse_line(line) {
+                                if parse_else {
+                                    else_group.push(dir);
+                                } else {
+                                    then_group.push(dir);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                (then_group, else_group)
+            }
+
+            fn parse_line(&mut self, line: &str) -> Option<Directive> {
+                let mut tokens = Tokens::new(line);
+
+                let start = tokens.next()?;
+
+                let dir = match start {
+                    Token::SpecialWord("if") => {
+                        let name = match tokens.next() {
+                            Some(Token::Word(w)) => w,
+                            _ => {
+                                self.invalid();
+                                return None;
+                            }
+                        };
+
+                        let (name, value) = match tokens.next() {
+                            Some(Token::Equal) => {
+                                let value = match tokens.next() {
+                                    Some(Token::Word(w)) => w,
+                                    None => "",
+                                    _ => {
+                                        self.invalid();
+                                        return None;
+                                    }
+                                };
+
+                                (Some(name), value)
+                            }
+                            None => (None, name),
+                            _ => {
+                                self.invalid();
+                                return None;
+                            }
+                        };
+
+                        let (then_group, else_group) = self.parse_conditional();
+
+                        Directive::Conditional{
+                            name: name.map(|s| s.to_owned()),
+                            value: value.to_owned(),
+                            then_group: then_group,
+                            else_group: else_group,
+                        }
+                    }
+                    Token::SpecialWord("else") => {
+                        self.error("$else without matching $if directive");
+                        return None;
+                    }
+                    Token::SpecialWord("endif") => {
+                        self.error("$endif without matching $if directive");
+                        return None;
+                    }
+                    Token::String(seq) => {
+                        match tokens.next() {
+                            Some(Token::Colon) => (),
+                            _ => {
+                                self.invalid();
+                                return None;
+                            }
+                        }
+
+                        match tokens.next() {
+                            Some(Token::Word(value)) =>
+                                Directive::Bind(seq, Command::from_string(value)),
+                            Some(Token::String(out)) =>
+                                Directive::Bind(seq, Command::Macro(out.to_owned().into())),
+                            _ => {
+                                self.invalid();
+                                return None;
+                            }
+                        }
+                    }
+                    Token::Word("set") => {
+                        let name = match tokens.next() {
+                            Some(Token::Word(w)) => w,
+                            _ => {
+                                self.invalid();
+                                return None;
+                            }
+                        };
+
+                        let rest = tokens.line;
+
+                        let value = match tokens.next() {
+                            Some(Token::String(s)) => s,
+                            Some(Token::Word(_)) => rest.to_owned(),
+                            _ => {
+                                self.invalid();
+                                return None;
+                            }
+                        };
+
+                        Directive::SetVariable(name.to_owned(), value)
+                    }
+                    Token::Word(name) => {
+                        match tokens.next() {
+                            Some(Token::Colon) => (),
+                            _ => {
+                                self.invalid();
+                                return None;
+                            }
+                        }
+
+                        let seq = match parse_char_name(name) {
+                            Some(seq) => seq,
+                            None => {
+                                self.invalid();
+                                return None;
+                            }
+                        };
+
+                        match tokens.next() {
+                            Some(Token::Word(value)) =>
+                                Directive::Bind(seq, Command::from_string(value)),
+                            Some(Token::String(macro_seq)) =>
+                                Directive::Bind(seq, Command::Macro(macro_seq.to_owned().into())),
+                            _ => {
+                                self.invalid();
+                                return None;
+                            }
+                        }
+                    }
+                    _ => {
+                        self.invalid();
+                        return None;
+                    }
+                };
+
+                Some(dir)
+            }
+
+            fn error(&self, msg: &str) {
+                let _ = writeln!(stderr(),
+                    "linefeed: {} line {}: {}", self.filename.display(), self.line_num, msg);
+            }
+
+            fn invalid(&self) {
+                self.error("invalid directive");
+            }
+        }
+
+        struct Tokens<'a> {
+            line: &'a str,
+        }
+
+        impl<'a> Tokens<'a> {
+            fn new(line: &str) -> Tokens {
+                Tokens{
+                    line: line,
+                }
+            }
+        }
+
+        impl<'a> Iterator for Tokens<'a> {
+            type Item = Token<'a>;
+
+            fn next(&mut self) -> Option<Token<'a>> {
+                let ch = self.line.chars().next()?;
+
+                let tok = match ch {
+                    ':' => {
+                        self.line = self.line[1..].trim_start();
+                        Token::Colon
+                    }
+                    '=' => {
+                        self.line = self.line[1..].trim_start();
+                        Token::Equal
+                    }
+                    '$' => {
+                        let (word, rest) = parse_word(&self.line[1..]);
+                        self.line = rest.trim_start();
+                        Token::SpecialWord(word)
+                    }
+                    '"' => {
+                        let (tok, rest) = parse_string(self.line);
+                        self.line = rest.trim_start();
+                        tok
+                    }
+                    _ => {
+                        let (word, rest) = parse_word(self.line);
+                        self.line = rest.trim_start();
+                        Token::Word(word)
+                    }
+                };
+
+                Some(tok)
+            }
+        }
+
+        fn parse_escape(chars: &mut Chars) -> Option<String> {
+            let ch = chars.next()?;
+
+            let esc = match ch {
+                'C'  => {
+                    match chars.next() {
+                        Some('-') => (),
+                        _ => return None
+                    }
+                    ctrl(chars.next()?)
+                }
+                'M'  => {
+                    match chars.next() {
+                        Some('-') => (),
+                        _ => return None
+                    }
+                    return Some(meta(chars.next()?));
+                }
+                'e'  => '\x1b',
+                '\\' => '\\',
+                '"'  => '"',
+                '\'' => '\'',
+                'a'  => '\x07',
+                'b'  => '\x08',
+                'd'  => '\x7f',
+                'f'  => '\x0c',
+                'n'  => '\n',
+                'r'  => '\r',
+                't'  => '\t',
+                'u'  => {
+                    match chars.next() {
+                        Some('{') => (),
+                        _ => return None
+                    }
+
+                    let mut n = 0;
+
+                    for _ in 0..6 {
+                        match chars.clone().next().and_then(|ch| ch.to_digit(16)) {
+                            Some(digit) => {
+                                chars.next();
+                                n *= 16;
+                                n += digit;
+                            }
+                            None => break
+                        }
+                    }
+
+                    match chars.next() {
+                        Some('}') => (),
+                        _ => return None
+                    }
+
+                    from_u32(n)?
+                }
+                'v'  => '\x0b',
+                'x'  => {
+                    let mut n = 0;
+
+                    for _ in 0..2 {
+                        // Peek the next character
+                        let digit = chars.clone().next()?.to_digit(16)? as u8;
+
+                        // Consume if valid
+                        chars.next();
+
+                        n <<= 4;
+                        n |= digit;
+                    }
+
+                    n as char
+                }
+                '0' ..= '3' => {
+                    let mut n = ch as u8 - b'0';
+
+                    for _ in 0..2 {
+                        // Peek the next character
+                        let digit = chars.clone().next()?.to_digit(8)? as u8;
+
+                        // Consume if valid
+                        chars.next();
+
+                        n <<= 3;
+                        n |= digit;
+                    }
+
+                    n as char
+                }
+                _ => return None
+            };
+
+            Some(esc.to_string())
+        }
+
+        fn parse_string(s: &str) -> (Token, &str) {
+            let mut chars = s.chars();
+            let mut res = String::new();
+
+            // Skip open quote
+            chars.next();
+
+            while let Some(ch) = chars.next() {
+                match ch {
+                    '"' => return (Token::String(res), chars.as_str()),
+                    '\\' => {
+                        match parse_escape(&mut chars) {
+                            Some(esc) => {
+                                res.push_str(&esc);
+                            }
+                            None => break
+                        }
+                    }
+                    ch => res.push(ch)
+                }
+            }
+
+            (Token::Invalid, "")
+        }
+
+        fn parse_word(s: &str) -> (&str, &str) {
+            let mut chars = s.char_indices();
+
+            loop {
+                let mut clone = chars.clone();
+
+                match clone.next() {
+                    Some((ind, ch)) if ch == ':' || ch == '"' || ch == '=' ||
+                            ch.is_whitespace() => {
+                        return (&s[..ind], &s[ind..]);
+                    }
+                    None => {
+                        return (s, "");
+                    }
+                    _ => ()
+                }
+
+                chars = clone;
+            }
+        }
+    }
 }
 
 pub mod path
@@ -6958,14 +8297,17 @@ pub mod prompt
     use ::
     {
         char::{is_ctrl, is_printable, DELETE, EOF},
-        collections::{ HashSet },
+        collections::{ FindResult, HashSet },
         command::{ Category, Command },
         complete::{ Completion },
         ffi::{ Function },
         mem::{ replace },
         ops::{ Range },
         reader::{ BindingIter, InputState, ReadLock, ReadResult },
+        regex::{ forward_word, replace_all },
+        signals::{ Signal },
         sync::{ Arc, Mutex },
+        terminal::{ Terminals },
         time::{ Instant },
         writer::{ BLINK_DURATION, display_str, Digit, Display, HistoryIter, PromptType, Writer, WriteLock },
         *,
@@ -6975,7 +8317,7 @@ pub mod prompt
     use mortal::FindResult;
     
     use crate::table::{format_columns, Line, Table};
-    use crate::terminal::{CursorMode, Signal, Size, Terminal};
+    use crate::terminal::{CursorMode, Signal, Size};
     use crate::util::{
         get_open_paren, find_matching_paren, first_word,
         longest_common_prefix, repeat_char,
@@ -8083,7 +9425,8 @@ pub mod prompt
                         self.insert(n as usize, '\t')?;
                     }
                 }
-                InsertComment => {
+                InsertComment => 
+                {
                     if self.explicit_arg() &&
                             self.write.buffer.starts_with(&self.read.comment_begin[..]) {
                         self.write.move_to(0)?;
@@ -8166,7 +9509,7 @@ pub mod prompt
                 }
                 BackwardKillWord => {
                     if n > 0 {
-                        let pos = backward_word(n as usize,
+                        let pos = ::char::backward(n as usize,
                             &self.write.buffer, self.write.cursor, &self.read.word_break);
                         let r = pos..self.write.cursor;
                         self.kill_range(r)?;
@@ -8184,7 +9527,7 @@ pub mod prompt
                         let r = self.write.cursor..pos;
                         self.kill_range(r)?;
                     } else if n < 0 {
-                        let pos = backward_word((-n) as usize,
+                        let pos = ::char::backward((-n) as usize,
                             &self.write.buffer, self.write.cursor, &self.read.word_break);
                         let r = pos..self.write.cursor;
                         self.kill_range(r)?;
@@ -8192,7 +9535,7 @@ pub mod prompt
                 }
                 UnixWordRubout => {
                     if n > 0 {
-                        let pos = backward_word(n as usize,
+                        let pos = ::char::backward(n as usize,
                             &self.write.buffer, self.write.cursor, " \t\n");
                         let r = pos..self.write.cursor;
                         self.kill_range(r)?;
@@ -8213,13 +9556,13 @@ pub mod prompt
                         if self.read.overwrite_mode {
                             self.overwrite_back(n as usize)?;
                         } else {
-                            let pos = backward_char(n as usize,
+                            let pos = ::char::backward(n as usize,
                                 &self.write.buffer, self.write.cursor);
                             let r = pos..self.write.cursor;
                             self.delete_range(r)?;
                         }
                     } else if n < 0 {
-                        let pos = forward_char((-n) as usize,
+                        let pos = ::char::forward((-n) as usize,
                             &self.write.buffer, self.write.cursor);
                         let r = self.write.cursor..pos;
                         self.delete_range(r)?;
@@ -8227,12 +9570,12 @@ pub mod prompt
                 }
                 DeleteChar => {
                     if n > 0 {
-                        let pos = forward_char(n as usize,
+                        let pos = ::char::forward(n as usize,
                             &self.write.buffer, self.write.cursor);
                         let r = self.write.cursor..pos;
                         self.delete_range(r)?;
                     } else if n < 0 {
-                        let pos = backward_char(n as usize,
+                        let pos = ::char::backward(n as usize,
                             &self.write.buffer, self.write.cursor);
                         let r = pos..self.write.cursor;
                         self.delete_range(r)?;
@@ -8249,7 +9592,7 @@ pub mod prompt
                             src = start..end;
                             dest = end..self.write.cursor;
                         } else {
-                            let start = backward_char(1, &self.write.buffer, self.write.cursor);
+                            let start = ::char::backward(1, &self.write.buffer, self.write.cursor);
                             let end = self.write.cursor;
 
                             src = start..end;
@@ -8258,7 +9601,7 @@ pub mod prompt
                                 let back = backward_char((-n) as usize, &self.write.buffer, start);
                                 back..start
                             } else {
-                                let fwd = forward_char(n as usize + 1, &self.write.buffer, start);
+                                let fwd = ::char::forward(n as usize + 1, &self.write.buffer, start);
                                 end..fwd
                             };
                         }
@@ -8416,6 +9759,11 @@ pub mod prompt
     }
 }
 
+pub mod ptr
+{
+    pub use std::ptr::{ * };
+}
+
 pub mod reader
 {
     //! Provides access to terminal read operations
@@ -8430,6 +9778,7 @@ pub mod reader
         path::{ Path, PathBuf },
         signals::{ Signal },
         sync::{ Arc, MutexGuard },
+        terminal::{ Terminals },
         time::{ Duration, Instant },
         *,
     };
@@ -9030,7 +10379,7 @@ pub mod reader
             if self.data.input_buffer.is_empty() {
                 Ok(None)
             } else {
-                first_char(&self.data.input_buffer)
+                ::char::first(&self.data.input_buffer)
             }
         }
 
@@ -9382,6 +10731,13 @@ pub mod regex
 {
     pub use ::re::{ * };
 
+    use ::
+    {
+        iter::{ drop_while },
+        ops::{Range, RangeFrom, RangeFull, RangeTo},
+        *,
+    };
+
     pub fn contains( text: &str, ptn: &str ) -> bool
     {
         let re = match regex::Regex::new(ptn)
@@ -9422,12 +10778,151 @@ pub mod regex
         let result = re.replace_all(text, ptn_to);
         result.to_string()
     }
+
+    pub fn get_open_paren(ch: char) -> Option<char>
+    {
+        match ch
+        {
+            ')' => Some('('),
+            ']' => Some('['),
+            '}' => Some('{'),
+            _ => None
+        }
+    }
+
+    pub fn find_matching_paren(s: &str, quotes: &str, open: char, close: char) -> Option<usize>
+    {
+        let mut chars = s.char_indices().rev();
+        let mut level = 0;
+        let mut string_delim = None;
+
+        while let Some((ind, ch)) = chars.next() {
+            if string_delim == Some(ch) {
+                string_delim = None;
+            } else if quotes.contains(ch) {
+                string_delim = Some(ch);
+            } else if string_delim.is_none() && ch == close {
+                level += 1;
+            } else if string_delim.is_none() && ch == open {
+                level -= 1;
+
+                if level == 0 {
+                    return Some(ind);
+                }
+            }
+        }
+
+        None
+    }
+
+    pub fn match_name(name: &str, value: &str) -> bool
+    {
+        name == value || (name.starts_with(value) && name.as_bytes()[value.len()] == b'-')
+    }
+
+    pub fn backward_word(n: usize, buf: &str, cur: usize, word_break: &str) -> usize
+    {
+        let mut chars = buf[..cur].char_indices().rev();
+
+        for _ in 0..n {
+            drop_while(&mut chars, |(_, ch)| word_break.contains(ch));
+            if chars.clone().next().is_none() { break; }
+            drop_while(&mut chars, |(_, ch)| !word_break.contains(ch));
+            if chars.clone().next().is_none() { break; }
+        }
+
+        match chars.next() {
+            Some((ind, ch)) => ind + ch.len_utf8(),
+            None => 0
+        }
+    }
+
+    pub fn forward_word(n: usize, buf: &str, cur: usize, word_break: &str) -> usize
+    {
+        let mut chars = buf[cur..].char_indices();
+
+        for _ in 0..n {
+            drop_while(&mut chars, |(_, ch)| word_break.contains(ch));
+            if chars.clone().next().is_none() { break; }
+            drop_while(&mut chars, |(_, ch)| !word_break.contains(ch));
+            if chars.clone().next().is_none() { break; }
+        }
+
+        match chars.next() {
+            Some((ind, _)) => cur + ind,
+            None => buf.len()
+        }
+    }
+
+    pub fn back_n_words(n: usize, buf: &str, cur: usize, word_break: &str) -> Range<usize>
+    {
+        let prev = backward_word(1, buf, cur, word_break);
+        let end = word_end(&buf, prev, word_break);
+
+        if n > 1 {
+            let start = backward_word(n - 1, buf, prev, word_break);
+            start..end
+        } else {
+            prev..end
+        }
+    }
+
+    pub fn forward_n_words(n: usize, buf: &str, cur: usize, word_break: &str) -> Range<usize>
+    {
+        let start = next_word(1, buf, cur, word_break);
+
+        if n > 1
+        {
+            let last = next_word(n - 1, buf, start, word_break);
+            let end = word_end(buf, last, word_break);
+            start..end
+        }
+        
+        else
+        {
+            let end = word_end(buf, start, word_break);
+            start..end
+        }
+    }
+
+    pub fn next_word(n: usize, buf: &str, cur: usize, word_break: &str) -> usize
+    {
+        let mut chars = buf[cur..].char_indices();
+
+        for _ in 0..n {
+            drop_while(&mut chars, |(_, ch)| !word_break.contains(ch));
+            if chars.clone().next().is_none() { break; }
+            drop_while(&mut chars, |(_, ch)| word_break.contains(ch));
+            if chars.clone().next().is_none() { break; }
+        }
+
+        match chars.next() {
+            Some((idx, _)) => cur + idx,
+            None => buf.len()
+        }
+    }
+
+    pub fn word_end(buf: &str, cur: usize, word_break: &str) -> usize
+    {
+        let mut chars = buf[cur..].char_indices();
+
+        drop_while(&mut chars, |(_, ch)| !word_break.contains(ch));
+
+        match chars.next() {
+            Some((idx, _)) => cur + idx,
+            None => buf.len()
+        }
+    }
+
 }
 
 pub mod scripts
 {
     use ::
     {
+        fs::{ File },
+        path::{ Path, PathBuf },
+        regex::{ Regex, RegexBuilder },
         *,
     };
 
@@ -9548,12 +11043,11 @@ pub mod scripts
         }
 
         let mut status = 0;
-        let cr_list = run_lines(sh, &text_new, args, false);
+        let cr_list = ::lines::run( sh, &text_new, args, false );
 
         if let Some(last) = cr_list.last() { status = last.status; }
         
         sh.exit_on_error = false;
-
         status
     }
 }
@@ -9711,6 +11205,11 @@ pub mod slice
     pub use std::slice::{ * };
 }
 
+pub mod str
+{
+    pub use std::str::{ * };
+}
+
 pub mod sync
 {
     pub use std::sync::{ * };
@@ -9762,10 +11261,41 @@ pub mod task
     {
         use ::
         {
+            io::{ Write },
+            nix::
+            {
+                sys::signal::Signal,
+                sys::wait::waitpid,
+                sys::wait::WaitPidFlag as WF,
+                sys::wait::WaitStatus as WS,
+                unistd::Pid,
+            },
+            types::{self, CommandResult},
             *,
         };
 
-        pub fn mark_job_as_done(sh: &mut shell::Shell, gid: i32, pid: i32, reason: &str)
+        pub fn get_job_line(job: &types::Job, trim: bool) -> String 
+        {
+            let mut cmd = job.cmd.clone();
+            if trim && cmd.len() > 50 {
+                cmd.truncate(50);
+                cmd.push_str(" ...");
+            }
+            let _cmd = if job.is_bg && job.status == "Running" {
+                format!("{} &", cmd)
+            } else {
+                cmd
+            };
+            format!("[{}] {}  {}   {}", job.id, job.gid, job.status, _cmd)
+        }
+
+        pub fn print_job(job: &types::Job) 
+        {
+            let line = get_job_line(job, true);
+            println_stderr!("{}", line);
+        }
+
+        pub fn mark_job_as_done(sh: &mut shell::Shell, gid: i32, pid: i32, reason: &str) 
         {
             if let Some(mut job) = sh.remove_pid_from_job(gid, pid) {
                 job.status = reason.to_string();
@@ -9776,7 +11306,168 @@ pub mod task
             }
         }
 
-        pub fn try_wait_bg_jobs(sh: &mut shell::Shell, report: bool, sig_handler_enabled: bool)
+        pub fn mark_job_as_stopped(sh: &mut shell::Shell, gid: i32, report: bool) 
+        {
+            sh.mark_job_as_stopped(gid);
+            if !report {
+                return;
+            }
+
+            // add an extra line to separate output of fg commands if any.
+            if let Some(job) = sh.get_job_by_gid(gid) {
+                println_stderr!("");
+                print_job(job);
+            }
+        }
+
+        pub fn mark_job_member_stopped(sh: &mut shell::Shell, pid: i32, gid: i32, report: bool) 
+        {
+            let _gid = if gid == 0 {
+                unsafe { libc::getpgid(pid) }
+            } else {
+                gid
+            };
+
+            if let Some(job) = sh.mark_job_member_stopped(pid, gid) {
+                if job.all_members_stopped() {
+                    mark_job_as_stopped(sh, gid, report);
+                }
+            }
+        }
+
+        pub fn mark_job_member_continued(sh: &mut shell::Shell, pid: i32, gid: i32) 
+        {
+            let _gid = if gid == 0 {
+                unsafe { libc::getpgid(pid) }
+            } else {
+                gid
+            };
+
+            if let Some(job) = sh.mark_job_member_continued(pid, gid) {
+                if job.all_members_running() {
+                    mark_job_as_running(sh, gid, true);
+                }
+            }
+        }
+
+        pub fn mark_job_as_running(sh: &mut shell::Shell, gid: i32, bg: bool) 
+        {
+            sh.mark_job_as_running(gid, bg);
+        }
+
+
+        pub fn waitpidx(wpid: i32, block: bool) -> types::WaitStatus 
+        {
+            let options = if block {
+                Some(WF::WUNTRACED | WF::WCONTINUED)
+            } else {
+                Some(WF::WUNTRACED | WF::WCONTINUED | WF::WNOHANG)
+            };
+            match waitpid(Pid::from_raw(wpid), options) {
+                Ok(WS::Exited(pid, status)) => {
+                    let pid = i32::from(pid);
+                    types::WaitStatus::from_exited(pid, status)
+                }
+                Ok(WS::Stopped(pid, sig)) => {
+                    let pid = i32::from(pid);
+                    types::WaitStatus::from_stopped(pid, sig as i32)
+                }
+                Ok(WS::Continued(pid)) => {
+                    let pid = i32::from(pid);
+                    types::WaitStatus::from_continuted(pid)
+                }
+                Ok(WS::Signaled(pid, sig, _core_dumped)) => {
+                    let pid = i32::from(pid);
+                    types::WaitStatus::from_signaled(pid, sig as i32)
+                }
+                Ok(WS::StillAlive) => {
+                    types::WaitStatus::empty()
+                }
+                Ok(_others) => {
+                    // this is for PtraceEvent and PtraceSyscall on Linux,
+                    // unreachable on other platforms.
+                    types::WaitStatus::from_others()
+                }
+                Err(e) => {
+                    types::WaitStatus::from_error(e as i32)
+                }
+            }
+        }
+
+        pub fn wait_fg_job(sh: &mut shell::Shell, gid: i32, pids: &[i32]) -> CommandResult 
+        {
+            let mut cmd_result = CommandResult::new();
+            let mut count_waited = 0;
+            let count_child = pids.len();
+            if count_child == 0 {
+                return cmd_result;
+            }
+            let pid_last = pids.last().unwrap();
+
+            loop {
+                let ws = waitpidx(-1, true);
+                // here when we calling waitpidx(), all signals should have
+                // been masked. There should no errors (ECHILD/EINTR etc) happen.
+                if ws.is_error() {
+                    let err = ws.get_errno();
+                    if err == nix::Error::ECHILD {
+                        break;
+                    }
+
+                    log!("jobc unexpected waitpid error: {}", err);
+                    cmd_result = CommandResult::from_status(gid, err as i32);
+                    break;
+                }
+
+                let pid = ws.get_pid();
+                let is_a_fg_child = pids.contains(&pid);
+                if is_a_fg_child && !ws.is_continued() {
+                    count_waited += 1;
+                }
+
+                if ws.is_exited() {
+                    if is_a_fg_child {
+                        mark_job_as_done(sh, gid, pid, "Done");
+                    } else {
+                        let status = ws.get_status();
+                        signals::insert_reap_map(pid, status);
+                    }
+                } else if ws.is_stopped() {
+                    if is_a_fg_child {
+                        // for stop signal of fg job (current job)
+                        // i.e. Ctrl-Z is pressed on the fg job
+                        mark_job_member_stopped(sh, pid, gid, true);
+                    } else {
+                        // for stop signal of bg jobs
+                        signals::insert_stopped_map(pid);
+                        mark_job_member_stopped(sh, pid, 0, false);
+                    }
+                } else if ws.is_continued() {
+                    if !is_a_fg_child {
+                        signals::insert_cont_map(pid);
+                    }
+                    continue;
+                } else if ws.is_signaled() {
+                    if is_a_fg_child {
+                        mark_job_as_done(sh, gid, pid, "Killed");
+                    } else {
+                        signals::killed_map_insert(pid, ws.get_signal());
+                    }
+                }
+
+                if is_a_fg_child && pid == *pid_last {
+                    let status = ws.get_status();
+                    cmd_result.status = status;
+                }
+
+                if count_waited >= count_child {
+                    break;
+                }
+            }
+            cmd_result
+        }
+
+        pub fn try_wait_bg_jobs(sh: &mut shell::Shell, report: bool, sig_handler_enabled: bool) 
         {
             if sh.jobs.is_empty() {
                 return;
@@ -9788,40 +11479,25 @@ pub mod task
             }
 
             let jobs = sh.jobs.clone();
-
-            for (_i, job) in jobs.iter()
-            {
-                for pid in job.pids.iter()
-                {
-                    if let Some(_status) = signals::pop_reap_map(*pid)
-                    {
+            for (_i, job) in jobs.iter() {
+                for pid in job.pids.iter() {
+                    if let Some(_status) = signals::pop_reap_map(*pid) {
                         mark_job_as_done(sh, job.gid, *pid, "Done");
                         continue;
                     }
 
-                    if let Some(sig) = signals::killed_map_pop(*pid)
-                    {
-                        let reason = if sig == Signal::SIGQUIT as i32
-                        {
+                    if let Some(sig) = signals::killed_map_pop(*pid) {
+                        let reason = if sig == Signal::SIGQUIT as i32 {
                             format!("Quit: {}", sig)
-                        }
-                        else if sig == Signal::SIGINT as i32
-                        {
+                        } else if sig == Signal::SIGINT as i32 {
                             format!("Interrupt: {}", sig)
-                        }
-                        else if sig == Signal::SIGKILL as i32
-                        {
+                        } else if sig == Signal::SIGKILL as i32 {
                             format!("Killed: {}", sig)
-                        }
-                        else if sig == Signal::SIGTERM as i32
-                        {
+                        } else if sig == Signal::SIGTERM as i32 {
                             format!("Terminated: {}", sig)
-                        }
-                        else
-                        {
+                        } else {
                             format!("Killed: {}", sig)
                         };
-
                         mark_job_as_done(sh, job.gid, *pid, &reason);
                         continue;
                     }
@@ -9848,6 +11524,9 @@ pub mod terminal
     {
         use ::
         {
+            libc::ioctl,
+            libc::winsize,
+            mem::zeroed,
             *,
         };
         /// Query the current processes's stdout, stdin, and stderr, to determine terminal width.
@@ -9857,6 +11536,27 @@ pub mod terminal
 
             if w.ws_col == 0 || w.ws_row == 0 { None } else { Some((w.ws_col as usize, w.ws_row as usize)) }
         } 
+        /// Runs the ioctl command.
+        unsafe fn get_dimensions_any() -> winsize
+        {
+            let mut window: winsize = zeroed();
+            let mut result = ioctl(STDOUT_FILENO, TIOCGWINSZ, &mut window);
+
+            if result == -1
+            {
+                window = zeroed();
+                result = ioctl(STDIN_FILENO, TIOCGWINSZ, &mut window);
+                if result == -1 {
+                    window = zeroed();
+                    result = ioctl(STDERR_FILENO, TIOCGWINSZ, &mut window);
+                    if result == -1 {
+                        return zeroed();
+                    }
+                }
+            }
+
+            window
+        }
     }
     /// Defines a low-level interface to the terminal
     pub trait Terminals: Sized + Send + Sync
@@ -9999,6 +11699,116 @@ pub mod time
                 )
             }
         }
+    }
+}
+
+pub mod tokens
+{
+    use ::
+    {
+        types::{ Redirection, Tokens },
+        regex::{ contains, Regex },
+        *,
+    };
+
+    pub fn tokens_to_redirections(tokens: &Tokens) -> Result<(Tokens, Vec<Redirection>), String>
+    {
+        let mut tokens_new = Vec::new();
+        let mut redirects = Vec::new();
+        let mut to_be_continued = false;
+        let mut to_be_continued_s1 = String::new();
+        let mut to_be_continued_s2 = String::new();
+
+        for token in tokens
+        {
+            let sep = &token.0;
+
+            if !sep.is_empty() && !to_be_continued
+            {
+                tokens_new.push(token.clone());
+                continue;
+            }
+
+            let word = &token.1;
+
+            if to_be_continued
+            {
+                if sep.is_empty() && word.starts_with('&') { return Err(String::from("bad redirection syntax near &")); }
+
+                let s3 = word.to_string();
+                if contains(&to_be_continued_s1, r"^\d+$")
+                {
+                    if to_be_continued_s1 != "1" && to_be_continued_s1 != "2" { return Err(String::from("Bad file descriptor #3")); }
+
+                    let s1 = to_be_continued_s1.clone();
+                    let s2 = to_be_continued_s2.clone();
+                    redirects.push((s1, s2, s3));
+                }
+
+                else
+                {
+                    if !to_be_continued_s1.is_empty() { tokens_new.push((sep.clone(), to_be_continued_s1.to_string())); }
+
+                    redirects.push(("1".to_string(), to_be_continued_s2.clone(), s3));
+                }
+
+                to_be_continued = false;
+                continue;
+            }
+
+            let ptn1 = r"^([^>]*)(>>?)([^>]+)$";
+            let ptn2 = r"^([^>]*)(>>?)$";
+
+            if !contains(word, r">") { tokens_new.push(token.clone()); }
+            else if contains(word, ptn1)
+            {
+                let re;
+                if let Ok(x) = Regex::new(ptn1) { re = x; }
+                else { return Err(String::from("Failed to build Regex")); }
+
+                if let Some(caps) = re.captures(word)
+                {
+                    let s1 = caps.get(1).unwrap().as_str();
+                    let s2 = caps.get(2).unwrap().as_str();
+                    let s3 = caps.get(3).unwrap().as_str();
+
+                    if s3.starts_with('&') && s3 != "&1" && s3 != "&2" { return Err(String::from("Bad file descriptor #1")); }
+
+                    if contains(s1, r"^\d+$")
+                    {
+                        if s1 != "1" && s1 != "2" { return Err(String::from("Bad file descriptor #2")); }
+                        redirects.push((s1.to_string(), s2.to_string(), s3.to_string()));
+                    }
+                    
+                    else
+                    {
+                        if !s1.is_empty() { tokens_new.push((sep.clone(), s1.to_string())); }
+                        redirects.push((String::from("1"), s2.to_string(), s3.to_string()));
+                    }
+                }
+            }
+
+            else if contains(word, ptn2)
+            {
+                let re;
+
+                if let Ok(x) = Regex::new(ptn2) { re = x; }
+                else { return Err(String::from("Failed to build Regex")); }
+
+                if let Some(caps) = re.captures(word)
+                {
+                    let s1 = caps.get(1).unwrap().as_str();
+                    let s2 = caps.get(2).unwrap().as_str();
+                    to_be_continued = true;
+                    to_be_continued_s1 = s1.to_string();
+                    to_be_continued_s2 = s2.to_string();
+                }
+            }
+        }
+
+        if to_be_continued { return Err(String::from("redirection syntax error")); }
+
+        Ok((tokens_new, redirects))
     }
 }
 
@@ -12058,5 +13868,5 @@ fn main()
 }
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 12062
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// 13872
