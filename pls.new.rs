@@ -1,11 +1,7 @@
-#![feature
-(
-    tool_lints
-)]
-
 #![allow
 (
     non_camel_case_types,
+    stable_features,
     unknown_lints,
     unused_imports,
     unused_macros,
@@ -13,13 +9,137 @@
 /**/
 #[macro_use] extern crate lazy_static;
 /**/
-extern crate libc;
+extern crate fnv;
+//extern crate libc;
 extern crate memchr;
 extern crate nix;
+extern crate num_integer;
+extern crate num_traits;
+extern crate phf;
 extern crate regex as re;
 extern crate time as timed;
 extern crate unicode_normalization;
 extern crate unicode_width;
+
+#[macro_use] pub mod macros
+{
+    use ::
+    {
+        *,
+    };    
+    /// OVER::map    
+    #[macro_export] macro_rules! map
+    {
+        { } => { ::collections::HashMap::new() };
+        
+        { $( $key:expr => $value:expr ),+ , } => { map!{ $( $key => $value),+ } };
+        
+        { $( $key:expr => $value:expr ),* } =>
+        {
+            {
+                let mut _map = ::collections::HashMap::new();
+                $( let _ = _map.insert($key, $value); )*
+                _map
+            }
+        }
+    }
+    /// Given an int, creates and returns a `BigInt`.
+    #[macro_export] macro_rules! int
+    {
+        ($int:expr) => 
+        {{
+            use num::big::BigInt;
+
+            let _b: BigInt = $int.into();
+            _b
+        }};
+    }
+    /// Given two ints, creates and returns a `BigRational`.
+    #[macro_export] macro_rules! frac
+    {
+        ($int1:expr, $int2:expr) => 
+        {{
+            ::num::rational::BigRational::new($int1.into(), $int2.into())
+        }};
+    }
+    /// Given a list of elements, converts each element to a `Value` and returns an `Arr` containing a
+    /// vector of the values.
+    #[macro_export] macro_rules! arr
+    {
+        [] =>
+        {
+            ::database::arrays::Arr::from_vec(vec![]).unwrap()
+        };
+
+        [ $( $elem:expr ),+ , ] => { try_arr![ $( $elem ),+ ].unwrap() };
+
+        [ $( $elem:expr ),+ ] => { try_arr![ $( $elem ),+ ].unwrap() };
+    }
+    /// Given a list of elements, converts each to a `Value` and returns an `Arr` containing a vector of the values.
+    #[macro_export] macro_rules! try_arr
+    {
+        [ $( $elem:expr ),+ , ] => { try_arr![ $( $elem ),+ ] };
+
+        [ $( $elem:expr ),+ ] =>
+        {
+            {
+                $crate::arrays::Arr::from_vec(vec![ $( $elem.into() ),+ ])
+            }
+        };
+    }
+    /// Given a list of elements, converts each element to `Value`s and returns a `Tup` containing a
+    /// vector of the values.
+    #[macro_export] macro_rules! tup
+    {
+        ( $( $elem:expr ),* , ) => { tup!( $( $elem ),* ) };
+
+        ( $( $elem:expr ),* ) =>
+        {
+            {
+                ::database::tuples::Tup::from_vec(vec![ $( $elem.into() ),+ ])            
+            }
+        };
+    }
+    /// Given a list of field/value pairs, returns an `Obj` containing each pair.
+    #[macro_export] macro_rules! obj
+    {
+        {} => { ::database::objects::Obj::from_map_unchecked( ::collections::HashMap::new() ) };
+        { $( $field:expr => $inner:expr ),+ , } => { try_obj!{ $( $field => $inner ),+ }.unwrap() };
+        { $( $field:expr => $inner:expr ),+ } => { try_obj!{ $( $field => $inner ),+ }.unwrap() };
+    }
+    /// Given a list of field to `Value` pairs, returns an `Obj` with the fields and values.
+    #[macro_export] macro_rules! try_obj 
+    {
+        { $( $field:expr => $inner:expr ),+ , } =>
+        {
+            try_obj!{ $( $field => $inner ),* };
+        };
+
+        { $( $field:expr => $inner:expr ),+ } =>
+        {
+            {
+                use ::database::objects::Obj;
+                let mut _map = ::collections::HashMap::new();
+                let mut _parent: Option<::database::values::Value> = None;
+                $(
+                    if $field == "^" { _parent = Some($inner.into()); }
+                    else { _map.insert($field.into(), $inner.into()); }
+                )*
+
+                match _parent
+                {
+                    Some(parent) => match parent.get_obj()
+                    {
+                        Ok(parent) => Obj::from_map_with_parent(_map, parent),
+                        e @ Err(_) => e,
+                    }
+
+                    None => Obj::from_map(_map),
+                }
+            }
+        };
+    }
+}
 
 pub mod alloc
 {
@@ -34,6 +154,179 @@ pub mod borrow
 pub mod boxed
 {
     pub use std::boxed::{ * };
+}
+
+pub mod cell
+{
+   pub use std::cell::{ * };
+}
+
+pub mod char
+{
+    //! Character stream used for parsing.
+    pub use std::char::{ * };
+    use ::
+    {
+        cell::{ RefCell },
+        fs::{ File },
+        io::{ self, Read },
+        iter::{ Peekable },
+        rc::{ Rc },
+        str::{ Chars },
+        *,
+    };
+
+    #[derive(Clone, Debug)]
+    struct Inner
+    {
+        file: Option<String>,
+        contents: String,
+        stream: Peekable<Chars<'static>>,
+        line: usize,
+        col: usize,
+    }
+
+    #[derive(Clone, Debug)]
+    pub struct CharStream
+    {
+        inner: Rc<RefCell<Inner>>,
+    }
+
+    impl CharStream
+    {
+        pub fn from_file(path: &str) -> io::Result<CharStream>
+        {
+            let mut file = File::open(path)?;
+
+            let len = file.metadata()?.len();
+            let mut contents = String::with_capacity(len as usize);
+
+            file.read_to_string(&mut contents)?;
+
+            Self::from_string_impl(Some(String::from(path)), contents)
+        }
+
+        pub fn from_string(contents: String) -> io::Result<CharStream> {
+            Self::from_string_impl(None, contents)
+        }
+
+        fn from_string_impl(file: Option<String>, contents: String) -> io::Result<CharStream>
+        {
+            let chars: Chars = unsafe { mem::transmute(contents.chars()) };
+            let stream = chars.peekable();
+
+            Ok(CharStream
+            {
+                inner: Rc::new(RefCell::new(Inner
+                {
+                    file,
+                    contents,
+                    stream,
+                    line: 1,
+                    col: 1,
+                })),
+            })
+        }
+
+        pub fn peek(&self) -> Option<char>
+        {
+            let mut inner = self.inner.borrow_mut();
+            let opt = inner.stream.peek();
+            match opt
+            {
+                Some(ch) => Some(*ch),
+                None => None,
+            }
+        }
+
+        pub fn file(&self) -> Option<String>
+        {
+            let inner = self.inner.borrow();
+            inner.file.clone()
+        }
+
+        pub fn line(&self) -> usize
+        {
+            let inner = self.inner.borrow();
+            inner.line
+        }
+
+        pub fn col(&self) -> usize
+        {
+            let inner = self.inner.borrow();
+            inner.col
+        }
+
+        fn set_line(&mut self, value: usize)
+        {
+            let mut inner = self.inner.borrow_mut();
+            inner.line = value;
+        }
+
+        fn set_col(&mut self, value: usize)
+        {
+            let mut inner = self.inner.borrow_mut();
+            inner.col = value;
+        }
+    }
+
+    impl Iterator for CharStream
+    {
+        type Item = char;
+
+        fn next(&mut self) -> Option<Self::Item>
+        {
+            let opt =
+            {
+                let mut inner = self.inner.borrow_mut();
+                inner.stream.next()
+            };
+
+            match opt
+            {
+                Some(ch) =>
+                {
+                    if ch == '\n' {
+                        let line = self.line();
+                        self.set_line(line + 1);
+                        self.set_col(1);
+                    } else {
+                        let col = self.col();
+                        self.set_col(col + 1);
+                    }
+                    Some(ch)
+                }
+                None => None,
+            }
+        }
+    }
+    /*
+    pub fn format_char(...) -> String */
+    pub fn format( ch:char ) -> String
+    {
+        match ch
+        {
+            '\n' => String::from("\\n"),
+            ch => format!("{}", ch),
+        }
+    }
+    /*
+    pub fn get_escape_char(...) -> Option<char> */
+    /// If `ch` preceded by a backslash together form an escape character, then return this char.
+    pub fn get_escape(ch: char) -> Option<char>
+    {
+        match ch 
+        {
+            '\\' => Some('\\'),
+            '"' => Some('"'),
+            '\'' => Some('\''),
+            '$' => Some('$'),
+            'n' => Some('\n'),
+            'r' => Some('\r'),
+            't' => Some('\t'),
+            _ => None,
+        }
+    }
 }
 
 pub mod cmp
@@ -62,28 +355,1598 @@ pub mod common
         {
             *,
         };
+        
+        #[derive(Debug)]
+        pub enum Error 
+        {
+            /// IO error.
+            Io(io::Error),
+            /// Database not found.
+            NotFound,
+            /// Parsing error.
+            Parse,
+            /// Expansion error.
+            Expand(Expand),
+        }
 
+        #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+        pub enum Expand 
+        {
+            /// The expansion string is invalid.
+            Invalid,
+            /// There was a type mismatch while expanding.
+            TypeMismatch,
+            /// The stack underflowed while expanding.
+            StackUnderflow,
+        }
+
+        pub type Result<T> = ::result::Result<T, Error>;
+
+        impl From<io::Error> for Error 
+        {
+            fn from(value: io::Error) -> Self 
+            {
+                Error::Io(value)
+            }
+        }
+
+        impl From<Expand> for Error 
+        {
+            fn from(value: Expand) -> Self 
+            {
+                Error::Expand(value)
+            }
+        }
+
+        impl fmt::Display for Error 
+        {
+            fn fmt(&self, f: &mut fmt::Formatter) -> ::result::Result<(), fmt::Error> 
+            {
+                match *self 
+                {
+                    Error::Io(ref err) => err.fmt(f),
+
+                    Error::NotFound => f.write_str("Capability database not found."),
+
+                    Error::Parse => f.write_str("Failed to parse capability database."),
+
+                    Error::Expand(ref err) => match *err
+                    {
+                        Expand::Invalid => f.write_str("The expansion string is invalid."),
+                        Expand::StackUnderflow => f.write_str("Not enough elements on the stack."),
+                        Expand::TypeMismatch => f.write_str("Type mismatch."),
+                    },
+                }
+            }
+        }
+
+        impl error::Error for Error {}
     }
     pub use self::error::{Error, Result};
-
     /// String capability expansion.
     #[macro_use] pub mod expand
     {
         use ::
         {
+            common::
+            { 
+                error::{ self },
+                parser::expansion::{ * },
+            },
+            io::{ BufWriter, Write },
             *,
         };
+        /// Expand a parametrized string.
+        #[macro_export] macro_rules! expand 
+        {
+            ($value:expr) => (
+                $crate::expand!($value;)
+            );
 
+            ($value:expr => $context:expr) => (
+                $crate::expand!($value => $context;)
+            );
+
+            ($value:expr; $($item:expr),*) => (
+                $crate::expand!($value => &mut ::default::Default::default(); $($item),*)
+            );
+
+            ($value:expr => $context:expr; $($item:expr),*) => ({
+                let mut output = ::vec::Vec::new();
+
+                $crate::expand!(&mut output, $value => $context; $($item),*).map(|()| output)
+            });
+
+            ($output:expr, $value:expr) => (
+                $crate::expand!($output, $value;)
+            );
+
+            ($output:expr, $value:expr => $context:expr) => (
+                $crate::expand!($output, $value => $context;)
+            );
+
+            ($output:expr, $value:expr; $($item:expr),*) => (
+                $crate::expand!($output, $value => &mut ::default::Default::default(); $($item),*)
+            );
+
+            ($output:expr, $value:expr => $context:expr; $($item:expr),*) => ({
+                use $crate::Expand;
+                $value.expand($output, &[$($item.into()),*], $context)
+            })
+        }
+
+        macro_rules! from 
+        {
+            (number $ty:ty) => 
+            {
+                impl From<$ty> for Parameter 
+                {
+                    fn from(value: $ty) -> Self 
+                    {
+                        Parameter::Number(value as i32)
+                    }
+                }
+            };
+
+            (string ref $ty:ty) => 
+            {
+                impl<'a> From<&'a $ty> for Parameter 
+                {
+                    fn from(value: &'a $ty) -> Self 
+                    {
+                        Parameter::String(value.into())
+                    }
+                }
+            };
+
+            (string $ty:ty) => 
+            {
+                impl From<$ty> for Parameter 
+                {
+                    fn from(value: $ty) -> Self 
+                    {
+                        Parameter::String(value.into())
+                    }
+                }
+            };
+        }
+        /// Trait for items that can be expanded.
+        pub trait Expand 
+        {
+            fn expand<W: Write>(
+                &self,
+                output: W,
+                parameters: &[Parameter],
+                context: &mut Context,
+            ) -> error::Result<()>;
+        }
+        /// An expansion parameter.
+        #[derive(Eq, PartialEq, Clone, Debug)]
+        pub enum Parameter 
+        {
+            /// A number.
+            Number(i32),
+            /// An ASCII string.
+            String(Vec<u8>),
+        }
+
+        impl Default for Parameter 
+        {
+            fn default() -> Self 
+            {
+                Parameter::Number(0)
+            }
+        }
+
+        from!(number bool);
+        from!(number u8);
+        from!(number i8);
+        from!(number u16);
+        from!(number i16);
+        from!(number u32);
+        from!(number i32);
+
+        from!(string String);
+        from!(string ref str);
+        from!(string Vec<u8>);
+        from!(string ref [u8]);
+
+        /// The expansion context.
+        #[derive(Eq, PartialEq, Default, Debug)]
+        pub struct Context 
+        {
+            pub fixed: [Parameter; 26],
+            pub dynamic: [Parameter; 26],
+        }
+
+        impl Expand for [u8] 
+        {
+            fn expand<W: Write>(
+                &self,
+                output: W,
+                parameters: &[Parameter],
+                context: &mut Context,
+            ) -> error::Result<()> 
+            {
+                let mut output = BufWriter::new(output);
+                let mut input = self;
+                let mut params: [Parameter; 9] = Default::default();
+                let mut stack = Vec::new();
+                let mut conditional = false;
+                let mut incremented = false;
+
+                for (dest, source) in params.iter_mut().zip(parameters.iter()) 
+                {
+                    *dest = source.clone();
+                }
+
+                macro_rules! next 
+                {
+                    () => {
+                        match parse(input) 
+                        {
+                            Ok((rest, item)) => 
+                            {
+                                input = rest;
+                                item
+                            }
+
+                            Err(_) => return Err(error::Expand::Invalid.into()),
+                        }
+                    };
+                }
+
+                'main: while !input.is_empty() 
+                {
+                    match next!() {
+                        Item::Conditional(Conditional::If) => 
+                        {
+                            conditional = true;
+                        }
+
+                        Item::Conditional(Conditional::End) if conditional => 
+                        {
+                            conditional = false;
+                        }
+
+                        Item::Conditional(Conditional::Then) if conditional => match stack.pop() 
+                        {
+                            Some(Parameter::Number(0)) => 
+                            {
+                                let mut level = 0;
+
+                                while !input.is_empty() 
+                                {
+                                    match next!() {
+                                        Item::Conditional(Conditional::End)
+                                        | Item::Conditional(Conditional::Else)
+                                            if level == 0 =>
+                                        {
+                                            continue 'main
+                                        }
+
+                                        Item::Conditional(Conditional::If) => level += 1,
+
+                                        Item::Conditional(Conditional::End) => level -= 1,
+
+                                        _ => (),
+                                    }
+                                }
+
+                                return Err(error::Expand::Invalid.into());
+                            }
+
+                            Some(_) => (),
+
+                            None => return Err(error::Expand::StackUnderflow.into()),
+                        },
+
+                        Item::Conditional(Conditional::Else) if conditional => 
+                        {
+                            let mut level = 0;
+
+                            while !input.is_empty() 
+                            {
+                                match next!() {
+                                    Item::Conditional(Conditional::End) if level == 0 => continue 'main,
+
+                                    Item::Conditional(Conditional::If) => level += 1,
+
+                                    Item::Conditional(Conditional::End) => level -= 1,
+
+                                    _ => (),
+                                }
+                            }
+
+                            return Err(error::Expand::Invalid.into());
+                        }
+
+                        Item::Conditional(..) => return Err(error::Expand::Invalid.into()),
+
+                        Item::String(value) => output.write_all(value)?,
+
+                        Item::Constant(Constant::Character(ch)) => 
+                        {
+                            stack.push(Parameter::Number(ch as i32));
+                        }
+
+                        Item::Constant(Constant::Integer(value)) => 
+                        {
+                            stack.push(Parameter::Number(value));
+                        }
+
+                        Item::Variable(Variable::Length) => match stack.pop() 
+                        {
+                            Some(Parameter::String(ref value)) => 
+                            {
+                                stack.push(Parameter::Number(value.len() as i32));
+                            }
+
+                            Some(_) => 
+                            {
+                                return Err(error::Expand::TypeMismatch.into());
+                            }
+
+                            None => 
+                            {
+                                return Err(error::Expand::StackUnderflow.into());
+                            }
+                        },
+
+                        Item::Variable(Variable::Push(index)) => 
+                        {
+                            stack.push(params[index as usize].clone());
+                        }
+
+                        Item::Variable(Variable::Set(dynamic, index)) => 
+                        {
+                            if let Some(value) = stack.pop() 
+                            {
+                                if dynamic {
+                                    context.dynamic[index as usize] = value.clone();
+                                } else {
+                                    context.fixed[index as usize] = value.clone();
+                                }
+                            } else {
+                                return Err(error::Expand::StackUnderflow.into());
+                            }
+                        }
+
+                        Item::Variable(Variable::Get(dynamic, index)) => 
+                        {
+                            if dynamic {
+                                stack.push(context.dynamic[index as usize].clone());
+                            } else {
+                                stack.push(context.fixed[index as usize].clone());
+                            }
+                        }
+
+                        Item::Operation(Operation::Increment) if !incremented => 
+                        {
+                            incremented = true;
+
+                            if let (&Parameter::Number(x), &Parameter::Number(y)) = (&params[0], &params[1])
+                            {
+                                params[0] = Parameter::Number(x + 1);
+                                params[1] = Parameter::Number(y + 1);
+                            } else 
+                            {
+                                return Err(error::Expand::TypeMismatch.into());
+                            }
+                        }
+
+                        Item::Operation(Operation::Increment) => (),
+
+                        Item::Operation(Operation::Binary(operation)) => match (stack.pop(), stack.pop()) 
+                        {
+                            (Some(Parameter::Number(y)), Some(Parameter::Number(x))) => 
+                            {
+                                stack.push(Parameter::Number(match operation 
+                                {
+                                    Binary::Add => x + y,
+                                    Binary::Subtract => x - y,
+                                    Binary::Multiply => x * y,
+                                    Binary::Divide => 
+                                    {
+                                        if y != 0 
+                                        {
+                                            x / y
+                                        } else 
+                                        {
+                                            0
+                                        }
+                                    }
+                                    Binary::Remainder => 
+                                    {
+                                        if y != 0 
+                                        {
+                                            x % y
+                                        } else 
+                                        {
+                                            0
+                                        }
+                                    }
+
+                                    Binary::AND => x & y,
+                                    Binary::OR => x | y,
+                                    Binary::XOR => x ^ y,
+
+                                    Binary::And => (x != 0 && y != 0) as i32,
+                                    Binary::Or => (x != 0 || y != 0) as i32,
+
+                                    Binary::Equal => (x == y) as i32,
+                                    Binary::Greater => (x > y) as i32,
+                                    Binary::Lesser => (x < y) as i32,
+                                }))
+                            }
+
+                            (Some(_), Some(_)) => return Err(error::Expand::TypeMismatch.into()),
+
+                            _ => return Err(error::Expand::StackUnderflow.into()),
+                        },
+
+                        Item::Operation(Operation::Unary(operation)) => match stack.pop() 
+                        {
+                            Some(Parameter::Number(x)) => stack.push(Parameter::Number(match operation 
+                            {
+                                Unary::Not => (x != 0) as i32,
+                                Unary::NOT => !x,
+                            })),
+
+                            Some(_) => return Err(error::Expand::TypeMismatch.into()),
+
+                            _ => return Err(error::Expand::StackUnderflow.into()),
+                        },
+
+                        Item::Print(p) => 
+                        {
+                            /// Calculate the length of a formatted number.
+                            fn length(value: i32, p: &Print) -> usize 
+                            {
+                                let digits = match p.format {
+                                    Format::Dec => (value as f32).abs().log(10.0).floor() as usize + 1,
+
+                                    Format::Oct => (value as f32).abs().log(8.0).floor() as usize + 1,
+
+                                    Format::Hex | Format::HEX => 
+                                    {
+                                        (value as f32).abs().log(16.0).floor() as usize + 1
+                                    }
+
+                                    _ => unreachable!(),
+                                };
+
+                                let mut length = digits;
+
+                                // Add the minimum number of digits.
+                                if p.flags.precision > digits 
+                                {
+                                    length += p.flags.precision - digits;
+                                }
+
+                                // Add the sign if present.
+                                if p.format == Format::Dec && (value < 0 || p.flags.sign) 
+                                {
+                                    length += 1;
+                                }
+
+                                // Add the alternate representation.
+                                if p.flags.alternate 
+                                {
+                                    match p.format 
+                                    {
+                                        Format::Hex | Format::HEX => length += 2,
+
+                                        Format::Oct => length += 1,
+
+                                        _ => (),
+                                    }
+                                }
+
+                                length
+                            }
+
+                            macro_rules! w 
+                            {
+                                ($value:expr) => (
+                                    output.write_all($value)?
+                                );
+
+                                ($($item:tt)*) => (
+                                    write!(output, $($item)*)?
+                                );
+                            }
+
+                            macro_rules! f 
+                            {
+                                (by $length:expr) => (
+                                    for _ in 0 .. p.flags.width - $length 
+                                    {
+                                        output.write_all(if p.flags.space { b" " } else { b"0" })?;
+                                    }
+                                );
+
+                                (before by $length:expr) => (
+                                    if !p.flags.left && p.flags.width > $length 
+                                    {
+                                        f!(by $length);
+                                    }
+                                );
+
+                                (after by $length:expr) => (
+                                    if p.flags.left && p.flags.width > $length 
+                                    {
+                                        f!(by $length);
+                                    }
+                                );
+
+                                (before $value:expr) => (
+                                    f!(before by length($value, &p));
+                                );
+
+                                (after $value:expr) => (
+                                    f!(after by length($value, &p));
+                                );
+                            }
+
+                            match (p.format, stack.pop()) 
+                            {
+                                (Format::Str, Some(Parameter::String(ref value))) => 
+                                {
+                                    let mut value = &value[..];
+
+                                    if p.flags.precision > 0 && p.flags.precision < value.len() 
+                                    {
+                                        value = &value[..p.flags.precision];
+                                    }
+
+                                    f!(before by value.len());
+                                    w!(value);
+                                    f!(after by value.len());
+                                }
+
+                                (Format::Chr, Some(Parameter::Number(value))) => 
+                                {
+                                    w!("{}", value as u8 as char)
+                                }
+
+                                (Format::Uni, Some(Parameter::Number(value))) => w!(
+                                    "{}",
+                                    char::from_u32(value as u32).ok_or(error::Expand::TypeMismatch)?
+                                ),
+
+                                (Format::Dec, Some(Parameter::Number(value))) => 
+                                {
+                                    f!(before value);
+
+                                    if p.flags.sign && value >= 0 
+                                    {
+                                        w!(b"+");
+                                    }
+
+                                    w!("{:.1$}", value, p.flags.precision);
+
+                                    f!(after value);
+                                }
+
+                                (Format::Oct, Some(Parameter::Number(value))) => 
+                                {
+                                    f!(before value);
+
+                                    if p.flags.alternate 
+                                    {
+                                        w!(b"0");
+                                    }
+
+                                    w!("{:.1$o}", value, p.flags.precision);
+
+                                    f!(after value);
+                                }
+
+                                (Format::Hex, Some(Parameter::Number(value))) => 
+                                {
+                                    f!(before value);
+
+                                    if p.flags.alternate 
+                                    {
+                                        w!(b"0x");
+                                    }
+
+                                    w!("{:.1$x}", value, p.flags.precision);
+
+                                    f!(after value);
+                                }
+
+                                (Format::HEX, Some(Parameter::Number(value))) => 
+                                {
+                                    f!(before value);
+
+                                    if p.flags.alternate 
+                                    {
+                                        w!(b"0X");
+                                    }
+
+                                    w!("{:.1$X}", value, p.flags.precision);
+
+                                    f!(after value);
+                                }
+
+                                (_, Some(_)) => return Err(error::Expand::TypeMismatch.into()),
+
+                                (_, None) => return Err(error::Expand::StackUnderflow.into()),
+                            }
+                        }
+                    }
+                }
+
+                Ok(())
+            }
+        }
     }
     pub use self::expand::Expand;
-
     /// Standard terminal capabilities.
     pub mod capability
     {
+        //! Standard capabilities.
         use ::
         {
+            borrow::{ Cow },
+            common::
+            {
+                error::{ self },
+                expand::{ Context, Expand, Parameter },
+            },
+            io::{ Write },
             *,
         };
+
+        macro_rules! from 
+        {
+            (number $ty:ty) => 
+            {
+                impl From<$ty> for Value 
+                {
+                    fn from(value: $ty) -> Self 
+                    {
+                        Value::Number(value as i32)
+                    }
+                }
+            };
+
+            (string ref $ty:ty) => 
+            {
+                impl<'a> From<&'a $ty> for Value 
+                {
+                    fn from(value: &'a $ty) -> Self 
+                    {
+                        Value::String(value.into())
+                    }
+                }
+            };
+
+            (string $ty:ty) => 
+            {
+                impl From<$ty> for Value 
+                {
+                    fn from(value: $ty) -> Self 
+                    {
+                        Value::String(value.into())
+                    }
+                }
+            };
+        }
+
+        macro_rules! define 
+        {
+            (boolean $ident:ident => $capability:expr) => 
+            (
+                #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+                pub struct $ident(pub bool);
+
+                impl<'a> Capability<'a> for $ident {
+                    #[inline] fn name() -> &'static str {
+                        $capability
+                    }
+
+                    #[inline] fn from(value: Option<&Value>) -> Option<Self> 
+                    {
+                        if let Some(&Value::True) = value 
+                        {
+                            Some($ident(true))
+                        }
+                        else 
+                        {
+                            Some($ident(false))
+                        }
+                    }
+
+                    #[inline] fn into(self) -> Option<Value> 
+                    {
+                        if self.0 
+                        {
+                            Some(Value::True)
+                        }
+                        else 
+                        {
+                            None
+                        }
+                    }
+                }
+
+                impl From<$ident> for bool 
+                {
+                    fn from(cap: $ident) -> Self 
+                    {
+                        cap.0
+                    }
+                }
+            );
+
+            (number $ident:ident => $capability:expr) => 
+            (
+                #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+                pub struct $ident(pub i32);
+
+                impl<'a> Capability<'a> for $ident 
+                {
+                    #[inline] fn name() -> &'static str 
+                    {
+                        $capability
+                    }
+
+                    #[inline] fn from(value: Option<&Value>) -> Option<Self> 
+                    {
+                        if let Some(&Value::Number(value)) = value 
+                        {
+                            Some($ident(value))
+                        }
+                        else 
+                        {
+                            None
+                        }
+                    }
+
+                    #[inline] fn into(self) -> Option<Value> 
+                    {
+                        Some(Value::Number(self.0))
+                    }
+                }
+
+                impl From<$ident> for i32 
+                {
+                    fn from(cap: $ident) -> Self 
+                    {
+                        cap.0
+                    }
+                }
+            );
+
+            (string define $ident:ident => $capability:expr) => 
+            (
+                #[derive(Eq, PartialEq, Clone, Debug)]
+                pub struct $ident<'a>(Cow<'a, [u8]>);
+
+                impl<'a> Capability<'a> for $ident<'a> 
+                {
+                    #[inline] fn name() -> &'static str 
+                    {
+                        $capability
+                    }
+
+                    #[inline] fn from(value: Option<&'a Value>) -> Option<$ident<'a>> 
+                    {
+                        if let Some(&Value::String(ref value)) = value 
+                        {
+                            Some($ident(Cow::Borrowed(value)))
+                        }
+                        else { None }
+                    }
+
+                    #[inline] fn into(self) -> Option<Value> 
+                    {
+                        Some(Value::String(match self.0 
+                        {
+                            Cow::Borrowed(value) => value.into(),
+                            Cow::Owned(value) => value,
+                        }))
+                    }
+                }
+
+                impl<'a, T: AsRef<&'a [u8]>> From<T> for $ident<'a> 
+                {
+                    #[inline] fn from(value: T) -> Self 
+                    {
+                        $ident(Cow::Borrowed(value.as_ref()))
+                    }
+                }
+
+                impl<'a> AsRef<[u8]> for $ident<'a> 
+                {
+                    #[inline] fn as_ref(&self) -> &[u8] 
+                    {
+                        &self.0
+                    }
+                }
+
+                impl<'a> $ident<'a> 
+                {
+                    /// Begin expanding the capability.
+                    #[inline] pub fn expand(&self) -> Expansion<$ident> 
+                    {
+                        Expansion
+                        {
+                            string:  self,
+                            params:  Default::default(),
+                            context: None,
+                        }
+                    }
+                }
+            );
+
+            (string $ident:ident => $capability:expr) => 
+            (
+                define!(string define $ident => $capability);
+            );
+
+            (string $ident:ident => $capability:expr; $($rest:tt)+) => 
+            (
+                define!(string define $ident => $capability);
+                define!(string parameters $ident; $($rest)+);
+                define!(string builder $ident; 0, $($rest)+, );
+            );
+
+            (string parameters $ident:ident; $($name:ident : $ty:ty),+) => 
+            (
+                impl<'a> Expansion<'a, $ident<'a>> 
+                {
+                    /// Pass all expansion parameters at once.
+                    #[inline] pub fn parameters(mut self, $($name: $ty),*) -> Self 
+                    {
+                        let mut index = 0;
+
+                        $({
+                            self.params[index]  = $name.into();
+                            index              += 1;
+                        })*;
+
+                        self
+                    }
+                }
+            );
+
+            (string builder $ident:ident; $index:expr, ) => ();
+
+            (string builder $ident:ident; $index:expr, $name:ident : u8, $($rest:tt)*) => 
+            (
+                define!(string builder direct $ident; $index, $name : u8);
+                define!(string builder $ident; $index + 1, $($rest)*);
+            );
+
+            (string builder $ident:ident; $index:expr, $name:ident : i8, $($rest:tt)*) => 
+            (
+                define!(string builder direct $ident; $index, $name : i8);
+                define!(string builder $ident; $index + 1, $($rest)*);
+            );
+
+            (string builder $ident:ident; $index:expr, $name:ident : u16, $($rest:tt)*) => 
+            (
+                define!(string builder direct $ident; $index, $name : u16);
+                define!(string builder $ident; $index + 1, $($rest)*);
+            );
+
+            (string builder $ident:ident; $index:expr, $name:ident : i16 $($rest:tt)*) => 
+            (
+                define!(string builder direct $ident; $index, $name : i16);
+                define!(string builder $ident; $index + 1, $($rest)*);
+            );
+
+            (string builder $ident:ident; $index:expr, $name:ident : u32, $($rest:tt)*) => 
+            (
+                define!(string builder direct $ident; $index, $name : u32);
+                define!(string builder $ident; $index + 1, $($rest)*);
+            );
+
+            (string builder $ident:ident; $index:expr, $name:ident : i32, $($rest:tt)*) => 
+            (
+                define!(string builder direct $ident; $index, $name : i32);
+                define!(string builder $ident; $index + 1, $($rest)*);
+            );
+
+            (string builder $ident:ident; $index:expr, $name:ident : $ty:ty, $($rest:tt)*) => 
+            (
+                define!(string builder into $ident; $index, $name : $ty);
+                define!(string builder $ident; $index + 1, $($rest)*);
+            );
+
+            (string builder direct $ident:ident; $index:expr, $name:ident : $ty:ty) => 
+            (
+                impl<'a> Expansion<'a, $ident<'a>> 
+                {
+                    /// Set the given parameter.
+                    #[inline] pub fn $name(mut self, value: $ty) -> Self 
+                    {
+                        self.params[$index] = value.into();
+                        self
+                    }
+                }
+            );
+
+            (string builder into $ident:ident; $index:expr, $name:ident : $ty:ty) => 
+            (
+                impl<'a> Expansion<'a, $ident<'a>> 
+                {
+                    /// Set the given parameter.
+                    #[inline] pub fn $name<T: Into<$ty>>(mut self, value: T) -> Self 
+                    {
+                        self.params[$index] = value.into().into();
+                        self
+                    }
+                }
+            );
+        }
+        /// A trait for any object that will represent a terminal capability.
+        pub trait Capability<'a>: Sized 
+        {
+            /// Returns the name of the capability in its long form.
+            fn name() -> &'static str;
+            /// Parse the capability from its raw value.
+            fn from(value: Option<&'a Value>) -> Option<Self>;
+            /// Convert the capability into its raw value.
+            fn into(self) -> Option<Value>;
+        }
+        /// Possible value types for capabilities.
+        #[derive(Eq, PartialEq, Clone, Debug)]
+        pub enum Value 
+        {
+            /// A boolean.
+            True,
+            /// A number.
+            Number(i32),
+            /// An ASCII string requiring expansion.
+            String(Vec<u8>),
+        }
+        /// Expansion helper struct.
+        #[derive(Debug)]
+        pub struct Expansion<'a, T: 'a + AsRef<[u8]>> 
+        {
+            string: &'a T,
+            params: [Parameter; 9],
+            context: Option<&'a mut Context>,
+        }
+
+        impl<'a, T: AsRef<[u8]>> Expansion<'a, T> 
+        {
+            /// Expand using the given context.
+            pub fn with<'c: 'a>(mut self, context: &'c mut Context) -> Self 
+            {
+                self.context = Some(context);
+                self
+            }
+            /// Expand to the given output.
+            pub fn to<W: Write>(self, output: W) -> error::Result<()> 
+            {
+                self.string.as_ref().expand(
+                    output,
+                    &self.params,
+                    self.context.unwrap_or(&mut Default::default()),
+                )
+            }
+            /// Expand into a vector.
+            pub fn to_vec(self) -> error::Result<Vec<u8>> 
+            {
+                let mut result = Vec::with_capacity(self.string.as_ref().len());
+                self.to(&mut result)?;
+                Ok(result)
+            }
+        }
+
+        impl From<()> for Value 
+        {
+            fn from(_: ()) -> Self {
+                Value::True
+            }
+        }
+
+        from!(number u8);
+        from!(number i8);
+        from!(number u16);
+        from!(number i16);
+        from!(number u32);
+        from!(number i32);
+
+        from!(string String);
+        from!(string ref str);
+        from!(string Vec<u8>);
+        from!(string ref [u8]);
+
+        define!(boolean AutoLeftMargin => "auto_left_margin");
+        define!(boolean AutoRightMargin => "auto_right_margin");
+        define!(boolean NoEscCtlc => "no_esc_ctlc");
+        define!(boolean CeolStandoutGlitch => "ceol_standout_glitch");
+        define!(boolean EatNewlineGlitch => "eat_newline_glitch");
+        define!(boolean EraseOverstrike => "erase_overstrike");
+        define!(boolean GenericType => "generic_type");
+        define!(boolean HardCopy => "hard_copy");
+        define!(boolean HasMetaKey => "has_meta_key");
+        define!(boolean HasStatusLine => "has_status_line");
+        define!(boolean InsertNullGlitch => "insert_null_glitch");
+        define!(boolean MemoryAbove => "memory_above");
+        define!(boolean MemoryBelow => "memory_below");
+        define!(boolean MoveInsertMode => "move_insert_mode");
+        define!(boolean MoveStandoutMode => "move_standout_mode");
+        define!(boolean OverStrike => "over_strike");
+        define!(boolean StatusLineEscOk => "status_line_esc_ok");
+        define!(boolean DestTabsMagicSmso => "dest_tabs_magic_smso");
+        define!(boolean TildeGlitch => "tilde_glitch");
+        define!(boolean TransparentUnderline => "transparent_underline");
+        define!(boolean XonXoff => "xon_xoff");
+        define!(boolean NeedsXonXoff => "needs_xon_xoff");
+        define!(boolean PrtrSilent => "prtr_silent");
+        define!(boolean HardCursor => "hard_cursor");
+        define!(boolean NonRevRmcup => "non_rev_rmcup");
+        define!(boolean NoPadChar => "no_pad_char");
+        define!(boolean NonDestScrollRegion => "non_dest_scroll_region");
+        define!(boolean CanChange => "can_change");
+        define!(boolean BackColorErase => "back_color_erase");
+        define!(boolean HueLightnessSaturation => "hue_lightness_saturation");
+        define!(boolean ColAddrGlitch => "col_addr_glitch");
+        define!(boolean CrCancelsMicroMode => "cr_cancels_micro_mode");
+        define!(boolean HasPrintWheel => "has_print_wheel");
+        define!(boolean RowAddrGlitch => "row_addr_glitch");
+        define!(boolean SemiAutoRightMargin => "semi_auto_right_margin");
+        define!(boolean CpiChangesRes => "cpi_changes_res");
+        define!(boolean LpiChangesRes => "lpi_changes_res");
+        define!(boolean BackspacesWithBs => "backspaces_with_bs");
+        define!(boolean CrtNoScrolling => "crt_no_scrolling");
+        define!(boolean NoCorrectlyWorkingCr => "no_correctly_working_cr");
+        define!(boolean GnuHasMetaKey => "gnu_has_meta_key");
+        define!(boolean LinefeedIsNewline => "linefeed_is_newline");
+        define!(boolean HasHardwareTabs => "has_hardware_tabs");
+        define!(boolean ReturnDoesClrEol => "return_does_clr_eol");
+
+        define!(number Columns => "columns");
+        define!(number InitTabs => "init_tabs");
+        define!(number Lines => "lines");
+        define!(number LinesOfMemory => "lines_of_memory");
+        define!(number MagicCookieGlitch => "magic_cookie_glitch");
+        define!(number PaddingBaudRate => "padding_baud_rate");
+        define!(number VirtualTerminal => "virtual_terminal");
+        define!(number WidthStatusLine => "width_status_line");
+        define!(number NumLabels => "num_labels");
+        define!(number LabelHeight => "label_height");
+        define!(number LabelWidth => "label_width");
+        define!(number MaxAttributes => "max_attributes");
+        define!(number MaximumWindows => "maximum_windows");
+        define!(number MaxColors => "max_colors");
+        define!(number MaxPairs => "max_pairs");
+        define!(number NoColorVideo => "no_color_video");
+        define!(number BufferCapacity => "buffer_capacity");
+        define!(number DotVertSpacing => "dot_vert_spacing");
+        define!(number DotHorzSpacing => "dot_horz_spacing");
+        define!(number MaxMicroAddress => "max_micro_address");
+        define!(number MaxMicroJump => "max_micro_jump");
+        define!(number MicroColSize => "micro_col_size");
+        define!(number MicroLineSize => "micro_line_size");
+        define!(number NumberOfPins => "number_of_pins");
+        define!(number OutputResChar => "output_res_char");
+        define!(number OutputResLine => "output_res_line");
+        define!(number OutputResHorzInch => "output_res_horz_inch");
+        define!(number OutputResVertInch => "output_res_vert_inch");
+        define!(number PrintRate => "print_rate");
+        define!(number WideCharSize => "wide_char_size");
+        define!(number Buttons => "buttons");
+        define!(number BitImageEntwining => "bit_image_entwining");
+        define!(number BitImageType => "bit_image_type");
+        define!(number MagicCookieGlitchUl => "magic_cookie_glitch_ul");
+        define!(number CarriageReturnDelay => "carriage_return_delay");
+        define!(number NewLineDelay => "new_line_delay");
+        define!(number BackspaceDelay => "backspace_delay");
+        define!(number HorizontalTabDelay => "horizontal_tab_delay");
+        define!(number NumberOfFunctionKeys => "number_of_function_keys");
+
+        define!(string BackTab => "back_tab");
+        define!(string Bell => "bell");
+        define!(string CarriageReturn => "carriage_return");
+        define!(string ClearAllTabs => "clear_all_tabs");
+        define!(string ClearScreen => "clear_screen");
+        define!(string ClrEol => "clr_eol");
+        define!(string ClrEos => "clr_eos");
+        define!(string CommandCharacter => "command_character");
+        define!(string CursorDown => "cursor_down");
+        define!(string CursorHome => "cursor_home");
+        define!(string CursorInvisible => "cursor_invisible");
+        define!(string CursorLeft => "cursor_left");
+        define!(string CursorMemAddress => "cursor_mem_address");
+        define!(string CursorNormal => "cursor_normal");
+        define!(string CursorRight => "cursor_right");
+        define!(string CursorToLl => "cursor_to_ll");
+        define!(string CursorUp => "cursor_up");
+        define!(string CursorVisible => "cursor_visible");
+        define!(string DeleteCharacter => "delete_character");
+        define!(string DeleteLine => "delete_line");
+        define!(string DisStatusLine => "dis_status_line");
+        define!(string DownHalfLine => "down_half_line");
+        define!(string EnterAltCharsetMode => "enter_alt_charset_mode");
+        define!(string EnterBlinkMode => "enter_blink_mode");
+        define!(string EnterBoldMode => "enter_bold_mode");
+        define!(string EnterCaMode => "enter_ca_mode");
+        define!(string EnterDeleteMode => "enter_delete_mode");
+        define!(string EnterDimMode => "enter_dim_mode");
+        define!(string EnterInsertMode => "enter_insert_mode");
+        define!(string EnterSecureMode => "enter_secure_mode");
+        define!(string EnterProtectedMode => "enter_protected_mode");
+        define!(string EnterReverseMode => "enter_reverse_mode");
+        define!(string EnterStandoutMode => "enter_standout_mode");
+        define!(string EnterUnderlineMode => "enter_underline_mode");
+        define!(string ExitAltCharsetMode => "exit_alt_charset_mode");
+        define!(string ExitAttributeMode => "exit_attribute_mode");
+        define!(string ExitCaMode => "exit_ca_mode");
+        define!(string ExitDeleteMode => "exit_delete_mode");
+        define!(string ExitInsertMode => "exit_insert_mode");
+        define!(string ExitStandoutMode => "exit_standout_mode");
+        define!(string ExitUnderlineMode => "exit_underline_mode");
+        define!(string FlashScreen => "flash_screen");
+        define!(string FormFeed => "form_feed");
+        define!(string FromStatusLine => "from_status_line");
+        define!(string Init1String => "init_1string");
+        define!(string Init2String => "init_2string");
+        define!(string Init3String => "init_3string");
+        define!(string InitFile => "init_file");
+        define!(string InsertCharacter => "insert_character");
+        define!(string InsertLine => "insert_line");
+        define!(string InsertPadding => "insert_padding");
+        define!(string KeyBackspace => "key_backspace");
+        define!(string KeyCATab => "key_catab");
+        define!(string KeyClear => "key_clear");
+        define!(string KeyCTab => "key_ctab");
+        define!(string KeyDc => "key_dc");
+        define!(string KeyDl => "key_dl");
+        define!(string KeyDown => "key_down");
+        define!(string KeyEic => "key_eic");
+        define!(string KeyEol => "key_eol");
+        define!(string KeyEos => "key_eos");
+        define!(string KeyF0 => "key_f0");
+        define!(string KeyF1 => "key_f1");
+        define!(string KeyF10 => "key_f10");
+        define!(string KeyF2 => "key_f2");
+        define!(string KeyF3 => "key_f3");
+        define!(string KeyF4 => "key_f4");
+        define!(string KeyF5 => "key_f5");
+        define!(string KeyF6 => "key_f6");
+        define!(string KeyF7 => "key_f7");
+        define!(string KeyF8 => "key_f8");
+        define!(string KeyF9 => "key_f9");
+        define!(string KeyHome => "key_home");
+        define!(string KeyIc => "key_ic");
+        define!(string KeyIl => "key_il");
+        define!(string KeyLeft => "key_left");
+        define!(string KeyLl => "key_ll");
+        define!(string KeyNPage => "key_npage");
+        define!(string KeyPPage => "key_ppage");
+        define!(string KeyRight => "key_right");
+        define!(string KeySf => "key_sf");
+        define!(string KeySr => "key_sr");
+        define!(string KeySTab => "key_stab");
+        define!(string KeyUp => "key_up");
+        define!(string KeypadLocal => "keypad_local");
+        define!(string KeypadXmit => "keypad_xmit");
+        define!(string LabF0 => "lab_f0");
+        define!(string LabF1 => "lab_f1");
+        define!(string LabF10 => "lab_f10");
+        define!(string LabF2 => "lab_f2");
+        define!(string LabF3 => "lab_f3");
+        define!(string LabF4 => "lab_f4");
+        define!(string LabF5 => "lab_f5");
+        define!(string LabF6 => "lab_f6");
+        define!(string LabF7 => "lab_f7");
+        define!(string LabF8 => "lab_f8");
+        define!(string LabF9 => "lab_f9");
+        define!(string MetaOff => "meta_off");
+        define!(string MetaOn => "meta_on");
+        define!(string Newline => "newline");
+        define!(string PadChar => "pad_char");
+        define!(string PKeyKey => "pkey_key");
+        define!(string PKeyLocal => "pkey_local");
+        define!(string PKeyXmit => "pkey_xmit");
+        define!(string PrintScreen => "print_screen");
+        define!(string PrtrOff => "prtr_off");
+        define!(string PrtrOn => "prtr_on");
+        define!(string RepeatChar => "repeat_char");
+        define!(string Reset1String => "reset_1string");
+        define!(string Reset2String => "reset_2string");
+        define!(string Reset3String => "reset_3string");
+        define!(string ResetFile => "reset_file");
+        define!(string RestoreCursor => "restore_cursor");
+        define!(string SaveCursor => "save_cursor");
+        define!(string ScrollForward => "scroll_forward");
+        define!(string ScrollReverse => "scroll_reverse");
+        define!(string SetTab => "set_tab");
+        define!(string SetWindow => "set_window");
+        define!(string Tab => "tab");
+        define!(string ToStatusLine => "to_status_line");
+        define!(string UnderlineChar => "underline_char");
+        define!(string UpHalfLine => "up_half_line");
+        define!(string InitProg => "init_prog");
+        define!(string KeyA1 => "key_a1");
+        define!(string KeyA3 => "key_a3");
+        define!(string KeyB2 => "key_b2");
+        define!(string KeyC1 => "key_c1");
+        define!(string KeyC3 => "key_c3");
+        define!(string PrtrNon => "prtr_non");
+        define!(string CharPadding => "char_padding");
+        define!(string AcsChars => "acs_chars");
+        define!(string PlabNorm => "plab_norm");
+        define!(string KeyBTab => "key_btab");
+        define!(string EnterXonMode => "enter_xon_mode");
+        define!(string ExitXonMode => "exit_xon_mode");
+        define!(string EnterAmMode => "enter_am_mode");
+        define!(string ExitAmMode => "exit_am_mode");
+        define!(string XonCharacter => "xon_character");
+        define!(string XoffCharacter => "xoff_character");
+        define!(string EnaAcs => "ena_acs");
+        define!(string LabelOn => "label_on");
+        define!(string LabelOff => "label_off");
+        define!(string KeyBeg => "key_beg");
+        define!(string KeyCancel => "key_cancel");
+        define!(string KeyClose => "key_close");
+        define!(string KeyCommand => "key_command");
+        define!(string KeyCopy => "key_copy");
+        define!(string KeyCreate => "key_create");
+        define!(string KeyEnd => "key_end");
+        define!(string KeyEnter => "key_enter");
+        define!(string KeyExit => "key_exit");
+        define!(string KeyFind => "key_find");
+        define!(string KeyHelp => "key_help");
+        define!(string KeyMark => "key_mark");
+        define!(string KeyMessage => "key_message");
+        define!(string KeyMove => "key_move");
+        define!(string KeyNext => "key_next");
+        define!(string KeyOpen => "key_open");
+        define!(string KeyOptions => "key_options");
+        define!(string KeyPrevious => "key_previous");
+        define!(string KeyPrint => "key_print");
+        define!(string KeyRedo => "key_redo");
+        define!(string KeyReference => "key_reference");
+        define!(string KeyRefresh => "key_refresh");
+        define!(string KeyReplace => "key_replace");
+        define!(string KeyRestart => "key_restart");
+        define!(string KeyResume => "key_resume");
+        define!(string KeySave => "key_save");
+        define!(string KeySuspend => "key_suspend");
+        define!(string KeyUndo => "key_undo");
+        define!(string KeySBeg => "key_sbeg");
+        define!(string KeySCancel => "key_scancel");
+        define!(string KeySCommand => "key_scommand");
+        define!(string KeySCopy => "key_scopy");
+        define!(string KeySCreate => "key_screate");
+        define!(string KeySDc => "key_sdc");
+        define!(string KeySDl => "key_sdl");
+        define!(string KeySelect => "key_select");
+        define!(string KeySEnd => "key_send");
+        define!(string KeySEol => "key_seol");
+        define!(string KeySExit => "key_sexit");
+        define!(string KeySFind => "key_sfind");
+        define!(string KeySHelp => "key_shelp");
+        define!(string KeySHome => "key_shome");
+        define!(string KeySIc => "key_sic");
+        define!(string KeySLeft => "key_sleft");
+        define!(string KeySMessage => "key_smessage");
+        define!(string KeySMove => "key_smove");
+        define!(string KeySNext => "key_snext");
+        define!(string KeySOptions => "key_soptions");
+        define!(string KeySPrevious => "key_sprevious");
+        define!(string KeySPrint => "key_sprint");
+        define!(string KeySRedo => "key_sredo");
+        define!(string KeySReplace => "key_sreplace");
+        define!(string KeySRight => "key_sright");
+        define!(string KeySRsume => "key_srsume");
+        define!(string KeySSave => "key_ssave");
+        define!(string KeySSuspend => "key_ssuspend");
+        define!(string KeySUndo => "key_sundo");
+        define!(string ReqForInput => "req_for_input");
+        define!(string KeyF11 => "key_f11");
+        define!(string KeyF12 => "key_f12");
+        define!(string KeyF13 => "key_f13");
+        define!(string KeyF14 => "key_f14");
+        define!(string KeyF15 => "key_f15");
+        define!(string KeyF16 => "key_f16");
+        define!(string KeyF17 => "key_f17");
+        define!(string KeyF18 => "key_f18");
+        define!(string KeyF19 => "key_f19");
+        define!(string KeyF20 => "key_f20");
+        define!(string KeyF21 => "key_f21");
+        define!(string KeyF22 => "key_f22");
+        define!(string KeyF23 => "key_f23");
+        define!(string KeyF24 => "key_f24");
+        define!(string KeyF25 => "key_f25");
+        define!(string KeyF26 => "key_f26");
+        define!(string KeyF27 => "key_f27");
+        define!(string KeyF28 => "key_f28");
+        define!(string KeyF29 => "key_f29");
+        define!(string KeyF30 => "key_f30");
+        define!(string KeyF31 => "key_f31");
+        define!(string KeyF32 => "key_f32");
+        define!(string KeyF33 => "key_f33");
+        define!(string KeyF34 => "key_f34");
+        define!(string KeyF35 => "key_f35");
+        define!(string KeyF36 => "key_f36");
+        define!(string KeyF37 => "key_f37");
+        define!(string KeyF38 => "key_f38");
+        define!(string KeyF39 => "key_f39");
+        define!(string KeyF40 => "key_f40");
+        define!(string KeyF41 => "key_f41");
+        define!(string KeyF42 => "key_f42");
+        define!(string KeyF43 => "key_f43");
+        define!(string KeyF44 => "key_f44");
+        define!(string KeyF45 => "key_f45");
+        define!(string KeyF46 => "key_f46");
+        define!(string KeyF47 => "key_f47");
+        define!(string KeyF48 => "key_f48");
+        define!(string KeyF49 => "key_f49");
+        define!(string KeyF50 => "key_f50");
+        define!(string KeyF51 => "key_f51");
+        define!(string KeyF52 => "key_f52");
+        define!(string KeyF53 => "key_f53");
+        define!(string KeyF54 => "key_f54");
+        define!(string KeyF55 => "key_f55");
+        define!(string KeyF56 => "key_f56");
+        define!(string KeyF57 => "key_f57");
+        define!(string KeyF58 => "key_f58");
+        define!(string KeyF59 => "key_f59");
+        define!(string KeyF60 => "key_f60");
+        define!(string KeyF61 => "key_f61");
+        define!(string KeyF62 => "key_f62");
+        define!(string KeyF63 => "key_f63");
+        define!(string ClrBol => "clr_bol");
+        define!(string ClearMargins => "clear_margins");
+        define!(string SetLeftMargin => "set_left_margin");
+        define!(string SetRightMargin => "set_right_margin");
+        define!(string LabelFormat => "label_format");
+        define!(string SetClock => "set_clock");
+        define!(string DisplayClock => "display_clock");
+        define!(string RemoveClock => "remove_clock");
+        define!(string CreateWindow => "create_window");
+        define!(string GotoWindow => "goto_window");
+        define!(string Hangup => "hangup");
+        define!(string DialPhone => "dial_phone");
+        define!(string QuickDial => "quick_dial");
+        define!(string Tone => "tone");
+        define!(string Pulse => "pulse");
+        define!(string FlashHook => "flash_hook");
+        define!(string FixedPause => "fixed_pause");
+        define!(string WaitTone => "wait_tone");
+        define!(string User0 => "user0");
+        define!(string User1 => "user1");
+        define!(string User2 => "user2");
+        define!(string User3 => "user3");
+        define!(string User4 => "user4");
+        define!(string User5 => "user5");
+        define!(string User6 => "user6");
+        define!(string User7 => "user7");
+        define!(string User8 => "user8");
+        define!(string User9 => "user9");
+        define!(string OrigPair => "orig_pair");
+        define!(string OrigColors => "orig_colors");
+        define!(string InitializeColor => "initialize_color");
+        define!(string InitializePair => "initialize_pair");
+        define!(string SetColorPair => "set_color_pair");
+        define!(string ChangeCharPitch => "change_char_pitch");
+        define!(string ChangeLinePitch => "change_line_pitch");
+        define!(string ChangeResHorz => "change_res_horz");
+        define!(string ChangeResVert => "change_res_vert");
+        define!(string DefineChar => "define_char");
+        define!(string EnterDoublewideMode => "enter_doublewide_mode");
+        define!(string EnterDraftQuality => "enter_draft_quality");
+        define!(string EnterItalicsMode => "enter_italics_mode");
+        define!(string EnterLeftwardMode => "enter_leftward_mode");
+        define!(string EnterMicroMode => "enter_micro_mode");
+        define!(string EnterNearLetterQuality => "enter_near_letter_quality");
+        define!(string EnterNormalQuality => "enter_normal_quality");
+        define!(string EnterShadowMode => "enter_shadow_mode");
+        define!(string EnterSubscriptMode => "enter_subscript_mode");
+        define!(string EnterSuperscriptMode => "enter_superscript_mode");
+        define!(string EnterUpwardMode => "enter_upward_mode");
+        define!(string ExitDoublewideMode => "exit_doublewide_mode");
+        define!(string ExitItalicsMode => "exit_italics_mode");
+        define!(string ExitLeftwardMode => "exit_leftward_mode");
+        define!(string ExitMicroMode => "exit_micro_mode");
+        define!(string ExitShadowMode => "exit_shadow_mode");
+        define!(string ExitSubscriptMode => "exit_subscript_mode");
+        define!(string ExitSuperscriptMode => "exit_superscript_mode");
+        define!(string ExitUpwardMode => "exit_upward_mode");
+        define!(string MicroColumnAddress => "micro_column_address");
+        define!(string MicroDown => "micro_down");
+        define!(string MicroLeft => "micro_left");
+        define!(string MicroRight => "micro_right");
+        define!(string MicroRowAddress => "micro_row_address");
+        define!(string MicroUp => "micro_up");
+        define!(string OrderOfPins => "order_of_pins");
+        define!(string SelectCharSet => "select_char_set");
+        define!(string SetBottomMargin => "set_bottom_margin");
+        define!(string SetBottomMarginParm => "set_bottom_margin_parm");
+        define!(string SetLeftMarginParm => "set_left_margin_parm");
+        define!(string SetRightMarginParm => "set_right_margin_parm");
+        define!(string SetTopMargin => "set_top_margin");
+        define!(string SetTopMarginParm => "set_top_margin_parm");
+        define!(string StartBitImage => "start_bit_image");
+        define!(string StartCharSetDef => "start_char_set_def");
+        define!(string StopBitImage => "stop_bit_image");
+        define!(string StopCharSetDef => "stop_char_set_def");
+        define!(string SubscriptCharacters => "subscript_characters");
+        define!(string SuperscriptCharacters => "superscript_characters");
+        define!(string TheseCauseCr => "these_cause_cr");
+        define!(string ZeroMotion => "zero_motion");
+        define!(string CharSetNames => "char_set_names");
+        define!(string KeyMouse => "key_mouse");
+        define!(string MouseInfo => "mouse_info");
+        define!(string ReqMousePos => "req_mouse_pos");
+        define!(string GetMouse => "get_mouse");
+        define!(string PkeyPlab => "pkey_plab");
+        define!(string DeviceType => "device_type");
+        define!(string CodeSetInit => "code_set_init");
+        define!(string Set0DesSeq => "set0_des_seq");
+        define!(string Set1DesSeq => "set1_des_seq");
+        define!(string Set2DesSeq => "set2_des_seq");
+        define!(string Set3DesSeq => "set3_des_seq");
+        define!(string SetLrMargin => "set_lr_margin");
+        define!(string SetTbMargin => "set_tb_margin");
+        define!(string BitImageRepeat => "bit_image_repeat");
+        define!(string BitImageNewline => "bit_image_newline");
+        define!(string BitImageCarriageReturn => "bit_image_carriage_return");
+        define!(string ColorNames => "color_names");
+        define!(string DefineBitImageRegion => "define_bit_image_region");
+        define!(string EndBitImageRegion => "end_bit_image_region");
+        define!(string SetColorBand => "set_color_band");
+        define!(string SetPageLength => "set_page_length");
+        define!(string DisplayPcChar => "display_pc_char");
+        define!(string EnterPcCharsetMode => "enter_pc_charset_mode");
+        define!(string ExitPcCharsetMode => "exit_pc_charset_mode");
+        define!(string EnterScancodeMode => "enter_scancode_mode");
+        define!(string ExitScancodeMode => "exit_scancode_mode");
+        define!(string PcTermOptions => "pc_term_options");
+        define!(string ScancodeEscape => "scancode_escape");
+        define!(string AltScancodeEsc => "alt_scancode_esc");
+        define!(string EnterHorizontalHlMode => "enter_horizontal_hl_mode");
+        define!(string EnterLeftHlMode => "enter_left_hl_mode");
+        define!(string EnterLowHlMode => "enter_low_hl_mode");
+        define!(string EnterRightHlMode => "enter_right_hl_mode");
+        define!(string EnterTopHlMode => "enter_top_hl_mode");
+        define!(string EnterVerticalHlMode => "enter_vertical_hl_mode");
+        define!(string SetAAttributes => "set_a_attributes");
+        define!(string SetPglenInch => "set_pglen_inch");
+        define!(string TermcapInit2 => "termcap_init2");
+        define!(string TermcapReset => "termcap_reset");
+        define!(string LinefeedIfNotLf => "linefeed_if_not_lf");
+        define!(string BackspaceIfNotBs => "backspace_if_not_bs");
+        define!(string OtherNonFunctionKeys => "other_non_function_keys");
+        define!(string ArrowKeyMap => "arrow_key_map");
+        define!(string AcsULcorner => "acs_ulcorner");
+        define!(string AcsLLcorner => "acs_llcorner");
+        define!(string AcsURcorner => "acs_urcorner");
+        define!(string AcsLRcorner => "acs_lrcorner");
+        define!(string AcsLTee => "acs_ltee");
+        define!(string AcsRTee => "acs_rtee");
+        define!(string AcsBTee => "acs_btee");
+        define!(string AcsTTee => "acs_ttee");
+        define!(string AcsHLine => "acs_hline");
+        define!(string AcsVLine => "acs_vline");
+        define!(string AcsPlus => "acs_plus");
+        define!(string MemoryLock => "memory_lock");
+        define!(string MemoryUnlock => "memory_unlock");
+        define!(string BoxChars1 => "box_chars_1");
+
+        define!(string ChangeScrollRegion => "change_scroll_region";
+            top:    u32,
+            bottom: u32);
+
+        define!(string ColumnAddress => "column_address";
+            x: u32);
+
+        define!(string CursorAddress => "cursor_address";
+            y: u32,
+            x: u32);
+
+        define!(string EraseChars => "erase_chars";
+            count: u32);
+
+        define!(string ParmDch => "parm_dch";
+            count: u32);
+
+        define!(string ParmDeleteLine => "parm_delete_line";
+            count: u32);
+
+        define!(string ParmDownCursor => "parm_down_cursor";
+            count: u32);
+
+        define!(string ParmIch => "parm_ich";
+            count: u32);
+
+        define!(string ParmIndex => "parm_index";
+            count: u32);
+
+        define!(string ParmInsertLine => "parm_insert_line";
+            count: u32);
+
+        define!(string ParmLeftCursor => "parm_left_cursor";
+            count: u32);
+
+        define!(string ParmRightCursor => "parm_right_cursor";
+            count: u32);
+
+        define!(string ParmRindex => "parm_rindex";
+            count: u32);
+
+        define!(string ParmUpCursor => "parm_up_cursor";
+            count: u32);
+
+        define!(string ParmDownMicro => "parm_down_micro";
+            count: u32);
+
+        define!(string ParmLeftMicro => "parm_left_micro";
+            count: u32);
+
+        define!(string ParmRightMicro => "parm_right_micro";
+            count: u32);
+
+        define!(string ParmUpMicro => "parm_up_micro";
+            count: u32);
+
+        define!(string RowAddress => "row_address";
+            y: u32);
+
+        define!(string SetAttributes => "set_attributes";
+            standout:    bool,
+            underline:   bool,
+            reverse:     bool,
+            blink:       bool,
+            dim:         bool,
+            bold:        bool,
+            invisible:   bool,
+            protected:   bool,
+            alt_charset: bool);
+
+        define!(string SetAForeground => "set_a_foreground";
+            color: u8);
+
+        define!(string SetABackground => "set_a_background";
+            color: u8);
+
+        define!(string SetForeground => "set_foreground";
+            color: u8);
+
+        define!(string SetBackground => "set_background";
+            color: u8);
+
+
+        define!(boolean XTermTitle => "XT");
+        define!(boolean BrightAttribute => "AX");
+        define!(boolean XTermMouse => "XM");
+        
+        define!(boolean TrueColor => "Tc");
+
+        define!(string SetClipboard => "Ms";
+            selection: String,
+            content:   Vec<u8>);
+
+        define!(string SetCursorStyle => "Ss";
+            kind: u8);
+
+        define!(string ResetCursorStyle => "Se");
+        
+        define!(string SetTrueColorForeground => "8f";
+            r: u8,
+            g: u8,
+            b: u8);
+
+        define!(string SetTrueColorBackground => "8b";
+            r: u8,
+            g: u8,
+            b: u8);
+
+        define!(string ResetCursorColor => "Cr");
+
+        define!(string SetCursorColor => "Cs";
+            color: String);
 
     }
     pub use self::capability::{Capability, Value};
@@ -92,12 +1955,249 @@ pub mod common
     {
         use ::
         {
+            collections::{ HashMap },
+            common::
+            {
+                capability::{ Capability, Value },
+                error::{ self, Error },
+                names,
+                parser::compiled,
+            },
+            fnv::{ FnvHasher },
+            fs::{ self, File },
+            hash::{ BuildHasherDefault},
+            io::{ Read },
+            path::{ Path, PathBuf },
             *,
         };
+        /// A capability database.
+        #[derive(Eq, PartialEq, Clone, Debug)]
+        pub struct Database 
+        {
+            name: String,
+            aliases: Vec<String>,
+            description: String,
+            inner: HashMap<String, Value, BuildHasherDefault<FnvHasher>>,
+        }
+        /// Builder for a new `Database`.
+        #[derive(Default, Debug)]
+        pub struct Builder 
+        {
+            name: Option<String>,
+            aliases: Vec<String>,
+            description: Option<String>,
+            inner: HashMap<String, Value, BuildHasherDefault<FnvHasher>>,
+        }
 
+        impl Builder 
+        {
+            /// Build the database.
+            pub fn build(self) -> Result<Database, ()> 
+            {
+                Ok(Database 
+                {
+                    name: self.name.ok_or(())?,
+                    aliases: self.aliases,
+                    description: self.description.unwrap_or_default(),
+                    inner: self.inner,
+                })
+            }
+            /// Set the terminal name.
+            pub fn name<T: Into<String>>(&mut self, name: T) -> &mut Self 
+            {
+                self.name = Some(name.into());
+                self
+            }
+            /// Set the terminal aliases.
+            pub fn aliases<T, I>(&mut self, iter: I) -> &mut Self where
+                T: Into<String>,
+                I: IntoIterator<Item = T>,
+            {
+                self.aliases = iter.into_iter().map(|a| a.into()).collect();
+                self
+            }
+            /// Set the terminal description.
+            pub fn description<T: Into<String>>(&mut self, description: T) -> &mut Self 
+            {
+                self.description = Some(description.into());
+                self
+            }
+            /// Set a capability.
+            pub fn set<'a, C: Capability<'a>>(&'a mut self, value: C) -> &mut Self 
+            {
+                if !self.inner.contains_key(C::name()) 
+                {
+                    if let Some(value) = C::into(value) 
+                    {
+                        self.inner.insert(C::name().into(), value);
+                    }
+                }
+
+                self
+            }
+            /// Set a raw capability.
+            pub fn raw<S: AsRef<str>, V: Into<Value>>(&mut self, name: S, value: V) -> &mut Self 
+            {
+                /*
+                let name = name.as_ref();
+                let name = names::ALIASES.get(name).copied().unwrap_or(name);
+
+                if !self.inner.contains_key(name) 
+                {
+                    self.inner.insert(name.into(), value.into());
+                }
+                */
+                self
+            }
+        }
+
+        impl Database 
+        {
+            pub fn new() -> Builder 
+            {
+                Builder::default()
+            }
+            /// Load a database from the current environment.
+            pub fn from_env() -> error::Result<Self> 
+            {
+                if let Ok(name) = env::var("TERM") 
+                {
+                    Self::from_name(name)
+                }
+                else 
+                {
+                    Err(Error::NotFound)
+                }
+            }
+            /// Load a database for the given name.
+            pub fn from_name<N: AsRef<str>>(name: N) -> error::Result<Self> 
+            {
+                let name = name.as_ref();
+                let first = name.chars().next().ok_or(Error::NotFound)?;
+
+                // See https://manpages.debian.org/buster/ncurses-bin/terminfo.5.en.html#Fetching_Compiled_Descriptions
+                let mut search = Vec::<PathBuf>::new();
+
+                #[allow(deprecated)]
+                if let Some(dir) = env::var_os("TERMINFO") 
+                {
+                    search.push(dir.into());
+                } else if let Some(mut home) = std::env::home_dir() 
+                {
+                    home.push(".terminfo");
+                    search.push(home);
+                }
+
+                if let Ok(dirs) = env::var("TERMINFO_DIRS") 
+                {
+                    for dir in dirs.split(':') {
+                        search.push(dir.into());
+                    }
+                }
+
+                // handle non-FHS systems like Termux
+                if let Ok(prefix) = env::var("PREFIX") 
+                {
+                    let path = Path::new(&prefix);
+                    search.push(path.join("etc/terminfo"));
+                    search.push(path.join("lib/terminfo"));
+                    search.push(path.join("share/terminfo"));
+                }
+
+                search.push("/etc/terminfo".into());
+                search.push("/lib/terminfo".into());
+                search.push("/usr/share/terminfo".into());
+                search.push("/usr/local/share/terminfo".into());
+                search.push("/usr/local/share/site-terminfo".into());
+                search.push("/boot/system/data/terminfo".into());
+
+                for path in search 
+                {
+                    if fs::metadata(&path).is_err() 
+                    {
+                        continue;
+                    }
+
+                    // Check standard location.
+                    {
+                        let mut path = path.clone();
+                        path.push(first.to_string());
+                        path.push(name);
+
+                        if fs::metadata(&path).is_ok() 
+                        {
+                            return Self::from_path(path);
+                        }
+                    }
+
+                    // Check non-standard location.
+                    {
+                        let mut path = path.clone();
+                        path.push(format!("{:x}", first as usize));
+                        path.push(name);
+
+                        if fs::metadata(&path).is_ok() 
+                        {
+                            return Self::from_path(path);
+                        }
+                    }
+                }
+
+                Err(Error::NotFound)
+            }
+            /// Load a database from the given path.
+            pub fn from_path<P: AsRef<Path>>(path: P) -> error::Result<Self> 
+            {
+                let mut file = File::open(path)?;
+                let mut buffer = Vec::new();
+                file.read_to_end(&mut buffer)?;
+
+                Self::from_buffer(buffer)
+            }
+            /// Load a database from a buffer.
+            pub fn from_buffer<T: AsRef<[u8]>>(buffer: T) -> error::Result<Self> 
+            {
+                if let Ok((_, database)) = compiled::parse(buffer.as_ref()) 
+                {
+                    Ok(database.into())
+                } else 
+                {
+                    Err(Error::Parse)
+                }
+            }
+            /// The terminal name.
+            pub fn name(&self) -> &str 
+            {
+                &self.name
+            }
+            /// The terminal aliases.
+            pub fn aliases(&self) -> &[String] 
+            {
+                &self.aliases
+            }
+            /// The terminal description.
+            pub fn description(&self) -> &str 
+            {
+                &self.description
+            }
+            /// Get a capability.
+            pub fn get<'a, C: Capability<'a>>(&'a self) -> Option<C> 
+            {
+                C::from(self.inner.get(C::name()))
+            }
+            /// Get a capability by name.
+            pub fn raw<S: AsRef<str>>(&self, name: S) -> Option<&Value> 
+            {
+                /*
+                let name = name.as_ref();
+                let name = names::ALIASES.get(name).copied().unwrap_or(name);
+                self.inner.get(name)
+                */
+                None
+            }
+        }
     }
     pub use self::database::Database;
-
     /// Constants to deal with name differences across terminfo and termcap.
     pub mod names
     {
@@ -105,7 +2205,6 @@ pub mod common
         {
             *,
         };
-
     }
     /// Parsers for various formats.
     mod parser
@@ -355,17 +2454,19 @@ pub mod common
                 extended: Option<Extended<'a>>,
             }
 
-            impl<'a> From<Database<'a>> for ::common::Database {
-                fn from(source: Database<'a>) -> Self {
-                    let mut names = source
-                        .names
-                        .split(|&c| c == b'|')
-                        .map(|s| unsafe { str::from_utf8_unchecked(s) })
-                        .map(|s| s.trim())
-                        .collect::<Vec<_>>();
-
+            impl<'a> From<Database<'a>> for ::common::Database
+            {
+                fn from(source: Database<'a>) -> Self 
+                {
                     let mut database = ::common::Database::new();
-
+                    /*
+                    let mut names = source
+                    .names
+                    .split(|&c| c == b'|')
+                    .map(|s| unsafe { str::from_utf8_unchecked(s) })
+                    .map(|s| s.trim())
+                    .collect::<Vec<_>>();
+                    
                     database.name(names.remove(0));
                     names.pop().map(|name| database.description(name));
                     database.aliases(names);
@@ -419,7 +2520,7 @@ pub mod common
                             );
                         }
                     }
-
+                    */
                     database.build().unwrap()
                 }
             }
@@ -541,12 +2642,13 @@ pub mod common
                     combinator::{map, opt, value},
                     error::{make_error, ErrorKind},
                     IResult, Err
-                }
+                },
                 *,
             }; use super::util::number;
 
-            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-            pub enum Item<'a> {
+            #[derive( Eq, PartialEq, Copy, Clone, Debug )]
+            pub enum Item<'a> 
+            {
                 String(&'a [u8]),
                 Constant(Constant),
                 Variable(Variable),
@@ -555,35 +2657,40 @@ pub mod common
                 Print(Print),
             }
 
-            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-            pub enum Constant {
+            #[derive( Eq, PartialEq, Copy, Clone, Debug )]
+            pub enum Constant 
+            {
                 Character(u8),
                 Integer(i32),
             }
 
-            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-            pub enum Variable {
+            #[derive( Eq, PartialEq, Copy, Clone, Debug )]
+            pub enum Variable 
+            {
                 Length,
                 Push(u8),
                 Set(bool, u8),
                 Get(bool, u8),
             }
 
-            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-            pub enum Operation {
+            #[derive( Eq, PartialEq, Copy, Clone, Debug )]
+            pub enum Operation 
+            {
                 Increment,
                 Unary(Unary),
                 Binary(Binary),
             }
 
-            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-            pub enum Unary {
+            #[derive( Eq, PartialEq, Copy, Clone, Debug )]
+            pub enum Unary 
+            {
                 Not,
                 NOT,
             }
 
-            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-            pub enum Binary {
+            #[derive( Eq, PartialEq, Copy, Clone, Debug )]
+            pub enum Binary 
+            {
                 Add,
                 Subtract,
                 Multiply,
@@ -602,22 +2709,25 @@ pub mod common
                 Lesser,
             }
 
-            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-            pub enum Conditional {
+            #[derive( Eq, PartialEq, Copy, Clone, Debug )]
+            pub enum Conditional 
+            {
                 If,
                 Then,
                 Else,
                 End,
             }
 
-            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-            pub struct Print {
+            #[derive( Eq, PartialEq, Copy, Clone, Debug )]
+            pub struct Print 
+            {
                 pub flags: Flags,
                 pub format: Format,
             }
 
-            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-            pub enum Format {
+            #[derive( Eq, PartialEq, Copy, Clone, Debug )]
+            pub enum Format 
+            {
                 Chr,
                 Uni,
                 Str,
@@ -628,7 +2738,8 @@ pub mod common
             }
 
             #[derive(Eq, PartialEq, Copy, Clone, Default, Debug)]
-            pub struct Flags {
+            pub struct Flags 
+            {
                 pub width: usize,
                 pub precision: usize,
 
@@ -638,30 +2749,36 @@ pub mod common
                 pub space: bool,
             }
 
-            pub fn parse(input: &[u8]) -> IResult<&[u8], Item> {
+            pub fn parse(input: &[u8]) -> IResult<&[u8], Item> 
+            {
                 alt((expansion, string))(input)
             }
 
-            fn string(input: &[u8]) -> IResult<&[u8], Item> {
+            fn string(input: &[u8]) -> IResult<&[u8], Item> 
+            {
                 map(complete::take_till(|b| b == b'%'), Item::String)(input)
             }
 
-            fn expansion(input: &[u8]) -> IResult<&[u8], Item> {
+            fn expansion(input: &[u8]) -> IResult<&[u8], Item> 
+            {
                 let (input, _) = tag("%")(input)?;
                 let (input, item) = alt((percent, constant, variable, operation, conditional, print))(input)?;
 
                 Ok((input, item))
             }
 
-            fn percent(input: &[u8]) -> IResult<&[u8], Item> {
+            fn percent(input: &[u8]) -> IResult<&[u8], Item> 
+            {
                 value(Item::String(b"%"), tag("%"))(input)
             }
 
-            fn constant(input: &[u8]) -> IResult<&[u8], Item> {
+            fn constant(input: &[u8]) -> IResult<&[u8], Item> 
+            {
                 alt((constant_char, constant_integer))(input)
             }
 
-            fn constant_char(input: &[u8]) -> IResult<&[u8], Item> {
+            fn constant_char(input: &[u8]) -> IResult<&[u8], Item> 
+            {
                 let (input, _) = tag("'")(input)?;
                 let (input, ch) = take(1_usize)(input)?;
                 let (input, _) = tag("'")(input)?;
@@ -669,7 +2786,8 @@ pub mod common
                 Ok((input, Item::Constant(Constant::Character(ch[0]))))
             }
 
-            fn constant_integer(input: &[u8]) -> IResult<&[u8], Item> {
+            fn constant_integer(input: &[u8]) -> IResult<&[u8], Item> 
+            {
                 let (input, _) = tag("{")(input)?;
                 let (input, digit) = take_while(is::digit)(input)?;
                 let (input, _) = tag("}")(input)?;
@@ -677,7 +2795,8 @@ pub mod common
                 Ok((input, Item::Constant(Constant::Integer(number(digit)))))
             }
 
-            fn variable(input: &[u8]) -> IResult<&[u8], Item> {
+            fn variable(input: &[u8]) -> IResult<&[u8], Item> 
+            {
                 let (input, c) = take(1_usize)(input)?;
                 match c {
                     b"l" => Ok((input, Item::Variable(Variable::Length))),
@@ -706,7 +2825,8 @@ pub mod common
                 }
             }
 
-            fn operation(input: &[u8]) -> IResult<&[u8], Item> {
+            fn operation(input: &[u8]) -> IResult<&[u8], Item> 
+            {
                 let (input, c) = take(1_usize)(input)?;
                 match c {
                     b"+" => Ok((input, Item::Operation(Operation::Binary(Binary::Add)))),
@@ -733,7 +2853,8 @@ pub mod common
                 }
             }
 
-            fn conditional(input: &[u8]) -> IResult<&[u8], Item> {
+            fn conditional(input: &[u8]) -> IResult<&[u8], Item> 
+            {
                 let (input, c) = take(1_usize)(input)?;
                 match c {
                     b"?" => Ok((input, Item::Conditional(Conditional::If))),
@@ -745,7 +2866,8 @@ pub mod common
                 }
             }
 
-            fn print(input: &[u8]) -> IResult<&[u8], Item> {
+            fn print(input: &[u8]) -> IResult<&[u8], Item> 
+            {
                 let (input, _) = opt(tag(":"))(input)?;
 
                 let (input, flags) = take_while(is_flag)(input)?;
@@ -786,7 +2908,8 @@ pub mod common
                 ))
             }
 
-            fn is_flag(i: u8) -> bool {
+            fn is_flag(i: u8) -> bool 
+            {
                 i == b' ' || i == b'-' || i == b'+' || i == b'#'
             }
         }
@@ -795,11 +2918,132 @@ pub mod common
         {
             use ::
             {
+                borrow::{ Cow },
+                common::
+                {
+                    parser::
+                    {
+                        util::{ unescape, end, is_eol, is_ws, ws, is_printable_no_comma, is_printable_no_control, is_printable_no_pipe },
+                    },
+                },
+                parsers::nom::
+                {
+                    branch::alt,
+                    bytes::streaming::{ tag, take, take_until, take_while },
+                    character::{ streaming::line_ending as eol },
+                    combinator::{ complete, map, map_res, opt },
+                    error::{ make_error, ErrorKind },
+                    sequence::terminated,
+                    IResult, Err,
+                },
                 *,
             };
-        }
 
-        
+            #[derive(Eq, PartialEq, Clone, Debug)]
+            pub enum Item<'a> {
+                Comment(&'a str),
+
+                Definition { name: &'a str, aliases: Vec<&'a str>, description: &'a str },
+
+                True(&'a str),
+                Number(&'a str, i16),
+                String(&'a str, Cow<'a, [u8]>),
+                Disable(&'a str),
+            }
+
+            pub fn parse(input: &[u8]) -> IResult<&[u8], Item> {
+                alt((comment, definition, disable, entry))(input)
+            }
+
+            fn comment(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, _) = tag("#")(input)?;
+                let (input, content) = map_res(terminated(take_until("\n"), tag("\n")), str::from_utf8)(input)?;
+                let (input, _) = opt(complete(take_while(is_eol)))(input)?;
+
+                Ok((input, Item::Comment(content.trim())))
+            }
+
+            fn definition(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, name) =
+                    map(take_while(is_printable_no_pipe), |n| unsafe { str::from_utf8_unchecked(n) })(input)?;
+
+                let (input, _) = tag("|")(input)?;
+
+                let (input, content) =
+                    map(take_while(is_printable_no_comma), |n| unsafe { str::from_utf8_unchecked(n) })(input)?;
+
+                let (input, _) = tag(",")(input)?;
+
+                let (input, _) = take_while(is_ws)(input)?;
+
+                let (input, _) = eol(input)?;
+                let (input, _) = opt(complete(take_while(is_eol)))(input)?;
+
+                Ok((input, {
+                    let mut aliases = content.split(|c| c == '|').map(|n| n.trim()).collect::<Vec<_>>();
+
+                    Item::Definition { name, description: aliases.pop().unwrap(), aliases }
+                }))
+            }
+
+            fn disable(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, _) = ws(input)?;
+                let (input, _) = take_while(is_ws)(input)?;
+                let (input, _) = tag("@")(input)?;
+
+                let (input, name) =
+                    map(take_while(is_printable_no_control), |n| unsafe { str::from_utf8_unchecked(n) })(
+                        input,
+                    )?;
+
+                let (input, _) = tag(",")(input)?;
+                let (input, _) = take_while(is_ws)(input)?;
+                let (input, _) = end(input)?;
+                let (input, _) = opt(complete(take_while(is_eol)))(input)?;
+
+                Ok((input, Item::Disable(name)))
+            }
+
+            fn entry(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, _) = ws(input)?;
+                let (input, _) = take_while(is_ws)(input)?;
+
+                let (input, name) =
+                    map(take_while(is_printable_no_control), |n| unsafe { str::from_utf8_unchecked(n) })(
+                        input,
+                    )?;
+
+                let (input, c) = take(1_usize)(input)?;
+                let (input, value) = match c {
+                    b"," => (input, Item::True(name)),
+
+                    b"#" => {
+                        let (input, value) =
+                            map(take_while(is::digit), |n| unsafe { str::from_utf8_unchecked(n) })(input)?;
+
+                        let (input, _) = tag(",")(input)?;
+
+                        (input, Item::Number(name, value.parse().unwrap()))
+                    }
+
+                    b"=" => {
+                        let (input, value) = take_while(is_printable_no_comma)(input)?;
+
+                        let (input, _) = tag(",")(input)?;
+
+                        (input, Item::String(name, unescape(value)))
+                    }
+
+                    _ => Err( Err::Error(make_error(input, ErrorKind::Switch)))?,
+                };
+
+                let (input, _) = take_while(is_ws)(input)?;
+                let (input, _) = end(input)?;
+                let (input, _) = opt(complete(take_while(is_eol)))(input)?;
+
+                Ok((input, value))
+            }
+        }       
     }
 }
 
@@ -816,6 +3060,2115 @@ pub mod core
         *,
     };
     
+}
+/*
+over | the best data format*/
+pub mod database
+{
+    //! OVER: the best data format.
+    //extern crate num_bigint;
+    //extern crate num_rational;
+    use ::
+    {
+        *,
+    };
+    /// Result type for this crate.
+    pub type OverResult<T> = Result<T, OverError>;
+
+    // Indent step in .over files.
+    const INDENT_STEP: usize = 4; 
+
+    pub mod arrays
+    {
+        use ::
+        {
+            *,
+        };
+    } pub use self::arrays::Arr;
+
+    pub mod error
+    {
+        use ::
+        {
+            *,
+        };
+    } pub use self::error::OverError;
+
+    pub mod objects
+    {
+        use ::
+        {
+            *,
+        };
+    } pub use self::objects::Obj;
+
+    pub mod tuples
+    {
+        use ::
+        {
+            *,
+        };
+    } pub use self::tuples::Tup;
+
+    pub mod types
+    {
+        use ::
+        {
+            *,
+        };
+    }
+
+    pub mod values
+    {
+        use ::
+        {
+            *,
+        };
+    }
+
+    pub mod parses
+    {
+        //! Functions for loading/writing Objs.
+        use ::
+        {
+            *,
+        };
+
+        pub mod error
+        {
+            //! Module for parse errors.
+            use ::
+            {
+                database::
+                {
+                    types::{ Type },
+                    OverError,
+                },
+                error::{ Error },
+                num::
+                {
+                    big::{ BigInt, ParseBigIntError },
+                    ParseIntError,
+                },
+                *,
+            };
+            
+            use super::
+            {
+                ParseResult,
+                MAX_DEPTH,
+            };
+
+            pub fn parse_err<T>(file: Option<String>, kind: ParseErrorKind) -> ParseResult<T>
+            { Err(ParseError { file, kind }) }
+            /// Error kind.
+            #[derive(Debug)]
+            pub enum ParseErrorKind
+            {
+                BinaryOperatorError(Type, Type, char, usize, usize),
+                CyclicInclude(String, usize, usize),
+                DuplicateField(String, usize, usize),
+                DuplicateGlobal(String, usize, usize),
+                ExpectedType(Type, Type, usize, usize),
+                GlobalNotFound(String, usize, usize),
+                InvalidIndex(BigInt, usize, usize),
+                InvalidClosingBracket(Option<char>, char, usize, usize),
+                InvalidDot(Type, usize, usize),
+                InvalidEscapeChar(char, usize, usize),
+                InvalidFieldChar(char, usize, usize),
+                InvalidFieldName(String, usize, usize),
+                InvalidIncludeChar(char, usize, usize),
+                InvalidIncludePath(String, usize, usize),
+                InvalidIncludeToken(Type, usize, usize),
+                InvalidNumeric(usize, usize),
+                InvalidValue(String, usize, usize),
+                InvalidValueChar(char, usize, usize),
+                MaxDepth(usize, usize),
+                UnaryOperatorError(Type, char, usize, usize),
+                UnexpectedEnd(usize),
+                VariableNotFound(String, usize, usize),
+
+                IoError(String),
+                OverError(String),
+                ParseIntError(String),
+            }
+            /// Parse error.
+            #[derive(Debug)]
+            pub struct ParseError
+            {
+                /// The file this error occurred in.
+                pub file: Option<String>,
+                /// Error kind.
+                pub kind: ParseErrorKind,
+            }
+
+            impl fmt::Display for ParseError
+            {
+                fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+                {
+                    use self::ParseErrorKind::*;
+
+                    if let Some(ref file) = (*self).file {
+                        write!(f, "{}: ", file)?;
+                    }
+
+                    match (*self).kind {
+                        BinaryOperatorError(ref expected, ref found, ref op, ref line, ref col) => write!(
+                            f,
+                            "Could not apply operator {} on types {} and {} at line {}, column {}",
+                            op, expected, found, line, col,
+                        ),
+                        CyclicInclude(ref file, ref line, ref col) => write!(
+                            f,
+                            "Tried to cyclically include file \"{}\" at line {}, column {}",
+                            file, line, col
+                        ),
+                        DuplicateField(ref field, ref line, ref col) => write!(
+                            f,
+                            "Duplicate field \"{}\" at line {}, column {}",
+                            field, line, col
+                        ),
+                        DuplicateGlobal(ref field, ref line, ref col) => write!(
+                            f,
+                            "Duplicate global \"{}\" at line {}, column {}",
+                            field, line, col
+                        ),
+                        ExpectedType(ref expected, ref found, ref line, ref col) => write!(
+                            f,
+                            "Expected {} at line {}, column {}; found {}",
+                            expected, line, col, found
+                        ),
+                        GlobalNotFound(ref var, ref line, ref col) => write!(
+                            f,
+                            "Global \"{}\" at line {}, column {} could not be found",
+                            var, line, col
+                        ),
+                        InvalidClosingBracket(ref expected, ref found, ref line, ref col) => write!(
+                            f,
+                            "Invalid closing bracket '{}' at line {}, column {}; expected {}",
+                            found,
+                            line,
+                            col,
+                            match *expected {
+                                Some(ch) => format!("'{}'", ch),
+                                None => String::from("none"),
+                            }
+                        ),
+                        InvalidDot(ref t, ref line, ref col) => write!(
+                            f,
+                            "Invalid use of dot notation on value of type {} at line {}, column {}; \
+                            value must be an Obj, Arr, or Tup.",
+                            t, line, col
+                        ),
+                        InvalidEscapeChar(ref ch, ref line, ref col) => write!(
+                            f,
+                            "Invalid escape character '\\{}' at line {}, column {}. \
+                            If you meant to write a backslash, use '\\\\'",
+                            ::char::format(*ch),
+                            line,
+                            col
+                        ),
+                        InvalidFieldChar(ref ch, ref line, ref col) => write!(
+                            f,
+                            "Invalid character '{}' for field at line {}, column {}",
+                            ::char::format(*ch),
+                            line,
+                            col
+                        ),
+                        InvalidFieldName(ref field, ref line, ref col) => write!(
+                            f,
+                            "Invalid field name \"{}\" at line {}, column {}",
+                            field, line, col
+                        ),
+                        InvalidIncludeChar(ref found, ref line, ref col) => write!(
+                            f,
+                            "Invalid include token character \'{}\' at line {}, column {}",
+                            found, line, col
+                        ),
+                        InvalidIncludePath(ref path, ref line, ref col) => write!(
+                            f,
+                            "Invalid include path \"{}\" at line {}, column {}",
+                            path, line, col
+                        ),
+                        InvalidIncludeToken(ref t, ref line, ref col) => write!(
+                            f,
+                            "Invalid value of type \"{}\" at line {}, column {}; \
+                            must be either a Str value or one of the tokens \
+                            \"Obj\", \"Arr\", \"Tup\", or \"Str\"",
+                            t, line, col
+                        ),
+                        InvalidIndex(ref index, ref line, ref col) => write!(
+                            f,
+                            "Invalid index {} at line {}, column {}",
+                            index, line, col
+                        ),
+                        InvalidNumeric(ref line, ref col) => {
+                            write!(f, "Invalid numeric value at line {}, column {}", line, col)
+                        }
+                        InvalidValue(ref value, ref line, ref col) => write!(
+                            f,
+                            "Invalid value \"{}\" at line {}, column {}",
+                            value, line, col
+                        ),
+                        InvalidValueChar(ref ch, ref line, ref col) => write!(
+                            f,
+                            "Invalid character '{}' for value at line {}, column {}",
+                            ::char::format(*ch),
+                            line,
+                            col
+                        ),
+                        MaxDepth(ref line, ref col) => write!(
+                            f,
+                            "Exceeded maximum recursion depth ({}) at line {}, column {}",
+                            MAX_DEPTH, line, col
+                        ),
+                        UnaryOperatorError(ref found, ref op, ref line, ref col) => write!(
+                            f,
+                            "Could not apply operator {} on type {} at line {}, column {}",
+                            op, found, line, col,
+                        ),
+                        UnexpectedEnd(ref line) => write!(f, "Unexpected end at line {}", line,),
+                        VariableNotFound(ref var, ref line, ref col) => write!(
+                            f,
+                            "Variable \"{}\" at line {}, column {} could not be found",
+                            var, line, col
+                        ),
+
+                        IoError(ref error) | OverError(ref error) | ParseIntError(ref error) => {
+                            write!(f, "{}", error)
+                        }
+                    }
+                }
+            }
+
+            impl Error for ParseError
+            {
+                fn description(&self) -> &str
+                {
+                    use self::ParseErrorKind::*;
+
+                    match (*self).kind
+                    {
+                        BinaryOperatorError(_, _, _, _, _) | UnaryOperatorError(_, _, _, _) =>
+                        {
+                            "Could not apply operator"
+                        }
+
+                        CyclicInclude(_, _, _) => "Tried to cyclically include file",
+                        DuplicateField(_, _, _) => "Duplicate field",
+                        DuplicateGlobal(_, _, _) => "Duplicate global",
+                        ExpectedType(_, _, _, _) => "Expected different type",
+                        GlobalNotFound(_, _, _) => "Global could not be found",
+                        InvalidClosingBracket(_, _, _, _) => "Invalid closing bracket",
+                        InvalidDot(_, _, _) => "Invalid use of dot notation",
+                        InvalidEscapeChar(_, _, _) => "Invalid escape character",
+                        InvalidFieldChar(_, _, _) => "Invalid character for field",
+                        InvalidFieldName(_, _, _) => "Invalid field name",
+                        InvalidIncludeChar(_, _, _) => "Invalid include character",
+                        InvalidIncludePath(_, _, _) => "Invalid include path",
+                        InvalidIncludeToken(_, _, _) => "Invalid include token",
+                        InvalidIndex(_, _, _) => "Invalid index",
+                        InvalidNumeric(_, _) => "Invalid numeric value",
+                        InvalidValue(_, _, _) => "Invalid value",
+                        InvalidValueChar(_, _, _) => "Invalid character for value",
+                        MaxDepth(_, _) => "Exceeded maximum depth for a container",
+                        UnexpectedEnd(_) => "Unexpected end when reading value",
+                        VariableNotFound(_, _, _) => "Variable could not be found",
+
+                        IoError(ref error) | OverError(ref error) | ParseIntError(ref error) => error,
+                    }
+                }
+            }
+
+            impl ParseError
+            {
+                /// Convert an `OverError` to a `ParseError` given line and column numbers.
+                pub fn from_over(e: &OverError, file: Option<String>, line: usize, col: usize) -> Self
+                {
+                    ParseError
+                    {
+                        file,
+                        kind: ParseErrorKind::OverError(format!("{} at line {}, col {}", e, line, col)),
+                    }
+                }
+            }
+
+            impl From<io::Error> for ParseError
+            {
+                fn from(e: io::Error) -> Self
+                {
+                    ParseError {
+                        file: None,
+                        kind: ParseErrorKind::IoError(format!("{}", e)),
+                    }
+                }
+            }
+
+            impl From<ParseIntError> for ParseError
+            {
+                fn from(e: ParseIntError) -> Self
+                {
+                    ParseError {
+                        file: None,
+                        kind: ParseErrorKind::ParseIntError(format!("{}", e)),
+                    }
+                }
+            }
+
+            impl From<ParseBigIntError> for ParseError
+            {
+                fn from(e: ParseBigIntError) -> Self
+                {
+                    ParseError {
+                        file: None,
+                        kind: ParseErrorKind::ParseIntError(format!("{}", e)),
+                    }
+                }
+            }
+        } use self::error::ParseError;
+
+        pub mod format
+        {
+            //! Module containing functions for formatting output of objects.
+            use ::
+            {
+                database::{ arrays::Arr, objects::Obj, tuples::Tup, values::Value, INDENT_STEP },
+                num::
+                {
+                    big::BigInt,
+                    rational::BigRational,
+                    traits::One,
+                },
+                *,
+            };
+            
+            fn indent(amount: usize) -> String { " ".repeat(amount) }
+
+            fn get_char_map(ch: char) -> Option<&'static str>
+            {
+                match ch
+                {
+                    '\\' => Some("\\\\"),
+                    '\"' => Some("\\\""),
+                    '\'' => Some("\\\'"),
+                    '$' => Some("\\$"),
+                    '\n' => Some("\\n"),
+                    '\r' => Some("\\r"),
+                    '\t' => Some("\\t"),
+                    _ => None,
+                }
+            }
+
+            fn replace_all(s: &str) -> String
+            {
+                let mut string = String::with_capacity(s.len());
+
+                for ch in s.chars()
+                {
+                    if let Some(s) = get_char_map(ch) {
+                        string.push_str(s);
+                    } else {
+                        string.push(ch);
+                    }
+                }
+
+                string
+            }
+            /// Trait for formatting a .over representation of an object.
+            pub trait Format
+            {
+                fn format(&self, full: bool, indent_amt: usize) -> String;
+            }
+
+            impl Format for BigRational
+            {
+                fn format(&self, _full: bool, _indent_amt: usize) -> String
+                {
+                    let frac_fmt = format!("{}", *self);
+
+                    if *self.denom() == BigInt::one() { format!("{}.0", frac_fmt) } else { frac_fmt }
+                }
+            }
+
+            impl Format for char
+            {
+                fn format(&self, _full: bool, _indent_amt: usize) -> String
+                {
+                    if let Some(s) = get_char_map(*self) {
+                        format!("\'{}\'", s)
+                    } else {
+                        format!("\'{}\'", *self)
+                    }
+                }
+            }
+
+            impl Format for String
+            {
+                fn format(&self, _full: bool, _indent_amt: usize) -> String { format!("\"{}\"", replace_all(self)) }
+            }
+
+            impl Format for Value
+            {
+                fn format(&self, _full: bool, indent_amt: usize) -> String
+                {
+                    match *self
+                    {
+                        Value::Null => String::from("null"),
+
+                        Value::Bool(ref inner) => {
+                            if *inner {
+                                String::from("true")
+                            } else {
+                                String::from("false")
+                            }
+                        }
+
+                        Value::Int(ref inner) => format!("{}", inner),
+
+                        Value::Frac(ref inner) => inner.format(true, indent_amt),
+                        Value::Char(ref inner) => inner.format(true, indent_amt),
+                        Value::Str(ref inner) => inner.format(true, indent_amt),
+                        Value::Arr(ref inner) => inner.format(true, indent_amt),
+                        Value::Tup(ref inner) => inner.format(true, indent_amt),
+                        Value::Obj(ref inner) => inner.format(true, indent_amt),
+                    }
+                }
+            }
+
+            impl Format for Arr
+            {
+                fn format(&self, full: bool, indent_amt: usize) -> String
+                {
+                    match self.len()
+                    {
+                        0 =>
+                        {
+                            if full {
+                                String::from("[]")
+                            } else {
+                                String::new()
+                            }
+                        }
+
+                        1 =>
+                        {
+                            let f = self.get(0).unwrap().format(true, indent_amt);
+                            if full {
+                                format!("[{}]", f)
+                            } else {
+                                f
+                            }
+                        }
+
+                        _ =>
+                        {
+                            let mut s = if full {
+                                String::from("[\n")
+                            } else {
+                                String::new()
+                            };
+
+                            self.with_each(|value| {
+                                s.push_str(&format!(
+                                    "{}{}\n",
+                                    indent(indent_amt),
+                                    value.format(true, indent_amt + INDENT_STEP)
+                                ))
+                            });
+
+                            if full {
+                                let actual_indent_amt = if indent_amt == 0 {
+                                    0
+                                } else {
+                                    indent_amt - INDENT_STEP
+                                };
+                                s.push_str(&format!("{}]", indent(actual_indent_amt)));
+                            }
+                            s
+                        }
+                    }
+                }
+            }
+
+            impl Format for Tup
+            {
+                fn format(&self, full: bool, indent_amt: usize) -> String
+                {
+                    match self.len()
+                    {
+                        0 =>
+                        {
+                            if full {
+                                String::from("()")
+                            } else {
+                                String::new()
+                            }
+                        }
+
+                        1 =>
+                        {
+                            let f = self.get(0).unwrap().format(true, indent_amt);
+                            if full {
+                                format!("({})", f)
+                            } else {
+                                f
+                            }
+                        }
+
+                        _ =>
+                        {
+                            let mut s = if full {
+                                String::from("(\n")
+                            } else {
+                                String::new()
+                            };
+
+                            self.with_each(|value| {
+                                s.push_str(&format!(
+                                    "{}{}\n",
+                                    indent(indent_amt),
+                                    value.format(true, indent_amt + INDENT_STEP)
+                                ))
+                            });
+
+                            if full {
+                                s.push_str(&format!("{})", indent(indent_amt - INDENT_STEP)));
+                            }
+                            s
+                        }
+                    }
+                }
+            }
+
+            impl Format for Obj
+            {
+                fn format(&self, full: bool, indent_amt: usize) -> String
+                {
+                    if self.is_empty() && !self.has_parent()
+                    {
+                        if full { String::from("{}") } else { String::new() }
+                    }
+                    
+                    else
+                    {
+                        let mut s = if full { String::from("{\n") }
+
+                        else { String::new() };
+
+                        if let Some(parent) = self.get_parent()
+                        {
+                            s.push_str(&format!
+                            (
+                                "{}^: {}\n",
+                                indent(indent_amt),
+                                parent.format(true, indent_amt + INDENT_STEP)
+                            ));
+                        }
+
+                        self.with_each(|field, value|
+                        {
+                            s.push_str(&format!
+                            (
+                                "{}{}: {}\n",
+                                indent(indent_amt),
+                                field,
+                                value.format(true, indent_amt + INDENT_STEP)
+                            ));
+                        });
+
+                        if full { s.push_str(&format!("{}}}", indent(indent_amt - INDENT_STEP))); }
+                        s
+                    }
+                }
+            }
+        }
+
+        pub mod parser
+        {
+            //! Module containing parsing functions.
+            use num::fractional::frac_from_whole_and_dec;
+            use ::
+            {
+                char::{ CharStream },
+                collections::{ HashMap, HashSet, VecDeque },
+                database::
+                {
+                    arrays::{self, Arr},
+                    objects::Obj,
+                    tuples::Tup,
+                    types::Type,
+                    values::Value,
+                },
+                num::
+                {
+                    big::{ BigInt },
+                    rational::{ BigRational },
+                    traits::{ ToPrimitive, Zero },
+                },
+                ops::{ Deref },
+                path::{ Path },
+                *,
+            };
+
+            use super::
+            {
+                error::ParseErrorKind::*,
+                error::{parse_err, ParseError},
+                ParseResult, MAX_DEPTH,
+            };
+            
+            type ObjMap = HashMap<String, Value>;
+            type GlobalMap = HashMap<String, Value>;
+            type IncludedMap = (HashMap<String, Value>, HashSet<String>);
+
+            lazy_static!
+            {
+                static ref OBJ_SENTINEL: Obj = Obj::from_map_unchecked(HashMap::new());
+                static ref STR_SENTINEL: Obj = Obj::from_map_unchecked(HashMap::new());
+                static ref ARR_SENTINEL: Obj = Obj::from_map_unchecked(HashMap::new());
+                static ref TUP_SENTINEL: Obj = Obj::from_map_unchecked(HashMap::new());
+            }
+            /// Parses given file as an `Obj`.
+            pub fn parse_obj_file(path: &str) -> ParseResult<Obj> 
+            {
+                let stream = CharStream::from_file(path)?;
+                parse_obj_stream(stream, &mut (HashMap::new(), HashSet::new()))
+            }
+            /// Parses given file as an `Obj`, keeping track of already encountered includes.
+            pub fn parse_obj_file_includes(path: &str, included: &mut IncludedMap) -> ParseResult<Obj> 
+            {
+                let stream = CharStream::from_file(path)?;
+                parse_obj_stream(stream, included)
+            }
+            /// Parses given &str as an `Obj`.
+            pub fn parse_obj_str(contents: &str) -> ParseResult<Obj> 
+            {
+                let contents = String::from(contents);
+                let stream = CharStream::from_string(contents)?;
+                parse_obj_stream(stream, &mut (HashMap::new(), HashSet::new()))
+            }
+            /// Parses an Obj given a character stream.
+            #[inline] fn parse_obj_stream(mut stream: CharStream, mut included: &mut IncludedMap) -> ParseResult<Obj> 
+            {
+                let mut obj: ObjMap = HashMap::new();
+
+                // Go to the first non-whitespace character, or return if there is none.
+                if !find_char(stream.clone()) 
+                {
+                    return Ok(Obj::from_map_unchecked(obj));
+                }
+
+                let mut globals: GlobalMap = HashMap::new();
+                let mut parent = None;
+
+                // Parse all field/value pairs for this Obj.
+                while parse_field_value_pair
+                (
+                    &mut stream,
+                    &mut obj,
+                    &mut globals,
+                    &mut included,
+                    &mut parent,
+                    1,
+                    None,
+                )? {}
+
+                Ok(match parent 
+                {
+                    Some(parent) => Obj::from_map_with_parent_unchecked(obj, parent),
+                    None => Obj::from_map_unchecked(obj),
+                })
+            }
+            /// Parses a sub-Obj in a file. It *must* start with { and end with }.
+            pub fn parse_obj
+            (
+                mut stream: &mut CharStream,
+                globals: &mut GlobalMap,
+                mut included: &mut IncludedMap,
+                depth: usize,
+            ) -> ParseResult<Value> 
+            {
+                // Check depth.
+                if depth > MAX_DEPTH 
+                {
+                    return parse_err(stream.file(), MaxDepth(stream.line(), stream.col()));
+                }
+
+                // We must already be at a '{'.
+                let ch = stream.next().unwrap();
+                assert_eq!(ch, '{');
+
+                // Go to the first non-whitespace character, or error if there is none.
+                if !find_char(stream.clone()) 
+                {
+                    return parse_err(stream.file(), UnexpectedEnd(stream.line()));
+                }
+
+                let mut obj: ObjMap = HashMap::new();
+                let mut parent = None;
+
+                // Parse field/value pairs.
+                while parse_field_value_pair
+                (
+                    &mut stream,
+                    &mut obj,
+                    globals,
+                    &mut included,
+                    &mut parent,
+                    depth,
+                    Some('}'),
+                )? {}
+
+                let obj = match parent 
+                {
+                    Some(parent) => Obj::from_map_with_parent_unchecked(obj, parent),
+                    None => Obj::from_map_unchecked(obj),
+                };
+                Ok(obj.into())
+            }
+            /// Parses a field/value pair.
+            #[inline] pub fn parse_field_value_pair
+            (
+                mut stream: &mut CharStream,
+                obj: &mut ObjMap,
+                mut globals: &mut GlobalMap,
+                mut included: &mut IncludedMap,
+                parent: &mut Option<Obj>,
+                depth: usize,
+                cur_brace: Option<char>,
+            ) -> ParseResult<bool>
+            {
+                // Check if we're at an end delimiter instead of a field.
+                let peek = stream.peek().unwrap();
+                if peek == '}' && cur_brace.is_some() 
+                {
+                    let _ = stream.next();
+                    return Ok(false);
+                } else if is::end_delimiter(peek) 
+                {
+                    return parse_err
+                    (
+                        stream.file(),
+                        InvalidClosingBracket(cur_brace, peek, stream.line(), stream.col()),
+                    );
+                }
+
+                // Get the field line/col.
+                let (field_line, field_col) = (stream.line(), stream.col());
+
+                // Parse field.
+                let (field, is_global, is_parent) = parse_field(stream.clone(), field_line, field_col)?;
+
+                if !is_global && !is_parent && obj.contains_key(&field) 
+                {
+                    return parse_err(stream.file(), DuplicateField(field, field_line, field_col));
+                } else if is_parent && parent.is_some() 
+                {
+                    return parse_err(
+                        stream.file(),
+                        DuplicateField("^".into(), field_line, field_col),
+                    );
+                }
+
+                // Deal with extra whitespace between field and value.
+                if !find_char(stream.clone()) 
+                {
+                    return parse_err(stream.file(), UnexpectedEnd(stream.line()));
+                }
+
+                // At a non-whitespace character, parse value.
+                let (value_line, value_col) = (stream.line(), stream.col());
+                let value = parse_value
+                (
+                    &mut stream,
+                    obj,
+                    &mut globals,
+                    &mut included,
+                    value_line,
+                    value_col,
+                    depth,
+                    cur_brace,
+                    true,
+                )?;
+
+                // Add value either to the globals map or to the current Obj.
+                if is_global 
+                {
+                    if globals.contains_key(&field) 
+                    {
+                        return parse_err(stream.file(), DuplicateGlobal(field, field_line, field_col));
+                    }
+                    globals.insert(field, value);
+                } else if is_parent 
+                {
+                    let par = value
+                        .get_obj()
+                        .map_err(|e| ParseError::from_over(&e, stream.file(), value_line, value_col))?;
+                    *parent = Some(par);
+                } else 
+                {
+                    obj.insert(field, value);
+                }
+
+                // Go to the next non-whitespace character.
+                if !find_char(stream.clone()) 
+                {
+                    match cur_brace 
+                    {
+                        Some(_) => return parse_err(stream.file(), UnexpectedEnd(stream.line())),
+                        None => return Ok(false),
+                    }
+                }
+
+                Ok(true)
+            }
+            /// Parses an Arr given a file.
+            fn parse_arr_file(path: &str, mut included: &mut IncludedMap) -> ParseResult<Arr> 
+            {
+                let mut stream = CharStream::from_file(path)?;
+
+                let obj: ObjMap = HashMap::new();
+                let mut globals: GlobalMap = HashMap::new();
+
+                let mut vec = Vec::new();
+                let mut tcur = Type::Any;
+                let mut has_any = true;
+
+                loop 
+                {
+                    // Go to the first non-whitespace character, or error if there is none.
+                    if !find_char(stream.clone()) 
+                    {
+                        break;
+                    }
+
+                    // At a non-whitespace character, parse value.
+                    let (value_line, value_col) = (stream.line(), stream.col());
+                    let value = parse_value
+                    (
+                        &mut stream,
+                        &obj,
+                        &mut globals,
+                        &mut included,
+                        value_line,
+                        value_col,
+                        1,
+                        None,
+                        true,
+                    )?;
+
+                    let tnew = value.get_type();
+
+                    if has_any 
+                    {
+                        match Type::most_specific(&tcur, &tnew) 
+                        {
+                            Some((t, any)) => 
+                            {
+                                tcur = t;
+                                has_any = any;
+                            }
+                            None => 
+                            {
+                                return parse_err
+                                (
+                                    stream.file(),
+                                    ExpectedType(tcur, tnew, value_line, value_col),
+                                );
+                            }
+                        }
+                    } else if tcur != tnew 
+                    {
+                        return parse_err
+                        (
+                            stream.file(),
+                            ExpectedType(tcur, tnew, value_line, value_col),
+                        );
+                    }
+
+                    vec.push(value);
+                }
+
+                let arr = Arr::from_vec_unchecked(vec, tcur);
+
+                Ok(arr)
+            }
+            /// Parses a sub-Arr in a file. It *must* start with [ and end with ].
+            pub fn parse_arr
+            (
+                mut stream: &mut CharStream,
+                obj: &ObjMap,
+                mut globals: &mut GlobalMap,
+                mut included: &mut IncludedMap,
+                depth: usize,
+            ) -> ParseResult<Value>
+            {
+                // Check depth.
+                if depth > MAX_DEPTH {
+                    return parse_err(stream.file(), MaxDepth(stream.line(), stream.col()));
+                }
+
+                // We must already be at a '['.
+                let ch = stream.next().unwrap();
+                assert_eq!(ch, '[');
+
+                let mut vec = Vec::new();
+                let mut tcur = Type::Any;
+                let mut has_any = true;
+
+                loop {
+                    // Go to the first non-whitespace character, or error if there is none.
+                    if !find_char(stream.clone()) {
+                        return parse_err(stream.file(), UnexpectedEnd(stream.line()));
+                    }
+
+                    let peek = stream.peek().unwrap();
+                    if peek == ']' {
+                        let _ = stream.next();
+                        break;
+                    } else if is::end_delimiter(peek) {
+                        return parse_err(
+                            stream.file(),
+                            InvalidClosingBracket(Some(']'), peek, stream.line(), stream.col()),
+                        );
+                    }
+
+                    // At a non-whitespace character, parse value.
+                    let (value_line, value_col) = (stream.line(), stream.col());
+                    let value = parse_value(
+                        &mut stream,
+                        obj,
+                        &mut globals,
+                        &mut included,
+                        value_line,
+                        value_col,
+                        depth,
+                        Some(']'),
+                        true,
+                    )?;
+
+                    let tnew = value.get_type();
+
+                    if has_any {
+                        match Type::most_specific(&tcur, &tnew) {
+                            Some((t, any)) => {
+                                tcur = t;
+                                has_any = any;
+                            }
+                            None => {
+                                return parse_err(
+                                    stream.file(),
+                                    ExpectedType(tcur, tnew, value_line, value_col),
+                                );
+                            }
+                        }
+                    } else if tcur != tnew {
+                        return parse_err(
+                            stream.file(),
+                            ExpectedType(tcur, tnew, value_line, value_col),
+                        );
+                    }
+
+                    vec.push(value);
+                }
+
+                let arr = Arr::from_vec_unchecked(vec, tcur);
+
+                Ok(arr.into())
+            }
+            /// Parses a Tup given a file.
+            pub fn parse_tup_file(path: &str, mut included: &mut IncludedMap) -> ParseResult<Tup>
+            {
+                let mut stream = CharStream::from_file(path)?;
+
+                let mut vec: Vec<Value> = Vec::new();
+                let obj: ObjMap = HashMap::new();
+                let mut globals: GlobalMap = HashMap::new();
+
+                loop {
+                    // Go to the first non-whitespace character, or error if there is none.
+                    if !find_char(stream.clone()) {
+                        break;
+                    }
+
+                    // At a non-whitespace character, parse value.
+                    let (value_line, value_col) = (stream.line(), stream.col());
+                    let value = parse_value(
+                        &mut stream,
+                        &obj,
+                        &mut globals,
+                        &mut included,
+                        value_line,
+                        value_col,
+                        1,
+                        None,
+                        true,
+                    )?;
+
+                    vec.push(value);
+                }
+
+                Ok(vec.into())
+            }
+            /// Parses a sub-Tup in a file. It *must* start with ( and end with ).
+            pub fn parse_tup
+            (
+                mut stream: &mut CharStream,
+                obj: &ObjMap,
+                mut globals: &mut GlobalMap,
+                mut included: &mut IncludedMap,
+                depth: usize,
+            ) -> ParseResult<Value>
+            {
+                // Check depth.
+                if depth > MAX_DEPTH {
+                    return parse_err(stream.file(), MaxDepth(stream.line(), stream.col()));
+                }
+
+                // We must already be at a '('.
+                let ch = stream.next().unwrap();
+                assert_eq!(ch, '(');
+
+                let mut vec = Vec::new();
+
+                loop {
+                    // Go to the first non-whitespace character, or error if there is none.
+                    if !find_char(stream.clone()) {
+                        return parse_err(stream.file(), UnexpectedEnd(stream.line()));
+                    }
+
+                    let peek = stream.peek().unwrap();
+                    if peek == ')' {
+                        let _ = stream.next();
+                        break;
+                    } else if is::end_delimiter(peek) {
+                        return parse_err(
+                            stream.file(),
+                            InvalidClosingBracket(Some(')'), peek, stream.line(), stream.col()),
+                        );
+                    }
+
+                    // At a non-whitespace character, parse value.
+                    let (value_line, value_col) = (stream.line(), stream.col());
+                    let value = parse_value(
+                        &mut stream,
+                        obj,
+                        &mut globals,
+                        &mut included,
+                        value_line,
+                        value_col,
+                        depth,
+                        Some(')'),
+                        true,
+                    )?;
+
+                    vec.push(value);
+                }
+
+                let tup = Tup::from_vec(vec);
+
+                Ok(tup.into())
+            }
+            /// Gets the next field in the char stream.
+            pub fn parse_field
+            (
+                mut stream: CharStream,
+                line: usize,
+                col: usize,
+            ) -> ParseResult<(String, bool, bool)>
+            {
+                let mut field = String::new();
+                let mut first = true;
+                let mut is_global = false;
+
+                let ch = stream.peek().unwrap();
+                if ch == '@' {
+                    let ch = stream.next().unwrap();
+                    is_global = true;
+                    field.push(ch);
+                }
+
+                while let Some(ch) = stream.next() {
+                    match ch {
+                        ':' if !first => {
+                            break;
+                        }
+                        ch if Obj::is_valid_field_char(ch, first) => field.push(ch),
+                        ch => {
+                            return parse_err(
+                                stream.file(),
+                                InvalidFieldChar(ch, stream.line(), stream.col() - 1),
+                            );
+                        }
+                    }
+
+                    first = false;
+                }
+
+                // Check for invalid field names.
+                match field.as_str() {
+                    _field_str if is::reserved(_field_str) => {
+                        parse_err(stream.file(), InvalidFieldName(field.clone(), line, col))
+                    }
+                    "^" => Ok((field.clone(), false, true)),
+                    bad if bad.starts_with('^') => {
+                        parse_err(stream.file(), InvalidFieldName(field.clone(), line, col))
+                    }
+                    _ => Ok((field.clone(), is_global, false)),
+                }
+            }
+            /// Gets the next value in the char stream.
+            pub fn parse_value
+            (
+                mut stream: &mut CharStream,
+                obj: &ObjMap,
+                mut globals: &mut GlobalMap,
+                mut included: &mut IncludedMap,
+                line: usize,
+                col: usize,
+                depth: usize,
+                cur_brace: Option<char>,
+                is_first: bool,
+            ) -> ParseResult<Value>
+            {
+                // Peek to determine what kind of value we'll be parsing.
+                let res = match stream.peek().unwrap() {
+                    '"' => parse_str(&mut stream)?,
+                    '\'' => parse_char(&mut stream)?,
+                    '{' => parse_obj(&mut stream, &mut globals, included, depth + 1)?,
+                    '[' => parse_arr(&mut stream, obj, &mut globals, included, depth + 1)?,
+                    '(' => parse_tup(&mut stream, obj, &mut globals, included, depth + 1)?,
+                    '@' => parse_variable(
+                        &mut stream,
+                        obj,
+                        globals,
+                        included,
+                        line,
+                        col,
+                        depth,
+                        cur_brace,
+                    )?,
+                    '<' => parse_include(&mut stream, obj, &mut globals, &mut included, depth + 1)?,
+                    ch @ '+' | ch @ '-' => {
+                        parse_unary_op(&mut stream, obj, globals, included, depth, cur_brace, ch)?
+                    }
+                    ch if is::numeric_char(ch) => parse_numeric(&mut stream, line, col)?,
+                    ch if Obj::is_valid_field_char(ch, true) => parse_variable(
+                        &mut stream,
+                        obj,
+                        globals,
+                        included,
+                        line,
+                        col,
+                        depth,
+                        cur_brace,
+                    )?,
+                    ch => {
+                        return parse_err(stream.file(), InvalidValueChar(ch, line, col));
+                    }
+                };
+
+                // Process operations if this is the first value.
+                if is_first {
+                    let mut val_deque: VecDeque<(Value, usize, usize)> = VecDeque::new();
+                    let mut op_deque: VecDeque<char> = VecDeque::new();
+                    val_deque.push_back((res, line, col));
+
+                    loop {
+                        match stream.peek() {
+                            Some(ch) if is::operator(ch) => {
+                                let _ = stream.next();
+                                if stream.peek().is_none() {
+                                    return parse_err(stream.file(), UnexpectedEnd(stream.line()));
+                                }
+
+                                let (line2, col2) = (stream.line(), stream.col());
+
+                                // Parse another value.
+                                let val2 = parse_value(
+                                    &mut stream,
+                                    obj,
+                                    &mut globals,
+                                    &mut included,
+                                    line2,
+                                    col2,
+                                    depth,
+                                    cur_brace,
+                                    false,
+                                )?;
+
+                                if is::priority_operator(ch) {
+                                    let (val1, line1, col1) = val_deque.pop_back().unwrap();
+                                    let res = binary_op_on_values(stream, val1, val2, ch, line2, col2)?;
+                                    val_deque.push_back((res, line1, col1));
+                                } else {
+                                    val_deque.push_back((val2, line2, col2));
+                                    op_deque.push_back(ch);
+                                }
+                            }
+                            _ => break,
+                        }
+                    }
+
+                    // Check for valid characters after the value.
+                    check_value_end(stream, cur_brace)?;
+
+                    let (mut val1, _, _) = val_deque.pop_front().unwrap();
+                    while !op_deque.is_empty() {
+                        let (val2, line2, col2) = val_deque.pop_front().unwrap();
+                        val1 = binary_op_on_values(
+                            stream,
+                            val1,
+                            val2,
+                            op_deque.pop_front().unwrap(),
+                            line2,
+                            col2,
+                        )?;
+                    }
+                    Ok(val1)
+                } else {
+                    Ok(res)
+                }
+            }
+
+            fn parse_unary_op
+            (
+                mut stream: &mut CharStream,
+                obj: &ObjMap,
+                mut globals: &mut GlobalMap,
+                mut included: &mut IncludedMap,
+                depth: usize,
+                cur_brace: Option<char>,
+                ch: char,
+            ) -> ParseResult<Value>
+            {
+                let _ = stream.next();
+                let line = stream.line();
+                let col = stream.col();
+
+                let res = match stream.peek() {
+                    Some(_) => parse_value(
+                        &mut stream,
+                        obj,
+                        &mut globals,
+                        &mut included,
+                        line,
+                        col,
+                        depth + 1,
+                        cur_brace,
+                        false,
+                    )?,
+                    None => return parse_err(stream.file(), UnexpectedEnd(line)),
+                };
+                unary_op_on_value(stream, res, ch, line, col)
+            }
+            /// Gets the next numeric (either Int or Frac) in the character stream.
+            fn parse_numeric(stream: &mut CharStream, line: usize, col: usize) -> ParseResult<Value>
+            {
+                let mut s1 = String::new();
+                let mut s2 = String::new();
+                let mut dec = false;
+                let mut under = false;
+
+                while let Some(ch) = stream.peek() {
+                    match ch {
+                        ch if is::value_end_char(ch) => break,
+                        ch if is::digit(ch) => {
+                            if !dec {
+                                s1.push(ch);
+                            } else {
+                                s2.push(ch);
+                            }
+                        }
+                        '.' | ',' => {
+                            if !dec {
+                                dec = true;
+                            } else {
+                                return parse_err(
+                                    stream.file(),
+                                    InvalidValueChar(ch, stream.line(), stream.col()),
+                                );
+                            }
+                        }
+                        '_' => {
+                            if !under {
+                                under = true;
+                            } else {
+                                return parse_err(
+                                    stream.file(),
+                                    InvalidValueChar(ch, stream.line(), stream.col()),
+                                );
+                            }
+                        }
+                        _ => {
+                            return parse_err(
+                                stream.file(),
+                                InvalidValueChar(ch, stream.line(), stream.col()),
+                            );
+                        }
+                    }
+
+                    if ch != '_' {
+                        under = false;
+                    }
+
+                    let _ = stream.next();
+                }
+
+                if dec {
+                    // Parse a Frac from a number with a decimal.
+                    if s1.is_empty() && s2.is_empty() {
+                        return parse_err(stream.file(), InvalidNumeric(line, col));
+                    }
+
+                    let whole: BigInt = if s1.is_empty() {
+                        0u8.into()
+                    } else {
+                        s1.parse()?
+                    };
+
+                    // Remove trailing zeros.
+                    let s2 = s2.trim_end_matches('0');
+
+                    let (decimal, dec_len): (BigInt, usize) = if s2.is_empty() {
+                        (0u8.into(), 1)
+                    } else {
+                        (s2.parse()?, s2.len())
+                    };
+
+                    let f = frac_from_whole_and_dec(whole, decimal, dec_len);
+                    Ok(f.into())
+                } else {
+                    // Parse an Int.
+                    if s1.is_empty() {
+                        return parse_err(stream.file(), InvalidNumeric(line, col));
+                    }
+
+                    let i: BigInt = s1.parse()?;
+                    Ok(i.into())
+                }
+            }
+            /// Parses a variable name and gets a value from the corresponding variable.
+            fn parse_variable
+            (
+                mut stream: &mut CharStream,
+                obj: &ObjMap,
+                mut globals: &mut GlobalMap,
+                mut included: &mut IncludedMap,
+                line: usize,
+                col: usize,
+                depth: usize,
+                cur_brace: Option<char>,
+            ) -> ParseResult<Value>
+            {
+                let mut var = String::new();
+                let mut is_global = false;
+                let mut dot = false;
+                let mut dot_global = false;
+
+                let ch = stream.peek().unwrap();
+                if ch == '@' {
+                    let ch = stream.next().unwrap();
+                    is_global = true;
+                    var.push(ch);
+                }
+
+                while let Some(ch) = stream.peek() {
+                    match ch {
+                        '.' => {
+                            let _ = stream.next();
+                            match stream.peek() {
+                                Some('@') => dot_global = true,
+                                Some(ch) if Obj::is_valid_field_char(ch, true) || is::numeric_char(ch) => (),
+                                Some(ch) => {
+                                    return parse_err(
+                                        stream.file(),
+                                        InvalidValueChar(ch, stream.line(), stream.col()),
+                                    );
+                                }
+                                None => return parse_err(stream.file(), UnexpectedEnd(stream.line())),
+                            }
+
+                            dot = true;
+                            break;
+                        }
+                        ch if is::value_end_char(ch) => break,
+                        ch if Obj::is_valid_field_char(ch, false) => {
+                            let _ = stream.next();
+                            var.push(ch);
+                        }
+                        ch => {
+                            return parse_err(
+                                stream.file(),
+                                InvalidValueChar(ch, stream.line(), stream.col()),
+                            );
+                        }
+                    }
+                }
+
+                let mut value = match var.as_str() {
+                    "null" => Value::Null,
+                    "true" => Value::Bool(true),
+                    "false" => Value::Bool(false),
+
+                    "Obj" => Value::Obj(OBJ_SENTINEL.clone()),
+                    "Str" => Value::Obj(STR_SENTINEL.clone()),
+                    "Arr" => Value::Obj(ARR_SENTINEL.clone()),
+                    "Tup" => Value::Obj(TUP_SENTINEL.clone()),
+
+                    var @ "@" => return parse_err(stream.file(), InvalidValue(var.into(), line, col)),
+                    var if is_global => {
+                        // Global variable, get value from globals map.
+                        match globals.get(var) {
+                            Some(value) => value.clone(),
+                            None => {
+                                let var = String::from(var);
+                                return parse_err(stream.file(), GlobalNotFound(var, line, col));
+                            }
+                        }
+                    }
+                    var => {
+                        // Regular variable, get value from the current Obj.
+                        match obj.get(var) {
+                            Some(value) => value.clone(),
+                            None => {
+                                let var = String::from(var);
+                                return parse_err(stream.file(), VariableNotFound(var, line, col));
+                            }
+                        }
+                    }
+                };
+
+                if dot {
+                    value = match value {
+                        Value::Arr(arr) => {
+                            let (line, col) = (stream.line(), stream.col());
+                            let value = parse_value(
+                                &mut stream,
+                                obj,
+                                &mut globals,
+                                &mut included,
+                                line,
+                                col,
+                                depth + 1,
+                                cur_brace,
+                                false,
+                            )?;
+
+                            match value {
+                                Value::Int(int) => match int.to_usize() {
+                                    Some(index) => arr
+                                        .get(index)
+                                        .map_err(|e| ParseError::from_over(&e, stream.file(), line, col))?,
+                                    None => return parse_err(stream.file(), InvalidIndex(int, line, col)),
+                                },
+                                _ => {
+                                    return parse_err(
+                                        stream.file(),
+                                        ExpectedType(Type::Int, value.get_type(), line, col),
+                                    );
+                                }
+                            }
+                        }
+                        Value::Tup(tup) => {
+                            let (line, col) = (stream.line(), stream.col());
+                            let value = parse_value(
+                                &mut stream,
+                                obj,
+                                &mut globals,
+                                &mut included,
+                                line,
+                                col,
+                                depth + 1,
+                                cur_brace,
+                                false,
+                            )?;
+
+                            match value {
+                                Value::Int(int) => match int.to_usize() {
+                                    Some(index) => tup
+                                        .get(index)
+                                        .map_err(|e| ParseError::from_over(&e, stream.file(), line, col))?,
+                                    None => return parse_err(stream.file(), InvalidIndex(int, line, col)),
+                                },
+                                _ => {
+                                    return parse_err(
+                                        stream.file(),
+                                        ExpectedType(Type::Int, value.get_type(), line, col),
+                                    );
+                                }
+                            }
+                        }
+                        Value::Obj(obj) => {
+                            let (line, col) = (stream.line(), stream.col());
+
+                            if dot_global {
+                                return parse_err(stream.file(), InvalidValueChar('@', line, col));
+                            }
+
+                            parse_variable(
+                                &mut stream,
+                                obj.map_ref(),
+                                globals,
+                                included,
+                                line,
+                                col,
+                                depth + 1,
+                                cur_brace,
+                            )?
+                        }
+                        _ => return parse_err(stream.file(), InvalidDot(value.get_type(), line, col)),
+                    }
+                }
+
+                Ok(value)
+            }
+            /// Gets the next Char in the character stream.
+            pub fn parse_char(stream: &mut CharStream) -> ParseResult<Value>
+            {
+                let ch = stream.next().unwrap();
+                assert_eq!(ch, '\'');
+
+                let (escape, mut ch) = match stream.next() {
+                    Some('\\') => (true, '\0'),
+                    Some(ch) if ch == '\n' || ch == '\r' || ch == '\t' => {
+                        return parse_err(
+                            stream.file(),
+                            InvalidValueChar(ch, stream.line(), stream.col() - 1),
+                        );
+                    }
+                    Some(ch) => (false, ch),
+                    None => return parse_err(stream.file(), UnexpectedEnd(stream.line())),
+                };
+
+                if escape {
+                    ch = match stream.next() {
+                        Some(ch) => match char::get_escape(ch) {
+                            Some(ch) => ch,
+                            None => {
+                                return parse_err(
+                                    stream.file(),
+                                    InvalidEscapeChar(ch, stream.line(), stream.col() - 1),
+                                );
+                            }
+                        },
+                        None => return parse_err(stream.file(), UnexpectedEnd(stream.line())),
+                    }
+                }
+
+                match stream.next() {
+                    Some('\'') => (),
+                    Some(ch) => {
+                        return parse_err(
+                            stream.file(),
+                            InvalidValueChar(ch, stream.line(), stream.col() - 1),
+                        );
+                    }
+                    None => return parse_err(stream.file(), UnexpectedEnd(stream.line())),
+                }
+
+                Ok(ch.into())
+            }
+
+            fn parse_str_file(path: &str) -> ParseResult<String>
+            {
+                let s = str::read_file(path)?.replace("\r\n", "\n");
+                Ok(s)
+            }
+            /// Gets the next Str in the character stream.
+            pub fn parse_str(stream: &mut CharStream) -> ParseResult<Value>
+            {
+                let ch = stream.next().unwrap();
+                assert_eq!(ch, '"');
+
+                let mut s = String::new();
+                let mut escape = false;
+
+                loop {
+                    match stream.next() {
+                        Some(ch) => {
+                            if escape {
+                                match char::get_escape(ch) {
+                                    Some(ch) => s.push(ch),
+                                    None => {
+                                        return parse_err(
+                                            stream.file(),
+                                            InvalidEscapeChar(ch, stream.line(), stream.col() - 1),
+                                        );
+                                    }
+                                }
+                                escape = false;
+                            } else {
+                                match ch {
+                                    '"' => break,
+                                    '\\' => escape = true,
+                                    _ => s.push(ch),
+                                }
+                            }
+                        }
+                        None => return parse_err(stream.file(), UnexpectedEnd(stream.line())),
+                    }
+                }
+
+                // Replace \r\n line endings with \n for consistency in internal handling.
+                let s = s.replace("\r\n", "\n");
+
+                Ok(s.into())
+            }
+
+            pub fn parse_include
+            (
+                mut stream: &mut CharStream,
+                obj: &ObjMap,
+                mut globals: &mut GlobalMap,
+                mut included: &mut IncludedMap,
+                depth: usize,
+            ) -> ParseResult<Value>
+            {
+                enum IncludeType {
+                    Obj,
+                    Str,
+                    Arr,
+                    Tup,
+                }
+
+                // Check depth.
+                if depth > MAX_DEPTH {
+                    return parse_err(stream.file(), MaxDepth(stream.line(), stream.col()));
+                }
+
+                let ch = stream.next().unwrap();
+                assert_eq!(ch, '<');
+
+                // Go to the next non-whitespace character, or error if there is none.
+                if !find_char(stream.clone()) {
+                    return parse_err(stream.file(), UnexpectedEnd(stream.line()));
+                }
+
+                let (mut line, mut col) = (stream.line(), stream.col());
+                let mut value = parse_value(
+                    &mut stream,
+                    obj,
+                    &mut globals,
+                    &mut included,
+                    line,
+                    col,
+                    depth,
+                    Some('>'),
+                    true,
+                )?;
+
+                let mut include_type = IncludeType::Obj; // Default include type if no token is present.
+                let mut parse_again = true; // True if an include token was found.
+                match value {
+                    Value::Obj(ref obj) if obj.ptr_eq(&OBJ_SENTINEL) => include_type = IncludeType::Obj,
+                    Value::Obj(ref obj) if obj.ptr_eq(&STR_SENTINEL) => include_type = IncludeType::Str,
+                    Value::Obj(ref obj) if obj.ptr_eq(&ARR_SENTINEL) => include_type = IncludeType::Arr,
+                    Value::Obj(ref obj) if obj.ptr_eq(&TUP_SENTINEL) => include_type = IncludeType::Tup,
+                    Value::Str(_) => parse_again = false,
+                    _ => {
+                        return parse_err(
+                            stream.file(),
+                            InvalidIncludeToken(value.get_type(), line, col),
+                        );
+                    }
+                }
+
+                if parse_again {
+                    // Go to the next non-whitespace character, or error if there is none.
+                    if !find_char(stream.clone()) {
+                        return parse_err(stream.file(), UnexpectedEnd(stream.line()));
+                    }
+
+                    line = stream.line();
+                    col = stream.col();
+                    value = parse_value(
+                        &mut stream,
+                        obj,
+                        &mut globals,
+                        &mut included,
+                        line,
+                        col,
+                        depth,
+                        Some('>'),
+                        true,
+                    )?;
+                }
+
+                // Go to the next non-whitespace character, or error if there is none.
+                if !find_char(stream.clone()) {
+                    return parse_err(stream.file(), UnexpectedEnd(stream.line()));
+                }
+
+                match stream.next().unwrap() {
+                    '>' => (),
+                    ch => {
+                        return parse_err(
+                            stream.file(),
+                            InvalidClosingBracket(Some('>'), ch, stream.line(), stream.col() - 1),
+                        );
+                    }
+                }
+
+                // Get the full path of the include file.
+                let include_file = match value {
+                    Value::Str(s) => s,
+                    _ => {
+                        return parse_err(
+                            stream.file(),
+                            ExpectedType(Type::Str, value.get_type(), line, col),
+                        );
+                    }
+                };
+
+                let pathbuf = match stream.file().as_ref() {
+                    Some(file) => Path::new(file)
+                        .parent()
+                        .unwrap()
+                        .join(Path::new(&include_file)),
+                    None => Path::new(&include_file).to_path_buf(),
+                };
+                let path = pathbuf.as_path();
+                if !path.is_file() {
+                    return parse_err(stream.file(), InvalidIncludePath(include_file, line, col));
+                }
+
+                // Get the include file as a path relative to the current working directory.
+                let path_str = match path.to_str() {
+                    Some(path) => path,
+                    None => return parse_err(stream.file(), InvalidIncludePath(include_file, line, col)),
+                };
+
+                // Get the include file as an absolute path.
+                let path = match path.canonicalize() {
+                    Ok(path) => path,
+                    Err(_) => return parse_err(stream.file(), InvalidIncludePath(include_file, line, col)),
+                };
+                let full_path_str = match path.to_str() {
+                    Some(path) => path,
+                    None => return parse_err(stream.file(), InvalidIncludePath(include_file, line, col)),
+                };
+
+                // Prevent cyclic includes by temporarily storing the current file path.
+                let storing = if let Some(file) = stream.file() {
+                    let full_file = String::from(Path::new(&file).canonicalize().unwrap().to_str().unwrap());
+                    included.1.insert(full_file.clone());
+                    Some(full_file)
+                } else {
+                    None
+                };
+                if included.1.contains(full_path_str) {
+                    return parse_err(stream.file(), CyclicInclude(include_file, line, col));
+                }
+
+                // Get either the tracked value or parse it if it's our first time seeing the include.
+                let value = if included.0.contains_key(full_path_str) {
+                    let value = &included.0[full_path_str];
+                    value.clone()
+                } else {
+                    let value: Value = match include_type {
+                        IncludeType::Obj => parse_obj_file_includes(path_str, included)?.into(),
+                        IncludeType::Str => parse_str_file(path_str)?.into(),
+                        IncludeType::Arr => parse_arr_file(path_str, included)?.into(),
+                        IncludeType::Tup => parse_tup_file(path_str, included)?.into(),
+                    };
+                    // Use full path as included key.
+                    included.0.insert(full_path_str.into(), value.clone());
+                    value
+                };
+
+                // Remove the stored file path.
+                if let Some(file) = storing {
+                    included.1.remove(&file);
+                }
+
+                Ok(value)
+            }
+            /// Tries to perform a unary operation on a single value.
+            pub fn unary_op_on_value
+            (
+                stream: &CharStream,
+                val: Value,
+                op: char,
+                line: usize,
+                col: usize,
+            ) -> ParseResult<Value>
+            {
+                use crate::database::types::Type::*;
+
+                let t = val.get_type();
+
+                Ok(match op {
+                    '+' => match t {
+                        Int | Frac => val,
+                        _ => return parse_err(stream.file(), UnaryOperatorError(t, op, line, col)),
+                    },
+                    '-' => match t {
+                        Int => (-val.get_int().unwrap()).into(),
+                        Frac => (-val.get_frac().unwrap()).into(),
+                        _ => return parse_err(stream.file(), UnaryOperatorError(t, op, line, col)),
+                    },
+                    _ => return parse_err(stream.file(), UnaryOperatorError(t, op, line, col)),
+                })
+            }
+            /// Tries to perform an operation on two values.
+            pub fn binary_op_on_values
+            (
+                stream: &CharStream,
+                mut val1: Value,
+                mut val2: Value,
+                op: char,
+                line: usize,
+                col: usize,
+            ) -> ParseResult<Value>
+            {
+                use crate::database::types::Type::*;
+
+                let (mut type1, mut type2) = (val1.get_type(), val2.get_type());
+
+                // If one value is an Int and the other is a Frac, promote the Int.
+                if type1 == Int && type2 == Frac {
+                    val1 = Value::Frac(BigRational::new(val1.get_int().unwrap(), 1.into()));
+                    type1 = Frac;
+                } else if type1 == Frac && type2 == Int {
+                    val2 = Value::Frac(BigRational::new(val2.get_int().unwrap(), 1.into()));
+                    type2 = Frac;
+                }
+
+                Ok(match op 
+                {
+                    '+' => 
+                    {
+                        match type1 
+                        {
+                            Int if type2 == Int => (val1.get_int().unwrap() + val2.get_int().unwrap()).into(),
+                            Frac if type2 == Frac => 
+                            {
+                                (val1.get_frac().unwrap() + val2.get_frac().unwrap()).into()
+                            }
+                            Char if type2 == Char => 
+                            {
+                                let mut s = String::with_capacity(2);
+                                s.push(val1.get_char().unwrap());
+                                s.push(val2.get_char().unwrap());
+                                s.into()
+                            }
+                            Char if type2 == Str => 
+                            {
+                                let str2 = val2.get_str().unwrap();
+                                let mut s = String::with_capacity(1 + str2.len());
+                                s.push(val1.get_char().unwrap());
+                                s.push_str(&str2);
+                                s.into()
+                            }
+                            Str if type2 == Char => 
+                            {
+                                let str1 = val1.get_str().unwrap();
+                                let mut s = String::with_capacity(str1.len() + 1);
+                                s.push_str(&str1);
+                                s.push(val2.get_char().unwrap());
+                                s.into()
+                            }
+                            Str if type2 == Str => 
+                            {
+                                let str1 = val1.get_str().unwrap();
+                                let str2 = val2.get_str().unwrap();
+                                let mut s = String::with_capacity(str1.len() + str2.len());
+                                s.push_str(&str1);
+                                s.push_str(&str2);
+                                s.into()
+                            }
+                            Arr(_) => 
+                            {
+                                match Type::most_specific(&type1, &type2) 
+                                {
+                                    Some((t, _)) => 
+                                    {
+                                        let (arr1, arr2) = (val1.get_arr().unwrap(), val2.get_arr().unwrap());
+                                        let (mut vec1, mut vec2) =
+                                            (arr1.vec_ref().clone(), arr2.vec_ref().clone());
+
+                                        let mut vec = Vec::with_capacity(vec1.len() + vec2.len());
+                                        vec.append(&mut vec1);
+                                        vec.append(&mut vec2);
+
+                                        // Get the inner type.
+                                        let arr = if let Arr(ref t) = t 
+                                        {
+                                            // Because we know the type already, we can safely use `_unchecked`.
+                                            arrays::Arr::from_vec_unchecked(vec, t.deref().clone())
+                                        } else 
+                                        {
+                                            panic!("Logic error")
+                                        };
+
+                                        arr.into()
+                                    }
+                                    None => {
+                                        return parse_err
+                                        (
+                                            stream.file(),
+                                            BinaryOperatorError(type1, type2, op, line, col),
+                                        );
+                                    }
+                                }
+                            }
+                            _ => {
+                                return parse_err
+                                (
+                                    stream.file(),
+                                    BinaryOperatorError(type1, type2, op, line, col),
+                                );
+                            }
+                        }
+                    }
+                    '-' => match type1 {
+                        Int if type2 == Int => (val1.get_int().unwrap() - val2.get_int().unwrap()).into(),
+                        Frac if type2 == Frac => (val1.get_frac().unwrap() - val2.get_frac().unwrap()).into(),
+                        _ => {
+                            return parse_err(
+                                stream.file(),
+                                BinaryOperatorError(type1, type2, op, line, col),
+                            );
+                        }
+                    },
+                    '*' => match type1 {
+                        Int if type2 == Int => (val1.get_int().unwrap() * val2.get_int().unwrap()).into(),
+                        Frac if type2 == Frac => (val1.get_frac().unwrap() * val2.get_frac().unwrap()).into(),
+                        _ => {
+                            return parse_err(
+                                stream.file(),
+                                BinaryOperatorError(type1, type2, op, line, col),
+                            );
+                        }
+                    },
+                    '/' => match type1 {
+                        Int if type2 == Int => {
+                            let (int1, int2) = (val1.get_int().unwrap(), val2.get_int().unwrap());
+                            if int2.is_zero() {
+                                return parse_err(stream.file(), InvalidNumeric(line, col));
+                            }
+                            BigRational::new(int1, int2).into()
+                        }
+                        Frac if type2 == Frac => {
+                            let (frac1, frac2) = (val1.get_frac().unwrap(), val2.get_frac().unwrap());
+                            if frac2.is_zero() {
+                                return parse_err(stream.file(), InvalidNumeric(line, col));
+                            }
+                            (frac1 / frac2).into()
+                        }
+                        _ => {
+                            return parse_err(
+                                stream.file(),
+                                BinaryOperatorError(type1, type2, op, line, col),
+                            );
+                        }
+                    },
+                    '%' => match type1 {
+                        Int if type2 == Int => {
+                            let int2 = val2.get_int().unwrap();
+                            if int2.is_zero() {
+                                return parse_err(stream.file(), InvalidNumeric(line, col));
+                            }
+                            (val1.get_int().unwrap() % int2).into()
+                        }
+                        _ => {
+                            return parse_err(
+                                stream.file(),
+                                BinaryOperatorError(type1, type2, op, line, col),
+                            );
+                        }
+                    },
+                    _ => {
+                        return parse_err(
+                            stream.file(),
+                            BinaryOperatorError(type1, type2, op, line, col),
+                        );
+                    }
+                })
+            }
+            /// Finds the next non-whitespace character, ignoring comments, and update stream position.
+            pub fn find_char(mut stream: CharStream) -> bool
+            {
+                while let Some(ch) = stream.peek() 
+                {
+                    match ch 
+                    {
+                        '#' => 
+                        {
+                            // Comment found; eat the rest of the line.
+                            loop {
+                                let ch = stream.next();
+                                if ch.is_none() 
+                                {
+                                    return false;
+                                }
+                                if ch.unwrap() == '\n' 
+                                {
+                                    break;
+                                }
+                            }
+                        }
+                        ch if ch.is_whitespace() => 
+                        {
+                            let _ = stream.next();
+                        }
+                        _ => return true,
+                    }
+                }
+
+                false
+            }
+            /// Helper function to make sure values are followed by a correct end delimiter.
+            pub fn check_value_end(stream: &CharStream, cur_brace: Option<char>) -> ParseResult<()>
+            {
+                match stream.peek() 
+                {
+                    Some(ch) => match ch 
+                    {
+                        ch if is_value_end_char(ch) => 
+                        {
+                            if is_end_delimiter(ch) && Some(ch) != cur_brace 
+                            {
+                                parse_err(
+                                    stream.file(),
+                                    InvalidClosingBracket(cur_brace, ch, stream.line(), stream.col()),
+                                )
+                            } else 
+                            {
+                                Ok(())
+                            }
+                        }
+                        ch => parse_err
+                        (
+                            stream.file(),
+                            InvalidValueChar(ch, stream.line(), stream.col()),
+                        ),
+                    },
+                    None => Ok(()),
+                }
+            }
+        }
+        
+        use super::Obj;
+
+        pub type ParseResult<T> = Result<T, ParseError>;
+        pub const MAX_DEPTH: usize = 64;
+        /// Load an `Obj` from a file.
+        pub fn load_from_file(path: &str) -> ParseResult<Obj> { parser::parse_obj_file(path) }
+        /// Load an `Obj` from a &str.
+        pub fn load_from_str(contents: &str) -> ParseResult<Obj> { parser::parse_obj_str(contents) }
+    }
+}
+
+pub mod default
+{
+    pub use std::default::{ * };
+}
+
+pub mod env
+{
+    pub use std::env::{ * };
 }
 
 pub mod error
@@ -836,9 +5189,19 @@ pub mod fmt
     pub use std::fmt::{ * };
 }
 
+pub mod fs
+{
+    pub use std::fs::{ * };
+}
+
 pub mod hash
 {
     pub use std::hash::{ * };
+}
+
+pub mod io
+{
+    pub use std::io::{ * };
 }
 
 pub mod iter
@@ -881,6 +5244,60 @@ pub mod is
     pub fn is_newline(...) -> bool */
     /// Tests if byte is ASCII newline: \n
     #[inline] pub fn newline(chr: u8) -> bool { chr == b'\n' }
+    /*
+    pub fn is_value_end_char(...) -> bool */
+    /// Returns true if this character signifies the legal end of a value.
+    pub fn value_end_char(ch: char) -> bool {
+        whitespace(ch) || end_delimiter(ch) || operator(ch)
+    }
+    /*
+    pub fn is_whitespace(...) -> bool */
+    /// Returns true if the character is either whitespace or '#' (start of a comment).
+    pub fn whitespace(ch: char) -> bool {
+        ch.is_whitespace() || ch == '#'
+    }
+    /*
+    pub fn is_end_delimiter(...) -> bool */
+    pub fn end_delimiter(ch: char) -> bool {
+        match ch {
+            ')' | ']' | '}' | '>' => true,
+            _ => false,
+        }
+    }
+    /*
+    pub fn is_numeric_char(...) -> bool */
+    pub fn numeric_char(ch: char) -> bool {
+        match ch {
+            _ch if is_digit(_ch) => true,
+            '.' | ',' => true,
+            _ => false,
+        }
+    }
+    /*
+    pub fn is_priority_operator(...) -> bool */
+    pub fn priority_operator(ch: char) -> bool {
+        match ch {
+            '*' | '/' | '%' => true,
+            _ => false,
+        }
+    }
+    /*
+    pub fn is_operator(...) -> bool */
+    pub fn operator(ch: char) -> bool
+    {
+        match ch {
+            '+' | '-' | '*' | '/' | '%' => true,
+            _ => false,
+        }
+    }
+    /*
+    pub fn is_reserved(...) -> bool */
+    pub fn reserved(field: &str) -> bool {
+        match field {
+            "@" | "null" | "true" | "false" | "Obj" | "Str" | "Arr" | "Tup" => true,
+            _ => false,
+        }
+    }
 }
 
 pub mod marker
@@ -896,6 +5313,45 @@ pub mod mem
 pub mod num
 {
     pub use std::num::{ * };
+    pub mod big
+    {
+        use ::
+        {
+            *,
+        };
+    }
+
+    pub mod fractional
+    {
+        use ::
+        {
+            *,
+        };
+
+        pub fn frac_from_whole_and_dec(whole: BigInt, decimal: BigInt, dec_len: usize) -> BigRational
+        {
+            let denom = pow(BigInt::from_u8(10).unwrap(), dec_len);
+            BigRational::new(whole, 1.into()) + BigRational::new(decimal, denom)
+        }
+    }
+
+    pub mod integers
+    {
+        pub use ::num_integer::{ * };
+    }
+
+    pub mod rational
+    {
+        use ::
+        {
+            *,
+        };
+    }
+
+    pub mod traits
+    {
+        pub use ::num_traits::{ * };
+    }
 }
 
 pub mod ops
@@ -2048,7 +6504,6 @@ pub mod parsers
                 Failure(E),
                 Incomplete(Needed),
             }
-
             /// a parser which always succeeds with given value without consuming any input.
             pub fn success<I, O: Clone, E: ParseError<I>>(val: O) -> impl Fn(I) -> IResult<I, O, E> 
             {
@@ -3637,29 +8092,42 @@ pub mod parsers
 
             impl<'a> AsChar for &'a char
             {
-                #[inline] fn as_char(self) -> char {
+                #[inline] fn as_char(self) -> char 
+                {
                     *self
                 }
-                #[inline] fn is_alpha(self) -> bool {
+
+                #[inline] fn is_alpha(self) -> bool 
+                {
                     self.is_ascii_alphabetic()
                 }
-                #[inline] fn is_alphanum(self) -> bool {
+
+                #[inline] fn is_alphanum(self) -> bool 
+                {
                     self.is_alpha() || self.is_dec_digit()
                 }
-                #[inline] fn is_dec_digit(self) -> bool {
+
+                #[inline] fn is_dec_digit(self) -> bool 
+                {
                     self.is_ascii_digit()
                 }
-                #[inline] fn is_hex_digit(self) -> bool {
+
+                #[inline] fn is_hex_digit(self) -> bool 
+                {
                     self.is_ascii_hexdigit()
                 }
-                #[inline] fn is_oct_digit(self) -> bool {
+
+                #[inline] fn is_oct_digit(self) -> bool 
+                {
                     self.is_digit(8)
                 }
-                #[inline] fn len(self) -> usize {
+
+                #[inline] fn len(self) -> usize 
+                {
                     self.len_utf8()
                 }
-            }
 
+            }
             /// Abstracts common iteration operations on the input type
             pub trait InputIter 
             {
@@ -8069,6 +12537,16 @@ pub mod parsers
     }
 }
 
+pub mod path
+{
+    pub use std::path::{ * };
+}
+
+pub mod rc
+{
+    pub use std::rc::{ * };
+}
+
 pub mod result
 {
     pub use std::result::{ * };
@@ -8081,7 +12559,35 @@ pub mod slice
 
 pub mod str
 {
-    pub use std::str::{ * };
+    pub use std::str::{ * };    
+    use ::
+    {
+        fs::{ File },
+        io::{ self, Write },
+        *,
+    };
+    /*
+    pub fn write_file_str(...) -> io::Result<()> */
+    /// Writes a strand to a file.
+    pub fn write_file(fname: &str, contents: &str) -> io::Result<()>
+    {
+        let mut file = File::create(fname)?;
+        file.write_all(contents.as_bytes())?;
+        Ok(())
+    }
+    /*
+    pub fn read_file_str(...) -> io::Result<String> */
+    /// Reads a file and returns its contents in a string.
+    pub fn read_file(fname: &str) -> io::Result<String>
+    {
+        // Open a file in read-only mode
+        let mut file = File::open(fname)?;
+
+        let mut contents = String::new();
+        let _ = file.read_to_string(&mut contents)?;
+
+        Ok(contents)
+    }
 }
 
 pub mod string
@@ -8106,9 +12612,9 @@ pub mod vec
 
 fn main()
 {
-
+    
 }
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 7668
+// 12620
