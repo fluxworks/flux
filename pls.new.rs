@@ -14,6 +14,7 @@
 #[macro_use] extern crate lazy_static;
 /**/
 extern crate libc;
+extern crate memchr;
 extern crate nix;
 extern crate regex as re;
 extern crate time as timed;
@@ -118,18 +119,18 @@ pub mod common
         {
             use ::
             {
+                borrow::Cow,
+                parsers::nom::
+                {
+                    branch::alt,
+                    character::streaming::char,
+                    character::{streaming::line_ending as eol},
+                    combinator::eof,
+                    IResult,
+                },
                 *,
             };
             
-            use nom::branch::alt;
-            use nom::character::streaming::char;
-            use nom::character::{is_digit, streaming::line_ending as eol};
-            use nom::combinator::eof;
-            use nom::IResult;
-            use std::borrow::Cow;
-            use std::str;
-            use std::u8;
-
             const NONE: u8 = 0b000000;
             const PRINT: u8 = 0b000001;
             const SPACE: u8 = 0b000010;
@@ -139,8 +140,9 @@ pub mod common
             const EOL: u8 = 0b100000;
 
             // Ugly table of DOOM, gotta run and gun.
-            #[rustfmt::skip]
-            static ASCII: [u8; 256] = [
+            
+            static ASCII: [u8; 256] = 
+            [
                 NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
                 NONE, SPACE, EOL, NONE, NONE, EOL, NONE, NONE,
                 NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
@@ -175,41 +177,43 @@ pub mod common
                 NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
             ];
 
-            #[inline(always)]
-            pub fn is_ws(ch: u8) -> bool {
+            #[inline( always )] pub fn is_ws(ch: u8) -> bool 
+            {
                 unsafe { ASCII.get_unchecked(ch as usize) & SPACE == SPACE }
             }
 
-            #[inline(always)]
-            pub fn is_eol(ch: u8) -> bool {
+            #[inline( always )] pub fn is_eol(ch: u8) -> bool 
+            {
                 unsafe { ASCII.get_unchecked(ch as usize) & EOL == EOL }
             }
 
-            #[inline(always)]
-            pub fn is_printable_no_pipe(ch: u8) -> bool {
+            #[inline( always )] pub fn is_printable_no_pipe(ch: u8) -> bool 
+            {
                 unsafe { ASCII.get_unchecked(ch as usize) & (PRINT | PIPE) == PRINT }
             }
 
-            #[inline(always)]
-            pub fn is_printable_no_comma(ch: u8) -> bool {
+            #[inline( always )] pub fn is_printable_no_comma(ch: u8) -> bool 
+            {
                 unsafe { ASCII.get_unchecked(ch as usize) & (PRINT | COMMA) == PRINT }
             }
 
-            #[inline(always)]
-            pub fn is_printable_no_control(ch: u8) -> bool {
+            #[inline( always )] pub fn is_printable_no_control(ch: u8) -> bool 
+            {
                 unsafe { ASCII.get_unchecked(ch as usize) & (PRINT | CONTROL) == PRINT }
             }
 
-            pub fn ws(input: &[u8]) -> IResult<&[u8], char> {
+            pub fn ws(input: &[u8]) -> IResult<&[u8], char> 
+            {
                 alt((char(' '), char('\t')))(input)
             }
 
-            pub fn end(input: &[u8]) -> IResult<&[u8], &[u8]> {
+            pub fn end(input: &[u8]) -> IResult<&[u8], &[u8]> 
+            {
                 alt((eof, eol))(input)
             }
 
-            #[inline]
-            pub fn number(i: &[u8]) -> i32 {
+            #[inline] pub fn number(i: &[u8]) -> i32 
+            {
                 let mut n: i32 = 0;
 
                 for &ch in i {
@@ -223,8 +227,10 @@ pub mod common
                 n
             }
 
-            pub fn unescape(i: &[u8]) -> Cow<[u8]> {
-                fn escape<I: Iterator<Item = u8>>(output: &mut Vec<u8>, iter: &mut I) {
+            pub fn unescape(i: &[u8]) -> Cow<[u8]> 
+            {
+                fn escape<I: Iterator<Item = u8>>(output: &mut Vec<u8>, iter: &mut I) 
+                {
                     match iter.next() {
                         None => (),
 
@@ -254,8 +260,8 @@ pub mod common
 
                         Some(b'0') => output.push(0x00),
 
-                        Some(a) if is_digit(a) => match (iter.next(), iter.next()) {
-                            (Some(b), Some(c)) if is_digit(b) && is_digit(c) => {
+                        Some(a) if is::digit(a) => match (iter.next(), iter.next()) {
+                            (Some(b), Some(c)) if is::digit(b) && is::digit(c) => {
                                 if let Ok(number) =
                                     u8::from_str_radix(unsafe { str::from_utf8_unchecked(&[a, b, c]) }, 8)
                                 {
@@ -327,16 +333,462 @@ pub mod common
         {
             use ::
             {
+                parsers::nom::
+                {
+                    branch::alt,
+                    bytes::streaming::{tag, take, take_until},
+                    combinator::{complete, cond, map, map_opt, map_parser, opt},
+                    multi::count,
+                    number::streaming::{le_i16, le_i32},
+                    IResult,
+                },
                 *,
             };
+
+            use ::common::capability::Value;
+            use ::common::names;
+
+            #[derive(Eq, PartialEq, Clone, Debug)]
+            pub struct Database<'a> {
+                names: &'a [u8],
+                standard: Standard<'a>,
+                extended: Option<Extended<'a>>,
+            }
+
+            impl<'a> From<Database<'a>> for ::common::Database {
+                fn from(source: Database<'a>) -> Self {
+                    let mut names = source
+                        .names
+                        .split(|&c| c == b'|')
+                        .map(|s| unsafe { str::from_utf8_unchecked(s) })
+                        .map(|s| s.trim())
+                        .collect::<Vec<_>>();
+
+                    let mut database = ::common::Database::new();
+
+                    database.name(names.remove(0));
+                    names.pop().map(|name| database.description(name));
+                    database.aliases(names);
+
+                    for (index, _) in source.standard.booleans.iter().enumerate().filter(|&(_, &value)| value) {
+                        if let Some(&name) = names::BOOLEAN.get(&(index as u16)) {
+                            database.raw(name, Value::True);
+                        }
+                    }
+
+                    for (index, &value) in source.standard.numbers.iter().enumerate().filter(|&(_, &n)| n >= 0)
+                    {
+                        if let Some(&name) = names::NUMBER.get(&(index as u16)) {
+                            database.raw(name, Value::Number(value));
+                        }
+                    }
+
+                    for (index, &offset) in source.standard.strings.iter().enumerate().filter(|&(_, &n)| n >= 0)
+                    {
+                        if let Some(&name) = names::STRING.get(&(index as u16)) {
+                            let string = &source.standard.table[offset as usize..];
+                            let edge = string.iter().position(|&c| c == 0).unwrap();
+
+                            database.raw(name, Value::String(Vec::from(&string[..edge])));
+                        }
+                    }
+
+                    if let Some(extended) = source.extended {
+                        let names = extended
+                            .table
+                            .split(|&c| c == 0)
+                            .skip(extended.strings.iter().cloned().filter(|&n| n >= 0).count())
+                            .map(|s| unsafe { str::from_utf8_unchecked(s) })
+                            .collect::<Vec<_>>();
+
+                        for (index, _) in extended.booleans.iter().enumerate().filter(|&(_, &value)| value) {
+                            database.raw(names[index], Value::True);
+                        }
+
+                        for (index, &value) in extended.numbers.iter().enumerate().filter(|&(_, &n)| n >= 0) {
+                            database.raw(names[extended.booleans.len() + index], Value::Number(value));
+                        }
+
+                        for (index, &offset) in extended.strings.iter().enumerate().filter(|&(_, &n)| n >= 0) {
+                            let string = &extended.table[offset as usize..];
+                            let edge = string.iter().position(|&c| c == 0).unwrap();
+
+                            database.raw(
+                                names[extended.booleans.len() + extended.numbers.len() + index],
+                                Value::String(Vec::from(&string[..edge])),
+                            );
+                        }
+                    }
+
+                    database.build().unwrap()
+                }
+            }
+
+            #[derive(Eq, PartialEq, Clone, Debug)]
+            pub struct Standard<'a> {
+                booleans: Vec<bool>,
+                numbers: Vec<i32>,
+                strings: Vec<i32>,
+                table: &'a [u8],
+            }
+
+            #[derive(Eq, PartialEq, Clone, Debug)]
+            pub struct Extended<'a> {
+                booleans: Vec<bool>,
+                numbers: Vec<i32>,
+                strings: Vec<i32>,
+                names: Vec<i32>,
+                table: &'a [u8],
+            }
+
+            fn bit_size(magic: &[u8]) -> usize {
+                match magic[1] {
+                    0x01 => 16,
+                    0x02 => 32,
+
+                    _ => unreachable!("unknown magic number"),
+                }
+            }
+
+            pub fn parse(input: &[u8]) -> IResult<&[u8], Database> {
+                let (input, magic) = alt((tag([0x1A, 0x01]), tag([0x1E, 0x02])))(input)?;
+
+                let (input, name_size) = size(input)?;
+                let (input, bool_count) = size(input)?;
+                let (input, num_count) = size(input)?;
+                let (input, string_count) = size(input)?;
+                let (input, table_size) = size(input)?;
+
+                let (input, names) = map_parser(take(name_size), take_until("\x00"))(input)?;
+
+                let (input, booleans) = count(boolean, bool_count)(input)?;
+
+                let (input, _) = cond((name_size + bool_count) % 2 != 0, take(1_usize))(input)?;
+
+                let (input, numbers) = count(|input| capability(input, bit_size(magic)), num_count)(input)?;
+
+                let (input, strings) = count(|input| capability(input, 16), string_count)(input)?;
+
+                let (input, table) = take(table_size)(input)?;
+
+                let (input, extended) = opt(complete(|input| {
+                    let (input, _) = cond(table_size % 2 != 0, take(1_usize))(input)?;
+
+                    let (input, ext_bool_count) = size(input)?;
+                    let (input, ext_num_count) = size(input)?;
+                    let (input, ext_string_count) = size(input)?;
+                    let (input, _ext_offset_count) = size(input)?;
+                    let (input, ext_table_size) = size(input)?;
+
+                    let (input, booleans) = count(boolean, ext_bool_count)(input)?;
+
+                    let (input, _) = cond(ext_bool_count % 2 != 0, take(1_usize))(input)?;
+
+                    let (input, numbers) =
+                        count(|input| capability(input, bit_size(magic)), ext_num_count)(input)?;
+
+                    let (input, strings) = count(|input| capability(input, 16), ext_string_count)(input)?;
+
+                    let (input, names) = count(
+                        |input| capability(input, 16),
+                        ext_bool_count + ext_num_count + ext_string_count,
+                    )(input)?;
+
+                    let (input, table) = take(ext_table_size)(input)?;
+
+                    Ok((input, Extended { booleans, numbers, strings, names, table }))
+                }))(input)?;
+
+                Ok((
+                    input,
+                    Database { names, standard: Standard { booleans, numbers, strings, table }, extended },
+                ))
+            }
+
+            fn boolean(input: &[u8]) -> IResult<&[u8], bool> {
+                alt((map(tag([0]), |_| false), map(tag([1]), |_| true)))(input)
+            }
+
+            fn size(input: &[u8]) -> IResult<&[u8], usize> {
+                map_opt(le_i16, |n| match n {
+                    -1 => Some(0),
+                    n if n >= 0 => Some(n as usize),
+                    _ => None,
+                })(input)
+            }
+
+            fn capability(input: &[u8], bits: usize) -> IResult<&[u8], i32> {
+                alt((
+                    map_opt(
+                        cond(bits == 16, map_opt(le_i16, |n| if n >= -2 { Some(n as i32) } else { None })),
+                        |o| o,
+                    ),
+                    map_opt(cond(bits == 32, map_opt(le_i32, |n| if n >= -2 { Some(n) } else { None })), |o| o),
+                ))(input)
+            }
         }
 
         pub mod expansion
         {
             use ::
             {
+                parsers::nom::
+                {
+                    branch::alt,
+                    bytes::complete,
+                    bytes::streaming::{tag, take, take_while},
+                    character::streaming::one_of,
+                    combinator::{map, opt, value},
+                    error::{make_error, ErrorKind},
+                    IResult, Err
+                }
                 *,
-            };
+            }; use super::util::number;
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub enum Item<'a> {
+                String(&'a [u8]),
+                Constant(Constant),
+                Variable(Variable),
+                Operation(Operation),
+                Conditional(Conditional),
+                Print(Print),
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub enum Constant {
+                Character(u8),
+                Integer(i32),
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub enum Variable {
+                Length,
+                Push(u8),
+                Set(bool, u8),
+                Get(bool, u8),
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub enum Operation {
+                Increment,
+                Unary(Unary),
+                Binary(Binary),
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub enum Unary {
+                Not,
+                NOT,
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub enum Binary {
+                Add,
+                Subtract,
+                Multiply,
+                Divide,
+                Remainder,
+
+                AND,
+                OR,
+                XOR,
+
+                And,
+                Or,
+
+                Equal,
+                Greater,
+                Lesser,
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub enum Conditional {
+                If,
+                Then,
+                Else,
+                End,
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub struct Print {
+                pub flags: Flags,
+                pub format: Format,
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub enum Format {
+                Chr,
+                Uni,
+                Str,
+                Dec,
+                Oct,
+                Hex,
+                HEX,
+            }
+
+            #[derive(Eq, PartialEq, Copy, Clone, Default, Debug)]
+            pub struct Flags {
+                pub width: usize,
+                pub precision: usize,
+
+                pub alternate: bool,
+                pub left: bool,
+                pub sign: bool,
+                pub space: bool,
+            }
+
+            pub fn parse(input: &[u8]) -> IResult<&[u8], Item> {
+                alt((expansion, string))(input)
+            }
+
+            fn string(input: &[u8]) -> IResult<&[u8], Item> {
+                map(complete::take_till(|b| b == b'%'), Item::String)(input)
+            }
+
+            fn expansion(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, _) = tag("%")(input)?;
+                let (input, item) = alt((percent, constant, variable, operation, conditional, print))(input)?;
+
+                Ok((input, item))
+            }
+
+            fn percent(input: &[u8]) -> IResult<&[u8], Item> {
+                value(Item::String(b"%"), tag("%"))(input)
+            }
+
+            fn constant(input: &[u8]) -> IResult<&[u8], Item> {
+                alt((constant_char, constant_integer))(input)
+            }
+
+            fn constant_char(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, _) = tag("'")(input)?;
+                let (input, ch) = take(1_usize)(input)?;
+                let (input, _) = tag("'")(input)?;
+
+                Ok((input, Item::Constant(Constant::Character(ch[0]))))
+            }
+
+            fn constant_integer(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, _) = tag("{")(input)?;
+                let (input, digit) = take_while(is::digit)(input)?;
+                let (input, _) = tag("}")(input)?;
+
+                Ok((input, Item::Constant(Constant::Integer(number(digit)))))
+            }
+
+            fn variable(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, c) = take(1_usize)(input)?;
+                match c {
+                    b"l" => Ok((input, Item::Variable(Variable::Length))),
+
+                    b"p" => map(one_of("123456789"), |n| Item::Variable(Variable::Push(n as u8 - b'1')))(input),
+
+                    b"P" => alt((
+                        map(one_of("abcdefghijklmnopqrstuvwxyz"), |n| {
+                            Item::Variable(Variable::Set(true, n as u8 - b'a'))
+                        }),
+                        map(one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ"), |n| {
+                            Item::Variable(Variable::Set(false, n as u8 - b'A'))
+                        }),
+                    ))(input),
+
+                    b"g" => alt((
+                        map(one_of("abcdefghijklmnopqrstuvwxyz"), |n| {
+                            Item::Variable(Variable::Get(true, n as u8 - b'a'))
+                        }),
+                        map(one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ"), |n| {
+                            Item::Variable(Variable::Get(false, n as u8 - b'A'))
+                        }),
+                    ))(input),
+
+                    _ => Err( Err::Error(make_error(input, ErrorKind::Switch))),
+                }
+            }
+
+            fn operation(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, c) = take(1_usize)(input)?;
+                match c {
+                    b"+" => Ok((input, Item::Operation(Operation::Binary(Binary::Add)))),
+                    b"-" => Ok((input, Item::Operation(Operation::Binary(Binary::Subtract)))),
+                    b"*" => Ok((input, Item::Operation(Operation::Binary(Binary::Multiply)))),
+                    b"/" => Ok((input, Item::Operation(Operation::Binary(Binary::Divide)))),
+                    b"m" => Ok((input, Item::Operation(Operation::Binary(Binary::Remainder)))),
+                    b"i" => Ok((input, Item::Operation(Operation::Increment))),
+
+                    b"&" => Ok((input, Item::Operation(Operation::Binary(Binary::AND)))),
+                    b"|" => Ok((input, Item::Operation(Operation::Binary(Binary::OR)))),
+                    b"^" => Ok((input, Item::Operation(Operation::Binary(Binary::XOR)))),
+                    b"~" => Ok((input, Item::Operation(Operation::Unary(Unary::NOT)))),
+
+                    b"A" => Ok((input, Item::Operation(Operation::Binary(Binary::And)))),
+                    b"O" => Ok((input, Item::Operation(Operation::Binary(Binary::Or)))),
+                    b"!" => Ok((input, Item::Operation(Operation::Unary(Unary::Not)))),
+
+                    b"=" => Ok((input, Item::Operation(Operation::Binary(Binary::Equal)))),
+                    b">" => Ok((input, Item::Operation(Operation::Binary(Binary::Greater)))),
+                    b"<" => Ok((input, Item::Operation(Operation::Binary(Binary::Lesser)))),
+
+                    _ => Err( Err::Error(make_error(input, ErrorKind::Switch))),
+                }
+            }
+
+            fn conditional(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, c) = take(1_usize)(input)?;
+                match c {
+                    b"?" => Ok((input, Item::Conditional(Conditional::If))),
+                    b"t" => Ok((input, Item::Conditional(Conditional::Then))),
+                    b"e" => Ok((input, Item::Conditional(Conditional::Else))),
+                    b";" => Ok((input, Item::Conditional(Conditional::End))),
+
+                    _ => Err( Err::Error(make_error(input, ErrorKind::Switch))),
+                }
+            }
+
+            fn print(input: &[u8]) -> IResult<&[u8], Item> {
+                let (input, _) = opt(tag(":"))(input)?;
+
+                let (input, flags) = take_while(is_flag)(input)?;
+                let (input, width) = opt(take_while(is::digit))(input)?;
+                let (input, precision) = opt(|input| {
+                    let (input, _) = tag(".")(input)?;
+                    let (input, amount) = take_while(is::digit)(input)?;
+
+                    Ok((input, amount))
+                })(input)?;
+
+                let (input, format) = one_of("doxXsc")(input)?;
+
+                Ok((
+                    input,
+                    Item::Print(Print {
+                        flags: Flags {
+                            width: number(width.unwrap_or(b"0")) as usize,
+                            precision: number(precision.unwrap_or(b"0")) as usize,
+
+                            alternate: flags.contains(&b'#'),
+                            left: flags.contains(&b'-'),
+                            sign: flags.contains(&b'+'),
+                            space: flags.contains(&b' '),
+                        },
+
+                        format: match format {
+                            'd' => Format::Dec,
+                            'o' => Format::Oct,
+                            'x' => Format::Hex,
+                            'X' => Format::HEX,
+                            's' => Format::Str,
+                            'c' => Format::Chr,
+                            'u' => Format::Uni,
+                            _ => unreachable!(),
+                        },
+                    }),
+                ))
+            }
+
+            fn is_flag(i: u8) -> bool {
+                i == b' ' || i == b'-' || i == b'+' || i == b'#'
+            }
         }
 
         pub mod source
@@ -431,6 +883,11 @@ pub mod is
     #[inline] pub fn newline(chr: u8) -> bool { chr == b'\n' }
 }
 
+pub mod marker
+{
+    pub use std::marker::{ * };
+}
+
 pub mod mem
 {
     pub use std::mem::{ * };
@@ -497,8 +954,16 @@ pub mod parsers
             use ::
             {
                 collections::{ HashMap },
+                fmt::{ self, Write},
+                hash::{ Hash, Hasher },
+                parsers::nom::
+                {
+                    HexDisplay,
+                    internal::Parser,
+                    traits::Offset,
+                },
                 *,
-            }; use super::internal::Parser;
+            };
             /// Creates a parse error from a `nom::ErrorKind` and the position in the input
             #[macro_export(local_inner_macros)]
             macro_rules! error_position
@@ -719,9 +1184,6 @@ pub mod parsers
             pub fn convert_error<I: ::ops::Deref<Target = str>>( input: I, e: VerboseError<I> ) 
             -> ::string::String 
             {
-                use ::fmt::Write;
-                use super::traits::Offset;
-
                 let mut result = ::string::String::new();
 
                 for (i, (substring, kind)) in e.errors.iter().enumerate()
@@ -1018,8 +1480,7 @@ pub mod parsers
             pub fn dbg_dmp<'a, F, O, E: ::fmt::Debug>( f:F, context:&'static str ) 
             -> impl Fn(&'a [u8]) -> IResult<&'a [u8], O, E> where
             F: Fn(&'a [u8]) -> IResult<&'a [u8], O, E>,
-            {
-                use super::HexDisplay;
+            { 
                 move |i: &'a [u8]| match f(i) 
                 {
                     Err(e) => {
@@ -1028,216 +1489,6 @@ pub mod parsers
                     }
                     a => a,
                 }
-            }
-            
-            pub fn add_error_pattern<'a, I: Clone + Hash + Eq, O, E: Clone + Hash + Eq>
-            (
-                h: &mut HashMap<VerboseError<I>, &'a str>,
-                e: VerboseError<I>,
-                message: &'a str,
-            ) -> bool
-            {
-                h.insert(e, message);
-                true
-            }
-
-            pub fn slice_to_offsets(input: &[u8], s: &[u8]) -> (usize, usize)
-            {
-                let start = input.as_ptr();
-                let off1 = s.as_ptr() as usize - start as usize;
-                let off2 = off1 + s.len();
-                (off1, off2)
-            }
-            
-            pub fn prepare_errors<O, E: Clone>(input: &[u8], e: VerboseError<&[u8]>) -> 
-            Option<Vec<(ErrorKind, usize, usize)>>
-            {
-                let mut v: Vec<(ErrorKind, usize, usize)> = Vec::new();
-
-                for (p, kind) in e.errors.drain(..) 
-                {
-                    let (o1, o2) = slice_to_offsets(input, p);
-                    v.push((kind, o1, o2));
-                }
-
-                v.reverse();
-                Some(v)
-            }
-            
-            pub fn print_error<O, E: Clone>(input: &[u8], res: VerboseError<&[u8]>)
-            {
-                if let Some(v) = prepare_errors(input, res)
-                {
-                    let colors = generate_colors(&v);
-                    println!("parser codes: {}", print_codes(&colors, &HashMap::new()));
-                    println!("{}", print_offsets(input, 0, &v));
-                }
-                else { println!("not an error"); }
-            }
-            
-            pub fn generate_colors<E>(v: &[(ErrorKind, usize, usize)]) -> HashMap<u32, u8>
-            {
-                let mut h: HashMap<u32, u8> = HashMap::new();
-                let mut color = 0;
-
-                for &(ref c, _, _) in v.iter()
-                {
-                    h.insert(error_to_u32(c), color + 31);
-                    color = color + 1 % 7;
-                }
-
-                h
-            }
-
-            pub fn code_from_offset(v: &[(ErrorKind, usize, usize)], offset: usize) -> Option<u32>
-            {
-                let mut acc: Option<(u32, usize, usize)> = None;
-                for &(ref ek, s, e) in v.iter() {
-                    let c = error_to_u32(ek);
-                    if s <= offset && offset <= e {
-                    if let Some((_, start, end)) = acc {
-                        if start <= s && e <= end {
-                        acc = Some((c, s, e));
-                        }
-                    } else {
-                        acc = Some((c, s, e));
-                    }
-                    }
-                }
-                if let Some((code, _, _)) = acc {
-                    return Some(code);
-                } else {
-                    return None;
-                }
-            }
-
-            pub fn reset_color(v: &mut Vec<u8>)
-            {
-                v.push(0x1B);
-                v.push(b'[');
-                v.push(0);
-                v.push(b'm');
-            }
-            
-            pub fn write_color(v: &mut Vec<u8>, color: u8)
-            {
-                v.push(0x1B);
-                v.push(b'[');
-                v.push(1);
-                v.push(b';');
-                let s = color.to_string();
-                let bytes = s.as_bytes();
-                v.extend(bytes.iter().cloned());
-                v.push(b'm');
-            }
-            
-            pub fn print_codes(colors: &HashMap<u32, u8>, names: &HashMap<u32, &str>) -> String
-            {
-                let mut v = Vec::new();
-                for (code, &color) in colors {
-                    if let Some(&s) = names.get(code) {
-                    let bytes = s.as_bytes();
-                    write_color(&mut v, color);
-                    v.extend(bytes.iter().cloned());
-                    } else {
-                    let s = code.to_string();
-                    let bytes = s.as_bytes();
-                    write_color(&mut v, color);
-                    v.extend(bytes.iter().cloned());
-                    }
-                    reset_color(&mut v);
-                    v.push(b' ');
-                }
-                reset_color(&mut v);
-
-                String::from_utf8_lossy(&v[..]).into_owned()
-            }
-            
-            pub fn print_offsets(input: &[u8], from: usize, offsets: &[(ErrorKind, usize, usize)]) -> String 
-            {
-                let mut v = Vec::with_capacity(input.len() * 3);
-                let mut i = from;
-                let chunk_size = 8;
-                let mut current_code: Option<u32> = None;
-                let mut current_code2: Option<u32> = None;
-
-                let colors = generate_colors(&offsets);
-
-                for chunk in input.chunks(chunk_size)
-                {
-                    let s = format!("{:08x}", i);
-                    for &ch in s.as_bytes().iter() {
-                    v.push(ch);
-                    }
-                    v.push(b'\t');
-
-                    let mut k = i;
-                    let mut l = i;
-                    for &byte in chunk {
-                    if let Some(code) = code_from_offset(&offsets, k) {
-                        if let Some(current) = current_code {
-                        if current != code {
-                            reset_color(&mut v);
-                            current_code = Some(code);
-                            if let Some(&color) = colors.get(&code) {
-                            write_color(&mut v, color);
-                            }
-                        }
-                        } else {
-                        current_code = Some(code);
-                        if let Some(&color) = colors.get(&code) {
-                            write_color(&mut v, color);
-                        }
-                        }
-                    }
-                    v.push(CHARS[(byte >> 4) as usize]);
-                    v.push(CHARS[(byte & 0xf) as usize]);
-                    v.push(b' ');
-                    k = k + 1;
-                    }
-
-                    reset_color(&mut v);
-
-                    if chunk_size > chunk.len() {
-                    for _ in 0..(chunk_size - chunk.len()) {
-                        v.push(b' ');
-                        v.push(b' ');
-                        v.push(b' ');
-                    }
-                    }
-                    v.push(b'\t');
-
-                    for &byte in chunk {
-                    if let Some(code) = code_from_offset(&offsets, l) {
-                        if let Some(current) = current_code2 {
-                        if current != code {
-                            reset_color(&mut v);
-                            current_code2 = Some(code);
-                            if let Some(&color) = colors.get(&code) {
-                            write_color(&mut v, color);
-                            }
-                        }
-                        } else {
-                        current_code2 = Some(code);
-                        if let Some(&color) = colors.get(&code) {
-                            write_color(&mut v, color);
-                        }
-                        }
-                    }
-                    if (byte >= 32 && byte <= 126) || byte >= 128 {
-                        v.push(byte);
-                    } else {
-                        v.push(b'.');
-                    }
-                    l = l + 1;
-                    }
-                    reset_color(&mut v);
-
-                    v.push(b'\n');
-                    i = i + chunk_size;
-                }
-
-                String::from_utf8_lossy(&v[..]).into_owned()
             }
         }
 
@@ -1388,8 +1639,9 @@ pub mod parsers
             /// Tests a list of parsers one by one until one succeeds.
             pub fn alt<I: Clone, O, E: ParseError<I>, List: Alt<I, O, E>>(
             mut l: List,
-            ) -> impl FnMut(I) -> IResult<I, O, E> {
-            move |i: I| l.choice(i)
+            ) -> impl FnMut(I) -> IResult<I, O, E>
+            {
+                move |i: I| l.choice(i)
             }
             /// Helper trait for the [permutation()] combinator.
             pub trait Permutation<I, O, E>
@@ -1455,16 +1707,14 @@ pub mod parsers
                 *,
             };
             /// Return the remaining input.
-            #[inline]
-            pub fn rest<T, E: ParseError<T>>(input: T) -> IResult<T, T, E> where
+            #[inline] pub fn rest<T, E: ParseError<T>>(input: T) -> IResult<T, T, E> where
             T: Slice<RangeFrom<usize>>,
             T: InputLength,
             {
                 Ok((input.slice(input.input_len()..), input))
             }
             /// Return the length of the remaining input.
-            #[inline]
-            pub fn rest_len<T, E: ParseError<T>>(input: T) -> IResult<T, usize, E> where
+            #[inline] pub fn rest_len<T, E: ParseError<T>>(input: T) -> IResult<T, usize, E> where
             T: InputLength,
             {
                 let len = input.input_len();
@@ -1587,7 +1837,7 @@ pub mod parsers
                 }
             }
             /// returns its input if it is at the end of input data.
-            pub fn eof<I: InputLength + Clone, E: ParseError<I>>(input: I) -> IResult<I, I, E>
+            pub fn eof<I: InputLength + Clone, E: ParseError<I>>( input:I ) -> IResult<I, I, E>
             {
                 if input.input_len() == 0 {
                     let clone = input.clone();
@@ -1756,7 +2006,7 @@ pub mod parsers
                 }
             }
 
-            impl<'a, Input, Output, Error, F> core::iter::Iterator for &'a mut ParserIterator<Input, Error, F> where
+            impl<'a, Input, Output, Error, F> ::iter::Iterator for &'a mut ParserIterator<Input, Error, F> where
             F: FnMut(Input) -> IResult<Input, Output, Error>,
             Input: Clone,
             {
@@ -1813,10 +2063,424 @@ pub mod parsers
 
         pub mod internal
         {
+            //! Basic types to build the parsers
             use ::
             {
+                borrow::{ ToOwned },
+                boxed::{ Box },
+                marker::{ PhantomData, Sized },
+                num::NonZeroUsize,
+                parsers::nom::
+                {
+                    error::{ self, ErrorKind, ParseError }
+                },
+                string::{ String },
+                vec::{ Vec },
                 *,
             };
+            /// Holds the result of parsing functions.
+            pub type IResult<I, O, E = error::Error<I>> = Result<(I, O), Err<E>>;
+            /// Helper trait to convert a parser's result to a more manageable type
+            pub trait Finish<I, O, E>
+            {
+                /// Converts the parser's result to a type that is more consumable by error management libraries.
+                fn finish(self) -> Result<(I, O), E>;
+            }
+
+            impl<I, O, E> Finish<I, O, E> for IResult<I, O, E> 
+            {
+                fn finish(self) -> Result<(I, O), E> 
+                {
+                    match self {
+                    Ok(res) => Ok(res),
+                    Err(Err::Error(e)) | Err(Err::Failure(e)) => Err(e),
+                    Err(Err::Incomplete(_)) => {
+                        panic!("Cannot call `finish()` on `Err(Err::Incomplete(_))`: this result means that the parser does not have enough data to decide, you should gather more data and try to reapply  the parser instead")
+                    }
+                    }
+                }
+            }
+            /// Contains information on needed data if a parser returned `Incomplete`
+            #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+            pub enum Needed 
+            {
+                /// Needs more data, but we do not know how much
+                Unknown,
+                /// Contains the required data size in bytes
+                Size(NonZeroUsize),
+            }
+
+            impl Needed 
+            {
+                /// Creates `Needed` instance, returns `Needed::Unknown` if the argument is zero
+                pub fn new(s: usize) -> Self 
+                {
+                    match NonZeroUsize::new(s) {
+                    Some(sz) => Needed::Size(sz),
+                    None => Needed::Unknown,
+                    }
+                }
+                /// Indicates if we know how many bytes we need
+                pub fn is_known(&self) -> bool { *self != Needed::Unknown }
+                /// Maps a `Needed` to `Needed` by applying a function to a contained `Size` value.
+                #[inline] pub fn map<F: Fn(NonZeroUsize) -> usize>(self, f: F) -> Needed
+                {
+                    match self 
+                    {
+                        Needed::Unknown => Needed::Unknown,
+                        Needed::Size(n) => Needed::new(f(n)),
+                    }
+                }
+            }
+            /// The `Err` enum indicates the parser was not successful.
+            #[derive(Debug, Clone, PartialEq)]
+            pub enum Err<E>
+            {
+                /// There was not enough data
+                Incomplete(Needed),
+                /// The parser had an error (recoverable)
+                Error(E),
+                /// The parser had an unrecoverable error: we got to the right
+                /// branch and we know other branches won't work, so backtrack
+                /// as fast as possible
+                Failure(E),
+            }
+
+            impl<E> Err<E> 
+            {
+                /// Tests if the result is Incomplete
+                pub fn is_incomplete(&self) -> bool {
+                    if let Err::Incomplete(_) = self {
+                    true
+                    } else {
+                    false
+                    }
+                }
+
+                /// Applies the given function to the inner error
+                pub fn map<E2, F>(self, f: F) -> Err<E2>
+                where
+                    F: FnOnce(E) -> E2,
+                {
+                    match self {
+                    Err::Incomplete(n) => Err::Incomplete(n),
+                    Err::Failure(t) => Err::Failure(f(t)),
+                    Err::Error(t) => Err::Error(f(t)),
+                    }
+                }
+                /// Automatically converts between errors if the underlying type supports it
+                pub fn convert<F>(e: Err<F>) -> Self
+                where
+                    E: From<F>,
+                {
+                    e.map( ::convert::Into::into )
+                }
+            }
+
+            impl<T> Err<(T, ErrorKind)>
+            {
+                /// Maps `Err<(T, ErrorKind)>` to `Err<(U, ErrorKind)>` with the given `F: T -> U`
+                pub fn map_input<U, F>(self, f: F) -> Err<(U, ErrorKind)>
+                where
+                    F: FnOnce(T) -> U,
+                {
+                    match self {
+                    Err::Incomplete(n) => Err::Incomplete(n),
+                    Err::Failure((input, k)) => Err::Failure((f(input), k)),
+                    Err::Error((input, k)) => Err::Error((f(input), k)),
+                    }
+                }
+            }
+
+            impl<T> Err<error::Error<T>> 
+            {
+                /// Maps `Err<error::Error<T>>` to `Err<error::Error<U>>` with the given `F: T -> U`
+                pub fn map_input<U, F>(self, f: F) -> Err<error::Error<U>>
+                where
+                    F: FnOnce(T) -> U,
+                {
+                    match self {
+                    Err::Incomplete(n) => Err::Incomplete(n),
+                    Err::Failure(error::Error { input, code }) => Err::Failure(error::Error {
+                        input: f(input),
+                        code,
+                    }),
+                    Err::Error(error::Error { input, code }) => Err::Error(error::Error {
+                        input: f(input),
+                        code,
+                    }),
+                    }
+                }
+            }
+            
+            impl Err<(&[u8], ErrorKind)>
+            {
+                /// Obtaining ownership
+                pub fn to_owned(self) -> Err<(Vec<u8>, ErrorKind)> {
+                    self.map_input(ToOwned::to_owned)
+                }
+            }
+            
+            impl Err<(&str, ErrorKind)>
+            {
+                /// Obtaining ownership
+                pub fn to_owned(self) -> Err<(String, ErrorKind)> {
+                    self.map_input(ToOwned::to_owned)
+                }
+            }
+            
+            impl Err<error::Error<&[u8]>>
+            {
+                /// Obtaining ownership
+                pub fn to_owned(self) -> Err<error::Error<Vec<u8>>> {
+                    self.map_input(ToOwned::to_owned)
+                }
+            }
+            
+            impl Err<error::Error<&str>>
+            {
+                /// Obtaining ownership
+                pub fn to_owned(self) -> Err<error::Error<String>> {
+                    self.map_input(ToOwned::to_owned)
+                }
+            }
+
+            impl<E: Eq> Eq for Err<E> {}
+
+            impl<E> fmt::Display for Err<E> where
+            E: fmt::Debug,
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    match self {
+                    Err::Incomplete(Needed::Size(u)) => write!(f, "Parsing requires {} bytes/chars", u),
+                    Err::Incomplete(Needed::Unknown) => write!(f, "Parsing requires more data"),
+                    Err::Failure(c) => write!(f, "Parsing Failure: {:?}", c),
+                    Err::Error(c) => write!(f, "Parsing Error: {:?}", c),
+                    }
+                }
+            }
+            
+            use ::error::Error;
+            
+            impl<E> Error for Err<E> where
+            E: fmt::Debug,
+            {
+                fn source(&self) -> Option<&(dyn Error + 'static)> {
+                    None // no underlying error
+                }
+            }
+            /// All nom parsers implement this trait
+            pub trait Parser<I, O, E>
+            {
+                /// A parser takes in input type, 
+                /// and returns a `Result` containing either the remaining input and the output value, or an error.
+                fn parse(&mut self, input: I) -> IResult<I, O, E>;
+                /// Maps a function over the result of a parser
+                fn map<G, O2>(self, g: G) -> Map<Self, G, O>
+                where
+                    G: Fn(O) -> O2,
+                    Self: Sized,
+                {
+                    Map {
+                    f: self,
+                    g,
+                    phantom: PhantomData,
+                    }
+                }
+
+                /// Creates a second parser from the output of the first one, then apply over the rest of the input
+                fn flat_map<G, H, O2>(self, g: G) -> FlatMap<Self, G, O>
+                where
+                    G: FnMut(O) -> H,
+                    H: Parser<I, O2, E>,
+                    Self: Sized,
+                {
+                    FlatMap {
+                    f: self,
+                    g,
+                    phantom: PhantomData,
+                    }
+                }
+
+                /// Applies a second parser over the output of the first one
+                fn and_then<G, O2>(self, g: G) -> AndThen<Self, G, O>
+                where
+                    G: Parser<O, O2, E>,
+                    Self: Sized,
+                {
+                    AndThen {
+                    f: self,
+                    g,
+                    phantom: PhantomData,
+                    }
+                }
+
+                /// Applies a second parser after the first one, return their results as a tuple
+                fn and<G, O2>(self, g: G) -> And<Self, G>
+                where
+                    G: Parser<I, O2, E>,
+                    Self: Sized,
+                {
+                    And { f: self, g }
+                }
+
+                /// Applies a second parser over the input if the first one failed
+                fn or<G>(self, g: G) -> Or<Self, G>
+                where
+                    G: Parser<I, O, E>,
+                    Self: Sized,
+                {
+                    Or { f: self, g }
+                }
+
+                /// automatically converts the parser's output and error values to another type, as long as they
+                /// implement the `From` trait
+                fn into<O2: From<O>, E2: From<E>>(self) -> Into<Self, O, O2, E, E2>
+                where
+                    Self: Sized,
+                {
+                    Into {
+                    f: self,
+                    phantom_out1: PhantomData,
+                    phantom_err1: PhantomData,
+                    phantom_out2: PhantomData,
+                    phantom_err2: PhantomData,
+                    }
+                }
+            }
+
+            impl<'a, I, O, E, F> Parser<I, O, E> for F
+            where
+            F: FnMut(I) -> IResult<I, O, E> + 'a,
+            {
+                fn parse(&mut self, i: I) -> IResult<I, O, E> {
+                    self(i)
+                }
+            }
+            
+            impl<'a, I, O, E> Parser<I, O, E> for Box<dyn Parser<I, O, E> + 'a> 
+            {
+                fn parse(&mut self, input: I) -> IResult<I, O, E> {
+                    (**self).parse(input)
+                }
+            }
+            /// Implementation of `Parser::map`            
+            pub struct Map<F, G, O1>
+            {
+                f: F,
+                g: G,
+                phantom: PhantomData<O1>,
+            }
+
+            impl<'a, I, O1, O2, E, F: Parser<I, O1, E>, G: Fn(O1) -> O2> Parser<I, O2, E> for Map<F, G, O1>
+            {
+                fn parse(&mut self, i: I) -> IResult<I, O2, E> {
+                    match self.f.parse(i) {
+                    Err(e) => Err(e),
+                    Ok((i, o)) => Ok((i, (self.g)(o))),
+                    }
+                }
+            }
+            /// Implementation of `Parser::flat_map`
+            pub struct FlatMap<F, G, O1> 
+            {
+                f: F,
+                g: G,
+                phantom: PhantomData<O1>,
+            }
+
+            impl<'a, I, O1, O2, E, F: Parser<I, O1, E>, G: Fn(O1) -> H, H: Parser<I, O2, E>> Parser<I, O2, E>
+            for FlatMap<F, G, O1>
+            {
+                fn parse(&mut self, i: I) -> IResult<I, O2, E> {
+                    let (i, o1) = self.f.parse(i)?;
+                    (self.g)(o1).parse(i)
+                }
+            }
+            /// Implementation of `Parser::and_then`            
+            pub struct AndThen<F, G, O1> 
+            {
+                f: F,
+                g: G,
+                phantom: PhantomData<O1>,
+            }
+
+            impl<'a, I, O1, O2, E, F: Parser<I, O1, E>, G: Parser<O1, O2, E>> Parser<I, O2, E>
+            for AndThen<F, G, O1>
+            {
+                fn parse(&mut self, i: I) -> IResult<I, O2, E> {
+                    let (i, o1) = self.f.parse(i)?;
+                    let (_, o2) = self.g.parse(o1)?;
+                    Ok((i, o2))
+                }
+            }
+            /// Implementation of `Parser::and`            
+            pub struct And<F, G> 
+            {
+                f: F,
+                g: G,
+            }
+
+            impl<'a, I, O1, O2, E, F: Parser<I, O1, E>, G: Parser<I, O2, E>> Parser<I, (O1, O2), E>
+            for And<F, G>
+            {
+                fn parse(&mut self, i: I) -> IResult<I, (O1, O2), E> {
+                    let (i, o1) = self.f.parse(i)?;
+                    let (i, o2) = self.g.parse(i)?;
+                    Ok((i, (o1, o2)))
+                }
+            }
+            /// Implementation of `Parser::or`            
+            pub struct Or<F, G> 
+            {
+                f: F,
+                g: G,
+            }
+
+            impl<'a, I: Clone, O, E: ParseError<I>, F: Parser<I, O, E>, G: Parser<I, O, E>>
+            Parser<I, O, E> for Or<F, G>
+            {
+                fn parse(&mut self, i: I) -> IResult<I, O, E> {
+                    match self.f.parse(i.clone()) {
+                    Err(Err::Error(e1)) => match self.g.parse(i) {
+                        Err(Err::Error(e2)) => Err(Err::Error(e1.or(e2))),
+                        res => res,
+                    },
+                    res => res,
+                    }
+                }
+            }
+            /// Implementation of `Parser::into`
+            pub struct Into<F, O1, O2: From<O1>, E1, E2: From<E1>> 
+            {
+                f: F,
+                phantom_out1: PhantomData<O1>,
+                phantom_err1: PhantomData<E1>,
+                phantom_out2: PhantomData<O2>,
+                phantom_err2: PhantomData<E2>,
+            }
+
+            impl<
+                'a,
+                I: Clone,
+                O1,
+                O2: From<O1>,
+                E1,
+                E2: ParseError<I> + From<E1>,
+                F: Parser<I, O1, E1>,
+            > Parser<I, O2, E2> for Into<F, O1, O2, E1, E2>
+            {
+                fn parse(&mut self, i: I) -> IResult<I, O2, E2> 
+                {
+                    match self.f.parse(i) {
+                    Ok((i, o)) => Ok((i, o.into())),
+                    Err(Err::Error(e)) => Err(Err::Error(e.into())),
+                    Err(Err::Failure(e)) => Err(Err::Failure(e.into())),
+                    Err(Err::Incomplete(e)) => Err(Err::Incomplete(e)),
+                    }
+                }
+            }
+
         } pub use self::internal::*;
         
         pub mod multi
@@ -1837,8 +2501,7 @@ pub mod parsers
             /// Don't pre-allocate more than 64KiB when calling `Vec::with_capacity`.
             const MAX_INITIAL_CAPACITY_BYTES: usize = 65536;
             /// Repeats the embedded parser, gathering the results in a `Vec`.
-            pub fn many0<I, O, E, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Vec<O>, E>
-            where
+            pub fn many0<I, O, E, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Vec<O>, E> where
             I: Clone + InputLength,
             F: Parser<I, O, E>,
             E: ParseError<I>,
@@ -1864,8 +2527,7 @@ pub mod parsers
                 }
             }
             /// Runs the embedded parser, gathering the results in a `Vec`.
-            pub fn many1<I, O, E, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Vec<O>, E>
-            where
+            pub fn many1<I, O, E, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Vec<O>, E> where
             I: Clone + InputLength,
             F: Parser<I, O, E>,
             E: ParseError<I>,
@@ -1901,8 +2563,7 @@ pub mod parsers
             pub fn many_till<I, O, P, E, F, G>(
             mut f: F,
             mut g: G,
-            ) -> impl FnMut(I) -> IResult<I, (Vec<O>, P), E>
-            where
+            ) -> impl FnMut(I) -> IResult<I, (Vec<O>, P), E> where
             I: Clone + InputLength,
             F: Parser<I, O, E>,
             G: Parser<I, P, E>,
@@ -1938,8 +2599,7 @@ pub mod parsers
             pub fn separated_list0<I, O, O2, E, F, G>(
             mut sep: G,
             mut f: F,
-            ) -> impl FnMut(I) -> IResult<I, Vec<O>, E>
-            where
+            ) -> impl FnMut(I) -> IResult<I, Vec<O>, E> where
             I: Clone + InputLength,
             F: Parser<I, O, E>,
             G: Parser<I, O2, E>,
@@ -1985,8 +2645,7 @@ pub mod parsers
             pub fn separated_list1<I, O, O2, E, F, G>(
             mut sep: G,
             mut f: F,
-            ) -> impl FnMut(I) -> IResult<I, Vec<O>, E>
-            where
+            ) -> impl FnMut(I) -> IResult<I, Vec<O>, E> where
             I: Clone + InputLength,
             F: Parser<I, O, E>,
             G: Parser<I, O2, E>,
@@ -2033,8 +2692,7 @@ pub mod parsers
             min: usize,
             max: usize,
             mut parse: F,
-            ) -> impl FnMut(I) -> IResult<I, Vec<O>, E>
-            where
+            ) -> impl FnMut(I) -> IResult<I, Vec<O>, E> where
             I: Clone + InputLength,
             F: Parser<I, O, E>,
             E: ParseError<I>,
@@ -2075,8 +2733,7 @@ pub mod parsers
                 }
             }
             /// Repeats the embedded parser, counting the results.
-            pub fn many0_count<I, O, E, F>(mut f: F) -> impl FnMut(I) -> IResult<I, usize, E>
-            where
+            pub fn many0_count<I, O, E, F>(mut f: F) -> impl FnMut(I) -> IResult<I, usize, E> where
             I: Clone + InputLength,
             F: Parser<I, O, E>,
             E: ParseError<I>,
@@ -2107,8 +2764,7 @@ pub mod parsers
                 }
             }
             /// Runs the embedded parser, counting the results.
-            pub fn many1_count<I, O, E, F>(mut f: F) -> impl FnMut(I) -> IResult<I, usize, E>
-            where
+            pub fn many1_count<I, O, E, F>(mut f: F) -> impl FnMut(I) -> IResult<I, usize, E> where
             I: Clone + InputLength,
             F: Parser<I, O, E>,
             E: ParseError<I>,
@@ -2144,8 +2800,7 @@ pub mod parsers
                 }
             }
             /// Runs the embedded parser `count` times, gathering the results in a `Vec`.
-            pub fn count<I, O, E, F>(mut f: F, count: usize) -> impl FnMut(I) -> IResult<I, Vec<O>, E>
-            where
+            pub fn count<I, O, E, F>(mut f: F, count: usize) -> impl FnMut(I) -> IResult<I, Vec<O>, E> where
             I: Clone + PartialEq,
             F: Parser<I, O, E>,
             E: ParseError<I>,
@@ -2175,8 +2830,7 @@ pub mod parsers
                 }
             }
             /// Runs the embedded parser repeatedly, filling the given slice with results.
-            pub fn fill<'a, I, O, E, F>(f: F, buf: &'a mut [O]) -> impl FnMut(I) -> IResult<I, (), E> + 'a
-            where
+            pub fn fill<'a, I, O, E, F>(f: F, buf: &'a mut [O]) -> impl FnMut(I) -> IResult<I, (), E> + 'a where
             I: Clone + PartialEq,
             F: Fn(I) -> IResult<I, O, E> + 'a,
             E: ParseError<I>,
@@ -2208,8 +2862,7 @@ pub mod parsers
             mut f: F,
             mut init: H,
             mut g: G,
-            ) -> impl FnMut(I) -> IResult<I, R, E>
-            where
+            ) -> impl FnMut(I) -> IResult<I, R, E> where
             I: Clone + InputLength,
             F: Parser<I, O, E>,
             G: FnMut(R, O) -> R,
@@ -2248,8 +2901,7 @@ pub mod parsers
             mut f: F,
             mut init: H,
             mut g: G,
-            ) -> impl FnMut(I) -> IResult<I, R, E>
-            where
+            ) -> impl FnMut(I) -> IResult<I, R, E> where
             I: Clone + InputLength,
             F: Parser<I, O, E>,
             G: FnMut(R, O) -> R,
@@ -2298,8 +2950,7 @@ pub mod parsers
             mut parse: F,
             mut init: H,
             mut fold: G,
-            ) -> impl FnMut(I) -> IResult<I, R, E>
-            where
+            ) -> impl FnMut(I) -> IResult<I, R, E> where
             I: Clone + InputLength,
             F: Parser<I, O, E>,
             G: FnMut(R, O) -> R,
@@ -2338,8 +2989,7 @@ pub mod parsers
                 }
             }
             /// Gets a number from the parser and returns a subslice of the input of that size.
-            pub fn length_data<I, N, E, F>(mut f: F) -> impl FnMut(I) -> IResult<I, I, E>
-            where
+            pub fn length_data<I, N, E, F>(mut f: F) -> impl FnMut(I) -> IResult<I, I, E> where
             I: InputLength + InputTake,
             N: ToUsize,
             F: Parser<I, N, E>,
@@ -2362,8 +3012,7 @@ pub mod parsers
             }
             /// Gets a number from the first parser, takes a subslice of the input of that size, 
             /// then applies the second parser on that subslice.
-            pub fn length_value<I, O, N, E, F, G>(mut f: F, mut g: G) -> impl FnMut(I) -> IResult<I, O, E>
-            where
+            pub fn length_value<I, O, N, E, F, G>(mut f: F, mut g: G) -> impl FnMut(I) -> IResult<I, O, E> where
             I: Clone + InputLength + InputTake,
             N: ToUsize,
             F: Parser<I, N, E>,
@@ -2391,8 +3040,7 @@ pub mod parsers
                 }
             }
             /// Gets a number from the first parser, then applies the second parser that many times.
-            pub fn length_count<I, O, N, E, F, G>(mut f: F, mut g: G) -> impl FnMut(I) -> IResult<I, Vec<O>, E>
-            where
+            pub fn length_count<I, O, N, E, F, G>(mut f: F, mut g: G) -> impl FnMut(I) -> IResult<I, Vec<O>, E> where
             I: Clone,
             N: ToUsize,
             F: Parser<I, N, E>,
@@ -2427,35 +3075,1525 @@ pub mod parsers
         
         pub mod sequence
         {
+            //! Combinators applying parsers in sequence
             use ::
-            {
+            {                
+                parsers::nom::
+                {
+                    error::ParseError,
+                    internal::{IResult, Parser},
+                },
                 *,
-            };
+            };            
 
-            pub mod complete
+            macro_rules! tuple_trait
+            (
+                ($name1:ident $ty1:ident, $name2: ident $ty2:ident, $($name:ident $ty:ident),*) => (
+                    tuple_trait!(__impl $name1 $ty1, $name2 $ty2; $($name $ty),*);
+                );
+                (__impl $($name:ident $ty: ident),+; $name1:ident $ty1:ident, $($name2:ident $ty2:ident),*) => (
+                    tuple_trait_impl!($($name $ty),+);
+                    tuple_trait!(__impl $($name $ty),+ , $name1 $ty1; $($name2 $ty2),*);
+                );
+                (__impl $($name:ident $ty: ident),+; $name1:ident $ty1:ident) => (
+                    tuple_trait_impl!($($name $ty),+);
+                    tuple_trait_impl!($($name $ty),+, $name1 $ty1);
+                );
+            );
+
+            macro_rules! tuple_trait_impl
+            (
+                ($($name:ident $ty: ident),+) => (
+                    impl<
+                    Input: Clone, $($ty),+ , Error: ParseError<Input>,
+                    $($name: Parser<Input, $ty, Error>),+
+                    > Tuple<Input, ( $($ty),+ ), Error> for ( $($name),+ ) {
+
+                    fn parse(&mut self, input: Input) -> IResult<Input, ( $($ty),+ ), Error> {
+                        tuple_trait_inner!(0, self, input, (), $($name)+)
+
+                    }
+                    }
+                );
+            );
+
+            macro_rules! tuple_trait_inner
+            (
+                ($it:tt, $self:expr, $input:expr, (), $head:ident $($id:ident)+) => ({
+                    let (i, o) = $self.$it.parse($input.clone())?;
+
+                    succ!($it, tuple_trait_inner!($self, i, ( o ), $($id)+))
+                });
+                ($it:tt, $self:expr, $input:expr, ($($parsed:tt)*), $head:ident $($id:ident)+) => ({
+                    let (i, o) = $self.$it.parse($input.clone())?;
+
+                    succ!($it, tuple_trait_inner!($self, i, ($($parsed)* , o), $($id)+))
+                });
+                ($it:tt, $self:expr, $input:expr, ($($parsed:tt)*), $head:ident) => ({
+                    let (i, o) = $self.$it.parse($input.clone())?;
+
+                    Ok((i, ($($parsed)* , o)))
+                });
+            );
+            /// Gets an object from the first parser, then gets another object from the second parser.
+            pub fn pair<I, O1, O2, E: ParseError<I>, F, G>(
+            mut first: F,
+            mut second: G,
+            ) -> impl FnMut(I) -> IResult<I, (O1, O2), E> where
+            F: Parser<I, O1, E>,
+            G: Parser<I, O2, E>,
             {
-                use ::
-                {
-                    *
-                };
+                move |input: I| {
+                    let (input, o1) = first.parse(input)?;
+                    second.parse(input).map(|(i, o2)| (i, (o1, o2)))
+                }
+            }
+            /// Matches an object from the first parser and discards it,
+            /// then gets an object from the second parser.
+            pub fn preceded<I, O1, O2, E: ParseError<I>, F, G>(
+            mut first: F,
+            mut second: G,
+            ) -> impl FnMut(I) -> IResult<I, O2, E> where
+            F: Parser<I, O1, E>,
+            G: Parser<I, O2, E>,
+            {
+                move |input: I| {
+                    let (input, _) = first.parse(input)?;
+                    second.parse(input)
+                }
+            }
+            /// Gets an object from the first parser,
+            /// then matches an object from the second parser and discards it.
+            pub fn terminated<I, O1, O2, E: ParseError<I>, F, G>(
+            mut first: F,
+            mut second: G,
+            ) -> impl FnMut(I) -> IResult<I, O1, E> where
+            F: Parser<I, O1, E>,
+            G: Parser<I, O2, E>,
+            {
+                move |input: I| {
+                    let (input, o1) = first.parse(input)?;
+                    second.parse(input).map(|(i, _)| (i, o1))
+                }
+            }
+            /// Gets an object from the first parser,
+            /// then matches an object from the sep_parser and discards it,
+            /// then gets another object from the second parser.
+            pub fn separated_pair<I, O1, O2, O3, E: ParseError<I>, F, G, H>(
+            mut first: F,
+            mut sep: G,
+            mut second: H,
+            ) -> impl FnMut(I) -> IResult<I, (O1, O3), E> where
+            F: Parser<I, O1, E>,
+            G: Parser<I, O2, E>,
+            H: Parser<I, O3, E>,
+            {
+                move |input: I| {
+                    let (input, o1) = first.parse(input)?;
+                    let (input, _) = sep.parse(input)?;
+                    second.parse(input).map(|(i, o2)| (i, (o1, o2)))
+                }
+            }
+            /// Matches an object from the first parser and discards it,
+            /// then gets an object from the second parser,
+            /// and finally matches an object from the third parser and discards it.
+            pub fn delimited<I, O1, O2, O3, E: ParseError<I>, F, G, H>(
+            mut first: F,
+            mut second: G,
+            mut third: H,
+            ) -> impl FnMut(I) -> IResult<I, O2, E> where
+            F: Parser<I, O1, E>,
+            G: Parser<I, O2, E>,
+            H: Parser<I, O3, E>,
+            {
+                move |input: I| {
+                    let (input, _) = first.parse(input)?;
+                    let (input, o2) = second.parse(input)?;
+                    third.parse(input).map(|(i, _)| (i, o2))
+                }
+            }
+            /// Helper trait for the tuple combinator.
+            pub trait Tuple<I, O, E>
+            {
+                /// Parses the input and returns a tuple of results of each parser.
+                fn parse(&mut self, input: I) -> IResult<I, O, E>;
             }
 
-            pub mod streaming
+            impl<Input, Output, Error: ParseError<Input>, F: Parser<Input, Output, Error>>
+            Tuple<Input, (Output,), Error> for (F,)
             {
-                use ::
+                fn parse(&mut self, input: Input) -> IResult<Input, (Output,), Error>
                 {
-                    *
-                };
+                    self.0.parse(input).map(|(i, o)| (i, (o,)))
+                }
             }
 
+            tuple_trait!(FnA A, FnB B, FnC C, FnD D, FnE E, FnF F, FnG G, FnH H, FnI I, FnJ J, FnK K, FnL L,
+            FnM M, FnN N, FnO O, FnP P, FnQ Q, FnR R, FnS S, FnT T, FnU U);
+            
+            impl<I, E: ParseError<I>> Tuple<I, (), E> for () 
+            {
+                fn parse(&mut self, input: I) -> IResult<I, (), E> {
+                    Ok((input, ()))
+                }
+            }
+            /// Applies a tuple of parsers one by one and returns their results as a tuple.
+            pub fn tuple<I, O, E: ParseError<I>, List: Tuple<I, O, E>>(
+            mut l: List,
+            ) -> impl FnMut(I) -> IResult<I, O, E> 
+            {
+                move |i: I| l.parse(i)
+            }
         }
         
         pub mod traits
         {
+            //! Traits input types have to implement to work with nom combinators            
             use ::
             {
+                iter::{Copied, Enumerate},
+                ops::{Range, RangeFrom, RangeFull, RangeTo},
+                parsers::nom::
+                {
+                    error::{ self, ErrorKind, ParseError},
+                    internal::{Err, IResult, Needed},
+                },
+                slice::Iter,
+                str::{ Chars, CharIndices, FromStr, from_utf8, },
+                string::{ String },
+                vec::{ Vec },
                 *,
             };
+            
+            macro_rules! as_bytes_array_impls 
+            {
+                ($($N:expr)+) => {
+                    $(
+                    impl<'a> AsBytes for &'a [u8; $N] 
+                    {
+                        #[inline(always)]
+                        fn as_bytes(&self) -> &[u8] 
+                        {
+                        *self
+                        }
+                    }
+
+                    impl AsBytes for [u8; $N] 
+                    {
+                        #[inline(always)]
+                        fn as_bytes(&self) -> &[u8] 
+                        {
+                        self
+                        }
+                    }
+                    )+
+                };
+            }
+            
+            macro_rules! impl_fn_slice
+            {
+                ( $ty:ty ) => {
+                    fn slice(&self, range: $ty) -> Self {
+                    &self[range]
+                    }
+                };
+            }
+
+            macro_rules! slice_range_impl
+            {
+                ( [ $for_type:ident ], $ty:ty ) => {
+                    impl<'a, $for_type> Slice<$ty> for &'a [$for_type] {
+                    impl_fn_slice!($ty);
+                    }
+                };
+                ( $for_type:ty, $ty:ty ) => {
+                    impl<'a> Slice<$ty> for &'a $for_type {
+                    impl_fn_slice!($ty);
+                    }
+                };
+            }
+
+            macro_rules! slice_ranges_impl
+            {
+                ( [ $for_type:ident ] ) => {
+                    slice_range_impl! {[$for_type], Range<usize>}
+                    slice_range_impl! {[$for_type], RangeTo<usize>}
+                    slice_range_impl! {[$for_type], RangeFrom<usize>}
+                    slice_range_impl! {[$for_type], RangeFull}
+                };
+                ( $for_type:ty ) => {
+                    slice_range_impl! {$for_type, Range<usize>}
+                    slice_range_impl! {$for_type, RangeTo<usize>}
+                    slice_range_impl! {$for_type, RangeFrom<usize>}
+                    slice_range_impl! {$for_type, RangeFull}
+                };
+            }
+
+            macro_rules! array_impls
+            {
+                ($($N:expr)+) => {
+                    $(
+                    impl InputLength for [u8; $N] {
+                        #[inline]
+                        fn input_len(&self) -> usize {
+                        self.len()
+                        }
+                    }
+
+                    impl<'a> InputLength for &'a [u8; $N] {
+                        #[inline]
+                        fn input_len(&self) -> usize {
+                        self.len()
+                        }
+                    }
+
+                    impl<'a> InputIter for &'a [u8; $N] {
+                        type Item = u8;
+                        type Iter = Enumerate<Self::IterElem>;
+                        type IterElem = Copied<Iter<'a, u8>>;
+
+                        fn iter_indices(&self) -> Self::Iter {
+                        (&self[..]).iter_indices()
+                        }
+
+                        fn iter_elements(&self) -> Self::IterElem {
+                        (&self[..]).iter_elements()
+                        }
+
+                        fn position<P>(&self, predicate: P) -> Option<usize>
+                        where P: Fn(Self::Item) -> bool {
+                        (&self[..]).position(predicate)
+                        }
+
+                        fn slice_index(&self, count: usize) -> Result<usize, Needed> {
+                        (&self[..]).slice_index(count)
+                        }
+                    }
+
+                    impl<'a> Compare<[u8; $N]> for &'a [u8] {
+                        #[inline(always)]
+                        fn compare(&self, t: [u8; $N]) -> CompareResult {
+                        self.compare(&t[..])
+                        }
+
+                        #[inline(always)]
+                        fn compare_no_case(&self, t: [u8;$N]) -> CompareResult {
+                        self.compare_no_case(&t[..])
+                        }
+                    }
+
+                    impl<'a,'b> Compare<&'b [u8; $N]> for &'a [u8] {
+                        #[inline(always)]
+                        fn compare(&self, t: &'b [u8; $N]) -> CompareResult {
+                        self.compare(&t[..])
+                        }
+
+                        #[inline(always)]
+                        fn compare_no_case(&self, t: &'b [u8;$N]) -> CompareResult {
+                        self.compare_no_case(&t[..])
+                        }
+                    }
+
+                    impl FindToken<u8> for [u8; $N] {
+                        fn find_token(&self, token: u8) -> bool {
+                        memchr::memchr(token, &self[..]).is_some()
+                        }
+                    }
+
+                    impl<'a> FindToken<&'a u8> for [u8; $N] {
+                        fn find_token(&self, token: &u8) -> bool {
+                        self.find_token(*token)
+                        }
+                    }
+                    )+
+                };
+            }
+            /// Abstract method to calculate the input length
+            pub trait InputLength 
+            {
+                /// Calculates the input length, as indicated by its name,
+                /// and the name of the trait itself
+                fn input_len(&self) -> usize;
+            }
+
+            impl<'a, T> InputLength for &'a [T] 
+            {
+                #[inline] fn input_len(&self) -> usize 
+                {
+                    self.len()
+                }
+            }
+
+            impl<'a> InputLength for &'a str 
+            {
+                #[inline] fn input_len(&self) -> usize 
+                {
+                    self.len()
+                }
+            }
+
+            impl<'a> InputLength for (&'a [u8], usize) 
+            {
+                #[inline] fn input_len(&self) -> usize 
+                {
+                    //println!("bit input length for ({:?}, {}):", self.0, self.1);
+                    //println!("-> {}", self.0.len() * 8 - self.1);
+                    self.0.len() * 8 - self.1
+                }
+            }
+            /// Useful functions to calculate the offset between slices and show a hexdump of a slice
+            pub trait Offset 
+            {
+                /// Offset between the first byte of self and the first byte of the argument
+                fn offset(&self, second: &Self) -> usize;
+            }
+
+            impl Offset for [u8] 
+            {
+                fn offset(&self, second: &Self) -> usize {
+                    let fst = self.as_ptr();
+                    let snd = second.as_ptr();
+
+                    snd as usize - fst as usize
+                }
+            }
+
+            impl<'a> Offset for &'a [u8]
+            {
+                fn offset(&self, second: &Self) -> usize {
+                    let fst = self.as_ptr();
+                    let snd = second.as_ptr();
+
+                    snd as usize - fst as usize
+                }
+            }
+
+            impl Offset for str
+            {
+                fn offset(&self, second: &Self) -> usize {
+                    let fst = self.as_ptr();
+                    let snd = second.as_ptr();
+
+                    snd as usize - fst as usize
+                }
+            }
+
+            impl<'a> Offset for &'a str
+            {
+                fn offset(&self, second: &Self) -> usize {
+                    let fst = self.as_ptr();
+                    let snd = second.as_ptr();
+
+                    snd as usize - fst as usize
+                }
+            }
+            /// Helper trait for types that can be viewed as a byte slice
+            pub trait AsBytes 
+            {
+                /// Casts the input type to a byte slice
+                fn as_bytes(&self) -> &[u8];
+            }
+
+            impl<'a> AsBytes for &'a str
+            {
+                #[inline(always)]
+                fn as_bytes(&self) -> &[u8] {
+                    (*self).as_bytes()
+                }
+            }
+
+            impl AsBytes for str 
+            {
+                #[inline(always)]
+                fn as_bytes(&self) -> &[u8]  { self.as_ref() }
+            }
+
+            impl<'a> AsBytes for &'a [u8] 
+            {
+                #[inline(always)]
+                fn as_bytes(&self) -> &[u8] 
+                {
+                    *self
+                }
+            }
+
+            impl AsBytes for [u8] 
+            {
+                #[inline(always)]
+                fn as_bytes(&self) -> &[u8] 
+                {
+                    self
+                }
+            }
+
+            as_bytes_array_impls!
+            {
+                0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16
+                17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32
+            }
+            /// Transforms common types to a char for basic token parsing
+            pub trait AsChar 
+            {
+                /// makes a char from self
+                fn as_char(self) -> char;
+
+                /// Tests that self is an alphabetic character
+                ///
+                /// Warning: for `&str` it recognizes alphabetic
+                /// characters outside of the 52 ASCII letters
+                fn is_alpha(self) -> bool;
+
+                /// Tests that self is an alphabetic character
+                /// or a decimal digit
+                fn is_alphanum(self) -> bool;
+                /// Tests that self is a decimal digit
+                fn is_dec_digit(self) -> bool;
+                /// Tests that self is an hex digit
+                fn is_hex_digit(self) -> bool;
+                /// Tests that self is an octal digit
+                fn is_oct_digit(self) -> bool;
+                /// Gets the len in bytes for self
+                fn len(self) -> usize;
+            }
+
+            impl AsChar for u8 
+            {
+                #[inline] fn as_char(self) -> char {
+                    self as char
+                }
+                #[inline] fn is_alpha(self) -> bool {
+                    (self >= 0x41 && self <= 0x5A) || (self >= 0x61 && self <= 0x7A)
+                }
+                #[inline] fn is_alphanum(self) -> bool {
+                    self.is_alpha() || self.is_dec_digit()
+                }
+                #[inline] fn is_dec_digit(self) -> bool {
+                    self >= 0x30 && self <= 0x39
+                }
+                #[inline] fn is_hex_digit(self) -> bool {
+                    (self >= 0x30 && self <= 0x39)
+                    || (self >= 0x41 && self <= 0x46)
+                    || (self >= 0x61 && self <= 0x66)
+                }
+                #[inline] fn is_oct_digit(self) -> bool {
+                    self >= 0x30 && self <= 0x37
+                }
+                #[inline] fn len(self) -> usize {
+                    1
+                }
+            }
+
+            impl<'a> AsChar for &'a u8
+            {
+                #[inline] fn as_char(self) -> char {
+                    *self as char
+                }
+                #[inline] fn is_alpha(self) -> bool {
+                    (*self >= 0x41 && *self <= 0x5A) || (*self >= 0x61 && *self <= 0x7A)
+                }
+                #[inline] fn is_alphanum(self) -> bool {
+                    self.is_alpha() || self.is_dec_digit()
+                }
+                #[inline] fn is_dec_digit(self) -> bool {
+                    *self >= 0x30 && *self <= 0x39
+                }
+                #[inline] fn is_hex_digit(self) -> bool {
+                    (*self >= 0x30 && *self <= 0x39)
+                    || (*self >= 0x41 && *self <= 0x46)
+                    || (*self >= 0x61 && *self <= 0x66)
+                }
+                #[inline] fn is_oct_digit(self) -> bool {
+                    *self >= 0x30 && *self <= 0x37
+                }
+                #[inline] fn len(self) -> usize {
+                    1
+                }
+            }
+
+            impl AsChar for char
+            {
+                #[inline] fn as_char(self) -> char {
+                    self
+                }
+                #[inline] fn is_alpha(self) -> bool {
+                    self.is_ascii_alphabetic()
+                }
+                #[inline] fn is_alphanum(self) -> bool {
+                    self.is_alpha() || self.is_dec_digit()
+                }
+                #[inline] fn is_dec_digit(self) -> bool {
+                    self.is_ascii_digit()
+                }
+                #[inline] fn is_hex_digit(self) -> bool {
+                    self.is_ascii_hexdigit()
+                }
+                #[inline] fn is_oct_digit(self) -> bool {
+                    self.is_digit(8)
+                }
+                #[inline] fn len(self) -> usize {
+                    self.len_utf8()
+                }
+            }
+
+            impl<'a> AsChar for &'a char
+            {
+                #[inline] fn as_char(self) -> char {
+                    *self
+                }
+                #[inline] fn is_alpha(self) -> bool {
+                    self.is_ascii_alphabetic()
+                }
+                #[inline] fn is_alphanum(self) -> bool {
+                    self.is_alpha() || self.is_dec_digit()
+                }
+                #[inline] fn is_dec_digit(self) -> bool {
+                    self.is_ascii_digit()
+                }
+                #[inline] fn is_hex_digit(self) -> bool {
+                    self.is_ascii_hexdigit()
+                }
+                #[inline] fn is_oct_digit(self) -> bool {
+                    self.is_digit(8)
+                }
+                #[inline] fn len(self) -> usize {
+                    self.len_utf8()
+                }
+            }
+
+            /// Abstracts common iteration operations on the input type
+            pub trait InputIter 
+            {
+                /// The current input type is a sequence of that `Item` type.
+                ///
+                /// Example: `u8` for `&[u8]` or `char` for `&str`
+                type Item;
+                /// An iterator over the input type, producing the item and its position
+                /// for use with [Slice]. If we're iterating over `&str`, the position
+                /// corresponds to the byte index of the character
+                type Iter: Iterator<Item = (usize, Self::Item)>;
+
+                /// An iterator over the input type, producing the item
+                type IterElem: Iterator<Item = Self::Item>;
+
+                /// Returns an iterator over the elements and their byte offsets
+                fn iter_indices(&self) -> Self::Iter;
+                /// Returns an iterator over the elements
+                fn iter_elements(&self) -> Self::IterElem;
+                /// Finds the byte position of the element
+                fn position<P>(&self, predicate: P) -> Option<usize>
+                where
+                    P: Fn(Self::Item) -> bool;
+                /// Get the byte offset from the element's position in the stream
+                fn slice_index(&self, count: usize) -> Result<usize, Needed>;
+            }
+            /// Abstracts slicing operations
+            pub trait InputTake: Sized
+            {
+                /// Returns a slice of `count` bytes. panics if count > length
+                fn take(&self, count: usize) -> Self;
+                /// Split the stream at the `count` byte offset. panics if count > length
+                fn take_split(&self, count: usize) -> (Self, Self);
+            }
+
+            impl<'a> InputIter for &'a [u8]
+            {
+                type Item = u8;
+                type Iter = Enumerate<Self::IterElem>;
+                type IterElem = Copied<Iter<'a, u8>>;
+
+                #[inline] fn iter_indices(&self) -> Self::Iter {
+                    self.iter_elements().enumerate()
+                }
+                #[inline] fn iter_elements(&self) -> Self::IterElem {
+                    self.iter().copied()
+                }
+                #[inline] fn position<P>(&self, predicate: P) -> Option<usize>
+                where
+                    P: Fn(Self::Item) -> bool,
+                {
+                    self.iter().position(|b| predicate(*b))
+                }
+                #[inline] fn slice_index(&self, count: usize) -> Result<usize, Needed> {
+                    if self.len() >= count {
+                    Ok(count)
+                    } else {
+                    Err(Needed::new(count - self.len()))
+                    }
+                }
+            }
+
+            impl<'a> InputTake for &'a [u8]
+            {
+                #[inline] fn take(&self, count: usize) -> Self {
+                    &self[0..count]
+                }
+                #[inline] fn take_split(&self, count: usize) -> (Self, Self) {
+                    let (prefix, suffix) = self.split_at(count);
+                    (suffix, prefix)
+                }
+            }
+
+            impl<'a> InputIter for &'a str
+            {
+                type Item = char;
+                type Iter = CharIndices<'a>;
+                type IterElem = Chars<'a>;
+                #[inline] fn iter_indices(&self) -> Self::Iter {
+                    self.char_indices()
+                }
+                #[inline] fn iter_elements(&self) -> Self::IterElem {
+                    self.chars()
+                }
+                fn position<P>(&self, predicate: P) -> Option<usize>
+                where
+                    P: Fn(Self::Item) -> bool,
+                {
+                    for (o, c) in self.char_indices() {
+                    if predicate(c) {
+                        return Some(o);
+                    }
+                    }
+                    None
+                }
+                #[inline] fn slice_index(&self, count: usize) -> Result<usize, Needed> {
+                    let mut cnt = 0;
+                    for (index, _) in self.char_indices() {
+                    if cnt == count {
+                        return Ok(index);
+                    }
+                    cnt += 1;
+                    }
+                    if cnt == count {
+                    return Ok(self.len());
+                    }
+                    Err(Needed::Unknown)
+                }
+            }
+
+            impl<'a> InputTake for &'a str
+            {
+                #[inline] fn take(&self, count: usize) -> Self {
+                    &self[..count]
+                }
+                
+                #[inline] fn take_split(&self, count: usize) -> (Self, Self) {
+                    let (prefix, suffix) = self.split_at(count);
+                    (suffix, prefix)
+                }
+            }
+            /// Dummy trait used for default implementations.
+            pub trait UnspecializedInput {}
+            /// Methods to take as much input as possible 
+            /// until the provided function returns true for the current element.
+            pub trait InputTakeAtPosition: Sized 
+            {
+                /// The current input type is a sequence of that `Item` type.
+                type Item;
+
+                /// Looks for the first element of the input type for which the condition returns true,
+                /// and returns the input up to this position.
+                fn split_at_position<P, E: ParseError<Self>>(&self, predicate: P) -> IResult<Self, Self, E>
+                where
+                    P: Fn(Self::Item) -> bool;
+
+                /// Looks for the first element of the input type for which the condition returns true
+                /// and returns the input up to this position.
+                fn split_at_position1<P, E: ParseError<Self>>(
+                    &self,
+                    predicate: P,
+                    e: ErrorKind,
+                ) -> IResult<Self, Self, E>
+                where
+                    P: Fn(Self::Item) -> bool;
+
+                /// Looks for the first element of the input type for which the condition returns true,
+                /// and returns the input up to this position.
+                fn split_at_position_complete<P, E: ParseError<Self>>(
+                    &self,
+                    predicate: P,
+                ) -> IResult<Self, Self, E>
+                where
+                    P: Fn(Self::Item) -> bool;
+
+                /// Looks for the first element of the input type for which the condition returns true
+                /// and returns the input up to this position.
+                fn split_at_position1_complete<P, E: ParseError<Self>>(
+                    &self,
+                    predicate: P,
+                    e: ErrorKind,
+                ) -> IResult<Self, Self, E>
+                where
+                    P: Fn(Self::Item) -> bool;
+            }
+
+            impl<T: InputLength + InputIter + InputTake + Clone + UnspecializedInput> InputTakeAtPosition
+            for T
+            {
+                type Item = <T as InputIter>::Item;
+
+                fn split_at_position<P, E: ParseError<Self>>(&self, predicate: P) -> IResult<Self, Self, E>
+                where
+                    P: Fn(Self::Item) -> bool,
+                {
+                    match self.position(predicate) {
+                    Some(n) => Ok(self.take_split(n)),
+                    None => Err(Err::Incomplete(Needed::new(1))),
+                    }
+                }
+
+                fn split_at_position1<P, E: ParseError<Self>>(
+                    &self,
+                    predicate: P,
+                    e: ErrorKind,
+                ) -> IResult<Self, Self, E>
+                where
+                    P: Fn(Self::Item) -> bool,
+                {
+                    match self.position(predicate) {
+                    Some(0) => Err(Err::Error(E::from_error_kind(self.clone(), e))),
+                    Some(n) => Ok(self.take_split(n)),
+                    None => Err(Err::Incomplete(Needed::new(1))),
+                    }
+                }
+
+                fn split_at_position_complete<P, E: ParseError<Self>>(
+                    &self,
+                    predicate: P,
+                ) -> IResult<Self, Self, E>
+                where
+                    P: Fn(Self::Item) -> bool,
+                {
+                    match self.split_at_position(predicate) {
+                    Err(Err::Incomplete(_)) => Ok(self.take_split(self.input_len())),
+                    res => res,
+                    }
+                }
+
+                fn split_at_position1_complete<P, E: ParseError<Self>>(
+                    &self,
+                    predicate: P,
+                    e: ErrorKind,
+                ) -> IResult<Self, Self, E>
+                where
+                    P: Fn(Self::Item) -> bool,
+                {
+                    match self.split_at_position1(predicate, e) {
+                    Err(Err::Incomplete(_)) => {
+                        if self.input_len() == 0 {
+                        Err(Err::Error(E::from_error_kind(self.clone(), e)))
+                        } else {
+                        Ok(self.take_split(self.input_len()))
+                        }
+                    }
+                    res => res,
+                    }
+                }
+            }
+
+            impl<'a> InputTakeAtPosition for &'a [u8] 
+            {
+                type Item = u8;
+
+                fn split_at_position<P, E: ParseError<Self>>(&self, predicate: P) -> IResult<Self, Self, E>
+                where
+                    P: Fn(Self::Item) -> bool,
+                {
+                    match self.iter().position(|c| predicate(*c)) {
+                    Some(i) => Ok(self.take_split(i)),
+                    None => Err(Err::Incomplete(Needed::new(1))),
+                    }
+                }
+
+                fn split_at_position1<P, E: ParseError<Self>>(
+                    &self,
+                    predicate: P,
+                    e: ErrorKind,
+                ) -> IResult<Self, Self, E>
+                where
+                    P: Fn(Self::Item) -> bool,
+                {
+                    match self.iter().position(|c| predicate(*c)) {
+                    Some(0) => Err(Err::Error(E::from_error_kind(self, e))),
+                    Some(i) => Ok(self.take_split(i)),
+                    None => Err(Err::Incomplete(Needed::new(1))),
+                    }
+                }
+
+                fn split_at_position_complete<P, E: ParseError<Self>>(
+                    &self,
+                    predicate: P,
+                ) -> IResult<Self, Self, E>
+                where
+                    P: Fn(Self::Item) -> bool,
+                {
+                    match self.iter().position(|c| predicate(*c)) {
+                    Some(i) => Ok(self.take_split(i)),
+                    None => Ok(self.take_split(self.input_len())),
+                    }
+                }
+
+                fn split_at_position1_complete<P, E: ParseError<Self>>(
+                    &self,
+                    predicate: P,
+                    e: ErrorKind,
+                ) -> IResult<Self, Self, E>
+                where
+                    P: Fn(Self::Item) -> bool,
+                {
+                    match self.iter().position(|c| predicate(*c)) {
+                    Some(0) => Err(Err::Error(E::from_error_kind(self, e))),
+                    Some(i) => Ok(self.take_split(i)),
+                    None => {
+                        if self.is_empty() {
+                        Err(Err::Error(E::from_error_kind(self, e)))
+                        } else {
+                        Ok(self.take_split(self.input_len()))
+                        }
+                    }
+                    }
+                }
+            }
+
+            impl<'a> InputTakeAtPosition for &'a str 
+            {
+                type Item = char;
+
+                fn split_at_position<P, E: ParseError<Self>>(&self, predicate: P) -> IResult<Self, Self, E>
+                where
+                    P: Fn(Self::Item) -> bool,
+                {
+                    match self.find(predicate) {
+                    // find() returns a byte index that is already in the slice at a char boundary
+                    Some(i) => unsafe { Ok((self.get_unchecked(i..), self.get_unchecked(..i))) },
+                    None => Err(Err::Incomplete(Needed::new(1))),
+                    }
+                }
+
+                fn split_at_position1<P, E: ParseError<Self>>(
+                    &self,
+                    predicate: P,
+                    e: ErrorKind,
+                ) -> IResult<Self, Self, E>
+                where
+                    P: Fn(Self::Item) -> bool,
+                {
+                    match self.find(predicate) {
+                    Some(0) => Err(Err::Error(E::from_error_kind(self, e))),
+                    // find() returns a byte index that is already in the slice at a char boundary
+                    Some(i) => unsafe { Ok((self.get_unchecked(i..), self.get_unchecked(..i))) },
+                    None => Err(Err::Incomplete(Needed::new(1))),
+                    }
+                }
+
+                fn split_at_position_complete<P, E: ParseError<Self>>(
+                    &self,
+                    predicate: P,
+                ) -> IResult<Self, Self, E>
+                where
+                    P: Fn(Self::Item) -> bool,
+                {
+                    match self.find(predicate) {
+                    // find() returns a byte index that is already in the slice at a char boundary
+                    Some(i) => unsafe { Ok((self.get_unchecked(i..), self.get_unchecked(..i))) },
+                    // the end of slice is a char boundary
+                    None => unsafe {
+                        Ok((
+                        self.get_unchecked(self.len()..),
+                        self.get_unchecked(..self.len()),
+                        ))
+                    },
+                    }
+                }
+
+                fn split_at_position1_complete<P, E: ParseError<Self>>(
+                    &self,
+                    predicate: P,
+                    e: ErrorKind,
+                ) -> IResult<Self, Self, E>
+                where
+                    P: Fn(Self::Item) -> bool,
+                {
+                    match self.find(predicate) {
+                    Some(0) => Err(Err::Error(E::from_error_kind(self, e))),
+                    // find() returns a byte index that is already in the slice at a char boundary
+                    Some(i) => unsafe { Ok((self.get_unchecked(i..), self.get_unchecked(..i))) },
+                    None => {
+                        if self.is_empty() {
+                        Err(Err::Error(E::from_error_kind(self, e)))
+                        } else {
+                        // the end of slice is a char boundary
+                        unsafe {
+                            Ok((
+                            self.get_unchecked(self.len()..),
+                            self.get_unchecked(..self.len()),
+                            ))
+                        }
+                        }
+                    }
+                    }
+                }
+            }
+            /// Indicates whether a comparison was successful, an error, or if more data was needed
+            #[derive(Debug, PartialEq)]
+            pub enum CompareResult
+            {
+                /// Comparison was successful
+                Ok,
+                /// We need more data to be sure
+                Incomplete,
+                /// Comparison failed
+                Error,
+            }
+            /// Abstracts comparison operations
+            pub trait Compare<T> 
+            {
+                /// Compares self to another value for equality
+                fn compare(&self, t: T) -> CompareResult;
+                /// Compares self to another value for equality
+                /// independently of the case.
+                fn compare_no_case(&self, t: T) -> CompareResult;
+            }
+
+            fn lowercase_byte(c: u8) -> u8 
+            {
+                match c {
+                    b'A'..=b'Z' => c - b'A' + b'a',
+                    _ => c,
+                }
+            }
+
+            impl<'a, 'b> Compare<&'b [u8]> for &'a [u8] 
+            {
+                #[inline(always)]
+                fn compare(&self, t: &'b [u8]) -> CompareResult {
+                    let pos = self.iter().zip(t.iter()).position(|(a, b)| a != b);
+
+                    match pos {
+                    Some(_) => CompareResult::Error,
+                    None => {
+                        if self.len() >= t.len() {
+                        CompareResult::Ok
+                        } else {
+                        CompareResult::Incomplete
+                        }
+                    }
+                    }
+                }
+
+                #[inline(always)]
+                fn compare_no_case(&self, t: &'b [u8]) -> CompareResult {
+                    if self
+                    .iter()
+                    .zip(t)
+                    .any(|(a, b)| lowercase_byte(*a) != lowercase_byte(*b))
+                    {
+                    CompareResult::Error
+                    } else if self.len() < t.len() {
+                    CompareResult::Incomplete
+                    } else {
+                    CompareResult::Ok
+                    }
+                }
+            }
+
+            impl<
+                T: InputLength + InputIter<Item = u8> + InputTake + UnspecializedInput,
+                O: InputLength + InputIter<Item = u8> + InputTake,
+            > Compare<O> for T
+            {
+                #[inline(always)]
+                fn compare(&self, t: O) -> CompareResult {
+                    let pos = self
+                    .iter_elements()
+                    .zip(t.iter_elements())
+                    .position(|(a, b)| a != b);
+
+                    match pos {
+                    Some(_) => CompareResult::Error,
+                    None => {
+                        if self.input_len() >= t.input_len() {
+                        CompareResult::Ok
+                        } else {
+                        CompareResult::Incomplete
+                        }
+                    }
+                    }
+                }
+
+                #[inline(always)]
+                fn compare_no_case(&self, t: O) -> CompareResult {
+                    if self
+                    .iter_elements()
+                    .zip(t.iter_elements())
+                    .any(|(a, b)| lowercase_byte(a) != lowercase_byte(b))
+                    {
+                    CompareResult::Error
+                    } else if self.input_len() < t.input_len() {
+                    CompareResult::Incomplete
+                    } else {
+                    CompareResult::Ok
+                    }
+                }
+            }
+
+            impl<'a, 'b> Compare<&'b str> for &'a [u8] 
+            {
+                #[inline(always)]
+                fn compare(&self, t: &'b str) -> CompareResult {
+                    self.compare(AsBytes::as_bytes(t))
+                }
+                #[inline(always)]
+                fn compare_no_case(&self, t: &'b str) -> CompareResult {
+                    self.compare_no_case(AsBytes::as_bytes(t))
+                }
+            }
+
+            impl<'a, 'b> Compare<&'b str> for &'a str 
+            {
+                #[inline(always)]
+                fn compare(&self, t: &'b str) -> CompareResult {
+                    self.as_bytes().compare(t.as_bytes())
+                }
+                
+                #[inline(always)]
+                fn compare_no_case(&self, t: &'b str) -> CompareResult {
+                    let pos = self
+                    .chars()
+                    .zip(t.chars())
+                    .position(|(a, b)| a.to_lowercase().ne(b.to_lowercase()));
+
+                    match pos {
+                    Some(_) => CompareResult::Error,
+                    None => {
+                        if self.len() >= t.len() {
+                        CompareResult::Ok
+                        } else {
+                        CompareResult::Incomplete
+                        }
+                    }
+                    }
+                }
+            }
+
+            impl<'a, 'b> Compare<&'b [u8]> for &'a str 
+            {
+                #[inline(always)]
+                fn compare(&self, t: &'b [u8]) -> CompareResult {
+                    AsBytes::as_bytes(self).compare(t)
+                }
+                #[inline(always)]
+                fn compare_no_case(&self, t: &'b [u8]) -> CompareResult {
+                    AsBytes::as_bytes(self).compare_no_case(t)
+                }
+            }
+            /// Look for a token in self
+            pub trait FindToken<T> 
+            {
+                /// Returns true if self contains the token
+                fn find_token(&self, token: T) -> bool;
+            }
+
+            impl<'a> FindToken<u8> for &'a [u8] 
+            {
+                fn find_token(&self, token: u8) -> bool {
+                    memchr::memchr(token, self).is_some()
+                }
+            }
+
+            impl<'a> FindToken<u8> for &'a str 
+            {
+                fn find_token(&self, token: u8) -> bool {
+                    self.as_bytes().find_token(token)
+                }
+            }
+
+            impl<'a, 'b> FindToken<&'a u8> for &'b [u8] 
+            {
+                fn find_token(&self, token: &u8) -> bool {
+                    self.find_token(*token)
+                }
+            }
+
+            impl<'a, 'b> FindToken<&'a u8> for &'b str 
+            {
+                fn find_token(&self, token: &u8) -> bool {
+                    self.as_bytes().find_token(token)
+                }
+            }
+
+            impl<'a> FindToken<char> for &'a [u8] 
+            {
+                fn find_token(&self, token: char) -> bool {
+                    self.iter().any(|i| *i == token as u8)
+                }
+            }
+
+            impl<'a> FindToken<char> for &'a str 
+            {
+                fn find_token(&self, token: char) -> bool {
+                    self.chars().any(|i| i == token)
+                }
+            }
+
+            impl<'a> FindToken<char> for &'a [char] 
+            {
+                fn find_token(&self, token: char) -> bool {
+                    self.iter().any(|i| *i == token)
+                }
+            }
+
+            impl<'a, 'b> FindToken<&'a char> for &'b [char] 
+            {
+                fn find_token(&self, token: &char) -> bool {
+                    self.find_token(*token)
+                }
+            }
+            /// Look for a substring in self
+            pub trait FindSubstring<T> 
+            {
+                /// Returns the byte position of the substring if it is found
+                fn find_substring(&self, substr: T) -> Option<usize>;
+            }
+
+            impl<'a, 'b> FindSubstring<&'b [u8]> for &'a [u8] 
+            {
+                fn find_substring(&self, substr: &'b [u8]) -> Option<usize>
+                {
+                    if substr.len() > self.len() {
+                    return None;
+                    }
+
+                    let (&substr_first, substr_rest) = match substr.split_first() 
+                    {
+                        Some(split) => split,
+                        None => return Some(0),
+                    };
+
+                    if substr_rest.is_empty() {
+                    return memchr::memchr(substr_first, self);
+                    }
+
+                    let mut offset = 0;
+                    let haystack = &self[..self.len() - substr_rest.len()];
+
+                    while let Some(position) = memchr::memchr(substr_first, &haystack[offset..]) {
+                    offset += position;
+                    let next_offset = offset + 1;
+                    if &self[next_offset..][..substr_rest.len()] == substr_rest {
+                        return Some(offset);
+                    }
+
+                    offset = next_offset;
+                    }
+
+                    None
+                }
+            }
+
+            impl<'a, 'b> FindSubstring<&'b str> for &'a [u8]
+            {
+                fn find_substring(&self, substr: &'b str) -> Option<usize> {
+                    self.find_substring(AsBytes::as_bytes(substr))
+                }
+            }
+
+            impl<'a, 'b> FindSubstring<&'b str> for &'a str 
+            {
+                fn find_substring(&self, substr: &'b str) -> Option<usize> {
+                    self.find(substr)
+                }
+            }
+            /// Used to integrate `str`'s `parse()` method
+            pub trait ParseTo<R> 
+            {
+                /// Succeeds if `parse()` succeeded. The byte slice implementation
+                /// will first convert it to a `&str`, then apply the `parse()` function
+                fn parse_to(&self) -> Option<R>;
+            }
+
+            impl<'a, R: FromStr> ParseTo<R> for &'a [u8]
+            {
+                fn parse_to(&self) -> Option<R> {
+                    from_utf8(self).ok().and_then(|s| s.parse().ok())
+                }
+            }
+
+            impl<'a, R: FromStr> ParseTo<R> for &'a str
+            {
+                fn parse_to(&self) -> Option<R> {
+                    self.parse().ok()
+                }
+            }
+            /// Slicing operations using ranges.
+            pub trait Slice<R>
+            {
+                /// Slices self according to the range argument
+                fn slice(&self, range: R) -> Self;
+            }
+
+            slice_ranges_impl! {str}
+            slice_ranges_impl! {[T]}
+
+            array_impls!
+            {
+                0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 
+                17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32
+            }
+            /// Abstracts something which can extend an `Extend`.
+            pub trait ExtendInto 
+            {
+                /// The current input type is a sequence of that `Item` type.
+                type Item;
+                /// The type that will be produced
+                type Extender;
+                /// Create a new `Extend` of the correct type
+                fn new_builder(&self) -> Self::Extender;
+                /// Accumulate the input into an accumulator
+                fn extend_into(&self, acc: &mut Self::Extender);
+            }
+            
+            impl ExtendInto for [u8] 
+            {
+                type Item = u8;
+                type Extender = Vec<u8>;
+
+                #[inline] fn new_builder(&self) -> Vec<u8> {
+                    Vec::new()
+                }
+                #[inline] fn extend_into(&self, acc: &mut Vec<u8>) {
+                    acc.extend(self.iter().cloned());
+                }
+            }
+            
+            impl ExtendInto for &[u8] 
+            {
+                type Item = u8;
+                type Extender = Vec<u8>;
+
+                #[inline] fn new_builder(&self) -> Vec<u8> {
+                    Vec::new()
+                }
+                #[inline] fn extend_into(&self, acc: &mut Vec<u8>) {
+                    acc.extend_from_slice(self);
+                }
+            }
+            
+            impl ExtendInto for str 
+            {
+                type Item = char;
+                type Extender = String;
+
+                #[inline] fn new_builder(&self) -> String {
+                    String::new()
+                }
+                #[inline] fn extend_into(&self, acc: &mut String) {
+                    acc.push_str(self);
+                }
+            }
+            
+            impl ExtendInto for &str 
+            {
+                type Item = char;
+                type Extender = String;
+
+                #[inline] fn new_builder(&self) -> String {
+                    String::new()
+                }
+                #[inline] fn extend_into(&self, acc: &mut String) {
+                    acc.push_str(self);
+                }
+            }
+            
+            impl ExtendInto for char 
+            {
+                type Item = char;
+                type Extender = String;
+
+                #[inline] fn new_builder(&self) -> String {
+                    String::new()
+                }
+                #[inline] fn extend_into(&self, acc: &mut String) {
+                    acc.push(*self);
+                }
+            }
+            /// Helper trait to convert numbers to usize.
+            pub trait ToUsize 
+            {
+                /// converts self to usize
+                fn to_usize(&self) -> usize;
+            }
+
+            impl ToUsize for u8 
+            {
+                #[inline] fn to_usize(&self) -> usize {
+                    *self as usize
+                }
+            }
+
+            impl ToUsize for u16 
+            {
+                #[inline] fn to_usize(&self) -> usize {
+                    *self as usize
+                }
+            }
+
+            impl ToUsize for usize
+            {
+                #[inline] fn to_usize(&self) -> usize {
+                    *self
+                }
+            }
+            
+            impl ToUsize for u32
+            {
+                #[inline] fn to_usize(&self) -> usize {
+                    *self as usize
+                }
+            }
+            
+            impl ToUsize for u64
+            {
+                #[inline] fn to_usize(&self) -> usize {
+                    *self as usize
+                }
+            }
+            /// Equivalent From implementation to avoid orphan rules in bits parsers
+            pub trait ErrorConvert<E>
+            {
+                /// Transform to another error type
+                fn convert(self) -> E;
+            }
+
+            impl<I> ErrorConvert<(I, ErrorKind)> for ((I, usize), ErrorKind) 
+            {
+                fn convert(self) -> (I, ErrorKind) {
+                    ((self.0).0, self.1)
+                }
+            }
+
+            impl<I> ErrorConvert<((I, usize), ErrorKind)> for (I, ErrorKind)
+            {
+                fn convert(self) -> ((I, usize), ErrorKind) {
+                    ((self.0, 0), self.1)
+                }
+            }
+            
+            impl<I> ErrorConvert<error::Error<I>> for error::Error<(I, usize)> 
+            {
+                fn convert(self) -> error::Error<I> {
+                    error::Error {
+                    input: self.input.0,
+                    code: self.code,
+                    }
+                }
+            }
+
+            impl<I> ErrorConvert<error::Error<(I, usize)>> for error::Error<I> 
+            {
+                fn convert(self) -> error::Error<(I, usize)> {
+                    error::Error {
+                    input: (self.input, 0),
+                    code: self.code,
+                    }
+                }
+            }
+            
+            impl<I> ErrorConvert<error::VerboseError<I>> for error::VerboseError<(I, usize)> 
+            {
+                fn convert(self) -> error::VerboseError<I> {
+                    error::VerboseError {
+                    errors: self.errors.into_iter().map(|(i, e)| (i.0, e)).collect(),
+                    }
+                }
+            }
+            
+            impl<I> ErrorConvert<error::VerboseError<(I, usize)>> for error::VerboseError<I>
+            {
+                fn convert(self) -> error::VerboseError<(I, usize)> {
+                    error::VerboseError {
+                    errors: self.errors.into_iter().map(|(i, e)| ((i, 0), e)).collect(),
+                    }
+                }
+            }
+
+            impl ErrorConvert<()> for ()
+            {
+                fn convert(self) {}
+            }
+            /// Helper trait to show a byte slice as a hex dump
+            pub trait HexDisplay
+            {
+                /// Converts the value of `self` to a hex dump, returning the owned
+                /// `String`.
+                fn to_hex(&self, chunk_size: usize) -> String;
+
+                /// Converts the value of `self` to a hex dump beginning at `from` address, returning the owned
+                /// `String`.
+                fn to_hex_from(&self, chunk_size: usize, from: usize) -> String;
+            }
+            
+            static CHARS: &[u8] = b"0123456789abcdef";
+            
+            impl HexDisplay for [u8]
+            {
+                #[allow(unused_variables)]
+                fn to_hex(&self, chunk_size: usize) -> String {
+                    self.to_hex_from(chunk_size, 0)
+                }
+
+                #[allow(unused_variables)]
+                fn to_hex_from(&self, chunk_size: usize, from: usize) -> String {
+                    let mut v = Vec::with_capacity(self.len() * 3);
+                    let mut i = from;
+                    for chunk in self.chunks(chunk_size) {
+                    let s = format!("{:08x}", i);
+                    for &ch in s.as_bytes().iter() {
+                        v.push(ch);
+                    }
+                    v.push(b'\t');
+
+                    i += chunk_size;
+
+                    for &byte in chunk {
+                        v.push(CHARS[(byte >> 4) as usize]);
+                        v.push(CHARS[(byte & 0xf) as usize]);
+                        v.push(b' ');
+                    }
+                    if chunk_size > chunk.len() {
+                        for j in 0..(chunk_size - chunk.len()) {
+                        v.push(b' ');
+                        v.push(b' ');
+                        v.push(b' ');
+                        }
+                    }
+                    v.push(b'\t');
+
+                    for &byte in chunk {
+                        if (byte >= 32 && byte <= 126) || byte >= 128 {
+                        v.push(byte);
+                        } else {
+                        v.push(b'.');
+                        }
+                    }
+                    v.push(b'\n');
+                    }
+
+                    String::from_utf8_lossy(&v[..]).into_owned()
+                }
+            }
+            
+            impl HexDisplay for str
+            {
+                #[allow(unused_variables)]
+                fn to_hex(&self, chunk_size: usize) -> String {
+                    self.to_hex_from(chunk_size, 0)
+                }
+
+                #[allow(unused_variables)]
+                fn to_hex_from(&self, chunk_size: usize, from: usize) -> String {
+                    self.as_bytes().to_hex_from(chunk_size, from)
+                }
+            }
         } pub use self::traits::*;
         
         pub mod bits
@@ -2663,7 +4801,6 @@ pub mod parsers
                     Ok((res, bit != 0))
                 }
             }
-
             /// Converts a byte-level input to a bit-level input, for consumption by a parser that uses bits.
             pub fn bits<I, O, E1, E2, P>(mut parser: P) -> impl FnMut(I) -> IResult<I, O, E2> where
             E1: ParseError<(I, usize)> + ErrorConvert<E2>,
@@ -2729,8 +4866,8 @@ pub mod parsers
                         internal::{ Err, IResult, Parser },
                         traits::
                         {
-                            Compare, CompareResult, FindSubstring, FindToken, InputIter, InputLength, InputTake,
-                            InputTakeAtPosition, Slice, ToUsize,
+                            AsChar, Compare, CompareResult, ExtendInto, FindSubstring, FindToken, InputIter, InputLength, InputTake,
+                            InputTakeAtPosition, Offset, Slice, ToUsize,
                         },
                     },
                     result::Result::*,
@@ -2972,19 +5109,17 @@ pub mod parsers
                 ) -> impl FnMut(Input) -> IResult<Input, Input, Error>
                 where
                 Input: Clone
-                    + super::traits::Offset
+                    + Offset
                     + InputLength
                     + InputTake
                     + InputTakeAtPosition
                     + Slice<RangeFrom<usize>>
                     + InputIter,
-                <Input as InputIter>::Item: super::traits::AsChar,
+                <Input as InputIter>::Item: AsChar,
                 F: Parser<Input, O1, Error>,
                 G: Parser<Input, O2, Error>,
                 Error: ParseError<Input>,
                 {
-                    use super::traits::AsChar;
-
                     move |input: Input|
                     {
                         let mut i = input.clone();
@@ -3043,7 +5178,6 @@ pub mod parsers
                         Ok((input.slice(input.input_len()..), input))
                     }
                 }
-
                 /// Matches a byte string with escaped characters.
                 pub fn escaped_transform<Input, Error, F, G, O1, O2, ExtendItem, Output>(
                 mut normal: F,
@@ -3052,23 +5186,22 @@ pub mod parsers
                 ) -> impl FnMut(Input) -> IResult<Input, Output, Error>
                 where
                 Input: Clone
-                    + super::traits::Offset
+                    + Offset
                     + InputLength
                     + InputTake
                     + InputTakeAtPosition
                     + Slice<RangeFrom<usize>>
                     + InputIter,
-                Input: super::traits::ExtendInto<Item = ExtendItem, Extender = Output>,
-                O1: super::traits::ExtendInto<Item = ExtendItem, Extender = Output>,
-                O2: super::traits::ExtendInto<Item = ExtendItem, Extender = Output>,
-                <Input as InputIter>::Item: super::traits::AsChar,
+                Input: ExtendInto<Item = ExtendItem, Extender = Output>,
+                O1: ExtendInto<Item = ExtendItem, Extender = Output>,
+                O2: ExtendInto<Item = ExtendItem, Extender = Output>,
+                <Input as InputIter>::Item: AsChar,
                 F: Parser<Input, O1, Error>,
                 G: Parser<Input, O2, Error>,
                 Error: ParseError<Input>,
                 {
-                    use super::traits::AsChar;
-
-                    move |input: Input| {
+                    move | input:Input |
+                    {
                         let mut index = 0;
                         let mut res = input.new_builder();
 
@@ -3089,7 +5222,6 @@ pub mod parsers
                             }
                             }
                             Err(Err::Error(_)) => {
-                            // unwrap() should be safe here since index < $i.input_len()
                             if remainder.iter_elements().next().unwrap().as_char() == control_char {
                                 let next = index + control_char.len_utf8();
                                 let input_len = input.input_len();
@@ -3141,8 +5273,8 @@ pub mod parsers
                         internal::{Err, IResult, Needed, Parser},
                         traits::
                         {
-                            Compare, CompareResult, FindSubstring, FindToken, InputIter, InputLength, InputTake,
-                            InputTakeAtPosition, Slice, ToUsize,
+                            AsChar, Compare, CompareResult, ExtendInto, FindSubstring, FindToken, InputIter, InputLength, InputTake,
+                            InputTakeAtPosition, Offset, Slice, ToUsize,
                         },
                     },
                     result::Result::*,
@@ -3386,20 +5518,19 @@ pub mod parsers
                 ) -> impl FnMut(Input) -> IResult<Input, Input, Error>
                 where
                 Input: Clone
-                    + super::traits::Offset
+                    + Offset
                     + InputLength
                     + InputTake
                     + InputTakeAtPosition
                     + Slice<RangeFrom<usize>>
                     + InputIter,
-                <Input as InputIter>::Item: super::traits::AsChar,
+                <Input as InputIter>::Item: AsChar,
                 F: Parser<Input, O1, Error>,
                 G: Parser<Input, O2, Error>,
                 Error: ParseError<Input>,
                 {
-                    use super::traits::AsChar;
-
-                    move |input: Input| {
+                    move | input:Input |
+                    {
                         let mut i = input.clone();
 
                         while i.input_len() > 0 {
@@ -3417,7 +5548,6 @@ pub mod parsers
                             }
                             }
                             Err(Err::Error(_)) => {
-                            // unwrap() should be safe here since index < $i.input_len()
                             if i.iter_elements().next().unwrap().as_char() == control_char {
                                 let next = control_char.len_utf8();
                                 if next >= i.input_len() {
@@ -3456,23 +5586,22 @@ pub mod parsers
                 ) -> impl FnMut(Input) -> IResult<Input, Output, Error>
                 where
                 Input: Clone
-                    + super::traits::Offset
+                    + Offset
                     + InputLength
                     + InputTake
                     + InputTakeAtPosition
                     + Slice<RangeFrom<usize>>
                     + InputIter,
-                Input: super::traits::ExtendInto<Item = ExtendItem, Extender = Output>,
-                O1: super::traits::ExtendInto<Item = ExtendItem, Extender = Output>,
-                O2: super::traits::ExtendInto<Item = ExtendItem, Extender = Output>,
-                <Input as InputIter>::Item: super::traits::AsChar,
+                Input: ExtendInto<Item = ExtendItem, Extender = Output>,
+                O1: ExtendInto<Item = ExtendItem, Extender = Output>,
+                O2:  ExtendInto<Item = ExtendItem, Extender = Output>,
+                <Input as InputIter>::Item: AsChar,
                 F: Parser<Input, O1, Error>,
                 G: Parser<Input, O2, Error>,
                 Error: ParseError<Input>,
                 {
-                    use super::traits::AsChar;
-
-                    move |input: Input| {
+                    move | input:Input |
+                    {
                         let mut index = 0;
                         let mut res = input.new_builder();
 
@@ -3777,7 +5906,7 @@ pub mod parsers
                     }
                 }
                 /// Matches a newline character '\n'.
-                pub fn newline<I, Error: ParseError<I>>(input: I) -> IResult<I, char, Error>
+                pub fn newline<I, Error: ParseError<I>>( input:I ) -> IResult<I, char, Error>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter,
                 <I as InputIter>::Item: AsChar,
@@ -3785,7 +5914,7 @@ pub mod parsers
                     char('\n')(input)
                 }
                 /// Matches a tab character '\t'.
-                pub fn tab<I, Error: ParseError<I>>(input: I) -> IResult<I, char, Error>
+                pub fn tab<I, Error: ParseError<I>>( input:I ) -> IResult<I, char, Error>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter,
                 <I as InputIter>::Item: AsChar,
@@ -4207,7 +6336,7 @@ pub mod parsers
                     }
                 }
                 /// Matches a newline character '\\n'.
-                pub fn newline<I, Error: ParseError<I>>(input: I) -> IResult<I, char, Error>
+                pub fn newline<I, Error: ParseError<I>>( input:I ) -> IResult<I, char, Error>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter + InputLength,
                 <I as InputIter>::Item: AsChar,
@@ -4215,7 +6344,7 @@ pub mod parsers
                     char('\n')(input)
                 }
                 /// Matches a tab character '\t'.
-                pub fn tab<I, Error: ParseError<I>>(input: I) -> IResult<I, char, Error>
+                pub fn tab<I, Error: ParseError<I>>( input:I ) -> IResult<I, char, Error>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter + InputLength,
                 <I as InputIter>::Item: AsChar,
@@ -4389,18 +6518,6 @@ pub mod parsers
 
         }
         
-        pub mod str
-        {
-            use ::
-            {
-                parsers::nom::
-                {
-
-                },
-                *,
-            };
-        } pub use self::str::*;
-        
         pub mod number
         {
             use ::
@@ -4432,8 +6549,7 @@ pub mod parsers
                     *
                 };
                 /// Recognizes an unsigned 1 byte integer.
-                #[inline]
-                pub fn be_u8<I, E: ParseError<I>>(input: I) -> IResult<I, u8, E>
+                #[inline] pub fn be_u8<I, E: ParseError<I>>( input:I ) -> IResult<I, u8, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4447,8 +6563,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a big endian unsigned 2 bytes integer.
-                #[inline]
-                pub fn be_u16<I, E: ParseError<I>>(input: I) -> IResult<I, u16, E>
+                #[inline] pub fn be_u16<I, E: ParseError<I>>( input:I ) -> IResult<I, u16, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4465,8 +6580,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a big endian unsigned 3 byte integer.
-                #[inline]
-                pub fn be_u24<I, E: ParseError<I>>(input: I) -> IResult<I, u32, E>
+                #[inline] pub fn be_u24<I, E: ParseError<I>>( input:I ) -> IResult<I, u32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4483,8 +6597,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a big endian unsigned 4 bytes integer.
-                #[inline]
-                pub fn be_u32<I, E: ParseError<I>>(input: I) -> IResult<I, u32, E>
+                #[inline] pub fn be_u32<I, E: ParseError<I>>( input:I ) -> IResult<I, u32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4501,8 +6614,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a big endian unsigned 8 bytes integer.
-                #[inline]
-                pub fn be_u64<I, E: ParseError<I>>(input: I) -> IResult<I, u64, E>
+                #[inline] pub fn be_u64<I, E: ParseError<I>>( input:I ) -> IResult<I, u64, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4519,8 +6631,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a big endian unsigned 16 bytes integer.
-                #[inline]
-                pub fn be_u128<I, E: ParseError<I>>(input: I) -> IResult<I, u128, E>
+                #[inline] pub fn be_u128<I, E: ParseError<I>>( input:I ) -> IResult<I, u128, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4537,24 +6648,21 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a signed 1 byte integer.
-                #[inline]
-                pub fn be_i8<I, E: ParseError<I>>(input: I) -> IResult<I, i8, E>
+                #[inline] pub fn be_i8<I, E: ParseError<I>>( input:I ) -> IResult<I, i8, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     be_u8.map(|x| x as i8).parse(input)
                 }
                 /// Recognizes a big endian signed 2 bytes integer.
-                #[inline]
-                pub fn be_i16<I, E: ParseError<I>>(input: I) -> IResult<I, i16, E>
+                #[inline] pub fn be_i16<I, E: ParseError<I>>( input:I ) -> IResult<I, i16, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     be_u16.map(|x| x as i16).parse(input)
                 }
                 /// Recognizes a big endian signed 3 bytes integer.
-                #[inline]
-                pub fn be_i24<I, E: ParseError<I>>(input: I) -> IResult<I, i32, E>
+                #[inline] pub fn be_i24<I, E: ParseError<I>>( input:I ) -> IResult<I, i32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4570,32 +6678,28 @@ pub mod parsers
                         .parse(input)
                 }
                 /// Recognizes a big endian signed 4 bytes integer.
-                #[inline]
-                pub fn be_i32<I, E: ParseError<I>>(input: I) -> IResult<I, i32, E>
+                #[inline] pub fn be_i32<I, E: ParseError<I>>( input:I ) -> IResult<I, i32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     be_u32.map(|x| x as i32).parse(input)
                 }
                 /// Recognizes a big endian signed 8 bytes integer.
-                #[inline]
-                pub fn be_i64<I, E: ParseError<I>>(input: I) -> IResult<I, i64, E>
+                #[inline] pub fn be_i64<I, E: ParseError<I>>( input:I ) -> IResult<I, i64, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     be_u64.map(|x| x as i64).parse(input)
                 }
                 /// Recognizes a big endian signed 16 bytes integer.
-                #[inline]
-                pub fn be_i128<I, E: ParseError<I>>(input: I) -> IResult<I, i128, E>
+                #[inline] pub fn be_i128<I, E: ParseError<I>>( input:I ) -> IResult<I, i128, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     be_u128.map(|x| x as i128).parse(input)
                 }
                 /// Recognizes an unsigned 1 byte integer.
-                #[inline]
-                pub fn le_u8<I, E: ParseError<I>>(input: I) -> IResult<I, u8, E>
+                #[inline] pub fn le_u8<I, E: ParseError<I>>( input:I ) -> IResult<I, u8, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4609,8 +6713,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a little endian unsigned 2 bytes integer.
-                #[inline]
-                pub fn le_u16<I, E: ParseError<I>>(input: I) -> IResult<I, u16, E>
+                #[inline] pub fn le_u16<I, E: ParseError<I>>( input:I ) -> IResult<I, u16, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4627,8 +6730,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a little endian unsigned 3 byte integer.
-                #[inline]
-                pub fn le_u24<I, E: ParseError<I>>(input: I) -> IResult<I, u32, E>
+                #[inline] pub fn le_u24<I, E: ParseError<I>>( input:I ) -> IResult<I, u32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4645,8 +6747,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a little endian unsigned 4 bytes integer.
-                #[inline]
-                pub fn le_u32<I, E: ParseError<I>>(input: I) -> IResult<I, u32, E>
+                #[inline] pub fn le_u32<I, E: ParseError<I>>( input:I ) -> IResult<I, u32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4663,8 +6764,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a little endian unsigned 8 bytes integer.
-                #[inline]
-                pub fn le_u64<I, E: ParseError<I>>(input: I) -> IResult<I, u64, E>
+                #[inline] pub fn le_u64<I, E: ParseError<I>>( input:I ) -> IResult<I, u64, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4681,8 +6781,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a little endian unsigned 16 bytes integer.
-                #[inline]
-                pub fn le_u128<I, E: ParseError<I>>(input: I) -> IResult<I, u128, E>
+                #[inline] pub fn le_u128<I, E: ParseError<I>>( input:I ) -> IResult<I, u128, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4699,24 +6798,21 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a signed 1 byte integer.
-                #[inline]
-                pub fn le_i8<I, E: ParseError<I>>(input: I) -> IResult<I, i8, E>
+                #[inline] pub fn le_i8<I, E: ParseError<I>>( input:I ) -> IResult<I, i8, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     be_u8.map(|x| x as i8).parse(input)
                 }
                 /// Recognizes a little endian signed 2 bytes integer.
-                #[inline]
-                pub fn le_i16<I, E: ParseError<I>>(input: I) -> IResult<I, i16, E>
+                #[inline] pub fn le_i16<I, E: ParseError<I>>( input:I ) -> IResult<I, i16, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     le_u16.map(|x| x as i16).parse(input)
                 }
                 /// Recognizes a little endian signed 3 bytes integer.
-                #[inline]
-                pub fn le_i24<I, E: ParseError<I>>(input: I) -> IResult<I, i32, E>
+                #[inline] pub fn le_i24<I, E: ParseError<I>>( input:I ) -> IResult<I, i32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4731,32 +6827,28 @@ pub mod parsers
                     .parse(input)
                 }
                 /// Recognizes a little endian signed 4 bytes integer.
-                #[inline]
-                pub fn le_i32<I, E: ParseError<I>>(input: I) -> IResult<I, i32, E>
+                #[inline] pub fn le_i32<I, E: ParseError<I>>( input:I ) -> IResult<I, i32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                 le_u32.map(|x| x as i32).parse(input)
                 }
                 /// Recognizes a little endian signed 8 bytes integer.
-                #[inline]
-                pub fn le_i64<I, E: ParseError<I>>(input: I) -> IResult<I, i64, E>
+                #[inline] pub fn le_i64<I, E: ParseError<I>>( input:I ) -> IResult<I, i64, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     le_u64.map(|x| x as i64).parse(input)
                 }
                 /// Recognizes a little endian signed 16 bytes integer.
-                #[inline]
-                pub fn le_i128<I, E: ParseError<I>>(input: I) -> IResult<I, i128, E>
+                #[inline] pub fn le_i128<I, E: ParseError<I>>( input:I ) -> IResult<I, i128, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     le_u128.map(|x| x as i128).parse(input)
                 }
                 /// Recognizes an unsigned 1 byte integer
-                #[inline]
-                pub fn u8<I, E: ParseError<I>>(input: I) -> IResult<I, u8, E>
+                #[inline] pub fn u8<I, E: ParseError<I>>( input:I ) -> IResult<I, u8, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4770,8 +6862,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes an unsigned 2 bytes integer
-                #[inline]
-                pub fn u16<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, u16, E>
+                #[inline] pub fn u16<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, u16, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4785,8 +6876,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes an unsigned 3 byte integer
-                #[inline]
-                pub fn u24<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, u32, E>
+                #[inline] pub fn u24<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, u32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4800,8 +6890,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes an unsigned 4 byte integer
-                #[inline]
-                pub fn u32<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, u32, E>
+                #[inline] pub fn u32<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, u32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4815,8 +6904,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes an unsigned 8 byte integer
-                #[inline]
-                pub fn u64<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, u64, E>
+                #[inline] pub fn u64<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, u64, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4830,8 +6918,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes an unsigned 16 byte integer.
-                #[inline]
-                pub fn u128<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, u128, E>
+                #[inline] pub fn u128<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, u128, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4845,16 +6932,14 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a signed 1 byte integer
-                #[inline]
-                pub fn i8<I, E: ParseError<I>>(i: I) -> IResult<I, i8, E>
+                #[inline] pub fn i8<I, E: ParseError<I>>(i: I) -> IResult<I, i8, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     u8.map(|x| x as i8).parse(i)
                 }
                 /// Recognizes a signed 2 byte integer
-                #[inline]
-                pub fn i16<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, i16, E>
+                #[inline] pub fn i16<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, i16, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4868,8 +6953,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a signed 3 byte integer.
-                #[inline]
-                pub fn i24<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, i32, E>
+                #[inline] pub fn i24<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, i32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4883,8 +6967,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a signed 4 byte integer.
-                #[inline]
-                pub fn i32<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, i32, E>
+                #[inline] pub fn i32<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, i32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4898,8 +6981,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a signed 8 byte integer
-                #[inline]
-                pub fn i64<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, i64, E>
+                #[inline] pub fn i64<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, i64, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4913,8 +6995,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a signed 16 byte integer
-                #[inline]
-                pub fn i128<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, i128, E>
+                #[inline] pub fn i128<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, i128, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4928,8 +7009,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a big endian 4 bytes floating point number.
-                #[inline]
-                pub fn be_f32<I, E: ParseError<I>>(input: I) -> IResult<I, f32, E>
+                #[inline] pub fn be_f32<I, E: ParseError<I>>( input:I ) -> IResult<I, f32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4939,8 +7019,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a big endian 8 bytes floating point number.
-                #[inline]
-                pub fn be_f64<I, E: ParseError<I>>(input: I) -> IResult<I, f64, E>
+                #[inline] pub fn be_f64<I, E: ParseError<I>>( input:I ) -> IResult<I, f64, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4950,8 +7029,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a little endian 4 bytes floating point number.
-                #[inline]
-                pub fn le_f32<I, E: ParseError<I>>(input: I) -> IResult<I, f32, E>
+                #[inline] pub fn le_f32<I, E: ParseError<I>>( input:I ) -> IResult<I, f32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4961,8 +7039,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a little endian 8 bytes floating point number.
-                #[inline]
-                pub fn le_f64<I, E: ParseError<I>>(input: I) -> IResult<I, f64, E>
+                #[inline] pub fn le_f64<I, E: ParseError<I>>( input:I ) -> IResult<I, f64, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4972,8 +7049,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a 4 byte floating point number
-                #[inline]
-                pub fn f32<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, f32, E>
+                #[inline] pub fn f32<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, f32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -4987,8 +7063,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes an 8 byte floating point number
-                #[inline]
-                pub fn f64<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, f64, E>
+                #[inline] pub fn f64<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, f64, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5002,8 +7077,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a hex-encoded integer.
-                #[inline]
-                pub fn hex_u32<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], u32, E>
+                #[inline] pub fn hex_u32<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], u32, E>
                 {
                     let (i, o) = is_a(&b"0123456789abcdefABCDEF"[..])(input)?;
                     
@@ -5238,8 +7312,7 @@ pub mod parsers
                     *
                 };
                 /// Recognizes an unsigned 1 byte integer.
-                #[inline]
-                pub fn be_u8<I, E: ParseError<I>>(input: I) -> IResult<I, u8, E>
+                #[inline] pub fn be_u8<I, E: ParseError<I>>( input:I ) -> IResult<I, u8, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5253,8 +7326,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a big endian unsigned 2 bytes integer.
-                #[inline]
-                pub fn be_u16<I, E: ParseError<I>>(input: I) -> IResult<I, u16, E>
+                #[inline] pub fn be_u16<I, E: ParseError<I>>( input:I ) -> IResult<I, u16, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5271,8 +7343,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a big endian unsigned 3 byte integer.
-                #[inline]
-                pub fn be_u24<I, E: ParseError<I>>(input: I) -> IResult<I, u32, E>
+                #[inline] pub fn be_u24<I, E: ParseError<I>>( input:I ) -> IResult<I, u32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5289,8 +7360,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a big endian unsigned 4 bytes integer.
-                #[inline]
-                pub fn be_u32<I, E: ParseError<I>>(input: I) -> IResult<I, u32, E>
+                #[inline] pub fn be_u32<I, E: ParseError<I>>( input:I ) -> IResult<I, u32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5307,8 +7377,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a big endian unsigned 8 bytes integer.
-                #[inline]
-                pub fn be_u64<I, E: ParseError<I>>(input: I) -> IResult<I, u64, E>
+                #[inline] pub fn be_u64<I, E: ParseError<I>>( input:I ) -> IResult<I, u64, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5325,8 +7394,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a big endian unsigned 16 bytes integer.
-                #[inline]
-                pub fn be_u128<I, E: ParseError<I>>(input: I) -> IResult<I, u128, E>
+                #[inline] pub fn be_u128<I, E: ParseError<I>>( input:I ) -> IResult<I, u128, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5343,24 +7411,21 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a signed 1 byte integer.
-                #[inline]
-                pub fn be_i8<I, E: ParseError<I>>(input: I) -> IResult<I, i8, E>
+                #[inline] pub fn be_i8<I, E: ParseError<I>>( input:I ) -> IResult<I, i8, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     be_u8.map(|x| x as i8).parse(input)
                 }
                 /// Recognizes a big endian signed 2 bytes integer.
-                #[inline]
-                pub fn be_i16<I, E: ParseError<I>>(input: I) -> IResult<I, i16, E>
+                #[inline] pub fn be_i16<I, E: ParseError<I>>( input:I ) -> IResult<I, i16, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     be_u16.map(|x| x as i16).parse(input)
                 }
                 /// Recognizes a big endian signed 3 bytes integer.
-                #[inline]
-                pub fn be_i24<I, E: ParseError<I>>(input: I) -> IResult<I, i32, E>
+                #[inline] pub fn be_i24<I, E: ParseError<I>>( input:I ) -> IResult<I, i32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5375,32 +7440,28 @@ pub mod parsers
                         .parse(input)
                 }
                 /// Recognizes a big endian signed 4 bytes integer.
-                #[inline]
-                pub fn be_i32<I, E: ParseError<I>>(input: I) -> IResult<I, i32, E>
+                #[inline] pub fn be_i32<I, E: ParseError<I>>( input:I ) -> IResult<I, i32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     be_u32.map(|x| x as i32).parse(input)
                 }
                 /// Recognizes a big endian signed 8 bytes integer.
-                #[inline]
-                pub fn be_i64<I, E: ParseError<I>>(input: I) -> IResult<I, i64, E>
+                #[inline] pub fn be_i64<I, E: ParseError<I>>( input:I ) -> IResult<I, i64, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     be_u64.map(|x| x as i64).parse(input)
                 }
                 /// Recognizes a big endian signed 16 bytes integer.
-                #[inline]
-                pub fn be_i128<I, E: ParseError<I>>(input: I) -> IResult<I, i128, E>
+                #[inline] pub fn be_i128<I, E: ParseError<I>>( input:I ) -> IResult<I, i128, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     be_u128.map(|x| x as i128).parse(input)
                 }
                 /// Recognizes an unsigned 1 byte integer.
-                #[inline]
-                pub fn le_u8<I, E: ParseError<I>>(input: I) -> IResult<I, u8, E>
+                #[inline] pub fn le_u8<I, E: ParseError<I>>( input:I ) -> IResult<I, u8, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5414,8 +7475,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a little endian unsigned 2 bytes integer.
-                #[inline]
-                pub fn le_u16<I, E: ParseError<I>>(input: I) -> IResult<I, u16, E>
+                #[inline] pub fn le_u16<I, E: ParseError<I>>( input:I ) -> IResult<I, u16, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5432,8 +7492,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a little endian unsigned 3 bytes integer.
-                #[inline]
-                pub fn le_u24<I, E: ParseError<I>>(input: I) -> IResult<I, u32, E>
+                #[inline] pub fn le_u24<I, E: ParseError<I>>( input:I ) -> IResult<I, u32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5450,8 +7509,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a little endian unsigned 4 bytes integer.
-                #[inline]
-                pub fn le_u32<I, E: ParseError<I>>(input: I) -> IResult<I, u32, E>
+                #[inline] pub fn le_u32<I, E: ParseError<I>>( input:I ) -> IResult<I, u32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5468,8 +7526,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a little endian unsigned 8 bytes integer.
-                #[inline]
-                pub fn le_u64<I, E: ParseError<I>>(input: I) -> IResult<I, u64, E>
+                #[inline] pub fn le_u64<I, E: ParseError<I>>( input:I ) -> IResult<I, u64, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5486,8 +7543,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a little endian unsigned 16 bytes integer.
-                #[inline]
-                pub fn le_u128<I, E: ParseError<I>>(input: I) -> IResult<I, u128, E>
+                #[inline] pub fn le_u128<I, E: ParseError<I>>( input:I ) -> IResult<I, u128, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5504,24 +7560,21 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a signed 1 byte integer.
-                #[inline]
-                pub fn le_i8<I, E: ParseError<I>>(input: I) -> IResult<I, i8, E>
+                #[inline] pub fn le_i8<I, E: ParseError<I>>( input:I ) -> IResult<I, i8, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     le_u8.map(|x| x as i8).parse(input)
                 }
                 /// Recognizes a little endian signed 2 bytes integer.
-                #[inline]
-                pub fn le_i16<I, E: ParseError<I>>(input: I) -> IResult<I, i16, E>
+                #[inline] pub fn le_i16<I, E: ParseError<I>>( input:I ) -> IResult<I, i16, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     le_u16.map(|x| x as i16).parse(input)
                 }
                 /// Recognizes a little endian signed 3 bytes integer.
-                #[inline]
-                pub fn le_i24<I, E: ParseError<I>>(input: I) -> IResult<I, i32, E>
+                #[inline] pub fn le_i24<I, E: ParseError<I>>( input:I ) -> IResult<I, i32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5536,32 +7589,28 @@ pub mod parsers
                         .parse(input)
                 }
                 /// Recognizes a little endian signed 4 bytes integer.
-                #[inline]
-                pub fn le_i32<I, E: ParseError<I>>(input: I) -> IResult<I, i32, E>
+                #[inline] pub fn le_i32<I, E: ParseError<I>>( input:I ) -> IResult<I, i32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     le_u32.map(|x| x as i32).parse(input)
                 }
                 /// Recognizes a little endian signed 8 bytes integer.
-                #[inline]
-                pub fn le_i64<I, E: ParseError<I>>(input: I) -> IResult<I, i64, E>
+                #[inline] pub fn le_i64<I, E: ParseError<I>>( input:I ) -> IResult<I, i64, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     le_u64.map(|x| x as i64).parse(input)
                 }
                 /// Recognizes a little endian signed 16 bytes integer.
-                #[inline]
-                pub fn le_i128<I, E: ParseError<I>>(input: I) -> IResult<I, i128, E>
+                #[inline] pub fn le_i128<I, E: ParseError<I>>( input:I ) -> IResult<I, i128, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     le_u128.map(|x| x as i128).parse(input)
                 }
                 /// Recognizes an unsigned 1 byte integer
-                #[inline]
-                pub fn u8<I, E: ParseError<I>>(input: I) -> IResult<I, u8, E>
+                #[inline] pub fn u8<I, E: ParseError<I>>( input:I ) -> IResult<I, u8, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5575,8 +7624,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes an unsigned 2 bytes integer
-                #[inline]
-                pub fn u16<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, u16, E>
+                #[inline] pub fn u16<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, u16, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5590,8 +7638,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes an unsigned 3 byte integer
-                #[inline]
-                pub fn u24<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, u32, E>
+                #[inline] pub fn u24<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, u32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5605,8 +7652,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes an unsigned 4 byte integer.
-                #[inline]
-                pub fn u32<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, u32, E>
+                #[inline] pub fn u32<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, u32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5620,8 +7666,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes an unsigned 8 byte integer
-                #[inline]
-                pub fn u64<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, u64, E>
+                #[inline] pub fn u64<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, u64, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5635,8 +7680,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes an unsigned 16 byte integer
-                #[inline]
-                pub fn u128<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, u128, E>
+                #[inline] pub fn u128<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, u128, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5650,16 +7694,14 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a signed 1 byte integer
-                #[inline]
-                pub fn i8<I, E: ParseError<I>>(i: I) -> IResult<I, i8, E>
+                #[inline] pub fn i8<I, E: ParseError<I>>(i: I) -> IResult<I, i8, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     u8.map(|x| x as i8).parse(i)
                 }
                 /// Recognizes a signed 2 byte integer
-                #[inline]
-                pub fn i16<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, i16, E>
+                #[inline] pub fn i16<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, i16, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5673,8 +7715,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a signed 3 byte integer.
-                #[inline]
-                pub fn i24<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, i32, E>
+                #[inline] pub fn i24<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, i32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5688,8 +7729,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a signed 4 byte integer
-                #[inline]
-                pub fn i32<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, i32, E>
+                #[inline] pub fn i32<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, i32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5703,8 +7743,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a signed 8 byte integer
-                #[inline]
-                pub fn i64<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, i64, E>
+                #[inline] pub fn i64<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, i64, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5718,8 +7757,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a signed 16 byte integer.
-                #[inline]
-                pub fn i128<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, i128, E>
+                #[inline] pub fn i128<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, i128, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5733,8 +7771,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a big endian 4 bytes floating point number.
-                #[inline]
-                pub fn be_f32<I, E: ParseError<I>>(input: I) -> IResult<I, f32, E>
+                #[inline] pub fn be_f32<I, E: ParseError<I>>( input:I ) -> IResult<I, f32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5744,8 +7781,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a big endian 8 bytes floating point number.
-                #[inline]
-                pub fn be_f64<I, E: ParseError<I>>(input: I) -> IResult<I, f64, E>
+                #[inline] pub fn be_f64<I, E: ParseError<I>>( input:I ) -> IResult<I, f64, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5755,8 +7791,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a little endian 4 bytes floating point number.
-                #[inline]
-                pub fn le_f32<I, E: ParseError<I>>(input: I) -> IResult<I, f32, E>
+                #[inline] pub fn le_f32<I, E: ParseError<I>>( input:I ) -> IResult<I, f32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5766,8 +7801,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a little endian 8 bytes floating point number.
-                #[inline]
-                pub fn le_f64<I, E: ParseError<I>>(input: I) -> IResult<I, f64, E>
+                #[inline] pub fn le_f64<I, E: ParseError<I>>( input:I ) -> IResult<I, f64, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5777,8 +7811,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a 4 byte floating point number
-                #[inline]
-                pub fn f32<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, f32, E>
+                #[inline] pub fn f32<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, f32, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5792,8 +7825,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes an 8 byte floating point number
-                #[inline]
-                pub fn f64<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, f64, E>
+                #[inline] pub fn f64<I, E: ParseError<I>>(endian: Endianness) -> fn(I) -> IResult<I, f64, E>
                 where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
@@ -5807,8 +7839,7 @@ pub mod parsers
                     }
                 }
                 /// Recognizes a hex-encoded integer.
-                #[inline]
-                pub fn hex_u32<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], u32, E>
+                #[inline] pub fn hex_u32<'a, E: ParseError<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], u32, E>
                 {
                     let (i, o) = is_a(&b"0123456789abcdefABCDEF"[..])(input)?;
                     
@@ -5831,7 +7862,6 @@ pub mod parsers
                     Ok((remaining, res))
                 }
                 /// Recognizes a floating point number in text format and returns the corresponding part of the input.
-                #[rustfmt::skip]
                 pub fn recognize_float<T, E:ParseError<T>>(input: T) -> IResult<T, T, E>
                 where
                 T: Slice<RangeFrom<usize>> + Slice<RangeTo<usize>>,
@@ -6081,4 +8111,4 @@ fn main()
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 6084
+// 7668
