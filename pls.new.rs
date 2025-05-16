@@ -12,6 +12,7 @@
 /**/
 #[macro_use] extern crate lazy_static;
 /**/
+extern crate rand;
 extern crate fnv;
 extern crate memchr;
 extern crate nix;
@@ -6560,10 +6561,4129 @@ pub mod num
     
     pub mod big
     {
+        //! Big Integer Types for Rust
         use ::
         {
             *,
         };
+
+        #[macro_use]
+        pub mod macros
+        {
+            use ::
+            {
+                *,
+            };
+
+            macro_rules! cfg_32 
+            {
+                ($($any:tt)+) => 
+                {
+                    #[cfg(not(target_pointer_width = "64"))] $($any)+
+                }
+            }
+
+            macro_rules! cfg_32_or_test 
+            {
+                ($($any:tt)+) => 
+                {
+                    #[cfg(any(not(target_pointer_width = "64"), test))] $($any)+
+                }
+            }
+
+            macro_rules! cfg_64 
+            {
+                ($($any:tt)+) => 
+                {
+                    #[cfg(target_pointer_width = "64")] $($any)+
+                }
+            }
+
+            macro_rules! cfg_digit 
+            {
+                ($item32:item $item64:item) => 
+                {
+                    cfg_32!($item32);
+                    cfg_64!($item64);
+                };
+            }
+
+            macro_rules! cfg_digit_expr 
+            {
+                ($expr32:expr, $expr64:expr) => 
+                {
+                    cfg_32!($expr32);
+                    cfg_64!($expr64);
+                };
+            }
+
+            macro_rules! forward_val_val_binop 
+            {
+                (impl $imp:ident for $res:ty, $method:ident) => 
+                {
+                    impl $imp<$res> for $res 
+                    {
+                        type Output = $res;
+
+                        #[inline]
+                        fn $method(self, other: $res) -> $res 
+                        {
+                            // forward to val-ref
+                            $imp::$method(self, &other)
+                        }
+                    }
+                };
+            }
+
+            macro_rules! forward_val_val_binop_commutative 
+            {
+                (impl $imp:ident for $res:ty, $method:ident) => 
+                {
+                    impl $imp<$res> for $res {
+                        type Output = $res;
+
+                        #[inline]
+                        fn $method(self, other: $res) -> $res 
+                        {
+                            // forward to val-ref, with the larger capacity as val
+                            if self.capacity() >= other.capacity() 
+                            {
+                                $imp::$method(self, &other)
+                            } else 
+                            {
+                                $imp::$method(other, &self)
+                            }
+                        }
+                    }
+                };
+            }
+
+            macro_rules! forward_ref_val_binop 
+            {
+                (impl $imp:ident for $res:ty, $method:ident) => 
+                {
+                    impl $imp<$res> for &$res 
+                    {
+                        type Output = $res;
+
+                        #[inline]
+                        fn $method(self, other: $res) -> $res 
+                        {
+                            // forward to ref-ref
+                            $imp::$method(self, &other)
+                        }
+                    }
+                };
+            }
+
+            macro_rules! forward_ref_val_binop_commutative 
+            {
+                (impl $imp:ident for $res:ty, $method:ident) => 
+                {
+                    impl $imp<$res> for &$res {
+                        type Output = $res;
+
+                        #[inline]
+                        fn $method(self, other: $res) -> $res 
+                        {
+                            // reverse, forward to val-ref
+                            $imp::$method(other, self)
+                        }
+                    }
+                };
+            }
+
+            macro_rules! forward_val_ref_binop 
+            {
+                (impl $imp:ident for $res:ty, $method:ident) => 
+                {
+                    impl $imp<&$res> for $res 
+                    {
+                        type Output = $res;
+
+                        #[inline]
+                        fn $method(self, other: &$res) -> $res 
+                        {
+                            // forward to ref-ref
+                            $imp::$method(&self, other)
+                        }
+                    }
+                };
+            }
+
+            macro_rules! forward_ref_ref_binop 
+            {
+                (impl $imp:ident for $res:ty, $method:ident) => 
+                {
+                    impl $imp<&$res> for &$res 
+                    {
+                        type Output = $res;
+
+                        #[inline]
+                        fn $method(self, other: &$res) -> $res 
+                        {
+                            // forward to val-ref
+                            $imp::$method(self.clone(), other)
+                        }
+                    }
+                };
+            }
+
+            macro_rules! forward_ref_ref_binop_commutative 
+            {
+                (impl $imp:ident for $res:ty, $method:ident) => 
+                {
+                    impl $imp<&$res> for &$res {
+                        type Output = $res;
+
+                        #[inline]
+                        fn $method(self, other: &$res) -> $res 
+                        {
+                            // forward to val-ref, choosing the larger to clone
+                            if self.len() >= other.len() 
+                            {
+                                $imp::$method(self.clone(), other)
+                            } else 
+                            {
+                                $imp::$method(other.clone(), self)
+                            }
+                        }
+                    }
+                };
+            }
+
+            macro_rules! forward_val_assign 
+            {
+                (impl $imp:ident for $res:ty, $method:ident) => 
+                {
+                    impl $imp<$res> for $res 
+                    {
+                        #[inline]
+                        fn $method(&mut self, other: $res) 
+                        {
+                            self.$method(&other);
+                        }
+                    }
+                };
+            }
+
+            macro_rules! forward_val_assign_scalar 
+            {
+                (impl $imp:ident for $res:ty, $scalar:ty, $method:ident) => 
+                {
+                    impl $imp<$res> for $scalar 
+                    {
+                        #[inline]
+                        fn $method(&mut self, other: $res) 
+                        {
+                            self.$method(&other);
+                        }
+                    }
+                };
+            }
+
+            /// use this if val_val_binop is already implemented and the reversed order is required
+            macro_rules! forward_scalar_val_val_binop_commutative 
+            {
+                (impl $imp:ident < $scalar:ty > for $res:ty, $method:ident) => 
+                {
+                    impl $imp<$res> for $scalar 
+                    {
+                        type Output = $res;
+
+                        #[inline]
+                        fn $method(self, other: $res) -> $res 
+                        {
+                            $imp::$method(other, self)
+                        }
+                    }
+                };
+            }
+
+            // Forward scalar to ref-val, when reusing storage is not helpful
+            macro_rules! forward_scalar_val_val_binop_to_ref_val 
+            {
+                (impl $imp:ident<$scalar:ty> for $res:ty, $method:ident) => 
+                {
+                    impl $imp<$scalar> for $res 
+                    {
+                        type Output = $res;
+
+                        #[inline]
+                        fn $method(self, other: $scalar) -> $res 
+                        {
+                            $imp::$method(&self, other)
+                        }
+                    }
+
+                    impl $imp<$res> for $scalar 
+                    {
+                        type Output = $res;
+
+                        #[inline]
+                        fn $method(self, other: $res) -> $res 
+                        {
+                            $imp::$method(self, &other)
+                        }
+                    }
+                };
+            }
+
+            macro_rules! forward_scalar_ref_ref_binop_to_ref_val 
+            {
+                (impl $imp:ident<$scalar:ty> for $res:ty, $method:ident) => 
+                {
+                    impl $imp<&$scalar> for &$res 
+                    {
+                        type Output = $res;
+
+                        #[inline]
+                        fn $method(self, other: &$scalar) -> $res 
+                        {
+                            $imp::$method(self, *other)
+                        }
+                    }
+
+                    impl $imp<&$res> for &$scalar 
+                    {
+                        type Output = $res;
+
+                        #[inline]
+                        fn $method(self, other: &$res) -> $res 
+                        {
+                            $imp::$method(*self, other)
+                        }
+                    }
+                };
+            }
+
+            macro_rules! forward_scalar_val_ref_binop_to_ref_val 
+            {
+                (impl $imp:ident<$scalar:ty> for $res:ty, $method:ident) => 
+                {
+                    impl $imp<&$scalar> for $res 
+                    {
+                        type Output = $res;
+
+                        #[inline]
+                        fn $method(self, other: &$scalar) -> $res 
+                        {
+                            $imp::$method(&self, *other)
+                        }
+                    }
+
+                    impl $imp<$res> for &$scalar 
+                    {
+                        type Output = $res;
+
+                        #[inline]
+                        fn $method(self, other: $res) -> $res 
+                        {
+                            $imp::$method(*self, &other)
+                        }
+                    }
+                };
+            }
+
+            macro_rules! forward_scalar_val_ref_binop_to_val_val 
+            {
+                (impl $imp:ident<$scalar:ty> for $res:ty, $method:ident) => 
+                {
+                    impl $imp<&$scalar> for $res {
+                        type Output = $res;
+
+                        #[inline]
+                        fn $method(self, other: &$scalar) -> $res 
+                        {
+                            $imp::$method(self, *other)
+                        }
+                    }
+
+                    impl $imp<$res> for &$scalar 
+                    {
+                        type Output = $res;
+
+                        #[inline]
+                        fn $method(self, other: $res) -> $res 
+                        {
+                            $imp::$method(*self, other)
+                        }
+                    }
+                };
+            }
+
+            macro_rules! forward_scalar_ref_val_binop_to_val_val 
+            {
+                (impl $imp:ident < $scalar:ty > for $res:ty, $method:ident) => 
+                {
+                    impl $imp<$scalar> for &$res 
+                    {
+                        type Output = $res;
+
+                        #[inline]
+                        fn $method(self, other: $scalar) -> $res 
+                        {
+                            $imp::$method(self.clone(), other)
+                        }
+                    }
+
+                    impl $imp<&$res> for $scalar 
+                    {
+                        type Output = $res;
+
+                        #[inline]
+                        fn $method(self, other: &$res) -> $res 
+                        {
+                            $imp::$method(self, other.clone())
+                        }
+                    }
+                };
+            }
+
+            macro_rules! forward_scalar_ref_ref_binop_to_val_val 
+            {
+                (impl $imp:ident<$scalar:ty> for $res:ty, $method:ident) => 
+                {
+                    impl $imp<&$scalar> for &$res 
+                    {
+                        type Output = $res;
+
+                        #[inline]
+                        fn $method(self, other: &$scalar) -> $res 
+                        {
+                            $imp::$method(self.clone(), *other)
+                        }
+                    }
+
+                    impl $imp<&$res> for &$scalar 
+                    {
+                        type Output = $res;
+
+                        #[inline]
+                        fn $method(self, other: &$res) -> $res 
+                        {
+                            $imp::$method(*self, other.clone())
+                        }
+                    }
+                };
+            }
+
+            macro_rules! promote_scalars 
+            {
+                (impl $imp:ident<$promo:ty> for $res:ty, $method:ident, $( $scalar:ty ),*) => 
+                {
+                    $(
+                        forward_all_scalar_binop_to_val_val!(impl $imp<$scalar> for $res, $method);
+
+                        impl $imp<$scalar> for $res 
+                        {
+                            type Output = $res;
+
+                            #[allow(clippy::cast_lossless)]
+                            #[inline]
+                            fn $method(self, other: $scalar) -> $res 
+                            {
+                                $imp::$method(self, other as $promo)
+                            }
+                        }
+
+                        impl $imp<$res> for $scalar 
+                        {
+                            type Output = $res;
+
+                            #[allow(clippy::cast_lossless)]
+                            #[inline]
+                            fn $method(self, other: $res) -> $res 
+                            {
+                                $imp::$method(self as $promo, other)
+                            }
+                        }
+                    )*
+                }
+            }
+            macro_rules! promote_scalars_assign 
+            {
+                (impl $imp:ident<$promo:ty> for $res:ty, $method:ident, $( $scalar:ty ),*) => 
+                {
+                    $(
+                        impl $imp<$scalar> for $res 
+                        {
+                            #[allow(clippy::cast_lossless)]
+                            #[inline]
+                            fn $method(&mut self, other: $scalar) 
+                            {
+                                self.$method(other as $promo);
+                            }
+                        }
+                    )*
+                }
+            }
+
+            macro_rules! promote_unsigned_scalars 
+            {
+                (impl $imp:ident for $res:ty, $method:ident) => 
+                {
+                    promote_scalars!(impl $imp<u32> for $res, $method, u8, u16);
+                    promote_scalars!(impl $imp<UsizePromotion> for $res, $method, usize);
+                }
+            }
+
+            macro_rules! promote_unsigned_scalars_assign 
+            {
+                (impl $imp:ident for $res:ty, $method:ident) => 
+                {
+                    promote_scalars_assign!(impl $imp<u32> for $res, $method, u8, u16);
+                    promote_scalars_assign!(impl $imp<UsizePromotion> for $res, $method, usize);
+                }
+            }
+
+            macro_rules! promote_signed_scalars 
+            {
+                (impl $imp:ident for $res:ty, $method:ident) => 
+                {
+                    promote_scalars!(impl $imp<i32> for $res, $method, i8, i16);
+                    promote_scalars!(impl $imp<IsizePromotion> for $res, $method, isize);
+                }
+            }
+
+            macro_rules! promote_signed_scalars_assign 
+            {
+                (impl $imp:ident for $res:ty, $method:ident) => 
+                {
+                    promote_scalars_assign!(impl $imp<i32> for $res, $method, i8, i16);
+                    promote_scalars_assign!(impl $imp<IsizePromotion> for $res, $method, isize);
+                }
+            }
+
+            // Forward everything to ref-ref, when reusing storage is not helpful
+            macro_rules! forward_all_binop_to_ref_ref 
+            {
+                (impl $imp:ident for $res:ty, $method:ident) => 
+                {
+                    forward_val_val_binop!(impl $imp for $res, $method);
+                    forward_val_ref_binop!(impl $imp for $res, $method);
+                    forward_ref_val_binop!(impl $imp for $res, $method);
+                };
+            }
+
+            // Forward everything to val-ref, so LHS storage can be reused
+            macro_rules! forward_all_binop_to_val_ref 
+            {
+                (impl $imp:ident for $res:ty, $method:ident) => 
+                {
+                    forward_val_val_binop!(impl $imp for $res, $method);
+                    forward_ref_val_binop!(impl $imp for $res, $method);
+                    forward_ref_ref_binop!(impl $imp for $res, $method);
+                };
+            }
+
+            // Forward everything to val-ref, commutatively, so either LHS or RHS storage can be reused
+            macro_rules! forward_all_binop_to_val_ref_commutative 
+            {
+                (impl $imp:ident for $res:ty, $method:ident) => 
+                {
+                    forward_val_val_binop_commutative!(impl $imp for $res, $method);
+                    forward_ref_val_binop_commutative!(impl $imp for $res, $method);
+                    forward_ref_ref_binop_commutative!(impl $imp for $res, $method);
+                };
+            }
+
+            macro_rules! forward_all_scalar_binop_to_ref_val 
+            {
+                (impl $imp:ident<$scalar:ty> for $res:ty, $method:ident) => 
+                {
+                    forward_scalar_val_val_binop_to_ref_val!(impl $imp<$scalar> for $res, $method);
+                    forward_scalar_val_ref_binop_to_ref_val!(impl $imp<$scalar> for $res, $method);
+                    forward_scalar_ref_ref_binop_to_ref_val!(impl $imp<$scalar> for $res, $method);
+                }
+            }
+
+            macro_rules! forward_all_scalar_binop_to_val_val 
+            {
+                (impl $imp:ident<$scalar:ty> for $res:ty, $method:ident) => 
+                {
+                    forward_scalar_val_ref_binop_to_val_val!(impl $imp<$scalar> for $res, $method);
+                    forward_scalar_ref_val_binop_to_val_val!(impl $imp<$scalar> for $res, $method);
+                    forward_scalar_ref_ref_binop_to_val_val!(impl $imp<$scalar> for $res, $method);
+                }
+            }
+
+            macro_rules! forward_all_scalar_binop_to_val_val_commutative 
+            {
+                (impl $imp:ident<$scalar:ty> for $res:ty, $method:ident) => 
+                {
+                    forward_scalar_val_val_binop_commutative!(impl $imp<$scalar> for $res, $method);
+                    forward_all_scalar_binop_to_val_val!(impl $imp<$scalar> for $res, $method);
+                }
+            }
+
+            macro_rules! promote_all_scalars 
+            {
+                (impl $imp:ident for $res:ty, $method:ident) => 
+                {
+                    promote_unsigned_scalars!(impl $imp for $res, $method);
+                    promote_signed_scalars!(impl $imp for $res, $method);
+                }
+            }
+
+            macro_rules! promote_all_scalars_assign 
+            {
+                (impl $imp:ident for $res:ty, $method:ident) => 
+                {
+                    promote_unsigned_scalars_assign!(impl $imp for $res, $method);
+                    promote_signed_scalars_assign!(impl $imp for $res, $method);
+                }
+            }
+
+            macro_rules! impl_sum_iter_type 
+            {
+                ($res:ty) => 
+                {
+                    impl<T> Sum<T> for $res
+                    where
+                        $res: Add<T, Output = $res>,
+                    {
+                        fn sum<I>(iter: I) -> Self
+                        where
+                            I: Iterator<Item = T>,
+                        {
+                            iter.fold(Self::ZERO, <$res>::add)
+                        }
+                    }
+                };
+            }
+
+            macro_rules! impl_product_iter_type 
+            {
+                ($res:ty) => 
+                {
+                    impl<T> Product<T> for $res
+                    where
+                        $res: Mul<T, Output = $res>,
+                    {
+                        fn product<I>(iter: I) -> Self
+                        where
+                            I: Iterator<Item = T>,
+                        {
+                            iter.fold(One::one(), <$res>::mul)
+                        }
+                    }
+                };
+            }
+        }
+        
+        pub mod bigint
+        {
+            use ::
+            {
+                cmp::Ordering::{self, Equal},
+                default::{ Default },
+                num::
+                {
+                    big::
+                    {
+                        big_digit::BigDigit,
+                        Sign::{Minus, NoSign, Plus},
+                        biguint::{to_str_radix_reversed, BigUint, IntDigits, U32Digits, U64Digits}
+                    },
+                    integers::{ Integer, Roots },
+                    traits::{ConstZero, Num, One, Pow, Signed, Zero},
+                },
+                ops::{ Neg, Not },
+                string::{ String },
+                vec::{ Vec },
+                *,
+            };
+
+            pub mod addition
+            {
+                use ::
+                {
+                    cmp::Ordering::{ Equal, Greater, Less },
+                    iter::{ Sum },
+                    num::
+                    {
+                        big::
+                        {
+                            CheckedUnsignedAbs::{Negative, Positive},
+                            Sign::{Minus, NoSign, Plus},
+                            BigInt, UnsignedAbs, IsizePromotion, UsizePromotion
+                        },
+                        traits::{ CheckedAdd },
+                    },
+                    ops::{ Add, AddAssign },
+                    *,
+                };
+
+                macro_rules! bigint_add
+                {
+                    ($a:expr, $a_owned:expr, $a_data:expr, $b:expr, $b_owned:expr, $b_data:expr) => {
+                        match ($a.sign, $b.sign) {
+                            (_, NoSign) => $a_owned,
+                            (NoSign, _) => $b_owned,
+                            // same sign => keep the sign with the sum of magnitudes
+                            (Plus, Plus) | (Minus, Minus) => BigInt::from_biguint($a.sign, $a_data + $b_data),
+                            // opposite signs => keep the sign of the larger with the difference of magnitudes
+                            (Plus, Minus) | (Minus, Plus) => match $a.data.cmp(&$b.data) {
+                                Less => BigInt::from_biguint($b.sign, $b_data - $a_data),
+                                Greater => BigInt::from_biguint($a.sign, $a_data - $b_data),
+                                Equal => BigInt::ZERO,
+                            },
+                        }
+                    };
+                }
+
+                impl Add<&BigInt> for &BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn add(self, other: &BigInt) -> BigInt {
+                        bigint_add!(
+                            self,
+                            self.clone(),
+                            &self.data,
+                            other,
+                            other.clone(),
+                            &other.data
+                        )
+                    }
+                }
+
+                impl Add<BigInt> for &BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn add(self, other: BigInt) -> BigInt {
+                        bigint_add!(self, self.clone(), &self.data, other, other, other.data)
+                    }
+                }
+
+                impl Add<&BigInt> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn add(self, other: &BigInt) -> BigInt {
+                        bigint_add!(self, self, self.data, other, other.clone(), &other.data)
+                    }
+                }
+
+                impl Add<BigInt> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn add(self, other: BigInt) -> BigInt {
+                        bigint_add!(self, self, self.data, other, other, other.data)
+                    }
+                }
+
+                impl AddAssign<&BigInt> for BigInt {
+                    #[inline]
+                    fn add_assign(&mut self, other: &BigInt) {
+                        let n = mem::replace(self, Self::ZERO);
+                        *self = n + other;
+                    }
+                }
+                forward_val_assign!(impl AddAssign for BigInt, add_assign);
+
+                promote_all_scalars!(impl Add for BigInt, add);
+                promote_all_scalars_assign!(impl AddAssign for BigInt, add_assign);
+                forward_all_scalar_binop_to_val_val_commutative!(impl Add<u32> for BigInt, add);
+                forward_all_scalar_binop_to_val_val_commutative!(impl Add<u64> for BigInt, add);
+                forward_all_scalar_binop_to_val_val_commutative!(impl Add<u128> for BigInt, add);
+
+                impl Add<u32> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn add(self, other: u32) -> BigInt {
+                        match self.sign {
+                            NoSign => From::from(other),
+                            Plus => BigInt::from(self.data + other),
+                            Minus => match self.data.cmp(&From::from(other)) {
+                                Equal => Self::ZERO,
+                                Less => BigInt::from(other - self.data),
+                                Greater => -BigInt::from(self.data - other),
+                            },
+                        }
+                    }
+                }
+
+                impl AddAssign<u32> for BigInt {
+                    #[inline]
+                    fn add_assign(&mut self, other: u32) {
+                        let n = mem::replace(self, Self::ZERO);
+                        *self = n + other;
+                    }
+                }
+
+                impl Add<u64> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn add(self, other: u64) -> BigInt {
+                        match self.sign {
+                            NoSign => From::from(other),
+                            Plus => BigInt::from(self.data + other),
+                            Minus => match self.data.cmp(&From::from(other)) {
+                                Equal => Self::ZERO,
+                                Less => BigInt::from(other - self.data),
+                                Greater => -BigInt::from(self.data - other),
+                            },
+                        }
+                    }
+                }
+
+                impl AddAssign<u64> for BigInt {
+                    #[inline]
+                    fn add_assign(&mut self, other: u64) {
+                        let n = mem::replace(self, Self::ZERO);
+                        *self = n + other;
+                    }
+                }
+
+                impl Add<u128> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn add(self, other: u128) -> BigInt {
+                        match self.sign {
+                            NoSign => BigInt::from(other),
+                            Plus => BigInt::from(self.data + other),
+                            Minus => match self.data.cmp(&From::from(other)) {
+                                Equal => Self::ZERO,
+                                Less => BigInt::from(other - self.data),
+                                Greater => -BigInt::from(self.data - other),
+                            },
+                        }
+                    }
+                }
+                impl AddAssign<u128> for BigInt {
+                    #[inline]
+                    fn add_assign(&mut self, other: u128) {
+                        let n = mem::replace(self, Self::ZERO);
+                        *self = n + other;
+                    }
+                }
+
+                forward_all_scalar_binop_to_val_val_commutative!(impl Add<i32> for BigInt, add);
+                forward_all_scalar_binop_to_val_val_commutative!(impl Add<i64> for BigInt, add);
+                forward_all_scalar_binop_to_val_val_commutative!(impl Add<i128> for BigInt, add);
+
+                impl Add<i32> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn add(self, other: i32) -> BigInt {
+                        match other.checked_uabs() {
+                            Positive(u) => self + u,
+                            Negative(u) => self - u,
+                        }
+                    }
+                }
+                impl AddAssign<i32> for BigInt {
+                    #[inline]
+                    fn add_assign(&mut self, other: i32) {
+                        match other.checked_uabs() {
+                            Positive(u) => *self += u,
+                            Negative(u) => *self -= u,
+                        }
+                    }
+                }
+
+                impl Add<i64> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn add(self, other: i64) -> BigInt {
+                        match other.checked_uabs() {
+                            Positive(u) => self + u,
+                            Negative(u) => self - u,
+                        }
+                    }
+                }
+                impl AddAssign<i64> for BigInt {
+                    #[inline]
+                    fn add_assign(&mut self, other: i64) {
+                        match other.checked_uabs() {
+                            Positive(u) => *self += u,
+                            Negative(u) => *self -= u,
+                        }
+                    }
+                }
+
+                impl Add<i128> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn add(self, other: i128) -> BigInt {
+                        match other.checked_uabs() {
+                            Positive(u) => self + u,
+                            Negative(u) => self - u,
+                        }
+                    }
+                }
+                impl AddAssign<i128> for BigInt {
+                    #[inline]
+                    fn add_assign(&mut self, other: i128) {
+                        match other.checked_uabs() {
+                            Positive(u) => *self += u,
+                            Negative(u) => *self -= u,
+                        }
+                    }
+                }
+
+                impl CheckedAdd for BigInt {
+                    #[inline]
+                    fn checked_add(&self, v: &BigInt) -> Option<BigInt> {
+                        Some(self.add(v))
+                    }
+                }
+
+                impl_sum_iter_type!(BigInt);
+
+            } pub use self::addition::{ * };
+
+            pub mod division
+            {
+                use ::
+                {
+                    num::
+                    {
+                        big::
+                        {
+                            bigint::
+                            {
+                                CheckedUnsignedAbs::{ Negative, Positive },
+                                Sign::{ self, * },
+                                BigInt, UnsignedAbs,
+                            },
+                            IsizePromotion, UsizePromotion,
+                        },
+                        integers::{ Integer },
+                        traits::{ CheckedDiv, CheckedEuclid, Euclid, Signed, ToPrimitive, Zero },
+                    },
+                    ops::{ Div, DivAssign, Rem, RemAssign },
+                    *,
+                };
+                
+                forward_all_binop_to_ref_ref!(impl Div for BigInt, div);
+
+                impl Div<&BigInt> for &BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn div(self, other: &BigInt) -> BigInt {
+                        let (q, _) = self.div_rem(other);
+                        q
+                    }
+                }
+
+                impl DivAssign<&BigInt> for BigInt {
+                    #[inline]
+                    fn div_assign(&mut self, other: &BigInt) {
+                        *self = &*self / other;
+                    }
+                }
+                forward_val_assign!(impl DivAssign for BigInt, div_assign);
+
+                promote_all_scalars!(impl Div for BigInt, div);
+                promote_all_scalars_assign!(impl DivAssign for BigInt, div_assign);
+                forward_all_scalar_binop_to_val_val!(impl Div<u32> for BigInt, div);
+                forward_all_scalar_binop_to_val_val!(impl Div<u64> for BigInt, div);
+                forward_all_scalar_binop_to_val_val!(impl Div<u128> for BigInt, div);
+
+                impl Div<u32> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn div(self, other: u32) -> BigInt {
+                        BigInt::from_biguint(self.sign, self.data / other)
+                    }
+                }
+
+                impl DivAssign<u32> for BigInt {
+                    #[inline]
+                    fn div_assign(&mut self, other: u32) {
+                        self.data /= other;
+                        if self.data.is_zero() {
+                            self.sign = NoSign;
+                        }
+                    }
+                }
+
+                impl Div<BigInt> for u32 {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn div(self, other: BigInt) -> BigInt {
+                        BigInt::from_biguint(other.sign, self / other.data)
+                    }
+                }
+
+                impl Div<u64> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn div(self, other: u64) -> BigInt {
+                        BigInt::from_biguint(self.sign, self.data / other)
+                    }
+                }
+
+                impl DivAssign<u64> for BigInt {
+                    #[inline]
+                    fn div_assign(&mut self, other: u64) {
+                        self.data /= other;
+                        if self.data.is_zero() {
+                            self.sign = NoSign;
+                        }
+                    }
+                }
+
+                impl Div<BigInt> for u64 {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn div(self, other: BigInt) -> BigInt {
+                        BigInt::from_biguint(other.sign, self / other.data)
+                    }
+                }
+
+                impl Div<u128> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn div(self, other: u128) -> BigInt {
+                        BigInt::from_biguint(self.sign, self.data / other)
+                    }
+                }
+
+                impl DivAssign<u128> for BigInt {
+                    #[inline]
+                    fn div_assign(&mut self, other: u128) {
+                        self.data /= other;
+                        if self.data.is_zero() {
+                            self.sign = NoSign;
+                        }
+                    }
+                }
+
+                impl Div<BigInt> for u128 {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn div(self, other: BigInt) -> BigInt {
+                        BigInt::from_biguint(other.sign, self / other.data)
+                    }
+                }
+
+                forward_all_scalar_binop_to_val_val!(impl Div<i32> for BigInt, div);
+                forward_all_scalar_binop_to_val_val!(impl Div<i64> for BigInt, div);
+                forward_all_scalar_binop_to_val_val!(impl Div<i128> for BigInt, div);
+
+                impl Div<i32> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn div(self, other: i32) -> BigInt {
+                        match other.checked_uabs() {
+                            Positive(u) => self / u,
+                            Negative(u) => -self / u,
+                        }
+                    }
+                }
+
+                impl DivAssign<i32> for BigInt {
+                    #[inline]
+                    fn div_assign(&mut self, other: i32) {
+                        match other.checked_uabs() {
+                            Positive(u) => *self /= u,
+                            Negative(u) => {
+                                self.sign = -self.sign;
+                                *self /= u;
+                            }
+                        }
+                    }
+                }
+
+                impl Div<BigInt> for i32 {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn div(self, other: BigInt) -> BigInt {
+                        match self.checked_uabs() {
+                            Positive(u) => u / other,
+                            Negative(u) => u / -other,
+                        }
+                    }
+                }
+
+                impl Div<i64> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn div(self, other: i64) -> BigInt {
+                        match other.checked_uabs() {
+                            Positive(u) => self / u,
+                            Negative(u) => -self / u,
+                        }
+                    }
+                }
+
+                impl DivAssign<i64> for BigInt {
+                    #[inline]
+                    fn div_assign(&mut self, other: i64) {
+                        match other.checked_uabs() {
+                            Positive(u) => *self /= u,
+                            Negative(u) => {
+                                self.sign = -self.sign;
+                                *self /= u;
+                            }
+                        }
+                    }
+                }
+
+                impl Div<BigInt> for i64 {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn div(self, other: BigInt) -> BigInt {
+                        match self.checked_uabs() {
+                            Positive(u) => u / other,
+                            Negative(u) => u / -other,
+                        }
+                    }
+                }
+
+                impl Div<i128> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn div(self, other: i128) -> BigInt {
+                        match other.checked_uabs() {
+                            Positive(u) => self / u,
+                            Negative(u) => -self / u,
+                        }
+                    }
+                }
+
+                impl DivAssign<i128> for BigInt {
+                    #[inline]
+                    fn div_assign(&mut self, other: i128) {
+                        match other.checked_uabs() {
+                            Positive(u) => *self /= u,
+                            Negative(u) => {
+                                self.sign = -self.sign;
+                                *self /= u;
+                            }
+                        }
+                    }
+                }
+
+                impl Div<BigInt> for i128 {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn div(self, other: BigInt) -> BigInt {
+                        match self.checked_uabs() {
+                            Positive(u) => u / other,
+                            Negative(u) => u / -other,
+                        }
+                    }
+                }
+
+                forward_all_binop_to_ref_ref!(impl Rem for BigInt, rem);
+
+                impl Rem<&BigInt> for &BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn rem(self, other: &BigInt) -> BigInt {
+                        if let Some(other) = other.to_u32() {
+                            self % other
+                        } else if let Some(other) = other.to_i32() {
+                            self % other
+                        } else {
+                            let (_, r) = self.div_rem(other);
+                            r
+                        }
+                    }
+                }
+
+                impl RemAssign<&BigInt> for BigInt {
+                    #[inline]
+                    fn rem_assign(&mut self, other: &BigInt) {
+                        *self = &*self % other;
+                    }
+                }
+                forward_val_assign!(impl RemAssign for BigInt, rem_assign);
+
+                promote_all_scalars!(impl Rem for BigInt, rem);
+                promote_all_scalars_assign!(impl RemAssign for BigInt, rem_assign);
+                forward_all_scalar_binop_to_val_val!(impl Rem<u32> for BigInt, rem);
+                forward_all_scalar_binop_to_val_val!(impl Rem<u64> for BigInt, rem);
+                forward_all_scalar_binop_to_val_val!(impl Rem<u128> for BigInt, rem);
+
+                impl Rem<u32> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn rem(self, other: u32) -> BigInt {
+                        BigInt::from_biguint(self.sign, self.data % other)
+                    }
+                }
+
+                impl RemAssign<u32> for BigInt {
+                    #[inline]
+                    fn rem_assign(&mut self, other: u32) {
+                        self.data %= other;
+                        if self.data.is_zero() {
+                            self.sign = NoSign;
+                        }
+                    }
+                }
+
+                impl Rem<BigInt> for u32 {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn rem(self, other: BigInt) -> BigInt {
+                        BigInt::from(self % other.data)
+                    }
+                }
+
+                impl Rem<u64> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn rem(self, other: u64) -> BigInt {
+                        BigInt::from_biguint(self.sign, self.data % other)
+                    }
+                }
+
+                impl RemAssign<u64> for BigInt {
+                    #[inline]
+                    fn rem_assign(&mut self, other: u64) {
+                        self.data %= other;
+                        if self.data.is_zero() {
+                            self.sign = NoSign;
+                        }
+                    }
+                }
+
+                impl Rem<BigInt> for u64 {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn rem(self, other: BigInt) -> BigInt {
+                        BigInt::from(self % other.data)
+                    }
+                }
+
+                impl Rem<u128> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn rem(self, other: u128) -> BigInt {
+                        BigInt::from_biguint(self.sign, self.data % other)
+                    }
+                }
+
+                impl RemAssign<u128> for BigInt {
+                    #[inline]
+                    fn rem_assign(&mut self, other: u128) {
+                        self.data %= other;
+                        if self.data.is_zero() {
+                            self.sign = NoSign;
+                        }
+                    }
+                }
+
+                impl Rem<BigInt> for u128 {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn rem(self, other: BigInt) -> BigInt {
+                        BigInt::from(self % other.data)
+                    }
+                }
+
+                forward_all_scalar_binop_to_val_val!(impl Rem<i32> for BigInt, rem);
+                forward_all_scalar_binop_to_val_val!(impl Rem<i64> for BigInt, rem);
+                forward_all_scalar_binop_to_val_val!(impl Rem<i128> for BigInt, rem);
+
+                impl Rem<i32> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn rem(self, other: i32) -> BigInt {
+                        self % other.unsigned_abs()
+                    }
+                }
+
+                impl RemAssign<i32> for BigInt {
+                    #[inline]
+                    fn rem_assign(&mut self, other: i32) {
+                        *self %= other.unsigned_abs();
+                    }
+                }
+
+                impl Rem<BigInt> for i32 {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn rem(self, other: BigInt) -> BigInt {
+                        match self.checked_uabs() {
+                            Positive(u) => u % other,
+                            Negative(u) => -(u % other),
+                        }
+                    }
+                }
+
+                impl Rem<i64> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn rem(self, other: i64) -> BigInt {
+                        self % other.unsigned_abs()
+                    }
+                }
+
+                impl RemAssign<i64> for BigInt {
+                    #[inline]
+                    fn rem_assign(&mut self, other: i64) {
+                        *self %= other.unsigned_abs();
+                    }
+                }
+
+                impl Rem<BigInt> for i64 {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn rem(self, other: BigInt) -> BigInt {
+                        match self.checked_uabs() {
+                            Positive(u) => u % other,
+                            Negative(u) => -(u % other),
+                        }
+                    }
+                }
+
+                impl Rem<i128> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn rem(self, other: i128) -> BigInt {
+                        self % other.unsigned_abs()
+                    }
+                }
+
+                impl RemAssign<i128> for BigInt {
+                    #[inline]
+                    fn rem_assign(&mut self, other: i128) {
+                        *self %= other.unsigned_abs();
+                    }
+                }
+
+                impl Rem<BigInt> for i128 {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn rem(self, other: BigInt) -> BigInt {
+                        match self.checked_uabs() {
+                            Positive(u) => u % other,
+                            Negative(u) => -(u % other),
+                        }
+                    }
+                }
+
+                impl CheckedDiv for BigInt {
+                    #[inline]
+                    fn checked_div(&self, v: &BigInt) -> Option<BigInt> {
+                        if v.is_zero() {
+                            return None;
+                        }
+                        Some(self.div(v))
+                    }
+                }
+
+                impl CheckedEuclid for BigInt {
+                    #[inline]
+                    fn checked_div_euclid(&self, v: &BigInt) -> Option<BigInt> {
+                        if v.is_zero() {
+                            return None;
+                        }
+                        Some(self.div_euclid(v))
+                    }
+
+                    #[inline]
+                    fn checked_rem_euclid(&self, v: &BigInt) -> Option<BigInt> {
+                        if v.is_zero() {
+                            return None;
+                        }
+                        Some(self.rem_euclid(v))
+                    }
+
+                    fn checked_div_rem_euclid(&self, v: &Self) -> Option<(Self, Self)> {
+                        Some(self.div_rem_euclid(v))
+                    }
+                }
+
+                impl Euclid for BigInt {
+                    #[inline]
+                    fn div_euclid(&self, v: &BigInt) -> BigInt {
+                        let (q, r) = self.div_rem(v);
+                        if r.is_negative() {
+                            if v.is_positive() {
+                                q - 1
+                            } else {
+                                q + 1
+                            }
+                        } else {
+                            q
+                        }
+                    }
+
+                    #[inline]
+                    fn rem_euclid(&self, v: &BigInt) -> BigInt {
+                        let r = self % v;
+                        if r.is_negative() {
+                            if v.is_positive() {
+                                r + v
+                            } else {
+                                r - v
+                            }
+                        } else {
+                            r
+                        }
+                    }
+
+                    fn div_rem_euclid(&self, v: &Self) -> (Self, Self) {
+                        let (q, r) = self.div_rem(v);
+                        if r.is_negative() {
+                            if v.is_positive() {
+                                (q - 1, r + v)
+                            } else {
+                                (q + 1, r - v)
+                            }
+                        } else {
+                            (q, r)
+                        }
+                    }
+                }
+
+            } pub use self::division::{ * };
+
+            pub mod multiplication
+            {
+                use ::
+                {
+                    iter::{ Product },
+                    num::
+                    {
+                        big::
+                        {
+                            bigint::
+                            {
+                                CheckedUnsignedAbs::{ Negative, Positive },
+                                Sign::{ self,* },
+                                BigInt, UnsignedAbs
+                            },
+                            IsizePromotion, UsizePromotion,
+                        },
+                        traits::{CheckedMul, One, Zero},
+                    },
+                    ops::{ Mul, MulAssign },
+                    *,
+                };
+                
+                impl Mul<Sign> for Sign
+                {
+                    type Output = Sign;
+
+                    #[inline]
+                    fn mul(self, other: Sign) -> Sign {
+                        match (self, other) {
+                            (NoSign, _) | (_, NoSign) => NoSign,
+                            (Plus, Plus) | (Minus, Minus) => Plus,
+                            (Plus, Minus) | (Minus, Plus) => Minus,
+                        }
+                    }
+                }
+
+                macro_rules! impl_mul {
+                    ($(impl Mul<$Other:ty> for $Self:ty;)*) => {$(
+                        impl Mul<$Other> for $Self {
+                            type Output = BigInt;
+
+                            #[inline]
+                            fn mul(self, other: $Other) -> BigInt {
+                                // automatically match value/ref
+                                let BigInt { data: x, .. } = self;
+                                let BigInt { data: y, .. } = other;
+                                BigInt::from_biguint(self.sign * other.sign, x * y)
+                            }
+                        }
+                    )*}
+                }
+                impl_mul! {
+                    impl Mul<BigInt> for BigInt;
+                    impl Mul<BigInt> for &BigInt;
+                    impl Mul<&BigInt> for BigInt;
+                    impl Mul<&BigInt> for &BigInt;
+                }
+
+                macro_rules! impl_mul_assign {
+                    ($(impl MulAssign<$Other:ty> for BigInt;)*) => {$(
+                        impl MulAssign<$Other> for BigInt {
+                            #[inline]
+                            fn mul_assign(&mut self, other: $Other) {
+                                // automatically match value/ref
+                                let BigInt { data: y, .. } = other;
+                                self.data *= y;
+                                if self.data.is_zero() {
+                                    self.sign = NoSign;
+                                } else {
+                                    self.sign = self.sign * other.sign;
+                                }
+                            }
+                        }
+                    )*}
+                }
+                impl_mul_assign! {
+                    impl MulAssign<BigInt> for BigInt;
+                    impl MulAssign<&BigInt> for BigInt;
+                }
+
+                promote_all_scalars!(impl Mul for BigInt, mul);
+                promote_all_scalars_assign!(impl MulAssign for BigInt, mul_assign);
+                forward_all_scalar_binop_to_val_val_commutative!(impl Mul<u32> for BigInt, mul);
+                forward_all_scalar_binop_to_val_val_commutative!(impl Mul<u64> for BigInt, mul);
+                forward_all_scalar_binop_to_val_val_commutative!(impl Mul<u128> for BigInt, mul);
+
+                impl Mul<u32> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn mul(self, other: u32) -> BigInt {
+                        BigInt::from_biguint(self.sign, self.data * other)
+                    }
+                }
+
+                impl MulAssign<u32> for BigInt {
+                    #[inline]
+                    fn mul_assign(&mut self, other: u32) {
+                        self.data *= other;
+                        if self.data.is_zero() {
+                            self.sign = NoSign;
+                        }
+                    }
+                }
+
+                impl Mul<u64> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn mul(self, other: u64) -> BigInt {
+                        BigInt::from_biguint(self.sign, self.data * other)
+                    }
+                }
+
+                impl MulAssign<u64> for BigInt {
+                    #[inline]
+                    fn mul_assign(&mut self, other: u64) {
+                        self.data *= other;
+                        if self.data.is_zero() {
+                            self.sign = NoSign;
+                        }
+                    }
+                }
+
+                impl Mul<u128> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn mul(self, other: u128) -> BigInt {
+                        BigInt::from_biguint(self.sign, self.data * other)
+                    }
+                }
+
+                impl MulAssign<u128> for BigInt {
+                    #[inline]
+                    fn mul_assign(&mut self, other: u128) {
+                        self.data *= other;
+                        if self.data.is_zero() {
+                            self.sign = NoSign;
+                        }
+                    }
+                }
+
+                forward_all_scalar_binop_to_val_val_commutative!(impl Mul<i32> for BigInt, mul);
+                forward_all_scalar_binop_to_val_val_commutative!(impl Mul<i64> for BigInt, mul);
+                forward_all_scalar_binop_to_val_val_commutative!(impl Mul<i128> for BigInt, mul);
+
+                impl Mul<i32> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn mul(self, other: i32) -> BigInt {
+                        match other.checked_uabs() {
+                            Positive(u) => self * u,
+                            Negative(u) => -self * u,
+                        }
+                    }
+                }
+
+                impl MulAssign<i32> for BigInt {
+                    #[inline]
+                    fn mul_assign(&mut self, other: i32) {
+                        match other.checked_uabs() {
+                            Positive(u) => *self *= u,
+                            Negative(u) => {
+                                self.sign = -self.sign;
+                                self.data *= u;
+                            }
+                        }
+                    }
+                }
+
+                impl Mul<i64> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn mul(self, other: i64) -> BigInt {
+                        match other.checked_uabs() {
+                            Positive(u) => self * u,
+                            Negative(u) => -self * u,
+                        }
+                    }
+                }
+
+                impl MulAssign<i64> for BigInt {
+                    #[inline]
+                    fn mul_assign(&mut self, other: i64) {
+                        match other.checked_uabs() {
+                            Positive(u) => *self *= u,
+                            Negative(u) => {
+                                self.sign = -self.sign;
+                                self.data *= u;
+                            }
+                        }
+                    }
+                }
+
+                impl Mul<i128> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn mul(self, other: i128) -> BigInt {
+                        match other.checked_uabs() {
+                            Positive(u) => self * u,
+                            Negative(u) => -self * u,
+                        }
+                    }
+                }
+
+                impl MulAssign<i128> for BigInt {
+                    #[inline]
+                    fn mul_assign(&mut self, other: i128) {
+                        match other.checked_uabs() {
+                            Positive(u) => *self *= u,
+                            Negative(u) => {
+                                self.sign = -self.sign;
+                                self.data *= u;
+                            }
+                        }
+                    }
+                }
+
+                impl CheckedMul for BigInt {
+                    #[inline]
+                    fn checked_mul(&self, v: &BigInt) -> Option<BigInt> {
+                        Some(self.mul(v))
+                    }
+                }
+
+                impl_product_iter_type!(BigInt);
+
+            } pub use self::multiplication::{ * };
+
+            pub mod subtraction
+            {
+                
+                use ::
+                {
+                    cmp::Ordering::{ Equal, Greater, Less },
+                    iter::{ Product },
+                    num::
+                    {
+                        big::
+                        {
+                            bigint::
+                            {
+                                CheckedUnsignedAbs::{ Negative, Positive },
+                                Sign::{ self,* },
+                                BigInt, UnsignedAbs
+                            },
+                            IsizePromotion, UsizePromotion,
+                        },
+                        traits::{ CheckedSub },
+                    },
+                    ops::{ Sub, SubAssign },
+                    *,
+                };
+
+                // We want to forward to BigUint::sub, but it's not clear how that will go until
+                // we compare both sign and magnitude.  So we duplicate this body for every
+                // val/ref combination, deferring that decision to BigUint's own forwarding.
+                macro_rules! bigint_sub {
+                    ($a:expr, $a_owned:expr, $a_data:expr, $b:expr, $b_owned:expr, $b_data:expr) => {
+                        match ($a.sign, $b.sign) {
+                            (_, NoSign) => $a_owned,
+                            (NoSign, _) => -$b_owned,
+                            // opposite signs => keep the sign of the left with the sum of magnitudes
+                            (Plus, Minus) | (Minus, Plus) => BigInt::from_biguint($a.sign, $a_data + $b_data),
+                            // same sign => keep or toggle the sign of the left with the difference of magnitudes
+                            (Plus, Plus) | (Minus, Minus) => match $a.data.cmp(&$b.data) {
+                                Less => BigInt::from_biguint(-$a.sign, $b_data - $a_data),
+                                Greater => BigInt::from_biguint($a.sign, $a_data - $b_data),
+                                Equal => BigInt::ZERO,
+                            },
+                        }
+                    };
+                }
+
+                impl Sub<&BigInt> for &BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn sub(self, other: &BigInt) -> BigInt {
+                        bigint_sub!(
+                            self,
+                            self.clone(),
+                            &self.data,
+                            other,
+                            other.clone(),
+                            &other.data
+                        )
+                    }
+                }
+
+                impl Sub<BigInt> for &BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn sub(self, other: BigInt) -> BigInt {
+                        bigint_sub!(self, self.clone(), &self.data, other, other, other.data)
+                    }
+                }
+
+                impl Sub<&BigInt> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn sub(self, other: &BigInt) -> BigInt {
+                        bigint_sub!(self, self, self.data, other, other.clone(), &other.data)
+                    }
+                }
+
+                impl Sub<BigInt> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn sub(self, other: BigInt) -> BigInt {
+                        bigint_sub!(self, self, self.data, other, other, other.data)
+                    }
+                }
+
+                impl SubAssign<&BigInt> for BigInt {
+                    #[inline]
+                    fn sub_assign(&mut self, other: &BigInt) {
+                        let n = mem::replace(self, Self::ZERO);
+                        *self = n - other;
+                    }
+                }
+                forward_val_assign!(impl SubAssign for BigInt, sub_assign);
+
+                promote_all_scalars!(impl Sub for BigInt, sub);
+                promote_all_scalars_assign!(impl SubAssign for BigInt, sub_assign);
+                forward_all_scalar_binop_to_val_val!(impl Sub<u32> for BigInt, sub);
+                forward_all_scalar_binop_to_val_val!(impl Sub<u64> for BigInt, sub);
+                forward_all_scalar_binop_to_val_val!(impl Sub<u128> for BigInt, sub);
+
+                impl Sub<u32> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn sub(self, other: u32) -> BigInt {
+                        match self.sign {
+                            NoSign => -BigInt::from(other),
+                            Minus => -BigInt::from(self.data + other),
+                            Plus => match self.data.cmp(&From::from(other)) {
+                                Equal => Self::ZERO,
+                                Greater => BigInt::from(self.data - other),
+                                Less => -BigInt::from(other - self.data),
+                            },
+                        }
+                    }
+                }
+                impl SubAssign<u32> for BigInt {
+                    #[inline]
+                    fn sub_assign(&mut self, other: u32) {
+                        let n = mem::replace(self, Self::ZERO);
+                        *self = n - other;
+                    }
+                }
+
+                impl Sub<BigInt> for u32 {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn sub(self, other: BigInt) -> BigInt {
+                        -(other - self)
+                    }
+                }
+
+                impl Sub<BigInt> for u64 {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn sub(self, other: BigInt) -> BigInt {
+                        -(other - self)
+                    }
+                }
+
+                impl Sub<BigInt> for u128 {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn sub(self, other: BigInt) -> BigInt {
+                        -(other - self)
+                    }
+                }
+
+                impl Sub<u64> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn sub(self, other: u64) -> BigInt {
+                        match self.sign {
+                            NoSign => -BigInt::from(other),
+                            Minus => -BigInt::from(self.data + other),
+                            Plus => match self.data.cmp(&From::from(other)) {
+                                Equal => Self::ZERO,
+                                Greater => BigInt::from(self.data - other),
+                                Less => -BigInt::from(other - self.data),
+                            },
+                        }
+                    }
+                }
+
+                impl SubAssign<u64> for BigInt {
+                    #[inline]
+                    fn sub_assign(&mut self, other: u64) {
+                        let n = mem::replace(self, Self::ZERO);
+                        *self = n - other;
+                    }
+                }
+
+                impl Sub<u128> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn sub(self, other: u128) -> BigInt {
+                        match self.sign {
+                            NoSign => -BigInt::from(other),
+                            Minus => -BigInt::from(self.data + other),
+                            Plus => match self.data.cmp(&From::from(other)) {
+                                Equal => Self::ZERO,
+                                Greater => BigInt::from(self.data - other),
+                                Less => -BigInt::from(other - self.data),
+                            },
+                        }
+                    }
+                }
+
+                impl SubAssign<u128> for BigInt {
+                    #[inline]
+                    fn sub_assign(&mut self, other: u128) {
+                        let n = mem::replace(self, Self::ZERO);
+                        *self = n - other;
+                    }
+                }
+
+                forward_all_scalar_binop_to_val_val!(impl Sub<i32> for BigInt, sub);
+                forward_all_scalar_binop_to_val_val!(impl Sub<i64> for BigInt, sub);
+                forward_all_scalar_binop_to_val_val!(impl Sub<i128> for BigInt, sub);
+
+                impl Sub<i32> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn sub(self, other: i32) -> BigInt {
+                        match other.checked_uabs() {
+                            Positive(u) => self - u,
+                            Negative(u) => self + u,
+                        }
+                    }
+                }
+                impl SubAssign<i32> for BigInt {
+                    #[inline]
+                    fn sub_assign(&mut self, other: i32) {
+                        match other.checked_uabs() {
+                            Positive(u) => *self -= u,
+                            Negative(u) => *self += u,
+                        }
+                    }
+                }
+
+                impl Sub<BigInt> for i32 {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn sub(self, other: BigInt) -> BigInt {
+                        match self.checked_uabs() {
+                            Positive(u) => u - other,
+                            Negative(u) => -other - u,
+                        }
+                    }
+                }
+
+                impl Sub<i64> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn sub(self, other: i64) -> BigInt {
+                        match other.checked_uabs() {
+                            Positive(u) => self - u,
+                            Negative(u) => self + u,
+                        }
+                    }
+                }
+                impl SubAssign<i64> for BigInt {
+                    #[inline]
+                    fn sub_assign(&mut self, other: i64) {
+                        match other.checked_uabs() {
+                            Positive(u) => *self -= u,
+                            Negative(u) => *self += u,
+                        }
+                    }
+                }
+
+                impl Sub<BigInt> for i64 {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn sub(self, other: BigInt) -> BigInt {
+                        match self.checked_uabs() {
+                            Positive(u) => u - other,
+                            Negative(u) => -other - u,
+                        }
+                    }
+                }
+
+                impl Sub<i128> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn sub(self, other: i128) -> BigInt {
+                        match other.checked_uabs() {
+                            Positive(u) => self - u,
+                            Negative(u) => self + u,
+                        }
+                    }
+                }
+
+                impl SubAssign<i128> for BigInt {
+                    #[inline]
+                    fn sub_assign(&mut self, other: i128) {
+                        match other.checked_uabs() {
+                            Positive(u) => *self -= u,
+                            Negative(u) => *self += u,
+                        }
+                    }
+                }
+
+                impl Sub<BigInt> for i128 {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn sub(self, other: BigInt) -> BigInt {
+                        match self.checked_uabs() {
+                            Positive(u) => u - other,
+                            Negative(u) => -other - u,
+                        }
+                    }
+                }
+
+                impl CheckedSub for BigInt {
+                    #[inline]
+                    fn checked_sub(&self, v: &BigInt) -> Option<BigInt> {
+                        Some(self.sub(v))
+                    }
+                }
+
+            } pub use self::subtraction::{ * };
+
+            pub mod bits
+            {
+                use ::
+                {
+                    cmp::Ordering::{ Equal, Greater, Less },
+                    iter::{ Product },
+                    num::
+                    {
+                        big::
+                        {
+                            bigint::
+                            {
+                                CheckedUnsignedAbs::{ Negative, Positive },
+                                Sign::{ self,* },
+                                BigInt, UnsignedAbs
+                            },
+                            big_digit::{ self, BigDigit, DoubleBigDigit },
+                            biguint::IntDigits,
+                            IsizePromotion, UsizePromotion,
+                        },
+                        traits::{ ToPrimitive, Zero },
+                    },
+                    ops::{ BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign },
+                    vec::{ Vec },
+                    *,
+                };
+                
+
+                // Negation in two's complement.
+                // acc must be initialized as 1 for least-significant digit.
+                //
+                // When negating, a carry (acc == 1) means that all the digits
+                // considered to this point were zero. This means that if all the
+                // digits of a negative BigInt have been considered, carry must be
+                // zero as we cannot have negative zero.
+                //
+                //    01 -> ...f    ff
+                //    ff -> ...f    01
+                // 01 00 -> ...f ff 00
+                // 01 01 -> ...f fe ff
+                // 01 ff -> ...f fe 01
+                // ff 00 -> ...f 01 00
+                // ff 01 -> ...f 00 ff
+                // ff ff -> ...f 00 01
+                #[inline]
+                fn negate_carry(a: BigDigit, acc: &mut DoubleBigDigit) -> BigDigit {
+                    *acc += DoubleBigDigit::from(!a);
+                    let lo = *acc as BigDigit;
+                    *acc >>= big_digit::BITS;
+                    lo
+                }
+
+                // + 1 & -ff = ...0 01 & ...f 01 = ...0 01 = + 1
+                // +ff & - 1 = ...0 ff & ...f ff = ...0 ff = +ff
+                // answer is pos, has length of a
+                fn bitand_pos_neg(a: &mut [BigDigit], b: &[BigDigit]) {
+                    let mut carry_b = 1;
+                    for (ai, &bi) in a.iter_mut().zip(b.iter()) {
+                        let twos_b = negate_carry(bi, &mut carry_b);
+                        *ai &= twos_b;
+                    }
+                    debug_assert!(b.len() > a.len() || carry_b == 0);
+                }
+
+                // - 1 & +ff = ...f ff & ...0 ff = ...0 ff = +ff
+                // -ff & + 1 = ...f 01 & ...0 01 = ...0 01 = + 1
+                // answer is pos, has length of b
+                fn bitand_neg_pos(a: &mut Vec<BigDigit>, b: &[BigDigit]) {
+                    let mut carry_a = 1;
+                    for (ai, &bi) in a.iter_mut().zip(b.iter()) {
+                        let twos_a = negate_carry(*ai, &mut carry_a);
+                        *ai = twos_a & bi;
+                    }
+                    debug_assert!(a.len() > b.len() || carry_a == 0);
+                    match Ord::cmp(&a.len(), &b.len()) {
+                        Greater => a.truncate(b.len()),
+                        Equal => {}
+                        Less => {
+                            let extra = &b[a.len()..];
+                            a.extend(extra.iter().cloned());
+                        }
+                    }
+                }
+
+                // - 1 & -ff = ...f ff & ...f 01 = ...f 01 = - ff
+                // -ff & - 1 = ...f 01 & ...f ff = ...f 01 = - ff
+                // -ff & -fe = ...f 01 & ...f 02 = ...f 00 = -100
+                // answer is neg, has length of longest with a possible carry
+                fn bitand_neg_neg(a: &mut Vec<BigDigit>, b: &[BigDigit]) {
+                    let mut carry_a = 1;
+                    let mut carry_b = 1;
+                    let mut carry_and = 1;
+                    for (ai, &bi) in a.iter_mut().zip(b.iter()) {
+                        let twos_a = negate_carry(*ai, &mut carry_a);
+                        let twos_b = negate_carry(bi, &mut carry_b);
+                        *ai = negate_carry(twos_a & twos_b, &mut carry_and);
+                    }
+                    debug_assert!(a.len() > b.len() || carry_a == 0);
+                    debug_assert!(b.len() > a.len() || carry_b == 0);
+                    match Ord::cmp(&a.len(), &b.len()) {
+                        Greater => {
+                            for ai in a[b.len()..].iter_mut() {
+                                let twos_a = negate_carry(*ai, &mut carry_a);
+                                *ai = negate_carry(twos_a, &mut carry_and);
+                            }
+                            debug_assert!(carry_a == 0);
+                        }
+                        Equal => {}
+                        Less => {
+                            let extra = &b[a.len()..];
+                            a.extend(extra.iter().map(|&bi| {
+                                let twos_b = negate_carry(bi, &mut carry_b);
+                                negate_carry(twos_b, &mut carry_and)
+                            }));
+                            debug_assert!(carry_b == 0);
+                        }
+                    }
+                    if carry_and != 0 {
+                        a.push(1);
+                    }
+                }
+
+                forward_val_val_binop!(impl BitAnd for BigInt, bitand);
+                forward_ref_val_binop!(impl BitAnd for BigInt, bitand);
+
+                // do not use forward_ref_ref_binop_commutative! for bitand so that we can
+                // clone as needed, avoiding over-allocation
+                impl BitAnd<&BigInt> for &BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn bitand(self, other: &BigInt) -> BigInt {
+                        match (self.sign, other.sign) {
+                            (NoSign, _) | (_, NoSign) => BigInt::ZERO,
+                            (Plus, Plus) => BigInt::from(&self.data & &other.data),
+                            (Plus, Minus) => self.clone() & other,
+                            (Minus, Plus) => other.clone() & self,
+                            (Minus, Minus) => {
+                                // forward to val-ref, choosing the larger to clone
+                                if self.len() >= other.len() {
+                                    self.clone() & other
+                                } else {
+                                    other.clone() & self
+                                }
+                            }
+                        }
+                    }
+                }
+
+                impl BitAnd<&BigInt> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn bitand(mut self, other: &BigInt) -> BigInt {
+                        self &= other;
+                        self
+                    }
+                }
+
+                forward_val_assign!(impl BitAndAssign for BigInt, bitand_assign);
+
+                impl BitAndAssign<&BigInt> for BigInt {
+                    fn bitand_assign(&mut self, other: &BigInt) {
+                        match (self.sign, other.sign) {
+                            (NoSign, _) => {}
+                            (_, NoSign) => self.set_zero(),
+                            (Plus, Plus) => {
+                                self.data &= &other.data;
+                                if self.data.is_zero() {
+                                    self.sign = NoSign;
+                                }
+                            }
+                            (Plus, Minus) => {
+                                bitand_pos_neg(self.digits_mut(), other.digits());
+                                self.normalize();
+                            }
+                            (Minus, Plus) => {
+                                bitand_neg_pos(self.digits_mut(), other.digits());
+                                self.sign = Plus;
+                                self.normalize();
+                            }
+                            (Minus, Minus) => {
+                                bitand_neg_neg(self.digits_mut(), other.digits());
+                                self.normalize();
+                            }
+                        }
+                    }
+                }
+
+                // + 1 | -ff = ...0 01 | ...f 01 = ...f 01 = -ff
+                // +ff | - 1 = ...0 ff | ...f ff = ...f ff = - 1
+                // answer is neg, has length of b
+                fn bitor_pos_neg(a: &mut Vec<BigDigit>, b: &[BigDigit]) {
+                    let mut carry_b = 1;
+                    let mut carry_or = 1;
+                    for (ai, &bi) in a.iter_mut().zip(b.iter()) {
+                        let twos_b = negate_carry(bi, &mut carry_b);
+                        *ai = negate_carry(*ai | twos_b, &mut carry_or);
+                    }
+                    debug_assert!(b.len() > a.len() || carry_b == 0);
+                    match Ord::cmp(&a.len(), &b.len()) {
+                        Greater => {
+                            a.truncate(b.len());
+                        }
+                        Equal => {}
+                        Less => {
+                            let extra = &b[a.len()..];
+                            a.extend(extra.iter().map(|&bi| {
+                                let twos_b = negate_carry(bi, &mut carry_b);
+                                negate_carry(twos_b, &mut carry_or)
+                            }));
+                            debug_assert!(carry_b == 0);
+                        }
+                    }
+                    // for carry_or to be non-zero, we would need twos_b == 0
+                    debug_assert!(carry_or == 0);
+                }
+
+                // - 1 | +ff = ...f ff | ...0 ff = ...f ff = - 1
+                // -ff | + 1 = ...f 01 | ...0 01 = ...f 01 = -ff
+                // answer is neg, has length of a
+                fn bitor_neg_pos(a: &mut [BigDigit], b: &[BigDigit]) {
+                    let mut carry_a = 1;
+                    let mut carry_or = 1;
+                    for (ai, &bi) in a.iter_mut().zip(b.iter()) {
+                        let twos_a = negate_carry(*ai, &mut carry_a);
+                        *ai = negate_carry(twos_a | bi, &mut carry_or);
+                    }
+                    debug_assert!(a.len() > b.len() || carry_a == 0);
+                    if a.len() > b.len() {
+                        for ai in a[b.len()..].iter_mut() {
+                            let twos_a = negate_carry(*ai, &mut carry_a);
+                            *ai = negate_carry(twos_a, &mut carry_or);
+                        }
+                        debug_assert!(carry_a == 0);
+                    }
+                    // for carry_or to be non-zero, we would need twos_a == 0
+                    debug_assert!(carry_or == 0);
+                }
+
+                // - 1 | -ff = ...f ff | ...f 01 = ...f ff = -1
+                // -ff | - 1 = ...f 01 | ...f ff = ...f ff = -1
+                // answer is neg, has length of shortest
+                fn bitor_neg_neg(a: &mut Vec<BigDigit>, b: &[BigDigit]) {
+                    let mut carry_a = 1;
+                    let mut carry_b = 1;
+                    let mut carry_or = 1;
+                    for (ai, &bi) in a.iter_mut().zip(b.iter()) {
+                        let twos_a = negate_carry(*ai, &mut carry_a);
+                        let twos_b = negate_carry(bi, &mut carry_b);
+                        *ai = negate_carry(twos_a | twos_b, &mut carry_or);
+                    }
+                    debug_assert!(a.len() > b.len() || carry_a == 0);
+                    debug_assert!(b.len() > a.len() || carry_b == 0);
+                    if a.len() > b.len() {
+                        a.truncate(b.len());
+                    }
+                    // for carry_or to be non-zero, we would need twos_a == 0 or twos_b == 0
+                    debug_assert!(carry_or == 0);
+                }
+
+                forward_val_val_binop!(impl BitOr for BigInt, bitor);
+                forward_ref_val_binop!(impl BitOr for BigInt, bitor);
+
+                // do not use forward_ref_ref_binop_commutative! for bitor so that we can
+                // clone as needed, avoiding over-allocation
+                impl BitOr<&BigInt> for &BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn bitor(self, other: &BigInt) -> BigInt {
+                        match (self.sign, other.sign) {
+                            (NoSign, _) => other.clone(),
+                            (_, NoSign) => self.clone(),
+                            (Plus, Plus) => BigInt::from(&self.data | &other.data),
+                            (Plus, Minus) => other.clone() | self,
+                            (Minus, Plus) => self.clone() | other,
+                            (Minus, Minus) => {
+                                // forward to val-ref, choosing the smaller to clone
+                                if self.len() <= other.len() {
+                                    self.clone() | other
+                                } else {
+                                    other.clone() | self
+                                }
+                            }
+                        }
+                    }
+                }
+
+                impl BitOr<&BigInt> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn bitor(mut self, other: &BigInt) -> BigInt {
+                        self |= other;
+                        self
+                    }
+                }
+
+                forward_val_assign!(impl BitOrAssign for BigInt, bitor_assign);
+
+                impl BitOrAssign<&BigInt> for BigInt {
+                    fn bitor_assign(&mut self, other: &BigInt) {
+                        match (self.sign, other.sign) {
+                            (_, NoSign) => {}
+                            (NoSign, _) => self.clone_from(other),
+                            (Plus, Plus) => self.data |= &other.data,
+                            (Plus, Minus) => {
+                                bitor_pos_neg(self.digits_mut(), other.digits());
+                                self.sign = Minus;
+                                self.normalize();
+                            }
+                            (Minus, Plus) => {
+                                bitor_neg_pos(self.digits_mut(), other.digits());
+                                self.normalize();
+                            }
+                            (Minus, Minus) => {
+                                bitor_neg_neg(self.digits_mut(), other.digits());
+                                self.normalize();
+                            }
+                        }
+                    }
+                }
+
+                // + 1 ^ -ff = ...0 01 ^ ...f 01 = ...f 00 = -100
+                // +ff ^ - 1 = ...0 ff ^ ...f ff = ...f 00 = -100
+                // answer is neg, has length of longest with a possible carry
+                fn bitxor_pos_neg(a: &mut Vec<BigDigit>, b: &[BigDigit]) {
+                    let mut carry_b = 1;
+                    let mut carry_xor = 1;
+                    for (ai, &bi) in a.iter_mut().zip(b.iter()) {
+                        let twos_b = negate_carry(bi, &mut carry_b);
+                        *ai = negate_carry(*ai ^ twos_b, &mut carry_xor);
+                    }
+                    debug_assert!(b.len() > a.len() || carry_b == 0);
+                    match Ord::cmp(&a.len(), &b.len()) {
+                        Greater => {
+                            for ai in a[b.len()..].iter_mut() {
+                                let twos_b = !0;
+                                *ai = negate_carry(*ai ^ twos_b, &mut carry_xor);
+                            }
+                        }
+                        Equal => {}
+                        Less => {
+                            let extra = &b[a.len()..];
+                            a.extend(extra.iter().map(|&bi| {
+                                let twos_b = negate_carry(bi, &mut carry_b);
+                                negate_carry(twos_b, &mut carry_xor)
+                            }));
+                            debug_assert!(carry_b == 0);
+                        }
+                    }
+                    if carry_xor != 0 {
+                        a.push(1);
+                    }
+                }
+
+                // - 1 ^ +ff = ...f ff ^ ...0 ff = ...f 00 = -100
+                // -ff ^ + 1 = ...f 01 ^ ...0 01 = ...f 00 = -100
+                // answer is neg, has length of longest with a possible carry
+                fn bitxor_neg_pos(a: &mut Vec<BigDigit>, b: &[BigDigit]) {
+                    let mut carry_a = 1;
+                    let mut carry_xor = 1;
+                    for (ai, &bi) in a.iter_mut().zip(b.iter()) {
+                        let twos_a = negate_carry(*ai, &mut carry_a);
+                        *ai = negate_carry(twos_a ^ bi, &mut carry_xor);
+                    }
+                    debug_assert!(a.len() > b.len() || carry_a == 0);
+                    match Ord::cmp(&a.len(), &b.len()) {
+                        Greater => {
+                            for ai in a[b.len()..].iter_mut() {
+                                let twos_a = negate_carry(*ai, &mut carry_a);
+                                *ai = negate_carry(twos_a, &mut carry_xor);
+                            }
+                            debug_assert!(carry_a == 0);
+                        }
+                        Equal => {}
+                        Less => {
+                            let extra = &b[a.len()..];
+                            a.extend(extra.iter().map(|&bi| {
+                                let twos_a = !0;
+                                negate_carry(twos_a ^ bi, &mut carry_xor)
+                            }));
+                        }
+                    }
+                    if carry_xor != 0 {
+                        a.push(1);
+                    }
+                }
+
+                // - 1 ^ -ff = ...f ff ^ ...f 01 = ...0 fe = +fe
+                // -ff & - 1 = ...f 01 ^ ...f ff = ...0 fe = +fe
+                // answer is pos, has length of longest
+                fn bitxor_neg_neg(a: &mut Vec<BigDigit>, b: &[BigDigit]) {
+                    let mut carry_a = 1;
+                    let mut carry_b = 1;
+                    for (ai, &bi) in a.iter_mut().zip(b.iter()) {
+                        let twos_a = negate_carry(*ai, &mut carry_a);
+                        let twos_b = negate_carry(bi, &mut carry_b);
+                        *ai = twos_a ^ twos_b;
+                    }
+                    debug_assert!(a.len() > b.len() || carry_a == 0);
+                    debug_assert!(b.len() > a.len() || carry_b == 0);
+                    match Ord::cmp(&a.len(), &b.len()) {
+                        Greater => {
+                            for ai in a[b.len()..].iter_mut() {
+                                let twos_a = negate_carry(*ai, &mut carry_a);
+                                let twos_b = !0;
+                                *ai = twos_a ^ twos_b;
+                            }
+                            debug_assert!(carry_a == 0);
+                        }
+                        Equal => {}
+                        Less => {
+                            let extra = &b[a.len()..];
+                            a.extend(extra.iter().map(|&bi| {
+                                let twos_a = !0;
+                                let twos_b = negate_carry(bi, &mut carry_b);
+                                twos_a ^ twos_b
+                            }));
+                            debug_assert!(carry_b == 0);
+                        }
+                    }
+                }
+
+                forward_all_binop_to_val_ref_commutative!(impl BitXor for BigInt, bitxor);
+
+                impl BitXor<&BigInt> for BigInt {
+                    type Output = BigInt;
+
+                    #[inline]
+                    fn bitxor(mut self, other: &BigInt) -> BigInt {
+                        self ^= other;
+                        self
+                    }
+                }
+
+                forward_val_assign!(impl BitXorAssign for BigInt, bitxor_assign);
+
+                impl BitXorAssign<&BigInt> for BigInt {
+                    fn bitxor_assign(&mut self, other: &BigInt) {
+                        match (self.sign, other.sign) {
+                            (_, NoSign) => {}
+                            (NoSign, _) => self.clone_from(other),
+                            (Plus, Plus) => {
+                                self.data ^= &other.data;
+                                if self.data.is_zero() {
+                                    self.sign = NoSign;
+                                }
+                            }
+                            (Plus, Minus) => {
+                                bitxor_pos_neg(self.digits_mut(), other.digits());
+                                self.sign = Minus;
+                                self.normalize();
+                            }
+                            (Minus, Plus) => {
+                                bitxor_neg_pos(self.digits_mut(), other.digits());
+                                self.normalize();
+                            }
+                            (Minus, Minus) => {
+                                bitxor_neg_neg(self.digits_mut(), other.digits());
+                                self.sign = Plus;
+                                self.normalize();
+                            }
+                        }
+                    }
+                }
+
+                pub(super) fn set_negative_bit(x: &mut BigInt, bit: u64, value: bool) {
+                    debug_assert_eq!(x.sign, Minus);
+                    let data = &mut x.data;
+
+                    let bits_per_digit = u64::from(big_digit::BITS);
+                    if bit >= bits_per_digit * data.len() as u64 {
+                        if !value {
+                            data.set_bit(bit, true);
+                        }
+                    } else {
+                        // If the Uint number is
+                        //   ... 0  x 1 0 ... 0
+                        // then the two's complement is
+                        //   ... 1 !x 1 0 ... 0
+                        //            |-- bit at position 'trailing_zeros'
+                        // where !x is obtained from x by flipping each bit
+                        let trailing_zeros = data.trailing_zeros().unwrap();
+                        if bit > trailing_zeros {
+                            data.set_bit(bit, !value);
+                        } else if bit == trailing_zeros && !value {
+                            // Clearing the bit at position `trailing_zeros` is dealt with by doing
+                            // similarly to what `bitand_neg_pos` does, except we start at digit
+                            // `bit_index`. All digits below `bit_index` are guaranteed to be zero,
+                            // so initially we have `carry_in` = `carry_out` = 1. Furthermore, we
+                            // stop traversing the digits when there are no more carries.
+                            let bit_index = (bit / bits_per_digit).to_usize().unwrap();
+                            let bit_mask = (1 as BigDigit) << (bit % bits_per_digit);
+                            let mut digit_iter = data.digits_mut().iter_mut().skip(bit_index);
+                            let mut carry_in = 1;
+                            let mut carry_out = 1;
+
+                            let digit = digit_iter.next().unwrap();
+                            let twos_in = negate_carry(*digit, &mut carry_in);
+                            let twos_out = twos_in & !bit_mask;
+                            *digit = negate_carry(twos_out, &mut carry_out);
+
+                            for digit in digit_iter {
+                                if carry_in == 0 && carry_out == 0 {
+                                    // Exit the loop since no more digits can change
+                                    break;
+                                }
+                                let twos = negate_carry(*digit, &mut carry_in);
+                                *digit = negate_carry(twos, &mut carry_out);
+                            }
+
+                            if carry_out != 0 {
+                                // All digits have been traversed and there is a carry
+                                debug_assert_eq!(carry_in, 0);
+                                data.digits_mut().push(1);
+                            }
+                        } else if bit < trailing_zeros && value {
+                            // Flip each bit from position 'bit' to 'trailing_zeros', both inclusive
+                            //       ... 1 !x 1 0 ... 0 ... 0
+                            //                        |-- bit at position 'bit'
+                            //                |-- bit at position 'trailing_zeros'
+                            // bit_mask:      1 1 ... 1 0 .. 0
+                            // This is done by xor'ing with the bit_mask
+                            let index_lo = (bit / bits_per_digit).to_usize().unwrap();
+                            let index_hi = (trailing_zeros / bits_per_digit).to_usize().unwrap();
+                            let bit_mask_lo = big_digit::MAX << (bit % bits_per_digit);
+                            let bit_mask_hi =
+                                big_digit::MAX >> (bits_per_digit - 1 - (trailing_zeros % bits_per_digit));
+                            let digits = data.digits_mut();
+
+                            if index_lo == index_hi {
+                                digits[index_lo] ^= bit_mask_lo & bit_mask_hi;
+                            } else {
+                                digits[index_lo] = bit_mask_lo;
+                                for digit in &mut digits[index_lo + 1..index_hi] {
+                                    *digit = big_digit::MAX;
+                                }
+                                digits[index_hi] ^= bit_mask_hi;
+                            }
+                        } else {
+                            // We end up here in two cases:
+                            //   bit == trailing_zeros && value: Bit is already set
+                            //   bit < trailing_zeros && !value: Bit is already cleared
+                        }
+                    }
+                }
+
+            } pub use self::bits::{ * };
+
+            pub mod convert
+            {
+                use ::
+                {
+                    *,
+                };
+
+            } pub use self::convert::{ * };
+
+            pub mod power
+            {
+                use ::
+                {
+                    *,
+                };
+
+            } pub use self::power::{ * };
+
+            pub mod shift
+            {
+                use ::
+                {
+                    *,
+                };
+
+            } pub use self::shift::{ * };
+            /// A `Sign` is a [`BigInt`]'s composing element.
+            #[derive(PartialEq, PartialOrd, Eq, Ord, Copy, Clone, Debug, Hash)]
+            pub enum Sign {
+                Minus,
+                NoSign,
+                Plus,
+            }
+
+            impl Neg for Sign {
+                type Output = Sign;
+
+                /// Negate `Sign` value.
+                #[inline]
+                fn neg(self) -> Sign {
+                    match self {
+                        Minus => Plus,
+                        NoSign => NoSign,
+                        Plus => Minus,
+                    }
+                }
+            }
+
+            /// A big signed integer type.
+            pub struct BigInt {
+                sign: Sign,
+                data: BigUint,
+            }
+
+            // Note: derived `Clone` doesn't specialize `clone_from`,
+            // but we want to keep the allocation in `data`.
+            impl Clone for BigInt {
+                #[inline]
+                fn clone(&self) -> Self {
+                    BigInt {
+                        sign: self.sign,
+                        data: self.data.clone(),
+                    }
+                }
+
+                #[inline]
+                fn clone_from(&mut self, other: &Self) {
+                    self.sign = other.sign;
+                    self.data.clone_from(&other.data);
+                }
+            }
+
+            impl hash::Hash for BigInt {
+                #[inline]
+                fn hash<H: hash::Hasher>(&self, state: &mut H) {
+                    debug_assert!((self.sign != NoSign) ^ self.data.is_zero());
+                    self.sign.hash(state);
+                    if self.sign != NoSign {
+                        self.data.hash(state);
+                    }
+                }
+            }
+
+            impl PartialEq for BigInt {
+                #[inline]
+                fn eq(&self, other: &BigInt) -> bool {
+                    debug_assert!((self.sign != NoSign) ^ self.data.is_zero());
+                    debug_assert!((other.sign != NoSign) ^ other.data.is_zero());
+                    self.sign == other.sign && (self.sign == NoSign || self.data == other.data)
+                }
+            }
+
+            impl Eq for BigInt {}
+
+            impl PartialOrd for BigInt {
+                #[inline]
+                fn partial_cmp(&self, other: &BigInt) -> Option<Ordering> {
+                    Some(self.cmp(other))
+                }
+            }
+
+            impl Ord for BigInt {
+                #[inline]
+                fn cmp(&self, other: &BigInt) -> Ordering {
+                    debug_assert!((self.sign != NoSign) ^ self.data.is_zero());
+                    debug_assert!((other.sign != NoSign) ^ other.data.is_zero());
+                    let scmp = self.sign.cmp(&other.sign);
+                    if scmp != Equal {
+                        return scmp;
+                    }
+
+                    match self.sign {
+                        NoSign => Equal,
+                        Plus => self.data.cmp(&other.data),
+                        Minus => other.data.cmp(&self.data),
+                    }
+                }
+            }
+
+            impl Default for BigInt {
+                #[inline]
+                fn default() -> BigInt {
+                    Self::ZERO
+                }
+            }
+
+            impl fmt::Debug for BigInt {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    fmt::Display::fmt(self, f)
+                }
+            }
+
+            impl fmt::Display for BigInt {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    f.pad_integral(!self.is_negative(), "", &self.data.to_str_radix(10))
+                }
+            }
+
+            impl fmt::Binary for BigInt {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    f.pad_integral(!self.is_negative(), "0b", &self.data.to_str_radix(2))
+                }
+            }
+
+            impl fmt::Octal for BigInt {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    f.pad_integral(!self.is_negative(), "0o", &self.data.to_str_radix(8))
+                }
+            }
+
+            impl fmt::LowerHex for BigInt {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    f.pad_integral(!self.is_negative(), "0x", &self.data.to_str_radix(16))
+                }
+            }
+
+            impl fmt::UpperHex for BigInt {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    let mut s = self.data.to_str_radix(16);
+                    s.make_ascii_uppercase();
+                    f.pad_integral(!self.is_negative(), "0x", &s)
+                }
+            }
+
+            // !-2 = !...f fe = ...0 01 = +1
+            // !-1 = !...f ff = ...0 00 =  0
+            // ! 0 = !...0 00 = ...f ff = -1
+            // !+1 = !...0 01 = ...f fe = -2
+            impl Not for BigInt {
+                type Output = BigInt;
+
+                fn not(mut self) -> BigInt {
+                    match self.sign {
+                        NoSign | Plus => {
+                            self.data += 1u32;
+                            self.sign = Minus;
+                        }
+                        Minus => {
+                            self.data -= 1u32;
+                            self.sign = if self.data.is_zero() { NoSign } else { Plus };
+                        }
+                    }
+                    self
+                }
+            }
+
+            impl Not for &BigInt {
+                type Output = BigInt;
+
+                fn not(self) -> BigInt {
+                    match self.sign {
+                        NoSign => -BigInt::one(),
+                        Plus => -BigInt::from(&self.data + 1u32),
+                        Minus => BigInt::from(&self.data - 1u32),
+                    }
+                }
+            }
+
+            impl Zero for BigInt {
+                #[inline]
+                fn zero() -> BigInt {
+                    Self::ZERO
+                }
+
+                #[inline]
+                fn set_zero(&mut self) {
+                    self.data.set_zero();
+                    self.sign = NoSign;
+                }
+
+                #[inline]
+                fn is_zero(&self) -> bool {
+                    self.sign == NoSign
+                }
+            }
+
+            impl ConstZero for BigInt {
+                // forward to the inherent const
+                const ZERO: Self = Self::ZERO;
+            }
+
+            impl One for BigInt {
+                #[inline]
+                fn one() -> BigInt {
+                    BigInt {
+                        sign: Plus,
+                        data: BigUint::one(),
+                    }
+                }
+
+                #[inline]
+                fn set_one(&mut self) {
+                    self.data.set_one();
+                    self.sign = Plus;
+                }
+
+                #[inline]
+                fn is_one(&self) -> bool {
+                    self.sign == Plus && self.data.is_one()
+                }
+            }
+
+            impl Signed for BigInt {
+                #[inline]
+                fn abs(&self) -> BigInt {
+                    match self.sign {
+                        Plus | NoSign => self.clone(),
+                        Minus => BigInt::from(self.data.clone()),
+                    }
+                }
+
+                #[inline]
+                fn abs_sub(&self, other: &BigInt) -> BigInt {
+                    if *self <= *other {
+                        Self::ZERO
+                    } else {
+                        self - other
+                    }
+                }
+
+                #[inline]
+                fn signum(&self) -> BigInt {
+                    match self.sign {
+                        Plus => BigInt::one(),
+                        Minus => -BigInt::one(),
+                        NoSign => Self::ZERO,
+                    }
+                }
+
+                #[inline]
+                fn is_positive(&self) -> bool {
+                    self.sign == Plus
+                }
+
+                #[inline]
+                fn is_negative(&self) -> bool {
+                    self.sign == Minus
+                }
+            }
+
+            trait UnsignedAbs {
+                type Unsigned;
+
+                fn checked_uabs(self) -> CheckedUnsignedAbs<Self::Unsigned>;
+            }
+
+            enum CheckedUnsignedAbs<T> {
+                Positive(T),
+                Negative(T),
+            }
+            use self::CheckedUnsignedAbs::{Negative, Positive};
+
+            macro_rules! impl_unsigned_abs {
+                ($Signed:ty, $Unsigned:ty) => {
+                    impl UnsignedAbs for $Signed {
+                        type Unsigned = $Unsigned;
+
+                        #[inline]
+                        fn checked_uabs(self) -> CheckedUnsignedAbs<Self::Unsigned> {
+                            if self >= 0 {
+                                Positive(self as $Unsigned)
+                            } else {
+                                Negative(self.wrapping_neg() as $Unsigned)
+                            }
+                        }
+                    }
+                };
+            }
+            impl_unsigned_abs!(i8, u8);
+            impl_unsigned_abs!(i16, u16);
+            impl_unsigned_abs!(i32, u32);
+            impl_unsigned_abs!(i64, u64);
+            impl_unsigned_abs!(i128, u128);
+            impl_unsigned_abs!(isize, usize);
+
+            impl Neg for BigInt {
+                type Output = BigInt;
+
+                #[inline]
+                fn neg(mut self) -> BigInt {
+                    self.sign = -self.sign;
+                    self
+                }
+            }
+
+            impl Neg for &BigInt {
+                type Output = BigInt;
+
+                #[inline]
+                fn neg(self) -> BigInt {
+                    -self.clone()
+                }
+            }
+
+            impl Integer for BigInt {
+                #[inline]
+                fn div_rem(&self, other: &BigInt) -> (BigInt, BigInt) {
+                    // r.sign == self.sign
+                    let (d_ui, r_ui) = self.data.div_rem(&other.data);
+                    let d = BigInt::from_biguint(self.sign, d_ui);
+                    let r = BigInt::from_biguint(self.sign, r_ui);
+                    if other.is_negative() {
+                        (-d, r)
+                    } else {
+                        (d, r)
+                    }
+                }
+
+                #[inline]
+                fn div_floor(&self, other: &BigInt) -> BigInt {
+                    let (d_ui, m) = self.data.div_mod_floor(&other.data);
+                    let d = BigInt::from(d_ui);
+                    match (self.sign, other.sign) {
+                        (Plus, Plus) | (NoSign, Plus) | (Minus, Minus) => d,
+                        (Plus, Minus) | (NoSign, Minus) | (Minus, Plus) => {
+                            if m.is_zero() {
+                                -d
+                            } else {
+                                -d - 1u32
+                            }
+                        }
+                        (_, NoSign) => unreachable!(),
+                    }
+                }
+
+                #[inline]
+                fn mod_floor(&self, other: &BigInt) -> BigInt {
+                    // m.sign == other.sign
+                    let m_ui = self.data.mod_floor(&other.data);
+                    let m = BigInt::from_biguint(other.sign, m_ui);
+                    match (self.sign, other.sign) {
+                        (Plus, Plus) | (NoSign, Plus) | (Minus, Minus) => m,
+                        (Plus, Minus) | (NoSign, Minus) | (Minus, Plus) => {
+                            if m.is_zero() {
+                                m
+                            } else {
+                                other - m
+                            }
+                        }
+                        (_, NoSign) => unreachable!(),
+                    }
+                }
+
+                fn div_mod_floor(&self, other: &BigInt) -> (BigInt, BigInt) {
+                    // m.sign == other.sign
+                    let (d_ui, m_ui) = self.data.div_mod_floor(&other.data);
+                    let d = BigInt::from(d_ui);
+                    let m = BigInt::from_biguint(other.sign, m_ui);
+                    match (self.sign, other.sign) {
+                        (Plus, Plus) | (NoSign, Plus) | (Minus, Minus) => (d, m),
+                        (Plus, Minus) | (NoSign, Minus) | (Minus, Plus) => {
+                            if m.is_zero() {
+                                (-d, m)
+                            } else {
+                                (-d - 1u32, other - m)
+                            }
+                        }
+                        (_, NoSign) => unreachable!(),
+                    }
+                }
+
+                #[inline]
+                fn div_ceil(&self, other: &Self) -> Self {
+                    let (d_ui, m) = self.data.div_mod_floor(&other.data);
+                    let d = BigInt::from(d_ui);
+                    match (self.sign, other.sign) {
+                        (Plus, Minus) | (NoSign, Minus) | (Minus, Plus) => -d,
+                        (Plus, Plus) | (NoSign, Plus) | (Minus, Minus) => {
+                            if m.is_zero() {
+                                d
+                            } else {
+                                d + 1u32
+                            }
+                        }
+                        (_, NoSign) => unreachable!(),
+                    }
+                }
+
+                /// Calculates the Greatest Common Divisor (GCD) of the number and `other`.
+                ///
+                /// The result is always positive.
+                #[inline]
+                fn gcd(&self, other: &BigInt) -> BigInt {
+                    BigInt::from(self.data.gcd(&other.data))
+                }
+
+                /// Calculates the Lowest Common Multiple (LCM) of the number and `other`.
+                #[inline]
+                fn lcm(&self, other: &BigInt) -> BigInt {
+                    BigInt::from(self.data.lcm(&other.data))
+                }
+
+                /// Calculates the Greatest Common Divisor (GCD) and
+                /// Lowest Common Multiple (LCM) together.
+                #[inline]
+                fn gcd_lcm(&self, other: &BigInt) -> (BigInt, BigInt) {
+                    let (gcd, lcm) = self.data.gcd_lcm(&other.data);
+                    (BigInt::from(gcd), BigInt::from(lcm))
+                }
+
+                /// Greatest common divisor, least common multiple, and Bézout coefficients.
+                #[inline]
+                fn extended_gcd_lcm(&self, other: &BigInt) -> (num_integer::ExtendedGcd<BigInt>, BigInt) {
+                    let egcd = self.extended_gcd(other);
+                    let lcm = if egcd.gcd.is_zero() {
+                        Self::ZERO
+                    } else {
+                        BigInt::from(&self.data / &egcd.gcd.data * &other.data)
+                    };
+                    (egcd, lcm)
+                }
+
+                /// Deprecated, use `is_multiple_of` instead.
+                #[inline]
+                fn divides(&self, other: &BigInt) -> bool {
+                    self.is_multiple_of(other)
+                }
+
+                /// Returns `true` if the number is a multiple of `other`.
+                #[inline]
+                fn is_multiple_of(&self, other: &BigInt) -> bool {
+                    self.data.is_multiple_of(&other.data)
+                }
+
+                /// Returns `true` if the number is divisible by `2`.
+                #[inline]
+                fn is_even(&self) -> bool {
+                    self.data.is_even()
+                }
+
+                /// Returns `true` if the number is not divisible by `2`.
+                #[inline]
+                fn is_odd(&self) -> bool {
+                    self.data.is_odd()
+                }
+
+                /// Rounds up to nearest multiple of argument.
+                #[inline]
+                fn next_multiple_of(&self, other: &Self) -> Self {
+                    let m = self.mod_floor(other);
+                    if m.is_zero() {
+                        self.clone()
+                    } else {
+                        self + (other - m)
+                    }
+                }
+                /// Rounds down to nearest multiple of argument.
+                #[inline]
+                fn prev_multiple_of(&self, other: &Self) -> Self {
+                    self - self.mod_floor(other)
+                }
+
+                fn dec(&mut self) {
+                    *self -= 1u32;
+                }
+
+                fn inc(&mut self) {
+                    *self += 1u32;
+                }
+            }
+
+            impl Roots for BigInt {
+                fn nth_root(&self, n: u32) -> Self {
+                    assert!(
+                        !(self.is_negative() && n.is_even()),
+                        "root of degree {} is imaginary",
+                        n
+                    );
+
+                    BigInt::from_biguint(self.sign, self.data.nth_root(n))
+                }
+
+                fn sqrt(&self) -> Self {
+                    assert!(!self.is_negative(), "square root is imaginary");
+
+                    BigInt::from_biguint(self.sign, self.data.sqrt())
+                }
+
+                fn cbrt(&self) -> Self {
+                    BigInt::from_biguint(self.sign, self.data.cbrt())
+                }
+            }
+
+            impl IntDigits for BigInt {
+                #[inline]
+                fn digits(&self) -> &[BigDigit] {
+                    self.data.digits()
+                }
+                #[inline]
+                fn digits_mut(&mut self) -> &mut Vec<BigDigit> {
+                    self.data.digits_mut()
+                }
+                #[inline]
+                fn normalize(&mut self) {
+                    self.data.normalize();
+                    if self.data.is_zero() {
+                        self.sign = NoSign;
+                    }
+                }
+                #[inline]
+                fn capacity(&self) -> usize {
+                    self.data.capacity()
+                }
+                #[inline]
+                fn len(&self) -> usize {
+                    self.data.len()
+                }
+            }
+
+            /// A generic trait for converting a value to a [`BigInt`]. This may return
+            /// `None` when converting from `f32` or `f64`, and will always succeed
+            /// when converting from any integer or unsigned primitive, or [`BigUint`].
+            pub trait ToBigInt {
+                /// Converts the value of `self` to a [`BigInt`].
+                fn to_bigint(&self) -> Option<BigInt>;
+            }
+
+            impl BigInt {
+                /// A constant `BigInt` with value 0, useful for static initialization.
+                pub const ZERO: Self = BigInt {
+                    sign: NoSign,
+                    data: BigUint::ZERO,
+                };
+
+                /// Creates and initializes a [`BigInt`].
+                ///
+                /// The base 2<sup>32</sup> digits are ordered least significant digit first.
+                #[inline]
+                pub fn new(sign: Sign, digits: Vec<u32>) -> BigInt {
+                    BigInt::from_biguint(sign, BigUint::new(digits))
+                }
+
+                /// Creates and initializes a [`BigInt`].
+                ///
+                /// The base 2<sup>32</sup> digits are ordered least significant digit first.
+                #[inline]
+                pub fn from_biguint(mut sign: Sign, mut data: BigUint) -> BigInt {
+                    if sign == NoSign {
+                        data.assign_from_slice(&[]);
+                    } else if data.is_zero() {
+                        sign = NoSign;
+                    }
+
+                    BigInt { sign, data }
+                }
+
+                /// Creates and initializes a [`BigInt`].
+                ///
+                /// The base 2<sup>32</sup> digits are ordered least significant digit first.
+                #[inline]
+                pub fn from_slice(sign: Sign, slice: &[u32]) -> BigInt {
+                    BigInt::from_biguint(sign, BigUint::from_slice(slice))
+                }
+
+                /// Reinitializes a [`BigInt`].
+                ///
+                /// The base 2<sup>32</sup> digits are ordered least significant digit first.
+                #[inline]
+                pub fn assign_from_slice(&mut self, sign: Sign, slice: &[u32]) {
+                    if sign == NoSign {
+                        self.set_zero();
+                    } else {
+                        self.data.assign_from_slice(slice);
+                        self.sign = if self.data.is_zero() { NoSign } else { sign };
+                    }
+                }
+
+                /// Creates and initializes a [`BigInt`].
+                ///
+                /// The bytes are in big-endian byte order.
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// use num_bigint::{BigInt, Sign};
+                ///
+                /// assert_eq!(BigInt::from_bytes_be(Sign::Plus, b"A"),
+                ///            BigInt::parse_bytes(b"65", 10).unwrap());
+                /// assert_eq!(BigInt::from_bytes_be(Sign::Plus, b"AA"),
+                ///            BigInt::parse_bytes(b"16705", 10).unwrap());
+                /// assert_eq!(BigInt::from_bytes_be(Sign::Plus, b"AB"),
+                ///            BigInt::parse_bytes(b"16706", 10).unwrap());
+                /// assert_eq!(BigInt::from_bytes_be(Sign::Plus, b"Hello world!"),
+                ///            BigInt::parse_bytes(b"22405534230753963835153736737", 10).unwrap());
+                /// ```
+                #[inline]
+                pub fn from_bytes_be(sign: Sign, bytes: &[u8]) -> BigInt {
+                    BigInt::from_biguint(sign, BigUint::from_bytes_be(bytes))
+                }
+
+                /// Creates and initializes a [`BigInt`].
+                ///
+                /// The bytes are in little-endian byte order.
+                #[inline]
+                pub fn from_bytes_le(sign: Sign, bytes: &[u8]) -> BigInt {
+                    BigInt::from_biguint(sign, BigUint::from_bytes_le(bytes))
+                }
+
+                /// Creates and initializes a [`BigInt`] from an array of bytes in
+                /// two's complement binary representation.
+                ///
+                /// The digits are in big-endian base 2<sup>8</sup>.
+                #[inline]
+                pub fn from_signed_bytes_be(digits: &[u8]) -> BigInt {
+                    convert::from_signed_bytes_be(digits)
+                }
+
+                /// Creates and initializes a [`BigInt`] from an array of bytes in two's complement.
+                ///
+                /// The digits are in little-endian base 2<sup>8</sup>.
+                #[inline]
+                pub fn from_signed_bytes_le(digits: &[u8]) -> BigInt {
+                    convert::from_signed_bytes_le(digits)
+                }
+
+                /// Creates and initializes a [`BigInt`].
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// use num_bigint::{BigInt, ToBigInt};
+                ///
+                /// assert_eq!(BigInt::parse_bytes(b"1234", 10), ToBigInt::to_bigint(&1234));
+                /// assert_eq!(BigInt::parse_bytes(b"ABCD", 16), ToBigInt::to_bigint(&0xABCD));
+                /// assert_eq!(BigInt::parse_bytes(b"G", 16), None);
+                /// ```
+                #[inline]
+                pub fn parse_bytes(buf: &[u8], radix: u32) -> Option<BigInt> {
+                    let s = str::from_utf8(buf).ok()?;
+                    BigInt::from_str_radix(s, radix).ok()
+                }
+
+                /// Creates and initializes a [`BigInt`]. Each `u8` of the input slice is
+                /// interpreted as one digit of the number
+                /// and must therefore be less than `radix`.
+                ///
+                /// The bytes are in big-endian byte order.
+                /// `radix` must be in the range `2...256`.
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// use num_bigint::{BigInt, Sign};
+                ///
+                /// let inbase190 = vec![15, 33, 125, 12, 14];
+                /// let a = BigInt::from_radix_be(Sign::Minus, &inbase190, 190).unwrap();
+                /// assert_eq!(a.to_radix_be(190), (Sign:: Minus, inbase190));
+                /// ```
+                pub fn from_radix_be(sign: Sign, buf: &[u8], radix: u32) -> Option<BigInt> {
+                    let u = BigUint::from_radix_be(buf, radix)?;
+                    Some(BigInt::from_biguint(sign, u))
+                }
+
+                /// Creates and initializes a [`BigInt`]. Each `u8` of the input slice is
+                /// interpreted as one digit of the number
+                /// and must therefore be less than `radix`.
+                ///
+                /// The bytes are in little-endian byte order.
+                /// `radix` must be in the range `2...256`.
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// use num_bigint::{BigInt, Sign};
+                ///
+                /// let inbase190 = vec![14, 12, 125, 33, 15];
+                /// let a = BigInt::from_radix_be(Sign::Minus, &inbase190, 190).unwrap();
+                /// assert_eq!(a.to_radix_be(190), (Sign::Minus, inbase190));
+                /// ```
+                pub fn from_radix_le(sign: Sign, buf: &[u8], radix: u32) -> Option<BigInt> {
+                    let u = BigUint::from_radix_le(buf, radix)?;
+                    Some(BigInt::from_biguint(sign, u))
+                }
+
+                /// Returns the sign and the byte representation of the [`BigInt`] in big-endian byte order.
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// use num_bigint::{ToBigInt, Sign};
+                ///
+                /// let i = -1125.to_bigint().unwrap();
+                /// assert_eq!(i.to_bytes_be(), (Sign::Minus, vec![4, 101]));
+                /// ```
+                #[inline]
+                pub fn to_bytes_be(&self) -> (Sign, Vec<u8>) {
+                    (self.sign, self.data.to_bytes_be())
+                }
+
+                /// Returns the sign and the byte representation of the [`BigInt`] in little-endian byte order.
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// use num_bigint::{ToBigInt, Sign};
+                ///
+                /// let i = -1125.to_bigint().unwrap();
+                /// assert_eq!(i.to_bytes_le(), (Sign::Minus, vec![101, 4]));
+                /// ```
+                #[inline]
+                pub fn to_bytes_le(&self) -> (Sign, Vec<u8>) {
+                    (self.sign, self.data.to_bytes_le())
+                }
+
+                /// Returns the sign and the `u32` digits representation of the [`BigInt`] ordered least
+                /// significant digit first.
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// use num_bigint::{BigInt, Sign};
+                ///
+                /// assert_eq!(BigInt::from(-1125).to_u32_digits(), (Sign::Minus, vec![1125]));
+                /// assert_eq!(BigInt::from(4294967295u32).to_u32_digits(), (Sign::Plus, vec![4294967295]));
+                /// assert_eq!(BigInt::from(4294967296u64).to_u32_digits(), (Sign::Plus, vec![0, 1]));
+                /// assert_eq!(BigInt::from(-112500000000i64).to_u32_digits(), (Sign::Minus, vec![830850304, 26]));
+                /// assert_eq!(BigInt::from(112500000000i64).to_u32_digits(), (Sign::Plus, vec![830850304, 26]));
+                /// ```
+                #[inline]
+                pub fn to_u32_digits(&self) -> (Sign, Vec<u32>) {
+                    (self.sign, self.data.to_u32_digits())
+                }
+
+                /// Returns the sign and the `u64` digits representation of the [`BigInt`] ordered least
+                /// significant digit first.
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// use num_bigint::{BigInt, Sign};
+                ///
+                /// assert_eq!(BigInt::from(-1125).to_u64_digits(), (Sign::Minus, vec![1125]));
+                /// assert_eq!(BigInt::from(4294967295u32).to_u64_digits(), (Sign::Plus, vec![4294967295]));
+                /// assert_eq!(BigInt::from(4294967296u64).to_u64_digits(), (Sign::Plus, vec![4294967296]));
+                /// assert_eq!(BigInt::from(-112500000000i64).to_u64_digits(), (Sign::Minus, vec![112500000000]));
+                /// assert_eq!(BigInt::from(112500000000i64).to_u64_digits(), (Sign::Plus, vec![112500000000]));
+                /// assert_eq!(BigInt::from(1u128 << 64).to_u64_digits(), (Sign::Plus, vec![0, 1]));
+                /// ```
+                #[inline]
+                pub fn to_u64_digits(&self) -> (Sign, Vec<u64>) {
+                    (self.sign, self.data.to_u64_digits())
+                }
+
+                /// Returns an iterator of `u32` digits representation of the [`BigInt`] ordered least
+                /// significant digit first.
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// use num_bigint::BigInt;
+                ///
+                /// assert_eq!(BigInt::from(-1125).iter_u32_digits().collect::<Vec<u32>>(), vec![1125]);
+                /// assert_eq!(BigInt::from(4294967295u32).iter_u32_digits().collect::<Vec<u32>>(), vec![4294967295]);
+                /// assert_eq!(BigInt::from(4294967296u64).iter_u32_digits().collect::<Vec<u32>>(), vec![0, 1]);
+                /// assert_eq!(BigInt::from(-112500000000i64).iter_u32_digits().collect::<Vec<u32>>(), vec![830850304, 26]);
+                /// assert_eq!(BigInt::from(112500000000i64).iter_u32_digits().collect::<Vec<u32>>(), vec![830850304, 26]);
+                /// ```
+                #[inline]
+                pub fn iter_u32_digits(&self) -> U32Digits<'_> {
+                    self.data.iter_u32_digits()
+                }
+
+                /// Returns an iterator of `u64` digits representation of the [`BigInt`] ordered least
+                /// significant digit first.
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// use num_bigint::BigInt;
+                ///
+                /// assert_eq!(BigInt::from(-1125).iter_u64_digits().collect::<Vec<u64>>(), vec![1125u64]);
+                /// assert_eq!(BigInt::from(4294967295u32).iter_u64_digits().collect::<Vec<u64>>(), vec![4294967295u64]);
+                /// assert_eq!(BigInt::from(4294967296u64).iter_u64_digits().collect::<Vec<u64>>(), vec![4294967296u64]);
+                /// assert_eq!(BigInt::from(-112500000000i64).iter_u64_digits().collect::<Vec<u64>>(), vec![112500000000u64]);
+                /// assert_eq!(BigInt::from(112500000000i64).iter_u64_digits().collect::<Vec<u64>>(), vec![112500000000u64]);
+                /// assert_eq!(BigInt::from(1u128 << 64).iter_u64_digits().collect::<Vec<u64>>(), vec![0, 1]);
+                /// ```
+                #[inline]
+                pub fn iter_u64_digits(&self) -> U64Digits<'_> {
+                    self.data.iter_u64_digits()
+                }
+
+                /// Returns the two's-complement byte representation of the [`BigInt`] in big-endian byte order.
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// use num_bigint::ToBigInt;
+                ///
+                /// let i = -1125.to_bigint().unwrap();
+                /// assert_eq!(i.to_signed_bytes_be(), vec![251, 155]);
+                /// ```
+                #[inline]
+                pub fn to_signed_bytes_be(&self) -> Vec<u8> {
+                    convert::to_signed_bytes_be(self)
+                }
+
+                /// Returns the two's-complement byte representation of the [`BigInt`] in little-endian byte order.
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// use num_bigint::ToBigInt;
+                ///
+                /// let i = -1125.to_bigint().unwrap();
+                /// assert_eq!(i.to_signed_bytes_le(), vec![155, 251]);
+                /// ```
+                #[inline]
+                pub fn to_signed_bytes_le(&self) -> Vec<u8> {
+                    convert::to_signed_bytes_le(self)
+                }
+
+                /// Returns the integer formatted as a string in the given radix.
+                /// `radix` must be in the range `2...36`.
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// use num_bigint::BigInt;
+                ///
+                /// let i = BigInt::parse_bytes(b"ff", 16).unwrap();
+                /// assert_eq!(i.to_str_radix(16), "ff");
+                /// ```
+                #[inline]
+                pub fn to_str_radix(&self, radix: u32) -> String {
+                    let mut v = to_str_radix_reversed(&self.data, radix);
+
+                    if self.is_negative() {
+                        v.push(b'-');
+                    }
+
+                    v.reverse();
+                    unsafe { String::from_utf8_unchecked(v) }
+                }
+
+                /// Returns the integer in the requested base in big-endian digit order.
+                /// The output is not given in a human readable alphabet but as a zero
+                /// based `u8` number.
+                /// `radix` must be in the range `2...256`.
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// use num_bigint::{BigInt, Sign};
+                ///
+                /// assert_eq!(BigInt::from(-0xFFFFi64).to_radix_be(159),
+                ///            (Sign::Minus, vec![2, 94, 27]));
+                /// // 0xFFFF = 65535 = 2*(159^2) + 94*159 + 27
+                /// ```
+                #[inline]
+                pub fn to_radix_be(&self, radix: u32) -> (Sign, Vec<u8>) {
+                    (self.sign, self.data.to_radix_be(radix))
+                }
+
+                /// Returns the integer in the requested base in little-endian digit order.
+                /// The output is not given in a human readable alphabet but as a zero
+                /// based `u8` number.
+                /// `radix` must be in the range `2...256`.
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// use num_bigint::{BigInt, Sign};
+                ///
+                /// assert_eq!(BigInt::from(-0xFFFFi64).to_radix_le(159),
+                ///            (Sign::Minus, vec![27, 94, 2]));
+                /// // 0xFFFF = 65535 = 27 + 94*159 + 2*(159^2)
+                /// ```
+                #[inline]
+                pub fn to_radix_le(&self, radix: u32) -> (Sign, Vec<u8>) {
+                    (self.sign, self.data.to_radix_le(radix))
+                }
+
+                /// Returns the sign of the [`BigInt`] as a [`Sign`].
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// use num_bigint::{BigInt, Sign};
+                ///
+                /// assert_eq!(BigInt::from(1234).sign(), Sign::Plus);
+                /// assert_eq!(BigInt::from(-4321).sign(), Sign::Minus);
+                /// assert_eq!(BigInt::ZERO.sign(), Sign::NoSign);
+                /// ```
+                #[inline]
+                pub fn sign(&self) -> Sign {
+                    self.sign
+                }
+
+                /// Returns the magnitude of the [`BigInt`] as a [`BigUint`].
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// use num_bigint::{BigInt, BigUint};
+                /// use num_traits::Zero;
+                ///
+                /// assert_eq!(BigInt::from(1234).magnitude(), &BigUint::from(1234u32));
+                /// assert_eq!(BigInt::from(-4321).magnitude(), &BigUint::from(4321u32));
+                /// assert!(BigInt::ZERO.magnitude().is_zero());
+                /// ```
+                #[inline]
+                pub fn magnitude(&self) -> &BigUint {
+                    &self.data
+                }
+
+                /// Convert this [`BigInt`] into its [`Sign`] and [`BigUint`] magnitude,
+                /// the reverse of [`BigInt::from_biguint()`].
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// use num_bigint::{BigInt, BigUint, Sign};
+                ///
+                /// assert_eq!(BigInt::from(1234).into_parts(), (Sign::Plus, BigUint::from(1234u32)));
+                /// assert_eq!(BigInt::from(-4321).into_parts(), (Sign::Minus, BigUint::from(4321u32)));
+                /// assert_eq!(BigInt::ZERO.into_parts(), (Sign::NoSign, BigUint::ZERO));
+                /// ```
+                #[inline]
+                pub fn into_parts(self) -> (Sign, BigUint) {
+                    (self.sign, self.data)
+                }
+
+                /// Determines the fewest bits necessary to express the [`BigInt`],
+                /// not including the sign.
+                #[inline]
+                pub fn bits(&self) -> u64 {
+                    self.data.bits()
+                }
+
+                /// Converts this [`BigInt`] into a [`BigUint`], if it's not negative.
+                #[inline]
+                pub fn to_biguint(&self) -> Option<BigUint> {
+                    match self.sign {
+                        Plus => Some(self.data.clone()),
+                        NoSign => Some(BigUint::ZERO),
+                        Minus => None,
+                    }
+                }
+
+                #[inline]
+                pub fn checked_add(&self, v: &BigInt) -> Option<BigInt> {
+                    Some(self + v)
+                }
+
+                #[inline]
+                pub fn checked_sub(&self, v: &BigInt) -> Option<BigInt> {
+                    Some(self - v)
+                }
+
+                #[inline]
+                pub fn checked_mul(&self, v: &BigInt) -> Option<BigInt> {
+                    Some(self * v)
+                }
+
+                #[inline]
+                pub fn checked_div(&self, v: &BigInt) -> Option<BigInt> {
+                    if v.is_zero() {
+                        return None;
+                    }
+                    Some(self / v)
+                }
+
+                /// Returns `self ^ exponent`.
+                pub fn pow(&self, exponent: u32) -> Self {
+                    Pow::pow(self, exponent)
+                }
+
+                /// Returns `(self ^ exponent) mod modulus`
+                ///
+                /// Note that this rounds like `mod_floor`, not like the `%` operator,
+                /// which makes a difference when given a negative `self` or `modulus`.
+                /// The result will be in the interval `[0, modulus)` for `modulus > 0`,
+                /// or in the interval `(modulus, 0]` for `modulus < 0`
+                ///
+                /// Panics if the exponent is negative or the modulus is zero.
+                pub fn modpow(&self, exponent: &Self, modulus: &Self) -> Self {
+                    power::modpow(self, exponent, modulus)
+                }
+
+                /// Returns the modular multiplicative inverse if it exists, otherwise `None`.
+                ///
+                /// This solves for `x` such that `self * x ≡ 1 (mod modulus)`.
+                /// Note that this rounds like `mod_floor`, not like the `%` operator,
+                /// which makes a difference when given a negative `self` or `modulus`.
+                /// The solution will be in the interval `[0, modulus)` for `modulus > 0`,
+                /// or in the interval `(modulus, 0]` for `modulus < 0`,
+                /// and it exists if and only if `gcd(self, modulus) == 1`.
+                ///
+                /// ```
+                /// use num_bigint::BigInt;
+                /// use num_integer::Integer;
+                /// use num_traits::{One, Zero};
+                ///
+                /// let m = BigInt::from(383);
+                ///
+                /// // Trivial cases
+                /// assert_eq!(BigInt::zero().modinv(&m), None);
+                /// assert_eq!(BigInt::one().modinv(&m), Some(BigInt::one()));
+                /// let neg1 = &m - 1u32;
+                /// assert_eq!(neg1.modinv(&m), Some(neg1));
+                ///
+                /// // Positive self and modulus
+                /// let a = BigInt::from(271);
+                /// let x = a.modinv(&m).unwrap();
+                /// assert_eq!(x, BigInt::from(106));
+                /// assert_eq!(x.modinv(&m).unwrap(), a);
+                /// assert_eq!((&a * x).mod_floor(&m), BigInt::one());
+                ///
+                /// // Negative self and positive modulus
+                /// let b = -&a;
+                /// let x = b.modinv(&m).unwrap();
+                /// assert_eq!(x, BigInt::from(277));
+                /// assert_eq!((&b * x).mod_floor(&m), BigInt::one());
+                ///
+                /// // Positive self and negative modulus
+                /// let n = -&m;
+                /// let x = a.modinv(&n).unwrap();
+                /// assert_eq!(x, BigInt::from(-277));
+                /// assert_eq!((&a * x).mod_floor(&n), &n + 1);
+                ///
+                /// // Negative self and modulus
+                /// let x = b.modinv(&n).unwrap();
+                /// assert_eq!(x, BigInt::from(-106));
+                /// assert_eq!((&b * x).mod_floor(&n), &n + 1);
+                /// ```
+                pub fn modinv(&self, modulus: &Self) -> Option<Self> {
+                    let result = self.data.modinv(&modulus.data)?;
+                    // The sign of the result follows the modulus, like `mod_floor`.
+                    let (sign, mag) = match (self.is_negative(), modulus.is_negative()) {
+                        (false, false) => (Plus, result),
+                        (true, false) => (Plus, &modulus.data - result),
+                        (false, true) => (Minus, &modulus.data - result),
+                        (true, true) => (Minus, result),
+                    };
+                    Some(BigInt::from_biguint(sign, mag))
+                }
+
+                /// Returns the truncated principal square root of `self` --
+                /// see [`num_integer::Roots::sqrt()`].
+                pub fn sqrt(&self) -> Self {
+                    Roots::sqrt(self)
+                }
+
+                /// Returns the truncated principal cube root of `self` --
+                /// see [`num_integer::Roots::cbrt()`].
+                pub fn cbrt(&self) -> Self {
+                    Roots::cbrt(self)
+                }
+
+                /// Returns the truncated principal `n`th root of `self` --
+                /// See [`num_integer::Roots::nth_root()`].
+                pub fn nth_root(&self, n: u32) -> Self {
+                    Roots::nth_root(self, n)
+                }
+
+                /// Returns the number of least-significant bits that are zero,
+                /// or `None` if the entire number is zero.
+                pub fn trailing_zeros(&self) -> Option<u64> {
+                    self.data.trailing_zeros()
+                }
+
+                /// Returns whether the bit in position `bit` is set,
+                /// using the two's complement for negative numbers
+                pub fn bit(&self, bit: u64) -> bool {
+                    if self.is_negative() {
+                        // Let the binary representation of a number be
+                        //   ... 0  x 1 0 ... 0
+                        // Then the two's complement is
+                        //   ... 1 !x 1 0 ... 0
+                        // where !x is obtained from x by flipping each bit
+                        if bit >= u64::from(crate::big_digit::BITS) * self.len() as u64 {
+                            true
+                        } else {
+                            let trailing_zeros = self.data.trailing_zeros().unwrap();
+                            match Ord::cmp(&bit, &trailing_zeros) {
+                                Ordering::Less => false,
+                                Ordering::Equal => true,
+                                Ordering::Greater => !self.data.bit(bit),
+                            }
+                        }
+                    } else {
+                        self.data.bit(bit)
+                    }
+                }
+
+                /// Sets or clears the bit in the given position,
+                /// using the two's complement for negative numbers
+                ///
+                /// Note that setting/clearing a bit (for positive/negative numbers,
+                /// respectively) greater than the current bit length, a reallocation
+                /// may be needed to store the new digits
+                pub fn set_bit(&mut self, bit: u64, value: bool) {
+                    match self.sign {
+                        Sign::Plus => self.data.set_bit(bit, value),
+                        Sign::Minus => bits::set_negative_bit(self, bit, value),
+                        Sign::NoSign => {
+                            if value {
+                                self.data.set_bit(bit, true);
+                                self.sign = Sign::Plus;
+                            } else {
+                                // Clearing a bit for zero is a no-op
+                            }
+                        }
+                    }
+                    // The top bit may have been cleared, so normalize
+                    self.normalize();
+                }
+            }
+
+            impl num_traits::FromBytes for BigInt {
+                type Bytes = [u8];
+
+                fn from_be_bytes(bytes: &Self::Bytes) -> Self {
+                    Self::from_signed_bytes_be(bytes)
+                }
+
+                fn from_le_bytes(bytes: &Self::Bytes) -> Self {
+                    Self::from_signed_bytes_le(bytes)
+                }
+            }
+
+            impl num_traits::ToBytes for BigInt {
+                type Bytes = Vec<u8>;
+
+                fn to_be_bytes(&self) -> Self::Bytes {
+                    self.to_signed_bytes_be()
+                }
+
+                fn to_le_bytes(&self) -> Self::Bytes {
+                    self.to_signed_bytes_le()
+                }
+            }
+        }
+
+        pub mod bigrand
+        {
+            use ::
+            {
+                rand::
+                {
+                    distributions::uniform::{ SampleBorrow, SampleUniform, UniformSampler },
+                    prelude::{ * },
+                },
+                num::
+                {
+                    big::
+                    {
+                        BigInt, BigUint, Sign::{ self, * },
+                        biguint::{ biguint_from_vec },
+                    },
+                    integers::{ Integer },
+                    traits::{ ToPrimitive, Zero },
+                },
+                *,
+            };
+            /// A trait for sampling random big integers.
+            ///
+            /// The `rand` feature must be enabled to use this. See crate-level documentation for details.
+            pub trait RandBigInt {
+                /// Generate a random [`BigUint`] of the given bit size.
+                fn gen_biguint(&mut self, bit_size: u64) -> BigUint;
+
+                /// Generate a random [ BigInt`] of the given bit size.
+                fn gen_bigint(&mut self, bit_size: u64) -> BigInt;
+
+                /// Generate a random [`BigUint`] less than the given bound. Fails
+                /// when the bound is zero.
+                fn gen_biguint_below(&mut self, bound: &BigUint) -> BigUint;
+
+                /// Generate a random [`BigUint`] within the given range. The lower
+                /// bound is inclusive; the upper bound is exclusive. Fails when
+                /// the upper bound is not greater than the lower bound.
+                fn gen_biguint_range(&mut self, lbound: &BigUint, ubound: &BigUint) -> BigUint;
+
+                /// Generate a random [`BigInt`] within the given range. The lower
+                /// bound is inclusive; the upper bound is exclusive. Fails when
+                /// the upper bound is not greater than the lower bound.
+                fn gen_bigint_range(&mut self, lbound: &BigInt, ubound: &BigInt) -> BigInt;
+            }
+
+            fn gen_bits<R: Rng + ?Sized>(rng: &mut R, data: &mut [u32], rem: u64) {
+                // `fill` is faster than many `gen::<u32>` calls
+                rng.fill(data);
+                if rem > 0 {
+                    let last = data.len() - 1;
+                    data[last] >>= 32 - rem;
+                }
+            }
+
+            impl<R: Rng + ?Sized> RandBigInt for R {
+                cfg_digit!(
+                    fn gen_biguint(&mut self, bit_size: u64) -> BigUint {
+                        let (digits, rem) = bit_size.div_rem(&32);
+                        let len = (digits + (rem > 0) as u64)
+                            .to_usize()
+                            .expect("capacity overflow");
+                        let mut data = vec![0u32; len];
+                        gen_bits(self, &mut data, rem);
+                        biguint_from_vec(data)
+                    }
+
+                    fn gen_biguint(&mut self, bit_size: u64) -> BigUint {
+                        use core::slice;
+
+                        let (digits, rem) = bit_size.div_rem(&32);
+                        let len = (digits + (rem > 0) as u64)
+                            .to_usize()
+                            .expect("capacity overflow");
+                        let native_digits = Integer::div_ceil(&bit_size, &64);
+                        let native_len = native_digits.to_usize().expect("capacity overflow");
+                        let mut data = vec![0u64; native_len];
+                        unsafe {
+                            // Generate bits in a `&mut [u32]` slice for value stability
+                            let ptr = data.as_mut_ptr() as *mut u32;
+                            debug_assert!(native_len * 2 >= len);
+                            let data = slice::from_raw_parts_mut(ptr, len);
+                            gen_bits(self, data, rem);
+                        }
+                        #[cfg(target_endian = "big")]
+                        for digit in &mut data {
+                            // swap u32 digits into u64 endianness
+                            *digit = (*digit << 32) | (*digit >> 32);
+                        }
+                        biguint_from_vec(data)
+                    }
+                );
+
+                fn gen_bigint(&mut self, bit_size: u64) -> BigInt {
+                    loop {
+                        // Generate a random BigUint...
+                        let biguint = self.gen_biguint(bit_size);
+                        // ...and then randomly assign it a Sign...
+                        let sign = if biguint.is_zero() {
+                            // ...except that if the BigUint is zero, we need to try
+                            // again with probability 0.5. This is because otherwise,
+                            // the probability of generating a zero BigInt would be
+                            // double that of any other number.
+                            if self.gen() {
+                                continue;
+                            } else {
+                                NoSign
+                            }
+                        } else if self.gen() {
+                            Plus
+                        } else {
+                            Minus
+                        };
+                        return BigInt::from_biguint(sign, biguint);
+                    }
+                }
+
+                fn gen_biguint_below(&mut self, bound: &BigUint) -> BigUint {
+                    assert!(!bound.is_zero());
+                    let bits = bound.bits();
+                    loop {
+                        let n = self.gen_biguint(bits);
+                        if n < *bound {
+                            return n;
+                        }
+                    }
+                }
+
+                fn gen_biguint_range(&mut self, lbound: &BigUint, ubound: &BigUint) -> BigUint {
+                    assert!(*lbound < *ubound);
+                    if lbound.is_zero() {
+                        self.gen_biguint_below(ubound)
+                    } else {
+                        lbound + self.gen_biguint_below(&(ubound - lbound))
+                    }
+                }
+
+                fn gen_bigint_range(&mut self, lbound: &BigInt, ubound: &BigInt) -> BigInt {
+                    assert!(*lbound < *ubound);
+                    if lbound.is_zero() {
+                        BigInt::from(self.gen_biguint_below(ubound.magnitude()))
+                    } else if ubound.is_zero() {
+                        lbound + BigInt::from(self.gen_biguint_below(lbound.magnitude()))
+                    } else {
+                        let delta = ubound - lbound;
+                        lbound + BigInt::from(self.gen_biguint_below(delta.magnitude()))
+                    }
+                }
+            }
+
+            /// The back-end implementing rand's [`UniformSampler`] for [`BigUint`].
+            #[derive(Clone, Debug)]
+            pub struct UniformBigUint {
+                base: BigUint,
+                len: BigUint,
+            }
+
+            impl UniformSampler for UniformBigUint {
+                type X = BigUint;
+
+                #[inline]
+                fn new<B1, B2>(low_b: B1, high_b: B2) -> Self
+                where
+                    B1: SampleBorrow<Self::X> + Sized,
+                    B2: SampleBorrow<Self::X> + Sized,
+                {
+                    let low = low_b.borrow();
+                    let high = high_b.borrow();
+                    assert!(low < high);
+                    UniformBigUint {
+                        len: high - low,
+                        base: low.clone(),
+                    }
+                }
+
+                #[inline]
+                fn new_inclusive<B1, B2>(low_b: B1, high_b: B2) -> Self
+                where
+                    B1: SampleBorrow<Self::X> + Sized,
+                    B2: SampleBorrow<Self::X> + Sized,
+                {
+                    let low = low_b.borrow();
+                    let high = high_b.borrow();
+                    assert!(low <= high);
+                    Self::new(low, high + 1u32)
+                }
+
+                #[inline]
+                fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Self::X {
+                    &self.base + rng.gen_biguint_below(&self.len)
+                }
+
+                #[inline]
+                fn sample_single<R: Rng + ?Sized, B1, B2>(low: B1, high: B2, rng: &mut R) -> Self::X
+                where
+                    B1: SampleBorrow<Self::X> + Sized,
+                    B2: SampleBorrow<Self::X> + Sized,
+                {
+                    rng.gen_biguint_range(low.borrow(), high.borrow())
+                }
+            }
+
+            impl SampleUniform for BigUint {
+                type Sampler = UniformBigUint;
+            }
+
+            /// The back-end implementing rand's [`UniformSampler`] for [`BigInt`].
+            #[derive(Clone, Debug)]
+            pub struct UniformBigInt {
+                base: BigInt,
+                len: BigUint,
+            }
+
+            impl UniformSampler for UniformBigInt {
+                type X = BigInt;
+
+                #[inline]
+                fn new<B1, B2>(low_b: B1, high_b: B2) -> Self
+                where
+                    B1: SampleBorrow<Self::X> + Sized,
+                    B2: SampleBorrow<Self::X> + Sized,
+                {
+                    let low = low_b.borrow();
+                    let high = high_b.borrow();
+                    assert!(low < high);
+                    UniformBigInt {
+                        len: (high - low).into_parts().1,
+                        base: low.clone(),
+                    }
+                }
+
+                #[inline]
+                fn new_inclusive<B1, B2>(low_b: B1, high_b: B2) -> Self
+                where
+                    B1: SampleBorrow<Self::X> + Sized,
+                    B2: SampleBorrow<Self::X> + Sized,
+                {
+                    let low = low_b.borrow();
+                    let high = high_b.borrow();
+                    assert!(low <= high);
+                    Self::new(low, high + 1u32)
+                }
+
+                #[inline]
+                fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Self::X {
+                    &self.base + BigInt::from(rng.gen_biguint_below(&self.len))
+                }
+
+                #[inline]
+                fn sample_single<R: Rng + ?Sized, B1, B2>(low: B1, high: B2, rng: &mut R) -> Self::X
+                where
+                    B1: SampleBorrow<Self::X> + Sized,
+                    B2: SampleBorrow<Self::X> + Sized,
+                {
+                    rng.gen_bigint_range(low.borrow(), high.borrow())
+                }
+            }
+
+            impl SampleUniform for BigInt {
+                type Sampler = UniformBigInt;
+            }
+
+            /// A random distribution for [`BigUint`] and [`BigInt`] values of a particular bit size.
+            ///
+            /// The `rand` feature must be enabled to use this. See crate-level documentation for details.
+            #[derive(Clone, Copy, Debug)]
+            pub struct RandomBits {
+                bits: u64,
+            }
+
+            impl RandomBits {
+                #[inline]
+                pub fn new(bits: u64) -> RandomBits {
+                    RandomBits { bits }
+                }
+            }
+
+            impl Distribution<BigUint> for RandomBits {
+                #[inline]
+                fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> BigUint {
+                    rng.gen_biguint(self.bits)
+                }
+            }
+
+            impl Distribution<BigInt> for RandomBits {
+                #[inline]
+                fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> BigInt {
+                    rng.gen_bigint(self.bits)
+                }
+            }
+
+        }
+
+        pub mod biguint
+        {
+            use ::
+            {
+                *,
+            };
+
+        }
+        
+        type UsizePromotion = u64;
+        type IsizePromotion = i64;
+
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        pub struct ParseBigIntError {
+            kind: BigIntErrorKind,
+        }
+
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        enum BigIntErrorKind {
+            Empty,
+            InvalidDigit,
+        }
+
+        impl ParseBigIntError {
+            fn __description(&self) -> &str {
+                use ::BigIntErrorKind::*;
+                match self.kind {
+                    Empty => "cannot parse integer from empty string",
+                    InvalidDigit => "invalid digit found in string",
+                }
+            }
+
+            fn empty() -> Self {
+                ParseBigIntError {
+                    kind: BigIntErrorKind::Empty,
+                }
+            }
+
+            fn invalid() -> Self {
+                ParseBigIntError {
+                    kind: BigIntErrorKind::InvalidDigit,
+                }
+            }
+        }
+
+        impl fmt::Display for ParseBigIntError {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                self.__description().fmt(f)
+            }
+        }
+        
+        impl ::error::Error for ParseBigIntError {
+            fn description(&self) -> &str {
+                self.__description()
+            }
+        }
+
+        /// The error type returned when a checked conversion regarding big integer fails.
+        #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+        pub struct TryFromBigIntError<T> {
+            original: T,
+        }
+
+        impl<T> TryFromBigIntError<T> {
+            fn new(original: T) -> Self {
+                TryFromBigIntError { original }
+            }
+
+            fn __description(&self) -> &str {
+                "out of range conversion regarding big integer attempted"
+            }
+
+            /// Extract the original value, if available. The value will be available
+            /// if the type before conversion was either [`BigInt`] or [`BigUint`].
+            pub fn into_original(self) -> T {
+                self.original
+            }
+        }
+        
+        impl<T> std::error::Error for TryFromBigIntError<T>
+        where
+            T: fmt::Debug,
+        {
+            fn description(&self) -> &str {
+                self.__description()
+            }
+        }
+
+        impl<T> fmt::Display for TryFromBigIntError<T> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                self.__description().fmt(f)
+            }
+        }
+
+        pub use self::biguint::BigUint;
+        pub use self::biguint::ToBigUint;
+        pub use self::biguint::U32Digits;
+        pub use self::biguint::U64Digits;
+        pub use self::bigint::BigInt;
+        pub use self::bigint::Sign;
+        pub use self::bigint::ToBigInt;
+        
+        pub use self::bigrand::{RandBigInt, RandomBits, UniformBigInt, UniformBigUint};
+
+        mod big_digit 
+        {
+            // A [`BigDigit`] is a [`BigUint`]'s composing element.
+            
+                pub type BigDigit = u64;
+
+            // A [`DoubleBigDigit`] is the internal type used to do the computations.  Its
+            // size is the double of the size of [`BigDigit`].
+            pub type DoubleBigDigit = u128;
+
+            pub const BITS: u8 = BigDigit::BITS as u8;
+            pub const HALF_BITS: u8 = BITS / 2;
+            pub const HALF: BigDigit = (1 << HALF_BITS) - 1;
+
+            pub const MAX: BigDigit = BigDigit::MAX;
+            const LO_MASK: DoubleBigDigit = MAX as DoubleBigDigit;
+
+            #[inline]
+            fn get_hi(n: DoubleBigDigit) -> BigDigit {
+                (n >> BITS) as BigDigit
+            }
+            #[inline]
+            fn get_lo(n: DoubleBigDigit) -> BigDigit {
+                (n & LO_MASK) as BigDigit
+            }
+
+            /// Split one [`DoubleBigDigit`] into two [`BigDigit`]s.
+            #[inline]
+            pub fn from_doublebigdigit(n: DoubleBigDigit) -> (BigDigit, BigDigit) {
+                (get_hi(n), get_lo(n))
+            }
+
+            /// Join two [`BigDigit`]s into one [`DoubleBigDigit`].
+            #[inline]
+            pub fn to_doublebigdigit(hi: BigDigit, lo: BigDigit) -> DoubleBigDigit {
+                DoubleBigDigit::from(lo) | (DoubleBigDigit::from(hi) << BITS)
+            }
+        }
     }
     
     pub mod complex
@@ -6573,13 +10693,1005 @@ pub mod num
             *,
         };
     }
-    
-    pub mod integers
+
+    pub mod fractional
     {
         use ::
         {
             *,
         };
+        pub fn frac_from_whole_and_dec(whole: BigInt, decimal: BigInt, dec_len: usize) -> BigRational
+        {
+            let denom = pow(BigInt::from_u8(10).unwrap(), dec_len);
+            BigRational::new(whole, 1.into()) + BigRational::new(decimal, denom)
+        }
+    }
+    
+    pub mod integers
+    {
+        //! Integer trait and functions.
+        use ::
+        {
+            ops::{ Add },
+            num::traits::{ Num, Signed, Zero },
+            *,
+        };
+
+        mod roots
+        {
+            use ::
+            {
+                num::
+                {
+                    integers::{ Integer },
+                    traits::{checked_pow, PrimInt},
+                },
+                *,
+            };
+            /// Provides methods to compute an integer's square root, cube root,
+            /// and arbitrary `n`th root.
+            pub trait Roots: Integer
+            {
+                /// Returns the truncated principal `n`th root of an integer
+                /// -- `if x >= 0 { ⌊ⁿ√x⌋ } else { ⌈ⁿ√x⌉ }`
+                ///
+                /// This is solving for `r` in `rⁿ = x`, rounding toward zero.
+                /// If `x` is positive, the result will satisfy `rⁿ ≤ x < (r+1)ⁿ`.
+                /// If `x` is negative and `n` is odd, then `(r-1)ⁿ < x ≤ rⁿ`.
+                ///
+                /// # Panics
+                ///
+                /// Panics if `n` is zero:
+                ///
+                /// ```should_panic
+                /// # use num_integer::Roots;
+                /// println!("can't compute ⁰√x : {}", 123.nth_root(0));
+                /// ```
+                ///
+                /// or if `n` is even and `self` is negative:
+                ///
+                /// ```should_panic
+                /// # use num_integer::Roots;
+                /// println!("no imaginary numbers... {}", (-1).nth_root(10));
+                /// ```
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// use num_integer::Roots;
+                ///
+                /// let x: i32 = 12345;
+                /// assert_eq!(x.nth_root(1), x);
+                /// assert_eq!(x.nth_root(2), x.sqrt());
+                /// assert_eq!(x.nth_root(3), x.cbrt());
+                /// assert_eq!(x.nth_root(4), 10);
+                /// assert_eq!(x.nth_root(13), 2);
+                /// assert_eq!(x.nth_root(14), 1);
+                /// assert_eq!(x.nth_root(std::u32::MAX), 1);
+                ///
+                /// assert_eq!(std::i32::MAX.nth_root(30), 2);
+                /// assert_eq!(std::i32::MAX.nth_root(31), 1);
+                /// assert_eq!(std::i32::MIN.nth_root(31), -2);
+                /// assert_eq!((std::i32::MIN + 1).nth_root(31), -1);
+                ///
+                /// assert_eq!(std::u32::MAX.nth_root(31), 2);
+                /// assert_eq!(std::u32::MAX.nth_root(32), 1);
+                /// ```
+                fn nth_root(&self, n: u32) -> Self;
+
+                /// Returns the truncated principal square root of an integer -- `⌊√x⌋`
+                ///
+                /// This is solving for `r` in `r² = x`, rounding toward zero.
+                /// The result will satisfy `r² ≤ x < (r+1)²`.
+                ///
+                /// # Panics
+                ///
+                /// Panics if `self` is less than zero:
+                ///
+                /// ```should_panic
+                /// # use num_integer::Roots;
+                /// println!("no imaginary numbers... {}", (-1).sqrt());
+                /// ```
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// use num_integer::Roots;
+                ///
+                /// let x: i32 = 12345;
+                /// assert_eq!((x * x).sqrt(), x);
+                /// assert_eq!((x * x + 1).sqrt(), x);
+                /// assert_eq!((x * x - 1).sqrt(), x - 1);
+                /// ```
+                #[inline]
+                fn sqrt(&self) -> Self {
+                    self.nth_root(2)
+                }
+
+                /// Returns the truncated principal cube root of an integer --
+                /// `if x >= 0 { ⌊∛x⌋ } else { ⌈∛x⌉ }`
+                ///
+                /// This is solving for `r` in `r³ = x`, rounding toward zero.
+                /// If `x` is positive, the result will satisfy `r³ ≤ x < (r+1)³`.
+                /// If `x` is negative, then `(r-1)³ < x ≤ r³`.
+                ///
+                /// # Examples
+                ///
+                /// ```
+                /// use num_integer::Roots;
+                ///
+                /// let x: i32 = 1234;
+                /// assert_eq!((x * x * x).cbrt(), x);
+                /// assert_eq!((x * x * x + 1).cbrt(), x);
+                /// assert_eq!((x * x * x - 1).cbrt(), x - 1);
+                ///
+                /// assert_eq!((-(x * x * x)).cbrt(), -x);
+                /// assert_eq!((-(x * x * x + 1)).cbrt(), -x);
+                /// assert_eq!((-(x * x * x - 1)).cbrt(), -(x - 1));
+                /// ```
+                #[inline]
+                fn cbrt(&self) -> Self {
+                    self.nth_root(3)
+                }
+            }
+
+            /// Returns the truncated principal square root of an integer --
+            /// see [Roots::sqrt](trait.Roots.html#method.sqrt).
+            #[inline]
+            pub fn sqrt<T: Roots>(x: T) -> T
+                {    x.sqrt()
+            }
+
+            /// Returns the truncated principal cube root of an integer --
+            /// see [Roots::cbrt](trait.Roots.html#method.cbrt).
+            #[inline]
+            pub fn cbrt<T: Roots>(x: T) -> T
+                {    x.cbrt()
+            }
+
+            /// Returns the truncated principal `n`th root of an integer --
+            /// see [Roots::nth_root](trait.Roots.html#tymethod.nth_root).
+            #[inline]
+            pub fn nth_root<T: Roots>(x: T, n: u32) -> T
+                {    x.nth_root(n)
+            }
+
+            macro_rules! signed_roots {
+                ($T:ty, $U:ty) => {
+                    impl Roots for $T {
+                        #[inline]
+                        fn nth_root(&self, n: u32) -> Self {
+                            if *self >= 0 {
+                                (*self as $U).nth_root(n) as Self
+                            } else {
+                                assert!(n.is_odd(), "even roots of a negative are imaginary");
+                                -((self.wrapping_neg() as $U).nth_root(n) as Self)
+                            }
+                        }
+
+                        #[inline]
+                        fn sqrt(&self) -> Self {
+                            assert!(*self >= 0, "the square root of a negative is imaginary");
+                            (*self as $U).sqrt() as Self
+                        }
+
+                        #[inline]
+                        fn cbrt(&self) -> Self {
+                            if *self >= 0 {
+                                (*self as $U).cbrt() as Self
+                            } else {
+                                -((self.wrapping_neg() as $U).cbrt() as Self)
+                            }
+                        }
+                    }
+                };
+            }
+
+            signed_roots!(i8, u8);
+            signed_roots!(i16, u16);
+            signed_roots!(i32, u32);
+            signed_roots!(i64, u64);
+            signed_roots!(i128, u128);
+            signed_roots!(isize, usize);
+
+            #[inline] fn fixpoint<T, F>(mut x: T, f: F) -> T where
+                T: Integer + Copy,
+                F: Fn(T) -> T,
+            {
+                let mut xn = f(x);
+                while x < xn {
+                    x = xn;
+                    xn = f(x);
+                }
+                while x > xn {
+                    x = xn;
+                    xn = f(x);
+                }
+                x
+            }
+
+            #[inline] fn bits<T>() -> u32 {
+                8 * mem::size_of::<T>() as u32
+            }
+
+            #[inline] fn log2<T: PrimInt>(x: T) -> u32 {
+                debug_assert!(x > T::zero());
+                bits::<T>() - 1 - x.leading_zeros()
+            }
+
+            macro_rules! unsigned_roots {
+                ($T:ident) => {
+                    impl Roots for $T {
+                        #[inline]
+                        fn nth_root(&self, n: u32) -> Self {
+                            fn go(a: $T, n: u32) -> $T {
+                                // Specialize small roots
+                                match n {
+                                    0 => panic!("can't find a root of degree 0!"),
+                                    1 => return a,
+                                    2 => return a.sqrt(),
+                                    3 => return a.cbrt(),
+                                    _ => (),
+                                }
+
+                                // The root of values less than 2ⁿ can only be 0 or 1.
+                                if bits::<$T>() <= n || a < (1 << n) {
+                                    return (a > 0) as $T;
+                                }
+
+                                if bits::<$T>() > 64 {
+                                    // 128-bit division is slow, so do a bitwise `nth_root` until it's small enough.
+                                    return if a <= core::u64::MAX as $T {
+                                        (a as u64).nth_root(n) as $T
+                                    } else {
+                                        let lo = (a >> n).nth_root(n) << 1;
+                                        let hi = lo + 1;
+                                        // 128-bit `checked_mul` also involves division, but we can't always
+                                        // compute `hiⁿ` without risking overflow.  Try to avoid it though...
+                                        if hi.next_power_of_two().trailing_zeros() * n >= bits::<$T>() {
+                                            match checked_pow(hi, n as usize) {
+                                                Some(x) if x <= a => hi,
+                                                _ => lo,
+                                            }
+                                        } else {
+                                            if hi.pow(n) <= a {
+                                                hi
+                                            } else {
+                                                lo
+                                            }
+                                        }
+                                    };
+                                }
+
+                                #[cfg(feature = "std")]
+                                #[inline]
+                                fn guess(x: $T, n: u32) -> $T {
+                                    // for smaller inputs, `f64` doesn't justify its cost.
+                                    if bits::<$T>() <= 32 || x <= core::u32::MAX as $T {
+                                        1 << ((log2(x) + n - 1) / n)
+                                    } else {
+                                        ((x as f64).ln() / f64::from(n)).exp() as $T
+                                    }
+                                }
+
+                                #[cfg(not(feature = "std"))]
+                                #[inline]
+                                fn guess(x: $T, n: u32) -> $T {
+                                    1 << ((log2(x) + n - 1) / n)
+                                }
+
+                                // https://en.wikipedia.org/wiki/Nth_root_algorithm
+                                let n1 = n - 1;
+                                let next = |x: $T| {
+                                    let y = match checked_pow(x, n1 as usize) {
+                                        Some(ax) => a / ax,
+                                        None => 0,
+                                    };
+                                    (y + x * n1 as $T) / n as $T
+                                };
+                                fixpoint(guess(a, n), next)
+                            }
+                            go(*self, n)
+                        }
+
+                        #[inline]
+                        fn sqrt(&self) -> Self {
+                            fn go(a: $T) -> $T {
+                                if bits::<$T>() > 64 {
+                                    // 128-bit division is slow, so do a bitwise `sqrt` until it's small enough.
+                                    return if a <= core::u64::MAX as $T {
+                                        (a as u64).sqrt() as $T
+                                    } else {
+                                        let lo = (a >> 2u32).sqrt() << 1;
+                                        let hi = lo + 1;
+                                        if hi * hi <= a {
+                                            hi
+                                        } else {
+                                            lo
+                                        }
+                                    };
+                                }
+
+                                if a < 4 {
+                                    return (a > 0) as $T;
+                                }
+
+                                #[cfg(feature = "std")]
+                                #[inline]
+                                fn guess(x: $T) -> $T {
+                                    (x as f64).sqrt() as $T
+                                }
+
+                                #[cfg(not(feature = "std"))]
+                                #[inline]
+                                fn guess(x: $T) -> $T {
+                                    1 << ((log2(x) + 1) / 2)
+                                }
+
+                                // https://en.wikipedia.org/wiki/Methods_of_computing_square_roots#Babylonian_method
+                                let next = |x: $T| (a / x + x) >> 1;
+                                fixpoint(guess(a), next)
+                            }
+                            go(*self)
+                        }
+
+                        #[inline]
+                        fn cbrt(&self) -> Self {
+                            fn go(a: $T) -> $T {
+                                if bits::<$T>() > 64 {
+                                    // 128-bit division is slow, so do a bitwise `cbrt` until it's small enough.
+                                    return if a <= core::u64::MAX as $T {
+                                        (a as u64).cbrt() as $T
+                                    } else {
+                                        let lo = (a >> 3u32).cbrt() << 1;
+                                        let hi = lo + 1;
+                                        if hi * hi * hi <= a {
+                                            hi
+                                        } else {
+                                            lo
+                                        }
+                                    };
+                                }
+
+                                if bits::<$T>() <= 32 {
+                                    // Implementation based on Hacker's Delight `icbrt2`
+                                    let mut x = a;
+                                    let mut y2 = 0;
+                                    let mut y = 0;
+                                    let smax = bits::<$T>() / 3;
+                                    for s in (0..smax + 1).rev() {
+                                        let s = s * 3;
+                                        y2 *= 4;
+                                        y *= 2;
+                                        let b = 3 * (y2 + y) + 1;
+                                        if x >> s >= b {
+                                            x -= b << s;
+                                            y2 += 2 * y + 1;
+                                            y += 1;
+                                        }
+                                    }
+                                    return y;
+                                }
+
+                                if a < 8 {
+                                    return (a > 0) as $T;
+                                }
+                                if a <= core::u32::MAX as $T {
+                                    return (a as u32).cbrt() as $T;
+                                }
+
+                                #[cfg(feature = "std")]
+                                #[inline]
+                                fn guess(x: $T) -> $T {
+                                    (x as f64).cbrt() as $T
+                                }
+
+                                #[cfg(not(feature = "std"))]
+                                #[inline]
+                                fn guess(x: $T) -> $T {
+                                    1 << ((log2(x) + 2) / 3)
+                                }
+
+                                // https://en.wikipedia.org/wiki/Cube_root#Numerical_methods
+                                let next = |x: $T| (a / (x * x) + x * 2) / 3;
+                                fixpoint(guess(a), next)
+                            }
+                            go(*self)
+                        }
+                    }
+                };
+            }
+
+            unsigned_roots!(u8);
+            unsigned_roots!(u16);
+            unsigned_roots!(u32);
+            unsigned_roots!(u64);
+            unsigned_roots!(u128);
+            unsigned_roots!(usize);
+        }
+        pub use self::roots::Roots;
+        pub use self::roots::{cbrt, nth_root, sqrt};
+
+        mod average
+        {
+            use ::
+            {
+                num::integers::Integer,
+                ops::{BitAnd, BitOr, BitXor, Shr},
+                *,
+            };
+            /// Provides methods to compute the average of two integers, without overflows.
+            pub trait Average: Integer
+            {
+                /// Returns the ceiling value of the average of `self` and `other`.
+                fn average_ceil(&self, other: &Self) -> Self;
+                /// Returns the floor value of the average of `self` and `other`.
+                fn average_floor(&self, other: &Self) -> Self;
+            }
+
+            impl<I> Average for I where
+                I: Integer + Shr<usize, Output = I>,
+                for<'a, 'b> &'a I:
+                    BitAnd<&'b I, Output = I> + BitOr<&'b I, Output = I> + BitXor<&'b I, Output = I>,
+            {
+                // The Henry Gordon Dietz implementation as shown in the Hacker's Delight,
+                // see http://aggregate.org/MAGIC/#Average%20of%20Integers
+
+                /// Returns the floor value of the average of `self` and `other`.
+                #[inline]
+                fn average_floor(&self, other: &I) -> I {
+                    (self & other) + ((self ^ other) >> 1)
+                }
+
+                /// Returns the ceil value of the average of `self` and `other`.
+                #[inline]
+                fn average_ceil(&self, other: &I) -> I {
+                    (self | other) - ((self ^ other) >> 1)
+                }
+            }
+
+            /// Returns the floor value of the average of `x` and `y` --
+            /// see [Average::average_floor](trait.Average.html#tymethod.average_floor).
+            #[inline]
+            pub fn average_floor<T: Average>(x: T, y: T) -> T
+                {    x.average_floor(&y)
+            }
+            /// Returns the ceiling value of the average of `x` and `y` --
+            /// see [Average::average_ceil](trait.Average.html#tymethod.average_ceil).
+            #[inline]
+            pub fn average_ceil<T: Average>(x: T, y: T) -> T
+                {    x.average_ceil(&y)
+            }
+        }
+        pub use self::average::Average;
+        pub use self::average::{average_ceil, average_floor};
+
+        pub trait Integer: Sized + Num + PartialOrd + Ord + Eq 
+        {
+            /// Floored integer division.
+            fn div_floor(&self, other: &Self) -> Self;
+
+            /// Floored integer modulo
+            fn mod_floor(&self, other: &Self) -> Self;
+
+            /// Ceiled integer division.
+            fn div_ceil(&self, other: &Self) -> Self {
+                let (q, r) = self.div_mod_floor(other);
+                if r.is_zero() {
+                    q
+                } else {
+                    q + Self::one()
+                }
+            }
+
+            /// Greatest Common Divisor (GCD).
+            fn gcd(&self, other: &Self) -> Self;
+
+            /// Lowest Common Multiple (LCM).
+            fn lcm(&self, other: &Self) -> Self;
+
+            /// Greatest Common Divisor (GCD) and
+            /// Lowest Common Multiple (LCM) together.
+            #[inline] fn gcd_lcm(&self, other: &Self) -> (Self, Self) {
+                (self.gcd(other), self.lcm(other))
+            }
+
+            /// Greatest common divisor and Bézout coefficients.
+            #[inline] fn extended_gcd(&self, other: &Self) -> ExtendedGcd<Self> where
+                Self: Clone,
+            {
+                let mut s = (Self::zero(), Self::one());
+                let mut t = (Self::one(), Self::zero());
+                let mut r = (other.clone(), self.clone());
+
+                while !r.0.is_zero() {
+                    let q = r.1.clone() / r.0.clone();
+                    let f = |mut r: (Self, Self)| {
+                        mem::swap(&mut r.0, &mut r.1);
+                        r.0 = r.0 - q.clone() * r.1.clone();
+                        r
+                    };
+                    r = f(r);
+                    s = f(s);
+                    t = f(t);
+                }
+
+                if r.1 >= Self::zero() {
+                    ExtendedGcd {
+                        gcd: r.1,
+                        x: s.1,
+                        y: t.1,
+                    }
+                } else {
+                    ExtendedGcd {
+                        gcd: Self::zero() - r.1,
+                        x: Self::zero() - s.1,
+                        y: Self::zero() - t.1,
+                    }
+                }
+            }
+
+            /// Greatest common divisor, least common multiple, and Bézout coefficients.
+            #[inline] fn extended_gcd_lcm(&self, other: &Self) -> (ExtendedGcd<Self>, Self) where
+                Self: Clone + Signed,
+            {
+                (self.extended_gcd(other), self.lcm(other))
+            }
+
+            /// Deprecated, use `is_multiple_of` instead.
+            #[deprecated(note = "Please use is_multiple_of instead")]
+            #[inline] fn divides(&self, other: &Self) -> bool {
+                self.is_multiple_of(other)
+            }
+
+            /// Returns `true` if `self` is a multiple of `other`.
+            fn is_multiple_of(&self, other: &Self) -> bool;
+
+            /// Returns `true` if the number is even.
+            fn is_even(&self) -> bool;
+
+            /// Returns `true` if the number is odd.
+            fn is_odd(&self) -> bool;
+
+            /// Simultaneous truncated integer division and modulus.
+            fn div_rem(&self, other: &Self) -> (Self, Self);
+
+            /// Simultaneous floored integer division and modulus.
+            fn div_mod_floor(&self, other: &Self) -> (Self, Self) {
+                (self.div_floor(other), self.mod_floor(other))
+            }
+
+            /// Rounds up to nearest multiple of argument.
+            #[inline] fn next_multiple_of(&self, other: &Self) -> Self where
+                Self: Clone,
+            {
+                let m = self.mod_floor(other);
+                self.clone()
+                    + if m.is_zero() {
+                        Self::zero()
+                    } else {
+                        other.clone() - m
+                    }
+            }
+
+            /// Rounds down to nearest multiple of argument.
+            #[inline] fn prev_multiple_of(&self, other: &Self) -> Self where
+                Self: Clone,
+            {
+                self.clone() - self.mod_floor(other)
+            }
+
+            /// Decrements self by one.
+            fn dec(&mut self) where
+                Self: Clone,
+            {
+                *self = self.clone() - Self::one()
+            }
+
+            /// Increments self by one.
+            fn inc(&mut self) where
+                Self: Clone,
+            {
+                *self = self.clone() + Self::one()
+            }
+        }
+        /// Greatest common divisor and Bézout coefficients
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub struct ExtendedGcd<A> {
+            pub gcd: A,
+            pub x: A,
+            pub y: A,
+        }
+        /// Simultaneous integer division and modulus
+        #[inline] pub fn div_rem<T: Integer>(x: T, y: T) -> (T, T) {
+            x.div_rem(&y)
+        }
+        /// Floored integer division
+        #[inline] pub fn div_floor<T: Integer>(x: T, y: T) -> T
+                {x.div_floor(&y)
+        }
+        /// Floored integer modulus
+        #[inline] pub fn mod_floor<T: Integer>(x: T, y: T) -> T
+                {x.mod_floor(&y)
+        }
+        /// Simultaneous floored integer division and modulus
+        #[inline] pub fn div_mod_floor<T: Integer>(x: T, y: T) -> (T, T) {
+            x.div_mod_floor(&y)
+        }
+        /// Ceiled integer division
+        #[inline] pub fn div_ceil<T: Integer>(x: T, y: T) -> T
+                {x.div_ceil(&y)
+        }
+        /// Calculates the Greatest Common Divisor (GCD) of the number and `other`. The
+        /// result is always non-negative.
+        #[inline( always )] pub fn gcd<T: Integer>(x: T, y: T) -> T
+                {x.gcd(&y)
+        }
+        /// Calculates the Lowest Common Multiple (LCM) of the number and `other`.
+        #[inline( always )] pub fn lcm<T: Integer>(x: T, y: T) -> T
+                {x.lcm(&y)
+        }
+        /// Calculates the Greatest Common Divisor (GCD) and
+        /// Lowest Common Multiple (LCM) of the number and `other`.
+        #[inline( always )] pub fn gcd_lcm<T: Integer>(x: T, y: T) -> (T, T) {
+            x.gcd_lcm(&y)
+        }
+
+        macro_rules! impl_integer_for_isize {
+            ($T:ty, $test_mod:ident) => {
+                impl Integer for $T {
+                    /// Floored integer division
+                    #[inline] fn div_floor(&self, other: &Self) -> Self {
+                        // Algorithm from [Daan Leijen. _Division and Modulus for Computer Scientists_,
+                        // December 2001](http://research.microsoft.com/pubs/151917/divmodnote-letter.pdf)
+                        let (d, r) = self.div_rem(other);
+                        if (r > 0 && *other < 0) || (r < 0 && *other > 0) {
+                            d - 1
+                        } else {
+                            d
+                        }
+                    }
+
+                    /// Floored integer modulo
+                    #[inline] fn mod_floor(&self, other: &Self) -> Self {
+                        // Algorithm from [Daan Leijen. _Division and Modulus for Computer Scientists_,
+                        // December 2001](http://research.microsoft.com/pubs/151917/divmodnote-letter.pdf)
+                        let r = *self % *other;
+                        if (r > 0 && *other < 0) || (r < 0 && *other > 0) {
+                            r + *other
+                        } else {
+                            r
+                        }
+                    }
+
+                    /// Calculates `div_floor` and `mod_floor` simultaneously
+                    #[inline] fn div_mod_floor(&self, other: &Self) -> (Self, Self) {
+                        // Algorithm from [Daan Leijen. _Division and Modulus for Computer Scientists_,
+                        // December 2001](http://research.microsoft.com/pubs/151917/divmodnote-letter.pdf)
+                        let (d, r) = self.div_rem(other);
+                        if (r > 0 && *other < 0) || (r < 0 && *other > 0) {
+                            (d - 1, r + *other)
+                        } else {
+                            (d, r)
+                        }
+                    }
+
+                    #[inline] fn div_ceil(&self, other: &Self) -> Self {
+                        let (d, r) = self.div_rem(other);
+                        if (r > 0 && *other > 0) || (r < 0 && *other < 0) {
+                            d + 1
+                        } else {
+                            d
+                        }
+                    }
+
+                    /// Calculates the Greatest Common Divisor (GCD) of the number and
+                    /// `other`. The result is always non-negative.
+                    #[inline] fn gcd(&self, other: &Self) -> Self {
+                        // Use Stein's algorithm
+                        let mut m = *self;
+                        let mut n = *other;
+                        if m == 0 || n == 0 {
+                            return (m | n).abs();
+                        }
+                        
+                        let shift = (m | n).trailing_zeros();
+                        
+                        if m == Self::min_value() || n == Self::min_value() {
+                            return (1 << shift).abs();
+                        }
+
+                        // guaranteed to be positive now, rest like unsigned algorithm
+                        m = m.abs();
+                        n = n.abs();
+
+                        // divide n and m by 2 until odd
+                        m >>= m.trailing_zeros();
+                        n >>= n.trailing_zeros();
+
+                        while m != n {
+                            if m > n {
+                                m -= n;
+                                m >>= m.trailing_zeros();
+                            } else {
+                                n -= m;
+                                n >>= n.trailing_zeros();
+                            }
+                        }
+                        m << shift
+                    }
+
+                    #[inline] fn extended_gcd_lcm(&self, other: &Self) -> (ExtendedGcd<Self>, Self) {
+                        let egcd = self.extended_gcd(other);
+                        // should not have to recalculate abs
+                        let lcm = if egcd.gcd.is_zero() {
+                            Self::zero()
+                        } else {
+                            (*self * (*other / egcd.gcd)).abs()
+                        };
+                        (egcd, lcm)
+                    }
+
+                    /// Calculates the Lowest Common Multiple (LCM) of the number and
+                    /// `other`.
+                    #[inline] fn lcm(&self, other: &Self) -> Self {
+                        self.gcd_lcm(other).1
+                    }
+
+                    /// Calculates the Greatest Common Divisor (GCD) and
+                    /// Lowest Common Multiple (LCM) of the number and `other`.
+                    #[inline] fn gcd_lcm(&self, other: &Self) -> (Self, Self) {
+                        if self.is_zero() && other.is_zero() {
+                            return (Self::zero(), Self::zero());
+                        }
+                        let gcd = self.gcd(other);
+                        // should not have to recalculate abs
+                        let lcm = (*self * (*other / gcd)).abs();
+                        (gcd, lcm)
+                    }
+
+                    /// Returns `true` if the number is a multiple of `other`.
+                    #[inline] fn is_multiple_of(&self, other: &Self) -> bool {
+                        if other.is_zero() {
+                            return self.is_zero();
+                        }
+                        *self % *other == 0
+                    }
+
+                    /// Returns `true` if the number is divisible by `2`
+                    #[inline] fn is_even(&self) -> bool {
+                        (*self) & 1 == 0
+                    }
+
+                    /// Returns `true` if the number is not divisible by `2`
+                    #[inline] fn is_odd(&self) -> bool {
+                        !self.is_even()
+                    }
+
+                    /// Simultaneous truncated integer division and modulus.
+                    #[inline] fn div_rem(&self, other: &Self) -> (Self, Self) {
+                        (*self / *other, *self % *other)
+                    }
+
+                    /// Rounds up to nearest multiple of argument.
+                    #[inline] fn next_multiple_of(&self, other: &Self) -> Self {
+                        // Avoid the overflow of `MIN % -1`
+                        if *other == -1 {
+                            return *self;
+                        }
+
+                        let m = Integer::mod_floor(self, other);
+                        *self + if m == 0 { 0 } else { other - m }
+                    }
+
+                    /// Rounds down to nearest multiple of argument.
+                    #[inline] fn prev_multiple_of(&self, other: &Self) -> Self {
+                        // Avoid the overflow of `MIN % -1`
+                        if *other == -1 {
+                            return *self;
+                        }
+
+                        *self - Integer::mod_floor(self, other)
+                    }
+                }
+            };
+        }
+
+        impl_integer_for_isize!(i8, test_integer_i8);
+        impl_integer_for_isize!(i16, test_integer_i16);
+        impl_integer_for_isize!(i32, test_integer_i32);
+        impl_integer_for_isize!(i64, test_integer_i64);
+        impl_integer_for_isize!(i128, test_integer_i128);
+        impl_integer_for_isize!(isize, test_integer_isize);
+
+        macro_rules! impl_integer_for_usize {
+            ($T:ty, $test_mod:ident) => {
+                impl Integer for $T {
+                    /// Unsigned integer division. Returns the same result as `div` (`/`).
+                    #[inline] fn div_floor(&self, other: &Self) -> Self {
+                        *self / *other
+                    }
+
+                    /// Unsigned integer modulo operation. Returns the same result as `rem` (`%`).
+                    #[inline] fn mod_floor(&self, other: &Self) -> Self {
+                        *self % *other
+                    }
+
+                    #[inline] fn div_ceil(&self, other: &Self) -> Self {
+                        *self / *other + (0 != *self % *other) as Self
+                    }
+
+                    /// Calculates the Greatest Common Divisor (GCD) of the number and `other`
+                    #[inline] fn gcd(&self, other: &Self) -> Self {
+                        // Use Stein's algorithm
+                        let mut m = *self;
+                        let mut n = *other;
+                        if m == 0 || n == 0 {
+                            return m | n;
+                        }
+
+                        // find common factors of 2
+                        let shift = (m | n).trailing_zeros();
+
+                        // divide n and m by 2 until odd
+                        m >>= m.trailing_zeros();
+                        n >>= n.trailing_zeros();
+
+                        while m != n {
+                            if m > n {
+                                m -= n;
+                                m >>= m.trailing_zeros();
+                            } else {
+                                n -= m;
+                                n >>= n.trailing_zeros();
+                            }
+                        }
+                        m << shift
+                    }
+
+                    #[inline] fn extended_gcd_lcm(&self, other: &Self) -> (ExtendedGcd<Self>, Self) {
+                        let egcd = self.extended_gcd(other);
+                        // should not have to recalculate abs
+                        let lcm = if egcd.gcd.is_zero() {
+                            Self::zero()
+                        } else {
+                            *self * (*other / egcd.gcd)
+                        };
+                        (egcd, lcm)
+                    }
+
+                    /// Calculates the Lowest Common Multiple (LCM) of the number and `other`.
+                    #[inline] fn lcm(&self, other: &Self) -> Self {
+                        self.gcd_lcm(other).1
+                    }
+
+                    /// Calculates the Greatest Common Divisor (GCD) and
+                    /// Lowest Common Multiple (LCM) of the number and `other`.
+                    #[inline] fn gcd_lcm(&self, other: &Self) -> (Self, Self) {
+                        if self.is_zero() && other.is_zero() {
+                            return (Self::zero(), Self::zero());
+                        }
+                        let gcd = self.gcd(other);
+                        let lcm = *self * (*other / gcd);
+                        (gcd, lcm)
+                    }
+
+                    /// Returns `true` if the number is a multiple of `other`.
+                    #[inline] fn is_multiple_of(&self, other: &Self) -> bool {
+                        if other.is_zero() {
+                            return self.is_zero();
+                        }
+                        *self % *other == 0
+                    }
+
+                    /// Returns `true` if the number is divisible by `2`.
+                    #[inline] fn is_even(&self) -> bool {
+                        *self % 2 == 0
+                    }
+
+                    /// Returns `true` if the number is not divisible by `2`.
+                    #[inline] fn is_odd(&self) -> bool {
+                        !self.is_even()
+                    }
+
+                    /// Simultaneous truncated integer division and modulus.
+                    #[inline] fn div_rem(&self, other: &Self) -> (Self, Self) {
+                        (*self / *other, *self % *other)
+                    }
+                }
+            };
+        }
+
+        impl_integer_for_usize!(u8, test_integer_u8);
+        impl_integer_for_usize!(u16, test_integer_u16);
+        impl_integer_for_usize!(u32, test_integer_u32);
+        impl_integer_for_usize!(u64, test_integer_u64);
+        impl_integer_for_usize!(u128, test_integer_u128);
+        impl_integer_for_usize!(usize, test_integer_usize);
+
+        /// An iterator over binomial coefficients.
+        pub struct IterBinomial<T> {
+            a: T,
+            n: T,
+            k: T,
+        }
+
+        impl<T> IterBinomial<T> where
+            T: Integer,
+        {
+            /// For n, iterate over all binomial coefficients binomial(n, k), for k=0...n.
+            pub fn new(n: T) -> IterBinomial<T> {
+                IterBinomial {
+                    k: T::zero(),
+                    a: T::one(),
+                    n,
+                }
+            }
+        }
+
+        impl<T> Iterator for IterBinomial<T> where
+            T: Integer + Clone,
+        {
+            type Item = T;
+
+            fn next(&mut self) -> Option<T> {
+                if self.k > self.n {
+                    return None;
+                }
+                self.a = if !self.k.is_zero() {
+                    multiply_and_divide(
+                        self.a.clone(),
+                        self.n.clone() - self.k.clone() + T::one(),
+                        self.k.clone(),
+                    )
+                } else {
+                    T::one()
+                };
+                self.k = self.k.clone() + T::one();
+                Some(self.a.clone())
+            }
+        }
+        /// Calculate r * a / b, avoiding overflows and fractions.
+        ///
+        /// Assumes that b divides r * a evenly.
+        fn multiply_and_divide<T: Integer + Clone>(r: T, a: T, b: T) -> T
+                {// See http://blog.plover.com/math/choose-2.html for the idea.
+            let g = gcd(r.clone(), b.clone());
+            r / g.clone() * (a / (b / g))
+        }
+        /// Calculate the binomial coefficient.
+        pub fn binomial<T: Integer + Clone>(mut n: T, k: T) -> T
+                {// See http://blog.plover.com/math/choose.html for the idea.
+            if k > n {
+                return T::zero();
+            }
+            if k > n.clone() - k.clone() {
+                return binomial(n.clone(), n - k);
+            }
+            let mut r = T::one();
+            let mut d = T::one();
+            loop {
+                if d > k {
+                    break;
+                }
+                r = multiply_and_divide(r, n.clone(), d.clone());
+                n = n - T::one();
+                d = d + T::one();
+            }
+            r
+        }
+        /// Calculate the multinomial coefficient.
+        pub fn multinomial<T: Integer + Clone>(k: &[T]) -> T where
+            for<'a> T: Add<&'a T, Output = T>,
+        {
+            let mut r = T::one();
+            let mut p = T::zero();
+            for i in k {
+                p = p + i;
+                r = r * binomial(p.clone(), i.clone());
+            }
+            r
+        }
     }
     
     pub mod iter
@@ -6607,11 +11719,6 @@ pub mod num
             { 
                 traits::
                 {
-                    bounds::{ Bounded },
-                    cast::{ cast, AsPrimitive, FromPrimitive, NumCast, ToPrimitive },
-                    float::{ Float, FloatConst },
-                    identities::{ one, zero, ConstOne, ConstZero, One, Zero },
-                    int::{ PrimInt },
                     ops::
                     {
                         bytes::{FromBytes, ToBytes},
@@ -6712,7 +11819,8 @@ pub mod num
             
             impl<T: Bounded> LowerBounded for T 
             {
-                fn min_value() -> T {
+                fn min_value() -> T
+                {
                     Bounded::min_value()
                 }
             }
@@ -6725,8 +11833,8 @@ pub mod num
 
             impl<T: Bounded> UpperBounded for T 
             {
-                fn max_value() -> T {
-                    Bounded::max_value()
+                fn max_value() -> T
+                {        Bounded::max_value()
                 }
             }
 
@@ -6804,7 +11912,7 @@ pub mod num
 
             for_each_tuple!(bounded_tuple);
             bounded_impl!(f64, f64::MIN, f64::MAX);
-        }
+        } pub use self::bounds::{ * };
 
         pub mod cast
         {
@@ -7036,8 +12144,7 @@ pub mod num
 
             macro_rules! impl_to_primitive_float_to_float {
                 ($SrcT:ident : $( fn $method:ident -> $DstT:ident ; )*) => {$(
-                    #[inline]
-                    fn $method(&self) -> Option<$DstT> {
+                    #[inline] fn $method(&self) -> Option<$DstT> {
                         // We can safely cast all values, whether NaN, +-inf, or finite.
                         // Finite values that are reducing size may saturate to +-inf.
                         Some(*self as $DstT)
@@ -7379,8 +12486,7 @@ pub mod num
             }
             /// A generic interface for casting between machine scalars with the
             /// `as` operator, which admits narrowing and precision loss.
-            pub trait AsPrimitive<T>: 'static + Copy
-            where
+            pub trait AsPrimitive<T>: 'static + Copy where
                 T: 'static + Copy,
             {
                 /// Convert a value to another, using the `as` operator.
@@ -7420,7 +12526,7 @@ pub mod num
             impl_as_primitive!(f64 => { f32, f64 });
             impl_as_primitive!(char => { char });
             impl_as_primitive!(bool => {});
-        }
+        } pub use self::cast::{ * };
 
         pub mod float
         {
@@ -7713,9 +12819,12 @@ pub mod num
                 }
             }
             /// Generic trait for floating point numbers
-            pub trait Float: Num + Copy + NumCast + PartialOrd + Neg<Output = Self> {
+            pub trait Float: Num + Copy + NumCast + PartialOrd + Neg<Output = Self> 
+            {
                 /// Returns the `NaN` value.
                 fn infinity() -> Self;
+                /// Returns NaN.
+                fn nan() -> Self;
                 /// Returns the negative infinite value.
                 fn neg_infinity() -> Self;
                 /// Returns `-0.0`.
@@ -7732,8 +12841,8 @@ pub mod num
                 fn max_value() -> Self;
                 /// Returns `true` if this value is `NaN` and false otherwise.
                 fn is_nan(self) -> bool;
-                /// Returns `true` if this value is positive infinity or negative infinity and
-                /// false otherwise.
+                /// `true` if this value is positive infinity or negative infinity and
+                /// `false` otherwise.
                 fn is_infinite(self) -> bool;
                 /// Returns `true` if this number is neither infinite nor `NaN`.
                 fn is_finite(self) -> bool;
@@ -8001,7 +13110,7 @@ pub mod num
                 (@float $T:ident, $($constant:ident,)+) => (
                     impl FloatConst for $T {
                         constant! {
-                            $( $constant() -> $T::consts::$constant; )+
+                            $( $constant() -> std::$T::consts::$constant; )+
                             TAU() -> 6.28318530717958647692528676655900577;
                             LOG10_2() -> 0.301029995663981195213738894724493027;
                             LOG2_10() -> 3.32192809488736234787031942948939018;
@@ -8079,7 +13188,7 @@ pub mod num
             }
             totalorder_impl!(f64, i64, u64, 64);
             totalorder_impl!(f32, i32, u32, 32);
-        }
+        } pub use self::float::{ * };
 
         pub mod identities
         {
@@ -8243,14 +13352,14 @@ pub mod num
             // Some helper functions provided for backwards compatibility.
 
             /// Returns the additive identity, `0`.
-            #[inline( always )] pub fn zero<T: Zero>() -> T {
-                Zero::zero()
+            #[inline( always )] pub fn zero<T: Zero>() -> T
+                {    Zero::zero()
             }
             /// Returns the multiplicative identity, `1`.
-            #[inline( always )] pub fn one<T: One>() -> T {
-                One::one()
+            #[inline( always )] pub fn one<T: One>() -> T
+                {    One::one()
             }
-        }
+        } pub use self::identities::{ * };
 
         pub mod int
         {
@@ -8472,15 +13581,10 @@ pub mod num
             prim_int_impl!(i64, i64, u64);
             prim_int_impl!(i128, i128, u128);
             prim_int_impl!(isize, isize, usize);
-        }
+        } pub use self::int::{ * };
 
         pub mod ops
         {
-            use ::
-            {
-                *,
-            };
-            
             pub mod bytes
             {
                 use ::
@@ -8659,7 +13763,7 @@ pub mod num
 
                 float_to_from_bytes_impl!(f32, 4);
                 float_to_from_bytes_impl!(f64, 8);
-            }
+            } pub use self::bytes::{ * };
             
             pub mod checked
             {
@@ -8865,7 +13969,7 @@ pub mod num
                 checked_shift_impl!(CheckedShr, checked_shr, i64);
                 checked_shift_impl!(CheckedShr, checked_shr, isize);
                 checked_shift_impl!(CheckedShr, checked_shr, i128);
-            }
+            } pub use self::checked::{ * };
             
             pub mod euclid
             {
@@ -8942,7 +14046,7 @@ pub mod num
 
                 checked_euclid_forward_impl!(isize i8 i16 i32 i64 i128);
                 checked_euclid_forward_impl!(usize u8 u16 u32 u64 u128);
-            }
+            } pub use self::euclid::{ * };
             
             pub mod inv
             {
@@ -8961,33 +14065,29 @@ pub mod num
 
                 impl Inv for f32 {
                     type Output = f32;
-                    #[inline]
-                    fn inv(self) -> f32 {
+                    #[inline] fn inv(self) -> f32 {
                         1.0 / self
                     }
                 }
                 impl Inv for f64 {
                     type Output = f64;
-                    #[inline]
-                    fn inv(self) -> f64 {
+                    #[inline] fn inv(self) -> f64 {
                         1.0 / self
                     }
                 }
                 impl<'a> Inv for &'a f32 {
                     type Output = f32;
-                    #[inline]
-                    fn inv(self) -> f32 {
+                    #[inline] fn inv(self) -> f32 {
                         1.0 / *self
                     }
                 }
                 impl<'a> Inv for &'a f64 {
                     type Output = f64;
-                    #[inline]
-                    fn inv(self) -> f64 {
+                    #[inline] fn inv(self) -> f64 {
                         1.0 / *self
                     }
                 }
-            }
+            } pub use self::inv::{ * };
             
             pub mod mul_add
             {
@@ -9013,8 +14113,7 @@ pub mod num
                 impl MulAdd<f32, f32> for f32 {
                     type Output = Self;
 
-                    #[inline]
-                    fn mul_add(self, a: Self, b: Self) -> Self::Output {
+                    #[inline] fn mul_add(self, a: Self, b: Self) -> Self::Output {
                         <Self as ::num::traits::Float>::mul_add(self, a, b)
                     }
                 }
@@ -9022,8 +14121,7 @@ pub mod num
                 impl MulAdd<f64, f64> for f64 {
                     type Output = Self;
 
-                    #[inline]
-                    fn mul_add(self, a: Self, b: Self) -> Self::Output {
+                    #[inline] fn mul_add(self, a: Self, b: Self) -> Self::Output {
                         <Self as ::num::traits::Float>::mul_add(self, a, b)
                     }
                 }
@@ -9045,15 +14143,13 @@ pub mod num
                 mul_add_impl!(MulAdd for usize u8 u16 u32 u64 u128);
                 
                 impl MulAddAssign<f32, f32> for f32 {
-                    #[inline]
-                    fn mul_add_assign(&mut self, a: Self, b: Self) {
+                    #[inline] fn mul_add_assign(&mut self, a: Self, b: Self) {
                         *self = <Self as ::num::traits::Float>::mul_add(*self, a, b)
                     }
                 }
                 
                 impl MulAddAssign<f64, f64> for f64 {
-                    #[inline]
-                    fn mul_add_assign(&mut self, a: Self, b: Self) {
+                    #[inline] fn mul_add_assign(&mut self, a: Self, b: Self) {
                         *self = <Self as ::num::traits::Float>::mul_add(*self, a, b)
                     }
                 }
@@ -9071,7 +14167,7 @@ pub mod num
 
                 mul_add_assign_impl!(MulAddAssign for isize i8 i16 i32 i64 i128);
                 mul_add_assign_impl!(MulAddAssign for usize u8 u16 u32 u64 u128);
-            }
+            } pub use self::mul_add::{ * };
             
             pub mod overflowing
             {
@@ -9151,7 +14247,7 @@ pub mod num
                 overflowing_impl!(OverflowingMul, overflowing_mul, i64);
                 overflowing_impl!(OverflowingMul, overflowing_mul, isize);
                 overflowing_impl!(OverflowingMul, overflowing_mul, i128);
-            }
+            } pub use self::overflowing::{ * };
             
             pub mod saturating
             {
@@ -9261,7 +14357,7 @@ pub mod num
                 saturating_impl!(SaturatingMul, saturating_mul, i64);
                 saturating_impl!(SaturatingMul, saturating_mul, isize);
                 saturating_impl!(SaturatingMul, saturating_mul, i128);
-            }
+            } pub use self::saturating::{ * };
             
             pub mod wrapping
             {
@@ -9483,7 +14579,7 @@ pub mod num
                         Wrapping(self.0.wrapping_shr(rhs))
                     }
                 }
-            }
+            } pub use self::wrapping::{ * };
         }
 
         pub mod pow
@@ -10018,16 +15114,16 @@ pub mod num
             /// For `f32` and `f64`, `NaN` will be returned if the number is `NaN`
             ///
             /// For signed integers, `::MIN` will be returned if the number is `::MIN`.
-            #[inline( always )] pub fn abs<T: Signed>(value: T) -> T {
-                value.abs()
+            #[inline( always )] pub fn abs<T: Signed>(value: T) -> T
+                {    value.abs()
             }
             /// The positive difference of two numbers.
-            #[inline( always )] pub fn abs_sub<T: Signed>(x: T, y: T) -> T {
-                x.abs_sub(&y)
+            #[inline( always )] pub fn abs_sub<T: Signed>(x: T, y: T) -> T
+                {    x.abs_sub(&y)
             }
             /// Returns the sign of the number.
-            #[inline( always )] pub fn signum<T: Signed>(value: T) -> T {
-                value.signum()
+            #[inline( always )] pub fn signum<T: Signed>(value: T) -> T
+                {    value.signum()
             }
             /// A trait for values which cannot be negative
             pub trait Unsigned: Num {}
@@ -10099,8 +15195,7 @@ pub mod num
             ($name:ident for $($t:ty)*) => ($(
                 impl $name for $t {
                     type FromStrRadixErr = ::num::ParseIntError;
-                    #[inline]
-                    fn from_str_radix(s: &str, radix: u32)
+                    #[inline] fn from_str_radix(s: &str, radix: u32)
                                     -> Result<Self, ::num::ParseIntError>
                     {
                         <$t>::from_str_radix(s, radix)
@@ -17401,4 +22496,4 @@ fn main()
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 17404
+// 22499
