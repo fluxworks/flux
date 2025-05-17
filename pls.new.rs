@@ -1,5 +1,6 @@
 #![allow
 (
+    dead_code,
     elided_named_lifetimes,
     non_camel_case_types,
     stable_features,
@@ -7,6 +8,7 @@
     unused_assignments,
     unused_imports,
     unused_macros,
+    unused_mut,
     unused_variables,
 )]
 /**/
@@ -3072,9 +3074,6 @@ pub mod core
 over | the best data format*/
 pub mod database
 {
-    //! OVER: the best data format.
-    //extern crate num_bigint;
-    //extern crate num_rational;
     use ::
     {
         *,
@@ -3103,19 +3102,23 @@ pub mod database
         };
         
         #[derive(Clone, Debug)]
-        struct ArrInner {
+        struct ArrInner 
+        {
             vec: Vec<Value>,
             inner_t: Type,
         }
         /// `Arr` struct.
         #[derive(Clone, Debug)]
-        pub struct Arr {
+        pub struct Arr 
+        {
             inner: Arc<ArrInner>,
         }
 
-        impl Arr {
+        impl Arr 
+        {
             /// Returns a new `Arr` from the given vector of `Value`s.
-            pub fn from_vec(vec: Vec<Value>) -> OverResult<Arr> {
+            pub fn from_vec(vec: Vec<Value>) -> OverResult<Arr> 
+            {
                 let mut tcur = Type::Any;
                 let mut has_any = true;
 
@@ -3139,9 +3142,9 @@ pub mod database
                     inner: Arc::new(ArrInner { vec, inner_t: tcur }),
                 })
             }
-            /// Returns a new `Arr` from the given vector of `Value`s without checking whether every value
-            /// in `vec` is the same type.
-            pub fn from_vec_unchecked(vec: Vec<Value>, inner_t: Type) -> Arr {
+            /// Returns a new `Arr` from the given vector of `Value`s without checks.
+            pub fn from_vec_unchecked(vec: Vec<Value>, inner_t: Type) -> Arr 
+            {
                 Arr {
                     inner: Arc::new(ArrInner { vec, inner_t }),
                 }
@@ -3161,7 +3164,8 @@ pub mod database
             }
             /// Gets the value at `index`.
             /// Returns an error if `index` is out of bounds.
-            pub fn get(&self, index: usize) -> OverResult<Value> {
+            pub fn get(&self, index: usize) -> OverResult<Value> 
+            {
                 if index >= self.inner.vec.len() {
                     Err(OverError::ArrOutOfBounds(index))
                 } else {
@@ -3169,11 +3173,13 @@ pub mod database
                 }
             }
             /// Returns the type of all elements in this `Arr`.
-            pub fn inner_type(&self) -> Type {
+            pub fn inner_type(&self) -> Type 
+            {
                 self.inner.inner_t.clone()
             }
             /// Returns the length of this `Arr`.
-            pub fn len(&self) -> usize {
+            pub fn len(&self) -> usize 
+            {
                 self.inner.vec.len()
             }
             /// Returns whether this `Arr` is empty.
@@ -3182,32 +3188,32 @@ pub mod database
                 self.inner.vec.is_empty()
             }
             /// Returns whether `self` and `other` point to the same data.
-            pub fn ptr_eq(&self, other: &Self) -> bool {
+            pub fn ptr_eq(&self, other: &Self) -> bool 
+            {
                 Arc::ptr_eq(&self.inner, &other.inner)
             }
             /// Returns an iterator over the Arr.
-            pub fn iter(&self) -> Iter<Value> {
+            pub fn iter(&self) -> Iter<Value> 
+            {
                 self.vec_ref().iter()
             }
         }
 
         impl Default for Arr 
         {
-            fn default() -> Self {
-                Self::from_vec_unchecked(vec![], Type::Any)
-            }
+            fn default() -> Self  { Self::from_vec_unchecked(vec![], Type::Any) }
         }
 
         impl fmt::Display for Arr 
         {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
-                {write!(f, "{}", self.format(true, INDENT_STEP))
-            }
+            { write!(f, "{}", self.format(true, INDENT_STEP)) }
         }
 
         impl PartialEq for Arr 
         {
-            fn eq(&self, other: &Self) -> bool {
+            fn eq(&self, other: &Self) -> bool 
+            {
                 // Quickly return false if the types don't match.
                 if self.inner.inner_t != other.inner.inner_t {
                     return false;
@@ -3347,27 +3353,32 @@ pub mod database
             *,
         };
 
-        lazy_static! {
+        lazy_static! 
+        {
             static ref CUR_ID: AtomicUsize = AtomicUsize::new(0);
         }
 
-        fn get_id() -> usize {
+        fn get_id() -> usize 
+        {
             CUR_ID.fetch_add(1, Ordering::Relaxed)
         }
 
         #[derive(Clone, Debug)]
-        struct ObjInner {
+        struct ObjInner 
+        {
             map: HashMap<String, Value>,
             parent: Option<Obj>,
             id: usize,
         }
         /// `Obj` struct.
         #[derive(Clone, Debug)]
-        pub struct Obj {
+        pub struct Obj 
+        {
             inner: Arc<ObjInner>,
         }
 
-        macro_rules! get_fn {
+        macro_rules! get_fn 
+        {
             ( $doc:expr, $name:tt, $type:ty ) => {
                 #[doc=$doc]
                 pub fn $name(&self, field: &str) -> OverResult<$type> {
@@ -3384,7 +3395,8 @@ pub mod database
             }
         }
 
-        impl Obj {
+        impl Obj 
+        {
             /// Returns a new `Obj` created from the given `HashMap`.
             pub fn from_map(obj_map: HashMap<String, Value>) -> OverResult<Obj> {
                 for field in obj_map.keys() {
@@ -3687,17 +3699,20 @@ pub mod database
         };
         
         #[derive(Clone, Debug)]
-        struct TupInner {
+        struct TupInner 
+        {
             vec: Vec<Value>,
             inner_tvec: Vec<Type>,
         }
         /// `Tup` struct.
         #[derive(Clone, Debug)]
-        pub struct Tup {
+        pub struct Tup 
+        {
             inner: Arc<TupInner>,
         }
 
-        impl Tup {
+        impl Tup 
+        {
             /// Returns a new `Tup` from the given vector of `Value`s.
             pub fn from_vec(values: Vec<Value>) -> Tup {
                 let tvec: Vec<Type> = values.iter().map(|val| val.get_type()).collect();
@@ -3797,7 +3812,8 @@ pub mod database
         };
         /// Enum of possible types for `Value`s.
         #[derive(Clone, Debug)]
-        pub enum Type {
+        pub enum Type 
+        {
             /// A type used to indicate an empty Arr.
             Any,
             /// Null value.
@@ -3822,7 +3838,8 @@ pub mod database
             Obj,
         }
 
-        impl Type {
+        impl Type 
+        {
             /// Returns true if this type is strictly the same as `other`.
             pub fn is(&self, other: &Type) -> bool {
                 use self::Type::*;
@@ -4003,6 +4020,7 @@ pub mod database
                 }
             }
         }
+
         impl Eq for Type {}
 
         impl fmt::Display for Type 
@@ -5341,37 +5359,34 @@ pub mod database
                 depth: usize,
             ) -> ParseResult<Value>
             {
-                // Check depth.
-                if depth > MAX_DEPTH {
-                    return parse_err(stream.file(), MaxDepth(stream.line(), stream.col()));
-                }
-
-                // We must already be at a '('.
+                if depth > MAX_DEPTH { return parse_err(stream.file(), MaxDepth(stream.line(), stream.col())); }
+                let mut vec = Vec::new();
                 let ch = stream.next().unwrap();
                 assert_eq!(ch, '(');
-
-                let mut vec = Vec::new();
-
-                loop {
-                    // Go to the first non-whitespace character, or error if there is none.
-                    if !find_char(stream.clone()) {
-                        return parse_err(stream.file(), UnexpectedEnd(stream.line()));
-                    }
+                
+                loop 
+                {
+                    if !find_char(stream.clone()) { return parse_err(stream.file(), UnexpectedEnd(stream.line())); }
 
                     let peek = stream.peek().unwrap();
-                    if peek == ')' {
+
+                    if peek == ')' 
+                    {
                         let _ = stream.next();
                         break;
-                    } else if is::end_delimiter(peek) {
-                        return parse_err(
+                    } 
+                    else if is::end_delimiter(peek) 
+                    {
+                        return parse_err
+                        (
                             stream.file(),
                             InvalidClosingBracket(Some(')'), peek, stream.line(), stream.col()),
                         );
                     }
-
-                    // At a non-whitespace character, parse value.
+                    
                     let (value_line, value_col) = (stream.line(), stream.col());
-                    let value = parse_value(
+                    let value = parse_value
+                    (
                         &mut stream,
                         obj,
                         &mut globals,
@@ -6773,7 +6788,6 @@ pub mod num
                     }
                 };
             }
-
             /// use this if val_val_binop is already implemented and the reversed order is required
             macro_rules! forward_scalar_val_val_binop_commutative 
             {
@@ -7192,12 +7206,7 @@ pub mod num
                     ops::{ Add, AddAssign },
                     *,
                 };
-                /*
-                b
-                            CheckedUnsignedAbs::{Negative, Positive},
-                            Sign::{Minus, NoSign, Plus},
-                            BigInt, UnsignedAbs, IsizePromotion, UsizePromotion
-                */
+                
                 macro_rules! bigint_add
                 {
                     ($a:expr, $a_owned:expr, $a_data:expr, $b:expr, $b_owned:expr, $b_data:expr) => {
@@ -7216,10 +7225,12 @@ pub mod num
                     };
                 }
 
-                impl Add<&BigInt> for &BigInt {
+                impl Add<&BigInt> for &BigInt 
+                {
                     type Output = BigInt;
 
-                    #[inline] fn add(self, other: &BigInt) -> BigInt {
+                    #[inline] fn add(self, other: &BigInt) -> BigInt
+                    {
                         bigint_add!(
                             self,
                             self.clone(),
@@ -7231,7 +7242,8 @@ pub mod num
                     }
                 }
 
-                impl Add<BigInt> for &BigInt {
+                impl Add<BigInt> for &BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn add(self, other: BigInt) -> BigInt {
@@ -7239,7 +7251,8 @@ pub mod num
                     }
                 }
 
-                impl Add<&BigInt> for BigInt {
+                impl Add<&BigInt> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn add(self, other: &BigInt) -> BigInt {
@@ -7247,7 +7260,8 @@ pub mod num
                     }
                 }
 
-                impl Add<BigInt> for BigInt {
+                impl Add<BigInt> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn add(self, other: BigInt) -> BigInt {
@@ -7255,7 +7269,8 @@ pub mod num
                     }
                 }
 
-                impl AddAssign<&BigInt> for BigInt {
+                impl AddAssign<&BigInt> for BigInt 
+                {
                     #[inline] fn add_assign(&mut self, other: &BigInt) {
                         let n = mem::replace(self, Self::ZERO);
                         *self = n + other;
@@ -7269,7 +7284,8 @@ pub mod num
                 forward_all_scalar_binop_to_val_val_commutative!(impl Add<u64> for BigInt, add);
                 forward_all_scalar_binop_to_val_val_commutative!(impl Add<u128> for BigInt, add);
 
-                impl Add<u32> for BigInt {
+                impl Add<u32> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn add(self, other: u32) -> BigInt {
@@ -7285,14 +7301,16 @@ pub mod num
                     }
                 }
 
-                impl AddAssign<u32> for BigInt {
+                impl AddAssign<u32> for BigInt 
+                {
                     #[inline] fn add_assign(&mut self, other: u32) {
                         let n = mem::replace(self, Self::ZERO);
                         *self = n + other;
                     }
                 }
 
-                impl Add<u64> for BigInt {
+                impl Add<u64> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn add(self, other: u64) -> BigInt {
@@ -7308,14 +7326,16 @@ pub mod num
                     }
                 }
 
-                impl AddAssign<u64> for BigInt {
+                impl AddAssign<u64> for BigInt 
+                {
                     #[inline] fn add_assign(&mut self, other: u64) {
                         let n = mem::replace(self, Self::ZERO);
                         *self = n + other;
                     }
                 }
 
-                impl Add<u128> for BigInt {
+                impl Add<u128> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn add(self, other: u128) -> BigInt {
@@ -7330,7 +7350,8 @@ pub mod num
                         }
                     }
                 }
-                impl AddAssign<u128> for BigInt {
+                impl AddAssign<u128> for BigInt 
+                {
                     #[inline] fn add_assign(&mut self, other: u128) {
                         let n = mem::replace(self, Self::ZERO);
                         *self = n + other;
@@ -7341,7 +7362,8 @@ pub mod num
                 forward_all_scalar_binop_to_val_val_commutative!(impl Add<i64> for BigInt, add);
                 forward_all_scalar_binop_to_val_val_commutative!(impl Add<i128> for BigInt, add);
 
-                impl Add<i32> for BigInt {
+                impl Add<i32> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn add(self, other: i32) -> BigInt {
@@ -7351,7 +7373,8 @@ pub mod num
                         }
                     }
                 }
-                impl AddAssign<i32> for BigInt {
+                impl AddAssign<i32> for BigInt 
+                {
                     #[inline] fn add_assign(&mut self, other: i32) {
                         match other.checked_uabs() {
                             Positive(u) => *self += u,
@@ -7360,7 +7383,8 @@ pub mod num
                     }
                 }
 
-                impl Add<i64> for BigInt {
+                impl Add<i64> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn add(self, other: i64) -> BigInt {
@@ -7370,7 +7394,8 @@ pub mod num
                         }
                     }
                 }
-                impl AddAssign<i64> for BigInt {
+                impl AddAssign<i64> for BigInt 
+                {
                     #[inline] fn add_assign(&mut self, other: i64) {
                         match other.checked_uabs() {
                             Positive(u) => *self += u,
@@ -7379,7 +7404,8 @@ pub mod num
                     }
                 }
 
-                impl Add<i128> for BigInt {
+                impl Add<i128> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn add(self, other: i128) -> BigInt {
@@ -7389,7 +7415,8 @@ pub mod num
                         }
                     }
                 }
-                impl AddAssign<i128> for BigInt {
+                impl AddAssign<i128> for BigInt 
+                {
                     #[inline] fn add_assign(&mut self, other: i128) {
                         match other.checked_uabs() {
                             Positive(u) => *self += u,
@@ -7398,7 +7425,8 @@ pub mod num
                     }
                 }
 
-                impl CheckedAdd for BigInt {
+                impl CheckedAdd for BigInt 
+                {
                     #[inline] fn checked_add(&self, v: &BigInt) -> Option<BigInt> {
                         Some(self.add(v))
                     }
@@ -7409,6 +7437,7 @@ pub mod num
             } pub use self::addition::{ * };
 
             pub mod division
+            
             {
                 use ::
                 {
@@ -7433,7 +7462,8 @@ pub mod num
                 
                 forward_all_binop_to_ref_ref!(impl Div for BigInt, div);
 
-                impl Div<&BigInt> for &BigInt {
+                impl Div<&BigInt> for &BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn div(self, other: &BigInt) -> BigInt {
@@ -7442,7 +7472,8 @@ pub mod num
                     }
                 }
 
-                impl DivAssign<&BigInt> for BigInt {
+                impl DivAssign<&BigInt> for BigInt 
+                {
                     #[inline] fn div_assign(&mut self, other: &BigInt) {
                         *self = &*self / other;
                     }
@@ -7455,7 +7486,8 @@ pub mod num
                 forward_all_scalar_binop_to_val_val!(impl Div<u64> for BigInt, div);
                 forward_all_scalar_binop_to_val_val!(impl Div<u128> for BigInt, div);
 
-                impl Div<u32> for BigInt {
+                impl Div<u32> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn div(self, other: u32) -> BigInt {
@@ -7463,7 +7495,8 @@ pub mod num
                     }
                 }
 
-                impl DivAssign<u32> for BigInt {
+                impl DivAssign<u32> for BigInt 
+                {
                     #[inline] fn div_assign(&mut self, other: u32) {
                         self.data /= other;
                         if self.data.is_zero() {
@@ -7472,7 +7505,8 @@ pub mod num
                     }
                 }
 
-                impl Div<BigInt> for u32 {
+                impl Div<BigInt> for u32 
+                {
                     type Output = BigInt;
 
                     #[inline] fn div(self, other: BigInt) -> BigInt {
@@ -7480,7 +7514,8 @@ pub mod num
                     }
                 }
 
-                impl Div<u64> for BigInt {
+                impl Div<u64> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn div(self, other: u64) -> BigInt {
@@ -7488,7 +7523,8 @@ pub mod num
                     }
                 }
 
-                impl DivAssign<u64> for BigInt {
+                impl DivAssign<u64> for BigInt 
+                {
                     #[inline] fn div_assign(&mut self, other: u64) {
                         self.data /= other;
                         if self.data.is_zero() {
@@ -7497,7 +7533,8 @@ pub mod num
                     }
                 }
 
-                impl Div<BigInt> for u64 {
+                impl Div<BigInt> for u64 
+                {
                     type Output = BigInt;
 
                     #[inline] fn div(self, other: BigInt) -> BigInt {
@@ -7505,7 +7542,8 @@ pub mod num
                     }
                 }
 
-                impl Div<u128> for BigInt {
+                impl Div<u128> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn div(self, other: u128) -> BigInt {
@@ -7513,7 +7551,8 @@ pub mod num
                     }
                 }
 
-                impl DivAssign<u128> for BigInt {
+                impl DivAssign<u128> for BigInt 
+                {
                     #[inline] fn div_assign(&mut self, other: u128) {
                         self.data /= other;
                         if self.data.is_zero() {
@@ -7522,7 +7561,8 @@ pub mod num
                     }
                 }
 
-                impl Div<BigInt> for u128 {
+                impl Div<BigInt> for u128 
+                {
                     type Output = BigInt;
 
                     #[inline] fn div(self, other: BigInt) -> BigInt {
@@ -7534,7 +7574,8 @@ pub mod num
                 forward_all_scalar_binop_to_val_val!(impl Div<i64> for BigInt, div);
                 forward_all_scalar_binop_to_val_val!(impl Div<i128> for BigInt, div);
 
-                impl Div<i32> for BigInt {
+                impl Div<i32> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn div(self, other: i32) -> BigInt {
@@ -7545,7 +7586,8 @@ pub mod num
                     }
                 }
 
-                impl DivAssign<i32> for BigInt {
+                impl DivAssign<i32> for BigInt 
+                {
                     #[inline] fn div_assign(&mut self, other: i32) {
                         match other.checked_uabs() {
                             Positive(u) => *self /= u,
@@ -7557,7 +7599,8 @@ pub mod num
                     }
                 }
 
-                impl Div<BigInt> for i32 {
+                impl Div<BigInt> for i32 
+                {
                     type Output = BigInt;
 
                     #[inline] fn div(self, other: BigInt) -> BigInt {
@@ -7568,7 +7611,8 @@ pub mod num
                     }
                 }
 
-                impl Div<i64> for BigInt {
+                impl Div<i64> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn div(self, other: i64) -> BigInt {
@@ -7579,7 +7623,8 @@ pub mod num
                     }
                 }
 
-                impl DivAssign<i64> for BigInt {
+                impl DivAssign<i64> for BigInt 
+                {
                     #[inline] fn div_assign(&mut self, other: i64) {
                         match other.checked_uabs() {
                             Positive(u) => *self /= u,
@@ -7591,7 +7636,8 @@ pub mod num
                     }
                 }
 
-                impl Div<BigInt> for i64 {
+                impl Div<BigInt> for i64 
+                {
                     type Output = BigInt;
 
                     #[inline] fn div(self, other: BigInt) -> BigInt {
@@ -7602,7 +7648,8 @@ pub mod num
                     }
                 }
 
-                impl Div<i128> for BigInt {
+                impl Div<i128> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn div(self, other: i128) -> BigInt {
@@ -7613,7 +7660,8 @@ pub mod num
                     }
                 }
 
-                impl DivAssign<i128> for BigInt {
+                impl DivAssign<i128> for BigInt 
+                {
                     #[inline] fn div_assign(&mut self, other: i128) {
                         match other.checked_uabs() {
                             Positive(u) => *self /= u,
@@ -7625,7 +7673,8 @@ pub mod num
                     }
                 }
 
-                impl Div<BigInt> for i128 {
+                impl Div<BigInt> for i128 
+                {
                     type Output = BigInt;
 
                     #[inline] fn div(self, other: BigInt) -> BigInt {
@@ -7638,7 +7687,8 @@ pub mod num
 
                 forward_all_binop_to_ref_ref!(impl Rem for BigInt, rem);
 
-                impl Rem<&BigInt> for &BigInt {
+                impl Rem<&BigInt> for &BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn rem(self, other: &BigInt) -> BigInt {
@@ -7653,7 +7703,8 @@ pub mod num
                     }
                 }
 
-                impl RemAssign<&BigInt> for BigInt {
+                impl RemAssign<&BigInt> for BigInt 
+                {
                     #[inline] fn rem_assign(&mut self, other: &BigInt) {
                         *self = &*self % other;
                     }
@@ -7666,7 +7717,8 @@ pub mod num
                 forward_all_scalar_binop_to_val_val!(impl Rem<u64> for BigInt, rem);
                 forward_all_scalar_binop_to_val_val!(impl Rem<u128> for BigInt, rem);
 
-                impl Rem<u32> for BigInt {
+                impl Rem<u32> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn rem(self, other: u32) -> BigInt {
@@ -7674,7 +7726,8 @@ pub mod num
                     }
                 }
 
-                impl RemAssign<u32> for BigInt {
+                impl RemAssign<u32> for BigInt 
+                {
                     #[inline] fn rem_assign(&mut self, other: u32) {
                         self.data %= other;
                         if self.data.is_zero() {
@@ -7683,7 +7736,8 @@ pub mod num
                     }
                 }
 
-                impl Rem<BigInt> for u32 {
+                impl Rem<BigInt> for u32 
+                {
                     type Output = BigInt;
 
                     #[inline] fn rem(self, other: BigInt) -> BigInt {
@@ -7691,7 +7745,8 @@ pub mod num
                     }
                 }
 
-                impl Rem<u64> for BigInt {
+                impl Rem<u64> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn rem(self, other: u64) -> BigInt {
@@ -7699,7 +7754,8 @@ pub mod num
                     }
                 }
 
-                impl RemAssign<u64> for BigInt {
+                impl RemAssign<u64> for BigInt 
+                {
                     #[inline] fn rem_assign(&mut self, other: u64) {
                         self.data %= other;
                         if self.data.is_zero() {
@@ -7708,7 +7764,8 @@ pub mod num
                     }
                 }
 
-                impl Rem<BigInt> for u64 {
+                impl Rem<BigInt> for u64 
+                {
                     type Output = BigInt;
 
                     #[inline] fn rem(self, other: BigInt) -> BigInt {
@@ -7716,7 +7773,8 @@ pub mod num
                     }
                 }
 
-                impl Rem<u128> for BigInt {
+                impl Rem<u128> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn rem(self, other: u128) -> BigInt {
@@ -7724,7 +7782,8 @@ pub mod num
                     }
                 }
 
-                impl RemAssign<u128> for BigInt {
+                impl RemAssign<u128> for BigInt 
+                {
                     #[inline] fn rem_assign(&mut self, other: u128) {
                         self.data %= other;
                         if self.data.is_zero() {
@@ -7733,7 +7792,8 @@ pub mod num
                     }
                 }
 
-                impl Rem<BigInt> for u128 {
+                impl Rem<BigInt> for u128 
+                {
                     type Output = BigInt;
 
                     #[inline] fn rem(self, other: BigInt) -> BigInt {
@@ -7745,7 +7805,8 @@ pub mod num
                 forward_all_scalar_binop_to_val_val!(impl Rem<i64> for BigInt, rem);
                 forward_all_scalar_binop_to_val_val!(impl Rem<i128> for BigInt, rem);
 
-                impl Rem<i32> for BigInt {
+                impl Rem<i32> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn rem(self, other: i32) -> BigInt {
@@ -7753,13 +7814,15 @@ pub mod num
                     }
                 }
 
-                impl RemAssign<i32> for BigInt {
+                impl RemAssign<i32> for BigInt 
+                {
                     #[inline] fn rem_assign(&mut self, other: i32) {
                         *self %= other.unsigned_abs();
                     }
                 }
 
-                impl Rem<BigInt> for i32 {
+                impl Rem<BigInt> for i32 
+                {
                     type Output = BigInt;
 
                     #[inline] fn rem(self, other: BigInt) -> BigInt {
@@ -7770,7 +7833,8 @@ pub mod num
                     }
                 }
 
-                impl Rem<i64> for BigInt {
+                impl Rem<i64> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn rem(self, other: i64) -> BigInt {
@@ -7778,13 +7842,15 @@ pub mod num
                     }
                 }
 
-                impl RemAssign<i64> for BigInt {
+                impl RemAssign<i64> for BigInt 
+                {
                     #[inline] fn rem_assign(&mut self, other: i64) {
                         *self %= other.unsigned_abs();
                     }
                 }
 
-                impl Rem<BigInt> for i64 {
+                impl Rem<BigInt> for i64 
+                {
                     type Output = BigInt;
 
                     #[inline] fn rem(self, other: BigInt) -> BigInt {
@@ -7795,7 +7861,8 @@ pub mod num
                     }
                 }
 
-                impl Rem<i128> for BigInt {
+                impl Rem<i128> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn rem(self, other: i128) -> BigInt {
@@ -7803,13 +7870,15 @@ pub mod num
                     }
                 }
 
-                impl RemAssign<i128> for BigInt {
+                impl RemAssign<i128> for BigInt 
+                {
                     #[inline] fn rem_assign(&mut self, other: i128) {
                         *self %= other.unsigned_abs();
                     }
                 }
 
-                impl Rem<BigInt> for i128 {
+                impl Rem<BigInt> for i128 
+                {
                     type Output = BigInt;
 
                     #[inline] fn rem(self, other: BigInt) -> BigInt {
@@ -7820,7 +7889,8 @@ pub mod num
                     }
                 }
 
-                impl CheckedDiv for BigInt {
+                impl CheckedDiv for BigInt 
+                {
                     #[inline] fn checked_div(&self, v: &BigInt) -> Option<BigInt> {
                         if v.is_zero() {
                             return None;
@@ -7829,7 +7899,8 @@ pub mod num
                     }
                 }
 
-                impl CheckedEuclid for BigInt {
+                impl CheckedEuclid for BigInt 
+                {
                     #[inline] fn checked_div_euclid(&self, v: &BigInt) -> Option<BigInt> {
                         if v.is_zero() {
                             return None;
@@ -7849,7 +7920,8 @@ pub mod num
                     }
                 }
 
-                impl Euclid for BigInt {
+                impl Euclid for BigInt 
+                {
                     #[inline] fn div_euclid(&self, v: &BigInt) -> BigInt {
                         let (q, r) = self.div_rem(v);
                         if r.is_negative() {
@@ -7928,7 +8000,8 @@ pub mod num
                     }
                 }
 
-                macro_rules! impl_mul {
+                macro_rules! impl_mul 
+                {
                     ($(impl Mul<$Other:ty> for $Self:ty;)*) => {$(
                         impl Mul<$Other> for $Self {
                             type Output = BigInt;
@@ -7943,14 +8016,16 @@ pub mod num
                         }
                     )*}
                 }
-                impl_mul! {
+                impl_mul! 
+                {
                     impl Mul<BigInt> for BigInt;
                     impl Mul<BigInt> for &BigInt;
                     impl Mul<&BigInt> for BigInt;
                     impl Mul<&BigInt> for &BigInt;
                 }
 
-                macro_rules! impl_mul_assign {
+                macro_rules! impl_mul_assign 
+                {
                     ($(impl MulAssign<$Other:ty> for BigInt;)*) => {$(
                         impl MulAssign<$Other> for BigInt {
                             #[inline]
@@ -7967,7 +8042,8 @@ pub mod num
                         }
                     )*}
                 }
-                impl_mul_assign! {
+                impl_mul_assign! 
+                {
                     impl MulAssign<BigInt> for BigInt;
                     impl MulAssign<&BigInt> for BigInt;
                 }
@@ -7978,7 +8054,8 @@ pub mod num
                 forward_all_scalar_binop_to_val_val_commutative!(impl Mul<u64> for BigInt, mul);
                 forward_all_scalar_binop_to_val_val_commutative!(impl Mul<u128> for BigInt, mul);
 
-                impl Mul<u32> for BigInt {
+                impl Mul<u32> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn mul(self, other: u32) -> BigInt {
@@ -7986,7 +8063,8 @@ pub mod num
                     }
                 }
 
-                impl MulAssign<u32> for BigInt {
+                impl MulAssign<u32> for BigInt 
+                {
                     #[inline] fn mul_assign(&mut self, other: u32) {
                         self.data *= other;
                         if self.data.is_zero() {
@@ -7995,7 +8073,8 @@ pub mod num
                     }
                 }
 
-                impl Mul<u64> for BigInt {
+                impl Mul<u64> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn mul(self, other: u64) -> BigInt {
@@ -8003,7 +8082,8 @@ pub mod num
                     }
                 }
 
-                impl MulAssign<u64> for BigInt {
+                impl MulAssign<u64> for BigInt 
+                {
                     #[inline] fn mul_assign(&mut self, other: u64) {
                         self.data *= other;
                         if self.data.is_zero() {
@@ -8012,7 +8092,8 @@ pub mod num
                     }
                 }
 
-                impl Mul<u128> for BigInt {
+                impl Mul<u128> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn mul(self, other: u128) -> BigInt {
@@ -8020,7 +8101,8 @@ pub mod num
                     }
                 }
 
-                impl MulAssign<u128> for BigInt {
+                impl MulAssign<u128> for BigInt 
+                {
                     #[inline] fn mul_assign(&mut self, other: u128) {
                         self.data *= other;
                         if self.data.is_zero() {
@@ -8033,7 +8115,8 @@ pub mod num
                 forward_all_scalar_binop_to_val_val_commutative!(impl Mul<i64> for BigInt, mul);
                 forward_all_scalar_binop_to_val_val_commutative!(impl Mul<i128> for BigInt, mul);
 
-                impl Mul<i32> for BigInt {
+                impl Mul<i32> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn mul(self, other: i32) -> BigInt {
@@ -8044,7 +8127,8 @@ pub mod num
                     }
                 }
 
-                impl MulAssign<i32> for BigInt {
+                impl MulAssign<i32> for BigInt 
+                {
                     #[inline] fn mul_assign(&mut self, other: i32) {
                         match other.checked_uabs() {
                             Positive(u) => *self *= u,
@@ -8056,7 +8140,8 @@ pub mod num
                     }
                 }
 
-                impl Mul<i64> for BigInt {
+                impl Mul<i64> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn mul(self, other: i64) -> BigInt {
@@ -8067,7 +8152,8 @@ pub mod num
                     }
                 }
 
-                impl MulAssign<i64> for BigInt {
+                impl MulAssign<i64> for BigInt 
+                {
                     #[inline] fn mul_assign(&mut self, other: i64) {
                         match other.checked_uabs() {
                             Positive(u) => *self *= u,
@@ -8079,7 +8165,8 @@ pub mod num
                     }
                 }
 
-                impl Mul<i128> for BigInt {
+                impl Mul<i128> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn mul(self, other: i128) -> BigInt {
@@ -8090,7 +8177,8 @@ pub mod num
                     }
                 }
 
-                impl MulAssign<i128> for BigInt {
+                impl MulAssign<i128> for BigInt 
+                {
                     #[inline] fn mul_assign(&mut self, other: i128) {
                         match other.checked_uabs() {
                             Positive(u) => *self *= u,
@@ -8102,7 +8190,8 @@ pub mod num
                     }
                 }
 
-                impl CheckedMul for BigInt {
+                impl CheckedMul for BigInt 
+                {
                     #[inline] fn checked_mul(&self, v: &BigInt) -> Option<BigInt> {
                         Some(self.mul(v))
                     }
@@ -8136,11 +8225,9 @@ pub mod num
                     ops::{ Sub, SubAssign },
                     *,
                 };
-
-                // We want to forward to BigUint::sub, but it's not clear how that will go until
-                // we compare both sign and magnitude.  So we duplicate this body for every
-                // val/ref combination, deferring that decision to BigUint's own forwarding.
-                macro_rules! bigint_sub {
+                
+                macro_rules! bigint_sub 
+                {
                     ($a:expr, $a_owned:expr, $a_data:expr, $b:expr, $b_owned:expr, $b_data:expr) => {
                         match ($a.sign, $b.sign) {
                             (_, NoSign) => $a_owned,
@@ -8157,7 +8244,8 @@ pub mod num
                     };
                 }
 
-                impl Sub<&BigInt> for &BigInt {
+                impl Sub<&BigInt> for &BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn sub(self, other: &BigInt) -> BigInt {
@@ -8172,7 +8260,8 @@ pub mod num
                     }
                 }
 
-                impl Sub<BigInt> for &BigInt {
+                impl Sub<BigInt> for &BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn sub(self, other: BigInt) -> BigInt {
@@ -8180,7 +8269,8 @@ pub mod num
                     }
                 }
 
-                impl Sub<&BigInt> for BigInt {
+                impl Sub<&BigInt> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn sub(self, other: &BigInt) -> BigInt {
@@ -8188,7 +8278,8 @@ pub mod num
                     }
                 }
 
-                impl Sub<BigInt> for BigInt {
+                impl Sub<BigInt> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn sub(self, other: BigInt) -> BigInt {
@@ -8196,7 +8287,8 @@ pub mod num
                     }
                 }
 
-                impl SubAssign<&BigInt> for BigInt {
+                impl SubAssign<&BigInt> for BigInt 
+                {
                     #[inline] fn sub_assign(&mut self, other: &BigInt) {
                         let n = mem::replace(self, Self::ZERO);
                         *self = n - other;
@@ -8210,7 +8302,8 @@ pub mod num
                 forward_all_scalar_binop_to_val_val!(impl Sub<u64> for BigInt, sub);
                 forward_all_scalar_binop_to_val_val!(impl Sub<u128> for BigInt, sub);
 
-                impl Sub<u32> for BigInt {
+                impl Sub<u32> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn sub(self, other: u32) -> BigInt {
@@ -8225,14 +8318,16 @@ pub mod num
                         }
                     }
                 }
-                impl SubAssign<u32> for BigInt {
+                impl SubAssign<u32> for BigInt 
+                {
                     #[inline] fn sub_assign(&mut self, other: u32) {
                         let n = mem::replace(self, Self::ZERO);
                         *self = n - other;
                     }
                 }
 
-                impl Sub<BigInt> for u32 {
+                impl Sub<BigInt> for u32 
+                {
                     type Output = BigInt;
 
                     #[inline] fn sub(self, other: BigInt) -> BigInt {
@@ -8240,7 +8335,8 @@ pub mod num
                     }
                 }
 
-                impl Sub<BigInt> for u64 {
+                impl Sub<BigInt> for u64 
+                {
                     type Output = BigInt;
 
                     #[inline] fn sub(self, other: BigInt) -> BigInt {
@@ -8248,7 +8344,8 @@ pub mod num
                     }
                 }
 
-                impl Sub<BigInt> for u128 {
+                impl Sub<BigInt> for u128 
+                {
                     type Output = BigInt;
 
                     #[inline] fn sub(self, other: BigInt) -> BigInt {
@@ -8256,7 +8353,8 @@ pub mod num
                     }
                 }
 
-                impl Sub<u64> for BigInt {
+                impl Sub<u64> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn sub(self, other: u64) -> BigInt {
@@ -8272,14 +8370,16 @@ pub mod num
                     }
                 }
 
-                impl SubAssign<u64> for BigInt {
+                impl SubAssign<u64> for BigInt 
+                {
                     #[inline] fn sub_assign(&mut self, other: u64) {
                         let n = mem::replace(self, Self::ZERO);
                         *self = n - other;
                     }
                 }
 
-                impl Sub<u128> for BigInt {
+                impl Sub<u128> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn sub(self, other: u128) -> BigInt {
@@ -8295,7 +8395,8 @@ pub mod num
                     }
                 }
 
-                impl SubAssign<u128> for BigInt {
+                impl SubAssign<u128> for BigInt 
+                {
                     #[inline] fn sub_assign(&mut self, other: u128) {
                         let n = mem::replace(self, Self::ZERO);
                         *self = n - other;
@@ -8306,7 +8407,8 @@ pub mod num
                 forward_all_scalar_binop_to_val_val!(impl Sub<i64> for BigInt, sub);
                 forward_all_scalar_binop_to_val_val!(impl Sub<i128> for BigInt, sub);
 
-                impl Sub<i32> for BigInt {
+                impl Sub<i32> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn sub(self, other: i32) -> BigInt {
@@ -8316,7 +8418,8 @@ pub mod num
                         }
                     }
                 }
-                impl SubAssign<i32> for BigInt {
+                impl SubAssign<i32> for BigInt 
+                {
                     #[inline] fn sub_assign(&mut self, other: i32) {
                         match other.checked_uabs() {
                             Positive(u) => *self -= u,
@@ -8325,7 +8428,8 @@ pub mod num
                     }
                 }
 
-                impl Sub<BigInt> for i32 {
+                impl Sub<BigInt> for i32 
+                {
                     type Output = BigInt;
 
                     #[inline] fn sub(self, other: BigInt) -> BigInt {
@@ -8336,7 +8440,8 @@ pub mod num
                     }
                 }
 
-                impl Sub<i64> for BigInt {
+                impl Sub<i64> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn sub(self, other: i64) -> BigInt {
@@ -8346,7 +8451,8 @@ pub mod num
                         }
                     }
                 }
-                impl SubAssign<i64> for BigInt {
+                impl SubAssign<i64> for BigInt 
+                {
                     #[inline] fn sub_assign(&mut self, other: i64) {
                         match other.checked_uabs() {
                             Positive(u) => *self -= u,
@@ -8355,7 +8461,8 @@ pub mod num
                     }
                 }
 
-                impl Sub<BigInt> for i64 {
+                impl Sub<BigInt> for i64 
+                {
                     type Output = BigInt;
 
                     #[inline] fn sub(self, other: BigInt) -> BigInt {
@@ -8366,7 +8473,8 @@ pub mod num
                     }
                 }
 
-                impl Sub<i128> for BigInt {
+                impl Sub<i128> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn sub(self, other: i128) -> BigInt {
@@ -8377,7 +8485,8 @@ pub mod num
                     }
                 }
 
-                impl SubAssign<i128> for BigInt {
+                impl SubAssign<i128> for BigInt 
+                {
                     #[inline] fn sub_assign(&mut self, other: i128) {
                         match other.checked_uabs() {
                             Positive(u) => *self -= u,
@@ -8386,7 +8495,8 @@ pub mod num
                     }
                 }
 
-                impl Sub<BigInt> for i128 {
+                impl Sub<BigInt> for i128 
+                {
                     type Output = BigInt;
 
                     #[inline] fn sub(self, other: BigInt) -> BigInt {
@@ -8397,7 +8507,8 @@ pub mod num
                     }
                 }
 
-                impl CheckedSub for BigInt {
+                impl CheckedSub for BigInt 
+                {
                     #[inline] fn checked_sub(&self, v: &BigInt) -> Option<BigInt> {
                         Some(self.sub(v))
                     }
@@ -8433,20 +8544,6 @@ pub mod num
                 };
                 // Negation in two's complement.
                 // acc must be initialized as 1 for least-significant digit.
-                //
-                // When negating, a carry (acc == 1) means that all the digits
-                // considered to this point were zero. This means that if all the
-                // digits of a negative BigInt have been considered, carry must be
-                // zero as we cannot have negative zero.
-                //
-                //    01 -> ...f    ff
-                //    ff -> ...f    01
-                // 01 00 -> ...f ff 00
-                // 01 01 -> ...f fe ff
-                // 01 ff -> ...f fe 01
-                // ff 00 -> ...f 01 00
-                // ff 01 -> ...f 00 ff
-                // ff ff -> ...f 00 01
                 #[inline] fn negate_carry(a: BigDigit, acc: &mut DoubleBigDigit) -> BigDigit {
                     *acc += DoubleBigDigit::from(!a);
                     let lo = *acc as BigDigit;
@@ -9374,19 +9471,16 @@ pub mod num
                     }
                     bytes
                 }
-
                 /// Perform in-place two's complement of the given binary representation,
                 /// in little-endian byte order.
                 #[inline] fn twos_complement_le(digits: &mut [u8]) {
                     twos_complement(digits)
                 }
-
                 /// Perform in-place two's complement of the given binary representation
                 /// in big-endian byte order.
                 #[inline] fn twos_complement_be(digits: &mut [u8]) {
                     twos_complement(digits.iter_mut().rev())
                 }
-
                 /// Perform in-place two's complement of the given digit iterator
                 /// starting from the least significant byte.
                 #[inline] fn twos_complement<'a, I>(digits: I)
@@ -9624,15 +9718,16 @@ pub mod num
             } pub use self::shift::{ * };
             /// A `Sign` is a [`BigInt`]'s composing element.
             #[derive(PartialEq, PartialOrd, Eq, Ord, Copy, Clone, Debug, Hash)]
-            pub enum Sign {
+            pub enum Sign 
+            {
                 Minus,
                 NoSign,
                 Plus,
             }
 
-            impl Neg for Sign {
+            impl Neg for Sign 
+            {
                 type Output = Sign;
-
                 /// Negate `Sign` value.
                 #[inline] fn neg(self) -> Sign {
                     match self {
@@ -9642,16 +9737,17 @@ pub mod num
                     }
                 }
             }
-
             /// A big signed integer type.
-            pub struct BigInt {
+            pub struct BigInt 
+            {
                 sign: Sign,
                 data: BigUint,
             }
 
             // Note: derived `Clone` doesn't specialize `clone_from`,
             // but we want to keep the allocation in `data`.
-            impl Clone for BigInt {
+            impl Clone for BigInt 
+            {
                 #[inline] fn clone(&self) -> Self {
                     BigInt {
                         sign: self.sign,
@@ -9665,7 +9761,8 @@ pub mod num
                 }
             }
 
-            impl hash::Hash for BigInt {
+            impl hash::Hash for BigInt 
+            {
                 #[inline] fn hash<H: hash::Hasher>(&self, state: &mut H) {
                     debug_assert!((self.sign != NoSign) ^ self.data.is_zero());
                     self.sign.hash(state);
@@ -9675,7 +9772,8 @@ pub mod num
                 }
             }
 
-            impl PartialEq for BigInt {
+            impl PartialEq for BigInt 
+            {
                 #[inline] fn eq(&self, other: &BigInt) -> bool {
                     debug_assert!((self.sign != NoSign) ^ self.data.is_zero());
                     debug_assert!((other.sign != NoSign) ^ other.data.is_zero());
@@ -9685,13 +9783,15 @@ pub mod num
 
             impl Eq for BigInt {}
 
-            impl PartialOrd for BigInt {
+            impl PartialOrd for BigInt 
+            {
                 #[inline] fn partial_cmp(&self, other: &BigInt) -> Option<Ordering> {
                     Some(self.cmp(other))
                 }
             }
 
-            impl Ord for BigInt {
+            impl Ord for BigInt 
+            {
                 #[inline] fn cmp(&self, other: &BigInt) -> Ordering {
                     debug_assert!((self.sign != NoSign) ^ self.data.is_zero());
                     debug_assert!((other.sign != NoSign) ^ other.data.is_zero());
@@ -9708,55 +9808,59 @@ pub mod num
                 }
             }
 
-            impl Default for BigInt {
+            impl Default for BigInt 
+            {
                 #[inline] fn default() -> BigInt {
                     Self::ZERO
                 }
             }
 
-            impl fmt::Debug for BigInt {
+            impl fmt::Debug for BigInt 
+            {
                 fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                     fmt::Display::fmt(self, f)
                 }
             }
 
-            impl fmt::Display for BigInt {
+            impl fmt::Display for BigInt 
+            {
                 fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                     f.pad_integral(!self.is_negative(), "", &self.data.to_str_radix(10))
                 }
             }
 
-            impl fmt::Binary for BigInt {
+            impl fmt::Binary for BigInt 
+            {
                 fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                     f.pad_integral(!self.is_negative(), "0b", &self.data.to_str_radix(2))
                 }
             }
 
-            impl fmt::Octal for BigInt {
+            impl fmt::Octal for BigInt 
+            {
                 fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                     f.pad_integral(!self.is_negative(), "0o", &self.data.to_str_radix(8))
                 }
             }
 
-            impl fmt::LowerHex for BigInt {
+            impl fmt::LowerHex for BigInt 
+            {
                 fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                     f.pad_integral(!self.is_negative(), "0x", &self.data.to_str_radix(16))
                 }
             }
 
-            impl fmt::UpperHex for BigInt {
+            impl fmt::UpperHex for BigInt 
+            {
                 fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                     let mut s = self.data.to_str_radix(16);
                     s.make_ascii_uppercase();
                     f.pad_integral(!self.is_negative(), "0x", &s)
                 }
             }
-
-            // !-2 = !...f fe = ...0 01 = +1
-            // !-1 = !...f ff = ...0 00 =  0
-            // ! 0 = !...0 00 = ...f ff = -1
-            // !+1 = !...0 01 = ...f fe = -2
-            impl Not for BigInt {
+            
+            impl Not for BigInt 
+            {
                 type Output = BigInt;
 
                 fn not(mut self) -> BigInt {
@@ -9774,7 +9878,8 @@ pub mod num
                 }
             }
 
-            impl Not for &BigInt {
+            impl Not for &BigInt 
+            {
                 type Output = BigInt;
 
                 fn not(self) -> BigInt {
@@ -9786,7 +9891,8 @@ pub mod num
                 }
             }
 
-            impl Zero for BigInt {
+            impl Zero for BigInt 
+            {
                 #[inline] fn zero() -> BigInt {
                     Self::ZERO
                 }
@@ -9801,12 +9907,14 @@ pub mod num
                 }
             }
 
-            impl ConstZero for BigInt {
+            impl ConstZero for BigInt 
+            {
                 // forward to the inherent const
                 const ZERO: Self = Self::ZERO;
             }
 
-            impl One for BigInt {
+            impl One for BigInt 
+            {
                 #[inline] fn one() -> BigInt {
                     BigInt {
                         sign: Plus,
@@ -9824,7 +9932,8 @@ pub mod num
                 }
             }
 
-            impl Signed for BigInt {
+            impl Signed for BigInt 
+            {
                 #[inline] fn abs(&self) -> BigInt {
                     match self.sign {
                         Plus | NoSign => self.clone(),
@@ -9857,19 +9966,22 @@ pub mod num
                 }
             }
 
-            trait UnsignedAbs {
+            trait UnsignedAbs 
+            {
                 type Unsigned;
 
                 fn checked_uabs(self) -> CheckedUnsignedAbs<Self::Unsigned>;
             }
 
-            enum CheckedUnsignedAbs<T> {
+            enum CheckedUnsignedAbs<T> 
+            {
                 Positive(T),
                 Negative(T),
             }
             use self::CheckedUnsignedAbs::{Negative, Positive};
 
-            macro_rules! impl_unsigned_abs {
+            macro_rules! impl_unsigned_abs 
+            {
                 ($Signed:ty, $Unsigned:ty) => {
                     impl UnsignedAbs for $Signed {
                         type Unsigned = $Unsigned;
@@ -9884,6 +9996,7 @@ pub mod num
                     }
                 };
             }
+
             impl_unsigned_abs!(i8, u8);
             impl_unsigned_abs!(i16, u16);
             impl_unsigned_abs!(i32, u32);
@@ -9990,26 +10103,22 @@ pub mod num
                         (_, NoSign) => unreachable!(),
                     }
                 }
-
                 /// Calculates the Greatest Common Divisor (GCD) of the number and `other`.
                 ///
                 /// The result is always positive.
                 #[inline] fn gcd(&self, other: &BigInt) -> BigInt {
                     BigInt::from(self.data.gcd(&other.data))
                 }
-
                 /// Calculates the Lowest Common Multiple (LCM) of the number and `other`.
                 #[inline] fn lcm(&self, other: &BigInt) -> BigInt {
                     BigInt::from(self.data.lcm(&other.data))
                 }
-
                 /// Calculates the Greatest Common Divisor (GCD) and
                 /// Lowest Common Multiple (LCM) together.
                 #[inline] fn gcd_lcm(&self, other: &BigInt) -> (BigInt, BigInt) {
                     let (gcd, lcm) = self.data.gcd_lcm(&other.data);
                     (BigInt::from(gcd), BigInt::from(lcm))
                 }
-
                 /// Greatest common divisor, least common multiple, and Bézout coefficients.
                 #[inline] fn extended_gcd_lcm(&self, other: &BigInt) -> ( ::num::integers::ExtendedGcd<BigInt>, BigInt) {
                     let egcd = self.extended_gcd(other);
@@ -10020,27 +10129,22 @@ pub mod num
                     };
                     (egcd, lcm)
                 }
-
                 /// Deprecated, use `is_multiple_of` instead.
                 #[inline] fn divides(&self, other: &BigInt) -> bool {
                     self.is_multiple_of(other)
                 }
-
                 /// Returns `true` if the number is a multiple of `other`.
                 #[inline] fn is_multiple_of(&self, other: &BigInt) -> bool {
                     self.data.is_multiple_of(&other.data)
                 }
-
                 /// Returns `true` if the number is divisible by `2`.
                 #[inline] fn is_even(&self) -> bool {
                     self.data.is_even()
                 }
-
                 /// Returns `true` if the number is not divisible by `2`.
                 #[inline] fn is_odd(&self) -> bool {
                     self.data.is_odd()
                 }
-
                 /// Rounds up to nearest multiple of argument.
                 #[inline] fn next_multiple_of(&self, other: &Self) -> Self {
                     let m = self.mod_floor(other);
@@ -10122,17 +10226,13 @@ pub mod num
                     sign: NoSign,
                     data: BigUint::ZERO,
                 };
-
                 /// Creates and initializes a [`BigInt`].
                 ///
                 /// The base 2<sup>32</sup> digits are ordered least significant digit first.
                 #[inline] pub fn new(sign: Sign, digits: Vec<u32>) -> BigInt {
                     BigInt::from_biguint(sign, BigUint::new(digits))
                 }
-
                 /// Creates and initializes a [`BigInt`].
-                ///
-                /// The base 2<sup>32</sup> digits are ordered least significant digit first.
                 #[inline] pub fn from_biguint(mut sign: Sign, mut data: BigUint) -> BigInt {
                     if sign == NoSign {
                         data.assign_from_slice(&[]);
@@ -10142,17 +10242,11 @@ pub mod num
 
                     BigInt { sign, data }
                 }
-
                 /// Creates and initializes a [`BigInt`].
-                ///
-                /// The base 2<sup>32</sup> digits are ordered least significant digit first.
                 #[inline] pub fn from_slice(sign: Sign, slice: &[u32]) -> BigInt {
                     BigInt::from_biguint(sign, BigUint::from_slice(slice))
                 }
-
                 /// Reinitializes a [`BigInt`].
-                ///
-                /// The base 2<sup>32</sup> digits are ordered least significant digit first.
                 #[inline] pub fn assign_from_slice(&mut self, sign: Sign, slice: &[u32]) {
                     if sign == NoSign {
                         self.set_zero();
@@ -10161,250 +10255,78 @@ pub mod num
                         self.sign = if self.data.is_zero() { NoSign } else { sign };
                     }
                 }
-
                 /// Creates and initializes a [`BigInt`].
-                ///
-                /// The bytes are in big-endian byte order.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::{BigInt, Sign};
-                ///
-                /// assert_eq!(BigInt::from_bytes_be(Sign::Plus, b"A"),
-                ///            BigInt::parse_bytes(b"65", 10).unwrap());
-                /// assert_eq!(BigInt::from_bytes_be(Sign::Plus, b"AA"),
-                ///            BigInt::parse_bytes(b"16705", 10).unwrap());
-                /// assert_eq!(BigInt::from_bytes_be(Sign::Plus, b"AB"),
-                ///            BigInt::parse_bytes(b"16706", 10).unwrap());
-                /// assert_eq!(BigInt::from_bytes_be(Sign::Plus, b"Hello world!"),
-                ///            BigInt::parse_bytes(b"22405534230753963835153736737", 10).unwrap());
-                /// ```
                 #[inline] pub fn from_bytes_be(sign: Sign, bytes: &[u8]) -> BigInt {
                     BigInt::from_biguint(sign, BigUint::from_bytes_be(bytes))
                 }
-
                 /// Creates and initializes a [`BigInt`].
                 ///
                 /// The bytes are in little-endian byte order.
                 #[inline] pub fn from_bytes_le(sign: Sign, bytes: &[u8]) -> BigInt {
                     BigInt::from_biguint(sign, BigUint::from_bytes_le(bytes))
                 }
-
                 /// Creates and initializes a [`BigInt`] from an array of bytes in
                 /// two's complement binary representation.
-                ///
-                /// The digits are in big-endian base 2<sup>8</sup>.
                 #[inline] pub fn from_signed_bytes_be(digits: &[u8]) -> BigInt {
                     convert::from_signed_bytes_be(digits)
                 }
-
                 /// Creates and initializes a [`BigInt`] from an array of bytes in two's complement.
-                ///
-                /// The digits are in little-endian base 2<sup>8</sup>.
                 #[inline] pub fn from_signed_bytes_le(digits: &[u8]) -> BigInt {
                     convert::from_signed_bytes_le(digits)
                 }
-
                 /// Creates and initializes a [`BigInt`].
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::{BigInt, ToBigInt};
-                ///
-                /// assert_eq!(BigInt::parse_bytes(b"1234", 10), ToBigInt::to_bigint(&1234));
-                /// assert_eq!(BigInt::parse_bytes(b"ABCD", 16), ToBigInt::to_bigint(&0xABCD));
-                /// assert_eq!(BigInt::parse_bytes(b"G", 16), None);
-                /// ```
                 #[inline] pub fn parse_bytes(buf: &[u8], radix: u32) -> Option<BigInt> {
                     let s = str::from_utf8(buf).ok()?;
                     BigInt::from_str_radix(s, radix).ok()
                 }
-
-                /// Creates and initializes a [`BigInt`]. Each `u8` of the input slice is
-                /// interpreted as one digit of the number
-                /// and must therefore be less than `radix`.
-                ///
-                /// The bytes are in big-endian byte order.
-                /// `radix` must be in the range `2...256`.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::{BigInt, Sign};
-                ///
-                /// let inbase190 = vec![15, 33, 125, 12, 14];
-                /// let a = BigInt::from_radix_be(Sign::Minus, &inbase190, 190).unwrap();
-                /// assert_eq!(a.to_radix_be(190), (Sign:: Minus, inbase190));
-                /// ```
+                /// Creates and initializes a [`BigInt`].
                 pub fn from_radix_be(sign: Sign, buf: &[u8], radix: u32) -> Option<BigInt> {
                     let u = BigUint::from_radix_be(buf, radix)?;
                     Some(BigInt::from_biguint(sign, u))
                 }
-
-                /// Creates and initializes a [`BigInt`]. Each `u8` of the input slice is
-                /// interpreted as one digit of the number
-                /// and must therefore be less than `radix`.
-                ///
-                /// The bytes are in little-endian byte order.
-                /// `radix` must be in the range `2...256`.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::{BigInt, Sign};
-                ///
-                /// let inbase190 = vec![14, 12, 125, 33, 15];
-                /// let a = BigInt::from_radix_be(Sign::Minus, &inbase190, 190).unwrap();
-                /// assert_eq!(a.to_radix_be(190), (Sign::Minus, inbase190));
-                /// ```
+                /// Creates and initializes a [`BigInt`].
                 pub fn from_radix_le(sign: Sign, buf: &[u8], radix: u32) -> Option<BigInt> {
                     let u = BigUint::from_radix_le(buf, radix)?;
                     Some(BigInt::from_biguint(sign, u))
                 }
-
                 /// Returns the sign and the byte representation of the [`BigInt`] in big-endian byte order.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::{ToBigInt, Sign};
-                ///
-                /// let i = -1125.to_bigint().unwrap();
-                /// assert_eq!(i.to_bytes_be(), (Sign::Minus, vec![4, 101]));
-                /// ```
                 #[inline] pub fn to_bytes_be(&self) -> (Sign, Vec<u8>) {
                     (self.sign, self.data.to_bytes_be())
                 }
-
                 /// Returns the sign and the byte representation of the [`BigInt`] in little-endian byte order.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::{ToBigInt, Sign};
-                ///
-                /// let i = -1125.to_bigint().unwrap();
-                /// assert_eq!(i.to_bytes_le(), (Sign::Minus, vec![101, 4]));
-                /// ```
                 #[inline] pub fn to_bytes_le(&self) -> (Sign, Vec<u8>) {
                     (self.sign, self.data.to_bytes_le())
                 }
-
                 /// Returns the sign and the `u32` digits representation of the [`BigInt`] ordered least
                 /// significant digit first.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::{BigInt, Sign};
-                ///
-                /// assert_eq!(BigInt::from(-1125).to_u32_digits(), (Sign::Minus, vec![1125]));
-                /// assert_eq!(BigInt::from(4294967295u32).to_u32_digits(), (Sign::Plus, vec![4294967295]));
-                /// assert_eq!(BigInt::from(4294967296u64).to_u32_digits(), (Sign::Plus, vec![0, 1]));
-                /// assert_eq!(BigInt::from(-112500000000i64).to_u32_digits(), (Sign::Minus, vec![830850304, 26]));
-                /// assert_eq!(BigInt::from(112500000000i64).to_u32_digits(), (Sign::Plus, vec![830850304, 26]));
-                /// ```
                 #[inline] pub fn to_u32_digits(&self) -> (Sign, Vec<u32>) {
                     (self.sign, self.data.to_u32_digits())
                 }
-
                 /// Returns the sign and the `u64` digits representation of the [`BigInt`] ordered least
                 /// significant digit first.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::{BigInt, Sign};
-                ///
-                /// assert_eq!(BigInt::from(-1125).to_u64_digits(), (Sign::Minus, vec![1125]));
-                /// assert_eq!(BigInt::from(4294967295u32).to_u64_digits(), (Sign::Plus, vec![4294967295]));
-                /// assert_eq!(BigInt::from(4294967296u64).to_u64_digits(), (Sign::Plus, vec![4294967296]));
-                /// assert_eq!(BigInt::from(-112500000000i64).to_u64_digits(), (Sign::Minus, vec![112500000000]));
-                /// assert_eq!(BigInt::from(112500000000i64).to_u64_digits(), (Sign::Plus, vec![112500000000]));
-                /// assert_eq!(BigInt::from(1u128 << 64).to_u64_digits(), (Sign::Plus, vec![0, 1]));
-                /// ```
                 #[inline] pub fn to_u64_digits(&self) -> (Sign, Vec<u64>) {
                     (self.sign, self.data.to_u64_digits())
                 }
-
                 /// Returns an iterator of `u32` digits representation of the [`BigInt`] ordered least
                 /// significant digit first.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::BigInt;
-                ///
-                /// assert_eq!(BigInt::from(-1125).iter_u32_digits().collect::<Vec<u32>>(), vec![1125]);
-                /// assert_eq!(BigInt::from(4294967295u32).iter_u32_digits().collect::<Vec<u32>>(), vec![4294967295]);
-                /// assert_eq!(BigInt::from(4294967296u64).iter_u32_digits().collect::<Vec<u32>>(), vec![0, 1]);
-                /// assert_eq!(BigInt::from(-112500000000i64).iter_u32_digits().collect::<Vec<u32>>(), vec![830850304, 26]);
-                /// assert_eq!(BigInt::from(112500000000i64).iter_u32_digits().collect::<Vec<u32>>(), vec![830850304, 26]);
-                /// ```
                 #[inline] pub fn iter_u32_digits(&self) -> U32Digits<'_> {
                     self.data.iter_u32_digits()
                 }
-
                 /// Returns an iterator of `u64` digits representation of the [`BigInt`] ordered least
                 /// significant digit first.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::BigInt;
-                ///
-                /// assert_eq!(BigInt::from(-1125).iter_u64_digits().collect::<Vec<u64>>(), vec![1125u64]);
-                /// assert_eq!(BigInt::from(4294967295u32).iter_u64_digits().collect::<Vec<u64>>(), vec![4294967295u64]);
-                /// assert_eq!(BigInt::from(4294967296u64).iter_u64_digits().collect::<Vec<u64>>(), vec![4294967296u64]);
-                /// assert_eq!(BigInt::from(-112500000000i64).iter_u64_digits().collect::<Vec<u64>>(), vec![112500000000u64]);
-                /// assert_eq!(BigInt::from(112500000000i64).iter_u64_digits().collect::<Vec<u64>>(), vec![112500000000u64]);
-                /// assert_eq!(BigInt::from(1u128 << 64).iter_u64_digits().collect::<Vec<u64>>(), vec![0, 1]);
-                /// ```
                 #[inline] pub fn iter_u64_digits(&self) -> U64Digits<'_> {
                     self.data.iter_u64_digits()
                 }
-
                 /// Returns the two's-complement byte representation of the [`BigInt`] in big-endian byte order.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::ToBigInt;
-                ///
-                /// let i = -1125.to_bigint().unwrap();
-                /// assert_eq!(i.to_signed_bytes_be(), vec![251, 155]);
-                /// ```
                 #[inline] pub fn to_signed_bytes_be(&self) -> Vec<u8> {
                     convert::to_signed_bytes_be(self)
                 }
-
                 /// Returns the two's-complement byte representation of the [`BigInt`] in little-endian byte order.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::ToBigInt;
-                ///
-                /// let i = -1125.to_bigint().unwrap();
-                /// assert_eq!(i.to_signed_bytes_le(), vec![155, 251]);
-                /// ```
                 #[inline] pub fn to_signed_bytes_le(&self) -> Vec<u8> {
                     convert::to_signed_bytes_le(self)
                 }
-
                 /// Returns the integer formatted as a string in the given radix.
                 /// `radix` must be in the range `2...36`.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::BigInt;
-                ///
-                /// let i = BigInt::parse_bytes(b"ff", 16).unwrap();
-                /// assert_eq!(i.to_str_radix(16), "ff");
-                /// ```
                 #[inline] pub fn to_str_radix(&self, radix: u32) -> String {
                     let mut v = to_str_radix_reversed(&self.data, radix);
 
@@ -10415,96 +10337,31 @@ pub mod num
                     v.reverse();
                     unsafe { String::from_utf8_unchecked(v) }
                 }
-
                 /// Returns the integer in the requested base in big-endian digit order.
-                /// The output is not given in a human readable alphabet but as a zero
-                /// based `u8` number.
-                /// `radix` must be in the range `2...256`.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::{BigInt, Sign};
-                ///
-                /// assert_eq!(BigInt::from(-0xFFFFi64).to_radix_be(159),
-                ///            (Sign::Minus, vec![2, 94, 27]));
-                /// // 0xFFFF = 65535 = 2*(159^2) + 94*159 + 27
-                /// ```
                 #[inline] pub fn to_radix_be(&self, radix: u32) -> (Sign, Vec<u8>) {
                     (self.sign, self.data.to_radix_be(radix))
                 }
-
                 /// Returns the integer in the requested base in little-endian digit order.
-                /// The output is not given in a human readable alphabet but as a zero
-                /// based `u8` number.
-                /// `radix` must be in the range `2...256`.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::{BigInt, Sign};
-                ///
-                /// assert_eq!(BigInt::from(-0xFFFFi64).to_radix_le(159),
-                ///            (Sign::Minus, vec![27, 94, 2]));
-                /// // 0xFFFF = 65535 = 27 + 94*159 + 2*(159^2)
-                /// ```
                 #[inline] pub fn to_radix_le(&self, radix: u32) -> (Sign, Vec<u8>) {
                     (self.sign, self.data.to_radix_le(radix))
                 }
-
                 /// Returns the sign of the [`BigInt`] as a [`Sign`].
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::{BigInt, Sign};
-                ///
-                /// assert_eq!(BigInt::from(1234).sign(), Sign::Plus);
-                /// assert_eq!(BigInt::from(-4321).sign(), Sign::Minus);
-                /// assert_eq!(BigInt::ZERO.sign(), Sign::NoSign);
-                /// ```
                 #[inline] pub fn sign(&self) -> Sign {
                     self.sign
                 }
-
                 /// Returns the magnitude of the [`BigInt`] as a [`BigUint`].
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::{BigInt, BigUint};
-                /// use num_traits::Zero;
-                ///
-                /// assert_eq!(BigInt::from(1234).magnitude(), &BigUint::from(1234u32));
-                /// assert_eq!(BigInt::from(-4321).magnitude(), &BigUint::from(4321u32));
-                /// assert!(BigInt::ZERO.magnitude().is_zero());
-                /// ```
                 #[inline] pub fn magnitude(&self) -> &BigUint {
                     &self.data
                 }
-
                 /// Convert this [`BigInt`] into its [`Sign`] and [`BigUint`] magnitude,
                 /// the reverse of [`BigInt::from_biguint()`].
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::{BigInt, BigUint, Sign};
-                ///
-                /// assert_eq!(BigInt::from(1234).into_parts(), (Sign::Plus, BigUint::from(1234u32)));
-                /// assert_eq!(BigInt::from(-4321).into_parts(), (Sign::Minus, BigUint::from(4321u32)));
-                /// assert_eq!(BigInt::ZERO.into_parts(), (Sign::NoSign, BigUint::ZERO));
-                /// ```
                 #[inline] pub fn into_parts(self) -> (Sign, BigUint) {
                     (self.sign, self.data)
                 }
-
-                /// Determines the fewest bits necessary to express the [`BigInt`],
-                /// not including the sign.
+                /// Determines the fewest bits necessary to express the [`BigInt`], not including the sign.
                 #[inline] pub fn bits(&self) -> u64 {
                     self.data.bits()
                 }
-
                 /// Converts this [`BigInt`] into a [`BigUint`], if it's not negative.
                 #[inline] pub fn to_biguint(&self) -> Option<BigUint> {
                     match self.sign {
@@ -10532,70 +10389,15 @@ pub mod num
                     }
                     Some(self / v)
                 }
-
                 /// Returns `self ^ exponent`.
                 pub fn pow(&self, exponent: u32) -> Self {
                     Pow::pow(self, exponent)
                 }
-
                 /// Returns `(self ^ exponent) mod modulus`
-                ///
-                /// Note that this rounds like `mod_floor`, not like the `%` operator,
-                /// which makes a difference when given a negative `self` or `modulus`.
-                /// The result will be in the interval `[0, modulus)` for `modulus > 0`,
-                /// or in the interval `(modulus, 0]` for `modulus < 0`
-                ///
-                /// Panics if the exponent is negative or the modulus is zero.
                 pub fn modpow(&self, exponent: &Self, modulus: &Self) -> Self {
                     power::modpow(self, exponent, modulus)
                 }
-
                 /// Returns the modular multiplicative inverse if it exists, otherwise `None`.
-                ///
-                /// This solves for `x` such that `self * x ≡ 1 (mod modulus)`.
-                /// Note that this rounds like `mod_floor`, not like the `%` operator,
-                /// which makes a difference when given a negative `self` or `modulus`.
-                /// The solution will be in the interval `[0, modulus)` for `modulus > 0`,
-                /// or in the interval `(modulus, 0]` for `modulus < 0`,
-                /// and it exists if and only if `gcd(self, modulus) == 1`.
-                ///
-                /// ```
-                /// use num_bigint::BigInt;
-                /// use num_integer::Integer;
-                /// use num_traits::{One, Zero};
-                ///
-                /// let m = BigInt::from(383);
-                ///
-                /// // Trivial cases
-                /// assert_eq!(BigInt::zero().modinv(&m), None);
-                /// assert_eq!(BigInt::one().modinv(&m), Some(BigInt::one()));
-                /// let neg1 = &m - 1u32;
-                /// assert_eq!(neg1.modinv(&m), Some(neg1));
-                ///
-                /// // Positive self and modulus
-                /// let a = BigInt::from(271);
-                /// let x = a.modinv(&m).unwrap();
-                /// assert_eq!(x, BigInt::from(106));
-                /// assert_eq!(x.modinv(&m).unwrap(), a);
-                /// assert_eq!((&a * x).mod_floor(&m), BigInt::one());
-                ///
-                /// // Negative self and positive modulus
-                /// let b = -&a;
-                /// let x = b.modinv(&m).unwrap();
-                /// assert_eq!(x, BigInt::from(277));
-                /// assert_eq!((&b * x).mod_floor(&m), BigInt::one());
-                ///
-                /// // Positive self and negative modulus
-                /// let n = -&m;
-                /// let x = a.modinv(&n).unwrap();
-                /// assert_eq!(x, BigInt::from(-277));
-                /// assert_eq!((&a * x).mod_floor(&n), &n + 1);
-                ///
-                /// // Negative self and modulus
-                /// let x = b.modinv(&n).unwrap();
-                /// assert_eq!(x, BigInt::from(-106));
-                /// assert_eq!((&b * x).mod_floor(&n), &n + 1);
-                /// ```
                 pub fn modinv(&self, modulus: &Self) -> Option<Self> {
                     let result = self.data.modinv(&modulus.data)?;
                     // The sign of the result follows the modulus, like `mod_floor`.
@@ -10607,31 +10409,23 @@ pub mod num
                     };
                     Some(BigInt::from_biguint(sign, mag))
                 }
-
-                /// Returns the truncated principal square root of `self` --
-                /// see [`num_integer::Roots::sqrt()`].
+                /// Returns the truncated principal square root of `self`
                 pub fn sqrt(&self) -> Self {
                     Roots::sqrt(self)
                 }
-
-                /// Returns the truncated principal cube root of `self` --
-                /// see [`num_integer::Roots::cbrt()`].
+                /// Returns the truncated principal cube root of `self`
                 pub fn cbrt(&self) -> Self {
                     Roots::cbrt(self)
                 }
-
-                /// Returns the truncated principal `n`th root of `self` --
-                /// See [`num_integer::Roots::nth_root()`].
+                /// Returns the truncated principal `n`th root of `self`
                 pub fn nth_root(&self, n: u32) -> Self {
                     Roots::nth_root(self, n)
                 }
-
                 /// Returns the number of least-significant bits that are zero,
                 /// or `None` if the entire number is zero.
                 pub fn trailing_zeros(&self) -> Option<u64> {
                     self.data.trailing_zeros()
                 }
-
                 /// Returns whether the bit in position `bit` is set,
                 /// using the two's complement for negative numbers
                 pub fn bit(&self, bit: u64) -> bool {
@@ -10655,13 +10449,8 @@ pub mod num
                         self.data.bit(bit)
                     }
                 }
-
                 /// Sets or clears the bit in the given position,
                 /// using the two's complement for negative numbers
-                ///
-                /// Note that setting/clearing a bit (for positive/negative numbers,
-                /// respectively) greater than the current bit length, a reallocation
-                /// may be needed to store the new digits
                 pub fn set_bit(&mut self, bit: u64, value: bool) {
                     match self.sign {
                         Sign::Plus => self.data.set_bit(bit, value),
@@ -10729,24 +10518,18 @@ pub mod num
                 *,
             };
             /// A trait for sampling random big integers.
-            ///
-            /// The `rand` feature must be enabled to use this. See crate-level documentation for details.
             pub trait RandBigInt {
                 /// Generate a random [`BigUint`] of the given bit size.
                 fn gen_biguint(&mut self, bit_size: u64) -> BigUint;
-
                 /// Generate a random [ BigInt`] of the given bit size.
                 fn gen_bigint(&mut self, bit_size: u64) -> BigInt;
-
                 /// Generate a random [`BigUint`] less than the given bound. Fails
                 /// when the bound is zero.
                 fn gen_biguint_below(&mut self, bound: &BigUint) -> BigUint;
-
                 /// Generate a random [`BigUint`] within the given range. The lower
                 /// bound is inclusive; the upper bound is exclusive. Fails when
                 /// the upper bound is not greater than the lower bound.
                 fn gen_biguint_range(&mut self, lbound: &BigUint, ubound: &BigUint) -> BigUint;
-
                 /// Generate a random [`BigInt`] within the given range. The lower
                 /// bound is inclusive; the upper bound is exclusive. Fails when
                 /// the upper bound is not greater than the lower bound.
@@ -10845,7 +10628,6 @@ pub mod num
                     }
                 }
             }
-
             /// The back-end implementing rand's [`UniformSampler`] for [`BigUint`].
             #[derive(Clone, Debug)]
             pub struct UniformBigUint {
@@ -10897,7 +10679,6 @@ pub mod num
             impl SampleUniform for BigUint {
                 type Sampler = UniformBigUint;
             }
-
             /// The back-end implementing rand's [`UniformSampler`] for [`BigInt`].
             #[derive(Clone, Debug)]
             pub struct UniformBigInt {
@@ -10949,10 +10730,7 @@ pub mod num
             impl SampleUniform for BigInt {
                 type Sampler = UniformBigInt;
             }
-
             /// A random distribution for [`BigUint`] and [`BigInt`] values of a particular bit size.
-            ///
-            /// The `rand` feature must be enabled to use this. See crate-level documentation for details.
             #[derive(Clone, Copy, Debug)]
             pub struct RandomBits {
                 bits: u64,
@@ -11048,7 +10826,6 @@ pub mod num
 
                     carry as BigDigit
                 }
-
                 /// Two argument addition of raw slices:
                 /// a += b
                 ///
@@ -11242,7 +11019,6 @@ pub mod num
                 };
 
                 pub(super) const FAST_DIV_WIDE: bool = true;
-
                 /// Divide a two digit numerator by a one digit divisor, returns quotient and remainder.
                 #[inline] fn div_wide(hi: BigDigit, lo: BigDigit, divisor: BigDigit) -> (BigDigit, BigDigit) {
                     // This debug assertion covers the potential #DE for divisor==0 or a quotient too large for one
@@ -11274,7 +11050,6 @@ pub mod num
                         (div, rem)
                     }
                 }
-
                 /// For small divisors, we can divide without promoting to `DoubleBigDigit` by
                 /// using half-size pieces of digit, like long-division.
                 #[inline] fn div_half(rem: BigDigit, digit: BigDigit, divisor: BigDigit) -> (BigDigit, BigDigit) {
@@ -11331,7 +11106,6 @@ pub mod num
 
                     rem
                 }
-
                 /// Subtract a multiple.
                 /// a -= b * c
                 /// Returns a borrow (if a < b then borrow > 0).
@@ -11449,7 +11223,6 @@ pub mod num
                         (q, r >> shift)
                     }
                 }
-
                 /// An implementation of the base division algorithm.
                 /// Knuth, TAOCP vol 2 section 4.3.1, algorithm D, with an improvement from exercises 19-21.
                 fn div_rem_core(mut a: BigUint, b: &[BigDigit]) -> (BigUint, BigUint) {
@@ -11920,7 +11693,6 @@ pub mod num
                     *acc >>= big_digit::BITS;
                     lo
                 }
-
                 /// Three argument multiply accumulate:
                 /// acc += b * c
                 fn mac_digit(acc: &mut [BigDigit], b: &[BigDigit], c: BigDigit) {
@@ -11948,7 +11720,6 @@ pub mod num
                 fn bigint_from_slice(slice: &[BigDigit]) -> BigInt {
                     BigInt::from(biguint_from_vec(slice.to_vec()))
                 }
-
                 /// Three argument multiply accumulate:
                 /// acc += b * c
                 #[allow(clippy::many_single_char_names)]
@@ -12704,11 +12475,13 @@ pub mod num
                 
                 /// Find last set bit
                 /// fls(0) == 0, fls(u32::MAX) == 32
-                fn fls<T: PrimInt>(v: T) -> u8 {
+                fn fls<T: PrimInt>(v: T) -> u8 
+                {
                     mem::size_of::<T>() as u8 * 8 - v.leading_zeros() as u8
                 }
 
-                fn ilog2<T: PrimInt>(v: T) -> u8 {
+                fn ilog2<T: PrimInt>(v: T) -> u8 
+                {
                     fls(v) - 1
                 }
 
@@ -12724,7 +12497,8 @@ pub mod num
 
                 // Convert from a power of two radix (bits == ilog2(radix)) where bits evenly divides
                 // BigDigit::BITS
-                pub fn from_bitwise_digits_le(v: &[u8], bits: u8) -> BigUint {
+                pub fn from_bitwise_digits_le(v: &[u8], bits: u8) -> BigUint 
+                {
                     debug_assert!(!v.is_empty() && bits <= 8 && big_digit::BITS % bits == 0);
                     debug_assert!(v.iter().all(|&c| BigDigit::from(c) < (1 << bits)));
 
@@ -12743,7 +12517,8 @@ pub mod num
                     biguint_from_vec(data)
                 }
                 
-                fn from_inexact_bitwise_digits_le(v: &[u8], bits: u8) -> BigUint {
+                fn from_inexact_bitwise_digits_le(v: &[u8], bits: u8) -> BigUint 
+                {
                     debug_assert!(!v.is_empty() && bits <= 8 && big_digit::BITS % bits != 0);
                     debug_assert!(v.iter().all(|&c| BigDigit::from(c) < (1 << bits)));
 
@@ -12780,7 +12555,8 @@ pub mod num
                 }
 
                 // Read little-endian radix digits
-                fn from_radix_digits_be(v: &[u8], radix: u32) -> BigUint {
+                fn from_radix_digits_be(v: &[u8], radix: u32) -> BigUint 
+                {
                     debug_assert!(!v.is_empty() && !radix.is_power_of_two());
                     debug_assert!(v.iter().all(|&c| u32::from(c) < radix));
 
@@ -12826,7 +12602,8 @@ pub mod num
                     biguint_from_vec(data)
                 }
 
-                pub fn from_radix_be(buf: &[u8], radix: u32) -> Option<BigUint> {
+                pub fn from_radix_be(buf: &[u8], radix: u32) -> Option<BigUint> 
+                {
                     assert!(
                         2 <= radix && radix <= 256,
                         "The radix must be within 2...256"
@@ -12857,7 +12634,8 @@ pub mod num
                     Some(res)
                 }
 
-                pub fn from_radix_le(buf: &[u8], radix: u32) -> Option<BigUint> {
+                pub fn from_radix_le(buf: &[u8], radix: u32) -> Option<BigUint> 
+                {
                     assert!(
                         2 <= radix && radix <= 256,
                         "The radix must be within 2...256"
@@ -12888,7 +12666,8 @@ pub mod num
                     Some(res)
                 }
 
-                impl Num for BigUint {
+                impl Num for BigUint 
+                {
                     type FromStrRadixErr = ParseBigIntError;
 
                     /// Creates and initializes a `BigUint`.
@@ -12943,7 +12722,8 @@ pub mod num
                     }
                 }
 
-                fn high_bits_to_u64(v: &BigUint) -> u64 {
+                fn high_bits_to_u64(v: &BigUint) -> u64 
+                {
                     match v.data.len() {
                         0 => 0,
                         1 => {
@@ -12993,7 +12773,8 @@ pub mod num
                     }
                 }
 
-                impl ToPrimitive for BigUint {
+                impl ToPrimitive for BigUint 
+                {
                     #[inline] fn to_i64(&self) -> Option<i64> {
                         self.to_u64().as_ref().and_then(u64::to_i64)
                     }
@@ -13059,7 +12840,8 @@ pub mod num
                     }
                 }
 
-                macro_rules! impl_try_from_biguint {
+                macro_rules! impl_try_from_biguint 
+                {
                     ($T:ty, $to_ty:path) => {
                         impl TryFrom<&BigUint> for $T {
                             type Error = TryFromBigIntError<()>;
@@ -13095,8 +12877,10 @@ pub mod num
                 impl_try_from_biguint!(isize, ToPrimitive::to_isize);
                 impl_try_from_biguint!(i128, ToPrimitive::to_i128);
 
-                impl FromPrimitive for BigUint {
-                    #[inline] fn from_i64(n: i64) -> Option<BigUint> {
+                impl FromPrimitive for BigUint
+                {
+                    #[inline] fn from_i64(n: i64) -> Option<BigUint> 
+                    {
                         if n >= 0 {
                             Some(BigUint::from(n as u64))
                         } else {
@@ -13104,7 +12888,8 @@ pub mod num
                         }
                     }
 
-                    #[inline] fn from_i128(n: i128) -> Option<BigUint> {
+                    #[inline] fn from_i128(n: i128) -> Option<BigUint> 
+                    {
                         if n >= 0 {
                             Some(BigUint::from(n as u128))
                         } else {
@@ -13112,15 +12897,18 @@ pub mod num
                         }
                     }
 
-                    #[inline] fn from_u64(n: u64) -> Option<BigUint> {
+                    #[inline] fn from_u64(n: u64) -> Option<BigUint> 
+                    {
                         Some(BigUint::from(n))
                     }
 
-                    #[inline] fn from_u128(n: u128) -> Option<BigUint> {
+                    #[inline] fn from_u128(n: u128) -> Option<BigUint> 
+                    {
                         Some(BigUint::from(n))
                     }
 
-                    #[inline] fn from_f64(mut n: f64) -> Option<BigUint> {
+                    #[inline] fn from_f64(mut n: f64) -> Option<BigUint> 
+                    {
                         // handle NAN, INFINITY, NEG_INFINITY
                         if !n.is_finite() {
                             return None;
@@ -13150,7 +12938,8 @@ pub mod num
                     }
                 }
 
-                impl From<u64> for BigUint {
+                impl From<u64> for BigUint 
+                {
                     #[inline] fn from(mut n: u64) -> Self {
                         let mut ret: BigUint = Self::ZERO;
 
@@ -13164,7 +12953,8 @@ pub mod num
                     }
                 }
 
-                impl From<u128> for BigUint {
+                impl From<u128> for BigUint 
+                {
                     #[inline] fn from(mut n: u128) -> Self {
                         let mut ret: BigUint = Self::ZERO;
 
@@ -13177,7 +12967,8 @@ pub mod num
                     }
                 }
 
-                macro_rules! impl_biguint_from_uint {
+                macro_rules! impl_biguint_from_uint 
+                {
                     ($T:ty) => {
                         impl From<$T> for BigUint {
                             #[inline]
@@ -13193,7 +12984,8 @@ pub mod num
                 impl_biguint_from_uint!(u32);
                 impl_biguint_from_uint!(usize);
 
-                macro_rules! impl_biguint_try_from_int {
+                macro_rules! impl_biguint_try_from_int 
+                {
                     ($T:ty, $from_ty:path) => {
                         impl TryFrom<$T> for BigUint {
                             type Error = TryFromBigIntError<()>;
@@ -13213,13 +13005,15 @@ pub mod num
                 impl_biguint_try_from_int!(isize, FromPrimitive::from_isize);
                 impl_biguint_try_from_int!(i128, FromPrimitive::from_i128);
 
-                impl ToBigUint for BigUint {
+                impl ToBigUint for BigUint 
+                {
                     #[inline] fn to_biguint(&self) -> Option<BigUint> {
                         Some(self.clone())
                     }
                 }
 
-                macro_rules! impl_to_biguint {
+                macro_rules! impl_to_biguint 
+                {
                     ($T:ty, $from_ty:path) => {
                         impl ToBigUint for $T {
                             #[inline]
@@ -13247,7 +13041,8 @@ pub mod num
                 impl_to_biguint!(f32, FromPrimitive::from_f32);
                 impl_to_biguint!(f64, FromPrimitive::from_f64);
 
-                impl From<bool> for BigUint {
+                impl From<bool> for BigUint 
+                {
                     fn from(x: bool) -> Self {
                         if x {
                             One::one()
@@ -13258,7 +13053,8 @@ pub mod num
                 }
 
                 // Extract bitwise digits that evenly divide BigDigit
-                pub fn to_bitwise_digits_le(u: &BigUint, bits: u8) -> Vec<u8> {
+                pub fn to_bitwise_digits_le(u: &BigUint, bits: u8) -> Vec<u8> 
+                {
                     debug_assert!(!u.is_zero() && bits <= 8 && big_digit::BITS % bits == 0);
 
                     let last_i = u.data.len() - 1;
@@ -13286,7 +13082,8 @@ pub mod num
                 }
 
                 // Extract bitwise digits that don't evenly divide BigDigit
-                fn to_inexact_bitwise_digits_le(u: &BigUint, bits: u8) -> Vec<u8> {
+                fn to_inexact_bitwise_digits_le(u: &BigUint, bits: u8) -> Vec<u8> 
+                {
                     debug_assert!(!u.is_zero() && bits <= 8 && big_digit::BITS % bits != 0);
 
                     let mask: BigDigit = (1 << bits) - 1;
@@ -13328,7 +13125,8 @@ pub mod num
 
                 // Extract little-endian radix digits
                 #[inline(always)] // forced inline to get const-prop for radix=10
-                pub fn to_radix_digits_le(u: &BigUint, radix: u32) -> Vec<u8> {
+                pub fn to_radix_digits_le(u: &BigUint, radix: u32) -> Vec<u8> 
+                {
                     debug_assert!(!u.is_zero() && !radix.is_power_of_two());
 
                     let radix_digits = {
@@ -13401,7 +13199,8 @@ pub mod num
                     res
                 }
 
-                pub fn to_radix_le(u: &BigUint, radix: u32) -> Vec<u8> {
+                pub fn to_radix_le(u: &BigUint, radix: u32) -> Vec<u8> 
+                {
                     if u.is_zero() {
                         vec![0]
                     } else if radix.is_power_of_two() {
@@ -13421,7 +13220,8 @@ pub mod num
                     }
                 }
 
-                pub fn to_str_radix_reversed(u: &BigUint, radix: u32) -> Vec<u8> {
+                pub fn to_str_radix_reversed(u: &BigUint, radix: u32) -> Vec<u8> 
+                {
                     assert!(2 <= radix && radix <= 36, "The radix must be within 2...36");
 
                     if u.is_zero() {
@@ -13441,25 +13241,25 @@ pub mod num
                     }
                     res
                 }
-
                 /// Returns the greatest power of the radix for the `BigDigit` bit size
-                #[inline] fn get_radix_base(radix: u32) -> (BigDigit, usize) {
+                #[inline] fn get_radix_base(radix: u32) -> (BigDigit, usize) 
+                {
                     static BASES: [(BigDigit, usize); 257] = generate_radix_bases(big_digit::MAX);
                     debug_assert!(!radix.is_power_of_two());
                     debug_assert!((3..256).contains(&radix));
                     BASES[radix as usize]
                 }
-
                 /// Returns the greatest power of the radix for half the `BigDigit` bit size
-                #[inline] fn get_half_radix_base(radix: u32) -> (BigDigit, usize) {
+                #[inline] fn get_half_radix_base(radix: u32) -> (BigDigit, usize) 
+                {
                     static BASES: [(BigDigit, usize); 257] = generate_radix_bases(big_digit::HALF);
                     debug_assert!(!radix.is_power_of_two());
                     debug_assert!((3..256).contains(&radix));
                     BASES[radix as usize]
                 }
-
                 /// Generate tables of the greatest power of each radix that is less that the given maximum.
-                const fn generate_radix_bases(max: BigDigit) -> [(BigDigit, usize); 257] {
+                const fn generate_radix_bases(max: BigDigit) -> [(BigDigit, usize); 257] 
+                {
                     let mut bases = [(0, 0); 257];
 
                     let mut radix: BigDigit = 3;
@@ -13500,7 +13300,6 @@ pub mod num
                     },
                     *,
                 };
-
                 /// An iterator of `u32` digits representation of a `BigUint` or `BigInt`,
                 /// ordered least significant digit first.
                 pub struct U32Digits<'a> 
@@ -13682,13 +13481,14 @@ pub mod num
                     *,
                 };
                 
-                struct MontyReducer {
+                struct MontyReducer 
+                {
                     n0inv: BigDigit,
                 }
 
-                // k0 = -m**-1 mod 2**BITS. Algorithm from: Dumas, J.G. "On Newton–Raphson
-                // Iteration for Multiplicative Inverses Modulo Prime Powers".
-                fn inv_mod_alt(b: BigDigit) -> BigDigit {
+                // k0 = -m**-1 mod 2**BITS.
+                fn inv_mod_alt(b: BigDigit) -> BigDigit 
+                {
                     assert_ne!(b & 1, 0);
 
                     let mut k0 = BigDigit::wrapping_sub(2, b);
@@ -13704,22 +13504,16 @@ pub mod num
                     k0.wrapping_neg()
                 }
 
-                impl MontyReducer {
+                impl MontyReducer 
+                {
                     fn new(n: &BigUint) -> Self {
                         let n0inv = inv_mod_alt(n.data[0]);
                         MontyReducer { n0inv }
                     }
                 }
-
-                /// Computes z mod m = x * y * 2 ** (-n*_W) mod m
-                /// assuming k = -1/m mod 2**_W
-                /// See Gueron, "Efficient Software Implementations of Modular Exponentiation".
-                /// <https://eprint.iacr.org/2011/239.pdf>
-                /// In the terminology of that paper, this is an "Almost Montgomery Multiplication":
-                /// x and y are required to satisfy 0 <= z < 2**(n*_W) and then the result
-                /// z is guaranteed to satisfy 0 <= z < 2**(n*_W), but it may not be < m.
-                #[allow(clippy::many_single_char_names)]
-                fn montgomery(x: &BigUint, y: &BigUint, m: &BigUint, k: BigDigit, n: usize) -> BigUint {
+                /// Computes z mod m = x * y * 2 ** (-n*_W) mod m, assuming k = -1/m mod 2**_W
+                fn montgomery(x: &BigUint, y: &BigUint, m: &BigUint, k: BigDigit, n: usize) -> BigUint 
+                {
                     // This code assumes x, y, m are all the same length, n.
                     // (required by addMulVVW and the for loop).
                     // It also assumes that x, y are already reduced mod m,
@@ -13764,8 +13558,8 @@ pub mod num
                     z
                 }
 
-                #[inline(always)]
-                fn add_mul_vvw(z: &mut [BigDigit], x: &[BigDigit], y: BigDigit) -> BigDigit {
+                #[inline( always )] fn add_mul_vvw(z: &mut [BigDigit], x: &[BigDigit], y: BigDigit) -> BigDigit 
+                {
                     let mut c = 0;
                     for (zi, xi) in z.iter_mut().zip(x.iter()) {
                         let (z1, z0) = mul_add_www(*xi, y, *zi);
@@ -13776,10 +13570,9 @@ pub mod num
 
                     c
                 }
-
                 /// The resulting carry c is either 0 or 1.
-                #[inline(always)]
-                fn sub_vv(z: &mut [BigDigit], x: &[BigDigit], y: &[BigDigit]) -> BigDigit {
+                #[inline( always )] fn sub_vv(z: &mut [BigDigit], x: &[BigDigit], y: &[BigDigit]) -> BigDigit 
+                {
                     let mut c = 0;
                     for (i, (xi, yi)) in x.iter().zip(y.iter()).enumerate().take(z.len()) {
                         let zi = xi.wrapping_sub(*yi).wrapping_sub(c);
@@ -13790,27 +13583,25 @@ pub mod num
 
                     c
                 }
-
                 /// z1<<_W + z0 = x+y+c, with c == 0 or 1
-                #[inline(always)]
-                fn add_ww(x: BigDigit, y: BigDigit, c: BigDigit) -> (BigDigit, BigDigit) {
+                #[inline( always )] fn add_ww(x: BigDigit, y: BigDigit, c: BigDigit) -> (BigDigit, BigDigit) 
+                {
                     let yc = y.wrapping_add(c);
                     let z0 = x.wrapping_add(yc);
                     let z1 = if z0 < x || yc < y { 1 } else { 0 };
 
                     (z1, z0)
                 }
-
                 /// z1 << _W + z0 = x * y + c
-                #[inline(always)]
-                fn mul_add_www(x: BigDigit, y: BigDigit, c: BigDigit) -> (BigDigit, BigDigit) {
+                #[inline( always )] fn mul_add_www(x: BigDigit, y: BigDigit, c: BigDigit) -> (BigDigit, BigDigit) 
+                {
                     let z = x as DoubleBigDigit * y as DoubleBigDigit + c as DoubleBigDigit;
                     ((z >> big_digit::BITS) as BigDigit, z as BigDigit)
                 }
-
                 /// Calculates x ** y mod m using a fixed, 4-bit window.
                 #[allow(clippy::many_single_char_names)]
-                pub fn monty_modpow(x: &BigUint, y: &BigUint, m: &BigUint) -> BigUint {
+                pub fn monty_modpow(x: &BigUint, y: &BigUint, m: &BigUint) -> BigUint 
+                {
                     assert!(m.data[0] & 1 == 1);
                     let mr = MontyReducer::new(m);
                     let num_words = m.data.len();
@@ -14478,7 +14269,6 @@ pub mod num
                         d + 1u32
                     }
                 }
-
                 /// Calculates the Greatest Common Divisor (GCD) of the number and `other`.
                 ///
                 /// The result is always positive.
@@ -14514,7 +14304,6 @@ pub mod num
 
                     n << shift
                 }
-
                 /// Calculates the Lowest Common Multiple (LCM) of the number and `other`.
                 #[inline] fn lcm(&self, other: &BigUint) -> BigUint {
                     if self.is_zero() && other.is_zero() {
@@ -14523,7 +14312,6 @@ pub mod num
                         self / self.gcd(other) * other
                     }
                 }
-
                 /// Calculates the Greatest Common Divisor (GCD) and
                 /// Lowest Common Multiple (LCM) together.
                 #[inline] fn gcd_lcm(&self, other: &Self) -> (Self, Self) {
@@ -14535,12 +14323,10 @@ pub mod num
                     };
                     (gcd, lcm)
                 }
-
                 /// Deprecated, use `is_multiple_of` instead.
                 #[inline] fn divides(&self, other: &BigUint) -> bool {
                     self.is_multiple_of(other)
                 }
-
                 /// Returns `true` if the number is a multiple of `other`.
                 #[inline] fn is_multiple_of(&self, other: &BigUint) -> bool {
                     if other.is_zero() {
@@ -14548,7 +14334,6 @@ pub mod num
                     }
                     (self % other).is_zero()
                 }
-
                 /// Returns `true` if the number is divisible by `2`.
                 #[inline] fn is_even(&self) -> bool {
                     // Considering only the last digit.
@@ -14557,12 +14342,10 @@ pub mod num
                         None => true,
                     }
                 }
-
                 /// Returns `true` if the number is not divisible by `2`.
                 #[inline] fn is_odd(&self) -> bool {
                     !self.is_even()
                 }
-
                 /// Rounds up to nearest multiple of argument.
                 #[inline] fn next_multiple_of(&self, other: &Self) -> Self {
                     let m = self.mod_floor(other);
@@ -14753,28 +14536,21 @@ pub mod num
                     })
                 }
             }
-
             /// A generic trait for converting a value to a [`BigUint`].
             pub trait ToBigUint {
                 /// Converts the value of `self` to a [`BigUint`].
                 fn to_biguint(&self) -> Option<BigUint>;
             }
-
             /// Creates and initializes a [`BigUint`].
-            ///
-            /// The digits are in little-endian base matching `BigDigit`.
-            #[inline]
-            pub fn biguint_from_vec(digits: Vec<BigDigit>) -> BigUint {
+            #[inline] pub fn biguint_from_vec(digits: Vec<BigDigit>) -> BigUint {
                 BigUint { data: digits }.normalized()
             }
 
-            impl BigUint {
+            impl BigUint 
+            {
                 /// A constant `BigUint` with value 0, useful for static initialization.
                 pub const ZERO: Self = BigUint { data: Vec::new() };
-
                 /// Creates and initializes a [`BigUint`].
-                ///
-                /// The base 2<sup>32</sup> digits are ordered least significant digit first.
                 #[inline] pub fn new(digits: Vec<u32>) -> BigUint {
                     let mut big = Self::ZERO;
 
@@ -14788,19 +14564,13 @@ pub mod num
 
                     big
                 }
-
                 /// Creates and initializes a [`BigUint`].
-                ///
-                /// The base 2<sup>32</sup> digits are ordered least significant digit first.
                 #[inline] pub fn from_slice(slice: &[u32]) -> BigUint {
                     let mut big = Self::ZERO;
                     big.assign_from_slice(slice);
                     big
                 }
-
                 /// Assign a value to a [`BigUint`].
-                ///
-                /// The base 2<sup>32</sup> digits are ordered least significant digit first.
                 #[inline] pub fn assign_from_slice(&mut self, slice: &[u32]) {
                     self.data.clear();
 
@@ -14811,25 +14581,7 @@ pub mod num
 
                     self.normalize();
                 }
-
                 /// Creates and initializes a [`BigUint`].
-                ///
-                /// The bytes are in big-endian byte order.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::BigUint;
-                ///
-                /// assert_eq!(BigUint::from_bytes_be(b"A"),
-                ///            BigUint::parse_bytes(b"65", 10).unwrap());
-                /// assert_eq!(BigUint::from_bytes_be(b"AA"),
-                ///            BigUint::parse_bytes(b"16705", 10).unwrap());
-                /// assert_eq!(BigUint::from_bytes_be(b"AB"),
-                ///            BigUint::parse_bytes(b"16706", 10).unwrap());
-                /// assert_eq!(BigUint::from_bytes_be(b"Hello world!"),
-                ///            BigUint::parse_bytes(b"22405534230753963835153736737", 10).unwrap());
-                /// ```
                 #[inline] pub fn from_bytes_be(bytes: &[u8]) -> BigUint {
                     if bytes.is_empty() {
                         Self::ZERO
@@ -14839,7 +14591,6 @@ pub mod num
                         BigUint::from_bytes_le(&v)
                     }
                 }
-
                 /// Creates and initializes a [`BigUint`].
                 ///
                 /// The bytes are in little-endian byte order.
@@ -14850,94 +14601,26 @@ pub mod num
                         convert::from_bitwise_digits_le(bytes, 8)
                     }
                 }
-
-                /// Creates and initializes a [`BigUint`]. The input slice must contain
-                /// ascii/utf8 characters in [0-9a-zA-Z].
-                /// `radix` must be in the range `2...36`.
-                ///
-                /// The function `from_str_radix` from the `Num` trait provides the same logic
-                /// for `&str` buffers.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::{BigUint, ToBigUint};
-                ///
-                /// assert_eq!(BigUint::parse_bytes(b"1234", 10), ToBigUint::to_biguint(&1234));
-                /// assert_eq!(BigUint::parse_bytes(b"ABCD", 16), ToBigUint::to_biguint(&0xABCD));
-                /// assert_eq!(BigUint::parse_bytes(b"G", 16), None);
-                /// ```
+                /// Creates and initializes a [`BigUint`]
                 #[inline] pub fn parse_bytes(buf: &[u8], radix: u32) -> Option<BigUint> {
                     let s = str::from_utf8(buf).ok()?;
                     BigUint::from_str_radix(s, radix).ok()
                 }
-
-                /// Creates and initializes a [`BigUint`]. Each `u8` of the input slice is
-                /// interpreted as one digit of the number
-                /// and must therefore be less than `radix`.
-                ///
-                /// The bytes are in big-endian byte order.
-                /// `radix` must be in the range `2...256`.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::{BigUint};
-                ///
-                /// let inbase190 = &[15, 33, 125, 12, 14];
-                /// let a = BigUint::from_radix_be(inbase190, 190).unwrap();
-                /// assert_eq!(a.to_radix_be(190), inbase190);
-                /// ```
+                /// Creates and initializes a [`BigUint`].
                 pub fn from_radix_be(buf: &[u8], radix: u32) -> Option<BigUint> {
                     convert::from_radix_be(buf, radix)
                 }
-
-                /// Creates and initializes a [`BigUint`]. Each `u8` of the input slice is
-                /// interpreted as one digit of the number
-                /// and must therefore be less than `radix`.
-                ///
-                /// The bytes are in little-endian byte order.
-                /// `radix` must be in the range `2...256`.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::{BigUint};
-                ///
-                /// let inbase190 = &[14, 12, 125, 33, 15];
-                /// let a = BigUint::from_radix_be(inbase190, 190).unwrap();
-                /// assert_eq!(a.to_radix_be(190), inbase190);
-                /// ```
+                /// Creates and initializes a [`BigUint`].
                 pub fn from_radix_le(buf: &[u8], radix: u32) -> Option<BigUint> {
                     convert::from_radix_le(buf, radix)
                 }
-
                 /// Returns the byte representation of the [`BigUint`] in big-endian byte order.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::BigUint;
-                ///
-                /// let i = BigUint::parse_bytes(b"1125", 10).unwrap();
-                /// assert_eq!(i.to_bytes_be(), vec![4, 101]);
-                /// ```
                 #[inline] pub fn to_bytes_be(&self) -> Vec<u8> {
                     let mut v = self.to_bytes_le();
                     v.reverse();
                     v
                 }
-
                 /// Returns the byte representation of the [`BigUint`] in little-endian byte order.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::BigUint;
-                ///
-                /// let i = BigUint::parse_bytes(b"1125", 10).unwrap();
-                /// assert_eq!(i.to_bytes_le(), vec![101, 4]);
-                /// ```
                 #[inline] pub fn to_bytes_le(&self) -> Vec<u8> {
                     if self.is_zero() {
                         vec![0]
@@ -14945,132 +14628,43 @@ pub mod num
                         convert::to_bitwise_digits_le(self, 8)
                     }
                 }
-
                 /// Returns the `u32` digits representation of the [`BigUint`] ordered least significant digit
                 /// first.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::BigUint;
-                ///
-                /// assert_eq!(BigUint::from(1125u32).to_u32_digits(), vec![1125]);
-                /// assert_eq!(BigUint::from(4294967295u32).to_u32_digits(), vec![4294967295]);
-                /// assert_eq!(BigUint::from(4294967296u64).to_u32_digits(), vec![0, 1]);
-                /// assert_eq!(BigUint::from(112500000000u64).to_u32_digits(), vec![830850304, 26]);
-                /// ```
                 #[inline] pub fn to_u32_digits(&self) -> Vec<u32> {
                     self.iter_u32_digits().collect()
                 }
-
                 /// Returns the `u64` digits representation of the [`BigUint`] ordered least significant digit
                 /// first.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::BigUint;
-                ///
-                /// assert_eq!(BigUint::from(1125u32).to_u64_digits(), vec![1125]);
-                /// assert_eq!(BigUint::from(4294967295u32).to_u64_digits(), vec![4294967295]);
-                /// assert_eq!(BigUint::from(4294967296u64).to_u64_digits(), vec![4294967296]);
-                /// assert_eq!(BigUint::from(112500000000u64).to_u64_digits(), vec![112500000000]);
-                /// assert_eq!(BigUint::from(1u128 << 64).to_u64_digits(), vec![0, 1]);
-                /// ```
                 #[inline] pub fn to_u64_digits(&self) -> Vec<u64> {
                     self.iter_u64_digits().collect()
                 }
-
                 /// Returns an iterator of `u32` digits representation of the [`BigUint`] ordered least
                 /// significant digit first.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::BigUint;
-                ///
-                /// assert_eq!(BigUint::from(1125u32).iter_u32_digits().collect::<Vec<u32>>(), vec![1125]);
-                /// assert_eq!(BigUint::from(4294967295u32).iter_u32_digits().collect::<Vec<u32>>(), vec![4294967295]);
-                /// assert_eq!(BigUint::from(4294967296u64).iter_u32_digits().collect::<Vec<u32>>(), vec![0, 1]);
-                /// assert_eq!(BigUint::from(112500000000u64).iter_u32_digits().collect::<Vec<u32>>(), vec![830850304, 26]);
-                /// ```
                 #[inline] pub fn iter_u32_digits(&self) -> U32Digits<'_> {
                     U32Digits::new(self.data.as_slice())
                 }
-
                 /// Returns an iterator of `u64` digits representation of the [`BigUint`] ordered least
                 /// significant digit first.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::BigUint;
-                ///
-                /// assert_eq!(BigUint::from(1125u32).iter_u64_digits().collect::<Vec<u64>>(), vec![1125]);
-                /// assert_eq!(BigUint::from(4294967295u32).iter_u64_digits().collect::<Vec<u64>>(), vec![4294967295]);
-                /// assert_eq!(BigUint::from(4294967296u64).iter_u64_digits().collect::<Vec<u64>>(), vec![4294967296]);
-                /// assert_eq!(BigUint::from(112500000000u64).iter_u64_digits().collect::<Vec<u64>>(), vec![112500000000]);
-                /// assert_eq!(BigUint::from(1u128 << 64).iter_u64_digits().collect::<Vec<u64>>(), vec![0, 1]);
-                /// ```
                 #[inline] pub fn iter_u64_digits(&self) -> U64Digits<'_> {
                     U64Digits::new(self.data.as_slice())
                 }
-
                 /// Returns the integer formatted as a string in the given radix.
                 /// `radix` must be in the range `2...36`.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::BigUint;
-                ///
-                /// let i = BigUint::parse_bytes(b"ff", 16).unwrap();
-                /// assert_eq!(i.to_str_radix(16), "ff");
-                /// ```
                 #[inline] pub fn to_str_radix(&self, radix: u32) -> String {
                     let mut v = to_str_radix_reversed(self, radix);
                     v.reverse();
                     unsafe { String::from_utf8_unchecked(v) }
                 }
-
                 /// Returns the integer in the requested base in big-endian digit order.
-                /// The output is not given in a human readable alphabet but as a zero
-                /// based `u8` number.
-                /// `radix` must be in the range `2...256`.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::BigUint;
-                ///
-                /// assert_eq!(BigUint::from(0xFFFFu64).to_radix_be(159),
-                ///            vec![2, 94, 27]);
-                /// // 0xFFFF = 65535 = 2*(159^2) + 94*159 + 27
-                /// ```
                 #[inline] pub fn to_radix_be(&self, radix: u32) -> Vec<u8> {
                     let mut v = convert::to_radix_le(self, radix);
                     v.reverse();
                     v
                 }
-
                 /// Returns the integer in the requested base in little-endian digit order.
-                /// The output is not given in a human readable alphabet but as a zero
-                /// based u8 number.
-                /// `radix` must be in the range `2...256`.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_bigint::BigUint;
-                ///
-                /// assert_eq!(BigUint::from(0xFFFFu64).to_radix_le(159),
-                ///            vec![27, 94, 2]);
-                /// // 0xFFFF = 65535 = 27 + 94*159 + 2*(159^2)
-                /// ```
                 #[inline] pub fn to_radix_le(&self, radix: u32) -> Vec<u8> {
                     convert::to_radix_le(self, radix)
                 }
-
                 /// Determines the fewest bits necessary to express the [`BigUint`].
                 #[inline] pub fn bits(&self) -> u64 {
                     if self.is_zero() {
@@ -15079,9 +14673,7 @@ pub mod num
                     let zeros: u64 = self.data.last().unwrap().leading_zeros().into();
                     self.data.len() as u64 * u64::from(big_digit::BITS) - zeros
                 }
-
-                /// Strips off trailing zero bigdigits - comparisons require the last element in the vector to
-                /// be nonzero.
+                /// Strips off trailing zero bigdigit
                 #[inline] fn normalize(&mut self) {
                     if let Some(&0) = self.data.last() {
                         let len = self.data.iter().rposition(|&d| d != 0).map_or(0, |i| i + 1);
@@ -15091,48 +14683,20 @@ pub mod num
                         self.data.shrink_to_fit();
                     }
                 }
-
                 /// Returns a normalized [`BigUint`].
                 #[inline] fn normalized(mut self) -> BigUint {
                     self.normalize();
                     self
                 }
-
                 /// Returns `self ^ exponent`.
                 pub fn pow(&self, exponent: u32) -> Self {
                     Pow::pow(self, exponent)
                 }
-
                 /// Returns `(self ^ exponent) % modulus`.
-                ///
-                /// Panics if the modulus is zero.
                 pub fn modpow(&self, exponent: &Self, modulus: &Self) -> Self {
                     power::modpow(self, exponent, modulus)
                 }
-
                 /// Returns the modular multiplicative inverse if it exists, otherwise `None`.
-                ///
-                /// This solves for `x` in the interval `[0, modulus)` such that `self * x ≡ 1 (mod modulus)`.
-                /// The solution exists if and only if `gcd(self, modulus) == 1`.
-                ///
-                /// ```
-                /// use num_bigint::BigUint;
-                /// use num_traits::{One, Zero};
-                ///
-                /// let m = BigUint::from(383_u32);
-                ///
-                /// // Trivial cases
-                /// assert_eq!(BigUint::zero().modinv(&m), None);
-                /// assert_eq!(BigUint::one().modinv(&m), Some(BigUint::one()));
-                /// let neg1 = &m - 1u32;
-                /// assert_eq!(neg1.modinv(&m), Some(neg1));
-                ///
-                /// let a = BigUint::from(271_u32);
-                /// let x = a.modinv(&m).unwrap();
-                /// assert_eq!(x, BigUint::from(106_u32));
-                /// assert_eq!(x.modinv(&m).unwrap(), a);
-                /// assert!((a * x % m).is_one());
-                /// ```
                 pub fn modinv(&self, modulus: &Self) -> Option<Self> {
                     // Based on the inverse pseudocode listed here:
                     // https://en.wikipedia.org/wiki/Extended_Euclidean_algorithm#Modular_integers
@@ -15189,25 +14753,18 @@ pub mod num
                         None
                     }
                 }
-
-                /// Returns the truncated principal square root of `self` --
-                /// see [Roots::sqrt](https://docs.rs/num-integer/0.1/num_integer/trait.Roots.html#method.sqrt)
+                /// Returns the truncated principal square root of `self`
                 pub fn sqrt(&self) -> Self {
                     Roots::sqrt(self)
                 }
-
-                /// Returns the truncated principal cube root of `self` --
-                /// see [Roots::cbrt](https://docs.rs/num-integer/0.1/num_integer/trait.Roots.html#method.cbrt).
+                /// Returns the truncated principal cube root of `self`
                 pub fn cbrt(&self) -> Self {
                     Roots::cbrt(self)
                 }
-
-                /// Returns the truncated principal `n`th root of `self` --
-                /// see [Roots::nth_root](https://docs.rs/num-integer/0.1/num_integer/trait.Roots.html#tymethod.nth_root).
+                /// Returns the truncated principal `n`th root of `self`
                 pub fn nth_root(&self, n: u32) -> Self {
                     Roots::nth_root(self, n)
                 }
-
                 /// Returns the number of least-significant bits that are zero,
                 /// or `None` if the entire number is zero.
                 pub fn trailing_zeros(&self) -> Option<u64> {
@@ -15215,7 +14772,6 @@ pub mod num
                     let zeros: u64 = self.data[i].trailing_zeros().into();
                     Some(i as u64 * u64::from(big_digit::BITS) + zeros)
                 }
-
                 /// Returns the number of least-significant bits that are ones.
                 pub fn trailing_ones(&self) -> u64 {
                     if let Some(i) = self.data.iter().position(|&digit| !digit != 0) {
@@ -15225,12 +14781,10 @@ pub mod num
                         self.data.len() as u64 * u64::from(big_digit::BITS)
                     }
                 }
-
                 /// Returns the number of one bits.
                 pub fn count_ones(&self) -> u64 {
                     self.data.iter().map(|&d| u64::from(d.count_ones())).sum()
                 }
-
                 /// Returns whether the bit in the given position is set
                 pub fn bit(&self, bit: u64) -> bool {
                     let bits_per_digit = u64::from(big_digit::BITS);
@@ -15306,7 +14860,6 @@ pub mod num
                     self.data.len()
                 }
             }
-
             /// Convert a `u32` chunk (len is either 1 or 2) to a single `u64` digit
             #[inline] fn u32_chunk_to_u64(chunk: &[u32]) -> u64 {
                 // raw could have odd length
@@ -15321,19 +14874,23 @@ pub mod num
         type UsizePromotion = u64;
         type IsizePromotion = i64;
 
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        pub struct ParseBigIntError {
+        #[derive( Debug, Clone, PartialEq, Eq )]
+        pub struct ParseBigIntError 
+        {
             kind: BigIntErrorKind,
         }
 
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        enum BigIntErrorKind {
+        #[derive( Debug, Clone, PartialEq, Eq )]
+        enum BigIntErrorKind 
+        {
             Empty,
             InvalidDigit,
         }
 
-        impl ParseBigIntError {
-            fn __description(&self) -> &str {
+        impl ParseBigIntError 
+        {
+            fn __description(&self) -> &str 
+            {
                 use self::BigIntErrorKind::*;
                 match self.kind {
                     Empty => "cannot parse integer from empty string",
@@ -15341,38 +14898,45 @@ pub mod num
                 }
             }
 
-            fn empty() -> Self {
+            fn empty() -> Self 
+            {
                 ParseBigIntError {
                     kind: BigIntErrorKind::Empty,
                 }
             }
 
-            fn invalid() -> Self {
+            fn invalid() -> Self 
+            {
                 ParseBigIntError {
                     kind: BigIntErrorKind::InvalidDigit,
                 }
             }
         }
 
-        impl fmt::Display for ParseBigIntError {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        impl fmt::Display for ParseBigIntError 
+        {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result 
+            {
                 self.__description().fmt(f)
             }
         }
         
-        impl ::error::Error for ParseBigIntError {
-            fn description(&self) -> &str {
+        impl ::error::Error for ParseBigIntError 
+        {
+            fn description(&self) -> &str 
+            {
                 self.__description()
             }
         }
-
         /// The error type returned when a checked conversion regarding big integer fails.
         #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-        pub struct TryFromBigIntError<T> {
+        pub struct TryFromBigIntError<T> 
+        {
             original: T,
         }
 
-        impl<T> TryFromBigIntError<T> {
+        impl<T> TryFromBigIntError<T> 
+        {
             fn new(original: T) -> Self {
                 TryFromBigIntError { original }
             }
@@ -15380,7 +14944,6 @@ pub mod num
             fn __description(&self) -> &str {
                 "out of range conversion regarding big integer attempted"
             }
-
             /// Extract the original value, if available. The value will be available
             /// if the type before conversion was either [`BigInt`] or [`BigUint`].
             pub fn into_original(self) -> T {
@@ -15389,15 +14952,18 @@ pub mod num
         }
         
         impl<T> std::error::Error for TryFromBigIntError<T> where
-            T: fmt::Debug,
+        T: fmt::Debug
         {
-            fn description(&self) -> &str {
+            fn description(&self) -> &str 
+            {
                 self.__description()
             }
         }
 
-        impl<T> fmt::Display for TryFromBigIntError<T> {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        impl<T> fmt::Display for TryFromBigIntError<T> 
+        {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result 
+            {
                 self.__description().fmt(f)
             }
         }
@@ -15414,37 +14980,33 @@ pub mod num
 
         mod big_digit 
         {
-            // A [`BigDigit`] is a [`BigUint`]'s composing element.
-            
-                pub type BigDigit = u64;
-
-            // A [`DoubleBigDigit`] is the internal type used to do the computations.  Its
-            // size is the double of the size of [`BigDigit`].
+            /// A [`BigDigit`] is a [`BigUint`]'s composing element.
+            pub type BigDigit = u64;
+            /// A [`DoubleBigDigit`] is the internal type used to do the computations.
             pub type DoubleBigDigit = u128;
 
             pub const BITS: u8 = BigDigit::BITS as u8;
             pub const HALF_BITS: u8 = BITS / 2;
             pub const HALF: BigDigit = (1 << HALF_BITS) - 1;
-
             pub const MAX: BigDigit = BigDigit::MAX;
-            const LO_MASK: DoubleBigDigit = MAX as DoubleBigDigit;
+            pub const LO_MASK: DoubleBigDigit = MAX as DoubleBigDigit;
 
-            #[inline] fn get_hi(n: DoubleBigDigit) -> BigDigit {
+            #[inline] fn get_hi(n: DoubleBigDigit) -> BigDigit 
+            {
                 (n >> BITS) as BigDigit
             }
-            #[inline] fn get_lo(n: DoubleBigDigit) -> BigDigit {
+            #[inline] fn get_lo(n: DoubleBigDigit) -> BigDigit 
+            {
                 (n & LO_MASK) as BigDigit
             }
-
             /// Split one [`DoubleBigDigit`] into two [`BigDigit`]s.
-            #[inline]
-            pub fn from_doublebigdigit(n: DoubleBigDigit) -> (BigDigit, BigDigit) {
+            #[inline] pub fn from_doublebigdigit(n: DoubleBigDigit) -> (BigDigit, BigDigit) 
+            {
                 (get_hi(n), get_lo(n))
             }
-
             /// Join two [`BigDigit`]s into one [`DoubleBigDigit`].
-            #[inline]
-            pub fn to_doublebigdigit(hi: BigDigit, lo: BigDigit) -> DoubleBigDigit {
+            #[inline] pub fn to_doublebigdigit(hi: BigDigit, lo: BigDigit) -> DoubleBigDigit 
+            {
                 DoubleBigDigit::from(lo) | (DoubleBigDigit::from(hi) << BITS)
             }
         }
@@ -15452,10 +15014,1955 @@ pub mod num
     
     pub mod complex
     {
+        //! Complex Numbers
         use ::
         {
+            error::Error,
+            iter::{ Product, Sum },
+            num::traits::{ ConstOne, ConstZero, float::{ Float, FloatConst, FloatCore }, Inv, MulAdd, Num, One, Pow, Signed, Zero },
+            ops::{ Add, Div, Mul, Neg, Rem, Sub },
+            str::FromStr,
             *,
         };
+        
+        pub mod cast
+        {
+            use ::
+            {
+                num::traits::{ AsPrimitive, FromPrimitive, Num, NumCast, ToPrimitive },
+                *,
+            }; use super::Complex;
+
+            macro_rules! impl_to_primitive
+            {
+                ($ty:ty, $to:ident) => {
+                    #[inline]
+                    fn $to(&self) -> Option<$ty> {
+                        if self.im.is_zero() {
+                            self.re.$to()
+                        } else {
+                            None
+                        }
+                    }
+                };
+            } // impl_to_primitive
+
+            // Returns None if Complex part is non-zero
+            impl<T: ToPrimitive + Num> ToPrimitive for Complex<T> {
+                impl_to_primitive!(usize, to_usize);
+                impl_to_primitive!(isize, to_isize);
+                impl_to_primitive!(u8, to_u8);
+                impl_to_primitive!(u16, to_u16);
+                impl_to_primitive!(u32, to_u32);
+                impl_to_primitive!(u64, to_u64);
+                impl_to_primitive!(i8, to_i8);
+                impl_to_primitive!(i16, to_i16);
+                impl_to_primitive!(i32, to_i32);
+                impl_to_primitive!(i64, to_i64);
+                impl_to_primitive!(u128, to_u128);
+                impl_to_primitive!(i128, to_i128);
+                impl_to_primitive!(f32, to_f32);
+                impl_to_primitive!(f64, to_f64);
+            }
+
+            macro_rules! impl_from_primitive {
+                ($ty:ty, $from_xx:ident) => {
+                    #[inline]
+                    fn $from_xx(n: $ty) -> Option<Self> {
+                        Some(Complex {
+                            re: T::$from_xx(n)?,
+                            im: T::zero(),
+                        })
+                    }
+                };
+            } // impl_from_primitive
+
+            impl<T: FromPrimitive + Num> FromPrimitive for Complex<T> {
+                impl_from_primitive!(usize, from_usize);
+                impl_from_primitive!(isize, from_isize);
+                impl_from_primitive!(u8, from_u8);
+                impl_from_primitive!(u16, from_u16);
+                impl_from_primitive!(u32, from_u32);
+                impl_from_primitive!(u64, from_u64);
+                impl_from_primitive!(i8, from_i8);
+                impl_from_primitive!(i16, from_i16);
+                impl_from_primitive!(i32, from_i32);
+                impl_from_primitive!(i64, from_i64);
+                impl_from_primitive!(u128, from_u128);
+                impl_from_primitive!(i128, from_i128);
+                impl_from_primitive!(f32, from_f32);
+                impl_from_primitive!(f64, from_f64);
+            }
+
+            impl<T: NumCast + Num> NumCast for Complex<T> {
+                fn from<U: ToPrimitive>(n: U) -> Option<Self> {
+                    Some(Complex {
+                        re: T::from(n)?,
+                        im: T::zero(),
+                    })
+                }
+            }
+
+            impl<T, U> AsPrimitive<U> for Complex<T>
+            where
+                T: AsPrimitive<U>,
+                U: 'static + Copy,
+            {
+                fn as_(self) -> U {
+                    self.re.as_()
+                }
+            }
+        }
+
+        pub mod pow
+        {
+            use ::
+            {
+                num::traits::{ Float, Num, One, Pow },
+                ops::Neg,
+                *,
+            }; use super::Complex;
+
+            macro_rules! pow_impl
+            {
+                ($U:ty, $S:ty) => {
+                    impl<'a, T: Clone + Num> Pow<$U> for &'a Complex<T> {
+                        type Output = Complex<T>;
+
+                        #[inline]
+                        fn pow(self, mut exp: $U) -> Self::Output {
+                            if exp == 0 {
+                                return Complex::one();
+                            }
+                            let mut base = self.clone();
+
+                            while exp & 1 == 0 {
+                                base = base.clone() * base;
+                                exp >>= 1;
+                            }
+
+                            if exp == 1 {
+                                return base;
+                            }
+
+                            let mut acc = base.clone();
+                            while exp > 1 {
+                                exp >>= 1;
+                                base = base.clone() * base;
+                                if exp & 1 == 1 {
+                                    acc = acc * base.clone();
+                                }
+                            }
+                            acc
+                        }
+                    }
+
+                    impl<'a, 'b, T: Clone + Num> Pow<&'b $U> for &'a Complex<T> {
+                        type Output = Complex<T>;
+
+                        #[inline]
+                        fn pow(self, exp: &$U) -> Self::Output {
+                            self.pow(*exp)
+                        }
+                    }
+
+                    impl<'a, T: Clone + Num + Neg<Output = T>> Pow<$S> for &'a Complex<T> {
+                        type Output = Complex<T>;
+
+                        #[inline]
+                        fn pow(self, exp: $S) -> Self::Output {
+                            if exp < 0 {
+                                Pow::pow(&self.inv(), exp.wrapping_neg() as $U)
+                            } else {
+                                Pow::pow(self, exp as $U)
+                            }
+                        }
+                    }
+
+                    impl<'a, 'b, T: Clone + Num + Neg<Output = T>> Pow<&'b $S> for &'a Complex<T> {
+                        type Output = Complex<T>;
+
+                        #[inline]
+                        fn pow(self, exp: &$S) -> Self::Output {
+                            self.pow(*exp)
+                        }
+                    }
+                };
+            }
+
+            pow_impl!(u8, i8);
+            pow_impl!(u16, i16);
+            pow_impl!(u32, i32);
+            pow_impl!(u64, i64);
+            pow_impl!(usize, isize);
+            pow_impl!(u128, i128);
+
+            macro_rules! powf_impl {
+                ($F:ty) => {
+                    impl<'a, T: Float> Pow<$F> for &'a Complex<T>
+                    where
+                        $F: Into<T>,
+                    {
+                        type Output = Complex<T>;
+
+                        #[inline]
+                        fn pow(self, exp: $F) -> Self::Output {
+                            self.powf(exp.into())
+                        }
+                    }
+                    
+                    impl<'a, 'b, T: Float> Pow<&'b $F> for &'a Complex<T>
+                    where
+                        $F: Into<T>,
+                    {
+                        type Output = Complex<T>;
+
+                        #[inline]
+                        fn pow(self, &exp: &$F) -> Self::Output {
+                            self.powf(exp.into())
+                        }
+                    }
+                    
+                    impl<T: Float> Pow<$F> for Complex<T>
+                    where
+                        $F: Into<T>,
+                    {
+                        type Output = Complex<T>;
+
+                        #[inline]
+                        fn pow(self, exp: $F) -> Self::Output {
+                            self.powf(exp.into())
+                        }
+                    }
+                    
+                    impl<'b, T: Float> Pow<&'b $F> for Complex<T>
+                    where
+                        $F: Into<T>,
+                    {
+                        type Output = Complex<T>;
+
+                        #[inline]
+                        fn pow(self, &exp: &$F) -> Self::Output {
+                            self.powf(exp.into())
+                        }
+                    }
+                };
+            }
+
+            powf_impl!(f32);
+            powf_impl!(f64);
+            
+            impl<'a, T: Float> Pow<Complex<T>> for &'a Complex<T> {
+                type Output = Complex<T>;
+
+                #[inline]
+                fn pow(self, exp: Complex<T>) -> Self::Output {
+                    self.powc(exp)
+                }
+            }
+
+            
+            impl<'a, 'b, T: Float> Pow<&'b Complex<T>> for &'a Complex<T> {
+                type Output = Complex<T>;
+
+                #[inline]
+                fn pow(self, &exp: &'b Complex<T>) -> Self::Output {
+                    self.powc(exp)
+                }
+            }
+
+            
+            impl<T: Float> Pow<Complex<T>> for Complex<T> {
+                type Output = Complex<T>;
+
+                #[inline]
+                fn pow(self, exp: Complex<T>) -> Self::Output {
+                    self.powc(exp)
+                }
+            }
+
+            
+            impl<'b, T: Float> Pow<&'b Complex<T>> for Complex<T> {
+                type Output = Complex<T>;
+
+                #[inline]
+                fn pow(self, &exp: &'b Complex<T>) -> Self::Output {
+                    self.powc(exp)
+                }
+            }
+        }
+
+        pub mod complex_float
+        {
+            use ::
+            {
+                num::traits::{ Float, FloatConst, Num, NumCast },
+                ops::Neg,
+                *,
+            }; use super::Complex;
+            
+            mod private
+            {
+                use ::num::traits::{Float, FloatConst};
+
+                use super::super::Complex;
+
+                pub trait Seal {}
+
+                impl<T> Seal for T where T: Float + FloatConst {}
+                impl<T: Float + FloatConst> Seal for Complex<T> {}
+            }
+            /// Generic trait for floating point complex numbers.
+            pub trait ComplexFloat: Num + NumCast + Copy + Neg<Output = Self> + private::Seal 
+            {
+                /// The type used to represent the real coefficients of this complex number.
+                type Real: Float + FloatConst;
+                /// Returns `true` if this value is `NaN` and false otherwise.
+                fn is_nan(self) -> bool;
+                /// Returns `true` if this value is positive infinity or negative infinity and false otherwise.
+                fn is_infinite(self) -> bool;
+                /// Returns `true` if this number is neither infinite nor `NaN`.
+                fn is_finite(self) -> bool;
+                /// Returns `true` if the number is neither zero, infinite, or `NaN`.
+                fn is_normal(self) -> bool;
+                /// Take the reciprocal (inverse) of a number, `1/x`. See also [Complex::finv].
+                fn recip(self) -> Self;
+                /// Raises `self` to a signed integer power.
+                fn powi(self, exp: i32) -> Self;
+                /// Raises `self` to a real power.
+                fn powf(self, exp: Self::Real) -> Self;
+                /// Raises `self` to a complex power.
+                fn powc(self, exp: Complex<Self::Real>) -> Complex<Self::Real>;
+                /// Take the square root of a number.
+                fn sqrt(self) -> Self;
+                /// Returns `e^(self)`, (the exponential function).
+                fn exp(self) -> Self;
+                /// Returns `2^(self)`.
+                fn exp2(self) -> Self;
+                /// Returns `base^(self)`.
+                fn expf(self, base: Self::Real) -> Self;
+                /// Returns the natural logarithm of the number.
+                fn ln(self) -> Self;
+                /// Returns the logarithm of the number with respect to an arbitrary base.
+                fn log(self, base: Self::Real) -> Self;
+                /// Returns the base 2 logarithm of the number.
+                fn log2(self) -> Self;
+                /// Returns the base 10 logarithm of the number.
+                fn log10(self) -> Self;
+                /// Take the cubic root of a number.
+                fn cbrt(self) -> Self;
+                /// Computes the sine of a number (in radians).
+                fn sin(self) -> Self;
+                /// Computes the cosine of a number (in radians).
+                fn cos(self) -> Self;
+                /// Computes the tangent of a number (in radians).
+                fn tan(self) -> Self;
+                /// Computes the arcsine of a number.
+                fn asin(self) -> Self;
+                /// Computes the arccosine of a number.
+                fn acos(self) -> Self;
+                /// Computes the arctangent of a number.
+                fn atan(self) -> Self;
+                /// Hyperbolic sine function.
+                fn sinh(self) -> Self;
+                /// Hyperbolic cosine function.
+                fn cosh(self) -> Self;
+                /// Hyperbolic tangent function.
+                fn tanh(self) -> Self;
+                /// Inverse hyperbolic sine function.
+                fn asinh(self) -> Self;
+                /// Inverse hyperbolic cosine function.
+                fn acosh(self) -> Self;
+                /// Inverse hyperbolic tangent function.
+                fn atanh(self) -> Self;
+                /// Returns the real part of the number.
+                fn re(self) -> Self::Real;
+                /// Returns the imaginary part of the number.
+                fn im(self) -> Self::Real;
+                /// Returns the absolute value of the number. See also [Complex::norm]
+                fn abs(self) -> Self::Real;
+                /// Returns the L1 norm `|re| + |im|` -- the [Manhattan distance] from the origin.
+                fn l1_norm(&self) -> Self::Real;
+                /// Computes the argument of the number.
+                fn arg(self) -> Self::Real;
+                /// Computes the complex conjugate of the number.
+                fn conj(self) -> Self;
+            }
+
+            macro_rules! forward 
+            {
+                ($( $base:ident :: $method:ident ( self $( , $arg:ident : $ty:ty )* ) -> $ret:ty ; )*)
+                    => {$(
+                        #[inline]
+                        fn $method(self $( , $arg : $ty )* ) -> $ret {
+                            $base::$method(self $( , $arg )* )
+                        }
+                    )*};
+            }
+
+            macro_rules! forward_ref 
+            {
+                ($( Self :: $method:ident ( & self $( , $arg:ident : $ty:ty )* ) -> $ret:ty ; )*)
+                    => {$(
+                        #[inline]
+                        fn $method(self $( , $arg : $ty )* ) -> $ret {
+                            Self::$method(&self $( , $arg )* )
+                        }
+                    )*};
+            }
+
+            impl<T> ComplexFloat for T where
+            T: Float + FloatConst
+            {
+                type Real = T;
+
+                fn re(self) -> Self::Real {
+                    self
+                }
+
+                fn im(self) -> Self::Real {
+                    T::zero()
+                }
+
+                fn l1_norm(&self) -> Self::Real {
+                    self.abs()
+                }
+
+                fn arg(self) -> Self::Real {
+                    if self.is_nan() {
+                        self
+                    } else if self.is_sign_negative() {
+                        T::PI()
+                    } else {
+                        T::zero()
+                    }
+                }
+
+                fn powc(self, exp: Complex<Self::Real>) -> Complex<Self::Real> {
+                    Complex::new(self, T::zero()).powc(exp)
+                }
+
+                fn conj(self) -> Self {
+                    self
+                }
+
+                fn expf(self, base: Self::Real) -> Self {
+                    base.powf(self)
+                }
+
+                forward! {
+                    Float::is_normal(self) -> bool;
+                    Float::is_infinite(self) -> bool;
+                    Float::is_finite(self) -> bool;
+                    Float::is_nan(self) -> bool;
+                    Float::recip(self) -> Self;
+                    Float::powi(self, n: i32) -> Self;
+                    Float::powf(self, f: Self) -> Self;
+                    Float::sqrt(self) -> Self;
+                    Float::cbrt(self) -> Self;
+                    Float::exp(self) -> Self;
+                    Float::exp2(self) -> Self;
+                    Float::ln(self) -> Self;
+                    Float::log(self, base: Self) -> Self;
+                    Float::log2(self) -> Self;
+                    Float::log10(self) -> Self;
+                    Float::sin(self) -> Self;
+                    Float::cos(self) -> Self;
+                    Float::tan(self) -> Self;
+                    Float::asin(self) -> Self;
+                    Float::acos(self) -> Self;
+                    Float::atan(self) -> Self;
+                    Float::sinh(self) -> Self;
+                    Float::cosh(self) -> Self;
+                    Float::tanh(self) -> Self;
+                    Float::asinh(self) -> Self;
+                    Float::acosh(self) -> Self;
+                    Float::atanh(self) -> Self;
+                    Float::abs(self) -> Self;
+                }
+            }
+
+            impl<T: Float + FloatConst> ComplexFloat for Complex<T> 
+            {
+                type Real = T;
+
+                fn re(self) -> Self::Real {
+                    self.re
+                }
+
+                fn im(self) -> Self::Real {
+                    self.im
+                }
+
+                fn abs(self) -> Self::Real {
+                    self.norm()
+                }
+
+                fn recip(self) -> Self {
+                    self.finv()
+                }
+
+                // `Complex::l1_norm` uses `Signed::abs` to let it work
+                // for integers too, but we can just use `Float::abs`.
+                fn l1_norm(&self) -> Self::Real {
+                    self.re.abs() + self.im.abs()
+                }
+
+                // `Complex::is_*` methods use `T: FloatCore`, but we
+                // have `T: Float` that can do them as well.
+                fn is_nan(self) -> bool {
+                    self.re.is_nan() || self.im.is_nan()
+                }
+
+                fn is_infinite(self) -> bool {
+                    !self.is_nan() && (self.re.is_infinite() || self.im.is_infinite())
+                }
+
+                fn is_finite(self) -> bool {
+                    self.re.is_finite() && self.im.is_finite()
+                }
+
+                fn is_normal(self) -> bool {
+                    self.re.is_normal() && self.im.is_normal()
+                }
+
+                forward! {
+                    Complex::arg(self) -> Self::Real;
+                    Complex::powc(self, exp: Complex<Self::Real>) -> Complex<Self::Real>;
+                    Complex::exp2(self) -> Self;
+                    Complex::log(self, base: Self::Real) -> Self;
+                    Complex::log2(self) -> Self;
+                    Complex::log10(self) -> Self;
+                    Complex::powf(self, f: Self::Real) -> Self;
+                    Complex::sqrt(self) -> Self;
+                    Complex::cbrt(self) -> Self;
+                    Complex::exp(self) -> Self;
+                    Complex::expf(self, base: Self::Real) -> Self;
+                    Complex::ln(self) -> Self;
+                    Complex::sin(self) -> Self;
+                    Complex::cos(self) -> Self;
+                    Complex::tan(self) -> Self;
+                    Complex::asin(self) -> Self;
+                    Complex::acos(self) -> Self;
+                    Complex::atan(self) -> Self;
+                    Complex::sinh(self) -> Self;
+                    Complex::cosh(self) -> Self;
+                    Complex::tanh(self) -> Self;
+                    Complex::asinh(self) -> Self;
+                    Complex::acosh(self) -> Self;
+                    Complex::atanh(self) -> Self;
+                }
+
+                forward_ref! {
+                    Self::powi(&self, n: i32) -> Self;
+                    Self::conj(&self) -> Self;
+                }
+            }
+
+        } pub use self::complex_float::ComplexFloat;
+
+        pub mod crand
+        {
+            //! Rand implementations for complex numbers
+            use ::
+            {
+                num::traits::{ Num },
+                rand::{ distributions::Standard, prelude::* },
+                *,
+            }; use super::Complex;
+
+            impl<T> Distribution<Complex<T>> for Standard
+            where
+                T: Num + Clone,
+                Standard: Distribution<T>,
+            {
+                fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Complex<T> {
+                    Complex::new(self.sample(rng), self.sample(rng))
+                }
+            }
+            /// A generic random value distribution for complex numbers.
+            #[derive(Clone, Copy, Debug)]
+            pub struct ComplexDistribution<Re, Im = Re> {
+                re: Re,
+                im: Im,
+            }
+
+            impl<Re, Im> ComplexDistribution<Re, Im> {
+                /// Creates a complex distribution from independent
+                /// distributions of the real and imaginary parts.
+                pub fn new(re: Re, im: Im) -> Self {
+                    ComplexDistribution { re, im }
+                }
+            }
+
+            impl<T, Re, Im> Distribution<Complex<T>> for ComplexDistribution<Re, Im>
+            where
+                T: Num + Clone,
+                Re: Distribution<T>,
+                Im: Distribution<T>,
+            {
+                fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Complex<T> {
+                    Complex::new(self.re.sample(rng), self.im.sample(rng))
+                }
+            }
+
+        } pub use self::crand::ComplexDistribution;
+        /// A complex number in Cartesian form.
+        #[repr( C )] #[derive( PartialEq, Eq, Copy, Clone, Hash, Debug, Default )]
+        pub struct Complex<T> 
+        {
+            /// Real portion of the complex number
+            pub re: T,
+            /// Imaginary portion of the complex number
+            pub im: T,
+        }
+        /// Alias for a [`Complex<f32>`]
+        pub type Complex32 = Complex<f32>;
+        /// Create a new [`Complex<f32>`] with arguments that can convert [`Into<f32>`].
+        #[inline] pub fn c32<T: Into<f32>>(re: T, im: T) -> Complex32 
+        {
+            Complex::new(re.into(), im.into())
+        }
+        /// Alias for a [`Complex<f64>`]
+        pub type Complex64 = Complex<f64>;
+        /// Create a new [`Complex<f64>`] with arguments that can convert [`Into<f64>`].
+        #[inline] pub fn c64<T: Into<f64>>(re: T, im: T) -> Complex64 
+        {
+            Complex::new(re.into(), im.into())
+        }
+
+        impl<T> Complex<T> 
+        {
+            /// Create a new `Complex`
+            #[inline] pub const fn new(re: T, im: T) -> Self 
+            {
+                Complex { re, im }
+            }
+        }
+
+        impl<T: Clone + Num> Complex<T> 
+        {
+            /// Returns the imaginary unit.
+            #[inline] pub fn i() -> Self 
+            {
+                Self::new(T::zero(), T::one())
+            }
+            /// Returns the square of the norm, i.e. `re^2 + im^2`.
+            #[inline] pub fn norm_sqr(&self) -> T 
+            {
+                self.re.clone() * self.re.clone() + self.im.clone() * self.im.clone()
+            }
+            /// Multiplies `self` by the scalar `t`.
+            #[inline] pub fn scale(&self, t: T) -> Self 
+            {
+                Self::new(self.re.clone() * t.clone(), self.im.clone() * t)
+            }
+            /// Divides `self` by the scalar `t`.
+            #[inline] pub fn unscale(&self, t: T) -> Self 
+            {
+                Self::new(self.re.clone() / t.clone(), self.im.clone() / t)
+            }
+            /// Raises `self` to an unsigned integer power.
+            #[inline] pub fn powu(&self, exp: u32) -> Self 
+            {
+                Pow::pow(self, exp)
+            }
+        }
+
+        impl<T: Clone + Num + Neg<Output = T>> Complex<T> 
+        {
+            /// Returns the complex conjugate. i.e. `re - i im`
+            #[inline] pub fn conj(&self) -> Self 
+            {
+                Self::new(self.re.clone(), -self.im.clone())
+            }
+            /// Returns `1/self`
+            #[inline] pub fn inv(&self) -> Self 
+            {
+                let norm_sqr = self.norm_sqr();
+                Self::new(
+                    self.re.clone() / norm_sqr.clone(),
+                    -self.im.clone() / norm_sqr,
+                )
+            }
+            /// Raises `self` to a signed integer power.
+            #[inline] pub fn powi(&self, exp: i32) -> Self 
+            {
+                Pow::pow(self, exp)
+            }
+        }
+
+        impl<T: Clone + Signed> Complex<T> 
+        {
+            /// Returns the L1 norm `|re| + |im|` -- the [Manhattan distance] from the origin.
+            #[inline] pub fn l1_norm(&self) -> T 
+            {
+                self.re.abs() + self.im.abs()
+            }
+        }
+        
+        impl<T: Float> Complex<T> 
+        {
+            /// Create a new Complex with a given phase: `exp(i * phase)`.
+            #[inline] pub fn cis(phase: T) -> Self 
+            {
+                Self::new(phase.cos(), phase.sin())
+            }
+            /// Calculate |self|
+            #[inline] pub fn norm(self) -> T 
+            {
+                self.re.hypot(self.im)
+            }
+            /// Calculate the principal Arg of self.
+            #[inline] pub fn arg(self) -> T 
+            {
+                self.im.atan2(self.re)
+            }
+            /// Convert to polar form (r, theta), such that
+            /// `self = r * exp(i * theta)`
+            #[inline] pub fn to_polar(self) -> (T, T) 
+            {
+                (self.norm(), self.arg())
+            }
+            /// Convert a polar representation into a complex number.
+            #[inline] pub fn from_polar(r: T, theta: T) -> Self 
+            {
+                Self::new(r * theta.cos(), r * theta.sin())
+            }
+            /// Computes `e^(self)`, where `e` is the base of the natural logarithm.
+            #[inline] pub fn exp(self) -> Self 
+            {
+                // formula: e^(a + bi) = e^a (cos(b) + i*sin(b)) = from_polar(e^a, b)
+
+                let Complex { re, mut im } = self;
+                // Treat the corner cases +∞, -∞, and NaN
+                if re.is_infinite() {
+                    if re < T::zero() {
+                        if !im.is_finite() {
+                            return Self::new(T::zero(), T::zero());
+                        }
+                    } else if im == T::zero() || !im.is_finite() {
+                        if im.is_infinite() {
+                            im = T::nan();
+                        }
+                        return Self::new(re, im);
+                    }
+                } else if re.is_nan() && im == T::zero() {
+                    return self;
+                }
+
+                Self::from_polar(re.exp(), im)
+            }
+            /// Computes the principal value of natural logarithm of `self`.
+            #[inline] pub fn ln(self) -> Self 
+            {
+                // formula: ln(z) = ln|z| + i*arg(z)
+                let (r, theta) = self.to_polar();
+                Self::new(r.ln(), theta)
+            }
+            /// Computes the principal value of the square root of `self`.
+            #[inline] pub fn sqrt(self) -> Self 
+            {
+                if self.im.is_zero() {
+                    if self.re.is_sign_positive() {
+                        // simple positive real √r, and copy `im` for its sign
+                        Self::new(self.re.sqrt(), self.im)
+                    } else {
+                        // √(r e^(iπ)) = √r e^(iπ/2) = i√r
+                        // √(r e^(-iπ)) = √r e^(-iπ/2) = -i√r
+                        let re = T::zero();
+                        let im = (-self.re).sqrt();
+                        if self.im.is_sign_positive() {
+                            Self::new(re, im)
+                        } else {
+                            Self::new(re, -im)
+                        }
+                    }
+                } else if self.re.is_zero() {
+                    // √(r e^(iπ/2)) = √r e^(iπ/4) = √(r/2) + i√(r/2)
+                    // √(r e^(-iπ/2)) = √r e^(-iπ/4) = √(r/2) - i√(r/2)
+                    let one = T::one();
+                    let two = one + one;
+                    let x = (self.im.abs() / two).sqrt();
+                    if self.im.is_sign_positive() {
+                        Self::new(x, x)
+                    } else {
+                        Self::new(x, -x)
+                    }
+                } else {
+                    // formula: sqrt(r e^(it)) = sqrt(r) e^(it/2)
+                    let one = T::one();
+                    let two = one + one;
+                    let (r, theta) = self.to_polar();
+                    Self::from_polar(r.sqrt(), theta / two)
+                }
+            }
+            /// Computes the principal value of the cube root of `self`.
+            #[inline] pub fn cbrt(self) -> Self 
+            {
+                if self.im.is_zero() {
+                    if self.re.is_sign_positive() {
+                        // simple positive real ∛r, and copy `im` for its sign
+                        Self::new(self.re.cbrt(), self.im)
+                    } else {
+                        // ∛(r e^(iπ)) = ∛r e^(iπ/3) = ∛r/2 + i∛r√3/2
+                        // ∛(r e^(-iπ)) = ∛r e^(-iπ/3) = ∛r/2 - i∛r√3/2
+                        let one = T::one();
+                        let two = one + one;
+                        let three = two + one;
+                        let re = (-self.re).cbrt() / two;
+                        let im = three.sqrt() * re;
+                        if self.im.is_sign_positive() {
+                            Self::new(re, im)
+                        } else {
+                            Self::new(re, -im)
+                        }
+                    }
+                } else if self.re.is_zero() {
+                    // ∛(r e^(iπ/2)) = ∛r e^(iπ/6) = ∛r√3/2 + i∛r/2
+                    // ∛(r e^(-iπ/2)) = ∛r e^(-iπ/6) = ∛r√3/2 - i∛r/2
+                    let one = T::one();
+                    let two = one + one;
+                    let three = two + one;
+                    let im = self.im.abs().cbrt() / two;
+                    let re = three.sqrt() * im;
+                    if self.im.is_sign_positive() {
+                        Self::new(re, im)
+                    } else {
+                        Self::new(re, -im)
+                    }
+                } else {
+                    // formula: cbrt(r e^(it)) = cbrt(r) e^(it/3)
+                    let one = T::one();
+                    let three = one + one + one;
+                    let (r, theta) = self.to_polar();
+                    Self::from_polar(r.cbrt(), theta / three)
+                }
+            }
+            /// Raises `self` to a floating point power.
+            #[inline] pub fn powf(self, exp: T) -> Self 
+            {
+                if exp.is_zero() {
+                    return Self::one();
+                }
+                // formula: x^y = (ρ e^(i θ))^y = ρ^y e^(i θ y)
+                // = from_polar(ρ^y, θ y)
+                let (r, theta) = self.to_polar();
+                Self::from_polar(r.powf(exp), theta * exp)
+            }
+            /// Returns the logarithm of `self` with respect to an arbitrary base.
+            #[inline] pub fn log(self, base: T) -> Self 
+            {
+                // formula: log_y(x) = log_y(ρ e^(i θ))
+                // = log_y(ρ) + log_y(e^(i θ)) = log_y(ρ) + ln(e^(i θ)) / ln(y)
+                // = log_y(ρ) + i θ / ln(y)
+                let (r, theta) = self.to_polar();
+                Self::new(r.log(base), theta / base.ln())
+            }
+            /// Raises `self` to a complex power.
+            #[inline] pub fn powc(self, exp: Self) -> Self 
+            {
+                if exp.is_zero() {
+                    return Self::one();
+                }
+                // formula: x^y = exp(y * ln(x))
+                (exp * self.ln()).exp()
+            }
+            /// Raises a floating point number to the complex power `self`.
+            #[inline] pub fn expf(self, base: T) -> Self 
+            {
+                // formula: x^(a+bi) = x^a x^bi = x^a e^(b ln(x) i)
+                // = from_polar(x^a, b ln(x))
+                Self::from_polar(base.powf(self.re), self.im * base.ln())
+            }
+            /// Computes the sine of `self`.
+            #[inline] pub fn sin(self) -> Self 
+            {
+                // formula: sin(a + bi) = sin(a)cosh(b) + i*cos(a)sinh(b)
+                Self::new(
+                    self.re.sin() * self.im.cosh(),
+                    self.re.cos() * self.im.sinh(),
+                )
+            }
+            /// Computes the cosine of `self`.
+            #[inline] pub fn cos(self) -> Self 
+            {
+                // formula: cos(a + bi) = cos(a)cosh(b) - i*sin(a)sinh(b)
+                Self::new(
+                    self.re.cos() * self.im.cosh(),
+                    -self.re.sin() * self.im.sinh(),
+                )
+            }
+            /// Computes the tangent of `self`.
+            #[inline] pub fn tan(self) -> Self 
+            {
+                // formula: tan(a + bi) = (sin(2a) + i*sinh(2b))/(cos(2a) + cosh(2b))
+                let (two_re, two_im) = (self.re + self.re, self.im + self.im);
+                Self::new(two_re.sin(), two_im.sinh()).unscale(two_re.cos() + two_im.cosh())
+            }
+            /// Computes the principal value of the inverse sine of `self`.
+            #[inline] pub fn asin(self) -> Self 
+            {
+                // formula: arcsin(z) = -i ln(sqrt(1-z^2) + iz)
+                let i = Self::i();
+                -i * ((Self::one() - self * self).sqrt() + i * self).ln()
+            }
+            /// Computes the principal value of the inverse cosine of `self`.
+            #[inline] pub fn acos(self) -> Self 
+            {
+                // formula: arccos(z) = -i ln(i sqrt(1-z^2) + z)
+                let i = Self::i();
+                -i * (i * (Self::one() - self * self).sqrt() + self).ln()
+            }
+            /// Computes the principal value of the inverse tangent of `self`.
+            #[inline] pub fn atan(self) -> Self 
+            {
+                // formula: arctan(z) = (ln(1+iz) - ln(1-iz))/(2i)
+                let i = Self::i();
+                let one = Self::one();
+                let two = one + one;
+                if self == i {
+                    return Self::new(T::zero(), T::infinity());
+                } else if self == -i {
+                    return Self::new(T::zero(), -T::infinity());
+                }
+                ((one + i * self).ln() - (one - i * self).ln()) / (two * i)
+            }
+            /// Computes the hyperbolic sine of `self`.
+            #[inline] pub fn sinh(self) -> Self 
+            {
+                // formula: sinh(a + bi) = sinh(a)cos(b) + i*cosh(a)sin(b)
+                Self::new(
+                    self.re.sinh() * self.im.cos(),
+                    self.re.cosh() * self.im.sin(),
+                )
+            }
+            /// Computes the hyperbolic cosine of `self`.
+            #[inline] pub fn cosh(self) -> Self 
+            {
+                // formula: cosh(a + bi) = cosh(a)cos(b) + i*sinh(a)sin(b)
+                Self::new(
+                    self.re.cosh() * self.im.cos(),
+                    self.re.sinh() * self.im.sin(),
+                )
+            }
+            /// Computes the hyperbolic tangent of `self`.
+            #[inline] pub fn tanh(self) -> Self 
+            {
+                // formula: tanh(a + bi) = (sinh(2a) + i*sin(2b))/(cosh(2a) + cos(2b))
+                let (two_re, two_im) = (self.re + self.re, self.im + self.im);
+                Self::new(two_re.sinh(), two_im.sin()).unscale(two_re.cosh() + two_im.cos())
+            }
+            /// Computes the principal value of inverse hyperbolic sine of `self`.
+            #[inline] pub fn asinh(self) -> Self 
+            {
+                // formula: arcsinh(z) = ln(z + sqrt(1+z^2))
+                let one = Self::one();
+                (self + (one + self * self).sqrt()).ln()
+            }
+            /// Computes the principal value of inverse hyperbolic cosine of `self`.
+            #[inline] pub fn acosh(self) -> Self 
+            {
+                // formula: arccosh(z) = 2 ln(sqrt((z+1)/2) + sqrt((z-1)/2))
+                let one = Self::one();
+                let two = one + one;
+                two * (((self + one) / two).sqrt() + ((self - one) / two).sqrt()).ln()
+            }
+            /// Computes the principal value of inverse hyperbolic tangent of `self`.
+            #[inline] pub fn atanh(self) -> Self 
+            {
+                // formula: arctanh(z) = (ln(1+z) - ln(1-z))/2
+                let one = Self::one();
+                let two = one + one;
+                if self == one {
+                    return Self::new(T::infinity(), T::zero());
+                } else if self == -one {
+                    return Self::new(-T::infinity(), T::zero());
+                }
+                ((one + self).ln() - (one - self).ln()) / two
+            }
+            /// Returns `1/self` using floating-point operations.
+            #[inline] pub fn finv(self) -> Complex<T> 
+            {
+                let norm = self.norm();
+                self.conj() / norm / norm
+            }
+            /// Returns `self/other` using floating-point operations.
+            #[inline] pub fn fdiv(self, other: Complex<T>) -> Complex<T> 
+            {
+                self * other.finv()
+            }
+        }
+        
+        impl<T: Float + FloatConst> Complex<T> 
+        {
+            /// Computes `2^(self)`.
+            #[inline] pub fn exp2(self) -> Self {
+                // formula: 2^(a + bi) = 2^a (cos(b*log2) + i*sin(b*log2))
+                // = from_polar(2^a, b*log2)
+                Self::from_polar(self.re.exp2(), self.im * T::LN_2())
+            }
+            /// Computes the principal value of log base 2 of `self`.
+            #[inline] pub fn log2(self) -> Self {
+                Self::ln(self) / T::LN_2()
+            }
+            /// Computes the principal value of log base 10 of `self`.
+            #[inline] pub fn log10(self) -> Self {
+                Self::ln(self) / T::LN_10()
+            }
+        }
+
+        impl<T: FloatCore> Complex<T> 
+        {
+            /// Checks if the given complex number is NaN
+            #[inline] pub fn is_nan(self) -> bool {
+                self.re.is_nan() || self.im.is_nan()
+            }
+            /// Checks if the given complex number is infinite
+            #[inline] pub fn is_infinite(self) -> bool {
+                !self.is_nan() && (self.re.is_infinite() || self.im.is_infinite())
+            }
+            /// Checks if the given complex number is finite
+            #[inline] pub fn is_finite(self) -> bool {
+                self.re.is_finite() && self.im.is_finite()
+            }
+            /// Checks if the given complex number is normal
+            #[inline] pub fn is_normal(self) -> bool {
+                self.re.is_normal() && self.im.is_normal()
+            }
+        }
+
+        impl<T: Clone + Num> From<T> for Complex<T> 
+        {
+            #[inline]
+            fn from(re: T) -> Self {
+                Self::new(re, T::zero())
+            }
+        }
+
+        impl<'a, T: Clone + Num> From<&'a T> for Complex<T> 
+        {
+            #[inline]
+            fn from(re: &T) -> Self {
+                From::from(re.clone())
+            }
+        }
+
+        macro_rules! forward_ref_ref_binop 
+        {
+            (impl $imp:ident, $method:ident) => {
+                impl<'a, 'b, T: Clone + Num> $imp<&'b Complex<T>> for &'a Complex<T> {
+                    type Output = Complex<T>;
+
+                    #[inline]
+                    fn $method(self, other: &Complex<T>) -> Self::Output {
+                        self.clone().$method(other.clone())
+                    }
+                }
+            };
+        }
+
+        macro_rules! forward_ref_val_binop 
+        {
+            (impl $imp:ident, $method:ident) => {
+                impl<'a, T: Clone + Num> $imp<Complex<T>> for &'a Complex<T> {
+                    type Output = Complex<T>;
+
+                    #[inline]
+                    fn $method(self, other: Complex<T>) -> Self::Output {
+                        self.clone().$method(other)
+                    }
+                }
+            };
+        }
+
+        macro_rules! forward_val_ref_binop 
+        {
+            (impl $imp:ident, $method:ident) => {
+                impl<'a, T: Clone + Num> $imp<&'a Complex<T>> for Complex<T> {
+                    type Output = Complex<T>;
+
+                    #[inline]
+                    fn $method(self, other: &Complex<T>) -> Self::Output {
+                        self.$method(other.clone())
+                    }
+                }
+            };
+        }
+
+        macro_rules! forward_all_binop 
+        {
+            (impl $imp:ident, $method:ident) => {
+                forward_ref_ref_binop!(impl $imp, $method);
+                forward_ref_val_binop!(impl $imp, $method);
+                forward_val_ref_binop!(impl $imp, $method);
+            };
+        }
+
+        forward_all_binop!(impl Add, add);
+        
+        impl<T: Clone + Num> Add<Complex<T>> for Complex<T> 
+        {
+            type Output = Self;
+
+            #[inline]
+            fn add(self, other: Self) -> Self::Output {
+                Self::Output::new(self.re + other.re, self.im + other.im)
+            }
+        }
+
+        forward_all_binop!(impl Sub, sub);
+        
+        impl<T: Clone + Num> Sub<Complex<T>> for Complex<T> 
+        {
+            type Output = Self;
+
+            #[inline]
+            fn sub(self, other: Self) -> Self::Output {
+                Self::Output::new(self.re - other.re, self.im - other.im)
+            }
+        }
+
+        forward_all_binop!(impl Mul, mul);
+        
+        impl<T: Clone + Num> Mul<Complex<T>> for Complex<T> 
+        {
+            type Output = Self;
+
+            #[inline]
+            fn mul(self, other: Self) -> Self::Output {
+                let re = self.re.clone() * other.re.clone() - self.im.clone() * other.im.clone();
+                let im = self.re * other.im + self.im * other.re;
+                Self::Output::new(re, im)
+            }
+        }
+        
+        impl<T: Clone + Num + MulAdd<Output = T>> MulAdd<Complex<T>> for Complex<T> 
+        {
+            type Output = Complex<T>;
+
+            #[inline]
+            fn mul_add(self, other: Complex<T>, add: Complex<T>) -> Complex<T> {
+                let re = self.re.clone().mul_add(other.re.clone(), add.re)
+                    - (self.im.clone() * other.im.clone()); // FIXME: use mulsub when available in rust
+                let im = self.re.mul_add(other.im, self.im.mul_add(other.re, add.im));
+                Complex::new(re, im)
+            }
+        }
+
+        impl<'a, 'b, T: Clone + Num + MulAdd<Output = T>> MulAdd<&'b Complex<T>> for &'a Complex<T> 
+        {
+            type Output = Complex<T>;
+
+            #[inline]
+            fn mul_add(self, other: &Complex<T>, add: &Complex<T>) -> Complex<T> {
+                self.clone().mul_add(other.clone(), add.clone())
+            }
+        }
+
+        forward_all_binop!(impl Div, div);
+        
+        impl<T: Clone + Num> Div<Complex<T>> for Complex<T> 
+        {
+            type Output = Self;
+
+            #[inline]
+            fn div(self, other: Self) -> Self::Output {
+                let norm_sqr = other.norm_sqr();
+                let re = self.re.clone() * other.re.clone() + self.im.clone() * other.im.clone();
+                let im = self.im * other.re - self.re * other.im;
+                Self::Output::new(re / norm_sqr.clone(), im / norm_sqr)
+            }
+        }
+
+        forward_all_binop!(impl Rem, rem);
+
+        impl<T: Clone + Num> Complex<T> 
+        {
+            /// Find the gaussian integer corresponding to the true ratio rounded towards zero.
+            fn div_trunc(&self, divisor: &Self) -> Self {
+                let Complex { re, im } = self / divisor;
+                Complex::new(re.clone() - re % T::one(), im.clone() - im % T::one())
+            }
+        }
+
+        impl<T: Clone + Num> Rem<Complex<T>> for Complex<T> 
+        {
+            type Output = Self;
+
+            #[inline]
+            fn rem(self, modulus: Self) -> Self::Output {
+                let gaussian = self.div_trunc(&modulus);
+                self - modulus * gaussian
+            }
+        }
+        
+        mod opassign 
+        {
+            use ::
+            {
+                num::traits::{ MulAddAssign, NumAssign },
+                ops::{ AddAssign, DivAssign, MulAssign, RemAssign, SubAssign },
+                *,
+            }; use super::Complex;
+
+            impl<T: Clone + NumAssign> AddAssign for Complex<T> 
+            {
+                fn add_assign(&mut self, other: Self) {
+                    self.re += other.re;
+                    self.im += other.im;
+                }
+            }
+
+            impl<T: Clone + NumAssign> SubAssign for Complex<T> 
+            {
+                fn sub_assign(&mut self, other: Self) {
+                    self.re -= other.re;
+                    self.im -= other.im;
+                }
+            }
+
+            // (a + i b) * (c + i d) == (a*c - b*d) + i (a*d + b*c)
+            impl<T: Clone + NumAssign> MulAssign for Complex<T> 
+            {
+                fn mul_assign(&mut self, other: Self) {
+                    let a = self.re.clone();
+
+                    self.re *= other.re.clone();
+                    self.re -= self.im.clone() * other.im.clone();
+
+                    self.im *= other.re;
+                    self.im += a * other.im;
+                }
+            }
+
+            // (a + i b) * (c + i d) + (e + i f) == ((a*c + e) - b*d) + i (b*c + (a*d + f))
+            impl<T: Clone + NumAssign + MulAddAssign> MulAddAssign for Complex<T> 
+            {
+                fn mul_add_assign(&mut self, other: Complex<T>, add: Complex<T>) {
+                    let a = self.re.clone();
+
+                    self.re.mul_add_assign(other.re.clone(), add.re); // (a*c + e)
+                    self.re -= self.im.clone() * other.im.clone(); // ((a*c + e) - b*d)
+
+                    let mut adf = a;
+                    adf.mul_add_assign(other.im, add.im); // (a*d + f)
+                    self.im.mul_add_assign(other.re, adf); // (b*c + (a*d + f))
+                }
+            }
+
+            impl<'a, 'b, T: Clone + NumAssign + MulAddAssign> MulAddAssign<&'a Complex<T>, &'b Complex<T>>
+                for Complex<T>
+            {
+                fn mul_add_assign(&mut self, other: &Complex<T>, add: &Complex<T>) {
+                    self.mul_add_assign(other.clone(), add.clone());
+                }
+            }
+
+            // (a + i b) / (c + i d) == [(a + i b) * (c - i d)] / (c*c + d*d)
+            //   == [(a*c + b*d) / (c*c + d*d)] + i [(b*c - a*d) / (c*c + d*d)]
+            impl<T: Clone + NumAssign> DivAssign for Complex<T> 
+            {
+                fn div_assign(&mut self, other: Self) {
+                    let a = self.re.clone();
+                    let norm_sqr = other.norm_sqr();
+
+                    self.re *= other.re.clone();
+                    self.re += self.im.clone() * other.im.clone();
+                    self.re /= norm_sqr.clone();
+
+                    self.im *= other.re;
+                    self.im -= a * other.im;
+                    self.im /= norm_sqr;
+                }
+            }
+
+            impl<T: Clone + NumAssign> RemAssign for Complex<T> 
+            {
+                fn rem_assign(&mut self, modulus: Self) {
+                    let gaussian = self.div_trunc(&modulus);
+                    *self -= modulus * gaussian;
+                }
+            }
+
+            impl<T: Clone + NumAssign> AddAssign<T> for Complex<T> 
+            {
+                fn add_assign(&mut self, other: T) {
+                    self.re += other;
+                }
+            }
+
+            impl<T: Clone + NumAssign> SubAssign<T> for Complex<T> 
+            {
+                fn sub_assign(&mut self, other: T) {
+                    self.re -= other;
+                }
+            }
+
+            impl<T: Clone + NumAssign> MulAssign<T> for Complex<T> 
+            {
+                fn mul_assign(&mut self, other: T) {
+                    self.re *= other.clone();
+                    self.im *= other;
+                }
+            }
+
+            impl<T: Clone + NumAssign> DivAssign<T> for Complex<T> 
+            {
+                fn div_assign(&mut self, other: T) {
+                    self.re /= other.clone();
+                    self.im /= other;
+                }
+            }
+
+            impl<T: Clone + NumAssign> RemAssign<T> for Complex<T> 
+            {
+                fn rem_assign(&mut self, other: T) {
+                    self.re %= other.clone();
+                    self.im %= other;
+                }
+            }
+
+            macro_rules! forward_op_assign 
+            {
+                (impl $imp:ident, $method:ident) => {
+                    impl<'a, T: Clone + NumAssign> $imp<&'a Complex<T>> for Complex<T> {
+                        #[inline]
+                        fn $method(&mut self, other: &Self) {
+                            self.$method(other.clone())
+                        }
+                    }
+                    impl<'a, T: Clone + NumAssign> $imp<&'a T> for Complex<T> {
+                        #[inline]
+                        fn $method(&mut self, other: &T) {
+                            self.$method(other.clone())
+                        }
+                    }
+                };
+            }
+
+            forward_op_assign!(impl AddAssign, add_assign);
+            forward_op_assign!(impl SubAssign, sub_assign);
+            forward_op_assign!(impl MulAssign, mul_assign);
+            forward_op_assign!(impl DivAssign, div_assign);
+            forward_op_assign!(impl RemAssign, rem_assign);
+        }
+
+        impl<T: Clone + Num + Neg<Output = T>> Neg for Complex<T> 
+        {
+            type Output = Self;
+
+            #[inline]
+            fn neg(self) -> Self::Output {
+                Self::Output::new(-self.re, -self.im)
+            }
+        }
+
+        impl<'a, T: Clone + Num + Neg<Output = T>> Neg for &'a Complex<T> 
+        {
+            type Output = Complex<T>;
+
+            #[inline]
+            fn neg(self) -> Self::Output {
+                -self.clone()
+            }
+        }
+
+        impl<T: Clone + Num + Neg<Output = T>> Inv for Complex<T> 
+        {
+            type Output = Self;
+
+            #[inline]
+            fn inv(self) -> Self::Output {
+                Complex::inv(&self)
+            }
+        }
+
+        impl<'a, T: Clone + Num + Neg<Output = T>> Inv for &'a Complex<T> 
+        {
+            type Output = Complex<T>;
+
+            #[inline]
+            fn inv(self) -> Self::Output {
+                Complex::inv(self)
+            }
+        }
+
+        macro_rules! real_arithmetic 
+        {
+            (@forward $imp:ident::$method:ident for $($real:ident),*) => (
+                impl<'a, T: Clone + Num> $imp<&'a T> for Complex<T> {
+                    type Output = Complex<T>;
+
+                    #[inline]
+                    fn $method(self, other: &T) -> Self::Output {
+                        self.$method(other.clone())
+                    }
+                }
+                impl<'a, T: Clone + Num> $imp<T> for &'a Complex<T> {
+                    type Output = Complex<T>;
+
+                    #[inline]
+                    fn $method(self, other: T) -> Self::Output {
+                        self.clone().$method(other)
+                    }
+                }
+                impl<'a, 'b, T: Clone + Num> $imp<&'a T> for &'b Complex<T> {
+                    type Output = Complex<T>;
+
+                    #[inline]
+                    fn $method(self, other: &T) -> Self::Output {
+                        self.clone().$method(other.clone())
+                    }
+                }
+                $(
+                    impl<'a> $imp<&'a Complex<$real>> for $real {
+                        type Output = Complex<$real>;
+
+                        #[inline]
+                        fn $method(self, other: &Complex<$real>) -> Complex<$real> {
+                            self.$method(other.clone())
+                        }
+                    }
+                    impl<'a> $imp<Complex<$real>> for &'a $real {
+                        type Output = Complex<$real>;
+
+                        #[inline]
+                        fn $method(self, other: Complex<$real>) -> Complex<$real> {
+                            self.clone().$method(other)
+                        }
+                    }
+                    impl<'a, 'b> $imp<&'a Complex<$real>> for &'b $real {
+                        type Output = Complex<$real>;
+
+                        #[inline]
+                        fn $method(self, other: &Complex<$real>) -> Complex<$real> {
+                            self.clone().$method(other.clone())
+                        }
+                    }
+                )*
+            );
+            ($($real:ident),*) => (
+                real_arithmetic!(@forward Add::add for $($real),*);
+                real_arithmetic!(@forward Sub::sub for $($real),*);
+                real_arithmetic!(@forward Mul::mul for $($real),*);
+                real_arithmetic!(@forward Div::div for $($real),*);
+                real_arithmetic!(@forward Rem::rem for $($real),*);
+
+                $(
+                    impl Add<Complex<$real>> for $real {
+                        type Output = Complex<$real>;
+
+                        #[inline]
+                        fn add(self, other: Complex<$real>) -> Self::Output {
+                            Self::Output::new(self + other.re, other.im)
+                        }
+                    }
+
+                    impl Sub<Complex<$real>> for $real {
+                        type Output = Complex<$real>;
+
+                        #[inline]
+                        fn sub(self, other: Complex<$real>) -> Self::Output  {
+                            Self::Output::new(self - other.re, $real::zero() - other.im)
+                        }
+                    }
+
+                    impl Mul<Complex<$real>> for $real {
+                        type Output = Complex<$real>;
+
+                        #[inline]
+                        fn mul(self, other: Complex<$real>) -> Self::Output {
+                            Self::Output::new(self * other.re, self * other.im)
+                        }
+                    }
+
+                    impl Div<Complex<$real>> for $real {
+                        type Output = Complex<$real>;
+
+                        #[inline]
+                        fn div(self, other: Complex<$real>) -> Self::Output {
+                            // a / (c + i d) == [a * (c - i d)] / (c*c + d*d)
+                            let norm_sqr = other.norm_sqr();
+                            Self::Output::new(self * other.re / norm_sqr.clone(),
+                                            $real::zero() - self * other.im / norm_sqr)
+                        }
+                    }
+
+                    impl Rem<Complex<$real>> for $real {
+                        type Output = Complex<$real>;
+
+                        #[inline]
+                        fn rem(self, other: Complex<$real>) -> Self::Output {
+                            Self::Output::new(self, Self::zero()) % other
+                        }
+                    }
+                )*
+            );
+        }
+
+        impl<T: Clone + Num> Add<T> for Complex<T> 
+        {
+            type Output = Complex<T>;
+
+            #[inline]
+            fn add(self, other: T) -> Self::Output {
+                Self::Output::new(self.re + other, self.im)
+            }
+        }
+
+        impl<T: Clone + Num> Sub<T> for Complex<T> 
+        {
+            type Output = Complex<T>;
+
+            #[inline]
+            fn sub(self, other: T) -> Self::Output {
+                Self::Output::new(self.re - other, self.im)
+            }
+        }
+
+        impl<T: Clone + Num> Mul<T> for Complex<T> 
+        {
+            type Output = Complex<T>;
+
+            #[inline]
+            fn mul(self, other: T) -> Self::Output {
+                Self::Output::new(self.re * other.clone(), self.im * other)
+            }
+        }
+
+        impl<T: Clone + Num> Div<T> for Complex<T> 
+        {
+            type Output = Self;
+
+            #[inline]
+            fn div(self, other: T) -> Self::Output {
+                Self::Output::new(self.re / other.clone(), self.im / other)
+            }
+        }
+
+        impl<T: Clone + Num> Rem<T> for Complex<T> 
+        {
+            type Output = Complex<T>;
+
+            #[inline]
+            fn rem(self, other: T) -> Self::Output {
+                Self::Output::new(self.re % other.clone(), self.im % other)
+            }
+        }
+
+        real_arithmetic!(usize, u8, u16, u32, u64, u128, isize, i8, i16, i32, i64, i128, f32, f64);
+        
+        impl<T: ConstZero> Complex<T> 
+        {
+            /// A constant `Complex` 0.
+            pub const ZERO: Self = Self::new(T::ZERO, T::ZERO);
+        }
+
+        impl<T: Clone + Num + ConstZero> ConstZero for Complex<T> 
+        {
+            const ZERO: Self = Self::ZERO;
+        }
+
+        impl<T: Clone + Num> Zero for Complex<T> 
+        {
+            #[inline]
+            fn zero() -> Self {
+                Self::new(Zero::zero(), Zero::zero())
+            }
+
+            #[inline]
+            fn is_zero(&self) -> bool {
+                self.re.is_zero() && self.im.is_zero()
+            }
+
+            #[inline]
+            fn set_zero(&mut self) {
+                self.re.set_zero();
+                self.im.set_zero();
+            }
+        }
+
+        impl<T: ConstOne + ConstZero> Complex<T> 
+        {
+            /// A constant `Complex` 1.
+            pub const ONE: Self = Self::new(T::ONE, T::ZERO);
+
+            /// A constant `Complex` _i_, the imaginary unit.
+            pub const I: Self = Self::new(T::ZERO, T::ONE);
+        }
+
+        impl<T: Clone + Num + ConstOne + ConstZero> ConstOne for Complex<T> 
+        {
+            const ONE: Self = Self::ONE;
+        }
+
+        impl<T: Clone + Num> One for Complex<T> 
+        {
+            #[inline]
+            fn one() -> Self {
+                Self::new(One::one(), Zero::zero())
+            }
+
+            #[inline]
+            fn is_one(&self) -> bool {
+                self.re.is_one() && self.im.is_zero()
+            }
+
+            #[inline]
+            fn set_one(&mut self) {
+                self.re.set_one();
+                self.im.set_zero();
+            }
+        }
+
+        macro_rules! write_complex 
+        {
+            ($f:ident, $t:expr, $prefix:expr, $re:expr, $im:expr, $T:ident) => {{
+                let abs_re = if $re < Zero::zero() {
+                    $T::zero() - $re.clone()
+                } else {
+                    $re.clone()
+                };
+                let abs_im = if $im < Zero::zero() {
+                    $T::zero() - $im.clone()
+                } else {
+                    $im.clone()
+                };
+
+                return if let Some(prec) = $f.precision() {
+                    fmt_re_im(
+                        $f,
+                        $re < $T::zero(),
+                        $im < $T::zero(),
+                        format_args!(concat!("{:.1$", $t, "}"), abs_re, prec),
+                        format_args!(concat!("{:.1$", $t, "}"), abs_im, prec),
+                    )
+                } else {
+                    fmt_re_im(
+                        $f,
+                        $re < $T::zero(),
+                        $im < $T::zero(),
+                        format_args!(concat!("{:", $t, "}"), abs_re),
+                        format_args!(concat!("{:", $t, "}"), abs_im),
+                    )
+                };
+
+                fn fmt_re_im(
+                    f: &mut fmt::Formatter<'_>,
+                    re_neg: bool,
+                    im_neg: bool,
+                    real: fmt::Arguments<'_>,
+                    imag: fmt::Arguments<'_>,
+                ) -> fmt::Result {
+                    let prefix = if f.alternate() { $prefix } else { "" };
+                    let sign = if re_neg {
+                        "-"
+                    } else if f.sign_plus() {
+                        "+"
+                    } else {
+                        ""
+                    };
+
+                    if im_neg {
+                        fmt_complex(
+                            f,
+                            format_args!(
+                                "{}{pre}{re}-{pre}{im}i",
+                                sign,
+                                re = real,
+                                im = imag,
+                                pre = prefix
+                            ),
+                        )
+                    } else {
+                        fmt_complex(
+                            f,
+                            format_args!(
+                                "{}{pre}{re}+{pre}{im}i",
+                                sign,
+                                re = real,
+                                im = imag,
+                                pre = prefix
+                            ),
+                        )
+                    }
+                }
+                
+                // Currently, we can only apply width using an intermediate `String` (and thus `std`)
+                fn fmt_complex(f: &mut fmt::Formatter<'_>, complex: fmt::Arguments<'_>) -> fmt::Result {
+                    use std::string::ToString;
+                    if let Some(width) = f.width() {
+                        write!(f, "{0: >1$}", complex.to_string(), width)
+                    } else {
+                        write!(f, "{}", complex)
+                    }
+                }
+            }};
+        }
+        
+        impl<T> fmt::Display for Complex<T> where
+        T: fmt::Display + Num + PartialOrd + Clone,
+        {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write_complex!(f, "", "", self.re, self.im, T)
+            }
+        }
+
+        impl<T> fmt::LowerExp for Complex<T> where
+            T: fmt::LowerExp + Num + PartialOrd + Clone,
+        {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write_complex!(f, "e", "", self.re, self.im, T)
+            }
+        }
+
+        impl<T> fmt::UpperExp for Complex<T> where
+            T: fmt::UpperExp + Num + PartialOrd + Clone,
+        {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write_complex!(f, "E", "", self.re, self.im, T)
+            }
+        }
+
+        impl<T> fmt::LowerHex for Complex<T> where
+            T: fmt::LowerHex + Num + PartialOrd + Clone,
+        {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write_complex!(f, "x", "0x", self.re, self.im, T)
+            }
+        }
+
+        impl<T> fmt::UpperHex for Complex<T> where
+            T: fmt::UpperHex + Num + PartialOrd + Clone,
+        {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write_complex!(f, "X", "0x", self.re, self.im, T)
+            }
+        }
+
+        impl<T> fmt::Octal for Complex<T> where
+            T: fmt::Octal + Num + PartialOrd + Clone,
+        {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write_complex!(f, "o", "0o", self.re, self.im, T)
+            }
+        }
+
+        impl<T> fmt::Binary for Complex<T> where
+            T: fmt::Binary + Num + PartialOrd + Clone,
+        {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write_complex!(f, "b", "0b", self.re, self.im, T)
+            }
+        }
+
+        fn from_str_generic<T, E, F>(s: &str, from: F) -> Result<Complex<T>, ParseComplexError<E>> where
+            F: Fn(&str) -> Result<T, E>,
+            T: Clone + Num,
+        {
+            let imag = match s.rfind('j') {
+                None => 'i',
+                _ => 'j',
+            };
+
+            let mut neg_b = false;
+            let mut a = s;
+            let mut b = "";
+
+            for (i, w) in s.as_bytes().windows(2).enumerate() {
+                let p = w[0];
+                let c = w[1];
+
+                // ignore '+'/'-' if part of an exponent
+                if (c == b'+' || c == b'-') && !(p == b'e' || p == b'E') {
+                    // trim whitespace around the separator
+                    a = s[..=i].trim_end_matches(char::is_whitespace);
+                    b = s[i + 2..].trim_start_matches(char::is_whitespace);
+                    neg_b = c == b'-';
+
+                    if b.is_empty() || (neg_b && b.starts_with('-')) {
+                        return Err(ParseComplexError::expr_error());
+                    }
+                    break;
+                }
+            }
+
+            // split off real and imaginary parts
+            if b.is_empty() {
+                // input was either pure real or pure imaginary
+                b = if a.ends_with(imag) { "0" } else { "0i" };
+            }
+
+            let re;
+            let neg_re;
+            let im;
+            let neg_im;
+            if a.ends_with(imag) {
+                im = a;
+                neg_im = false;
+                re = b;
+                neg_re = neg_b;
+            } else if b.ends_with(imag) {
+                re = a;
+                neg_re = false;
+                im = b;
+                neg_im = neg_b;
+            } else {
+                return Err(ParseComplexError::expr_error());
+            }
+
+            // parse re
+            let re = from(re).map_err(ParseComplexError::from_error)?;
+            let re = if neg_re { T::zero() - re } else { re };
+
+            // pop imaginary unit off
+            let mut im = &im[..im.len() - 1];
+            // handle im == "i" or im == "-i"
+            if im.is_empty() || im == "+" {
+                im = "1";
+            } else if im == "-" {
+                im = "-1";
+            }
+
+            // parse im
+            let im = from(im).map_err(ParseComplexError::from_error)?;
+            let im = if neg_im { T::zero() - im } else { im };
+
+            Ok(Complex::new(re, im))
+        }
+
+        impl<T> FromStr for Complex<T> where
+            T: FromStr + Num + Clone,
+        {
+            type Err = ParseComplexError<T::Err>;
+
+            /// Parses `a +/- bi`; `ai +/- b`; `a`; or `bi` where `a` and `b` are of type `T`
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                from_str_generic(s, T::from_str)
+            }
+        }
+
+        impl<T: Num + Clone> Num for Complex<T> 
+        {
+            type FromStrRadixErr = ParseComplexError<T::FromStrRadixErr>;
+
+            /// Parses `a +/- bi`; `ai +/- b`; `a`; or `bi` where `a` and `b` are of type `T`
+            fn from_str_radix(s: &str, radix: u32) -> Result<Self, Self::FromStrRadixErr> 
+            {
+                assert!(
+                    radix <= 36,
+                    "from_str_radix: radix is too high (maximum 36)"
+                );
+
+                // larger radix would include 'i' and 'j' as digits, which cannot be supported
+                if radix > 18 {
+                    return Err(ParseComplexError::unsupported_radix());
+                }
+
+                from_str_generic(s, |x| -> Result<T, T::FromStrRadixErr> {
+                    T::from_str_radix(x, radix)
+                })
+            }
+        }
+
+        impl<T: Num + Clone> Sum for Complex<T> 
+        {
+            fn sum<I>(iter: I) -> Self where
+                I: Iterator<Item = Self>,
+            {
+                iter.fold(Self::zero(), |acc, c| acc + c)
+            }
+        }
+
+        impl<'a, T: 'a + Num + Clone> Sum<&'a Complex<T>> for Complex<T> 
+        {
+            fn sum<I>(iter: I) -> Self where
+                I: Iterator<Item = &'a Complex<T>>,
+            {
+                iter.fold(Self::zero(), |acc, c| acc + c)
+            }
+        }
+
+        impl<T: Num + Clone> Product for Complex<T> 
+        {
+            fn product<I>(iter: I) -> Self where
+                I: Iterator<Item = Self>,
+            {
+                iter.fold(Self::one(), |acc, c| acc * c)
+            }
+        }
+
+        impl<'a, T: 'a + Num + Clone> Product<&'a Complex<T>> for Complex<T> 
+        {
+            fn product<I>(iter: I) -> Self where
+                I: Iterator<Item = &'a Complex<T>>,
+            {
+                iter.fold(Self::one(), |acc, c| acc * c)
+            }
+        }
+
+        #[derive(Debug, PartialEq)]
+        pub struct ParseComplexError<E> 
+        {
+            kind: ComplexErrorKind<E>,
+        }
+
+        #[derive(Debug, PartialEq)]
+        enum ComplexErrorKind<E> 
+        {
+            ParseError(E),
+            ExprError,
+            UnsupportedRadix,
+        }
+
+        impl<E> ParseComplexError<E> 
+        {
+            fn expr_error() -> Self 
+            {
+                ParseComplexError {
+                    kind: ComplexErrorKind::ExprError,
+                }
+            }
+
+            fn unsupported_radix() -> Self 
+            {
+                ParseComplexError {
+                    kind: ComplexErrorKind::UnsupportedRadix,
+                }
+            }
+
+            fn from_error(error: E) -> Self 
+            {
+                ParseComplexError {
+                    kind: ComplexErrorKind::ParseError(error),
+                }
+            }
+        }
+        
+        impl<E: Error> Error for ParseComplexError<E> 
+        {
+            fn description(&self) -> &str 
+            {
+                match self.kind {
+                    ComplexErrorKind::ParseError(ref e) => e.description(),
+                    ComplexErrorKind::ExprError => "invalid or unsupported complex expression",
+                    ComplexErrorKind::UnsupportedRadix => "unsupported radix for conversion",
+                }
+            }
+        }
+
+        impl<E: fmt::Display> fmt::Display for ParseComplexError<E> 
+        {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result 
+            {
+                match self.kind {
+                    ComplexErrorKind::ParseError(ref e) => e.fmt(f),
+                    ComplexErrorKind::ExprError => "invalid or unsupported complex expression".fmt(f),
+                    ComplexErrorKind::UnsupportedRadix => "unsupported radix for conversion".fmt(f),
+                }
+            }
+        }
     }
 
     pub mod fractional
@@ -15470,6 +16977,7 @@ pub mod num
             },
             *,
         };
+
         pub fn frac_from_whole_and_dec(whole: BigInt, decimal: BigInt, dec_len: usize) -> BigRational
         {
             let denom = pow(BigInt::from_u8(10).unwrap(), dec_len);
@@ -15502,125 +17010,27 @@ pub mod num
             /// and arbitrary `n`th root.
             pub trait Roots: Integer
             {
-                /// Returns the truncated principal `n`th root of an integer
-                /// -- `if x >= 0 { ⌊ⁿ√x⌋ } else { ⌈ⁿ√x⌉ }`
-                ///
-                /// This is solving for `r` in `rⁿ = x`, rounding toward zero.
-                /// If `x` is positive, the result will satisfy `rⁿ ≤ x < (r+1)ⁿ`.
-                /// If `x` is negative and `n` is odd, then `(r-1)ⁿ < x ≤ rⁿ`.
-                ///
-                /// # Panics
-                ///
-                /// Panics if `n` is zero:
-                ///
-                /// ```should_panic
-                /// # use num_integer::Roots;
-                /// println!("can't compute ⁰√x : {}", 123.nth_root(0));
-                /// ```
-                ///
-                /// or if `n` is even and `self` is negative:
-                ///
-                /// ```should_panic
-                /// # use num_integer::Roots;
-                /// println!("no imaginary numbers... {}", (-1).nth_root(10));
-                /// ```
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_integer::Roots;
-                ///
-                /// let x: i32 = 12345;
-                /// assert_eq!(x.nth_root(1), x);
-                /// assert_eq!(x.nth_root(2), x.sqrt());
-                /// assert_eq!(x.nth_root(3), x.cbrt());
-                /// assert_eq!(x.nth_root(4), 10);
-                /// assert_eq!(x.nth_root(13), 2);
-                /// assert_eq!(x.nth_root(14), 1);
-                /// assert_eq!(x.nth_root(std::u32::MAX), 1);
-                ///
-                /// assert_eq!(std::i32::MAX.nth_root(30), 2);
-                /// assert_eq!(std::i32::MAX.nth_root(31), 1);
-                /// assert_eq!(std::i32::MIN.nth_root(31), -2);
-                /// assert_eq!((std::i32::MIN + 1).nth_root(31), -1);
-                ///
-                /// assert_eq!(std::u32::MAX.nth_root(31), 2);
-                /// assert_eq!(std::u32::MAX.nth_root(32), 1);
-                /// ```
+                /// Returns the truncated principal `n`th root of an integer | `if x >= 0 { ⌊ⁿ√x⌋ } else { ⌈ⁿ√x⌉ }`
                 fn nth_root(&self, n: u32) -> Self;
-
                 /// Returns the truncated principal square root of an integer -- `⌊√x⌋`
-                ///
-                /// This is solving for `r` in `r² = x`, rounding toward zero.
-                /// The result will satisfy `r² ≤ x < (r+1)²`.
-                ///
-                /// # Panics
-                ///
-                /// Panics if `self` is less than zero:
-                ///
-                /// ```should_panic
-                /// # use num_integer::Roots;
-                /// println!("no imaginary numbers... {}", (-1).sqrt());
-                /// ```
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_integer::Roots;
-                ///
-                /// let x: i32 = 12345;
-                /// assert_eq!((x * x).sqrt(), x);
-                /// assert_eq!((x * x + 1).sqrt(), x);
-                /// assert_eq!((x * x - 1).sqrt(), x - 1);
-                /// ```
                 #[inline] fn sqrt(&self) -> Self {
                     self.nth_root(2)
                 }
-
-                /// Returns the truncated principal cube root of an integer --
-                /// `if x >= 0 { ⌊∛x⌋ } else { ⌈∛x⌉ }`
-                ///
-                /// This is solving for `r` in `r³ = x`, rounding toward zero.
-                /// If `x` is positive, the result will satisfy `r³ ≤ x < (r+1)³`.
-                /// If `x` is negative, then `(r-1)³ < x ≤ r³`.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// use num_integer::Roots;
-                ///
-                /// let x: i32 = 1234;
-                /// assert_eq!((x * x * x).cbrt(), x);
-                /// assert_eq!((x * x * x + 1).cbrt(), x);
-                /// assert_eq!((x * x * x - 1).cbrt(), x - 1);
-                ///
-                /// assert_eq!((-(x * x * x)).cbrt(), -x);
-                /// assert_eq!((-(x * x * x + 1)).cbrt(), -x);
-                /// assert_eq!((-(x * x * x - 1)).cbrt(), -(x - 1));
-                /// ```
+                /// Returns the truncated principal cube root of an integer | `if x >= 0 { ⌊∛x⌋ } else { ⌈∛x⌉ }`
                 #[inline] fn cbrt(&self) -> Self {
                     self.nth_root(3)
                 }
             }
-
-            /// Returns the truncated principal square root of an integer --
-            /// see [Roots::sqrt](trait.Roots.html#method.sqrt).
-            #[inline]
-            pub fn sqrt<T: Roots>(x: T) -> T
+            /// Returns the truncated principal square root of an integer
+            #[inline] pub fn sqrt<T: Roots>(x: T) -> T
                 {    x.sqrt()
             }
-
-            /// Returns the truncated principal cube root of an integer --
-            /// see [Roots::cbrt](trait.Roots.html#method.cbrt).
-            #[inline]
-            pub fn cbrt<T: Roots>(x: T) -> T
+            /// Returns the truncated principal cube root of an integer
+            #[inline] pub fn cbrt<T: Roots>(x: T) -> T
                 {    x.cbrt()
             }
-
-            /// Returns the truncated principal `n`th root of an integer --
-            /// see [Roots::nth_root](trait.Roots.html#tymethod.nth_root).
-            #[inline]
-            pub fn nth_root<T: Roots>(x: T, n: u32) -> T
+            /// Returns the truncated principal `n`th root of an integer
+            #[inline] pub fn nth_root<T: Roots>(x: T, n: u32) -> T
                 {    x.nth_root(n)
             }
 
@@ -15882,7 +17292,6 @@ pub mod num
                 #[inline] fn average_floor(&self, other: &I) -> I {
                     (self & other) + ((self ^ other) >> 1)
                 }
-
                 /// Returns the ceil value of the average of `self` and `other`.
                 #[inline] fn average_ceil(&self, other: &I) -> I {
                     (self | other) - ((self ^ other) >> 1)
@@ -15890,14 +17299,12 @@ pub mod num
             }
             /// Returns the floor value of the average of `x` and `y` --
             /// see [Average::average_floor](trait.Average.html#tymethod.average_floor).
-            #[inline]
-            pub fn average_floor<T: Average>(x: T, y: T) -> T
+            #[inline] pub fn average_floor<T: Average>(x: T, y: T) -> T
                 {    x.average_floor(&y)
             }
             /// Returns the ceiling value of the average of `x` and `y` --
             /// see [Average::average_ceil](trait.Average.html#tymethod.average_ceil).
-            #[inline]
-            pub fn average_ceil<T: Average>(x: T, y: T) -> T
+            #[inline] pub fn average_ceil<T: Average>(x: T, y: T) -> T
                 {    x.average_ceil(&y)
             }
         }
@@ -15921,7 +17328,6 @@ pub mod num
                     q + Self::one()
                 }
             }
-
             /// Greatest Common Divisor (GCD).
             fn gcd(&self, other: &Self) -> Self;
 
@@ -15933,7 +17339,6 @@ pub mod num
             #[inline] fn gcd_lcm(&self, other: &Self) -> (Self, Self) {
                 (self.gcd(other), self.lcm(other))
             }
-
             /// Greatest common divisor and Bézout coefficients.
             #[inline] fn extended_gcd(&self, other: &Self) -> ExtendedGcd<Self> where
                 Self: Clone,
@@ -15968,20 +17373,17 @@ pub mod num
                     }
                 }
             }
-
             /// Greatest common divisor, least common multiple, and Bézout coefficients.
             #[inline] fn extended_gcd_lcm(&self, other: &Self) -> (ExtendedGcd<Self>, Self) where
                 Self: Clone + Signed,
             {
                 (self.extended_gcd(other), self.lcm(other))
             }
-
             /// Deprecated, use `is_multiple_of` instead.
             #[deprecated(note = "Please use is_multiple_of instead")]
             #[inline] fn divides(&self, other: &Self) -> bool {
                 self.is_multiple_of(other)
             }
-
             /// Returns `true` if `self` is a multiple of `other`.
             fn is_multiple_of(&self, other: &Self) -> bool;
 
@@ -15998,7 +17400,6 @@ pub mod num
             fn div_mod_floor(&self, other: &Self) -> (Self, Self) {
                 (self.div_floor(other), self.mod_floor(other))
             }
-
             /// Rounds up to nearest multiple of argument.
             #[inline] fn next_multiple_of(&self, other: &Self) -> Self where
                 Self: Clone,
@@ -16011,21 +17412,18 @@ pub mod num
                         other.clone() - m
                     }
             }
-
             /// Rounds down to nearest multiple of argument.
             #[inline] fn prev_multiple_of(&self, other: &Self) -> Self where
                 Self: Clone,
             {
                 self.clone() - self.mod_floor(other)
             }
-
             /// Decrements self by one.
             fn dec(&mut self) where
                 Self: Clone,
             {
                 *self = self.clone() - Self::one()
             }
-
             /// Increments self by one.
             fn inc(&mut self) where
                 Self: Clone,
@@ -16346,7 +17744,6 @@ pub mod num
         impl_integer_for_usize!(u64, test_integer_u64);
         impl_integer_for_usize!(u128, test_integer_u128);
         impl_integer_for_usize!(usize, test_integer_usize);
-
         /// An iterator over binomial coefficients.
         pub struct IterBinomial<T> {
             a: T,
@@ -16390,8 +17787,6 @@ pub mod num
             }
         }
         /// Calculate r * a / b, avoiding overflows and fractions.
-        ///
-        /// Assumes that b divides r * a evenly.
         fn multiply_and_divide<T: Integer + Clone>(r: T, a: T, b: T) -> T
                 {// See http://blog.plover.com/math/choose-2.html for the idea.
             let g = gcd(r.clone(), b.clone());
@@ -16432,14 +17827,6 @@ pub mod num
         }
     }
     
-    pub mod iter
-    {
-        use ::
-        {
-            *,
-        };
-    }
-    
     pub mod rational
     {
         //! Rational numbers
@@ -16463,7 +17850,6 @@ pub mod num
             *,
         };
         
-
         mod pow
         {
             use ::
@@ -16647,16 +18033,15 @@ pub mod num
                 }
             }
         }
-
         /// Represents the ratio between two numbers.
         #[derive(Copy, Clone, Debug)]
-        pub struct Ratio<T> {
+        pub struct Ratio<T> 
+        {
             /// Numerator.
             numer: T,
             /// Denominator.
             denom: T,
         }
-
         /// Alias for a `Ratio` of machine-sized integers.
         #[deprecated(
             since = "0.4.0",
@@ -16670,69 +18055,48 @@ pub mod num
         
         /// Alias for arbitrary precision rationals.
         pub type BigRational = Ratio<BigInt>;
-
         /// These method are `const`.
-        impl<T> Ratio<T> {
+        impl<T> Ratio<T> 
+        {
             /// Creates a `Ratio` without checking for `denom == 0` or reducing.
-            ///
-            /// **There are several methods that will panic if used on a `Ratio` with
-            /// `denom == 0`.**
-            #[inline]
-            pub const fn new_raw(numer: T, denom: T) -> Ratio<T> {
+            #[inline] pub const fn new_raw(numer: T, denom: T) -> Ratio<T> {
                 Ratio { numer, denom }
             }
-
             /// Deconstructs a `Ratio` into its numerator and denominator.
-            #[inline]
-            pub fn into_raw(self) -> (T, T) {
+            #[inline] pub fn into_raw(self) -> (T, T) {
                 (self.numer, self.denom)
             }
-
             /// Gets an immutable reference to the numerator.
-            #[inline]
-            pub const fn numer(&self) -> &T {
+            #[inline] pub const fn numer(&self) -> &T {
                 &self.numer
             }
-
             /// Gets an immutable reference to the denominator.
-            #[inline]
-            pub const fn denom(&self) -> &T {
+            #[inline] pub const fn denom(&self) -> &T {
                 &self.denom
             }
         }
 
-        impl<T: Clone + Integer> Ratio<T> {
+        impl<T: Clone + Integer> Ratio<T>
+        {
             /// Creates a new `Ratio`.
-            ///
-            /// **Panics if `denom` is zero.**
-            #[inline]
-            pub fn new(numer: T, denom: T) -> Ratio<T> {
+            #[inline] pub fn new(numer: T, denom: T) -> Ratio<T> {
                 let mut ret = Ratio::new_raw(numer, denom);
                 ret.reduce();
                 ret
             }
-
             /// Creates a `Ratio` representing the integer `t`.
-            #[inline]
-            pub fn from_integer(t: T) -> Ratio<T> {
+            #[inline] pub fn from_integer(t: T) -> Ratio<T> {
                 Ratio::new_raw(t, One::one())
             }
-
             /// Converts to an integer, rounding towards zero.
-            #[inline]
-            pub fn to_integer(&self) -> T {
+            #[inline] pub fn to_integer(&self) -> T {
                 self.trunc().numer
             }
-
             /// Returns true if the rational number is an integer (denominator is 1).
-            #[inline]
-            pub fn is_integer(&self) -> bool {
+            #[inline] pub fn is_integer(&self) -> bool {
                 self.denom.is_one()
             }
-
             /// Puts self into lowest terms, with `denom` > 0.
-            ///
-            /// **Panics if `denom` is zero.**
             fn reduce(&mut self) {
                 if self.denom.is_zero() {
                     panic!("denominator == 0");
@@ -16746,13 +18110,10 @@ pub mod num
                     return;
                 }
                 let g: T = self.numer.gcd(&self.denom);
-
-                // FIXME(#5992): assignment operator overloads
-                // T: Clone + Integer != T: Clone + NumAssign
-
+                
                 #[inline]
                 fn replace_with<T: Zero>(x: &mut T, f: impl FnOnce(T) -> T) {
-                    let y = core::mem::replace(x, T::zero());
+                    let y = ::mem::replace(x, T::zero());
                     *x = f(y);
                 }
 
@@ -16768,24 +18129,14 @@ pub mod num
                     replace_with(&mut self.denom, |x| T::zero() - x);
                 }
             }
-
             /// Returns a reduced copy of self.
-            ///
-            /// In general, it is not necessary to use this method, as the only
-            /// method of procuring a non-reduced fraction is through `new_raw`.
-            ///
-            /// **Panics if `denom` is zero.**
             pub fn reduced(&self) -> Ratio<T> {
                 let mut ret = self.clone();
                 ret.reduce();
                 ret
             }
-
             /// Returns the reciprocal.
-            ///
-            /// **Panics if the `Ratio` is zero.**
-            #[inline]
-            pub fn recip(&self) -> Ratio<T> {
+            #[inline] pub fn recip(&self) -> Ratio<T> {
                 self.clone().into_recip()
             }
 
@@ -16796,10 +18147,8 @@ pub mod num
                     cmp::Ordering::Less => Ratio::new_raw(T::zero() - self.denom, T::zero() - self.numer),
                 }
             }
-
             /// Rounds towards minus infinity.
-            #[inline]
-            pub fn floor(&self) -> Ratio<T> {
+            #[inline] pub fn floor(&self) -> Ratio<T> {
                 if *self < Zero::zero() {
                     let one: T = One::one();
                     Ratio::from_integer(
@@ -16809,10 +18158,8 @@ pub mod num
                     Ratio::from_integer(self.numer.clone() / self.denom.clone())
                 }
             }
-
             /// Rounds towards plus infinity.
-            #[inline]
-            pub fn ceil(&self) -> Ratio<T> {
+            #[inline] pub fn ceil(&self) -> Ratio<T> {
                 if *self < Zero::zero() {
                     Ratio::from_integer(self.numer.clone() / self.denom.clone())
                 } else {
@@ -16822,10 +18169,8 @@ pub mod num
                     )
                 }
             }
-
             /// Rounds to the nearest integer. Rounds half-way cases away from zero.
-            #[inline]
-            pub fn round(&self) -> Ratio<T> {
+            #[inline] pub fn round(&self) -> Ratio<T> {
                 let zero: Ratio<T> = Zero::zero();
                 let one: T = One::one();
                 let two: T = one.clone() + one.clone();
@@ -16856,34 +18201,27 @@ pub mod num
                     self.trunc()
                 }
             }
-
             /// Rounds towards zero.
-            #[inline]
-            pub fn trunc(&self) -> Ratio<T> {
+            #[inline] pub fn trunc(&self) -> Ratio<T> {
                 Ratio::from_integer(self.numer.clone() / self.denom.clone())
             }
-
             /// Returns the fractional part of a number, with division rounded towards zero.
-            ///
-            /// Satisfies `self == self.trunc() + self.fract()`.
-            #[inline]
-            pub fn fract(&self) -> Ratio<T> {
+            #[inline] pub fn fract(&self) -> Ratio<T> {
                 Ratio::new_raw(self.numer.clone() % self.denom.clone(), self.denom.clone())
             }
-
             /// Raises the `Ratio` to the power of an exponent.
-            #[inline]
-            pub fn pow(&self, expon: i32) -> Ratio<T>
-            where
-                for<'a> &'a T: Pow<u32, Output = T>,
+            #[inline] pub fn pow(&self, expon: i32) -> Ratio<T> where
+            for<'a> &'a T: Pow<u32, Output = T>
             {
                 Pow::pow(self, expon)
             }
         }
         
-        impl Ratio<BigInt> {
+        impl Ratio<BigInt> 
+        {
             /// Converts a float into a rational number.
-            pub fn from_float<T: FloatCore>(f: T) -> Option<BigRational> {
+            pub fn from_float<T: FloatCore>(f: T) -> Option<BigRational> 
+            {
                 if !f.is_finite() {
                     return None;
                 }
@@ -16905,7 +18243,8 @@ pub mod num
             }
         }
 
-        impl<T: Clone + Integer> Default for Ratio<T> {
+        impl<T: Clone + Integer> Default for Ratio<T> 
+        {
             /// Returns zero
             fn default() -> Self {
                 Ratio::zero()
@@ -16999,7 +18338,8 @@ pub mod num
 
         impl<T: Clone + Integer> Eq for Ratio<T> {}
         
-        impl<T: Clone + Integer + Hash> Hash for Ratio<T> {
+        impl<T: Clone + Integer + Hash> Hash for Ratio<T> 
+        {
             fn hash<H: Hasher>(&self, state: &mut H) {
                 recurse(&self.numer, &self.denom, state);
 
@@ -17357,7 +18697,8 @@ pub mod num
             }
         }
 
-        macro_rules! arith_impl {
+        macro_rules! arith_impl 
+        {
             (impl $imp:ident, $method:ident) => {
                 forward_all_binop!(impl $imp, $method);
                 // Abstracts a/b `op` c/d = (a*lcm/b `op` c*lcm/d)/lcm where lcm = lcm(b,d)
@@ -17512,12 +18853,14 @@ pub mod num
         }
 
         // Constants
-        impl<T: ConstZero + ConstOne> Ratio<T> {
+        impl<T: ConstZero + ConstOne> Ratio<T> 
+        {
             /// A constant `Ratio` 0/1.
             pub const ZERO: Self = Self::new_raw(T::ZERO, T::ONE);
         }
 
-        impl<T: Clone + Integer + ConstZero + ConstOne> ConstZero for Ratio<T> {
+        impl<T: Clone + Integer + ConstZero + ConstOne> ConstZero for Ratio<T> 
+        {
             const ZERO: Self = Self::ZERO;
         }
 
@@ -17537,12 +18880,14 @@ pub mod num
             }
         }
 
-        impl<T: ConstOne> Ratio<T> {
+        impl<T: ConstOne> Ratio<T> 
+        {
             /// A constant `Ratio` 1/1.
             pub const ONE: Self = Self::new_raw(T::ONE, T::ONE);
         }
 
-        impl<T: Clone + Integer + ConstOne> ConstOne for Ratio<T> {
+        impl<T: Clone + Integer + ConstOne> ConstOne for Ratio<T> 
+        {
             const ONE: Self = Self::ONE;
         }
 
@@ -17562,7 +18907,8 @@ pub mod num
             }
         }
 
-        impl<T: Clone + Integer> Num for Ratio<T> {
+        impl<T: Clone + Integer> Num for Ratio<T> 
+        {
             type FromStrRadixErr = ParseRatioError;
 
             /// Parses `numer/denom` where the numbers are in base `radix`.
@@ -17630,7 +18976,8 @@ pub mod num
         }
 
         // String conversions
-        macro_rules! impl_formatting {
+        macro_rules! impl_formatting 
+        {
             ($fmt_trait:ident, $prefix:expr, $fmt_str:expr, $fmt_alt:expr) => {
                 impl<T: $fmt_trait + Clone + Integer> $fmt_trait for Ratio<T> {
                     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -17661,7 +19008,8 @@ pub mod num
         impl_formatting!(LowerExp, "", "{:e}", "{:#e}");
         impl_formatting!(UpperExp, "", "{:E}", "{:#E}");
 
-        impl<T: FromStr + Clone + Integer> FromStr for Ratio<T> {
+        impl<T: FromStr + Clone + Integer> FromStr for Ratio<T> 
+        {
             type Err = ParseRatioError;
 
             /// Parses `numer/denom` or just `numer`.
@@ -17690,7 +19038,8 @@ pub mod num
             }
         }
 
-        impl<T> From<Ratio<T>> for (T, T) {
+        impl<T> From<Ratio<T>> for (T, T) 
+        {
             fn from(val: Ratio<T>) -> Self {
                 (val.numer, val.denom)
             }
@@ -17698,30 +19047,34 @@ pub mod num
 
         // FIXME: Bubble up specific errors
         #[derive(Copy, Clone, Debug, PartialEq)]
-        pub struct ParseRatioError {
+        pub struct ParseRatioError 
+        {
             kind: RatioErrorKind,
         }
 
         #[derive(Copy, Clone, Debug, PartialEq)]
-        enum RatioErrorKind {
+        enum RatioErrorKind 
+        {
             ParseError,
             ZeroDenominator,
         }
 
-        impl fmt::Display for ParseRatioError {
+        impl fmt::Display for ParseRatioError 
+        {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 self.kind.description().fmt(f)
             }
         }
         
-        impl Error for ParseRatioError {
-            #[allow(deprecated)]
+        impl Error for ParseRatioError 
+        {
             fn description(&self) -> &str {
                 self.kind.description()
             }
         }
 
-        impl RatioErrorKind {
+        impl RatioErrorKind 
+        {
             fn description(&self) -> &'static str {
                 match *self {
                     RatioErrorKind::ParseError => "failed to parse integer",
@@ -17730,7 +19083,8 @@ pub mod num
             }
         }
         
-        impl FromPrimitive for Ratio<BigInt> {
+        impl FromPrimitive for Ratio<BigInt> 
+        {
             fn from_i64(n: i64) -> Option<Self> {
                 Some(Ratio::from_integer(n.into()))
             }
@@ -17756,7 +19110,8 @@ pub mod num
             }
         }
 
-        macro_rules! from_primitive_integer {
+        macro_rules! from_primitive_integer 
+        {
             ($typ:ty, $approx:ident) => {
                 impl FromPrimitive for Ratio<$typ> {
                     fn from_i64(n: i64) -> Option<Self> {
@@ -17800,7 +19155,8 @@ pub mod num
         from_primitive_integer!(u128, approximate_float_unsigned);
         from_primitive_integer!(usize, approximate_float_unsigned);
 
-        impl<T: Integer + Signed + Bounded + NumCast + Clone> Ratio<T> {
+        impl<T: Integer + Signed + Bounded + NumCast + Clone> Ratio<T> 
+        {
             pub fn approximate_float<F: FloatCore + NumCast>(f: F) -> Option<Ratio<T>> {
                 // 1/10e-20 < 1/2**32 which seems like a good default, and 30 seems
                 // to work well. Might want to choose something based on the types in the future, e.g.
@@ -17810,7 +19166,8 @@ pub mod num
             }
         }
 
-        impl<T: Integer + Unsigned + Bounded + NumCast + Clone> Ratio<T> {
+        impl<T: Integer + Unsigned + Bounded + NumCast + Clone> Ratio<T> 
+        {
             pub fn approximate_float_unsigned<F: FloatCore + NumCast>(f: F) -> Option<Ratio<T>> {
                 // 1/10e-20 < 1/2**32 which seems like a good default, and 30 seems
                 // to work well. Might want to choose something based on the types in the future, e.g.
@@ -17924,88 +19281,9 @@ pub mod num
 
             Some(Ratio::new(n1, d1))
         }
-
-        #[cfg(not(feature = "num-bigint"))]
-        macro_rules! to_primitive_small {
-            ($($type_name:ty)*) => ($(
-                impl ToPrimitive for Ratio<$type_name> {
-                    fn to_i64(&self) -> Option<i64> {
-                        self.to_integer().to_i64()
-                    }
-
-                    fn to_i128(&self) -> Option<i128> {
-                        self.to_integer().to_i128()
-                    }
-
-                    fn to_u64(&self) -> Option<u64> {
-                        self.to_integer().to_u64()
-                    }
-
-                    fn to_u128(&self) -> Option<u128> {
-                        self.to_integer().to_u128()
-                    }
-
-                    fn to_f64(&self) -> Option<f64> {
-                        let float = self.numer.to_f64().unwrap() / self.denom.to_f64().unwrap();
-                        if float.is_nan() {
-                            None
-                        } else {
-                            Some(float)
-                        }
-                    }
-                }
-            )*)
-        }
-
-        #[cfg(not(feature = "num-bigint"))]
-        to_primitive_small!(u8 i8 u16 i16 u32 i32);
-
-        #[cfg(all(target_pointer_width = "32", not(feature = "num-bigint")))]
-        to_primitive_small!(usize isize);
-
-        #[cfg(not(feature = "num-bigint"))]
-        macro_rules! to_primitive_64 {
-            ($($type_name:ty)*) => ($(
-                impl ToPrimitive for Ratio<$type_name> {
-                    fn to_i64(&self) -> Option<i64> {
-                        self.to_integer().to_i64()
-                    }
-
-                    fn to_i128(&self) -> Option<i128> {
-                        self.to_integer().to_i128()
-                    }
-
-                    fn to_u64(&self) -> Option<u64> {
-                        self.to_integer().to_u64()
-                    }
-
-                    fn to_u128(&self) -> Option<u128> {
-                        self.to_integer().to_u128()
-                    }
-
-                    fn to_f64(&self) -> Option<f64> {
-                        let float = ratio_to_f64(
-                            self.numer as i128,
-                            self.denom as i128
-                        );
-                        if float.is_nan() {
-                            None
-                        } else {
-                            Some(float)
-                        }
-                    }
-                }
-            )*)
-        }
-
-        #[cfg(not(feature = "num-bigint"))]
-        to_primitive_64!(u64 i64);
-
-        #[cfg(all(target_pointer_width = "64", not(feature = "num-bigint")))]
-        to_primitive_64!(usize isize);
-
-        #[cfg(feature = "num-bigint")]
-        impl<T: Clone + Integer + ToPrimitive + ToBigInt> ToPrimitive for Ratio<T> {
+        
+        impl<T: Clone + Integer + ToPrimitive + ToBigInt> ToPrimitive for Ratio<T> 
+        {
             fn to_i64(&self) -> Option<i64> {
                 self.to_integer().to_i64()
             }
@@ -18042,32 +19320,29 @@ pub mod num
             }
         }
 
-        trait Bits {
+        trait Bits 
+        {
             fn bits(&self) -> u64;
         }
-
-        #[cfg(feature = "num-bigint")]
-        impl Bits for BigInt {
+        
+        impl Bits for BigInt 
+        {
             fn bits(&self) -> u64 {
                 self.bits()
             }
         }
 
-        impl Bits for i128 {
+        impl Bits for i128 
+        {
             fn bits(&self) -> u64 {
                 (128 - self.wrapping_abs().leading_zeros()).into()
             }
         }
-
         /// Converts a ratio of `T` to an f64.
-        ///
-        /// In addition to stated trait bounds, `T` must be able to hold numbers 56 bits larger than
-        /// the largest of `numer` and `denom`. This is automatically true if `T` is `BigInt`.
-        fn ratio_to_f64<T: Bits + Clone + Integer + Signed + ShlAssign<usize> + ToPrimitive>(
-            numer: T,
-            denom: T,
-        ) -> f64 {
-            use core::f64::{INFINITY, MANTISSA_DIGITS, MAX_EXP, MIN_EXP, RADIX};
+        fn ratio_to_f64<T: Bits + Clone + Integer + Signed + ShlAssign<usize> + ToPrimitive>( numer: T, denom: T, ) ->
+        f64 
+        {
+            use std::f64::{INFINITY, MANTISSA_DIGITS, MAX_EXP, MIN_EXP, RADIX};
 
             assert_eq!(
                 RADIX, 2,
@@ -18154,11 +19429,10 @@ pub mod num
             let q_float = quotient as f64 * flo_sign;
             ldexp(q_float, shift as i32)
         }
-
-        /// Multiply `x` by 2 to the power of `exp`. Returns an accurate result even if `2^exp` is not
-        /// representable.
-        fn ldexp(x: f64, exp: i32) -> f64 {
-            use core::f64::{INFINITY, MANTISSA_DIGITS, MAX_EXP, RADIX};
+        /// Multiply `x` by 2 to the power of `exp`. Returns an accurate result even if `2^exp` is not representable.
+        fn ldexp(x: f64, exp: i32) -> f64 
+        {
+            use std::f64::{INFINITY, MANTISSA_DIGITS, MAX_EXP, RADIX};
 
             assert_eq!(
                 RADIX, 2,
@@ -21601,10 +22875,6 @@ pub mod num
             signed_float_impl!(f32);
             signed_float_impl!(f64);
             /// Computes the absolute value.
-            ///
-            /// For `f32` and `f64`, `NaN` will be returned if the number is `NaN`
-            ///
-            /// For signed integers, `::MIN` will be returned if the number is `::MIN`.
             #[inline( always )] pub fn abs<T: Signed>(value: T) -> T
                 {    value.abs()
             }
@@ -22135,7 +23405,8 @@ pub mod parsers
             }
             /// This error type accumulates errors and their position when backtracking through a parse tree.
             #[derive(Clone, Debug, PartialEq)]
-            pub struct VerboseError<I> {
+            pub struct VerboseError<I> 
+        {
             /// List of errors accumulated by `VerboseError`, containing the affected
             /// part of input data, and some context
             pub errors: ::vec::Vec<(I, VerboseErrorKind)>,
@@ -24524,22 +25795,19 @@ pub mod parsers
 
             impl<'a> AsBytes for &'a str
             {
-                #[inline(always)]
-                fn as_bytes(&self) -> &[u8] {
+                #[inline( always )] fn as_bytes(&self) -> &[u8] {
                     (*self).as_bytes()
                 }
             }
 
             impl AsBytes for str 
             {
-                #[inline(always)]
-                fn as_bytes(&self) -> &[u8]  { self.as_ref() }
+                #[inline( always )] fn as_bytes(&self) -> &[u8]  { self.as_ref() }
             }
 
             impl<'a> AsBytes for &'a [u8] 
             {
-                #[inline(always)]
-                fn as_bytes(&self) -> &[u8] 
+                #[inline( always )] fn as_bytes(&self) -> &[u8] 
                 {
                     *self
                 }
@@ -24547,8 +25815,7 @@ pub mod parsers
 
             impl AsBytes for [u8] 
             {
-                #[inline(always)]
-                fn as_bytes(&self) -> &[u8] 
+                #[inline( always )] fn as_bytes(&self) -> &[u8] 
                 {
                     self
                 }
@@ -25078,8 +26345,7 @@ pub mod parsers
 
             impl<'a, 'b> Compare<&'b [u8]> for &'a [u8] 
             {
-                #[inline(always)]
-                fn compare(&self, t: &'b [u8]) -> CompareResult {
+                #[inline( always )] fn compare(&self, t: &'b [u8]) -> CompareResult {
                     let pos = self.iter().zip(t.iter()).position(|(a, b)| a != b);
 
                     match pos {
@@ -25094,8 +26360,7 @@ pub mod parsers
                     }
                 }
 
-                #[inline(always)]
-                fn compare_no_case(&self, t: &'b [u8]) -> CompareResult {
+                #[inline( always )] fn compare_no_case(&self, t: &'b [u8]) -> CompareResult {
                     if self
                     .iter()
                     .zip(t)
@@ -25115,8 +26380,7 @@ pub mod parsers
                 O: InputLength + InputIter<Item = u8> + InputTake,
             > Compare<O> for T
             {
-                #[inline(always)]
-                fn compare(&self, t: O) -> CompareResult {
+                #[inline( always )] fn compare(&self, t: O) -> CompareResult {
                     let pos = self
                     .iter_elements()
                     .zip(t.iter_elements())
@@ -25134,8 +26398,7 @@ pub mod parsers
                     }
                 }
 
-                #[inline(always)]
-                fn compare_no_case(&self, t: O) -> CompareResult {
+                #[inline( always )] fn compare_no_case(&self, t: O) -> CompareResult {
                     if self
                     .iter_elements()
                     .zip(t.iter_elements())
@@ -25152,25 +26415,21 @@ pub mod parsers
 
             impl<'a, 'b> Compare<&'b str> for &'a [u8] 
             {
-                #[inline(always)]
-                fn compare(&self, t: &'b str) -> CompareResult {
+                #[inline( always )] fn compare(&self, t: &'b str) -> CompareResult {
                     self.compare(AsBytes::as_bytes(t))
                 }
-                #[inline(always)]
-                fn compare_no_case(&self, t: &'b str) -> CompareResult {
+                #[inline( always )] fn compare_no_case(&self, t: &'b str) -> CompareResult {
                     self.compare_no_case(AsBytes::as_bytes(t))
                 }
             }
 
             impl<'a, 'b> Compare<&'b str> for &'a str 
             {
-                #[inline(always)]
-                fn compare(&self, t: &'b str) -> CompareResult {
+                #[inline( always )] fn compare(&self, t: &'b str) -> CompareResult {
                     self.as_bytes().compare(t.as_bytes())
                 }
                 
-                #[inline(always)]
-                fn compare_no_case(&self, t: &'b str) -> CompareResult {
+                #[inline( always )] fn compare_no_case(&self, t: &'b str) -> CompareResult {
                     let pos = self
                     .chars()
                     .zip(t.chars())
@@ -25191,12 +26450,10 @@ pub mod parsers
 
             impl<'a, 'b> Compare<&'b [u8]> for &'a str 
             {
-                #[inline(always)]
-                fn compare(&self, t: &'b [u8]) -> CompareResult {
+                #[inline( always )] fn compare(&self, t: &'b [u8]) -> CompareResult {
                     AsBytes::as_bytes(self).compare(t)
                 }
-                #[inline(always)]
-                fn compare_no_case(&self, t: &'b [u8]) -> CompareResult {
+                #[inline( always )] fn compare_no_case(&self, t: &'b [u8]) -> CompareResult {
                     AsBytes::as_bytes(self).compare_no_case(t)
                 }
             }
@@ -28980,11 +30237,62 @@ pub mod vec
     pub use std::vec::{ * };
 }
 
-fn main()
+fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
 {
-    
+    use ::database::objects::Obj;
+    use ::str::FromStr;
+
+    let over:String = r#"
+    receipt: "Oz-Ware Purchase Invoice"
+    date:    "2012-08-06"
+    customer: 
+    {
+        first_name:  "Dorothy"
+        family_name: "Gale"
+    }
+
+    items: 
+    [
+        {
+            part_no:  "A4786"
+            descrip:  "Water Bucket (Filled)"
+            price:    01.47
+            quantity: 4
+        }
+        {
+            part_no:  "E1628"
+            descrip:  "High Heeled \"Ruby\" Slippers"
+            size:     8
+            price:    133.70
+            quantity: 1
+        }
+    ]
+
+    bill_to: 
+    {
+        street:
+        # A multi-line string. Can also be written as "123 Tornado Alley\nSuite16"
+        "123 Tornado Alley
+        Suite 16"
+        city:  "East Centerville"
+        state: "KS"
+    }
+
+    ship_to: bill_to
+
+    specialDelivery: "Follow the Yellow Brick Road to the Emerald City. 
+    Pay no attention to the man behind the curtain."
+    "#.to_string();
+        
+        let mut db = Obj::from_str( &over.as_str() )?;
+
+        println!( r#"::database::
+    {:?}
+    "#, db);
+
+    Ok(())
 }
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 28990
+// 30298
