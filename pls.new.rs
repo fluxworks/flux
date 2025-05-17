@@ -345,2716 +345,6 @@ pub mod collections
 {
     pub use std::collections::{ * };
 }
-/*
-terminfo*/
-pub mod common
-{
-    use ::
-    {
-        *,
-    };
-    
-    extern "C" {}
-
-    mod error
-    {
-        use ::
-        {
-            *,
-        };
-        
-        #[derive( Debug )]
-        pub enum Error 
-        {
-            /// IO error.
-            Io(io::Error),
-            /// Database not found.
-            NotFound,
-            /// Parsing error.
-            Parse,
-            /// Expansion error.
-            Expand(Expand),
-        }
-
-        #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-        pub enum Expand 
-        {
-            /// The expansion string is invalid.
-            Invalid,
-            /// There was a type mismatch while expanding.
-            TypeMismatch,
-            /// The stack underflowed while expanding.
-            StackUnderflow,
-        }
-
-        pub type Result<T> = ::result::Result<T, Error>;
-
-        impl From<io::Error> for Error 
-        {
-            fn from(value: io::Error) -> Self 
-            {
-                Error::Io(value)
-            }
-        }
-
-        impl From<Expand> for Error 
-        {
-            fn from(value: Expand) -> Self 
-            {
-                Error::Expand(value)
-            }
-        }
-
-        impl fmt::Display for Error 
-        {
-            fn fmt(&self, f: &mut fmt::Formatter) -> ::result::Result<(), fmt::Error> 
-            {
-                match *self 
-                {
-                    Error::Io(ref err) => err.fmt(f),
-
-                    Error::NotFound => f.write_str("Capability database not found."),
-
-                    Error::Parse => f.write_str("Failed to parse capability database."),
-
-                    Error::Expand(ref err) => match *err
-                    {
-                        Expand::Invalid => f.write_str("The expansion string is invalid."),
-                        Expand::StackUnderflow => f.write_str("Not enough elements on the stack."),
-                        Expand::TypeMismatch => f.write_str("Type mismatch."),
-                    },
-                }
-            }
-        }
-
-        impl error::Error for Error {}
-    }
-    pub use self::error::{Error, Result};
-    /// String capability expansion.
-    #[macro_use] pub mod expand
-    {
-        use ::
-        {
-            common::
-            { 
-                error::{ self },
-                parser::expansion::{ * },
-            },
-            io::{ BufWriter, Write },
-            *,
-        };
-        /// Expand a parametrized string.
-        #[macro_export] macro_rules! expand 
-        {
-            ($value:expr) => (
-                $crate::expand!($value;)
-            );
-
-            ($value:expr => $context:expr) => (
-                $crate::expand!($value => $context;)
-            );
-
-            ($value:expr; $($item:expr),*) => (
-                $crate::expand!($value => &mut ::default::Default::default(); $($item),*)
-            );
-
-            ($value:expr => $context:expr; $($item:expr),*) => ({
-                let mut output = ::vec::Vec::new();
-
-                $crate::expand!(&mut output, $value => $context; $($item),*).map(|()| output)
-            });
-
-            ($output:expr, $value:expr) => (
-                $crate::expand!($output, $value;)
-            );
-
-            ($output:expr, $value:expr => $context:expr) => (
-                $crate::expand!($output, $value => $context;)
-            );
-
-            ($output:expr, $value:expr; $($item:expr),*) => (
-                $crate::expand!($output, $value => &mut ::default::Default::default(); $($item),*)
-            );
-
-            ($output:expr, $value:expr => $context:expr; $($item:expr),*) => ({
-                use $crate::Expand;
-                $value.expand($output, &[$($item.into()),*], $context)
-            })
-        }
-
-        macro_rules! from 
-        {
-            (number $ty:ty) => 
-            {
-                impl From<$ty> for Parameter 
-                {
-                    fn from(value: $ty) -> Self 
-                    {
-                        Parameter::Number(value as i32)
-                    }
-                }
-            };
-
-            (string ref $ty:ty) => 
-            {
-                impl<'a> From<&'a $ty> for Parameter 
-                {
-                    fn from(value: &'a $ty) -> Self 
-                    {
-                        Parameter::String(value.into())
-                    }
-                }
-            };
-
-            (string $ty:ty) => 
-            {
-                impl From<$ty> for Parameter 
-                {
-                    fn from(value: $ty) -> Self 
-                    {
-                        Parameter::String(value.into())
-                    }
-                }
-            };
-        }
-        /// Trait for items that can be expanded.
-        pub trait Expand 
-        {
-            fn expand<W: Write>(
-                &self,
-                output: W,
-                parameters: &[Parameter],
-                context: &mut Context,
-            ) -> error::Result<()>;
-        }
-        /// An expansion parameter.
-        #[derive(Eq, PartialEq, Clone, Debug)]
-        pub enum Parameter 
-        {
-            /// A number.
-            Number(i32),
-            /// An ASCII string.
-            String(Vec<u8>),
-        }
-
-        impl Default for Parameter 
-        {
-            fn default() -> Self 
-            {
-                Parameter::Number(0)
-            }
-        }
-
-        from!(number bool);
-        from!(number u8);
-        from!(number i8);
-        from!(number u16);
-        from!(number i16);
-        from!(number u32);
-        from!(number i32);
-
-        from!(string String);
-        from!(string ref str);
-        from!(string Vec<u8>);
-        from!(string ref [u8]);
-        /// The expansion context.
-        #[derive(Eq, PartialEq, Default, Debug)]
-        pub struct Context 
-        {
-            pub fixed: [Parameter; 26],
-            pub dynamic: [Parameter; 26],
-        }
-
-        impl Expand for [u8]
-        {
-            fn expand<W: Write>(
-                &self,
-                output: W,
-                parameters: &[Parameter],
-                context: &mut Context,
-            ) -> error::Result<()> 
-            {
-                let mut output = BufWriter::new(output);
-                let mut input = self;
-                let mut params: [Parameter; 9] = Default::default();
-                let mut stack = Vec::new();
-                let mut conditional = false;
-                let mut incremented = false;
-
-                for (dest, source) in params.iter_mut().zip(parameters.iter()) 
-                {
-                    *dest = source.clone();
-                }
-
-                macro_rules! next 
-                {
-                    () => {
-                        match parse(input) 
-                        {
-                            Ok((rest, item)) => 
-                            {
-                                input = rest;
-                                item
-                            }
-
-                            Err(_) => return Err(error::Expand::Invalid.into()),
-                        }
-                    };
-                }
-
-                'main: while !input.is_empty() 
-                {
-                    match next!() {
-                        Item::Conditional(Conditional::If) => 
-                        {
-                            conditional = true;
-                        }
-
-                        Item::Conditional(Conditional::End) if conditional => 
-                        {
-                            conditional = false;
-                        }
-
-                        Item::Conditional(Conditional::Then) if conditional => match stack.pop() 
-                        {
-                            Some(Parameter::Number(0)) => 
-                            {
-                                let mut level = 0;
-
-                                while !input.is_empty() 
-                                {
-                                    match next!() {
-                                        Item::Conditional(Conditional::End)
-                                        | Item::Conditional(Conditional::Else)
-                                            if level == 0 =>
-                                        {
-                                            continue 'main
-                                        }
-
-                                        Item::Conditional(Conditional::If) => level += 1,
-
-                                        Item::Conditional(Conditional::End) => level -= 1,
-
-                                        _ => (),
-                                    }
-                                }
-
-                                return Err(error::Expand::Invalid.into());
-                            }
-
-                            Some(_) => (),
-
-                            None => return Err(error::Expand::StackUnderflow.into()),
-                        },
-
-                        Item::Conditional(Conditional::Else) if conditional => 
-                        {
-                            let mut level = 0;
-
-                            while !input.is_empty() 
-                            {
-                                match next!() {
-                                    Item::Conditional(Conditional::End) if level == 0 => continue 'main,
-
-                                    Item::Conditional(Conditional::If) => level += 1,
-
-                                    Item::Conditional(Conditional::End) => level -= 1,
-
-                                    _ => (),
-                                }
-                            }
-
-                            return Err(error::Expand::Invalid.into());
-                        }
-
-                        Item::Conditional(..) => return Err(error::Expand::Invalid.into()),
-
-                        Item::String(value) => output.write_all(value)?,
-
-                        Item::Constant(Constant::Character(ch)) => 
-                        {
-                            stack.push(Parameter::Number(ch as i32));
-                        }
-
-                        Item::Constant(Constant::Integer(value)) => 
-                        {
-                            stack.push(Parameter::Number(value));
-                        }
-
-                        Item::Variable(Variable::Length) => match stack.pop() 
-                        {
-                            Some(Parameter::String(ref value)) => 
-                            {
-                                stack.push(Parameter::Number(value.len() as i32));
-                            }
-
-                            Some(_) => 
-                            {
-                                return Err(error::Expand::TypeMismatch.into());
-                            }
-
-                            None => 
-                            {
-                                return Err(error::Expand::StackUnderflow.into());
-                            }
-                        },
-
-                        Item::Variable(Variable::Push(index)) => 
-                        {
-                            stack.push(params[index as usize].clone());
-                        }
-
-                        Item::Variable(Variable::Set(dynamic, index)) => 
-                        {
-                            if let Some(value) = stack.pop() 
-                            {
-                                if dynamic {
-                                    context.dynamic[index as usize] = value.clone();
-                                } else {
-                                    context.fixed[index as usize] = value.clone();
-                                }
-                            } else {
-                                return Err(error::Expand::StackUnderflow.into());
-                            }
-                        }
-
-                        Item::Variable(Variable::Get(dynamic, index)) => 
-                        {
-                            if dynamic {
-                                stack.push(context.dynamic[index as usize].clone());
-                            } else {
-                                stack.push(context.fixed[index as usize].clone());
-                            }
-                        }
-
-                        Item::Operation(Operation::Increment) if !incremented => 
-                        {
-                            incremented = true;
-
-                            if let (&Parameter::Number(x), &Parameter::Number(y)) = (&params[0], &params[1])
-                            {
-                                params[0] = Parameter::Number(x + 1);
-                                params[1] = Parameter::Number(y + 1);
-                            } else 
-                            {
-                                return Err(error::Expand::TypeMismatch.into());
-                            }
-                        }
-
-                        Item::Operation(Operation::Increment) => (),
-
-                        Item::Operation(Operation::Binary(operation)) => match (stack.pop(), stack.pop()) 
-                        {
-                            (Some(Parameter::Number(y)), Some(Parameter::Number(x))) => 
-                            {
-                                stack.push(Parameter::Number(match operation 
-                                {
-                                    Binary::Add => x + y,
-                                    Binary::Subtract => x - y,
-                                    Binary::Multiply => x * y,
-                                    Binary::Divide => 
-                                    {
-                                        if y != 0 
-                                        {
-                                            x / y
-                                        } else 
-                                        {
-                                            0
-                                        }
-                                    }
-                                    Binary::Remainder => 
-                                    {
-                                        if y != 0 
-                                        {
-                                            x % y
-                                        } else 
-                                        {
-                                            0
-                                        }
-                                    }
-
-                                    Binary::AND => x & y,
-                                    Binary::OR => x | y,
-                                    Binary::XOR => x ^ y,
-
-                                    Binary::And => (x != 0 && y != 0) as i32,
-                                    Binary::Or => (x != 0 || y != 0) as i32,
-
-                                    Binary::Equal => (x == y) as i32,
-                                    Binary::Greater => (x > y) as i32,
-                                    Binary::Lesser => (x < y) as i32,
-                                }))
-                            }
-
-                            (Some(_), Some(_)) => return Err(error::Expand::TypeMismatch.into()),
-
-                            _ => return Err(error::Expand::StackUnderflow.into()),
-                        },
-
-                        Item::Operation(Operation::Unary(operation)) => match stack.pop() 
-                        {
-                            Some(Parameter::Number(x)) => stack.push(Parameter::Number(match operation 
-                            {
-                                Unary::Not => (x != 0) as i32,
-                                Unary::NOT => !x,
-                            })),
-
-                            Some(_) => return Err(error::Expand::TypeMismatch.into()),
-
-                            _ => return Err(error::Expand::StackUnderflow.into()),
-                        },
-
-                        Item::Print(p) => 
-                        {
-                            /// Calculate the length of a formatted number.
-                            fn length(value: i32, p: &Print) -> usize 
-                            {
-                                let digits = match p.format {
-                                    Format::Dec => (value as f32).abs().log(10.0).floor() as usize + 1,
-
-                                    Format::Oct => (value as f32).abs().log(8.0).floor() as usize + 1,
-
-                                    Format::Hex | Format::HEX => 
-                                    {
-                                        (value as f32).abs().log(16.0).floor() as usize + 1
-                                    }
-
-                                    _ => unreachable!(),
-                                };
-
-                                let mut length = digits;
-
-                                // Add the minimum number of digits.
-                                if p.flags.precision > digits 
-                                {
-                                    length += p.flags.precision - digits;
-                                }
-
-                                // Add the sign if present.
-                                if p.format == Format::Dec && (value < 0 || p.flags.sign) 
-                                {
-                                    length += 1;
-                                }
-
-                                // Add the alternate representation.
-                                if p.flags.alternate 
-                                {
-                                    match p.format 
-                                    {
-                                        Format::Hex | Format::HEX => length += 2,
-
-                                        Format::Oct => length += 1,
-
-                                        _ => (),
-                                    }
-                                }
-
-                                length
-                            }
-
-                            macro_rules! w 
-                            {
-                                ($value:expr) => (
-                                    output.write_all($value)?
-                                );
-
-                                ($($item:tt)*) => (
-                                    write!(output, $($item)*)?
-                                );
-                            }
-
-                            macro_rules! f 
-                            {
-                                (by $length:expr) => (
-                                    for _ in 0 .. p.flags.width - $length 
-                                    {
-                                        output.write_all(if p.flags.space { b" " } else { b"0" })?;
-                                    }
-                                );
-
-                                (before by $length:expr) => (
-                                    if !p.flags.left && p.flags.width > $length 
-                                    {
-                                        f!(by $length);
-                                    }
-                                );
-
-                                (after by $length:expr) => (
-                                    if p.flags.left && p.flags.width > $length 
-                                    {
-                                        f!(by $length);
-                                    }
-                                );
-
-                                (before $value:expr) => (
-                                    f!(before by length($value, &p));
-                                );
-
-                                (after $value:expr) => (
-                                    f!(after by length($value, &p));
-                                );
-                            }
-
-                            match (p.format, stack.pop()) 
-                            {
-                                (Format::Str, Some(Parameter::String(ref value))) => 
-                                {
-                                    let mut value = &value[..];
-
-                                    if p.flags.precision > 0 && p.flags.precision < value.len() 
-                                    {
-                                        value = &value[..p.flags.precision];
-                                    }
-
-                                    f!(before by value.len());
-                                    w!(value);
-                                    f!(after by value.len());
-                                }
-
-                                (Format::Chr, Some(Parameter::Number(value))) => 
-                                {
-                                    w!("{}", value as u8 as char)
-                                }
-
-                                (Format::Uni, Some(Parameter::Number(value))) => w!(
-                                    "{}",
-                                    char::from_u32(value as u32).ok_or(error::Expand::TypeMismatch)?
-                                ),
-
-                                (Format::Dec, Some(Parameter::Number(value))) => 
-                                {
-                                    f!(before value);
-
-                                    if p.flags.sign && value >= 0 
-                                    {
-                                        w!(b"+");
-                                    }
-
-                                    w!("{:.1$}", value, p.flags.precision);
-
-                                    f!(after value);
-                                }
-
-                                (Format::Oct, Some(Parameter::Number(value))) => 
-                                {
-                                    f!(before value);
-
-                                    if p.flags.alternate 
-                                    {
-                                        w!(b"0");
-                                    }
-
-                                    w!("{:.1$o}", value, p.flags.precision);
-
-                                    f!(after value);
-                                }
-
-                                (Format::Hex, Some(Parameter::Number(value))) => 
-                                {
-                                    f!(before value);
-
-                                    if p.flags.alternate 
-                                    {
-                                        w!(b"0x");
-                                    }
-
-                                    w!("{:.1$x}", value, p.flags.precision);
-
-                                    f!(after value);
-                                }
-
-                                (Format::HEX, Some(Parameter::Number(value))) => 
-                                {
-                                    f!(before value);
-
-                                    if p.flags.alternate 
-                                    {
-                                        w!(b"0X");
-                                    }
-
-                                    w!("{:.1$X}", value, p.flags.precision);
-
-                                    f!(after value);
-                                }
-
-                                (_, Some(_)) => return Err(error::Expand::TypeMismatch.into()),
-
-                                (_, None) => return Err(error::Expand::StackUnderflow.into()),
-                            }
-                        }
-                    }
-                }
-
-                Ok(())
-            }
-        }
-    }
-    pub use self::expand::Expand;
-    /// Standard terminal capabilities.
-    pub mod capability
-    {
-        //! Standard capabilities.
-        use ::
-        {
-            borrow::{ Cow },
-            common::
-            {
-                error::{ self },
-                expand::{ Context, Expand, Parameter },
-            },
-            io::{ Write },
-            *,
-        };
-
-        macro_rules! from 
-        {
-            (number $ty:ty) => 
-            {
-                impl From<$ty> for Value 
-                {
-                    fn from(value: $ty) -> Self 
-                    {
-                        Value::Number(value as i32)
-                    }
-                }
-            };
-
-            (string ref $ty:ty) => 
-            {
-                impl<'a> From<&'a $ty> for Value 
-                {
-                    fn from(value: &'a $ty) -> Self 
-                    {
-                        Value::String(value.into())
-                    }
-                }
-            };
-
-            (string $ty:ty) => 
-            {
-                impl From<$ty> for Value 
-                {
-                    fn from(value: $ty) -> Self 
-                    {
-                        Value::String(value.into())
-                    }
-                }
-            };
-        }
-
-        macro_rules! define 
-        {
-            (boolean $ident:ident => $capability:expr) => 
-            (
-                #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-                pub struct $ident(pub bool);
-
-                impl<'a> Capability<'a> for $ident {
-                    #[inline] fn name() -> &'static str {
-                        $capability
-                    }
-
-                    #[inline] fn from(value: Option<&Value>) -> Option<Self> 
-                    {
-                        if let Some(&Value::True) = value 
-                        {
-                            Some($ident(true))
-                        }
-                        else 
-                        {
-                            Some($ident(false))
-                        }
-                    }
-
-                    #[inline] fn into(self) -> Option<Value> 
-                    {
-                        if self.0 
-                        {
-                            Some(Value::True)
-                        }
-                        else 
-                        {
-                            None
-                        }
-                    }
-                }
-
-                impl From<$ident> for bool 
-                {
-                    fn from(cap: $ident) -> Self 
-                    {
-                        cap.0
-                    }
-                }
-            );
-
-            (number $ident:ident => $capability:expr) => 
-            (
-                #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-                pub struct $ident(pub i32);
-
-                impl<'a> Capability<'a> for $ident 
-                {
-                    #[inline] fn name() -> &'static str 
-                    {
-                        $capability
-                    }
-
-                    #[inline] fn from(value: Option<&Value>) -> Option<Self> 
-                    {
-                        if let Some(&Value::Number(value)) = value 
-                        {
-                            Some($ident(value))
-                        }
-                        else 
-                        {
-                            None
-                        }
-                    }
-
-                    #[inline] fn into(self) -> Option<Value> 
-                    {
-                        Some(Value::Number(self.0))
-                    }
-                }
-
-                impl From<$ident> for i32 
-                {
-                    fn from(cap: $ident) -> Self 
-                    {
-                        cap.0
-                    }
-                }
-            );
-
-            (string define $ident:ident => $capability:expr) => 
-            (
-                #[derive(Eq, PartialEq, Clone, Debug)]
-                pub struct $ident<'a>(Cow<'a, [u8]>);
-
-                impl<'a> Capability<'a> for $ident<'a> 
-                {
-                    #[inline] fn name() -> &'static str 
-                    {
-                        $capability
-                    }
-
-                    #[inline] fn from(value: Option<&'a Value>) -> Option<$ident<'a>> 
-                    {
-                        if let Some(&Value::String(ref value)) = value 
-                        {
-                            Some($ident(Cow::Borrowed(value)))
-                        }
-                        else { None }
-                    }
-
-                    #[inline] fn into(self) -> Option<Value> 
-                    {
-                        Some(Value::String(match self.0 
-                        {
-                            Cow::Borrowed(value) => value.into(),
-                            Cow::Owned(value) => value,
-                        }))
-                    }
-                }
-
-                impl<'a, T: AsRef<&'a [u8]>> From<T> for $ident<'a> 
-                {
-                    #[inline] fn from(value: T) -> Self 
-                    {
-                        $ident(Cow::Borrowed(value.as_ref()))
-                    }
-                }
-
-                impl<'a> AsRef<[u8]> for $ident<'a> 
-                {
-                    #[inline] fn as_ref(&self) -> &[u8] 
-                    {
-                        &self.0
-                    }
-                }
-
-                impl<'a> $ident<'a> 
-                {
-                    /// Begin expanding the capability.
-                    #[inline] pub fn expand(&self) -> Expansion<$ident> 
-                    {
-                        Expansion
-                        {
-                            string:  self,
-                            params:  Default::default(),
-                            context: None,
-                        }
-                    }
-                }
-            );
-
-            (string $ident:ident => $capability:expr) => 
-            (
-                define!(string define $ident => $capability);
-            );
-
-            (string $ident:ident => $capability:expr; $($rest:tt)+) => 
-            (
-                define!(string define $ident => $capability);
-                define!(string parameters $ident; $($rest)+);
-                define!(string builder $ident; 0, $($rest)+, );
-            );
-
-            (string parameters $ident:ident; $($name:ident : $ty:ty),+) => 
-            (
-                impl<'a> Expansion<'a, $ident<'a>> 
-                {
-                    /// Pass all expansion parameters at once.
-                    #[inline] pub fn parameters(mut self, $($name: $ty),*) -> Self 
-                    {
-                        let mut index = 0;
-
-                        $({
-                            self.params[index]  = $name.into();
-                            index              += 1;
-                        })*;
-
-                        self
-                    }
-                }
-            );
-
-            (string builder $ident:ident; $index:expr, ) => ();
-
-            (string builder $ident:ident; $index:expr, $name:ident : u8, $($rest:tt)*) => 
-            (
-                define!(string builder direct $ident; $index, $name : u8);
-                define!(string builder $ident; $index + 1, $($rest)*);
-            );
-
-            (string builder $ident:ident; $index:expr, $name:ident : i8, $($rest:tt)*) => 
-            (
-                define!(string builder direct $ident; $index, $name : i8);
-                define!(string builder $ident; $index + 1, $($rest)*);
-            );
-
-            (string builder $ident:ident; $index:expr, $name:ident : u16, $($rest:tt)*) => 
-            (
-                define!(string builder direct $ident; $index, $name : u16);
-                define!(string builder $ident; $index + 1, $($rest)*);
-            );
-
-            (string builder $ident:ident; $index:expr, $name:ident : i16 $($rest:tt)*) => 
-            (
-                define!(string builder direct $ident; $index, $name : i16);
-                define!(string builder $ident; $index + 1, $($rest)*);
-            );
-
-            (string builder $ident:ident; $index:expr, $name:ident : u32, $($rest:tt)*) => 
-            (
-                define!(string builder direct $ident; $index, $name : u32);
-                define!(string builder $ident; $index + 1, $($rest)*);
-            );
-
-            (string builder $ident:ident; $index:expr, $name:ident : i32, $($rest:tt)*) => 
-            (
-                define!(string builder direct $ident; $index, $name : i32);
-                define!(string builder $ident; $index + 1, $($rest)*);
-            );
-
-            (string builder $ident:ident; $index:expr, $name:ident : $ty:ty, $($rest:tt)*) => 
-            (
-                define!(string builder into $ident; $index, $name : $ty);
-                define!(string builder $ident; $index + 1, $($rest)*);
-            );
-
-            (string builder direct $ident:ident; $index:expr, $name:ident : $ty:ty) => 
-            (
-                impl<'a> Expansion<'a, $ident<'a>> 
-                {
-                    /// Set the given parameter.
-                    #[inline] pub fn $name(mut self, value: $ty) -> Self 
-                    {
-                        self.params[$index] = value.into();
-                        self
-                    }
-                }
-            );
-
-            (string builder into $ident:ident; $index:expr, $name:ident : $ty:ty) => 
-            (
-                impl<'a> Expansion<'a, $ident<'a>> 
-                {
-                    /// Set the given parameter.
-                    #[inline] pub fn $name<T: Into<$ty>>(mut self, value: T) -> Self 
-                    {
-                        self.params[$index] = value.into().into();
-                        self
-                    }
-                }
-            );
-        }
-        /// A trait for any object that will represent a terminal capability.
-        pub trait Capability<'a>: Sized 
-        {
-            /// Returns the name of the capability in its long form.
-            fn name() -> &'static str;
-            /// Parse the capability from its raw value.
-            fn from(value: Option<&'a Value>) -> Option<Self>;
-            /// Convert the capability into its raw value.
-            fn into(self) -> Option<Value>;
-        }
-        /// Possible value types for capabilities.
-        #[derive(Eq, PartialEq, Clone, Debug)]
-        pub enum Value 
-        {
-            /// A boolean.
-            True,
-            /// A number.
-            Number(i32),
-            /// An ASCII string requiring expansion.
-            String(Vec<u8>),
-        }
-        /// Expansion helper struct.
-        #[derive( Debug )]
-        pub struct Expansion<'a, T: 'a + AsRef<[u8]>> 
-        {
-            string: &'a T,
-            params: [Parameter; 9],
-            context: Option<&'a mut Context>,
-        }
-
-        impl<'a, T: AsRef<[u8]>> Expansion<'a, T> 
-        {
-            /// Expand using the given context.
-            pub fn with<'c: 'a>(mut self, context: &'c mut Context) -> Self 
-            {
-                self.context = Some(context);
-                self
-            }
-            /// Expand to the given output.
-            pub fn to<W: Write>(self, output: W) -> error::Result<()> 
-            {
-                self.string.as_ref().expand(
-                    output,
-                    &self.params,
-                    self.context.unwrap_or(&mut Default::default()),
-                )
-            }
-            /// Expand into a vector.
-            pub fn to_vec(self) -> error::Result<Vec<u8>> 
-            {
-                let mut result = Vec::with_capacity(self.string.as_ref().len());
-                self.to(&mut result)?;
-                Ok(result)
-            }
-        }
-
-        impl From<()> for Value 
-        {
-            fn from(_: ()) -> Self {
-                Value::True
-            }
-        }
-
-        from!(number u8);
-        from!(number i8);
-        from!(number u16);
-        from!(number i16);
-        from!(number u32);
-        from!(number i32);
-
-        from!(string String);
-        from!(string ref str);
-        from!(string Vec<u8>);
-        from!(string ref [u8]);
-
-        define!(boolean AutoLeftMargin => "auto_left_margin");
-        define!(boolean AutoRightMargin => "auto_right_margin");
-        define!(boolean NoEscCtlc => "no_esc_ctlc");
-        define!(boolean CeolStandoutGlitch => "ceol_standout_glitch");
-        define!(boolean EatNewlineGlitch => "eat_newline_glitch");
-        define!(boolean EraseOverstrike => "erase_overstrike");
-        define!(boolean GenericType => "generic_type");
-        define!(boolean HardCopy => "hard_copy");
-        define!(boolean HasMetaKey => "has_meta_key");
-        define!(boolean HasStatusLine => "has_status_line");
-        define!(boolean InsertNullGlitch => "insert_null_glitch");
-        define!(boolean MemoryAbove => "memory_above");
-        define!(boolean MemoryBelow => "memory_below");
-        define!(boolean MoveInsertMode => "move_insert_mode");
-        define!(boolean MoveStandoutMode => "move_standout_mode");
-        define!(boolean OverStrike => "over_strike");
-        define!(boolean StatusLineEscOk => "status_line_esc_ok");
-        define!(boolean DestTabsMagicSmso => "dest_tabs_magic_smso");
-        define!(boolean TildeGlitch => "tilde_glitch");
-        define!(boolean TransparentUnderline => "transparent_underline");
-        define!(boolean XonXoff => "xon_xoff");
-        define!(boolean NeedsXonXoff => "needs_xon_xoff");
-        define!(boolean PrtrSilent => "prtr_silent");
-        define!(boolean HardCursor => "hard_cursor");
-        define!(boolean NonRevRmcup => "non_rev_rmcup");
-        define!(boolean NoPadChar => "no_pad_char");
-        define!(boolean NonDestScrollRegion => "non_dest_scroll_region");
-        define!(boolean CanChange => "can_change");
-        define!(boolean BackColorErase => "back_color_erase");
-        define!(boolean HueLightnessSaturation => "hue_lightness_saturation");
-        define!(boolean ColAddrGlitch => "col_addr_glitch");
-        define!(boolean CrCancelsMicroMode => "cr_cancels_micro_mode");
-        define!(boolean HasPrintWheel => "has_print_wheel");
-        define!(boolean RowAddrGlitch => "row_addr_glitch");
-        define!(boolean SemiAutoRightMargin => "semi_auto_right_margin");
-        define!(boolean CpiChangesRes => "cpi_changes_res");
-        define!(boolean LpiChangesRes => "lpi_changes_res");
-        define!(boolean BackspacesWithBs => "backspaces_with_bs");
-        define!(boolean CrtNoScrolling => "crt_no_scrolling");
-        define!(boolean NoCorrectlyWorkingCr => "no_correctly_working_cr");
-        define!(boolean GnuHasMetaKey => "gnu_has_meta_key");
-        define!(boolean LinefeedIsNewline => "linefeed_is_newline");
-        define!(boolean HasHardwareTabs => "has_hardware_tabs");
-        define!(boolean ReturnDoesClrEol => "return_does_clr_eol");
-
-        define!(number Columns => "columns");
-        define!(number InitTabs => "init_tabs");
-        define!(number Lines => "lines");
-        define!(number LinesOfMemory => "lines_of_memory");
-        define!(number MagicCookieGlitch => "magic_cookie_glitch");
-        define!(number PaddingBaudRate => "padding_baud_rate");
-        define!(number VirtualTerminal => "virtual_terminal");
-        define!(number WidthStatusLine => "width_status_line");
-        define!(number NumLabels => "num_labels");
-        define!(number LabelHeight => "label_height");
-        define!(number LabelWidth => "label_width");
-        define!(number MaxAttributes => "max_attributes");
-        define!(number MaximumWindows => "maximum_windows");
-        define!(number MaxColors => "max_colors");
-        define!(number MaxPairs => "max_pairs");
-        define!(number NoColorVideo => "no_color_video");
-        define!(number BufferCapacity => "buffer_capacity");
-        define!(number DotVertSpacing => "dot_vert_spacing");
-        define!(number DotHorzSpacing => "dot_horz_spacing");
-        define!(number MaxMicroAddress => "max_micro_address");
-        define!(number MaxMicroJump => "max_micro_jump");
-        define!(number MicroColSize => "micro_col_size");
-        define!(number MicroLineSize => "micro_line_size");
-        define!(number NumberOfPins => "number_of_pins");
-        define!(number OutputResChar => "output_res_char");
-        define!(number OutputResLine => "output_res_line");
-        define!(number OutputResHorzInch => "output_res_horz_inch");
-        define!(number OutputResVertInch => "output_res_vert_inch");
-        define!(number PrintRate => "print_rate");
-        define!(number WideCharSize => "wide_char_size");
-        define!(number Buttons => "buttons");
-        define!(number BitImageEntwining => "bit_image_entwining");
-        define!(number BitImageType => "bit_image_type");
-        define!(number MagicCookieGlitchUl => "magic_cookie_glitch_ul");
-        define!(number CarriageReturnDelay => "carriage_return_delay");
-        define!(number NewLineDelay => "new_line_delay");
-        define!(number BackspaceDelay => "backspace_delay");
-        define!(number HorizontalTabDelay => "horizontal_tab_delay");
-        define!(number NumberOfFunctionKeys => "number_of_function_keys");
-
-        define!(string BackTab => "back_tab");
-        define!(string Bell => "bell");
-        define!(string CarriageReturn => "carriage_return");
-        define!(string ClearAllTabs => "clear_all_tabs");
-        define!(string ClearScreen => "clear_screen");
-        define!(string ClrEol => "clr_eol");
-        define!(string ClrEos => "clr_eos");
-        define!(string CommandCharacter => "command_character");
-        define!(string CursorDown => "cursor_down");
-        define!(string CursorHome => "cursor_home");
-        define!(string CursorInvisible => "cursor_invisible");
-        define!(string CursorLeft => "cursor_left");
-        define!(string CursorMemAddress => "cursor_mem_address");
-        define!(string CursorNormal => "cursor_normal");
-        define!(string CursorRight => "cursor_right");
-        define!(string CursorToLl => "cursor_to_ll");
-        define!(string CursorUp => "cursor_up");
-        define!(string CursorVisible => "cursor_visible");
-        define!(string DeleteCharacter => "delete_character");
-        define!(string DeleteLine => "delete_line");
-        define!(string DisStatusLine => "dis_status_line");
-        define!(string DownHalfLine => "down_half_line");
-        define!(string EnterAltCharsetMode => "enter_alt_charset_mode");
-        define!(string EnterBlinkMode => "enter_blink_mode");
-        define!(string EnterBoldMode => "enter_bold_mode");
-        define!(string EnterCaMode => "enter_ca_mode");
-        define!(string EnterDeleteMode => "enter_delete_mode");
-        define!(string EnterDimMode => "enter_dim_mode");
-        define!(string EnterInsertMode => "enter_insert_mode");
-        define!(string EnterSecureMode => "enter_secure_mode");
-        define!(string EnterProtectedMode => "enter_protected_mode");
-        define!(string EnterReverseMode => "enter_reverse_mode");
-        define!(string EnterStandoutMode => "enter_standout_mode");
-        define!(string EnterUnderlineMode => "enter_underline_mode");
-        define!(string ExitAltCharsetMode => "exit_alt_charset_mode");
-        define!(string ExitAttributeMode => "exit_attribute_mode");
-        define!(string ExitCaMode => "exit_ca_mode");
-        define!(string ExitDeleteMode => "exit_delete_mode");
-        define!(string ExitInsertMode => "exit_insert_mode");
-        define!(string ExitStandoutMode => "exit_standout_mode");
-        define!(string ExitUnderlineMode => "exit_underline_mode");
-        define!(string FlashScreen => "flash_screen");
-        define!(string FormFeed => "form_feed");
-        define!(string FromStatusLine => "from_status_line");
-        define!(string Init1String => "init_1string");
-        define!(string Init2String => "init_2string");
-        define!(string Init3String => "init_3string");
-        define!(string InitFile => "init_file");
-        define!(string InsertCharacter => "insert_character");
-        define!(string InsertLine => "insert_line");
-        define!(string InsertPadding => "insert_padding");
-        define!(string KeyBackspace => "key_backspace");
-        define!(string KeyCATab => "key_catab");
-        define!(string KeyClear => "key_clear");
-        define!(string KeyCTab => "key_ctab");
-        define!(string KeyDc => "key_dc");
-        define!(string KeyDl => "key_dl");
-        define!(string KeyDown => "key_down");
-        define!(string KeyEic => "key_eic");
-        define!(string KeyEol => "key_eol");
-        define!(string KeyEos => "key_eos");
-        define!(string KeyF0 => "key_f0");
-        define!(string KeyF1 => "key_f1");
-        define!(string KeyF10 => "key_f10");
-        define!(string KeyF2 => "key_f2");
-        define!(string KeyF3 => "key_f3");
-        define!(string KeyF4 => "key_f4");
-        define!(string KeyF5 => "key_f5");
-        define!(string KeyF6 => "key_f6");
-        define!(string KeyF7 => "key_f7");
-        define!(string KeyF8 => "key_f8");
-        define!(string KeyF9 => "key_f9");
-        define!(string KeyHome => "key_home");
-        define!(string KeyIc => "key_ic");
-        define!(string KeyIl => "key_il");
-        define!(string KeyLeft => "key_left");
-        define!(string KeyLl => "key_ll");
-        define!(string KeyNPage => "key_npage");
-        define!(string KeyPPage => "key_ppage");
-        define!(string KeyRight => "key_right");
-        define!(string KeySf => "key_sf");
-        define!(string KeySr => "key_sr");
-        define!(string KeySTab => "key_stab");
-        define!(string KeyUp => "key_up");
-        define!(string KeypadLocal => "keypad_local");
-        define!(string KeypadXmit => "keypad_xmit");
-        define!(string LabF0 => "lab_f0");
-        define!(string LabF1 => "lab_f1");
-        define!(string LabF10 => "lab_f10");
-        define!(string LabF2 => "lab_f2");
-        define!(string LabF3 => "lab_f3");
-        define!(string LabF4 => "lab_f4");
-        define!(string LabF5 => "lab_f5");
-        define!(string LabF6 => "lab_f6");
-        define!(string LabF7 => "lab_f7");
-        define!(string LabF8 => "lab_f8");
-        define!(string LabF9 => "lab_f9");
-        define!(string MetaOff => "meta_off");
-        define!(string MetaOn => "meta_on");
-        define!(string Newline => "newline");
-        define!(string PadChar => "pad_char");
-        define!(string PKeyKey => "pkey_key");
-        define!(string PKeyLocal => "pkey_local");
-        define!(string PKeyXmit => "pkey_xmit");
-        define!(string PrintScreen => "print_screen");
-        define!(string PrtrOff => "prtr_off");
-        define!(string PrtrOn => "prtr_on");
-        define!(string RepeatChar => "repeat_char");
-        define!(string Reset1String => "reset_1string");
-        define!(string Reset2String => "reset_2string");
-        define!(string Reset3String => "reset_3string");
-        define!(string ResetFile => "reset_file");
-        define!(string RestoreCursor => "restore_cursor");
-        define!(string SaveCursor => "save_cursor");
-        define!(string ScrollForward => "scroll_forward");
-        define!(string ScrollReverse => "scroll_reverse");
-        define!(string SetTab => "set_tab");
-        define!(string SetWindow => "set_window");
-        define!(string Tab => "tab");
-        define!(string ToStatusLine => "to_status_line");
-        define!(string UnderlineChar => "underline_char");
-        define!(string UpHalfLine => "up_half_line");
-        define!(string InitProg => "init_prog");
-        define!(string KeyA1 => "key_a1");
-        define!(string KeyA3 => "key_a3");
-        define!(string KeyB2 => "key_b2");
-        define!(string KeyC1 => "key_c1");
-        define!(string KeyC3 => "key_c3");
-        define!(string PrtrNon => "prtr_non");
-        define!(string CharPadding => "char_padding");
-        define!(string AcsChars => "acs_chars");
-        define!(string PlabNorm => "plab_norm");
-        define!(string KeyBTab => "key_btab");
-        define!(string EnterXonMode => "enter_xon_mode");
-        define!(string ExitXonMode => "exit_xon_mode");
-        define!(string EnterAmMode => "enter_am_mode");
-        define!(string ExitAmMode => "exit_am_mode");
-        define!(string XonCharacter => "xon_character");
-        define!(string XoffCharacter => "xoff_character");
-        define!(string EnaAcs => "ena_acs");
-        define!(string LabelOn => "label_on");
-        define!(string LabelOff => "label_off");
-        define!(string KeyBeg => "key_beg");
-        define!(string KeyCancel => "key_cancel");
-        define!(string KeyClose => "key_close");
-        define!(string KeyCommand => "key_command");
-        define!(string KeyCopy => "key_copy");
-        define!(string KeyCreate => "key_create");
-        define!(string KeyEnd => "key_end");
-        define!(string KeyEnter => "key_enter");
-        define!(string KeyExit => "key_exit");
-        define!(string KeyFind => "key_find");
-        define!(string KeyHelp => "key_help");
-        define!(string KeyMark => "key_mark");
-        define!(string KeyMessage => "key_message");
-        define!(string KeyMove => "key_move");
-        define!(string KeyNext => "key_next");
-        define!(string KeyOpen => "key_open");
-        define!(string KeyOptions => "key_options");
-        define!(string KeyPrevious => "key_previous");
-        define!(string KeyPrint => "key_print");
-        define!(string KeyRedo => "key_redo");
-        define!(string KeyReference => "key_reference");
-        define!(string KeyRefresh => "key_refresh");
-        define!(string KeyReplace => "key_replace");
-        define!(string KeyRestart => "key_restart");
-        define!(string KeyResume => "key_resume");
-        define!(string KeySave => "key_save");
-        define!(string KeySuspend => "key_suspend");
-        define!(string KeyUndo => "key_undo");
-        define!(string KeySBeg => "key_sbeg");
-        define!(string KeySCancel => "key_scancel");
-        define!(string KeySCommand => "key_scommand");
-        define!(string KeySCopy => "key_scopy");
-        define!(string KeySCreate => "key_screate");
-        define!(string KeySDc => "key_sdc");
-        define!(string KeySDl => "key_sdl");
-        define!(string KeySelect => "key_select");
-        define!(string KeySEnd => "key_send");
-        define!(string KeySEol => "key_seol");
-        define!(string KeySExit => "key_sexit");
-        define!(string KeySFind => "key_sfind");
-        define!(string KeySHelp => "key_shelp");
-        define!(string KeySHome => "key_shome");
-        define!(string KeySIc => "key_sic");
-        define!(string KeySLeft => "key_sleft");
-        define!(string KeySMessage => "key_smessage");
-        define!(string KeySMove => "key_smove");
-        define!(string KeySNext => "key_snext");
-        define!(string KeySOptions => "key_soptions");
-        define!(string KeySPrevious => "key_sprevious");
-        define!(string KeySPrint => "key_sprint");
-        define!(string KeySRedo => "key_sredo");
-        define!(string KeySReplace => "key_sreplace");
-        define!(string KeySRight => "key_sright");
-        define!(string KeySRsume => "key_srsume");
-        define!(string KeySSave => "key_ssave");
-        define!(string KeySSuspend => "key_ssuspend");
-        define!(string KeySUndo => "key_sundo");
-        define!(string ReqForInput => "req_for_input");
-        define!(string KeyF11 => "key_f11");
-        define!(string KeyF12 => "key_f12");
-        define!(string KeyF13 => "key_f13");
-        define!(string KeyF14 => "key_f14");
-        define!(string KeyF15 => "key_f15");
-        define!(string KeyF16 => "key_f16");
-        define!(string KeyF17 => "key_f17");
-        define!(string KeyF18 => "key_f18");
-        define!(string KeyF19 => "key_f19");
-        define!(string KeyF20 => "key_f20");
-        define!(string KeyF21 => "key_f21");
-        define!(string KeyF22 => "key_f22");
-        define!(string KeyF23 => "key_f23");
-        define!(string KeyF24 => "key_f24");
-        define!(string KeyF25 => "key_f25");
-        define!(string KeyF26 => "key_f26");
-        define!(string KeyF27 => "key_f27");
-        define!(string KeyF28 => "key_f28");
-        define!(string KeyF29 => "key_f29");
-        define!(string KeyF30 => "key_f30");
-        define!(string KeyF31 => "key_f31");
-        define!(string KeyF32 => "key_f32");
-        define!(string KeyF33 => "key_f33");
-        define!(string KeyF34 => "key_f34");
-        define!(string KeyF35 => "key_f35");
-        define!(string KeyF36 => "key_f36");
-        define!(string KeyF37 => "key_f37");
-        define!(string KeyF38 => "key_f38");
-        define!(string KeyF39 => "key_f39");
-        define!(string KeyF40 => "key_f40");
-        define!(string KeyF41 => "key_f41");
-        define!(string KeyF42 => "key_f42");
-        define!(string KeyF43 => "key_f43");
-        define!(string KeyF44 => "key_f44");
-        define!(string KeyF45 => "key_f45");
-        define!(string KeyF46 => "key_f46");
-        define!(string KeyF47 => "key_f47");
-        define!(string KeyF48 => "key_f48");
-        define!(string KeyF49 => "key_f49");
-        define!(string KeyF50 => "key_f50");
-        define!(string KeyF51 => "key_f51");
-        define!(string KeyF52 => "key_f52");
-        define!(string KeyF53 => "key_f53");
-        define!(string KeyF54 => "key_f54");
-        define!(string KeyF55 => "key_f55");
-        define!(string KeyF56 => "key_f56");
-        define!(string KeyF57 => "key_f57");
-        define!(string KeyF58 => "key_f58");
-        define!(string KeyF59 => "key_f59");
-        define!(string KeyF60 => "key_f60");
-        define!(string KeyF61 => "key_f61");
-        define!(string KeyF62 => "key_f62");
-        define!(string KeyF63 => "key_f63");
-        define!(string ClrBol => "clr_bol");
-        define!(string ClearMargins => "clear_margins");
-        define!(string SetLeftMargin => "set_left_margin");
-        define!(string SetRightMargin => "set_right_margin");
-        define!(string LabelFormat => "label_format");
-        define!(string SetClock => "set_clock");
-        define!(string DisplayClock => "display_clock");
-        define!(string RemoveClock => "remove_clock");
-        define!(string CreateWindow => "create_window");
-        define!(string GotoWindow => "goto_window");
-        define!(string Hangup => "hangup");
-        define!(string DialPhone => "dial_phone");
-        define!(string QuickDial => "quick_dial");
-        define!(string Tone => "tone");
-        define!(string Pulse => "pulse");
-        define!(string FlashHook => "flash_hook");
-        define!(string FixedPause => "fixed_pause");
-        define!(string WaitTone => "wait_tone");
-        define!(string User0 => "user0");
-        define!(string User1 => "user1");
-        define!(string User2 => "user2");
-        define!(string User3 => "user3");
-        define!(string User4 => "user4");
-        define!(string User5 => "user5");
-        define!(string User6 => "user6");
-        define!(string User7 => "user7");
-        define!(string User8 => "user8");
-        define!(string User9 => "user9");
-        define!(string OrigPair => "orig_pair");
-        define!(string OrigColors => "orig_colors");
-        define!(string InitializeColor => "initialize_color");
-        define!(string InitializePair => "initialize_pair");
-        define!(string SetColorPair => "set_color_pair");
-        define!(string ChangeCharPitch => "change_char_pitch");
-        define!(string ChangeLinePitch => "change_line_pitch");
-        define!(string ChangeResHorz => "change_res_horz");
-        define!(string ChangeResVert => "change_res_vert");
-        define!(string DefineChar => "define_char");
-        define!(string EnterDoublewideMode => "enter_doublewide_mode");
-        define!(string EnterDraftQuality => "enter_draft_quality");
-        define!(string EnterItalicsMode => "enter_italics_mode");
-        define!(string EnterLeftwardMode => "enter_leftward_mode");
-        define!(string EnterMicroMode => "enter_micro_mode");
-        define!(string EnterNearLetterQuality => "enter_near_letter_quality");
-        define!(string EnterNormalQuality => "enter_normal_quality");
-        define!(string EnterShadowMode => "enter_shadow_mode");
-        define!(string EnterSubscriptMode => "enter_subscript_mode");
-        define!(string EnterSuperscriptMode => "enter_superscript_mode");
-        define!(string EnterUpwardMode => "enter_upward_mode");
-        define!(string ExitDoublewideMode => "exit_doublewide_mode");
-        define!(string ExitItalicsMode => "exit_italics_mode");
-        define!(string ExitLeftwardMode => "exit_leftward_mode");
-        define!(string ExitMicroMode => "exit_micro_mode");
-        define!(string ExitShadowMode => "exit_shadow_mode");
-        define!(string ExitSubscriptMode => "exit_subscript_mode");
-        define!(string ExitSuperscriptMode => "exit_superscript_mode");
-        define!(string ExitUpwardMode => "exit_upward_mode");
-        define!(string MicroColumnAddress => "micro_column_address");
-        define!(string MicroDown => "micro_down");
-        define!(string MicroLeft => "micro_left");
-        define!(string MicroRight => "micro_right");
-        define!(string MicroRowAddress => "micro_row_address");
-        define!(string MicroUp => "micro_up");
-        define!(string OrderOfPins => "order_of_pins");
-        define!(string SelectCharSet => "select_char_set");
-        define!(string SetBottomMargin => "set_bottom_margin");
-        define!(string SetBottomMarginParm => "set_bottom_margin_parm");
-        define!(string SetLeftMarginParm => "set_left_margin_parm");
-        define!(string SetRightMarginParm => "set_right_margin_parm");
-        define!(string SetTopMargin => "set_top_margin");
-        define!(string SetTopMarginParm => "set_top_margin_parm");
-        define!(string StartBitImage => "start_bit_image");
-        define!(string StartCharSetDef => "start_char_set_def");
-        define!(string StopBitImage => "stop_bit_image");
-        define!(string StopCharSetDef => "stop_char_set_def");
-        define!(string SubscriptCharacters => "subscript_characters");
-        define!(string SuperscriptCharacters => "superscript_characters");
-        define!(string TheseCauseCr => "these_cause_cr");
-        define!(string ZeroMotion => "zero_motion");
-        define!(string CharSetNames => "char_set_names");
-        define!(string KeyMouse => "key_mouse");
-        define!(string MouseInfo => "mouse_info");
-        define!(string ReqMousePos => "req_mouse_pos");
-        define!(string GetMouse => "get_mouse");
-        define!(string PkeyPlab => "pkey_plab");
-        define!(string DeviceType => "device_type");
-        define!(string CodeSetInit => "code_set_init");
-        define!(string Set0DesSeq => "set0_des_seq");
-        define!(string Set1DesSeq => "set1_des_seq");
-        define!(string Set2DesSeq => "set2_des_seq");
-        define!(string Set3DesSeq => "set3_des_seq");
-        define!(string SetLrMargin => "set_lr_margin");
-        define!(string SetTbMargin => "set_tb_margin");
-        define!(string BitImageRepeat => "bit_image_repeat");
-        define!(string BitImageNewline => "bit_image_newline");
-        define!(string BitImageCarriageReturn => "bit_image_carriage_return");
-        define!(string ColorNames => "color_names");
-        define!(string DefineBitImageRegion => "define_bit_image_region");
-        define!(string EndBitImageRegion => "end_bit_image_region");
-        define!(string SetColorBand => "set_color_band");
-        define!(string SetPageLength => "set_page_length");
-        define!(string DisplayPcChar => "display_pc_char");
-        define!(string EnterPcCharsetMode => "enter_pc_charset_mode");
-        define!(string ExitPcCharsetMode => "exit_pc_charset_mode");
-        define!(string EnterScancodeMode => "enter_scancode_mode");
-        define!(string ExitScancodeMode => "exit_scancode_mode");
-        define!(string PcTermOptions => "pc_term_options");
-        define!(string ScancodeEscape => "scancode_escape");
-        define!(string AltScancodeEsc => "alt_scancode_esc");
-        define!(string EnterHorizontalHlMode => "enter_horizontal_hl_mode");
-        define!(string EnterLeftHlMode => "enter_left_hl_mode");
-        define!(string EnterLowHlMode => "enter_low_hl_mode");
-        define!(string EnterRightHlMode => "enter_right_hl_mode");
-        define!(string EnterTopHlMode => "enter_top_hl_mode");
-        define!(string EnterVerticalHlMode => "enter_vertical_hl_mode");
-        define!(string SetAAttributes => "set_a_attributes");
-        define!(string SetPglenInch => "set_pglen_inch");
-        define!(string TermcapInit2 => "termcap_init2");
-        define!(string TermcapReset => "termcap_reset");
-        define!(string LinefeedIfNotLf => "linefeed_if_not_lf");
-        define!(string BackspaceIfNotBs => "backspace_if_not_bs");
-        define!(string OtherNonFunctionKeys => "other_non_function_keys");
-        define!(string ArrowKeyMap => "arrow_key_map");
-        define!(string AcsULcorner => "acs_ulcorner");
-        define!(string AcsLLcorner => "acs_llcorner");
-        define!(string AcsURcorner => "acs_urcorner");
-        define!(string AcsLRcorner => "acs_lrcorner");
-        define!(string AcsLTee => "acs_ltee");
-        define!(string AcsRTee => "acs_rtee");
-        define!(string AcsBTee => "acs_btee");
-        define!(string AcsTTee => "acs_ttee");
-        define!(string AcsHLine => "acs_hline");
-        define!(string AcsVLine => "acs_vline");
-        define!(string AcsPlus => "acs_plus");
-        define!(string MemoryLock => "memory_lock");
-        define!(string MemoryUnlock => "memory_unlock");
-        define!(string BoxChars1 => "box_chars_1");
-
-        define!(string ChangeScrollRegion => "change_scroll_region";
-            top:    u32,
-            bottom: u32);
-
-        define!(string ColumnAddress => "column_address";
-            x: u32);
-
-        define!(string CursorAddress => "cursor_address";
-            y: u32,
-            x: u32);
-
-        define!(string EraseChars => "erase_chars";
-            count: u32);
-
-        define!(string ParmDch => "parm_dch";
-            count: u32);
-
-        define!(string ParmDeleteLine => "parm_delete_line";
-            count: u32);
-
-        define!(string ParmDownCursor => "parm_down_cursor";
-            count: u32);
-
-        define!(string ParmIch => "parm_ich";
-            count: u32);
-
-        define!(string ParmIndex => "parm_index";
-            count: u32);
-
-        define!(string ParmInsertLine => "parm_insert_line";
-            count: u32);
-
-        define!(string ParmLeftCursor => "parm_left_cursor";
-            count: u32);
-
-        define!(string ParmRightCursor => "parm_right_cursor";
-            count: u32);
-
-        define!(string ParmRindex => "parm_rindex";
-            count: u32);
-
-        define!(string ParmUpCursor => "parm_up_cursor";
-            count: u32);
-
-        define!(string ParmDownMicro => "parm_down_micro";
-            count: u32);
-
-        define!(string ParmLeftMicro => "parm_left_micro";
-            count: u32);
-
-        define!(string ParmRightMicro => "parm_right_micro";
-            count: u32);
-
-        define!(string ParmUpMicro => "parm_up_micro";
-            count: u32);
-
-        define!(string RowAddress => "row_address";
-            y: u32);
-
-        define!(string SetAttributes => "set_attributes";
-            standout:    bool,
-            underline:   bool,
-            reverse:     bool,
-            blink:       bool,
-            dim:         bool,
-            bold:        bool,
-            invisible:   bool,
-            protected:   bool,
-            alt_charset: bool);
-
-        define!(string SetAForeground => "set_a_foreground";
-            color: u8);
-
-        define!(string SetABackground => "set_a_background";
-            color: u8);
-
-        define!(string SetForeground => "set_foreground";
-            color: u8);
-
-        define!(string SetBackground => "set_background";
-            color: u8);
-
-
-        define!(boolean XTermTitle => "XT");
-        define!(boolean BrightAttribute => "AX");
-        define!(boolean XTermMouse => "XM");
-        
-        define!(boolean TrueColor => "Tc");
-
-        define!(string SetClipboard => "Ms";
-            selection: String,
-            content:   Vec<u8>);
-
-        define!(string SetCursorStyle => "Ss";
-            kind: u8);
-
-        define!(string ResetCursorStyle => "Se");
-        
-        define!(string SetTrueColorForeground => "8f";
-            r: u8,
-            g: u8,
-            b: u8);
-
-        define!(string SetTrueColorBackground => "8b";
-            r: u8,
-            g: u8,
-            b: u8);
-
-        define!(string ResetCursorColor => "Cr");
-
-        define!(string SetCursorColor => "Cs";
-            color: String);
-
-    }
-    pub use self::capability::{Capability, Value};
-
-    mod database
-    {
-        use ::
-        {
-            collections::{ HashMap },
-            common::
-            {
-                capability::{ Capability, Value },
-                error::{ self, Error },
-                names,
-                parser::compiled,
-            },
-            fnv::{ FnvHasher },
-            fs::{ self, File },
-            hash::{ BuildHasherDefault},
-            io::{ Read },
-            path::{ Path, PathBuf },
-            *,
-        };
-        /// A capability database.
-        #[derive(Eq, PartialEq, Clone, Debug)]
-        pub struct Database 
-        {
-            name: String,
-            aliases: Vec<String>,
-            description: String,
-            inner: HashMap<String, Value, BuildHasherDefault<FnvHasher>>,
-        }
-        /// Builder for a new `Database`.
-        #[derive(Default, Debug)]
-        pub struct Builder 
-        {
-            name: Option<String>,
-            aliases: Vec<String>,
-            description: Option<String>,
-            inner: HashMap<String, Value, BuildHasherDefault<FnvHasher>>,
-        }
-
-        impl Builder 
-        {
-            /// Build the database.
-            pub fn build(self) -> Result<Database, ()> 
-            {
-                Ok(Database 
-                {
-                    name: self.name.ok_or(())?,
-                    aliases: self.aliases,
-                    description: self.description.unwrap_or_default(),
-                    inner: self.inner,
-                })
-            }
-            /// Set the terminal name.
-            pub fn name<T: Into<String>>(&mut self, name: T) -> &mut Self 
-            {
-                self.name = Some(name.into());
-                self
-            }
-            /// Set the terminal aliases.
-            pub fn aliases<T, I>(&mut self, iter: I) -> &mut Self where
-                T: Into<String>,
-                I: IntoIterator<Item = T>,
-            {
-                self.aliases = iter.into_iter().map(|a| a.into()).collect();
-                self
-            }
-            /// Set the terminal description.
-            pub fn description<T: Into<String>>(&mut self, description: T) -> &mut Self 
-            {
-                self.description = Some(description.into());
-                self
-            }
-            /// Set a capability.
-            pub fn set<'a, C: Capability<'a>>(&'a mut self, value: C) -> &mut Self 
-            {
-                if !self.inner.contains_key(C::name()) 
-                {
-                    if let Some(value) = C::into(value) 
-                    {
-                        self.inner.insert(C::name().into(), value);
-                    }
-                }
-
-                self
-            }
-            /// Set a raw capability.
-            pub fn raw<S: AsRef<str>, V: Into<Value>>(&mut self, name: S, value: V) -> &mut Self 
-            {
-                /*
-                let name = name.as_ref();
-                let name = names::ALIASES.get(name).copied().unwrap_or(name);
-
-                if !self.inner.contains_key(name) 
-                {
-                    self.inner.insert(name.into(), value.into());
-                }
-                */
-                self
-            }
-        }
-
-        impl Database 
-        {
-            pub fn new() -> Builder 
-            {
-                Builder::default()
-            }
-            /// Load a database from the current environment.
-            pub fn from_env() -> error::Result<Self> 
-            {
-                if let Ok(name) = env::var("TERM") 
-                {
-                    Self::from_name(name)
-                }
-                else 
-                {
-                    Err(Error::NotFound)
-                }
-            }
-            /// Load a database for the given name.
-            pub fn from_name<N: AsRef<str>>(name: N) -> error::Result<Self> 
-            {
-                let name = name.as_ref();
-                let first = name.chars().next().ok_or(Error::NotFound)?;
-
-                // See https://manpages.debian.org/buster/ncurses-bin/terminfo.5.en.html#Fetching_Compiled_Descriptions
-                let mut search = Vec::<PathBuf>::new();
-
-                #[allow(deprecated)]
-                if let Some(dir) = env::var_os("TERMINFO") 
-                {
-                    search.push(dir.into());
-                } else if let Some(mut home) = std::env::home_dir() 
-                {
-                    home.push(".terminfo");
-                    search.push(home);
-                }
-
-                if let Ok(dirs) = env::var("TERMINFO_DIRS") 
-                {
-                    for dir in dirs.split(':') {
-                        search.push(dir.into());
-                    }
-                }
-
-                // handle non-FHS systems like Termux
-                if let Ok(prefix) = env::var("PREFIX") 
-                {
-                    let path = Path::new(&prefix);
-                    search.push(path.join("etc/terminfo"));
-                    search.push(path.join("lib/terminfo"));
-                    search.push(path.join("share/terminfo"));
-                }
-
-                search.push("/etc/terminfo".into());
-                search.push("/lib/terminfo".into());
-                search.push("/usr/share/terminfo".into());
-                search.push("/usr/local/share/terminfo".into());
-                search.push("/usr/local/share/site-terminfo".into());
-                search.push("/boot/system/data/terminfo".into());
-
-                for path in search 
-                {
-                    if fs::metadata(&path).is_err() 
-                    {
-                        continue;
-                    }
-
-                    // Check standard location.
-                    {
-                        let mut path = path.clone();
-                        path.push(first.to_string());
-                        path.push(name);
-
-                        if fs::metadata(&path).is_ok() 
-                        {
-                            return Self::from_path(path);
-                        }
-                    }
-
-                    // Check non-standard location.
-                    {
-                        let mut path = path.clone();
-                        path.push(format!("{:x}", first as usize));
-                        path.push(name);
-
-                        if fs::metadata(&path).is_ok() 
-                        {
-                            return Self::from_path(path);
-                        }
-                    }
-                }
-
-                Err(Error::NotFound)
-            }
-            /// Load a database from the given path.
-            pub fn from_path<P: AsRef<Path>>(path: P) -> error::Result<Self> 
-            {
-                let mut file = File::open(path)?;
-                let mut buffer = Vec::new();
-                file.read_to_end(&mut buffer)?;
-
-                Self::from_buffer(buffer)
-            }
-            /// Load a database from a buffer.
-            pub fn from_buffer<T: AsRef<[u8]>>(buffer: T) -> error::Result<Self> 
-            {
-                if let Ok((_, database)) = compiled::parse(buffer.as_ref()) 
-                {
-                    Ok(database.into())
-                } else 
-                {
-                    Err(Error::Parse)
-                }
-            }
-            /// The terminal name.
-            pub fn name(&self) -> &str 
-            
-            {
-                &self.name
-            }
-            /// The terminal aliases.
-            pub fn aliases(&self) -> &[String] 
-            
-            {
-                &self.aliases
-            }
-            /// The terminal description.
-            pub fn description(&self) -> &str 
-            
-            {
-                &self.description
-            }
-            /// Get a capability.
-            pub fn get<'a, C: Capability<'a>>(&'a self) -> Option<C> 
-            {
-                C::from(self.inner.get(C::name()))
-            }
-            /// Get a capability by name.
-            pub fn raw<S: AsRef<str>>(&self, name: S) -> Option<&Value> 
-            {
-                /*
-                let name = name.as_ref();
-                let name = names::ALIASES.get(name).copied().unwrap_or(name);
-                self.inner.get(name)
-                */
-                None
-            }
-        }
-    }
-    pub use self::database::Database;
-    /// Constants to deal with name differences across terminfo and termcap.
-    pub mod names
-    {
-        use ::
-        {
-            *,
-        };
-    }
-    /// Parsers for various formats.
-    mod parser
-    {
-        use ::
-        {
-            *,
-        };
-
-        #[macro_use] mod util
-        {
-            use ::
-            {
-                borrow::Cow,
-                parsers::nom::
-                {
-                    branch::alt,
-                    character::streaming::char,
-                    character::{streaming::line_ending as eol},
-                    combinator::eof,
-                    IResult,
-                },
-                *,
-            };
-            
-            const NONE: u8 = 0b000000;
-            const PRINT: u8 = 0b000001;
-            const SPACE: u8 = 0b000010;
-            const CONTROL: u8 = 0b000100;
-            const PIPE: u8 = 0b001000;
-            const COMMA: u8 = 0b010000;
-            const EOL: u8 = 0b100000;
-
-            // Ugly table of DOOM, gotta run and gun.
-            
-            static ASCII: [u8; 256] = 
-            [
-                NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
-                NONE, SPACE, EOL, NONE, NONE, EOL, NONE, NONE,
-                NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
-                NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
-                PRINT | SPACE, PRINT, PRINT, PRINT | CONTROL, PRINT, PRINT, PRINT, PRINT,
-                PRINT, PRINT, PRINT, PRINT, PRINT | COMMA | CONTROL, PRINT, PRINT, PRINT,
-                PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT,
-                PRINT, PRINT, PRINT, PRINT, PRINT, PRINT | CONTROL, PRINT, PRINT,
-                PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT,
-                PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT,
-                PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT,
-                PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT,
-                PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT,
-                PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT,
-                PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT, PRINT,
-                PRINT, PRINT, PRINT, PRINT, PRINT | PIPE, PRINT, PRINT, NONE,
-                NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
-                NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
-                NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
-                NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
-                NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
-                NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
-                NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
-                NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
-                NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
-                NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
-                NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
-                NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
-                NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
-                NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
-                NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
-                NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
-            ];
-
-            #[inline( always )] pub fn is_ws(ch: u8) -> bool 
-            {
-                unsafe { ASCII.get_unchecked(ch as usize) & SPACE == SPACE }
-            }
-
-            #[inline( always )] pub fn is_eol(ch: u8) -> bool 
-            {
-                unsafe { ASCII.get_unchecked(ch as usize) & EOL == EOL }
-            }
-
-            #[inline( always )] pub fn is_printable_no_pipe(ch: u8) -> bool 
-            {
-                unsafe { ASCII.get_unchecked(ch as usize) & (PRINT | PIPE) == PRINT }
-            }
-
-            #[inline( always )] pub fn is_printable_no_comma(ch: u8) -> bool 
-            {
-                unsafe { ASCII.get_unchecked(ch as usize) & (PRINT | COMMA) == PRINT }
-            }
-
-            #[inline( always )] pub fn is_printable_no_control(ch: u8) -> bool 
-            {
-                unsafe { ASCII.get_unchecked(ch as usize) & (PRINT | CONTROL) == PRINT }
-            }
-
-            pub fn ws(input: &[u8]) -> IResult<&[u8], char> 
-            {
-                alt((char(' '), char('\t')))(input)
-            }
-
-            pub fn end(input: &[u8]) -> IResult<&[u8], &[u8]> 
-            {
-                alt((eof, eol))(input)
-            }
-
-            #[inline] pub fn number(i: &[u8]) -> i32 
-            {
-                let mut n: i32 = 0;
-
-                for &ch in i {
-                    let d = (ch as i32).wrapping_sub(b'0' as i32);
-
-                    if d <= 9 {
-                        n = n.saturating_mul(10).saturating_add(d);
-                    }
-                }
-
-                n
-            }
-
-            pub fn unescape(i: &[u8]) -> Cow<[u8]> 
-            {
-                fn escape<I: Iterator<Item = u8>>(output: &mut Vec<u8>, iter: &mut I) 
-                {
-                    match iter.next() {
-                        None => (),
-
-                        Some(b'a') => output.push(0x07),
-
-                        Some(b'b') => output.push(0x08),
-
-                        Some(b'E') | Some(b'e') => output.push(0x1B),
-
-                        Some(b'f') => output.push(0x0C),
-
-                        Some(b'l') | Some(b'n') => output.push(b'\n'),
-
-                        Some(b'r') => output.push(b'\r'),
-
-                        Some(b's') => output.push(b' '),
-
-                        Some(b't') => output.push(b'\t'),
-
-                        Some(b'^') => output.push(b'^'),
-
-                        Some(b'\\') => output.push(b'\\'),
-
-                        Some(b',') => output.push(b','),
-
-                        Some(b':') => output.push(b':'),
-
-                        Some(b'0') => output.push(0x00),
-
-                        Some(a) if is::digit(a) => match (iter.next(), iter.next()) {
-                            (Some(b), Some(c)) if is::digit(b) && is::digit(c) => {
-                                if let Ok(number) =
-                                    u8::from_str_radix(unsafe { str::from_utf8_unchecked(&[a, b, c]) }, 8)
-                                {
-                                    output.push(number);
-                                } else {
-                                    output.extend(&[a, b, c]);
-                                }
-                            }
-
-                            (Some(b), None) => output.extend(&[b'\\', a, b]),
-
-                            (None, None) => output.extend(&[b'\\', a]),
-
-                            _ => unreachable!(),
-                        },
-
-                        Some(ch) => output.extend(&[b'\\', ch]),
-                    }
-                }
-
-                fn control<I: Iterator<Item = u8>>(output: &mut Vec<u8>, iter: &mut I) {
-                    match iter.next() {
-                        None => (),
-
-                        Some(ch) if ch.is_ascii_uppercase() => output.push(ch - b'A' + 1),
-
-                        Some(ch) if ch.is_ascii_lowercase() => output.push(ch - b'a' + 1),
-
-                        Some(ch) => output.extend(&[b'^', ch]),
-                    }
-                }
-
-                let mut chars = i.iter().cloned();
-                let mut offset = 0;
-
-                while let Some(ch) = chars.next() {
-                    if ch == b'\\' || ch == b'^' {
-                        let mut output = i[..offset].to_vec();
-
-                        match ch {
-                            b'\\' => escape(&mut output, &mut chars),
-
-                            b'^' => control(&mut output, &mut chars),
-
-                            _ => unreachable!(),
-                        }
-
-                        while let Some(ch) = chars.next() {
-                            match ch {
-                                b'\\' => escape(&mut output, &mut chars),
-
-                                b'^' => control(&mut output, &mut chars),
-
-                                ch => output.push(ch),
-                            }
-                        }
-
-                        return Cow::Owned(output);
-                    }
-
-                    offset += 1;
-                }
-
-                Cow::Borrowed(i)
-            }
-        }
-
-        pub mod compiled
-        {
-            use ::
-            {
-                parsers::nom::
-                {
-                    branch::alt,
-                    bytes::streaming::{tag, take, take_until},
-                    combinator::{complete, cond, map, map_opt, map_parser, opt},
-                    multi::count,
-                    number::streaming::{le_i16, le_i32},
-                    IResult,
-                },
-                *,
-            };
-
-            use ::common::capability::Value;
-            use ::common::names;
-
-            #[derive(Eq, PartialEq, Clone, Debug)]
-            pub struct Database<'a> {
-                names: &'a [u8],
-                standard: Standard<'a>,
-                extended: Option<Extended<'a>>,
-            }
-
-            impl<'a> From<Database<'a>> for ::common::Database
-            {
-                fn from(source: Database<'a>) -> Self 
-                {
-                    let mut database = ::common::Database::new();
-                    /*
-                    let mut names = source
-                    .names
-                    .split(|&c| c == b'|')
-                    .map(|s| unsafe { str::from_utf8_unchecked(s) })
-                    .map(|s| s.trim())
-                    .collect::<Vec<_>>();
-                    
-                    database.name(names.remove(0));
-                    names.pop().map(|name| database.description(name));
-                    database.aliases(names);
-
-                    for (index, _) in source.standard.booleans.iter().enumerate().filter(|&(_, &value)| value) {
-                        if let Some(&name) = names::BOOLEAN.get(&(index as u16)) {
-                            database.raw(name, Value::True);
-                        }
-                    }
-
-                    for (index, &value) in source.standard.numbers.iter().enumerate().filter(|&(_, &n)| n >= 0)
-                    {
-                        if let Some(&name) = names::NUMBER.get(&(index as u16)) {
-                            database.raw(name, Value::Number(value));
-                        }
-                    }
-
-                    for (index, &offset) in source.standard.strings.iter().enumerate().filter(|&(_, &n)| n >= 0)
-                    {
-                        if let Some(&name) = names::STRING.get(&(index as u16)) {
-                            let string = &source.standard.table[offset as usize..];
-                            let edge = string.iter().position(|&c| c == 0).unwrap();
-
-                            database.raw(name, Value::String(Vec::from(&string[..edge])));
-                        }
-                    }
-
-                    if let Some(extended) = source.extended {
-                        let names = extended
-                            .table
-                            .split(|&c| c == 0)
-                            .skip(extended.strings.iter().cloned().filter(|&n| n >= 0).count())
-                            .map(|s| unsafe { str::from_utf8_unchecked(s) })
-                            .collect::<Vec<_>>();
-
-                        for (index, _) in extended.booleans.iter().enumerate().filter(|&(_, &value)| value) {
-                            database.raw(names[index], Value::True);
-                        }
-
-                        for (index, &value) in extended.numbers.iter().enumerate().filter(|&(_, &n)| n >= 0) {
-                            database.raw(names[extended.booleans.len() + index], Value::Number(value));
-                        }
-
-                        for (index, &offset) in extended.strings.iter().enumerate().filter(|&(_, &n)| n >= 0) {
-                            let string = &extended.table[offset as usize..];
-                            let edge = string.iter().position(|&c| c == 0).unwrap();
-
-                            database.raw(
-                                names[extended.booleans.len() + extended.numbers.len() + index],
-                                Value::String(Vec::from(&string[..edge])),
-                            );
-                        }
-                    }
-                    */
-                    database.build().unwrap()
-                }
-            }
-
-            #[derive(Eq, PartialEq, Clone, Debug)]
-            pub struct Standard<'a> {
-                booleans: Vec<bool>,
-                numbers: Vec<i32>,
-                strings: Vec<i32>,
-                table: &'a [u8],
-            }
-
-            #[derive(Eq, PartialEq, Clone, Debug)]
-            pub struct Extended<'a> {
-                booleans: Vec<bool>,
-                numbers: Vec<i32>,
-                strings: Vec<i32>,
-                names: Vec<i32>,
-                table: &'a [u8],
-            }
-
-            fn bit_size(magic: &[u8]) -> usize {
-                match magic[1] {
-                    0x01 => 16,
-                    0x02 => 32,
-
-                    _ => unreachable!("unknown magic number"),
-                }
-            }
-
-            pub fn parse(input: &[u8]) -> IResult<&[u8], Database> {
-                let (input, magic) = alt((tag([0x1A, 0x01]), tag([0x1E, 0x02])))(input)?;
-
-                let (input, name_size) = size(input)?;
-                let (input, bool_count) = size(input)?;
-                let (input, num_count) = size(input)?;
-                let (input, string_count) = size(input)?;
-                let (input, table_size) = size(input)?;
-
-                let (input, names) = map_parser(take(name_size), take_until("\x00"))(input)?;
-
-                let (input, booleans) = count(boolean, bool_count)(input)?;
-
-                let (input, _) = cond((name_size + bool_count) % 2 != 0, take(1_usize))(input)?;
-
-                let (input, numbers) = count(|input| capability(input, bit_size(magic)), num_count)(input)?;
-
-                let (input, strings) = count(|input| capability(input, 16), string_count)(input)?;
-
-                let (input, table) = take(table_size)(input)?;
-
-                let (input, extended) = opt(complete(|input| {
-                    let (input, _) = cond(table_size % 2 != 0, take(1_usize))(input)?;
-
-                    let (input, ext_bool_count) = size(input)?;
-                    let (input, ext_num_count) = size(input)?;
-                    let (input, ext_string_count) = size(input)?;
-                    let (input, _ext_offset_count) = size(input)?;
-                    let (input, ext_table_size) = size(input)?;
-
-                    let (input, booleans) = count(boolean, ext_bool_count)(input)?;
-
-                    let (input, _) = cond(ext_bool_count % 2 != 0, take(1_usize))(input)?;
-
-                    let (input, numbers) =
-                        count(|input| capability(input, bit_size(magic)), ext_num_count)(input)?;
-
-                    let (input, strings) = count(|input| capability(input, 16), ext_string_count)(input)?;
-
-                    let (input, names) = count(
-                        |input| capability(input, 16),
-                        ext_bool_count + ext_num_count + ext_string_count,
-                    )(input)?;
-
-                    let (input, table) = take(ext_table_size)(input)?;
-
-                    Ok((input, Extended { booleans, numbers, strings, names, table }))
-                }))(input)?;
-
-                Ok((
-                    input,
-                    Database { names, standard: Standard { booleans, numbers, strings, table }, extended },
-                ))
-            }
-
-            fn boolean(input: &[u8]) -> IResult<&[u8], bool> {
-                alt((map(tag([0]), |_| false), map(tag([1]), |_| true)))(input)
-            }
-
-            fn size(input: &[u8]) -> IResult<&[u8], usize> {
-                map_opt(le_i16, |n| match n {
-                    -1 => Some(0),
-                    n if n >= 0 => Some(n as usize),
-                    _ => None,
-                })(input)
-            }
-
-            fn capability(input: &[u8], bits: usize) -> IResult<&[u8], i32> {
-                alt((
-                    map_opt(
-                        cond(bits == 16, map_opt(le_i16, |n| if n >= -2 { Some(n as i32) } else { None })),
-                        |o| o,
-                    ),
-                    map_opt(cond(bits == 32, map_opt(le_i32, |n| if n >= -2 { Some(n) } else { None })), |o| o),
-                ))(input)
-            }
-        }
-
-        pub mod expansion
-        {
-            use ::
-            {
-                parsers::nom::
-                {
-                    branch::alt,
-                    bytes::complete,
-                    bytes::streaming::{tag, take, take_while},
-                    character::streaming::one_of,
-                    combinator::{map, opt, value},
-                    error::{make_error, ErrorKind},
-                    IResult, Err
-                },
-                *,
-            }; use super::util::number;
-
-            #[derive( Eq, PartialEq, Copy, Clone, Debug )]
-            pub enum Item<'a> 
-            {
-                String(&'a [u8]),
-                Constant(Constant),
-                Variable(Variable),
-                Operation(Operation),
-                Conditional(Conditional),
-                Print(Print),
-            }
-
-            #[derive( Eq, PartialEq, Copy, Clone, Debug )]
-            pub enum Constant 
-            {
-                Character(u8),
-                Integer(i32),
-            }
-
-            #[derive( Eq, PartialEq, Copy, Clone, Debug )]
-            pub enum Variable 
-            {
-                Length,
-                Push(u8),
-                Set(bool, u8),
-                Get(bool, u8),
-            }
-
-            #[derive( Eq, PartialEq, Copy, Clone, Debug )]
-            pub enum Operation 
-            {
-                Increment,
-                Unary(Unary),
-                Binary(Binary),
-            }
-
-            #[derive( Eq, PartialEq, Copy, Clone, Debug )]
-            pub enum Unary 
-            {
-                Not,
-                NOT,
-            }
-
-            #[derive( Eq, PartialEq, Copy, Clone, Debug )]
-            pub enum Binary 
-            {
-                Add,
-                Subtract,
-                Multiply,
-                Divide,
-                Remainder,
-
-                AND,
-                OR,
-                XOR,
-
-                And,
-                Or,
-
-                Equal,
-                Greater,
-                Lesser,
-            }
-
-            #[derive( Eq, PartialEq, Copy, Clone, Debug )]
-            pub enum Conditional 
-            {
-                If,
-                Then,
-                Else,
-                End,
-            }
-
-            #[derive( Eq, PartialEq, Copy, Clone, Debug )]
-            pub struct Print 
-            {
-                pub flags: Flags,
-                pub format: Format,
-            }
-
-            #[derive( Eq, PartialEq, Copy, Clone, Debug )]
-            pub enum Format 
-            {
-                Chr,
-                Uni,
-                Str,
-                Dec,
-                Oct,
-                Hex,
-                HEX,
-            }
-
-            #[derive(Eq, PartialEq, Copy, Clone, Default, Debug)]
-            pub struct Flags 
-            {
-                pub width: usize,
-                pub precision: usize,
-
-                pub alternate: bool,
-                pub left: bool,
-                pub sign: bool,
-                pub space: bool,
-            }
-
-            pub fn parse(input: &[u8]) -> IResult<&[u8], Item> 
-            {
-                alt((expansion, string))(input)
-            }
-
-            fn string(input: &[u8]) -> IResult<&[u8], Item> 
-            {
-                map(complete::take_till(|b| b == b'%'), Item::String)(input)
-            }
-
-            fn expansion(input: &[u8]) -> IResult<&[u8], Item> 
-            {
-                let (input, _) = tag("%")(input)?;
-                let (input, item) = alt((percent, constant, variable, operation, conditional, print))(input)?;
-
-                Ok((input, item))
-            }
-
-            fn percent(input: &[u8]) -> IResult<&[u8], Item> 
-            {
-                value(Item::String(b"%"), tag("%"))(input)
-            }
-
-            fn constant(input: &[u8]) -> IResult<&[u8], Item> 
-            {
-                alt((constant_char, constant_integer))(input)
-            }
-
-            fn constant_char(input: &[u8]) -> IResult<&[u8], Item> 
-            {
-                let (input, _) = tag("'")(input)?;
-                let (input, ch) = take(1_usize)(input)?;
-                let (input, _) = tag("'")(input)?;
-
-                Ok((input, Item::Constant(Constant::Character(ch[0]))))
-            }
-
-            fn constant_integer(input: &[u8]) -> IResult<&[u8], Item> 
-            {
-                let (input, _) = tag("{")(input)?;
-                let (input, digit) = take_while(is::digit)(input)?;
-                let (input, _) = tag("}")(input)?;
-
-                Ok((input, Item::Constant(Constant::Integer(number(digit)))))
-            }
-
-            fn variable(input: &[u8]) -> IResult<&[u8], Item> 
-            {
-                let (input, c) = take(1_usize)(input)?;
-                match c {
-                    b"l" => Ok((input, Item::Variable(Variable::Length))),
-
-                    b"p" => map(one_of("123456789"), |n| Item::Variable(Variable::Push(n as u8 - b'1')))(input),
-
-                    b"P" => alt((
-                        map(one_of("abcdefghijklmnopqrstuvwxyz"), |n| {
-                            Item::Variable(Variable::Set(true, n as u8 - b'a'))
-                        }),
-                        map(one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ"), |n| {
-                            Item::Variable(Variable::Set(false, n as u8 - b'A'))
-                        }),
-                    ))(input),
-
-                    b"g" => alt((
-                        map(one_of("abcdefghijklmnopqrstuvwxyz"), |n| {
-                            Item::Variable(Variable::Get(true, n as u8 - b'a'))
-                        }),
-                        map(one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ"), |n| {
-                            Item::Variable(Variable::Get(false, n as u8 - b'A'))
-                        }),
-                    ))(input),
-
-                    _ => Err( Err::Error(make_error(input, ErrorKind::Switch))),
-                }
-            }
-
-            fn operation(input: &[u8]) -> IResult<&[u8], Item> 
-            {
-                let (input, c) = take(1_usize)(input)?;
-                match c {
-                    b"+" => Ok((input, Item::Operation(Operation::Binary(Binary::Add)))),
-                    b"-" => Ok((input, Item::Operation(Operation::Binary(Binary::Subtract)))),
-                    b"*" => Ok((input, Item::Operation(Operation::Binary(Binary::Multiply)))),
-                    b"/" => Ok((input, Item::Operation(Operation::Binary(Binary::Divide)))),
-                    b"m" => Ok((input, Item::Operation(Operation::Binary(Binary::Remainder)))),
-                    b"i" => Ok((input, Item::Operation(Operation::Increment))),
-
-                    b"&" => Ok((input, Item::Operation(Operation::Binary(Binary::AND)))),
-                    b"|" => Ok((input, Item::Operation(Operation::Binary(Binary::OR)))),
-                    b"^" => Ok((input, Item::Operation(Operation::Binary(Binary::XOR)))),
-                    b"~" => Ok((input, Item::Operation(Operation::Unary(Unary::NOT)))),
-
-                    b"A" => Ok((input, Item::Operation(Operation::Binary(Binary::And)))),
-                    b"O" => Ok((input, Item::Operation(Operation::Binary(Binary::Or)))),
-                    b"!" => Ok((input, Item::Operation(Operation::Unary(Unary::Not)))),
-
-                    b"=" => Ok((input, Item::Operation(Operation::Binary(Binary::Equal)))),
-                    b">" => Ok((input, Item::Operation(Operation::Binary(Binary::Greater)))),
-                    b"<" => Ok((input, Item::Operation(Operation::Binary(Binary::Lesser)))),
-
-                    _ => Err( Err::Error(make_error(input, ErrorKind::Switch))),
-                }
-            }
-
-            fn conditional(input: &[u8]) -> IResult<&[u8], Item> 
-            {
-                let (input, c) = take(1_usize)(input)?;
-                match c {
-                    b"?" => Ok((input, Item::Conditional(Conditional::If))),
-                    b"t" => Ok((input, Item::Conditional(Conditional::Then))),
-                    b"e" => Ok((input, Item::Conditional(Conditional::Else))),
-                    b";" => Ok((input, Item::Conditional(Conditional::End))),
-
-                    _ => Err( Err::Error(make_error(input, ErrorKind::Switch))),
-                }
-            }
-
-            fn print(input: &[u8]) -> IResult<&[u8], Item> 
-            {
-                let (input, _) = opt(tag(":"))(input)?;
-
-                let (input, flags) = take_while(is_flag)(input)?;
-                let (input, width) = opt(take_while(is::digit))(input)?;
-                let (input, precision) = opt(|input| {
-                    let (input, _) = tag(".")(input)?;
-                    let (input, amount) = take_while(is::digit)(input)?;
-
-                    Ok((input, amount))
-                })(input)?;
-
-                let (input, format) = one_of("doxXsc")(input)?;
-
-                Ok((
-                    input,
-                    Item::Print(Print {
-                        flags: Flags {
-                            width: number(width.unwrap_or(b"0")) as usize,
-                            precision: number(precision.unwrap_or(b"0")) as usize,
-
-                            alternate: flags.contains(&b'#'),
-                            left: flags.contains(&b'-'),
-                            sign: flags.contains(&b'+'),
-                            space: flags.contains(&b' '),
-                        },
-
-                        format: match format {
-                            'd' => Format::Dec,
-                            'o' => Format::Oct,
-                            'x' => Format::Hex,
-                            'X' => Format::HEX,
-                            's' => Format::Str,
-                            'c' => Format::Chr,
-                            'u' => Format::Uni,
-                            _ => unreachable!(),
-                        },
-                    }),
-                ))
-            }
-
-            fn is_flag(i: u8) -> bool 
-            {
-                i == b' ' || i == b'-' || i == b'+' || i == b'#'
-            }
-        }
-
-        pub mod source
-        {
-            use ::
-            {
-                borrow::{ Cow },
-                common::
-                {
-                    parser::
-                    {
-                        util::{ unescape, end, is_eol, is_ws, ws, is_printable_no_comma, is_printable_no_control, is_printable_no_pipe },
-                    },
-                },
-                parsers::nom::
-                {
-                    branch::alt,
-                    bytes::streaming::{ tag, take, take_until, take_while },
-                    character::{ streaming::line_ending as eol },
-                    combinator::{ complete, map, map_res, opt },
-                    error::{ make_error, ErrorKind },
-                    sequence::terminated,
-                    IResult, Err,
-                },
-                *,
-            };
-
-            #[derive(Eq, PartialEq, Clone, Debug)]
-            pub enum Item<'a> {
-                Comment(&'a str),
-
-                Definition { name: &'a str, aliases: Vec<&'a str>, description: &'a str },
-
-                True(&'a str),
-                Number(&'a str, i16),
-                String(&'a str, Cow<'a, [u8]>),
-                Disable(&'a str),
-            }
-
-            pub fn parse(input: &[u8]) -> IResult<&[u8], Item> {
-                alt((comment, definition, disable, entry))(input)
-            }
-
-            fn comment(input: &[u8]) -> IResult<&[u8], Item> {
-                let (input, _) = tag("#")(input)?;
-                let (input, content) = map_res(terminated(take_until("\n"), tag("\n")), str::from_utf8)(input)?;
-                let (input, _) = opt(complete(take_while(is_eol)))(input)?;
-
-                Ok((input, Item::Comment(content.trim())))
-            }
-
-            fn definition(input: &[u8]) -> IResult<&[u8], Item> {
-                let (input, name) =
-                    map(take_while(is_printable_no_pipe), |n| unsafe { str::from_utf8_unchecked(n) })(input)?;
-
-                let (input, _) = tag("|")(input)?;
-
-                let (input, content) =
-                    map(take_while(is_printable_no_comma), |n| unsafe { str::from_utf8_unchecked(n) })(input)?;
-
-                let (input, _) = tag(",")(input)?;
-
-                let (input, _) = take_while(is_ws)(input)?;
-
-                let (input, _) = eol(input)?;
-                let (input, _) = opt(complete(take_while(is_eol)))(input)?;
-
-                Ok((input, {
-                    let mut aliases = content.split(|c| c == '|').map(|n| n.trim()).collect::<Vec<_>>();
-
-                    Item::Definition { name, description: aliases.pop().unwrap(), aliases }
-                }))
-            }
-
-            fn disable(input: &[u8]) -> IResult<&[u8], Item> {
-                let (input, _) = ws(input)?;
-                let (input, _) = take_while(is_ws)(input)?;
-                let (input, _) = tag("@")(input)?;
-
-                let (input, name) =
-                    map(take_while(is_printable_no_control), |n| unsafe { str::from_utf8_unchecked(n) })(
-                        input,
-                    )?;
-
-                let (input, _) = tag(",")(input)?;
-                let (input, _) = take_while(is_ws)(input)?;
-                let (input, _) = end(input)?;
-                let (input, _) = opt(complete(take_while(is_eol)))(input)?;
-
-                Ok((input, Item::Disable(name)))
-            }
-
-            fn entry(input: &[u8]) -> IResult<&[u8], Item> {
-                let (input, _) = ws(input)?;
-                let (input, _) = take_while(is_ws)(input)?;
-
-                let (input, name) =
-                    map(take_while(is_printable_no_control), |n| unsafe { str::from_utf8_unchecked(n) })(
-                        input,
-                    )?;
-
-                let (input, c) = take(1_usize)(input)?;
-                let (input, value) = match c {
-                    b"," => (input, Item::True(name)),
-
-                    b"#" => {
-                        let (input, value) =
-                            map(take_while(is::digit), |n| unsafe { str::from_utf8_unchecked(n) })(input)?;
-
-                        let (input, _) = tag(",")(input)?;
-
-                        (input, Item::Number(name, value.parse().unwrap()))
-                    }
-
-                    b"=" => {
-                        let (input, value) = take_while(is_printable_no_comma)(input)?;
-
-                        let (input, _) = tag(",")(input)?;
-
-                        (input, Item::String(name, unescape(value)))
-                    }
-
-                    _ => Err( Err::Error(make_error(input, ErrorKind::Switch)))?,
-                };
-
-                let (input, _) = take_while(is_ws)(input)?;
-                let (input, _) = end(input)?;
-                let (input, _) = opt(complete(take_while(is_eol)))(input)?;
-
-                Ok((input, value))
-            }
-        }       
-    }
-}
 
 pub mod convert
 {
@@ -3062,7 +352,7 @@ pub mod convert
 }
 /*
 mortal*/
-pub mod core
+pub mod common
 {
     use ::
     {
@@ -3071,17 +361,21 @@ pub mod core
     
 }
 /*
-over | the best data format*/
+over | the best data format. */
 pub mod database
 {
     use ::
     {
+        collections::
+        {
+            hash_map::{Iter, Keys, Values},
+            HashMap,
+        },
         *,
     };
     /// Result type for this crate.
     pub type OverResult<T> = Result<T, OverError>;
-
-    // Indent step in .over files.
+    /// Indent step in .over files.
     const INDENT_STEP: usize = 4; 
 
     pub mod arrays
@@ -3243,6 +537,8 @@ pub mod database
         {
             ArrOutOfBounds(usize),
             ArrTypeMismatch(Type, Type),
+            DatabaseNotFound,
+            EnvironmentFileNotFound,            
             FieldNotFound(String),
             InvalidFieldName(String),
             NoParentFound,
@@ -3256,15 +552,18 @@ pub mod database
         impl fmt::Display for OverError 
         {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
-                {use self::OverError::*;
-
-                match *self {
+            {
+                use self::OverError::*;
+                match *self 
+                {
                     ArrOutOfBounds(ref index) => write!(f, "Arr index {} out of bounds", index),
                     ArrTypeMismatch(ref expected, ref found) => write!(
                         f,
                         "Arr inner types do not match: expected {}, found {}",
                         expected, found
                     ),
+                    DatabaseNotFound  => write!(f, "Database not found."),
+                    EnvironmentFileNotFound  => write!(f, "Environment File not found."),
                     FieldNotFound(ref field) => write!(f, "Field not found: \"{}\"", field),
                     InvalidFieldName(ref field) => write!(f, "Invalid field name: \"{}\"", field),
                     NoParentFound => write!(f, "No parent found for this obj"),
@@ -3285,19 +584,21 @@ pub mod database
 
         impl Error for OverError 
         {
-            fn description(&self) -> &str {
+            fn description(&self) -> &str
+            {
                 use self::OverError::*;
-
-                match *self {
+                match *self
+                {
                     ArrOutOfBounds(_) => "Arr index out of bounds",
                     ArrTypeMismatch(_, _) => "Arr inner types do not match",
+                    DatabaseNotFound => "Database not found",
+                    EnvironmentFileNotFound => "Environment File not found",
                     FieldNotFound(_) => "Field not found",
                     InvalidFieldName(_) => "Invalid field name",
                     NoParentFound => "No parent found for this obj",
                     TupOutOfBounds(_) => "Tup index out of bounds",
                     TupTypeMismatch(_, _, _) => "Tup inner types do not match",
                     TypeMismatch(_, _) => "Type mismatch",
-
                     ParseError(ref error) | IoError(ref error) => error,
                 }
             }
@@ -3305,14 +606,16 @@ pub mod database
 
         impl From<io::Error> for OverError 
         {
-            fn from(e: io::Error) -> Self {
+            fn from(e: io::Error) -> Self
+            {
                 OverError::IoError(format!("{}", e))
             }
         }
 
         impl From<ParseError> for OverError 
         {
-            fn from(e: ParseError) -> Self {
+            fn from(e: ParseError) -> Self
+            {
                 OverError::ParseError(format!("{}", e))
             }
         }
@@ -3652,7 +955,8 @@ pub mod database
         {
             type Err = OverError;
 
-            fn from_str(s: &str) -> Result<Self, Self::Err> {
+            fn from_str(s: &str) -> Result<Self, Self::Err> 
+            {
                 Ok(parses::load_from_str(s)?)
             }
         }
@@ -3661,7 +965,8 @@ pub mod database
         /// 2. The two Objs must have all the same fields pointing to the same values.
         impl PartialEq for Obj 
         {
-            fn eq(&self, other: &Self) -> bool {
+            fn eq(&self, other: &Self) -> bool 
+            {
                 let inner = &self.inner;
                 let other_inner = &other.inner;
 
@@ -3680,6 +985,8 @@ pub mod database
                 inner.map == other_inner.map
             }
         }
+        
+        impl Eq for Obj {}
     } pub use self::objects::Obj;
 
     pub mod tuples
@@ -6408,6 +3715,391 @@ pub mod database
         pub fn load_from_file(path: &str) -> ParseResult<Obj> { parser::parse_obj_file(path) }
         /// Load an `Obj` from a &str.
         pub fn load_from_str(contents: &str) -> ParseResult<Obj> { parser::parse_obj_str(contents) }
+    }
+    /// pls custom database.
+    #[derive(Eq, PartialEq, Clone, Debug)]
+    pub struct Database
+    {
+        pub name:String,
+        pub description:String,
+        pub alias:Vec<String>,
+        pub object:Option<Obj>,
+    }
+    
+    impl Database 
+    {
+        /// Create a new database with constant support.
+        pub const fn new() -> Self
+        {
+            Self
+            {
+                name:String::new(),
+                description:String::new(),
+                alias: Vec::new(),
+                object: None,
+            }
+        }
+        /// Create a new database with a backing name, description, and Obj
+        pub fn create( name:String, description:String, object:Obj ) -> Self
+        {
+            Self
+            {
+                name,
+                description,
+                alias: Vec::new(),
+                object:Some( object ),
+            }
+        }
+        /// Create a new database with a backing name, description, and HashMap
+        pub fn create_from_map( name:String, description:String, map:HashMap<String, values::Value> ) -> OverResult<Self>
+        {
+            match Obj::from_map( map )
+            {
+                Ok( object ) => Ok( Self::create( name, description, object ) ),
+                Err( e ) => Err( e )
+            }
+        }
+        /// Create a new database with a backing name, description, and HashMap, and given parent.
+        pub fn create_from_map_with_parent( name:String, description:String, map:HashMap<String, values::Value>, parent: Obj ) -> OverResult<Self>
+        {
+            match Obj::from_map_with_parent( map, parent )
+            {
+                Ok( object ) => Ok( Self::create( name, description, object ) ),
+                Err( e ) => Err( e )
+            }
+        }
+        /// Build the object data of the database once it has been established.
+        pub fn build( &mut self ) -> Self
+        {
+            match &self.object
+            {
+                None =>
+                {
+                    self.object = Some( Obj::default() );
+                    return self.clone();
+                }
+                Some( db ) => self.clone()
+            }
+        }
+        /// Load a database from the current environment.
+        pub fn from_env() -> OverResult<Self> 
+        {
+            if let Ok( filepath ) = env::var("PLS") { Self::from_file( &filepath ) }
+            else  { Err( OverError::EnvironmentFileNotFound ) }
+        }
+        /// Returns a new `Obj` loaded from a file.
+        pub fn from_file( filepath:&str ) -> OverResult<Self>
+        {
+            Ok( Self::create( "pls".to_string(), "...".to_string(), Obj::from_file( filepath )? ) )
+        }
+        /// Gets the `Value` associated with `field`.
+        pub fn get(&self, field: &str) -> OverResult<values::Value>
+        {
+            match &self.object
+            {
+                None => Err( OverError::DatabaseNotFound ),
+                Some( db ) =>
+                {
+                    match db.get( field )
+                    {
+                        None => Err( OverError::FieldNotFound( field.to_string() ) ),
+                        Some( found ) =>
+                        {
+                            Ok( found )
+                        }
+                    }
+                }
+            }
+        }
+        /// Returns the ID of this `Obj`.
+        pub fn identify( &self ) -> usize
+        {
+            match &self.object
+            {
+                None => 0,
+                Some( db ) => 
+                {
+                    return db.id();
+                }
+            }
+        }
+        /// Returns a reference to the inner map of this `Obj`.
+        pub fn refer( &self ) -> Option<&HashMap<String, values::Value>>
+        {
+            match &self.object
+            {
+                None => None,
+                Some( db ) => 
+                {
+                    return Some( db.map_ref() );
+                }
+            }
+        }
+        /// Writes this `Obj` to given file in `.over` representation.
+        pub fn write_to_file( &self, path:&str ) -> OverResult<()> 
+        {
+            match &self.object
+            {
+                None => Err( OverError::DatabaseNotFound ),
+                Some( db ) =>
+                {
+                    db.write_to_file( path )
+                }
+            }
+        }
+        /// Writes this `Obj` to a `String`.
+        pub fn write_str(&self) -> String
+        {
+            match &self.object
+            {
+                None => String::new(),
+                Some( db ) =>
+                {
+                    return db.write_str();
+                }
+            }
+        }
+        /// Iterates over each `(String, Value)` pair in `self`, applying `f`.
+        pub fn with_each<F>(&self, mut f: F) where
+        F: FnMut(&String, &values::Value),
+        {
+            match &self.object
+            {
+                None => { return },
+                Some( db ) =>
+                {
+                    db.with_each( f )
+                }
+            }
+        }
+        /// Returns the number of fields for this `Obj` (parent fields not included).
+        pub fn len(&self) -> usize
+        {
+            match &self.object
+            {
+                None => 0,
+                Some( db ) =>
+                {
+                    return db.len();
+                }
+            }
+        }
+        /// Returns whether this `Obj` is empty.
+        pub fn is_empty(&self) -> bool
+        {
+            match &self.object
+            {
+                None => true,
+                Some( db ) =>
+                {
+                    return db.is_empty();
+                }
+            }
+        }
+        /// Returns whether `self` and `other` point to the same data.
+        pub fn ptr_eq(&self, other: &Self) -> bool
+        {
+            match &self.object
+            {
+                None => false,
+                Some( this ) =>
+                {
+                    match &other.object
+                    {
+                        None => false,
+                        Some( that ) =>
+                        {
+                            this.ptr_eq( &that )
+                        }
+                    }
+                }
+            }
+        }
+        /// Returns whether this `Obj` is empty.
+        pub fn contains(&self, field: &str) -> bool
+        {
+            match &self.object
+            {
+                None => false,
+                Some( db ) =>
+                {
+                    return db.contains( field );
+                }
+            }
+        }
+        /// Gets the `Value` associated with `field` and the `Obj` where it was found.
+        pub fn get_with_source(&self, field: &str) -> Option<(values::Value, Obj)>
+        {
+            match &self.object
+            {
+                None => None,
+                Some( db ) =>
+                {
+                    return db.get_with_source( field );
+                }
+            }
+        }
+        /// Returns the `bool` found at `field`.
+        pub fn get_bool(&self, field: &str) -> OverResult<bool>
+        {
+            match &self.object
+            {
+                None => Err( OverError::DatabaseNotFound ),
+                Some( db ) =>
+                {
+                    return db.get_bool( field );
+                }
+            }
+        }
+        /// Returns the `BigInt` found at `field`.
+        pub fn get_int(&self, field: &str) -> OverResult<num::big::BigInt>
+        {
+            match &self.object
+            {
+                None => Err( OverError::DatabaseNotFound ),
+                Some( db ) =>
+                {
+                    return db.get_int( field );
+                }
+            }
+        }
+        /// Returns the `BigRational` found at `field`.
+        pub fn get_frac(&self, field: &str) -> OverResult<num::rational::BigRational>
+        {
+            match &self.object
+            {
+                None => Err( OverError::DatabaseNotFound ),
+                Some( db ) =>
+                {
+                    return db.get_frac( field );
+                }
+            }
+        }
+        /// Returns the `char` found at `field`.
+        pub fn get_char(&self, field: &str) -> OverResult<char>
+        {
+            match &self.object
+            {
+                None => Err( OverError::DatabaseNotFound ),
+                Some( db ) =>
+                {
+                    return db.get_char( field );
+                }
+            }
+        }
+        /// Returns the `String` found at `field`.
+        pub fn get_str(&self, field: &str) -> OverResult<String>
+        {
+            match &self.object
+            {
+                None => Err( OverError::DatabaseNotFound ),
+                Some( db ) =>
+                {
+                    return db.get_str( field );
+                }
+            }
+        }
+        /// Returns the `Arr` found at `field`.
+        pub fn get_arr(&self, field: &str) -> OverResult<Arr>
+        {
+            match &self.object
+            {
+                None => Err( OverError::DatabaseNotFound ),
+                Some( db ) =>
+                {
+                    return db.get_arr( field );
+                }
+            }
+        }
+        /// Returns the `Tup` found at `field`.
+        pub fn get_tup(&self, field: &str) -> OverResult<Tup>
+        {
+            match &self.object
+            {
+                None => Err( OverError::DatabaseNotFound ),
+                Some( db ) =>
+                {
+                    return db.get_tup( field );
+                }
+            }
+        }
+        /// Returns the `Obj` found at `field`.
+        pub fn get_obj(&self, field: &str) -> OverResult<Obj>
+        {
+            match &self.object
+            {
+                None => Err( OverError::DatabaseNotFound ),
+                Some( db ) =>
+                {
+                    return db.get_obj( field );
+                }
+            }
+        }
+        /// Returns whether this `Obj` has a parent.
+        pub fn has_parent(&self) -> bool
+        {
+            match &self.object
+            {
+                None => false,
+                Some( db ) =>
+                {
+                    return db.has_parent();
+                }
+            }
+        }
+        /// Returns the parent for this `Obj`.
+        pub fn get_parent(&self) -> Option<Obj>
+        {
+            match &self.object
+            {
+                None => None,
+                Some( db ) =>
+                {
+                    return db.get_parent();
+                }
+            }
+        }
+        /// Returns true if `field` is a valid field name for an `Obj`.
+        pub fn valid( &self, field: &str ) -> bool
+        {
+            Obj::is_valid_field( field )
+        }
+        /// An iterator visiting all fields (keys) in arbitrary order.
+        pub fn keys(&self) -> Option<Keys<String, values::Value>>
+        {
+            match &self.object
+            {
+                None => None,
+                Some( db ) =>
+                {
+                    return Some( db.keys() );
+                }
+            }
+        }
+        /// An iterator visiting all fields (keys) in arbitrary order.
+        pub fn values(&self) -> Option<Values<String, values::Value>>
+        {
+            match &self.object
+            {
+                None => None,
+                Some( db ) =>
+                {
+                    return Some( db.values() );
+                }
+            }
+        }
+        /// An iterator visiting all fields (keys) in arbitrary order.
+        pub fn iter(&self) -> Option<Iter<String, values::Value>>
+        {
+            match &self.object
+            {
+                None => None,
+                Some( db ) =>
+                {
+                    return Some( db.iter() );
+                }
+            }
+        }
     }
 }
 
@@ -30239,7 +27931,7 @@ pub mod vec
 
 fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
 {
-    use ::database::objects::Obj;
+    use ::database::Database;
     use ::str::FromStr;
 
     let over:String = r#"
@@ -30284,8 +27976,8 @@ fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
     Pay no attention to the man behind the curtain."
     "#.to_string();
         
-        let mut db = Obj::from_str( &over.as_str() )?;
-
+        // let mut db = Obj::from_str( &over.as_str() )?;
+        let mut db = Database::new().build();
         println!( r#"::database::
     {:?}
     "#, db);
@@ -30295,4 +27987,4 @@ fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 30298
+// 27990
