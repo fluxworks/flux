@@ -12,6 +12,7 @@
     unused_variables,
 )]
 /**/
+#[macro_use] extern crate bitflags;
 #[macro_use] extern crate lazy_static;
 /**/
 extern crate rand;
@@ -183,6 +184,9 @@ pub mod char
         str::{ Chars },
         *,
     };
+    
+    const CTRL_MASK: u8 = 0x1f;
+    const UNCTRL_BIT: u8 = 0x40;
 
     #[derive(Clone, Debug)]
     struct Inner
@@ -344,6 +348,12 @@ pub mod char
         use unicode_width::UnicodeWidthChar;
         ch.width()
     }
+    /// Returns the control character corresponding to the given character.
+    #[inline] pub fn ctrl(ch: char) -> char { ((ch as u8) & CTRL_MASK) as char }
+    /// Returns the ASCII character corresponding to the given control character.
+    #[inline] pub fn unctrl_upper(ch: char) -> char { ((ch as u8) | UNCTRL_BIT) as char }
+    /// Returns the lowercase ASCII character corresponding to the given control character.
+    #[inline] pub fn unctrl_lower(ch: char) -> char { unctrl_upper(ch).to_ascii_lowercase() }
 }
 
 pub mod cmp
@@ -391,7 +401,6 @@ pub mod common
         PrepareConfig, PrepareState,
         Terminal, TerminalReadGuard, TerminalWriteGuard,
     }; */
-
     #[macro_use] pub mod buffer
     {
         use ::
@@ -856,6 +865,7 @@ pub mod common
         }
 
         impl Cell
+        
         {
             fn new(fg: Option<Color>, bg: Option<Color>, style: Style, chr: char) -> Cell
             {
@@ -889,6 +899,7 @@ pub mod common
         }
 
         impl Default for Cell
+        
         {
             fn default() -> Cell { Cell::new(None, None, Style::empty(), ' ') }
         }
@@ -1149,18 +1160,21 @@ pub mod common
         }
         // Facilitates chaining calls from either a `Terminal` or `Screen` lock.
         pub trait Chain: Sized
+        
         {
             fn chain<F: FnOnce() -> Self>(self, f: F) -> Self;
             fn init() -> Self;
         }
 
         impl Chain for ()
+        
         {
             fn chain<F: FnOnce() -> Self>(self, f: F) -> Self { f() }
             fn init() -> Self {}
         }
 
         impl Chain for io::Result<()>
+        
         {
             fn chain<F: FnOnce() -> Self>(self, f: F) -> Self { self.and_then(|_| f()) }
             fn init() -> Self { Ok(()) }
@@ -1169,664 +1183,1281 @@ pub mod common
 
     pub mod screen
     {
+        //! Provides a drawable buffer on terminal devices
         use ::
         {
+            sync::{ LockResult, TryLockResult, map_lock_result, map_try_lock_result },
+            terminal::{ Color, Cursor, CursorMode, Event, PrepareConfig, Size, Style, Theme, Terminal, },
+            time::{ Duration },            
             *,
-        };
+        }; use super::sys;
+        /// Provides operations on an underlying terminal device in screen mode.
+        pub struct Screen(sys::Screen);
+        /// Holds an exclusive lock for read operations on a `Screen`
+        pub struct ScreenReadGuard<'a>(sys::ScreenReadGuard<'a>);
+        /// Holds an exclusive lock for write operations on a `Screen`
+        pub struct ScreenWriteGuard<'a>(sys::ScreenWriteGuard<'a>);
 
-        //! Provides a drawable buffer on terminal devices
-
-use std::fmt;
-use std::io;
-use std::sync::{LockResult, TryLockResult};
-use std::time::Duration;
-
-use crate::priv_util::{map_lock_result, map_try_lock_result};
-use crate::sys;
-use crate::terminal::{
-    Color, Cursor, CursorMode, Event, PrepareConfig, Size, Style, Theme,
-    Terminal,
-};
-
-/// Provides operations on an underlying terminal device in screen mode.
-///
-/// `Screen` uses an internal buffer to store rendered text, colors, and style.
-///
-/// Each set of changes must be followed by a call to [`refresh`] to flush these
-/// changes to the terminal device.
-///
-/// # Concurrency
-///
-/// Access to read and write operations is controlled by two internal locks:
-/// One for [reading] and one for [writing]. Each lock may be held independently
-/// of the other.
-///
-/// If any one thread wishes to hold both locks, the read lock
-/// must be acquired first, in order to prevent deadlocks.
-///
-/// [`refresh`]: #method.refresh
-/// [reading]: struct.ScreenReadGuard.html
-/// [writing]: struct.ScreenWriteGuard.html
-pub struct Screen(sys::Screen);
-
-/// Holds an exclusive lock for read operations on a `Screen`
-///
-/// See [`Screen`] documentation for details on locking.
-///
-/// [`Screen`]: struct.Screen.html
-pub struct ScreenReadGuard<'a>(sys::ScreenReadGuard<'a>);
-
-/// Holds an exclusive lock for write operations on a `Screen`
-///
-/// See [`Screen`] documentation for details on locking.
-///
-/// [`Screen`]: struct.Screen.html
-pub struct ScreenWriteGuard<'a>(sys::ScreenWriteGuard<'a>);
-
-impl Screen {
-    /// Opens a new screen interface on `stdout`.
-    pub fn new(config: PrepareConfig) -> io::Result<Screen> {
-        sys::Screen::stdout(config).map(Screen)
-    }
-
-    /// Opens a new screen interface on `stderr`.
-    pub fn stderr(config: PrepareConfig) -> io::Result<Screen> {
-        sys::Screen::stderr(config).map(Screen)
-    }
-
-    /// Begins a new screen session using the given `Terminal` instance.
-    pub fn with_terminal(term: Terminal, config: PrepareConfig) -> io::Result<Screen> {
-        sys::Screen::new(term.0, config).map(Screen)
-    }
-
-    /// Returns the name of the terminal.
-    ///
-    /// # Notes
-    ///
-    /// On Unix, this method returns the contents of the `TERM` environment variable.
-    ///
-    /// On Windows, this method always returns the string `"windows-console"`.
-    #[inline]
-    pub fn name(&self) -> &str {
-        self.0.name()
-    }
-
-    /// Attempts to acquire an exclusive lock on terminal read operations.
-    ///
-    /// The current thread will block until the lock can be acquired.
-    #[inline]
-    pub fn lock_read(&self) -> LockResult<ScreenReadGuard> {
-        map_lock_result(self.0.lock_read(), ScreenReadGuard)
-    }
-
-    /// Attempts to acquire an exclusive lock on terminal write operations.
-    ///
-    /// The current thread will block until the lock can be acquired.
-    #[inline]
-    pub fn lock_write(&self) -> LockResult<ScreenWriteGuard> {
-        map_lock_result(self.0.lock_write(), ScreenWriteGuard)
-    }
-
-    /// Attempts to acquire an exclusive lock on terminal read operations.
-    ///
-    /// If the lock cannot be acquired immediately, `Err(_)` is returned.
-    #[inline]
-    pub fn try_lock_read(&self) -> TryLockResult<ScreenReadGuard> {
-        map_try_lock_result(self.0.try_lock_read(), ScreenReadGuard)
-    }
-
-    /// Attempts to acquire an exclusive lock on terminal write operations.
-    ///
-    /// If the lock cannot be acquired immediately, `Err(_)` is returned.
-    #[inline]
-    pub fn try_lock_write(&self) -> TryLockResult<ScreenWriteGuard> {
-        map_try_lock_result(self.0.try_lock_write(), ScreenWriteGuard)
-    }
-}
-
-/// # Locking
-///
-/// The following methods internally acquire the read lock.
-///
-/// The lock is released before the method returns.
-///
-/// These methods are also implemented on [`ScreenReadGuard`],
-/// which holds the `Screen` read lock until the value is dropped.
-///
-/// [`ScreenReadGuard`]: struct.ScreenReadGuard.html
-impl Screen {
-    /// Waits for an event from the terminal.
-    ///
-    /// Returns `Ok(false)` if `timeout` elapses without an event occurring.
-    ///
-    /// If `timeout` is `None`, this method will wait indefinitely.
-    ///
-    /// # Notes
-    ///
-    /// Some low-level terminal events may not generate an `Event` value.
-    /// Therefore, this method may return `Ok(true)`, while a follow-up call
-    /// to `read_event` may not immediately return an event.
-    pub fn wait_event(&self, timeout: Option<Duration>) -> io::Result<bool> {
-        self.0.wait_event(timeout)
-    }
-
-    /// Reads an event from the terminal.
-    ///
-    /// If `timeout` elapses without an event occurring, this method will return
-    /// `Ok(None)`.
-    ///
-    /// If `timeout` is `None`, this method will wait indefinitely.
-    pub fn read_event(&self, timeout: Option<Duration>) -> io::Result<Option<Event>>  {
-        self.0.read_event(timeout)
-    }
-}
-
-/// # Locking
-///
-/// The following methods internally acquire the write lock.
-///
-/// The lock is released before the method returns.
-///
-/// These methods are also implemented on [`ScreenWriteGuard`],
-/// which holds the `Screen` write lock until the value is dropped.
-///
-/// [`ScreenWriteGuard`]: struct.ScreenWriteGuard.html
-impl Screen {
-    /// Returns the current size of the terminal screen.
-    #[inline]
-    pub fn size(&self) -> Size {
-        self.0.size()
-    }
-
-    /// Returns the current cursor position.
-    #[inline]
-    pub fn cursor(&self) -> Cursor {
-        self.0.cursor()
-    }
-
-    /// Sets the cursor position.
-    #[inline]
-    pub fn set_cursor<C: Into<Cursor>>(&self, pos: C) {
-        self.0.set_cursor(pos.into());
-    }
-
-    /// Moves the cursor to the given column on the next line.
-    #[inline]
-    pub fn next_line(&self, column: usize) {
-        self.0.next_line(column);
-    }
-
-    /// Set the current cursor mode.
-    ///
-    /// This setting is a visible hint to the user.
-    /// It produces no change in behavior.
-    ///
-    /// # Notes
-    ///
-    /// On Unix systems, this setting may have no effect.
-    pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> {
-        self.0.set_cursor_mode(mode)
-    }
-
-    /// Clears the internal screen buffer.
-    pub fn clear_screen(&self) {
-        self.0.clear_screen();
-    }
-
-    /// Adds a set of `Style` flags to the current style setting.
-    #[inline]
-    pub fn add_style(&self, style: Style) {
-        self.0.add_style(style);
-    }
-
-    /// Removes a set of `Style` flags to the current style setting.
-    #[inline]
-    pub fn remove_style(&self, style: Style) {
-        self.0.remove_style(style);
-    }
-
-    /// Sets the current style setting to the given set of flags.
-    #[inline]
-    pub fn set_style<S: Into<Option<Style>>>(&self, style: S) {
-        self.0.set_style(style.into().unwrap_or_default());
-    }
-
-    /// Sets or removes foreground text color.
-    #[inline]
-    pub fn set_fg<C: Into<Option<Color>>>(&self, fg: C) {
-        self.0.set_fg(fg.into());
-    }
-
-    /// Sets or removes background text color.
-    #[inline]
-    pub fn set_bg<C: Into<Option<Color>>>(&self, bg: C) {
-        self.0.set_bg(bg.into());
-    }
-
-    /// Sets all attributes for the screen.
-    #[inline]
-    pub fn set_theme(&self, theme: Theme) {
-        self.0.set_theme(theme)
-    }
-
-    /// Removes color and style attributes.
-    #[inline]
-    pub fn clear_attributes(&self) {
-        self.0.clear_attributes();
-    }
-
-    /// Adds bold to the current style setting.
-    ///
-    /// This is equivalent to `self.add_style(Style::BOLD)`.
-    #[inline]
-    pub fn bold(&self) {
-        self.add_style(Style::BOLD);
-    }
-
-    /// Adds italic to the current style setting.
-    ///
-    /// This is equivalent to `self.add_style(Style::ITALIC)`.
-    #[inline]
-    pub fn italic(&self) {
-        self.add_style(Style::ITALIC);
-    }
-
-    /// Adds underline to the current style setting.
-    ///
-    /// This is equivalent to `self.add_style(Style::UNDERLINE)`.
-    #[inline]
-    pub fn underline(&self) {
-        self.add_style(Style::UNDERLINE);
-    }
-
-    /// Adds reverse to the current style setting.
-    ///
-    /// This is equivalent to `self.add_style(Style::REVERSE)`.
-    #[inline]
-    pub fn reverse(&self) {
-        self.add_style(Style::REVERSE);
-    }
-
-    /// Renders the internal buffer to the terminal screen.
-    pub fn refresh(&self) -> io::Result<()> {
-        self.0.refresh()
-    }
-
-    /// Writes text at the given position within the screen buffer.
-    ///
-    /// Any non-printable characters, such as escape sequences, will be ignored.
-    pub fn write_at<C>(&self, position: C, text: &str)
-            where C: Into<Cursor> {
-        self.0.write_at(position.into(), text);
-    }
-
-    /// Writes text with the given attributes at the current cursor position.
-    ///
-    /// Any non-printable characters, such as escape sequences, will be ignored.
-    pub fn write_styled<F, B, S>(&self, fg: F, bg: B, style: S, text: &str) where
+        impl Screen 
+        {
+            /// Opens a new screen interface on `stdout`.
+            pub fn new(config: PrepareConfig) -> io::Result<Screen> { sys::Screen::stdout(config).map(Screen) }
+            /// Opens a new screen interface on `stderr`.
+            pub fn stderr(config: PrepareConfig) -> io::Result<Screen> { sys::Screen::stderr(config).map(Screen) }
+            /// Begins a new screen session using the given `Terminal` instance.
+            pub fn with_terminal(term: Terminal, config: PrepareConfig) -> io::Result<Screen> 
+            { sys::Screen::new(term.0, config).map(Screen) }
+            /// Returns the name of the terminal.
+            #[inline] pub fn name(&self) -> &str { self.0.name() }
+            /// Attempts to acquire an exclusive lock on terminal read operations.
+            #[inline] pub fn lock_read(&self) -> LockResult<ScreenReadGuard> 
+            { map_lock_result(self.0.lock_read(), ScreenReadGuard) }
+            /// Attempts to acquire an exclusive lock on terminal write operations.
+            #[inline] pub fn lock_write(&self) -> LockResult<ScreenWriteGuard> 
+            { map_lock_result(self.0.lock_write(), ScreenWriteGuard) }
+            /// Attempts to acquire an exclusive lock on terminal read operations.
+            #[inline] pub fn try_lock_read(&self) -> TryLockResult<ScreenReadGuard> 
+            { map_try_lock_result(self.0.try_lock_read(), ScreenReadGuard) }
+            /// Attempts to acquire an exclusive lock on terminal write operations.
+            #[inline] pub fn try_lock_write(&self) -> TryLockResult<ScreenWriteGuard> 
+            { map_try_lock_result(self.0.try_lock_write(), ScreenWriteGuard) }
+        }
+        /// # Locking
+        /// The following methods internally acquire the read lock.
+        impl Screen 
+        {
+            /// Waits for an event from the terminal.
+            pub fn wait_event(&self, timeout: Option<Duration>) -> io::Result<bool> { self.0.wait_event(timeout) }
+            /// Reads an event from the terminal.
+            pub fn read_event(&self, timeout: Option<Duration>) -> io::Result<Option<Event>>
+            { self.0.read_event(timeout) }
+        }
+        /// # Locking
+        ///
+        /// The following methods internally acquire the write lock.
+        impl Screen
+        {
+            /// Returns the current size of the terminal screen.
+            #[inline] pub fn size(&self) -> Size { self.0.size() }
+            /// Returns the current cursor position.
+            #[inline] pub fn cursor(&self) -> Cursor { self.0.cursor() }
+            /// Sets the cursor position.
+            #[inline] pub fn set_cursor<C: Into<Cursor>>(&self, pos: C) { self.0.set_cursor(pos.into()); }
+            /// Moves the cursor to the given column on the next line.
+            #[inline] pub fn next_line(&self, column: usize) { self.0.next_line(column); }
+            /// Set the current cursor mode.
+            pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> { self.0.set_cursor_mode(mode) }
+            /// Clears the internal screen buffer.
+            pub fn clear_screen(&self) { self.0.clear_screen(); }
+            /// Adds a set of `Style` flags to the current style setting.
+            #[inline] pub fn add_style(&self, style: Style) { self.0.add_style(style); }
+            /// Removes a set of `Style` flags to the current style setting.
+            #[inline] pub fn remove_style(&self, style: Style) { self.0.remove_style(style); }
+            /// Sets the current style setting to the given set of flags.
+            #[inline] pub fn set_style<S: Into<Option<Style>>>(&self, style: S) 
+            { self.0.set_style(style.into().unwrap_or_default()); }
+            /// Sets or removes foreground text color.
+            #[inline] pub fn set_fg<C: Into<Option<Color>>>(&self, fg: C) { self.0.set_fg(fg.into()); }
+            /// Sets or removes background text color.
+            #[inline] pub fn set_bg<C: Into<Option<Color>>>(&self, bg: C) { self.0.set_bg(bg.into()); }
+            /// Sets all attributes for the screen.
+            #[inline] pub fn set_theme(&self, theme: Theme) { self.0.set_theme(theme) }
+            /// Removes color and style attributes.
+            #[inline] pub fn clear_attributes(&self) { self.0.clear_attributes(); }
+            /// Adds bold to the current style setting.
+            #[inline] pub fn bold(&self) { self.add_style(Style::BOLD); }
+            /// Adds italic to the current style setting.
+            #[inline] pub fn italic(&self) { self.add_style(Style::ITALIC); }
+            /// Adds underline to the current style setting.
+            #[inline] pub fn underline(&self) { self.add_style(Style::UNDERLINE); }
+            /// Adds reverse to the current style setting.
+            #[inline] pub fn reverse(&self) { self.add_style(Style::REVERSE); }
+            /// Renders the internal buffer to the terminal screen.
+            pub fn refresh(&self) -> io::Result<()> { self.0.refresh() }
+            /// Writes text at the given position within the screen buffer.
+            pub fn write_at<C>(&self, position: C, text: &str) where 
+            C: Into<Cursor> { self.0.write_at(position.into(), text); }
+            /// Writes text with the given attributes at the current cursor position.
+            pub fn write_styled<F, B, S>(&self, fg: F, bg: B, style: S, text: &str) where
             F: Into<Option<Color>>,
             B: Into<Option<Color>>,
             S: Into<Option<Style>>,
-            {
-        self.0.write_styled(fg.into(), bg.into(), style.into().unwrap_or_default(), text);
-    }
-
-    /// Writes text with the given attributes at the given position within
-    /// the screen buffer.
-    ///
-    /// Any non-printable characters, such as escape sequences, will be ignored.
-    pub fn write_styled_at<C, F, B, S>(&self, position: C,
+            { self.0.write_styled(fg.into(), bg.into(), style.into().unwrap_or_default(), text); }
+            /// Writes text with the given attributes at the given position within the screen buffer.
+            pub fn write_styled_at<C, F, B, S>(&self, position: C,
             fg: F, bg: B, style: S, text: &str) where
             C: Into<Cursor>,
             F: Into<Option<Color>>,
             B: Into<Option<Color>>,
             S: Into<Option<Style>>,
+            { self.0.write_styled_at(position.into(), fg.into(), bg.into(), style.into().unwrap_or_default(), text); }
+            /// Writes a single character at the cursor position using the current style and color settings.
+            pub fn write_char(&self, ch: char) { self.0.write_char(ch); }
+            /// Writes a string at the cursor position using the current style and color settings.
+            pub fn write_str(&self, s: &str) { self.0.write_str(s); }
+            /// Writes formatted text at the cursor position using the current style and color settings.
+            pub fn write_fmt(&self, args: fmt::Arguments)
             {
-        self.0.write_styled_at(position.into(),
-            fg.into(), bg.into(), style.into().unwrap_or_default(), text);
-    }
+                let s = args.to_string();
+                self.write_str(&s)
+            }
+            
+            pub fn borrow_term_write_guard(&self) -> ScreenWriteGuard { self.lock_write().unwrap() }
+        }
 
-    /// Writes a single character at the cursor position
-    /// using the current style and color settings.
-    ///
-    /// If the character is a non-printable character, it will be ignored.
-    pub fn write_char(&self, ch: char) {
-        self.0.write_char(ch);
-    }
+        impl<'a> ScreenReadGuard<'a>
+        {
+            /// Waits for an event from the terminal.
+            pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool> { self.0.wait_event(timeout) }
+            /// Reads an event from the terminal.
+            pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> 
+            { self.0.read_event(timeout) }
+        }
 
-    /// Writes a string at the cursor position
-    /// using the current style and color settings.
-    ///
-    /// Any non-printable characters, such as escape sequences, will be ignored.
-    pub fn write_str(&self, s: &str) {
-        self.0.write_str(s);
-    }
-
-    /// Writes formatted text at the cursor position
-    /// using the current style and color settings.
-    ///
-    /// This method enables `Screen` to be used as the receiver to
-    /// the [`write!`] and [`writeln!`] macros.
-    ///
-    /// Any non-printable characters, such as escape sequences, will be ignored.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # use std::io;
-    /// # use mortal::Screen;
-    /// # fn example() -> io::Result<()> {
-    /// let screen = Screen::new(Default::default())?;
-    ///
-    /// writeln!(screen, "Hello, world!");
-    /// # Ok(())
-    /// # }
-    /// ```
-    ///
-    /// [`write!`]: https://doc.rust-lang.org/std/macro.write.html
-    /// [`writeln!`]: https://doc.rust-lang.org/std/macro.writeln.html
-    pub fn write_fmt(&self, args: fmt::Arguments) {
-        let s = args.to_string();
-        self.write_str(&s)
-    }
-
-    #[doc(hidden)]
-    pub fn borrow_term_write_guard(&self) -> ScreenWriteGuard {
-        self.lock_write().unwrap()
-    }
-}
-
-impl<'a> ScreenReadGuard<'a> {
-    /// Waits for an event from the terminal.
-    ///
-    /// Returns `Ok(false)` if `timeout` elapses without an event occurring.
-    ///
-    /// If `timeout` is `None`, this method will wait indefinitely.
-    ///
-    /// # Notes
-    ///
-    /// Some low-level terminal events may not generate an `Event` value.
-    /// Therefore, this method may return `Ok(true)`, while a follow-up call
-    /// to `read_event` may not immediately return an event.
-    pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool> {
-        self.0.wait_event(timeout)
-    }
-
-    /// Reads an event from the terminal.
-    ///
-    /// If `timeout` elapses without an event occurring, this method will return
-    /// `Ok(None)`.
-    ///
-    /// If `timeout` is `None`, this method will wait indefinitely.
-    pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
-        self.0.read_event(timeout)
-    }
-}
-
-impl<'a> ScreenWriteGuard<'a> {
-    /// Returns the current size of the terminal screen.
-    #[inline]
-    pub fn size(&self) -> Size {
-        self.0.size()
-    }
-
-    /// Sets the cursor position.
-    #[inline]
-    pub fn cursor(&self) -> Cursor {
-        self.0.cursor()
-    }
-
-    /// Moves the cursor to the given column on the next line.
-    #[inline]
-    pub fn set_cursor<C: Into<Cursor>>(&mut self, pos: C) {
-        self.0.set_cursor(pos.into());
-    }
-
-    /// Set the current cursor mode.
-    #[inline]
-    pub fn next_line(&mut self, column: usize) {
-        self.0.next_line(column);
-    }
-
-    /// Set the current cursor mode.
-    ///
-    /// This setting is a visible hint to the user.
-    /// It produces no change in behavior.
-    ///
-    /// # Notes
-    ///
-    /// On Unix systems, this setting may have no effect.
-    pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> {
-        self.0.set_cursor_mode(mode)
-    }
-
-    /// Adds a set of `Style` flags to the current style setting.
-    pub fn clear_screen(&mut self) {
-        self.0.clear_screen();
-    }
-
-    /// Removes a set of `Style` flags to the current style setting.
-    /// Adds a set of `Style` flags to the current style setting.
-    #[inline]
-    pub fn add_style(&mut self, style: Style) {
-        self.0.add_style(style)
-    }
-
-    /// Sets the current style setting to the given set of flags.
-    #[inline]
-    pub fn remove_style(&mut self, style: Style) {
-        self.0.remove_style(style)
-    }
-
-    /// Sets or removes foreground text color.
-    #[inline]
-    pub fn set_style<S: Into<Option<Style>>>(&mut self, style: S) {
-        self.0.set_style(style.into().unwrap_or_default())
-    }
-
-    /// Sets or removes background text color.
-    #[inline]
-    pub fn set_fg<C: Into<Option<Color>>>(&mut self, fg: C) {
-        self.0.set_fg(fg.into())
-    }
-
-    /// Removes color and style attributes.
-    #[inline]
-    pub fn set_bg<C: Into<Option<Color>>>(&mut self, bg: C) {
-        self.0.set_bg(bg.into())
-    }
-
-    /// Sets all attributes for the screen.
-    #[inline]
-    pub fn set_theme(&mut self, theme: Theme) {
-        self.0.set_theme(theme)
-    }
-
-    /// Adds bold to the current style setting.
-    #[inline]
-    pub fn clear_attributes(&mut self) {
-        self.0.clear_attributes()
-    }
-
-    /// Adds bold to the current style setting.
-    ///
-    /// This is equivalent to `self.add_style(Style::BOLD)`.
-    #[inline]
-    pub fn bold(&mut self) {
-        self.add_style(Style::BOLD)
-    }
-
-    /// Adds italic to the current style setting.
-    ///
-    /// This is equivalent to `self.add_style(Style::ITALIC)`.
-    #[inline]
-    pub fn italic(&mut self) {
-        self.add_style(Style::ITALIC);
-    }
-
-    /// Adds underline to the current style setting.
-    ///
-    /// This is equivalent to `self.add_style(Style::UNDERLINE)`.
-    #[inline]
-    pub fn underline(&mut self) {
-        self.add_style(Style::UNDERLINE)
-    }
-
-    /// Adds reverse to the current style setting.
-    ///
-    /// This is equivalent to `self.add_style(Style::REVERSE)`.
-    #[inline]
-    pub fn reverse(&mut self) {
-        self.add_style(Style::REVERSE)
-    }
-
-    /// Renders the internal buffer to the terminal screen.
-    ///
-    /// This is called automatically when the `ScreenWriteGuard` is dropped.
-    pub fn refresh(&mut self) -> io::Result<()> {
-        self.0.refresh()
-    }
-
-    /// Writes text at the given position within the screen buffer.
-    ///
-    /// Any non-printable characters, such as escape sequences, will be ignored.
-    pub fn write_at<C>(&mut self, position: C, text: &str)
-            where C: Into<Cursor> {
-        self.0.write_at(position.into(), text)
-    }
-
-    /// Writes text with the given attributes at the current cursor position.
-    ///
-    /// Any non-printable characters, such as escape sequences, will be ignored.
-    pub fn write_styled<F, B, S>(&mut self, fg: F, bg: B, style: S, text: &str) where
+        impl<'a> ScreenWriteGuard<'a>
+        {
+            /// Returns the current size of the terminal screen.
+            #[inline] pub fn size(&self) -> Size { self.0.size() }
+            /// Sets the cursor position.
+            #[inline] pub fn cursor(&self) -> Cursor { self.0.cursor() }
+            /// Moves the cursor to the given column on the next line.
+            #[inline] pub fn set_cursor<C: Into<Cursor>>(&mut self, pos: C) { self.0.set_cursor(pos.into()); }
+            /// Set the current cursor mode.
+            #[inline] pub fn next_line(&mut self, column: usize) { self.0.next_line(column); }
+            /// Set the current cursor mode.
+            pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> { self.0.set_cursor_mode(mode) }
+            /// Adds a set of `Style` flags to the current style setting.
+            pub fn clear_screen(&mut self) { self.0.clear_screen(); }
+            /// Removes a set of `Style` flags to the current style setting.
+            #[inline] pub fn add_style(&mut self, style: Style) { self.0.add_style(style) }
+            /// Sets the current style setting to the given set of flags.
+            #[inline] pub fn remove_style(&mut self, style: Style) { self.0.remove_style(style) }
+            /// Sets or removes foreground text color.
+            #[inline] pub fn set_style<S: Into<Option<Style>>>(&mut self, style: S) 
+            { self.0.set_style(style.into().unwrap_or_default()) }
+            /// Sets or removes background text color.
+            #[inline] pub fn set_fg<C: Into<Option<Color>>>(&mut self, fg: C) { self.0.set_fg(fg.into()) }
+            /// Removes color and style attributes.
+            #[inline] pub fn set_bg<C: Into<Option<Color>>>(&mut self, bg: C) { self.0.set_bg(bg.into()) }
+            /// Sets all attributes for the screen.
+            #[inline] pub fn set_theme(&mut self, theme: Theme) { self.0.set_theme(theme) }
+            /// Adds bold to the current style setting.
+            #[inline] pub fn clear_attributes(&mut self) { self.0.clear_attributes() }
+            /// Adds bold to the current style setting.
+            #[inline] pub fn bold(&mut self) { self.add_style(Style::BOLD) }
+            /// Adds italic to the current style setting.
+            #[inline] pub fn italic(&mut self) { self.add_style(Style::ITALIC); }
+            /// Adds underline to the current style setting.
+            #[inline] pub fn underline(&mut self) { self.add_style(Style::UNDERLINE) }
+            /// Adds reverse to the current style setting.
+            #[inline] pub fn reverse(&mut self) { self.add_style(Style::REVERSE) }
+            /// Renders the internal buffer to the terminal screen.
+            pub fn refresh(&mut self) -> io::Result<()> { self.0.refresh() }
+            /// Writes text at the given position within the screen buffer.
+            pub fn write_at<C>(&mut self, position: C, text: &str) where
+            C: Into<Cursor> { self.0.write_at(position.into(), text) }
+            /// Writes text with the given attributes at the current cursor position.
+            pub fn write_styled<F, B, S>(&mut self, fg: F, bg: B, style: S, text: &str) where
             F: Into<Option<Color>>,
             B: Into<Option<Color>>,
             S: Into<Option<Style>>,
-            {
-        self.0.write_styled(fg.into(), bg.into(), style.into().unwrap_or_default(), text)
-    }
-
-    /// Writes text with the given attributes at the given position within
-    /// the screen buffer.
-    ///
-    /// Any non-printable characters, such as escape sequences, will be ignored.
-    pub fn write_styled_at<C, F, B, S>(&mut self, position: C,
+            { self.0.write_styled(fg.into(), bg.into(), style.into().unwrap_or_default(), text) }
+            /// Writes text with the given attributes at the given position within the screen buffer.
+            pub fn write_styled_at<C, F, B, S>(&mut self, position: C,
             fg: F, bg: B, style: S, text: &str) where
             C: Into<Cursor>,
             F: Into<Option<Color>>,
             B: Into<Option<Color>>,
             S: Into<Option<Style>>,
+            { self.0.write_styled_at(position.into(), fg.into(), bg.into(), style.into().unwrap_or_default(), text) }
+            /// Writes a single character at the cursor position using the current style and color settings.
+            pub fn write_char(&mut self, ch: char) { self.0.write_char(ch) }
+            /// Writes a string at the cursor position using the current style and color settings.
+            pub fn write_str(&mut self, s: &str) { self.0.write_str(s) }
+            /// Writes formatted text at the cursor position using the current style and color settings.
+            pub fn write_fmt(&mut self, args: fmt::Arguments)
             {
-        self.0.write_styled_at(position.into(),
-            fg.into(), bg.into(), style.into().unwrap_or_default(), text)
-    }
-
-    /// Writes a single character at the cursor position
-    /// using the current style and color settings.
-    ///
-    /// If the character is a non-printable character, it will be ignored.
-    pub fn write_char(&mut self, ch: char) {
-        self.0.write_char(ch)
-    }
-
-    /// Writes a string at the cursor position
-    /// using the current style and color settings.
-    ///
-    /// Any non-printable characters, such as escape sequences, will be ignored.
-    pub fn write_str(&mut self, s: &str) {
-        self.0.write_str(s)
-    }
-
-    /// Writes formatted text at the cursor position
-    /// using the current style and color settings.
-    ///
-    /// This method enables `ScreenWriteGuard` to be used as the receiver to
-    /// the [`write!`] and [`writeln!`] macros.
-    ///
-    /// Any non-printable characters, such as escape sequences, will be ignored.
-    ///
-    /// [`write!`]: https://doc.rust-lang.org/std/macro.write.html
-    /// [`writeln!`]: https://doc.rust-lang.org/std/macro.writeln.html
-    pub fn write_fmt(&mut self, args: fmt::Arguments) {
-        let s = args.to_string();
-        self.write_str(&s)
-    }
-
-    #[doc(hidden)]
-    pub fn borrow_term_write_guard(&mut self) -> &mut Self {
-        self
-    }
-}
-
-#[cfg(unix)]
-impl crate::unix::TerminalExt for Screen {
-    fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> {
-        self.0.read_raw(buf, timeout)
-    }
-}
-
-#[cfg(unix)]
-impl<'a> crate::unix::TerminalExt for ScreenReadGuard<'a> {
-    fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> {
-        self.0.read_raw(buf, timeout)
-    }
-}
-
-#[cfg(windows)]
-impl crate::windows::TerminalExt for Screen {
-    fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>> {
-        self.0.read_raw(buf, timeout)
-    }
-
-    fn read_raw_event(&mut self, events: &mut [::winapi::um::wincon::INPUT_RECORD],
-            timeout: Option<Duration>) -> io::Result<Option<Event>> {
-        self.0.read_raw_event(events, timeout)
-    }
-}
-
-#[cfg(windows)]
-impl<'a> crate::windows::TerminalExt for ScreenReadGuard<'a> {
-    fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>> {
-        self.0.read_raw(buf, timeout)
-    }
-
-    fn read_raw_event(&mut self, events: &mut [::winapi::um::wincon::INPUT_RECORD],
-            timeout: Option<Duration>) -> io::Result<Option<Event>> {
-        self.0.read_raw_event(events, timeout)
-    }
-}
+                let s = args.to_string();
+                self.write_str(&s)
+            }
+            
+            pub fn borrow_term_write_guard(&mut self) -> &mut Self { self }
+        }
     }
 
     pub mod sequence
     {
+        //! Utilities for manipulating raw input sequences
         use ::
         {
+            iter::{ FromIterator },
+            mem::{ replace },
             *,
         };
-    }
+        /// Contains a set of string sequences, mapped to a value.
+        #[derive(Clone, Debug, Default)]
+        pub struct SequenceMap<K, V>
+        {
+            sequences: Vec<(K, V)>,
+        }
+        /// Represents the result of a `SequenceMap::find` operation.
+        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+        pub enum FindResult<V>
+        {
+            /// No contained sequences begin with the provided input sequence.
+            NotFound,
+            /// One or more sequences begin with the provided input sequence,
+            /// but the sequence does not represent a complete sequence.
+            Incomplete,
+            /// A sequence was found exactly matching the input sequence;
+            Undecided(V),
+            /// A sequence was found exactly matching the input sequence;
+            Found(V),
+        }
 
+        impl<'a, V: Clone> FindResult<&'a V>
+        {
+            /// Maps `FindResult<&V>` to `FindResult<V>` by cloning the contents of the result value.
+            pub fn cloned(self) -> FindResult<V>
+            {
+                match self
+                {
+                    FindResult::NotFound => FindResult::NotFound,
+                    FindResult::Incomplete => FindResult::Incomplete,
+                    FindResult::Undecided(v) => FindResult::Undecided(v.clone()),
+                    FindResult::Found(v) => FindResult::Found(v.clone()),
+                }
+            }
+        }
+
+        impl<K: AsRef<str>, V> SequenceMap<K, V>
+        {
+            /// Creates an empty `SequenceMap`.
+            pub fn new() -> SequenceMap<K, V> { SequenceMap::with_capacity(0) }
+            /// Creates an empty `SequenceMap` with allocated capacity for `n` elements.
+            pub fn with_capacity(n: usize) -> SequenceMap<K, V>
+            {
+                SequenceMap
+                {
+                    sequences: Vec::with_capacity(n),
+                }
+            }
+            /// Returns a slice of all contained sequences, sorted by key.
+            pub fn sequences(&self) -> &[(K, V)] { &self.sequences }
+            /// Returns a mutable slice of all contained sequences, sorted by key.
+            pub fn sequences_mut(&mut self) -> &mut [(K, V)] { &mut self.sequences }
+            /// Returns an `Entry` for the given key.
+            pub fn entry(&mut self, key: K) -> Entry<K, V>
+            {
+                match self.search(key.as_ref())
+                {
+                    Ok(n) => Entry::Occupied(OccupiedEntry
+                    {
+                        map: self,
+                        index: n,
+                    }),
+                    
+                    Err(n) => Entry::Vacant(VacantEntry
+                    {
+                        map: self,
+                        key,
+                        index: n,
+                    })
+                }
+            }
+            /// Performs a search for a partial or complete sequence match.
+            pub fn find(&self, key: &str) -> FindResult<&V>
+            {
+                let (n, found) = match self.search(key)
+                {
+                    Ok(n) => (n, true),
+                    Err(n) => (n, false)
+                };
+
+                let incomplete = self.sequences
+                .get(n + (found as usize))
+                .map_or(false, |&(ref next, _)| next.as_ref().starts_with(key));
+
+                match (found, incomplete)
+                {
+                    (false, false) => FindResult::NotFound,
+                    (false, true) => FindResult::Incomplete,
+                    (true, false) => FindResult::Found(&self.sequences[n].1),
+                    (true, true) => FindResult::Undecided(&self.sequences[n].1),
+                }
+            }
+            /// Returns the corresponding value for the given sequence.
+            pub fn get(&self, key: &str) -> Option<&V>
+            {
+                match self.search(key)
+                {
+                    Ok(n) => Some(&self.sequences[n].1),
+                    Err(_) => None
+                }
+            }
+            /// Returns a mutable reference to the corresponding value for the given sequence.
+            pub fn get_mut(&mut self, key: &str) -> Option<&mut V>
+            {
+                match self.search(key)
+                {
+                    Ok(n) => Some(&mut self.sequences[n].1),
+                    Err(_) => None
+                }
+            }
+            /// Inserts a key-value pair into the map.
+            pub fn insert(&mut self, key: K, value: V) -> Option<V>
+            {
+                match self.search(key.as_ref())
+                {
+                    Ok(n) => Some(replace(&mut self.sequences[n], (key, value)).1),
+                    Err(n) =>
+                    {
+                        self.sequences.insert(n, (key, value));
+                        None
+                    }
+                }
+            }
+            /// Removes a key-value pair from the map.
+            pub fn remove(&mut self, key: &str) -> Option<(K, V)>
+            {
+                match self.search(key)
+                {
+                    Ok(n) => Some(self.sequences.remove(n)),
+                    Err(_) => None
+                }
+            }
+
+            fn search(&self, key: &str) -> Result<usize, usize>
+            { self.sequences.binary_search_by_key(&key, |&(ref k, _)| &k.as_ref()) }
+        }
+
+        impl<K: AsRef<str>, V> From<Vec<(K, V)>> for SequenceMap<K, V>
+        {
+            /// Creates a `SequenceMap` from a `Vec` of key-value pairs.
+            fn from(mut sequences: Vec<(K, V)>) -> SequenceMap<K, V>
+            {
+                sequences.sort_by(|a, b| a.0.as_ref().cmp(b.0.as_ref()));
+                sequences.dedup_by(|a, b| a.0.as_ref() == b.0.as_ref());
+                SequenceMap{sequences}
+            }
+        }
+
+        impl<K: AsRef<str>, V> FromIterator<(K, V)> for SequenceMap<K, V>
+        {
+            /// Creates a `SequenceMap` from an iterator of key-value pairs.
+            fn from_iter<I: IntoIterator<Item=(K, V)>>(iter: I) -> Self
+            {
+                let iter = iter.into_iter();
+                let mut map = SequenceMap::with_capacity(iter.size_hint().0);
+
+                for (k, v) in iter
+                {
+                    map.insert(k, v);
+                }
+
+                map
+            }
+        }
+        /// A view into a single entry of a `SequenceMap`, which may be either occupied or vacant.
+        pub enum Entry<'a, K: 'a, V: 'a>
+        {
+            /// An occupied entry
+            Occupied(OccupiedEntry<'a, K, V>),
+            /// A vacant entry
+            Vacant(VacantEntry<'a, K, V>),
+        }
+        /// A view into an occupied entry in a `SequenceMap`.
+        pub struct OccupiedEntry<'a, K: 'a, V: 'a>
+        {
+            map: &'a mut SequenceMap<K, V>,
+            index: usize,
+        }
+        /// A view into a vacant entry in a `SequenceMap`.
+        pub struct VacantEntry<'a, K: 'a, V: 'a>
+        {
+            map: &'a mut SequenceMap<K, V>,
+            key: K,
+            index: usize,
+        }
+
+        impl<'a, K, V> Entry<'a, K, V>
+        {
+            /// Provides in-place mutable access to an occupied entry before any potential inserts into the map.
+            pub fn and_modify<F: FnOnce(&mut V)>(self, f: F) -> Self
+            {
+                match self
+                {
+                    Entry::Occupied(mut ent) =>
+                    {
+                        f(ent.get_mut());
+                        Entry::Occupied(ent)
+                    }
+                    
+                    Entry::Vacant(ent) => Entry::Vacant(ent)
+                }
+            }
+            /// Returns a mutable reference to the entry value, inserting the provided default if the entry is vacant.
+            pub fn or_insert(self, default: V) -> &'a mut V
+            {
+                match self
+                {
+                    Entry::Occupied(ent) => ent.into_mut(),
+                    Entry::Vacant(ent) => ent.insert(default)
+                }
+            }
+            /// Returns a mutable reference to the entry value, 
+            /// inserting a value with the closure if the entry is vacant.
+            pub fn or_insert_with<F: FnOnce() -> V>(self, default: F) -> &'a mut V
+            {
+                match self
+                {
+                    Entry::Occupied(ent) => ent.into_mut(),
+                    Entry::Vacant(ent) => ent.insert(default())
+                }
+            }
+            /// Returns a borrowed reference to the entry key.
+            pub fn key(&self) -> &K
+            {
+                match *self
+                {
+                    Entry::Occupied(ref ent) => ent.key(),
+                    Entry::Vacant(ref ent) => ent.key(),
+                }
+            }
+        }
+
+        impl<'a, K, V> OccupiedEntry<'a, K, V>
+        {
+            /// Returns a borrowed reference to the entry key.
+            pub fn key(&self) -> &K { &self.map.sequences[self.index].0 }
+            /// Returns a borrowed reference to the entry value.
+            pub fn get(&self) -> &V { &self.map.sequences[self.index].1 }
+            /// Returns a mutable reference to the entry value.
+            pub fn get_mut(&mut self) -> &mut V { &mut self.map.sequences[self.index].1 }
+            /// Converts the `OccupiedEntry` into a mutable reference whose lifetime is bound to the `SequenceMap`.
+            pub fn into_mut(self) -> &'a mut V { &mut self.map.sequences[self.index].1 }
+            /// Replaces the entry value with the given value, returning the previous value.
+            pub fn insert(&mut self, value: V) -> V { replace(self.get_mut(), value) }
+            /// Removes the entry and returns the value.
+            pub fn remove(self) -> V { self.map.sequences.remove(self.index).1 }
+            /// Removes the entry and returns the key-value pair.
+            pub fn remove_entry(self) -> (K, V) { self.map.sequences.remove(self.index) }
+        }
+
+        impl<'a, K, V> VacantEntry<'a, K, V>
+        {
+            /// Returns a borrowed reference to the entry key.
+            pub fn key(&self) -> &K { &self.key }
+            /// Consumes the `VacantEntry` and returns ownership of the key.
+            pub fn into_key(self) -> K { self.key }
+            /// Consumes the `VacantEntry` and inserts a value, 
+            /// returning a mutable reference to its place in the `SequenceMap`.
+            pub fn insert(self, value: V) -> &'a mut V
+            {
+                self.map.sequences.insert(self.index, (self.key, value));
+                &mut self.map.sequences[self.index].1
+            }
+        }
+
+        impl<'a, K: fmt::Debug, V: fmt::Debug> fmt::Debug for Entry<'a, K, V>
+        
+        {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+            {
+                match *self
+                {
+                    Entry::Occupied(ref ent) => f.debug_tuple("Entry").field(ent).finish(),
+                    Entry::Vacant(ref ent) => f.debug_tuple("Entry").field(ent).finish()
+                }
+            }
+        }
+
+        impl<'a, K: fmt::Debug, V: fmt::Debug> fmt::Debug for OccupiedEntry<'a, K, V>
+        
+        {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+            {
+                f.debug_struct("OccupiedEntry")
+                .field("key", self.key())
+                .field("value", self.get())
+                .finish()
+            }
+        }
+
+        impl<'a, K: fmt::Debug, V> fmt::Debug for VacantEntry<'a, K, V>
+        
+        {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+            {
+                f.debug_tuple("VacantEntry")
+                .field(self.key())
+                .finish()
+            }
+        }
+    }
+    
     pub mod signal
     {
+        //! Contains types relating to operating system signals
         use ::
         {
+            iter::{ FromIterator },
             *,
         };
-    }
 
+        macro_rules! impl_op 
+        {
+            ( $tr:ident , $tr_meth:ident , $method:ident ) => {
+                impl ops::$tr for SignalSet {
+                    type Output = SignalSet;
+
+                    fn $tr_meth(self, rhs: SignalSet) -> SignalSet {
+                        self.$method(rhs)
+                    }
+                }
+            }
+        }
+
+        macro_rules! impl_mut_op 
+        {
+            ( $tr:ident , $tr_meth:ident , $method:ident ) => {
+                impl ops::$tr for SignalSet {
+                    fn $tr_meth(&mut self, rhs: SignalSet) {
+                        *self = self.$method(rhs);
+                    }
+                }
+            }
+        }
+
+        macro_rules! impl_unary_op 
+        {
+            ( $tr:ident , $tr_meth:ident , $method:ident ) => {
+                impl ops::$tr for SignalSet {
+                    type Output = SignalSet;
+
+                    fn $tr_meth(self) -> SignalSet {
+                        self.$method()
+                    }
+                }
+            }
+        }
+        /// Signal received through a terminal device
+        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+        pub enum Signal
+        {
+            /// Break signal (`CTRL_BREAK_EVENT`); Windows only
+            Break,
+            /// Continue signal (`SIGCONT`); Unix only
+            Continue,
+            /// Interrupt signal (`SIGINT` on Unix, `CTRL_C_EVENT` on Windows)
+            Interrupt,
+            /// Terminal window resize (`SIGWINCH` on Unix, `WINDOW_BUFFER_SIZE_EVENT` on Windows)
+            Resize,
+            /// Suspend signal (`SIGTSTP`); Unix only
+            Suspend,
+            /// Quit signal (`SIGQUIT`); Unix only
+            Quit,
+        }
+
+        const NUM_SIGNALS: u8 = 6;
+
+        impl Signal 
+        {
+            fn as_bit(&self) -> u8 { 1 << (*self as u8) }
+            fn all_bits() -> u8 { (1 << NUM_SIGNALS) - 1 }
+        }
+
+        impl ops::BitOr for Signal 
+        {
+            type Output = SignalSet;
+
+            fn bitor(self, rhs: Signal) -> SignalSet 
+            {
+                let mut set = SignalSet::new();
+
+                set.insert(self);
+                set.insert(rhs);
+                set
+            }
+        }
+
+        impl ops::Not for Signal 
+        {
+            type Output = SignalSet;
+            fn not(self) -> SignalSet { !SignalSet::from(self) }
+        }
+        /// Represents a set of `Signal` values
+        #[derive(Copy, Clone, Default, Eq, PartialEq)]
+        pub struct SignalSet(u8);
+
+        impl SignalSet
+        {
+            /// Returns an empty `SignalSet`.
+            pub fn new() -> SignalSet { SignalSet(0) }
+            /// Returns a `SignalSet` containing all available signals.
+            pub fn all() -> SignalSet { SignalSet(Signal::all_bits()) }
+            /// Returns whether this set contains the given `Signal`.
+            pub fn contains(&self, sig: Signal) -> bool { self.0 & sig.as_bit() != 0 }
+            /// Returns whether this set contains all signals present in another set.
+            pub fn contains_all(&self, other: SignalSet) -> bool { self.0 & other.0 == other.0 }
+            /// Returns whether this set contains any signals present in another set.
+            pub fn intersects(&self, other: SignalSet) -> bool { self.0 & other.0 != 0 }
+            /// Returns whether this set contains any signals.
+            pub fn is_empty(&self) -> bool { self.0 == 0 }
+            /// Inserts a `Signal` into this set.
+            pub fn insert(&mut self, sig: Signal) { self.0 |= sig.as_bit(); }
+            /// Removes a `Signal` from this set.
+            pub fn remove(&mut self, sig: Signal) { self.0 &= !sig.as_bit(); }
+            /// Sets whether this set contains the given `Signal`.
+            pub fn set(&mut self, sig: Signal, set: bool) { if set { self.insert(sig); } else { self.remove(sig); } }
+            /// Returns the difference of two sets.
+            pub fn difference(&self, other: SignalSet) -> SignalSet { SignalSet(self.0 & !other.0) }
+            /// Returns the symmetric difference of two sets.
+            pub fn symmetric_difference(&self, other: SignalSet) -> SignalSet { SignalSet(self.0 ^ other.0) }
+            /// Returns the intersection of two sets.
+            pub fn intersection(&self, other: SignalSet) -> SignalSet { SignalSet(self.0 & other.0) }
+            /// Returns the union of two sets.
+            pub fn union(&self, other: SignalSet) -> SignalSet { SignalSet(self.0 | other.0) }
+            /// Returns the inverse of the set.
+            pub fn inverse(&self) -> SignalSet { SignalSet(!self.0 & Signal::all_bits()) }
+        }
+
+        impl fmt::Debug for SignalSet
+        {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result 
+            {
+                const SIGNALS: &[Signal] = &[
+                    Signal::Break,
+                    Signal::Continue,
+                    Signal::Interrupt,
+                    Signal::Resize,
+                    Signal::Suspend,
+                    Signal::Quit,
+                ];
+
+                let mut first = true;
+
+                f.write_str("SignalSet(")?;
+
+                for &sig in SIGNALS {
+                    if self.contains(sig) {
+                        if !first {
+                            f.write_str(" | ")?;
+                        }
+
+                        write!(f, "{:?}", sig)?;
+                        first = false;
+                    }
+                }
+
+                f.write_str(")")
+            }
+        }
+
+        impl From<Signal> for SignalSet 
+        {
+            fn from(sig: Signal) -> SignalSet 
+            {
+                let mut set = SignalSet::new();
+                set.insert(sig);
+                set
+            }
+        }
+
+        impl Extend<Signal> for SignalSet 
+        {
+            fn extend<I: IntoIterator<Item=Signal>>(&mut self, iter: I)
+            {
+                for sig in iter {
+                    self.insert(sig);
+                }
+            }
+        }
+
+        impl FromIterator<Signal> for SignalSet 
+        {
+            fn from_iter<I: IntoIterator<Item=Signal>>(iter: I) -> SignalSet
+            {
+                let mut set = SignalSet::new();
+                set.extend(iter);
+                set
+            }
+        }
+
+        impl_op!{ BitAnd, bitand, intersection }
+        impl_op!{ BitOr, bitor, union }
+        impl_op!{ BitXor, bitxor, symmetric_difference }
+        impl_op!{ Sub, sub, difference }
+
+        impl_unary_op!{ Not, not, inverse }
+
+        impl_mut_op!{ BitAndAssign, bitand_assign, intersection }
+        impl_mut_op!{ BitOrAssign, bitor_assign, union }
+        impl_mut_op!{ BitXorAssign, bitxor_assign, symmetric_difference }
+        impl_mut_op!{ SubAssign, sub_assign, difference }
+    }
+    
     pub mod terminal
     {
+        //! Provides an interface to terminal devices
         use ::
         {
+            common::signal::{Signal, SignalSet},
+            sync::{LockResult, TryLockResult, map_lock_result, map_try_lock_result },
+            time::{ Duration },
             *,
         };
-    }
+        /// Represents a color attribute applied to text foreground or background.
+        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+        pub enum Color 
+        {
+            /// Black
+            Black,
+            /// Blue
+            Blue,
+            /// Cyan
+            Cyan,
+            /// Green
+            Green,
+            /// Magenta
+            Magenta,
+            /// Red
+            Red,
+            /// White
+            White,
+            /// Yellow
+            Yellow,
+        }
+        bitflags!
+        {
+            /// Represents a set of style attributes applied to text.
+            #[derive( Copy, Clone, Debug, Default, Eq, PartialEq, Hash )]
+            pub struct Style: u8 
+            {
+                /// Bold
+                const BOLD      = 1 << 0;
+                /// Italic
+                const ITALIC    = 1 << 1;
+                /// Reverse; foreground and background color swapped
+                const REVERSE   = 1 << 2;
+                /// Underline
+                const UNDERLINE = 1 << 3;
+            }
+        }
+        /// Represents a terminal output theme.
+        #[derive(Copy, Clone, Debug, Default)]
+        pub struct Theme 
+        {
+            /// Foreground color
+            pub fg: Option<Color>,
+            /// Background color
+            pub bg: Option<Color>,
+            /// Style
+            pub style: Style,
+        }
 
-    pub mod util
-    {
-        use ::
+        impl Theme 
         {
-            *,
-        };
+            /// Creates a new theme with given values.
+            pub fn new<F,B,S>(fg: F, bg: B, style: S) -> Theme where
+            F: Into<Option<Color>>,
+            B: Into<Option<Color>>,
+            S: Into<Option<Style>>
+            {
+                Theme
+                {
+                    fg: fg.into(),
+                    bg: bg.into(),
+                    style: style.into().unwrap_or_default(),
+                }
+            }
+            /// Sets the foreground color on the given Theme and returns the new.
+            pub fn fg<F>(mut self, fg: F) -> Theme where 
+            F:Into<Option<Color>>
+            {
+                self.fg = fg.into();
+                self
+            }
+            /// Sets the background color on the given Theme and returns the new.
+            pub fn bg<B>(mut self, bg: B) -> Theme where B: Into<Option<Color>>
+            {
+                self.bg = bg.into();
+                self
+            }
+            /// Sets the style on the given Theme and returns the new.
+            pub fn style<S>(mut self, style: S) -> Theme where S: Into<Option<Style>>
+            {
+                self.style = style.into().unwrap_or_default();
+                self
+            }
+        }
+        /// Represents the cursor position in a terminal device
+        #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+        pub struct Cursor
+        {
+            /// Index of line in terminal, beginning at `0`.
+            pub line: usize,
+            /// Index of column in terminal, beginning at `0`.
+            pub column: usize,
+        }
+
+        impl Cursor
+        {
+            /// Returns the position of the next cell within a terminal of the given size.
+            #[inline] pub fn next(&self, size: Size) -> Option<Cursor>
+            {
+                let mut line = self.line;
+                let mut column = self.column + 1;
+
+                if column >= size.columns
+                {
+                    column = 0;
+                    line += 1;
+                }
+
+                if line >= size.lines { None } else { Some(Cursor{line, column}) }
+            }
+            /// Returns the position of the previous cell within a terminal of the given size.
+            ///
+            /// Returns `None` if this cursor position represents the first cell.
+            #[inline] pub fn previous(&self, size: Size) -> Option<Cursor>
+            {
+                if self.column == 0
+                {
+                    if self.line == 0 { None } else { Some(Cursor{line: self.line - 1, column: size.columns - 1}) }
+                }
+                else { Some(Cursor{line: self.line, column: self.column - 1}) }
+            }
+            /// Returns a `Cursor` pointing to the first cell, i.e. `(0, 0)`.
+            #[inline] pub fn first() -> Cursor
+            {
+                Cursor
+                {
+                    line: 0,
+                    column: 0,
+                }
+            }
+            /// Returns a `Cursor` pointing to the last cell of a screen of the given size.
+            #[inline] pub fn last(size: Size) -> Cursor
+            {
+                Cursor
+                {
+                    line: size.lines - 1,
+                    column: size.columns - 1,
+                }
+            }
+            /// Returns whether the cursor is out of bounds of the given size.
+            #[inline] pub fn is_out_of_bounds(&self, size: Size) -> bool
+            { self.line >= size.lines || self.column >= size.columns }
+            /// Returns the index of the cursor position within a one-dimensional array of the given size.
+            pub fn as_index(&self, size: Size) -> usize { self.line * size.columns + self.column }
+        }
+
+        impl From<(usize, usize)> for Cursor
+        {
+            /// Returns a `Cursor` value from a `(line, column)` or `(y, x)` tuple.
+            fn from((line, column): (usize, usize)) -> Cursor { Cursor{line, column} }
+        }
+        /// Represents the visual appearance of the cursor in the terminal
+        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+        pub enum CursorMode
+        {
+            /// Normal mode
+            Normal,
+            /// Invisible mode
+            Invisible,
+            /// Overwrite mode
+            Overwrite,
+        }
+        /// Represents an event generated from a terminal interface
+        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+        pub enum Event
+        {
+            /// Keyboard event
+            Key(Key),
+            /// Mouse event
+            Mouse(MouseEvent),
+            /// Raw data read
+            Raw(usize),
+            /// Terminal window size changed; contained value is the new size.
+            Resize(Size),
+            /// Terminal signal received
+            Signal(Signal),
+            /// No event
+            NoEvent,
+        }
+        /// Represents a keyboard key press event
+        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+        pub enum Key
+        {
+            /// Backspace
+            Backspace,
+            /// Enter
+            Enter,
+            /// Escape
+            Escape,
+            /// Tab
+            Tab,
+            /// Up arrow
+            Up,
+            /// Down arrow
+            Down,
+            /// Left arrow
+            Left,
+            /// Right arrow
+            Right,
+            /// Delete
+            Delete,
+            /// Insert
+            Insert,
+            /// Home
+            Home,
+            /// End
+            End,
+            /// PageUp
+            PageUp,
+            /// PageDown
+            PageDown,
+            /// Character key
+            Char(char),
+            /// Control character
+            Ctrl(char),
+            /// Function `n` key; e.g. F1, F2, ...
+            F(u32),
+        }
+
+        impl From<char> for Key
+        {
+            fn from(ch: char) -> Key
+            {
+                match ch
+                {
+                    '\x1b' => Key::Escape,
+                    '\x7f' => Key::Backspace,
+                    '\r' | '\n' => Key::Enter,
+                    '\t' => Key::Tab,
+                    _ if is::ctrl(ch) => Key::Ctrl( char::unctrl_lower(ch)),
+                    _ => Key::Char(ch),
+                }
+            }
+        }
+        /// Represents a mouse event
+        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+        pub struct MouseEvent
+        {
+            /// The position of the mouse within the terminal when the event occurred
+            pub position: Cursor,
+            /// The input event that occurred
+            pub input: MouseInput,
+            /// Modifier keys held when the input event occurred.
+            pub modifiers: ModifierState,
+        }
+        /// Represents the type of mouse input event
+        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+        pub enum MouseInput
+        {
+            /// The mouse cursor was moved
+            Motion,
+            /// A mouse button was pressed
+            ButtonPressed(MouseButton),
+            /// A mouse button was released
+            ButtonReleased(MouseButton),
+            /// The mouse wheel was scrolled up
+            WheelUp,
+            /// The mouse wheel was scrolled down
+            WheelDown,
+        }
+        /// Represents a button on a mouse device
+        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+        pub enum MouseButton
+        {
+            /// Left mouse button
+            Left,
+            /// Right mouse button
+            Right,
+            /// Middle mouse button
+            Middle,
+            /// Other mouse button
+            Other(u32),
+        }
+
+        bitflags!
+        {
+            /// Represents a set of modifier keys
+            #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+            pub struct ModifierState: u8 
+            {
+                /// Alt key
+                const ALT   = 1 << 0;
+                /// Ctrl key
+                const CTRL  = 1 << 1;
+                /// Shift key
+                const SHIFT = 1 << 2;
+            }
+        }
+        /// Configures a [`Terminal`] or [`Screen`] instance to read special input.
+        #[derive(Copy, Clone, Debug)]
+        pub struct PrepareConfig
+        {
+            /// Whether to block signals that result from user input.
+            pub block_signals: bool,
+            /// Whether to enable control flow characters.
+            pub enable_control_flow: bool,
+            /// If `true`, the terminal will be configured to generate events from function keys.
+            pub enable_keypad: bool,
+            /// If `true`, the terminal will be configured to generate events for
+            /// mouse input, if supported, and `read_event` may return `Event::Mouse(_)`.
+            pub enable_mouse: bool,
+            /// If `true`, mouse motion events will always be reported.
+            pub always_track_motion: bool,
+            /// For each signal in the set, a signal handler will intercept the signal
+            /// and report it by returning an `Event::Signal(_)` value.
+            pub report_signals: SignalSet,
+        }
+
+        impl Default for PrepareConfig
+        {
+            fn default() -> PrepareConfig
+            {
+                PrepareConfig
+                {
+                    block_signals: true,
+                    enable_control_flow: false,
+                    enable_keypad: true,
+                    enable_mouse: false,
+                    always_track_motion: false,
+                    report_signals: SignalSet::new(),
+                }
+            }
+        }
+        /// Represents a previous device state of a [`Terminal`].
+        #[must_use = "the result of `terminal.prepare()` should be passed to \
+            `terminal.restore()` to restore terminal to its original state"]
+        pub struct PrepareState(::common::sys::PrepareState);
+        /// Represents the size of a terminal window
+        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+        pub struct Size
+        {
+            /// Number of lines in the terminal
+            pub lines: usize,
+            /// Number of columns in the terminal
+            pub columns: usize,
+        }
+
+        impl Size
+        {
+            /// Returns the total number of cells in a terminal of the given size.
+            #[inline] pub fn area(&self) -> usize 
+            { self.checked_area().unwrap_or_else( || panic!("overflow in Size::area {:?}", self)) }
+            /// Returns the total number of cells in a terminal of the given size.
+            #[inline] pub fn checked_area(&self) -> Option<usize> { self.lines.checked_mul(self.columns) }
+        }
+        /// Provides concurrent read and write access to a terminal device.
+        pub struct Terminal(pub ::common::sys::Terminal );
+        /// Holds an exclusive lock for read operations on a `Terminal`
+        pub struct TerminalReadGuard<'a>( ::common::sys::TerminalReadGuard<'a> );
+        /// Holds an exclusive lock for write operations on a `Terminal`.
+        pub struct TerminalWriteGuard<'a>( ::common::sys::TerminalWriteGuard<'a> );
+
+        impl Terminal
+        {
+            /// Opens a new interface to the terminal on `stdout`.
+            pub fn new() -> io::Result<Terminal> { Ok(Terminal(sys::Terminal::stdout()?)) }
+            /// Opens a new interface to the terminal on `stderr`.
+            pub fn stderr() -> io::Result<Terminal> { Ok(Terminal(sys::Terminal::stderr()?)) }
+            /// Returns the name of the terminal.
+            #[inline] pub fn name(&self) -> &str { self.0.name() }
+            /// Attempts to acquire an exclusive lock on terminal read operations.
+            #[inline] pub fn lock_read(&self) -> LockResult<TerminalReadGuard>
+            { map_lock_result(self.0.lock_read(), TerminalReadGuard) }
+            /// Attempts to acquire an exclusive lock on terminal write operations.
+            #[inline] pub fn lock_write(&self) -> LockResult<TerminalWriteGuard>
+            { map_lock_result(self.0.lock_write(), TerminalWriteGuard) }
+            /// Attempts to acquire an exclusive lock on terminal read operations.
+            #[inline] pub fn try_lock_read(&self) -> TryLockResult<TerminalReadGuard>
+            { map_try_lock_result(self.0.try_lock_read(), TerminalReadGuard) }
+            /// Attempts to acquire an exclusive lock on terminal write operations.
+            #[inline] pub fn try_lock_write(&self) -> TryLockResult<TerminalWriteGuard>
+            { map_try_lock_result(self.0.try_lock_write(), TerminalWriteGuard) }
+        }
+        /// # Locking
+        /// The following methods internally acquire both the read and write locks.
+        impl Terminal
+        {
+            /// Prepares the terminal to read input.
+            pub fn prepare(&self, config: PrepareConfig) -> io::Result<PrepareState>
+            { self.0.prepare(config).map(PrepareState) }
+            /// Restores the terminal to its previous state.
+            pub fn restore(&self, state: PrepareState) -> io::Result<()> { self.0.restore(state.0) }
+        }
+        /// # Locking
+        /// The following methods internally acquire the read lock.
+        impl Terminal
+        {
+            /// Waits for an event from the terminal.
+            pub fn wait_event(&self, timeout: Option<Duration>) -> io::Result<bool> { self.0.wait_event(timeout) }
+            /// Waits for input and reads an event from the terminal.
+            pub fn read_event(&self, timeout: Option<Duration>) -> io::Result<Option<Event>>
+            { self.0.read_event(timeout) }
+        }
+        /// # Locking
+        /// The following methods internally acquire the write lock.
+        impl Terminal
+        {
+            /// Returns the size of the terminal.
+            #[inline] pub fn size(&self) -> io::Result<Size> { self.0.size() }
+            /// Clears the terminal screen, placing the cursor at the first line and column.
+            pub fn clear_screen(&self) -> io::Result<()> { self.0.clear_screen() }
+            /// Clears the current line, starting at cursor position.
+            pub fn clear_to_line_end(&self) -> io::Result<()> { self.0.clear_to_line_end() }
+            /// Clears the screen, starting at cursor position.
+            pub fn clear_to_screen_end(&self) -> io::Result<()> { self.0.clear_to_screen_end() }
+            /// Moves the cursor up `n` lines.
+            pub fn move_up(&self, n: usize) -> io::Result<()> { self.0.move_up(n) }
+            /// Moves the cursor down `n` lines.
+            pub fn move_down(&self, n: usize) -> io::Result<()> { self.0.move_down(n) }
+            /// Moves the cursor left `n` columns.
+            pub fn move_left(&self, n: usize) -> io::Result<()> { self.0.move_left(n) }
+            /// Moves the cursor right `n` columns.
+            pub fn move_right(&self, n: usize) -> io::Result<()> { self.0.move_right(n) }
+            /// Moves the cursor to the first column of the current line
+            pub fn move_to_first_column(&self) -> io::Result<()> { self.0.move_to_first_column() }
+            /// Set the current cursor mode.
+            pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> { self.0.set_cursor_mode(mode) }
+            /// Adds a set of `Style` flags to the current style setting.
+            pub fn add_style(&self, style: Style) -> io::Result<()> { self.0.add_style(style) }
+            /// Removes a set of `Style` flags from the current style setting.
+            pub fn remove_style(&self, style: Style) -> io::Result<()> { self.0.remove_style(style) }
+            /// Sets the current style to the given set of flags.
+            pub fn set_style<S>(&self, style: S) -> io::Result<()> where 
+            S: Into<Option<Style>> 
+            { self.0.set_style(style.into().unwrap_or_default()) }
+            /// Sets all attributes for the terminal.
+            pub fn set_theme(&self, theme: Theme) -> io::Result<()> { self.0.set_theme(theme) }
+            /// Sets the foreground text color.
+            pub fn set_fg<C: Into<Option<Color>>>(&self, fg: C) -> io::Result<()> { self.0.set_fg(fg.into()) }
+            /// Sets the background text color.
+            pub fn set_bg<C: Into<Option<Color>>>(&self, bg: C) -> io::Result<()> { self.0.set_bg(bg.into()) }
+            /// Removes color and style attributes.
+            pub fn clear_attributes(&self) -> io::Result<()> { self.0.clear_attributes() }
+            /// Adds bold to the current style setting.
+            pub fn bold(&self) -> io::Result<()> { self.add_style(Style::BOLD) }
+            /// Adds italic to the current style setting.
+            pub fn italic(&self) -> io::Result<()> { self.add_style(Style::ITALIC) }
+            /// Adds underline to the current style setting.
+            pub fn underline(&self) -> io::Result<()> { self.add_style(Style::UNDERLINE) }
+            /// Adds reverse to the current style setting.
+            pub fn reverse(&self) -> io::Result<()> { self.add_style(Style::REVERSE) }
+            /// Writes output to the terminal with the given color and style.
+            pub fn write_styled<F, B, S>(&self, fg: F, bg: B, style: S, s: &str) -> io::Result<()> where
+            F: Into<Option<Color>>,
+            B: Into<Option<Color>>,
+            S: Into<Option<Style>>
+            { self.0.write_styled(fg.into(), bg.into(), style.into().unwrap_or_default(), s) }
+            /// Writes a single character to the terminal using the current style and color settings.
+            pub fn write_char(&self, ch: char) -> io::Result<()> { self.0.write_char(ch) }
+            /// Writes a string to the terminal using the current style and color settings.
+            pub fn write_str(&self, s: &str) -> io::Result<()> { self.0.write_str(s) }
+            /// Writes formatted text to the terminal using the current style and color settings.
+            pub fn write_fmt(&self, args: fmt::Arguments) -> io::Result<()>
+            {
+                let s = args.to_string();
+                self.write_str(&s)
+            }
+            
+            pub fn borrow_term_write_guard(&self) -> TerminalWriteGuard { self.lock_write().unwrap() }
+        }
+
+        impl<'a> TerminalReadGuard<'a>
+        {
+            /// Prepares the terminal to read input.
+            pub fn prepare(&mut self, config: PrepareConfig) -> io::Result<PrepareState>
+            { self.0.prepare(config).map(PrepareState) }
+            /// Performs terminal preparation using both [`Terminal`] locks.
+            pub fn prepare_with_lock(&mut self, writer: &mut TerminalWriteGuard, config: PrepareConfig) -> 
+            io::Result<PrepareState>
+            { self.0.prepare_with_lock(&mut writer.0, config).map(PrepareState) }
+            /// Restores the terminal to its previous state.
+            pub fn restore(&mut self, state: PrepareState) -> io::Result<()> { self.0.restore(state.0) }
+            /// Performs terminal state restoration using both [`Terminal`] locks.
+            pub fn restore_with_lock(&mut self, writer: &mut TerminalWriteGuard, state: PrepareState) 
+            -> io::Result<()>
+            { self.0.restore_with_lock(&mut writer.0, state.0) }
+            /// Waits for an event from the terminal.
+            pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool> { self.0.wait_event(timeout) }
+            /// Waits for input and reads an event from the terminal.
+            pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> { self.0.read_event(timeout) }
+        }
+
+        impl<'a> TerminalWriteGuard<'a> 
+        {
+            /// Flush all output to the terminal device.
+            pub fn flush(&mut self) -> io::Result<()> { self.0.flush() }
+            /// Returns the size of the terminal.
+            #[inline] pub fn size(&self) -> io::Result<Size> { self.0.size() }
+            /// Clears the terminal screen, placing the cursor at the first line and column.
+            pub fn clear_screen(&mut self) -> io::Result<()> { self.0.clear_screen() }
+            /// Clears the current line, starting at cursor position.
+            pub fn clear_to_line_end(&mut self) -> io::Result<()> { self.0.clear_to_line_end() }
+            /// Clears the screen, starting at cursor position.
+            pub fn clear_to_screen_end(&mut self) -> io::Result<()> { self.0.clear_to_screen_end() }
+            /// Moves the cursor up `n` lines.
+            pub fn move_up(&mut self, n: usize) -> io::Result<()> { self.0.move_up(n) }
+            /// Moves the cursor down `n` lines.
+            pub fn move_down(&mut self, n: usize) -> io::Result<()> { self.0.move_down(n) }
+            /// Moves the cursor left `n` columns.
+            pub fn move_left(&mut self, n: usize) -> io::Result<()> { self.0.move_left(n) }
+            /// Moves the cursor right `n` columns.
+            pub fn move_right(&mut self, n: usize) -> io::Result<()> { self.0.move_right(n) }
+            /// Moves the cursor to the first column of the current line
+            pub fn move_to_first_column(&mut self) -> io::Result<()> { self.0.move_to_first_column() }
+            /// Set the current cursor mode.
+            pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> { self.0.set_cursor_mode(mode) }
+            /// Adds a set of `Style` flags to the current style setting.
+            pub fn add_style(&mut self, style: Style) -> io::Result<()> { self.0.add_style(style) }
+            /// Removes a set of `Style` flags from the current style setting.
+            pub fn remove_style(&mut self, style: Style) -> io::Result<()> { self.0.remove_style(style) }
+            /// Sets the current style to the given set of flags.
+            pub fn set_style<S>(&mut self, style: S) -> io::Result<()> where
+            S: Into<Option<Style>> 
+            { self.0.set_style(style.into().unwrap_or_default()) }
+            /// Sets all attributes for the terminal.
+            pub fn set_theme(&mut self, theme: Theme) -> io::Result<()> { self.0.set_theme(theme) }
+            /// Sets the background text color.
+            pub fn set_fg<C: Into<Option<Color>>>(&mut self, fg: C) -> io::Result<()> { self.0.set_fg(fg.into()) }
+            /// Removes color and style attributes.
+            pub fn set_bg<C: Into<Option<Color>>>(&mut self, bg: C) -> io::Result<()> { self.0.set_bg(bg.into()) }
+            /// Adds bold to the current style setting.
+            pub fn clear_attributes(&mut self) -> io::Result<()> { self.0.clear_attributes() }
+            /// Adds bold to the current style setting.
+            pub fn bold(&mut self) -> io::Result<()> { self.add_style(Style::BOLD) }
+            /// Adds italic to the current style setting.
+            pub fn italic(&mut self) -> io::Result<()> { self.add_style(Style::ITALIC) }
+            /// Adds underline to the current style setting.
+            pub fn underline(&mut self) -> io::Result<()> { self.add_style(Style::UNDERLINE) }
+            /// Adds reverse to the current style setting.
+            pub fn reverse(&mut self) -> io::Result<()> { self.add_style(Style::REVERSE) }
+            /// Writes output to the terminal with the given color and style added.
+            pub fn write_styled<F, B, S>(&mut self, fg: F, bg: B, style: S, s: &str) -> io::Result<()> where
+            F: Into<Option<Color>>,
+            B: Into<Option<Color>>,
+            S: Into<Option<Style>>
+            {
+                self.0.write_styled(fg.into(), bg.into(), style.into().unwrap_or_default(), s)
+            }
+            /// Writes a single character to the terminal using the current style and color settings.
+            pub fn write_char(&mut self, ch: char) -> io::Result<()> { self.0.write_char(ch) }
+            /// Writes a string to the terminal using the current style and color settings.
+            pub fn write_str(&mut self, s: &str) -> io::Result<()> { self.0.write_str(s) }
+            /// Writes formatted text to the terminal using the current style and color settings.
+            pub fn write_fmt(&mut self, args: fmt::Arguments) -> io::Result<()>
+            {
+                let s = args.to_string();
+                self.write_str(&s)
+            }
+            
+            pub fn borrow_term_write_guard(&mut self) -> &mut Self { self }
+        }
     }
 
     pub mod system
@@ -1835,20 +2466,1904 @@ impl<'a> crate::windows::TerminalExt for ScreenReadGuard<'a> {
         {
             use ::
             {
+                path::{ Path },
                 *,
             };
+
+            pub use self::screen::{ Screen, ScreenReadGuard, ScreenWriteGuard };
+            pub use self::terminal::{ PrepareState, Terminal, TerminalReadGuard, TerminalWriteGuard };
+
+            pub mod ext
+            {
+                //! Unix extension trait
+                use ::
+                {
+                    path::{ Path },
+                    time::{ Duration },
+                    *,
+                };                
+                use ::common::Private;
+                use ::common::terminal::Event;
+                /// Implements Unix-only extensions for terminal interfaces.
+                pub trait OpenTerminalExt: Sized + Private
+                {
+                    /// Opens a terminal interface on the device at the given path.
+                    fn from_path<P: AsRef<Path>>(path: P) -> io::Result<Self>;
+                }
+                /// Implements Unix-only extensions for terminal interfaces.
+                pub trait TerminalExt: Private
+                {
+                    /// Reads raw data from the terminal.
+                    fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>>;
+                }
+            }
+
+            pub mod io
+            {
+                use ::
+                {
+                    num::{ NotAllOnes },
+                    *,
+                };
+                /// Raw file descriptors.
+                pub type RawFd = ::ffi::c_int;                
+                type ValidRawFd = ::num::NotAllOnes<RawFd>;
+                /// An owned file descriptor.
+                #[repr(transparent)]
+                pub struct OwnedFd
+                {
+                    fd: ValidRawFd,
+                }
+                impl OwnedFd
+                {
+                    /// Creates a new `OwnedFd` instance that shares 
+                    /// the same underlying file description as the existing `OwnedFd` instance.
+                    pub fn try_clone(&self) -> ::io::Result<Self> { self.as_fd().try_clone_to_owned() }
+                }
+                /// A trait to express the ability to construct an object from a raw file descriptor.
+                pub trait FromRawFd
+                {
+                    /// Constructs a new instance of `Self` from the given raw file descriptor.
+                    unsafe fn from_raw_fd(fd: RawFd) -> Self;
+                }
+
+                impl FromRawFd for RawFd
+                {
+                    #[inline] unsafe fn from_raw_fd(fd: RawFd) -> RawFd 
+                    {
+                        fd
+                    }
+                }
+
+                impl FromRawFd for fs::File 
+                {
+                    #[inline] unsafe fn from_raw_fd(fd: RawFd) -> fs::File
+                    {
+                        unsafe { fs::File::from(OwnedFd::from_raw_fd(fd)) }
+                    }
+                }
+
+                impl FromRawFd for io::PipeReader
+                {
+                    unsafe fn from_raw_fd(raw_fd: RawFd) -> Self
+                    {
+                        Self::from_inner(unsafe { FromRawFd::from_raw_fd(raw_fd) })
+                    }
+                }
+
+                impl FromRawFd for io::PipeWriter
+                {
+                    unsafe fn from_raw_fd(raw_fd: RawFd) -> Self {
+                        Self::from_inner(unsafe { FromRawFd::from_raw_fd(raw_fd) })
+                    }
+                }
+                /// A trait to express the ability to consume an object and acquire ownership of its raw file descriptor.
+                pub trait IntoRawFd
+                {
+                    /// Consumes this object, returning the raw underlying file descriptor.
+                    #[must_use = "losing the raw file descriptor may leak resources"]
+                    fn into_raw_fd(self) -> RawFd;
+                }
+
+                impl IntoRawFd for RawFd
+                {
+                    #[inline] fn into_raw_fd(self) -> RawFd { self }
+                }
+
+                impl IntoRawFd for fs::File
+                {
+                    #[inline] fn into_raw_fd(self) -> RawFd { self.into_inner().into_inner().into_raw_fd() }
+                }
+                /*
+                impl IntoRawFd for io::PipeReader
+                {
+                    fn into_raw_fd(self) -> RawFd { self.0.into_raw_fd() }
+                }
+
+                impl IntoRawFd for io::PipeWriter
+                {
+                    fn into_raw_fd(self) -> RawFd { self.0.into_raw_fd() }
+                } */
+            }
+
+            pub mod screen
+            {
+                use ::
+                {
+                    sync::
+                    {
+                        LockResult, map_lock_result, map_try_lock_result, map2_lock_result, map2_try_lock_result, Mutex, MutexGuard, 
+                        TryLockResult
+                    },
+                    time::{ Duration },
+                    common::
+                    {
+                      buffer::{ ScreenBuffer },   
+                      sys::{ Terminal, TerminalReadGuard, TerminalWriteGuard, PrepareState },
+                      terminal::{ Color, Cursor, CursorMode, Event, Size, Style, PrepareConfig },
+                    },
+                    *,
+                };
+                
+                pub struct Screen 
+                {
+                    term: Terminal,
+                    state: Option<PrepareState>,
+                    writer: Mutex<Writer>,
+                }
+
+                pub struct ScreenReadGuard<'a> 
+                {
+                    screen: &'a Screen,
+                    reader: TerminalReadGuard<'a>,
+                }
+
+                pub struct ScreenWriteGuard<'a> 
+                {
+                    writer: TerminalWriteGuard<'a>,
+                    data: MutexGuard<'a, Writer>,
+                }
+
+                struct Writer 
+                {
+                    buffer: ScreenBuffer,
+                    clear_screen: bool,
+                    real_cursor: Cursor,
+                }
+
+                impl Screen 
+                {
+                    pub fn new(term: Terminal, config: PrepareConfig) -> io::Result<Screen> 
+                    {
+                        let size = term.size()?;
+                        let state = term.prepare(config)?;
+                        let screen = Screen
+                        {
+                            term: term,
+                            state: Some(state),
+
+                            writer: Mutex::new(Writer
+                            {
+                                buffer: ScreenBuffer::new(size),
+                                clear_screen: false,
+                                real_cursor: Cursor::default(),
+                            }),
+                        };
+                        screen.term.enter_screen()?;
+                        Ok(screen)
+                    }
+
+                    pub fn stdout(config: PrepareConfig) -> io::Result<Screen> 
+                    { Screen::new(Terminal::stdout()?, config) }
+
+                    pub fn stderr(config: PrepareConfig) -> io::Result<Screen>
+                    { Screen::new(Terminal::stderr()?, config) }
+
+                    forward_screen_buffer_methods!{ |slf| slf.lock_write_data().buffer }
+
+                    pub fn lock_read(&self) -> LockResult<ScreenReadGuard> 
+                    {
+                        map_lock_result
+                        (
+                            self.term.lock_read(),
+                            |r| ScreenReadGuard::new(self, r)
+                        )
+                    }
+
+                    pub fn try_lock_read(&self) -> TryLockResult<ScreenReadGuard> 
+                    {
+                        map_try_lock_result
+                        (
+                            self.term.try_lock_read(),
+                            | r | ScreenReadGuard::new(self, r)
+                        )
+                    }
+
+                    pub fn lock_write(&self) -> LockResult<ScreenWriteGuard> 
+                    {
+                        map2_lock_result
+                        (
+                            self.term.lock_write(), 
+                            self.writer.lock(),
+                            | a, b | ScreenWriteGuard::new(a, b)
+                        )
+                    }
+
+                    pub fn try_lock_write(&self) -> TryLockResult<ScreenWriteGuard> 
+                    {
+                        map2_try_lock_result
+                        (
+                            self.term.try_lock_write(), 
+                            self.writer.try_lock(),
+                            | a, b | ScreenWriteGuard::new(a, b)
+                        )
+                    }
+
+                    fn lock_reader(&self) -> ScreenReadGuard  { self.lock_read().expect("Screen::lock_reader") }
+                    fn lock_writer(&self) -> ScreenWriteGuard  { self.lock_write().expect("Screen::lock_writer") }
+
+                    fn lock_write_data(&self) -> MutexGuard<Writer>  
+                    { self.writer.lock().expect("Screen::lock_write_data") }
+
+                    pub fn name(&self) -> &str  { self.term.name() }
+
+                    pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> 
+                    { self.term.set_cursor_mode(mode) }
+
+                    pub fn wait_event(&self, timeout: Option<Duration>) -> io::Result<bool> 
+                    { self.lock_reader().wait_event(timeout) }
+
+                    pub fn read_event(&self, timeout: Option<Duration>) -> io::Result<Option<Event>> 
+                    { self.lock_reader().read_event(timeout) }
+
+                    pub fn read_raw(&self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> 
+                    { self.lock_reader().read_raw(buf, timeout) }
+
+                    pub fn refresh(&self) -> io::Result<()> { self.lock_writer().refresh() }
+                }
+
+                impl Drop for Screen 
+                {
+                    fn drop(&mut self) 
+                    {
+                        let res = if let Some(state) = self.state.take() { self.term.restore(state) }
+                        else { Ok(()) };
+
+                        if let Err(e) = res.and_then(|_| self.term.exit_screen()) 
+                        { eprintln!("failed to restore terminal: {}", e); }
+                    }
+                }
+
+                impl<'a> ScreenReadGuard<'a> 
+                {
+                    fn new(screen: &'a Screen, reader: TerminalReadGuard<'a>) -> ScreenReadGuard<'a> 
+                    { ScreenReadGuard{screen, reader} }
+
+                    pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool> 
+                    { self.reader.wait_event(timeout) }
+
+                    pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> 
+                    {
+                        let r = self.reader.read_event(timeout)?;
+
+                        if let Some(Event::Resize(size)) = r 
+                        {
+                            self.screen.lock_write_data().update_size(size);
+                        }
+
+                        Ok(r)
+                    }
+
+                    pub fn read_raw(&mut self, buf:&mut [u8], timeout:Option<Duration>) -> io::Result<Option<Event>>
+                    {
+                        let r = self.reader.read_raw(buf, timeout)?;
+
+                        if let Some(Event::Resize(size)) = r 
+                        {
+                            self.screen.lock_write_data().update_size(size);
+                        }
+
+                        Ok(r)
+                    }
+                }
+
+                impl<'a> ScreenWriteGuard<'a> 
+                {
+                    fn new(writer: TerminalWriteGuard<'a>, data: MutexGuard<'a, Writer>) -> ScreenWriteGuard<'a> 
+                    { ScreenWriteGuard{writer, data} }
+
+                    forward_screen_buffer_mut_methods!{ |slf| slf.data.buffer }
+
+                    pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> 
+                    { self.writer.set_cursor_mode(mode) }
+
+                    pub fn refresh(&mut self) -> io::Result<()> 
+                    {
+                        if self.data.clear_screen 
+                        {
+                            self.writer.clear_screen()?;
+                            self.data.clear_screen = false;
+                        }
+
+                        self.writer.clear_attributes()?;
+                        let mut indices = self.data.buffer.indices();
+
+                        while let Some((pos, cell)) = self.data.buffer.next_cell(&mut indices) 
+                        {
+                            self.move_cursor(pos)?;
+
+                            self.apply_attrs(cell.attrs())?;
+                            self.writer.write_str(cell.text())?;
+                            self.data.real_cursor.column += 1;
+                        }
+
+                        self.writer.clear_attributes()?;
+                        let size = self.data.buffer.size();
+                        let pos = self.data.buffer.cursor();
+
+                        if pos.is_out_of_bounds(size) { self.move_cursor(Cursor::last(size))?; }                        
+                        else  { self.move_cursor(pos)?; }
+
+                        self.writer.flush()
+                    }
+
+                    fn move_cursor(&mut self, pos: Cursor) -> io::Result<()> 
+                    {
+                        if self.data.real_cursor != pos 
+                        {
+                            self.writer.move_cursor(pos)?;
+                            self.data.real_cursor = pos;
+                        }
+
+                        Ok(())
+                    }
+
+                    fn apply_attrs(&mut self, (fg, bg, style): (Option<Color>, Option<Color>, Style)) -> io::Result<()> 
+                    { self.writer.set_attrs(fg, bg, style) }
+                }
+
+                impl<'a> Drop for ScreenWriteGuard<'a> 
+                {
+                    fn drop(&mut self) { if let Err(e) = self.refresh() { eprintln!("screen refresh failed: {}", e); } }
+                }
+
+                impl Writer 
+                {
+                    fn update_size(&mut self, new_size: Size) 
+                    {
+                        if self.real_cursor.is_out_of_bounds(new_size) { self.real_cursor = (!0, !0).into(); }
+
+                        self.buffer.resize(new_size);
+                        self.clear_screen = true;
+                    }
+                }
+            }
+
+            pub mod terminal
+            {
+                use ::
+                {
+                    common::
+                    {
+                        sequence::{ FindResult, SequenceMap },
+                        signal::{ Signal, SignalSet },
+                        sys::io::{ FromRawFd, IntoRawFd, RawFd },
+                        terminal::
+                        { 
+                            Color, Cursor, CursorMode, Event, Key, PrepareConfig, Size, Style, Theme, MouseButton, 
+                            MouseEvent, MouseInput, ModifierState,
+                        },
+                    },
+                    convert::TryFrom,
+                    fs::File,
+                    mem::{replace, zeroed},
+                    nix::
+                    {
+                        errno::{ Errno },
+                        sys::
+                        {
+                            select::{ select, FdSet },
+                            signal::{ sigaction, SaFlags, SigAction, SigHandler, Signal as NixSignal, SigSet },
+                            termios::{ tcgetattr, tcsetattr, SetArg, InputFlags, LocalFlags },
+                            time::{ TimeVal, TimeValLike },
+                            
+                        },
+                        unistd::{ read, write },
+                    },
+                    path::Path,
+                    str::{ from_utf8, SmallString, prefixes },
+                    sync::atomic::{AtomicUsize, Ordering},
+                    sync::{LockResult, map_lock_result, map_try_lock_result, Mutex, MutexGuard, TryLockResult},
+                    time::Duration,
+                    *,
+                };
+                /*
+                use libc::{
+                    ioctl,
+                    c_int, c_ushort, termios,
+                    STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, TIOCGWINSZ,
+                };
+
+                use terminfo::{self, capability as cap, Database};
+                use terminfo::capability::Expansion;
+                use terminfo::expand::Context;
+                */
+                const OUT_BUFFER_SIZE: usize = 8192;
+                const XTERM_ENABLE_MOUSE: &str = "\x1b[?1006h\x1b[?1002h";
+                const XTERM_DISABLE_MOUSE: &str = "\x1b[?1006l\x1b[?1002l";
+                const XTERM_ENABLE_MOUSE_MOTION: &str = "\x1b[?1003h";
+                const XTERM_DISABLE_MOUSE_MOTION: &str = "\x1b[?1003l";
+                const XTERM_MOUSE_INTRO: &str = "\x1b[<";
+                const XTERM_SHIFT_MASK: u32 = 0x04;
+                const XTERM_META_MASK: u32  = 0x08;
+                const XTERM_CTRL_MASK: u32  = 0x10;
+                const XTERM_MODIFIER_MASK: u32 = XTERM_SHIFT_MASK | XTERM_META_MASK | XTERM_CTRL_MASK;
+
+                type SeqMap = SequenceMap<SmallString<[u8; 8]>, SeqData>;
+
+                #[derive(Copy, Clone)]
+                enum SeqData {
+                    XTermMouse,
+                    Key(Key),
+                }
+
+                pub struct Terminal {
+                    info: Database,
+                    out_fd: RawFd,
+                    in_fd: RawFd,
+                    owned_fd: bool,
+                    sequences: SeqMap,
+                    reader: Mutex<Reader>,
+                    writer: Mutex<Writer>,
+                }
+
+                pub struct TerminalReadGuard<'a> {
+                    term: &'a Terminal,
+                    reader: MutexGuard<'a, Reader>,
+                }
+
+                pub struct TerminalWriteGuard<'a> {
+                    term: &'a Terminal,
+                    writer: MutexGuard<'a, Writer>,
+                }
+
+                struct Reader {
+                    in_buffer: Vec<u8>,
+                    resume: Option<Resume>,
+                    report_signals: SignalSet,
+                }
+
+                struct Writer {
+                    context: Context,
+                    out_buffer: Vec<u8>,
+                    fg: Option<Color>,
+                    bg: Option<Color>,
+                    cur_style: Style,
+                }
+
+                impl Terminal {
+                    fn new(in_fd: RawFd, out_fd: RawFd, owned_fd: bool) -> io::Result<Terminal> {
+                        let info = Database::from_env().map_err(ti_to_io)?;
+                        let sequences = sequences(&info);
+
+                        Ok(Terminal{
+                            info,
+                            in_fd,
+                            out_fd,
+                            owned_fd,
+                            sequences,
+                            reader: Mutex::new(Reader{
+                                in_buffer: Vec::new(),
+                                resume: None,
+                                report_signals: SignalSet::new(),
+                            }),
+                            writer: Mutex::new(Writer::new()),
+                        })
+                    }
+
+                    pub fn open<P: AsRef<Path>>(path: P) -> io::Result<Terminal> {
+                        let fd = open_rw(path)?;
+
+                        let r = Terminal::new(fd, fd, true);
+
+                        if r.is_err() {
+                            unsafe { close_fd(fd); }
+                        }
+
+                        r
+                    }
+
+                    pub fn stdout() -> io::Result<Terminal> {
+                        Terminal::new(STDIN_FILENO, STDOUT_FILENO, false)
+                    }
+
+                    pub fn stderr() -> io::Result<Terminal> {
+                        Terminal::new(STDIN_FILENO, STDERR_FILENO, false)
+                    }
+
+                    pub fn name(&self) -> &str {
+                        self.info.name()
+                    }
+
+                    fn is_xterm(&self) -> bool {
+                        is_xterm(self.name())
+                    }
+
+                    pub fn size(&self) -> io::Result<Size> {
+                        self.lock_writer().size()
+                    }
+
+                    pub fn wait_event(&self, timeout: Option<Duration>) -> io::Result<bool> {
+                        self.lock_reader().wait_event(timeout)
+                    }
+
+                    pub fn read_event(&self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                        self.lock_reader().read_event(timeout)
+                    }
+
+                    pub fn read_raw(&self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                        self.lock_reader().read_raw(buf, timeout)
+                    }
+
+                    pub fn enter_screen(&self) -> io::Result<()> {
+                        self.lock_writer().enter_screen()
+                    }
+
+                    pub fn exit_screen(&self) -> io::Result<()> {
+                        self.lock_writer().exit_screen()
+                    }
+
+                    pub fn prepare(&self, config: PrepareConfig) -> io::Result<PrepareState> {
+                        self.lock_reader().prepare(config)
+                    }
+
+                    pub fn restore(&self, state: PrepareState) -> io::Result<()> {
+                        self.lock_reader().restore(state)
+                    }
+
+                    pub fn clear_screen(&self) -> io::Result<()> {
+                        self.lock_writer().clear_screen()
+                    }
+
+                    pub fn clear_to_line_end(&self) -> io::Result<()> {
+                        self.lock_writer().clear_to_line_end()
+                    }
+
+                    pub fn clear_to_screen_end(&self) -> io::Result<()> {
+                        self.lock_writer().clear_to_screen_end()
+                    }
+
+                    pub fn move_up(&self, n: usize) -> io::Result<()> {
+                        if n != 0 {
+                            self.lock_writer().move_up(n)?;
+                        }
+                        Ok(())
+                    }
+
+                    pub fn move_down(&self, n: usize) -> io::Result<()> {
+                        if n != 0 {
+                            self.lock_writer().move_down(n)?;
+                        }
+                        Ok(())
+                    }
+
+                    pub fn move_left(&self, n: usize) -> io::Result<()> {
+                        if n != 0 {
+                            self.lock_writer().move_left(n)?;
+                        }
+                        Ok(())
+                    }
+
+                    pub fn move_right(&self, n: usize) -> io::Result<()> {
+                        if n != 0 {
+                            self.lock_writer().move_right(n)?;
+                        }
+                        Ok(())
+                    }
+
+                    pub fn move_to_first_column(&self) -> io::Result<()> {
+                        self.lock_writer().move_to_first_column()
+                    }
+
+                    pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> {
+                        self.lock_writer().set_cursor_mode(mode)
+                    }
+
+                    pub fn write_char(&self, ch: char) -> io::Result<()> {
+                        self.write_str(ch.encode_utf8(&mut [0; 4]))
+                    }
+
+                    pub fn write_str(&self, s: &str) -> io::Result<()> {
+                        self.lock_writer().write_str(s)
+                    }
+
+                    pub fn write_styled(&self,
+                            fg: Option<Color>, bg: Option<Color>, style: Style, text: &str)
+                            -> io::Result<()> {
+                        self.lock_writer().write_styled(fg, bg, style, text)
+                    }
+
+                    pub fn clear_attributes(&self) -> io::Result<()> {
+                        self.lock_writer().clear_attributes()
+                    }
+
+                    pub fn set_fg(&self, fg: Option<Color>) -> io::Result<()> {
+                        self.lock_writer().set_fg(fg)
+                    }
+
+                    pub fn set_bg(&self, bg: Option<Color>) -> io::Result<()> {
+                        self.lock_writer().set_bg(bg)
+                    }
+
+                    pub fn add_style(&self, style: Style) -> io::Result<()> {
+                        self.lock_writer().add_style(style)
+                    }
+
+                    pub fn remove_style(&self, style: Style) -> io::Result<()> {
+                        self.lock_writer().remove_style(style)
+                    }
+
+                    pub fn set_style(&self, style: Style) -> io::Result<()> {
+                        self.lock_writer().set_style(style)
+                    }
+
+                    pub fn set_theme(&self, theme: Theme) -> io::Result<()> {
+                        self.lock_writer().set_theme(theme)
+                    }
+
+                    pub fn lock_read(&self) -> LockResult<TerminalReadGuard> {
+                        map_lock_result(self.reader.lock(),
+                            |r| TerminalReadGuard::new(self, r))
+                    }
+
+                    pub fn lock_write(&self) -> LockResult<TerminalWriteGuard> {
+                        map_lock_result(self.writer.lock(),
+                            |w| TerminalWriteGuard::new(self, w))
+                    }
+
+                    pub fn try_lock_read(&self) -> TryLockResult<TerminalReadGuard> {
+                        map_try_lock_result(self.reader.try_lock(),
+                            |r| TerminalReadGuard::new(self, r))
+                    }
+
+                    pub fn try_lock_write(&self) -> TryLockResult<TerminalWriteGuard> {
+                        map_try_lock_result(self.writer.try_lock(),
+                            |w| TerminalWriteGuard::new(self, w))
+                    }
+
+                    fn lock_reader(&self) -> TerminalReadGuard {
+                        self.lock_read().expect("Terminal::lock_reader")
+                    }
+
+                    fn lock_writer(&self) -> TerminalWriteGuard {
+                        self.lock_write().expect("Terminal::lock_writer")
+                    }
+                }
+
+                impl Drop for Terminal {
+                    fn drop(&mut self) {
+                        if let Err(e) = self.set_cursor_mode(CursorMode::Normal) {
+                            eprintln!("failed to restore terminal: {}", e);
+                        }
+
+                        if self.owned_fd {
+                            unsafe { close_fd(self.out_fd); }
+                        }
+                    }
+                }
+
+                impl<'a> TerminalReadGuard<'a> {
+                    fn new(term: &'a Terminal, reader: MutexGuard<'a, Reader>) -> TerminalReadGuard<'a> {
+                        TerminalReadGuard{term, reader}
+                    }
+
+                    pub fn prepare(&mut self, config: PrepareConfig) -> io::Result<PrepareState> {
+                        let mut writer = self.term.lock_writer();
+                        self.prepare_with_lock(&mut writer, config)
+                    }
+
+                    pub fn prepare_with_lock(&mut self, writer: &mut TerminalWriteGuard,
+                            config: PrepareConfig) -> io::Result<PrepareState> {
+                        use nix::sys::termios::SpecialCharacterIndices::*;
+
+                        let old_tio = tcgetattr(self.term.in_fd).map_err(nix_to_io)?;
+                        let mut tio = old_tio.clone();
+
+                        let mut state = PrepareState{
+                            old_tio: old_tio.into(),
+                            old_sigcont: None,
+                            old_sigint: None,
+                            old_sigtstp: None,
+                            old_sigquit: None,
+                            old_sigwinch: None,
+                            restore_keypad: false,
+                            restore_mouse: false,
+                            prev_resume: self.reader.resume,
+                        };
+
+                        tio.input_flags.remove(
+                            // Disable carriage return/line feed conversion
+                            InputFlags::INLCR | InputFlags::ICRNL
+                        );
+
+                        tio.local_flags.remove(
+                            // Disable canonical mode;
+                            // this gives us input without waiting for newline or EOF
+                            // and disables line-editing, treating such inputs as characters.
+                            // Disable ECHO, preventing input from being written to output.
+                            LocalFlags::ICANON | LocalFlags::ECHO
+                        );
+
+                        // ISIG, when enabled, causes the process to receive signals when
+                        // Ctrl-C, Ctrl-\, etc. are input
+                        if config.block_signals {
+                            tio.local_flags.remove(LocalFlags::ISIG);
+                        } else {
+                            tio.local_flags.insert(LocalFlags::ISIG);
+                        }
+
+                        // IXON, when enabled, allows Ctrl-S/Ctrl-Q to suspend and restart inputs
+                        if config.enable_control_flow {
+                            tio.input_flags.insert(InputFlags::IXON);
+                        } else {
+                            tio.input_flags.remove(InputFlags::IXON);
+                        }
+
+                        // Allow a read to return with 0 characters ready
+                        tio.control_chars[VMIN as usize] = 0;
+                        // Allow a read to return after 0 deciseconds
+                        tio.control_chars[VTIME as usize] = 0;
+
+                        tcsetattr(self.term.in_fd, SetArg::TCSANOW, &tio).map_err(nix_to_io)?;
+
+                        if config.enable_mouse {
+                            if writer.enable_mouse(config.always_track_motion)? {
+                                state.restore_mouse = true;
+                            }
+                        }
+
+                        if config.enable_keypad {
+                            if writer.enable_keypad()? {
+                                state.restore_keypad = true;
+                            }
+                        }
+
+                        writer.flush()?;
+
+                        let action = SigAction::new(SigHandler::Handler(handle_signal),
+                            SaFlags::empty(), SigSet::all());
+
+                        // Continue and Resize are always handled by the internals,
+                        // but only reported if requested.
+                        state.old_sigcont = Some(unsafe { sigaction(NixSignal::SIGCONT, &action).map_err(nix_to_io)? });
+                        state.old_sigwinch = Some(unsafe { sigaction(NixSignal::SIGWINCH, &action).map_err(nix_to_io)? });
+
+                        if config.report_signals.contains(Signal::Interrupt) {
+                            state.old_sigint = Some(unsafe { sigaction(NixSignal::SIGINT, &action).map_err(nix_to_io)? });
+                        }
+                        if config.report_signals.contains(Signal::Suspend) {
+                            state.old_sigtstp = Some(unsafe { sigaction(NixSignal::SIGTSTP, &action).map_err(nix_to_io)? });
+                        }
+                        if config.report_signals.contains(Signal::Quit) {
+                            state.old_sigquit = Some(unsafe { sigaction(NixSignal::SIGQUIT, &action).map_err(nix_to_io)? });
+                        }
+
+                        self.reader.report_signals = config.report_signals;
+                        self.reader.resume = Some(Resume{config});
+
+                        Ok(state)
+                    }
+
+                    pub fn restore(&mut self, state: PrepareState) -> io::Result<()> {
+                        let mut writer = self.term.lock_writer();
+                        self.restore_with_lock(&mut writer, state)
+                    }
+
+                    pub fn restore_with_lock(&mut self, writer: &mut TerminalWriteGuard,
+                            state: PrepareState) -> io::Result<()> {
+                        self.reader.resume = state.prev_resume;
+
+                        if state.restore_mouse {
+                            writer.disable_mouse()?;
+                        }
+
+                        if state.restore_keypad {
+                            writer.disable_keypad()?;
+                        }
+
+                        writer.flush()?;
+
+                        tcsetattr(self.term.in_fd, SetArg::TCSANOW, &state.old_tio.into()).map_err(nix_to_io)?;
+
+                        unsafe {
+                            if let Some(ref old) = state.old_sigcont {
+                                sigaction(NixSignal::SIGCONT, old).map_err(nix_to_io)?;
+                            }
+                            if let Some(ref old) = state.old_sigint {
+                                sigaction(NixSignal::SIGINT, old).map_err(nix_to_io)?;
+                            }
+                            if let Some(ref old) = state.old_sigtstp {
+                                sigaction(NixSignal::SIGTSTP, old).map_err(nix_to_io)?;
+                            }
+                            if let Some(ref old) = state.old_sigquit {
+                                sigaction(NixSignal::SIGQUIT, old).map_err(nix_to_io)?;
+                            }
+                            if let Some(ref old) = state.old_sigwinch {
+                                sigaction(NixSignal::SIGWINCH, old).map_err(nix_to_io)?;
+                            }
+                        }
+
+                        Ok(())
+                    }
+
+                    pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool> {
+                        if get_signal().is_some() {
+                            return Ok(true);
+                        }
+
+                        if peek_event(&self.reader.in_buffer, &self.term.sequences)?.is_some() {
+                            return Ok(true);
+                        }
+
+                        let mut timeout = timeout.map(to_timeval);
+
+                        let n = loop {
+                            let in_fd = self.term.in_fd;
+
+                            let mut r_fds = FdSet::new();
+                            r_fds.insert(in_fd);
+
+                            // FIXME: FdSet does not implement Copy or Clone
+                            let mut e_fds = FdSet::new();
+                            e_fds.insert(in_fd);
+
+                            match select(in_fd + 1,
+                                    Some(&mut r_fds), None, Some(&mut e_fds), timeout.as_mut()) {
+                                Ok(n) => break n,
+                                Err(Errno::EINTR) =>
+                                    if get_signal().is_some() {
+                                        return Ok(true);
+                                    }
+                                
+                                Err(e) => return Err(nix_to_io(e))
+                            }
+                        };
+
+                        Ok(n != 0)
+                    }
+
+                    pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                        if let Some(ev) = self.try_read()? {
+                            return Ok(Some(ev));
+                        }
+
+                        match self.read_into_buffer(timeout)? {
+                            Some(Event::Raw(_)) => self.try_read(),
+                            Some(Event::Signal(sig)) => {
+                                if let Some(ev) = self.handle_signal(sig)? {
+                                    Ok(Some(ev))
+                                } else {
+                                    Ok(None)
+                                }
+                            }
+                            r => Ok(r)
+                        }
+                    }
+
+                    pub fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                        if !self.reader.in_buffer.is_empty() {
+                            let n = buf.len().min(self.reader.in_buffer.len());
+                            buf[..n].copy_from_slice(&self.reader.in_buffer[..n]);
+
+                            let _ = self.reader.in_buffer.drain(..n);
+
+                            return Ok(Some(Event::Raw(n)));
+                        }
+
+                        match self.read_input(buf, timeout)? {
+                            Some(Event::Signal(sig)) => {
+                                if let Some(event) = self.handle_signal(sig)? {
+                                    Ok(Some(event))
+                                } else {
+                                    Ok(None)
+                                }
+                            }
+                            r => Ok(r)
+                        }
+                    }
+
+                    fn read_into_buffer(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                        // Temporarily replace the buffer to prevent borrow errors
+                        let mut buf = replace(&mut self.reader.in_buffer, Vec::new());
+
+                        buf.reserve(128);
+
+                        let len = buf.len();
+                        let cap = buf.capacity();
+                        let r;
+
+                        unsafe {
+                            buf.set_len(cap);
+
+                            r = self.read_input(&mut buf[len..], timeout);
+
+                            match r {
+                                Ok(Some(Event::Raw(n))) => buf.set_len(len + n),
+                                _ => buf.set_len(len)
+                            }
+                        }
+
+                        // Restore the buffer before returning
+                        self.reader.in_buffer = buf;
+
+                        r
+                    }
+
+                    fn read_input(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                        // Check for a signal that may have already arrived.
+                        if let Some(sig) = take_signal() {
+                            return Ok(Some(Event::Signal(sig)));
+                        }
+
+                        if !self.wait_event(timeout)? {
+                            return Ok(None);
+                        }
+
+                        // Check for a signal again after waiting
+                        if let Some(sig) = take_signal() {
+                            return Ok(Some(Event::Signal(sig)));
+                        }
+
+                        loop {
+                            match read(self.term.in_fd, buf) {
+                                Ok(n) => break Ok(Some(Event::Raw(n))),
+                                Err(Errno::EINTR) => {
+                                    if let Some(sig) = take_signal() {
+                                        return Ok(Some(Event::Signal(sig)));
+                                    }
+                                }
+                                Err(e) => return Err(nix_to_io(e))
+                            }
+                        }
+                    }
+
+                    fn try_read(&mut self) -> io::Result<Option<Event>> {
+                        let in_buffer = &mut self.reader.in_buffer;
+
+                        if in_buffer.is_empty() {
+                            Ok(None)
+                        } else {
+                            match peek_event(&in_buffer, &self.term.sequences) {
+                                Ok(Some((ev, n))) => {
+                                    let _ = in_buffer.drain(..n);
+                                    Ok(Some(ev))
+                                }
+                                Ok(None) => Ok(None),
+                                Err(e) => Err(e)
+                            }
+                        }
+                    }
+
+                    fn handle_signal(&mut self, sig: Signal) -> io::Result<Option<Event>> {
+                        match sig {
+                            Signal::Continue => {
+                                self.resume()?;
+                            }
+                            Signal::Resize => {
+                                let size = self.term.size()?;
+                                return Ok(Some(Event::Resize(size)));
+                            }
+                            _ => ()
+                        }
+
+                        if self.reader.report_signals.contains(sig) {
+                            Ok(Some(Event::Signal(sig)))
+                        } else {
+                            Ok(None)
+                        }
+                    }
+
+                    fn resume(&mut self) -> io::Result<()> {
+                        if let Some(resume) = self.reader.resume {
+                            let _ = self.prepare(resume.config)?;
+                        }
+                        Ok(())
+                    }
+                }
+
+                macro_rules! expand_opt {
+                    ( $slf:expr , $cap:path ) => { {
+                        if let Some(cap) = $slf.term.info.get::<$cap>() {
+                            $slf.expand(cap.expand())
+                        } else {
+                            Ok(())
+                        }
+                    } };
+                    ( $slf:expr , $cap:path , |$ex:ident| $expansion:expr ) => { {
+                        if let Some(cap) = $slf.term.info.get::<$cap>() {
+                            let $ex = cap.expand();
+                            $slf.expand($expansion)
+                        } else {
+                            Ok(())
+                        }
+                    } }
+                }
+
+                macro_rules! expand_req {
+                    ( $slf:expr , $cap:path , $name:expr ) => { {
+                        $slf.term.info.get::<$cap>()
+                            .ok_or_else(|| not_supported($name))
+                            .and_then(|cap| $slf.expand(cap.expand()))
+                    } };
+                    ( $slf:expr , $cap:path , $name:expr , |$ex:ident| $expansion:expr ) => { {
+                        $slf.term.info.get::<$cap>()
+                            .ok_or_else(|| not_supported($name))
+                            .and_then(|cap| {
+                                let $ex = cap.expand();
+                                $slf.expand($expansion)
+                            })
+                    } }
+                }
+
+                impl<'a> TerminalWriteGuard<'a> {
+                    fn new(term: &'a Terminal, writer: MutexGuard<'a, Writer>) -> TerminalWriteGuard<'a> {
+                        TerminalWriteGuard{term, writer}
+                    }
+
+                    pub fn size(&self) -> io::Result<Size> {
+                        get_winsize(self.term.out_fd)
+                    }
+
+                    fn disable_keypad(&mut self) -> io::Result<()> {
+                        if let Some(local) = self.term.info.get::<cap::KeypadLocal>() {
+                            self.expand(local.expand())?;
+                        }
+                        Ok(())
+                    }
+
+                    fn enable_keypad(&mut self) -> io::Result<bool> {
+                        if let Some(xmit) = self.term.info.get::<cap::KeypadXmit>() {
+                            self.expand(xmit.expand())?;
+                            Ok(true)
+                        } else {
+                            Ok(false)
+                        }
+                    }
+
+                    fn disable_mouse(&mut self) -> io::Result<()> {
+                        self.write_bytes(XTERM_DISABLE_MOUSE.as_bytes())?;
+                        self.write_bytes(XTERM_DISABLE_MOUSE_MOTION.as_bytes())
+                    }
+
+                    fn enable_mouse(&mut self, track_motion: bool) -> io::Result<bool> {
+                        if self.term.is_xterm() {
+                            self.write_bytes(XTERM_ENABLE_MOUSE.as_bytes())?;
+                            if track_motion {
+                                self.write_bytes(XTERM_ENABLE_MOUSE_MOTION.as_bytes())?;
+                            }
+                            Ok(true)
+                        } else {
+                            Ok(false)
+                        }
+                    }
+
+                    fn enter_screen(&mut self) -> io::Result<()> {
+                        match (self.term.info.get::<cap::EnterCaMode>(),
+                                self.term.info.get::<cap::ChangeScrollRegion>(),
+                                self.term.info.get::<cap::CursorHome>()) {
+                            (enter, Some(scroll), Some(home)) => {
+                                let size = self.size()?;
+
+                                if let Some(enter) = enter {
+                                    self.expand(enter.expand())?;
+                                }
+
+                                self.expand(scroll.expand()
+                                    .parameters(0, to_u32(size.lines - 1)))?;
+                                self.expand(home.expand())?;
+                            }
+                            (_, None, _) => return Err(not_supported("change_scroll_region")),
+                            (_, _, None) => return Err(not_supported("cursor_home")),
+                        }
+
+                        self.clear_attributes()?;
+                        self.clear_screen()?;
+
+                        Ok(())
+                    }
+
+                    fn exit_screen(&mut self) -> io::Result<()> {
+                        if let Some(exit) = self.term.info.get::<cap::ExitCaMode>() {
+                            self.expand(exit.expand())?;
+                            self.flush()?;
+                        }
+
+                        Ok(())
+                    }
+
+                    pub fn clear_attributes(&mut self) -> io::Result<()> {
+                        if self.writer.fg.is_some() || self.writer.bg.is_some() ||
+                                !self.writer.cur_style.is_empty() {
+                            self.writer.fg = None;
+                            self.writer.bg = None;
+                            self.writer.cur_style = Style::empty();
+                            expand_opt!(self, cap::ExitAttributeMode)?;
+                        }
+
+                        Ok(())
+                    }
+
+                    pub fn set_fg(&mut self, fg: Option<Color>) -> io::Result<()> {
+                        if self.writer.fg == fg {
+                            Ok(())
+                        } else {
+                            if let Some(fg) = fg {
+                                self.set_fg_color(fg)?;
+                            } else {
+                                self.clear_fg()?;
+                            }
+
+                            self.writer.fg = fg;
+                            Ok(())
+                        }
+                    }
+
+                    pub fn set_bg(&mut self, bg: Option<Color>) -> io::Result<()> {
+                        if self.writer.bg == bg {
+                            Ok(())
+                        } else {
+                            if let Some(bg) = bg {
+                                self.set_bg_color(bg)?;
+                            } else {
+                                self.clear_bg()?;
+                            }
+
+                            self.writer.bg = bg;
+                            Ok(())
+                        }
+                    }
+
+                    pub fn add_style(&mut self, style: Style) -> io::Result<()> {
+                        let add = style - self.writer.cur_style;
+
+                        if add.contains(Style::BOLD) {
+                            expand_opt!(self, cap::EnterBoldMode)?;
+                        }
+                        if add.contains(Style::ITALIC) {
+                            expand_opt!(self, cap::EnterItalicsMode)?;
+                        }
+                        if add.contains(Style::REVERSE) {
+                            expand_opt!(self, cap::EnterReverseMode)?;
+                        }
+                        if add.contains(Style::UNDERLINE) {
+                            expand_opt!(self, cap::EnterUnderlineMode)?;
+                        }
+
+                        self.writer.cur_style |= add;
+
+                        Ok(())
+                    }
+
+                    pub fn remove_style(&mut self, style: Style) -> io::Result<()> {
+                        let remove = style & self.writer.cur_style;
+
+                        if remove.intersects(Style::BOLD | Style::REVERSE) {
+                            // terminfo does not contain entries to remove bold or reverse.
+                            // Instead, we must reset all attributes.
+                            let new_style = self.writer.cur_style - remove;
+                            let fg = self.writer.fg;
+                            let bg = self.writer.bg;
+                            self.clear_attributes()?;
+                            self.add_style(new_style)?;
+                            self.set_fg(fg)?;
+                            self.set_bg(bg)?;
+                        } else {
+                            if remove.contains(Style::ITALIC) {
+                                expand_opt!(self, cap::ExitItalicsMode)?;
+                            }
+                            if remove.contains(Style::UNDERLINE) {
+                                expand_opt!(self, cap::ExitUnderlineMode)?;
+                            }
+
+                            self.writer.cur_style -= remove;
+                        }
+
+                        Ok(())
+                    }
+
+                    pub fn set_style(&mut self, style: Style) -> io::Result<()> {
+                        let add = style - self.writer.cur_style;
+                        let remove = self.writer.cur_style - style;
+
+                        if remove.intersects(Style::BOLD | Style::REVERSE) {
+                            // terminfo does not contain entries to remove bold or reverse.
+                            // Instead, we must reset all attributes.
+                            let fg = self.writer.fg;
+                            let bg = self.writer.bg;
+                            self.clear_attributes()?;
+                            self.set_fg(fg)?;
+                            self.set_bg(bg)?;
+                            self.add_style(style)?;
+                        } else {
+                            self.add_style(add)?;
+                            self.remove_style(remove)?;
+                        }
+
+                        Ok(())
+                    }
+
+                    pub fn set_theme(&mut self, theme: Theme) -> io::Result<()> {
+                        self.set_attrs(theme.fg, theme.bg, theme.style)
+                    }
+
+                    pub fn set_attrs(&mut self, fg: Option<Color>, bg: Option<Color>, style: Style) -> io::Result<()> {
+                        if (self.writer.fg.is_some() && fg.is_none()) ||
+                                (self.writer.bg.is_some() && bg.is_none()) {
+                            self.clear_attributes()?;
+                        }
+
+                        self.set_style(style)?;
+                        self.set_fg(fg)?;
+                        self.set_bg(bg)?;
+
+                        Ok(())
+                    }
+
+                    fn clear_fg(&mut self) -> io::Result<()> {
+                        let bg = self.writer.bg;
+                        let style = self.writer.cur_style;
+
+                        self.clear_attributes()?;
+                        self.set_bg(bg)?;
+                        self.set_style(style)
+                    }
+
+                    fn clear_bg(&mut self) -> io::Result<()> {
+                        let fg = self.writer.fg;
+                        let style = self.writer.cur_style;
+
+                        self.clear_attributes()?;
+                        self.set_fg(fg)?;
+                        self.set_style(style)
+                    }
+
+                    fn set_fg_color(&mut self, fg: Color) -> io::Result<()> {
+                        expand_opt!(self, cap::SetAForeground,
+                            |ex| ex.parameters(color_code(fg)))
+                    }
+
+                    fn set_bg_color(&mut self, bg: Color) -> io::Result<()> {
+                        expand_opt!(self, cap::SetABackground,
+                            |ex| ex.parameters(color_code(bg)))
+                    }
+
+                    pub fn clear_screen(&mut self) -> io::Result<()> {
+                        expand_req!(self, cap::ClearScreen, "clear_screen")
+                    }
+
+                    pub fn clear_to_line_end(&mut self) -> io::Result<()> {
+                        expand_req!(self, cap::ClrEol, "clr_eol")
+                    }
+
+                    pub fn clear_to_screen_end(&mut self) -> io::Result<()> {
+                        expand_req!(self, cap::ClrEos, "clr_eos")
+                    }
+
+                    pub fn move_up(&mut self, n: usize) -> io::Result<()> {
+                        if n == 1 {
+                            expand_req!(self, cap::CursorUp, "cursor_up")?;
+                        } else if n != 0 {
+                            expand_req!(self, cap::ParmUpCursor, "parm_cursor_up",
+                                |ex| ex.parameters(to_u32(n)))?;
+                        }
+                        Ok(())
+                    }
+
+                    pub fn move_down(&mut self, n: usize) -> io::Result<()> {
+                        // Always use ParmDownCursor because CursorDown does not behave
+                        // as expected outside EnterCaMode state.
+                        if n != 0 {
+                            expand_req!(self, cap::ParmDownCursor, "parm_cursor_down",
+                                |ex| ex.parameters(to_u32(n)))?;
+                        }
+                        Ok(())
+                    }
+
+                    pub fn move_left(&mut self, n: usize) -> io::Result<()> {
+                        if n == 1 {
+                            expand_req!(self, cap::CursorLeft, "cursor_left")?;
+                        } else if n != 0 {
+                            expand_req!(self, cap::ParmLeftCursor, "parm_cursor_left",
+                                |ex| ex.parameters(to_u32(n)))?;
+                        }
+                        Ok(())
+                    }
+
+                    pub fn move_right(&mut self, n: usize) -> io::Result<()> {
+                        if n == 1 {
+                            expand_req!(self, cap::CursorRight, "cursor_right")?;
+                        } else if n != 0 {
+                            expand_req!(self, cap::ParmRightCursor, "parm_cursor_right",
+                                |ex| ex.parameters(to_u32(n)))?;
+                        }
+                        Ok(())
+                    }
+
+                    pub fn move_to_first_column(&mut self) -> io::Result<()> {
+                        self.write_bytes(b"\r")
+                    }
+
+                    pub fn move_cursor(&mut self, pos: Cursor) -> io::Result<()> {
+                        match (self.term.info.get::<cap::CursorAddress>(),
+                                self.term.info.get::<cap::CursorHome>()) {
+                            (_, Some(ref home)) if pos == Cursor::default() => {
+                                self.expand(home.expand())?;
+                            }
+                            (Some(addr), _) => {
+                                self.expand(addr.expand()
+                                    .parameters(to_u32(pos.line), to_u32(pos.column)))?;
+                            }
+                            (None, _) => return Err(not_supported("cursor_address"))
+                        }
+
+                        Ok(())
+                    }
+
+                    pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> {
+                        match mode {
+                            CursorMode::Normal | CursorMode::Overwrite => {
+                                // Overwrite is not supported by Unix terminals.
+                                // We set to normal in this case as it will reverse
+                                // a setting of Invisible
+                                expand_opt!(self, cap::CursorNormal)?;
+                            }
+                            CursorMode::Invisible => {
+                                expand_opt!(self, cap::CursorInvisible)?;
+                            }
+                        }
+
+                        Ok(())
+                    }
+
+                    pub fn write_char(&mut self, ch: char) -> io::Result<()> {
+                        self.write_str(ch.encode_utf8(&mut [0; 4]))
+                    }
+
+                    pub fn write_str(&mut self, s: &str) -> io::Result<()> {
+                        self.write_bytes(s.as_bytes())
+                    }
+
+                    pub fn write_styled(&mut self,
+                            fg: Option<Color>, bg: Option<Color>, style: Style, text: &str)
+                            -> io::Result<()> {
+                        self.set_attrs(fg, bg, style)?;
+
+                        self.write_str(text)?;
+                        self.clear_attributes()
+                    }
+
+                    fn write_bytes(&mut self, buf: &[u8]) -> io::Result<()> {
+                        if buf.len() + self.writer.out_buffer.len() > self.writer.out_buffer.capacity() {
+                            self.flush()?;
+                        }
+
+                        if buf.len() > self.writer.out_buffer.capacity() {
+                            self.write_data(buf).1
+                        } else {
+                            self.writer.out_buffer.extend(buf);
+                            Ok(())
+                        }
+                    }
+
+                    pub fn flush(&mut self) -> io::Result<()> {
+                        let (n, res) = self.write_data(&self.writer.out_buffer);
+                        self.writer.out_buffer.drain(..n);
+                        res
+                    }
+
+                    fn write_data(&self, buf: &[u8]) -> (usize, io::Result<()>) {
+                        let mut offset = 0;
+
+                        let r = loop {
+                            if offset == buf.len() {
+                                break Ok(());
+                            }
+
+                            match write(self.term.out_fd, buf) {
+                                Ok(0) => break Err(io::Error::from(io::ErrorKind::WriteZero)),
+                                Ok(n) => offset += n,
+                                Err(Errno::EINTR) => continue,
+                                Err(e) => break Err(nix_to_io(e))
+                            }
+                        };
+
+                        (offset, r)
+                    }
+
+                    fn expand<T: AsRef<[u8]>>(&mut self, exp: Expansion<T>) -> io::Result<()> {
+                        let writer = &mut *self.writer;
+                        exp
+                            .with(&mut writer.context)
+                            .to(&mut writer.out_buffer)
+                            .map_err(ti_to_io)
+                    }
+                }
+
+                impl<'a> Drop for TerminalWriteGuard<'a> {
+                    fn drop(&mut self) {
+                        if let Err(e) = self.flush() {
+                            eprintln!("failed to flush terminal: {}", e);
+                        }
+                    }
+                }
+
+                impl Writer {
+                    fn new() -> Writer {
+                        Writer{
+                            context: Context::default(),
+                            out_buffer: Vec::with_capacity(OUT_BUFFER_SIZE),
+                            fg: None,
+                            bg: None,
+                            cur_style: Style::empty(),
+                        }
+                    }
+                }
+
+                fn is_xterm(name: &str) -> bool {
+                    // Includes such terminal names as "xterm-256color"
+                    name == "xterm" || name.starts_with("xterm-")
+                }
+
+                fn sequences(info: &Database) -> SeqMap {
+                    let mut sequences = SequenceMap::new();
+
+                    macro_rules! add {
+                        ( $seq:ty , $key:expr ) => { {
+                            if let Some(seq) = info.get::<$seq>() {
+                                if let Some(s) = ascii_str(seq.as_ref()) {
+                                    sequences.insert(s.into(), SeqData::Key($key));
+                                }
+                            }
+                        } }
+                    }
+
+                    add!(cap::KeyUp,        Key::Up);
+                    add!(cap::KeyDown,      Key::Down);
+                    add!(cap::KeyLeft,      Key::Left);
+                    add!(cap::KeyRight,     Key::Right);
+                    add!(cap::KeyHome,      Key::Home);
+                    add!(cap::KeyEnd,       Key::End);
+                    add!(cap::KeyNPage,     Key::PageDown);
+                    add!(cap::KeyPPage,     Key::PageUp);
+                    add!(cap::KeyDc,        Key::Delete);
+                    add!(cap::KeyIc,        Key::Insert);
+                    add!(cap::KeyF1,        Key::F(1));
+                    add!(cap::KeyF2,        Key::F(2));
+                    add!(cap::KeyF3,        Key::F(3));
+                    add!(cap::KeyF4,        Key::F(4));
+                    add!(cap::KeyF5,        Key::F(5));
+                    add!(cap::KeyF6,        Key::F(6));
+                    add!(cap::KeyF7,        Key::F(7));
+                    add!(cap::KeyF8,        Key::F(8));
+                    add!(cap::KeyF9,        Key::F(9));
+                    add!(cap::KeyF10,       Key::F(10));
+                    add!(cap::KeyF11,       Key::F(11));
+                    add!(cap::KeyF12,       Key::F(12));
+
+                    if is_xterm(info.name()) {
+                        sequences.insert(XTERM_MOUSE_INTRO.into(), SeqData::XTermMouse);
+                    }
+
+                    sequences
+                }
+
+                pub struct PrepareState {
+                    old_tio: termios,
+                    old_sigcont: Option<SigAction>,
+                    old_sigint: Option<SigAction>,
+                    old_sigtstp: Option<SigAction>,
+                    old_sigquit: Option<SigAction>,
+                    old_sigwinch: Option<SigAction>,
+                    restore_keypad: bool,
+                    restore_mouse: bool,
+                    prev_resume: Option<Resume>,
+                }
+
+                #[derive(Copy, Clone, Debug)]
+                struct Resume {
+                    config: PrepareConfig,
+                }
+
+                unsafe fn close_fd(fd: RawFd) {
+                    drop(File::from_raw_fd(fd));
+                }
+
+                fn open_rw<P: AsRef<Path>>(path: P) -> io::Result<RawFd> {
+                    use std::fs::OpenOptions;
+
+                    let file = OpenOptions::new()
+                        .read(true)
+                        .write(true)
+                        .open(path)?;
+
+                    Ok(file.into_raw_fd())
+                }
+
+                #[repr(C)]
+                struct Winsize {
+                    ws_row: c_ushort,
+                    ws_col: c_ushort,
+                    ws_xpixel: c_ushort,
+                    ws_ypixel: c_ushort,
+                }
+
+                fn get_winsize(fd: c_int) -> io::Result<Size> {
+                    let mut winsz: Winsize = unsafe { zeroed() };
+
+                    // `TIOCGWINSZ.into()` is a workaround to a bug in the libc crate:
+                    //  https://github.com/rust-lang/libc/pull/704
+                    let res = unsafe { ioctl(fd, TIOCGWINSZ.into(), &mut winsz) };
+
+                    if res == -1 {
+                        Err(io::Error::last_os_error())
+                    } else {
+                        let size = Size{
+                            lines: winsz.ws_row as usize,
+                            columns: winsz.ws_col as usize,
+                        };
+
+                        Ok(size)
+                    }
+                }
+
+                fn nix_to_io(e: nix::Error) -> io::Error {
+                    io::Error::from_raw_os_error(e as i32)
+                }
+
+                fn ti_to_io(e: terminfo::Error) -> io::Error {
+                    match e {
+                        terminfo::Error::Io(e) => e,
+                        terminfo::Error::NotFound => io::Error::new(
+                            io::ErrorKind::NotFound, "terminfo entry not found"),
+                        terminfo::Error::Parse => io::Error::new(
+                            io::ErrorKind::Other, "failed to parse terminfo entry"),
+                        terminfo::Error::Expand(_) => io::Error::new(
+                            io::ErrorKind::Other, "failed to expand terminfo entry"),
+                    }
+                }
+
+                fn to_timeval(d: Duration) -> TimeVal {
+                    const MAX_SECS: i64 = i64::max_value() / 1_000;
+
+                    let secs = match d.as_secs() {
+                        n if n > MAX_SECS as u64 => MAX_SECS,
+                        n => n as i64,
+                    };
+
+                    let millis = d.subsec_millis() as i64;
+
+                    TimeVal::milliseconds(secs * 1_000 + millis)
+                }
+
+                fn peek_event(buf: &[u8], sequences: &SeqMap)
+                        -> io::Result<Option<(Event, usize)>> {
+                    let (res, n) = {
+                        let s = utf8_prefix(buf)?;
+
+                        if s.is_empty() {
+                            return Ok(None);
+                        }
+
+                        let mut last_match = None;
+
+                        for pfx in prefixes(s) {
+                            match sequences.find(pfx) {
+                                FindResult::NotFound => break,
+                                FindResult::Found(value) => {
+                                    last_match = Some((pfx, *value));
+                                    break;
+                                }
+                                FindResult::Incomplete => (),
+                                FindResult::Undecided(value) => {
+                                    last_match = Some((pfx, *value));
+                                }
+                            }
+                        }
+
+                        let res = last_match.and_then(|(seq, value)| {
+                            match value {
+                                SeqData::Key(key) => Some((Event::Key(key), seq.len())),
+                                SeqData::XTermMouse => {
+                                    if let Some((data, len)) = parse_mouse_data(&buf[seq.len()..]) {
+                                        Some((Event::Mouse(data), seq.len() + len))
+                                    } else {
+                                        // Input sequence was incomplete
+                                        None
+                                    }
+                                }
+                            }
+                        });
+
+                        if let Some(res) = res {
+                            res
+                        } else {
+                            let ch = s.chars().next().unwrap();
+                            (Event::Key(ch.into()), ch.len_utf8())
+                        }
+                    };
+
+                    Ok(Some((res, n)))
+                }
+
+                fn parse_mouse_data(mut buf: &[u8]) -> Option<(MouseEvent, usize)> {
+                    let orig_len = buf.len();
+
+                    let (mut input, end) = parse_integer(&mut buf)?;
+
+                    if end != b';' {
+                        return None;
+                    }
+
+                    let (column, end) = parse_integer(&mut buf)?;
+
+                    if end != b';' {
+                        return None;
+                    }
+
+                    let (line, end) = parse_integer(&mut buf)?;
+
+                    let is_pressed = match end {
+                        b'M' => true,
+                        b'm' => false,
+                        _ => return None
+                    };
+
+                    let mut mods = ModifierState::empty();
+
+                    if (input & XTERM_SHIFT_MASK) != 0 {
+                        mods |= ModifierState::SHIFT;
+                    }
+                    if (input & XTERM_META_MASK) != 0 {
+                        mods |= ModifierState::ALT;
+                    }
+                    if (input & XTERM_CTRL_MASK) != 0 {
+                        mods |= ModifierState::CTRL;
+                    }
+
+                    input &= !XTERM_MODIFIER_MASK;
+
+                    let input = match input {
+                        0 ..= 3 => mouse_button_event(input, is_pressed),
+                        64 => MouseInput::WheelUp,
+                        65 => MouseInput::WheelDown,
+                        _ => MouseInput::Motion,
+                    };
+
+                    let position = Cursor{
+                        // Parsed line and column begin at 1; we begin at 0
+                        line: (line - 1) as usize,
+                        column: (column - 1) as usize,
+                    };
+
+                    Some((MouseEvent{
+                        position,
+                        input,
+                        modifiers: mods,
+                    }, orig_len - buf.len()))
+                }
+
+                fn parse_integer(buf: &mut &[u8]) -> Option<(u32, u8)> {
+                    let mut n = 0u32;
+                    let mut iter = buf.iter();
+
+                    while let Some(&b) = iter.next() {
+                        match b {
+                            b'0' ..= b'9' => {
+                                n = n.checked_mul(10)?
+                                    .checked_add((b - b'0') as u32)?;
+                            }
+                            _ => {
+                                *buf = iter.as_slice();
+                                return Some((n, b));
+                            }
+                        }
+                    }
+
+                    None
+                }
+
+                fn mouse_button_event(input: u32, is_pressed: bool) -> MouseInput {
+                    let button = match input {
+                        0 => MouseButton::Left,
+                        1 => MouseButton::Middle,
+                        2 => MouseButton::Right,
+                        _ => MouseButton::Other(input)
+                    };
+
+                    if is_pressed {
+                        MouseInput::ButtonPressed(button)
+                    } else {
+                        MouseInput::ButtonReleased(button)
+                    }
+                }
+
+                fn utf8_prefix(buf: &[u8]) -> io::Result<&str> {
+                    match from_utf8(buf) {
+                        Ok(s) => Ok(s),
+                        Err(e) => {
+                            if e.valid_up_to() != 0 {
+                                from_utf8(&buf[..e.valid_up_to()])
+                                    .map_err(|_| unreachable!())
+                            } else if e.error_len().is_some() {
+                                Err(io::Error::new(io::ErrorKind::Other,
+                                    "read invalid utf-8 data from terminal"))
+                            } else {
+                                Ok("")
+                            }
+                        }
+                    }
+                }
+
+                static LAST_SIGNAL: AtomicUsize = AtomicUsize::new(0);
+
+                extern "C" fn handle_signal(signum: c_int) {
+                    LAST_SIGNAL.store(signum as usize, Ordering::Relaxed);
+                }
+
+                fn conv_signal(sig: c_int) -> Option<Signal> {
+                    match NixSignal::try_from(sig).ok() {
+                        Some(NixSignal::SIGCONT)  => Some(Signal::Continue),
+                        Some(NixSignal::SIGINT)   => Some(Signal::Interrupt),
+                        Some(NixSignal::SIGQUIT)  => Some(Signal::Quit),
+                        Some(NixSignal::SIGTSTP)  => Some(Signal::Suspend),
+                        Some(NixSignal::SIGWINCH) => Some(Signal::Resize),
+                        _ => None
+                    }
+                }
+
+                fn get_signal() -> Option<Signal> {
+                    conv_signal(LAST_SIGNAL.load(Ordering::Relaxed) as c_int)
+                }
+
+                fn take_signal() -> Option<Signal> {
+                    conv_signal(LAST_SIGNAL.swap(0, Ordering::Relaxed) as c_int)
+                }
+
+                fn ascii_str(s: &[u8]) -> Option<&str> {
+                    use std::str::from_utf8_unchecked;
+
+                    if s.is_ascii() {
+                        Some(unsafe { from_utf8_unchecked(s) })
+                    } else {
+                        None
+                    }
+                }
+
+                fn color_code(color: Color) -> u8 {
+                    match color {
+                        Color::Black =>     0,
+                        Color::Red =>       1,
+                        Color::Green =>     2,
+                        Color::Yellow =>    3,
+                        Color::Blue =>      4,
+                        Color::Magenta =>   5,
+                        Color::Cyan =>      6,
+                        Color::White =>     7,
+                    }
+                }
+
+                fn not_supported(op: &str) -> io::Error {
+                    io::Error::new(io::ErrorKind::Other,
+                        format!("operation not supported: {}", op))
+                }
+
+                #[cfg(target_pointer_width = "64")]
+                fn to_u32(u: usize) -> u32 {
+                    if u > u32::max_value() as usize {
+                        u32::max_value()
+                    } else {
+                        u as u32
+                    }
+                }
+
+                #[cfg(any(target_pointer_width = "16", target_pointer_width = "32"))]
+                fn to_u32(u: usize) -> u32 {
+                    u as u32
+                }
+            }
+                   
+            impl self::TerminalExt for Screen
+            {
+                fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>>
+                { self.0.read_raw(buf, timeout) }
+            }
+            
+            impl<'a> self::TerminalExt for ScreenReadGuard<'a>
+            {
+                fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>>
+                { self.0.read_raw(buf, timeout) }
+            }
+            
+            impl OpenTerminalExt for Terminal 
+            {
+                fn from_path<P: AsRef<Path>>(path: P) -> io::Result<Self> { sys::Terminal::open(path).map(Terminal) }
+            }
+            
+            impl TerminalExt for Terminal
+            {
+                fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>>
+                { self.0.read_raw(buf, timeout) }
+            }
+            
+            impl<'a> TerminalExt for TerminalReadGuard<'a>
+            {
+                fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>>
+                { self.0.read_raw(buf, timeout) }
+            }
         }
 
         pub mod windows
         {
             use ::
             {
+                time::{ Duration },
                 *,
             };
+            
+            impl TerminalExt for Screen
+            {
+                fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>>
+                { self.0.read_raw(buf, timeout) }
+
+                fn read_raw_event
+                (&mut self, events: &mut [::winapi::um::wincon::INPUT_RECORD], timeout: Option<Duration>) 
+                -> io::Result<Option<Event>>
+                {
+                    self.0.read_raw_event(events, timeout)
+                }
+            }
+            
+            impl<'a> TerminalExt for ScreenReadGuard<'a> 
+            {
+                fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>> 
+                { self.0.read_raw(buf, timeout) }
+
+                fn read_raw_event
+                (&mut self, events: &mut [::winapi::um::wincon::INPUT_RECORD], timeout: Option<Duration>) 
+                -> io::Result<Option<Event>>
+                { self.0.read_raw_event(events, timeout) }
+            }
+            
+            impl TerminalExt for Terminal
+            {
+                fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>>
+                { self.0.read_raw(buf, timeout) }
+
+                fn read_raw_event
+                (
+                    &mut self, 
+                    events: &mut [::winapi::um::wincon::INPUT_RECORD], 
+                    timeout: Option<Duration>
+                ) -> io::Result<Option<Event>>
+                { self.0.read_raw_event(events, timeout) }
+            }
+            
+            impl<'a> TerminalExt for TerminalReadGuard<'a> 
+            {
+                fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>>
+                { self.0.read_raw(buf, timeout) }
+
+                fn read_raw_event
+                (
+                    &mut self, 
+                    events: &mut [::winapi::um::wincon::INPUT_RECORD], 
+                    timeout: Option<Duration>
+                ) -> io::Result<Option<Event>>
+                { self.0.read_raw_event(events, timeout) }
+            }
         }
     }
-
-
+    
     #[cfg(unix)] pub use self::system::unix as sys;
     #[cfg(unix)] pub use self::sys::ext as unix;
 
@@ -1997,17 +4512,20 @@ pub mod database
         }
 
         impl Default for Arr 
+        
         {
             fn default() -> Self  { Self::from_vec_unchecked(vec![], Type::Any) }
         }
 
         impl fmt::Display for Arr 
+        
         {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
             { write!(f, "{}", self.format(true, INDENT_STEP)) }
         }
 
         impl PartialEq for Arr 
+        
         {
             fn eq(&self, other: &Self) -> bool 
             {
@@ -2053,6 +4571,7 @@ pub mod database
         }
 
         impl fmt::Display for OverError 
+        
         {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
             {
@@ -2086,6 +4605,7 @@ pub mod database
         }
 
         impl Error for OverError 
+        
         {
             fn description(&self) -> &str
             {
@@ -2108,6 +4628,7 @@ pub mod database
         }
 
         impl From<io::Error> for OverError 
+        
         {
             fn from(e: io::Error) -> Self
             {
@@ -2116,6 +4637,7 @@ pub mod database
         }
 
         impl From<ParseError> for OverError 
+        
         {
             fn from(e: ParseError) -> Self
             {
@@ -2441,6 +4963,7 @@ pub mod database
         }
 
         impl Default for Obj 
+        
         {
             fn default() -> Self {
                 Self::from_map_unchecked(map! {})
@@ -2448,6 +4971,7 @@ pub mod database
         }
 
         impl fmt::Display for Obj 
+        
         {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
                 {write!(f, "{}", self.format(true, INDENT_STEP))
@@ -2467,6 +4991,7 @@ pub mod database
         /// 1. If either Obj has a parent, then both must have parents and the parents must be equal.
         /// 2. The two Objs must have all the same fields pointing to the same values.
         impl PartialEq for Obj 
+        
         {
             fn eq(&self, other: &Self) -> bool 
             {
@@ -2580,6 +5105,7 @@ pub mod database
         }
 
         impl Default for Tup 
+        
         {
             fn default() -> Self {
                 Self::from_vec(vec![])
@@ -2587,6 +5113,7 @@ pub mod database
         }
 
         impl fmt::Display for Tup 
+        
         {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
                 {write!(f, "{}", self.format(true, INDENT_STEP))
@@ -2594,6 +5121,7 @@ pub mod database
         }
 
         impl From<Vec<Value>> for Tup 
+        
         {
             fn from(vec: Vec<Value>) -> Self {
                 Self::from_vec(vec)
@@ -2601,6 +5129,7 @@ pub mod database
         }
 
         impl PartialEq for Tup 
+        
         {
             fn eq(&self, other: &Self) -> bool {
                 // Quickly return false if the types don't match.
@@ -2801,6 +5330,7 @@ pub mod database
         }
         /// Two types are considered equal if one of them is Any or they have the same variant.
         impl PartialEq for Type 
+        
         {
             fn eq(&self, other: &Self) -> bool {
                 use self::Type::*;
@@ -2834,6 +5364,7 @@ pub mod database
         impl Eq for Type {}
 
         impl fmt::Display for Type 
+        
         {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
                 {use self::Type::*;
@@ -3087,6 +5618,7 @@ pub mod database
         }
 
         impl fmt::Display for Value 
+        
         {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
                 {write!(f, "{}", self.format(true, INDENT_STEP))
@@ -3102,6 +5634,7 @@ pub mod database
         impl_eq!(Obj, objects::Obj);
 
         impl<'a> PartialEq<&'a str> for Value 
+        
         {
             fn eq(&self, other: &&str) -> bool {
                 match *self {
@@ -3112,6 +5645,7 @@ pub mod database
         }
 
         impl<'a> PartialEq<Value> for &'a str 
+        
         {
             fn eq(&self, other: &Value) -> bool {
                 match *other {
@@ -3122,6 +5656,7 @@ pub mod database
         }
 
         impl PartialEq<String> for Value 
+        
         {
             fn eq(&self, other: &String) -> bool {
                 &other.as_str() == self
@@ -3129,6 +5664,7 @@ pub mod database
         }
 
         impl PartialEq<Value> for String 
+        
         {
             fn eq(&self, other: &Value) -> bool
             {
@@ -3164,6 +5700,7 @@ pub mod database
         impl_from!(String, Str);
 
         impl<'a> From<&'a str> for Value 
+        
         {
             fn from(inner: &str) -> Self {
                 Value::Str(inner.into())
@@ -5629,6 +8166,11 @@ pub mod error
     }
 }
 
+pub mod ffi
+{
+    pub use std::ffi::{ * };
+}
+
 pub mod fmt
 {
     pub use std::fmt::{ * };
@@ -5772,6 +8314,42 @@ pub mod is
             _ => char::width(ch).unwrap_or(0) != 0
         }
     }
+    /*
+    pub fn is_ctrl(...) -> bool */
+    /// Returns whether the given character is a control character.
+    #[inline] pub fn ctrl(ch: char) -> bool
+    {
+        let ch = ch as u32;
+        ch & ( 0x1f as u32 ) == ch
+    }
+}
+/*
+libc */
+pub mod libc
+{
+    pub mod unix
+    {
+        use ::
+        {
+            ffi::{ * },
+            *,
+        };
+
+        extern "C"
+        {
+            pub fn ioctl(fd: c_int, request: c_int, ...) -> c_int;
+        }
+    }
+
+    pub mod windows
+    {
+        use ::
+        {
+            *,
+        };
+    }
+
+
 }
 
 pub mod marker
@@ -14101,6 +16679,7 @@ pub mod num
         }
 
         impl ParseBigIntError 
+        
         {
             fn __description(&self) -> &str 
             {
@@ -14127,6 +16706,7 @@ pub mod num
         }
 
         impl fmt::Display for ParseBigIntError 
+        
         {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result 
             {
@@ -14135,6 +16715,7 @@ pub mod num
         }
         
         impl ::error::Error for ParseBigIntError 
+        
         {
             fn description(&self) -> &str 
             {
@@ -14149,6 +16730,7 @@ pub mod num
         }
 
         impl<T> TryFromBigIntError<T> 
+        
         {
             fn new(original: T) -> Self {
                 TryFromBigIntError { original }
@@ -14166,6 +16748,7 @@ pub mod num
         
         impl<T> std::error::Error for TryFromBigIntError<T> where
         T: fmt::Debug
+        
         {
             fn description(&self) -> &str 
             {
@@ -14174,6 +16757,7 @@ pub mod num
         }
 
         impl<T> fmt::Display for TryFromBigIntError<T> 
+        
         {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result 
             {
@@ -15243,16 +17827,14 @@ pub mod num
 
         impl<T: Clone + Num> From<T> for Complex<T> 
         {
-            #[inline]
-            fn from(re: T) -> Self {
+            #[inline] fn from(re: T) -> Self {
                 Self::new(re, T::zero())
             }
         }
 
         impl<'a, T: Clone + Num> From<&'a T> for Complex<T> 
         {
-            #[inline]
-            fn from(re: &T) -> Self {
+            #[inline] fn from(re: &T) -> Self {
                 From::from(re.clone())
             }
         }
@@ -15314,8 +17896,7 @@ pub mod num
         {
             type Output = Self;
 
-            #[inline]
-            fn add(self, other: Self) -> Self::Output {
+            #[inline] fn add(self, other: Self) -> Self::Output {
                 Self::Output::new(self.re + other.re, self.im + other.im)
             }
         }
@@ -15326,8 +17907,7 @@ pub mod num
         {
             type Output = Self;
 
-            #[inline]
-            fn sub(self, other: Self) -> Self::Output {
+            #[inline] fn sub(self, other: Self) -> Self::Output {
                 Self::Output::new(self.re - other.re, self.im - other.im)
             }
         }
@@ -15338,8 +17918,7 @@ pub mod num
         {
             type Output = Self;
 
-            #[inline]
-            fn mul(self, other: Self) -> Self::Output {
+            #[inline] fn mul(self, other: Self) -> Self::Output {
                 let re = self.re.clone() * other.re.clone() - self.im.clone() * other.im.clone();
                 let im = self.re * other.im + self.im * other.re;
                 Self::Output::new(re, im)
@@ -15350,8 +17929,7 @@ pub mod num
         {
             type Output = Complex<T>;
 
-            #[inline]
-            fn mul_add(self, other: Complex<T>, add: Complex<T>) -> Complex<T> {
+            #[inline] fn mul_add(self, other: Complex<T>, add: Complex<T>) -> Complex<T> {
                 let re = self.re.clone().mul_add(other.re.clone(), add.re)
                     - (self.im.clone() * other.im.clone()); // FIXME: use mulsub when available in rust
                 let im = self.re.mul_add(other.im, self.im.mul_add(other.re, add.im));
@@ -15363,8 +17941,7 @@ pub mod num
         {
             type Output = Complex<T>;
 
-            #[inline]
-            fn mul_add(self, other: &Complex<T>, add: &Complex<T>) -> Complex<T> {
+            #[inline] fn mul_add(self, other: &Complex<T>, add: &Complex<T>) -> Complex<T> {
                 self.clone().mul_add(other.clone(), add.clone())
             }
         }
@@ -15375,8 +17952,7 @@ pub mod num
         {
             type Output = Self;
 
-            #[inline]
-            fn div(self, other: Self) -> Self::Output {
+            #[inline] fn div(self, other: Self) -> Self::Output {
                 let norm_sqr = other.norm_sqr();
                 let re = self.re.clone() * other.re.clone() + self.im.clone() * other.im.clone();
                 let im = self.im * other.re - self.re * other.im;
@@ -15399,8 +17975,7 @@ pub mod num
         {
             type Output = Self;
 
-            #[inline]
-            fn rem(self, modulus: Self) -> Self::Output {
+            #[inline] fn rem(self, modulus: Self) -> Self::Output {
                 let gaussian = self.div_trunc(&modulus);
                 self - modulus * gaussian
             }
@@ -15561,8 +18136,7 @@ pub mod num
         {
             type Output = Self;
 
-            #[inline]
-            fn neg(self) -> Self::Output {
+            #[inline] fn neg(self) -> Self::Output {
                 Self::Output::new(-self.re, -self.im)
             }
         }
@@ -15571,8 +18145,7 @@ pub mod num
         {
             type Output = Complex<T>;
 
-            #[inline]
-            fn neg(self) -> Self::Output {
+            #[inline] fn neg(self) -> Self::Output {
                 -self.clone()
             }
         }
@@ -15581,8 +18154,7 @@ pub mod num
         {
             type Output = Self;
 
-            #[inline]
-            fn inv(self) -> Self::Output {
+            #[inline] fn inv(self) -> Self::Output {
                 Complex::inv(&self)
             }
         }
@@ -15591,8 +18163,7 @@ pub mod num
         {
             type Output = Complex<T>;
 
-            #[inline]
-            fn inv(self) -> Self::Output {
+            #[inline] fn inv(self) -> Self::Output {
                 Complex::inv(self)
             }
         }
@@ -15714,8 +18285,7 @@ pub mod num
         {
             type Output = Complex<T>;
 
-            #[inline]
-            fn add(self, other: T) -> Self::Output {
+            #[inline] fn add(self, other: T) -> Self::Output {
                 Self::Output::new(self.re + other, self.im)
             }
         }
@@ -15724,8 +18294,7 @@ pub mod num
         {
             type Output = Complex<T>;
 
-            #[inline]
-            fn sub(self, other: T) -> Self::Output {
+            #[inline] fn sub(self, other: T) -> Self::Output {
                 Self::Output::new(self.re - other, self.im)
             }
         }
@@ -15734,8 +18303,7 @@ pub mod num
         {
             type Output = Complex<T>;
 
-            #[inline]
-            fn mul(self, other: T) -> Self::Output {
+            #[inline] fn mul(self, other: T) -> Self::Output {
                 Self::Output::new(self.re * other.clone(), self.im * other)
             }
         }
@@ -15744,8 +18312,7 @@ pub mod num
         {
             type Output = Self;
 
-            #[inline]
-            fn div(self, other: T) -> Self::Output {
+            #[inline] fn div(self, other: T) -> Self::Output {
                 Self::Output::new(self.re / other.clone(), self.im / other)
             }
         }
@@ -15754,8 +18321,7 @@ pub mod num
         {
             type Output = Complex<T>;
 
-            #[inline]
-            fn rem(self, other: T) -> Self::Output {
+            #[inline] fn rem(self, other: T) -> Self::Output {
                 Self::Output::new(self.re % other.clone(), self.im % other)
             }
         }
@@ -15775,18 +18341,15 @@ pub mod num
 
         impl<T: Clone + Num> Zero for Complex<T> 
         {
-            #[inline]
-            fn zero() -> Self {
+            #[inline] fn zero() -> Self {
                 Self::new(Zero::zero(), Zero::zero())
             }
 
-            #[inline]
-            fn is_zero(&self) -> bool {
+            #[inline] fn is_zero(&self) -> bool {
                 self.re.is_zero() && self.im.is_zero()
             }
 
-            #[inline]
-            fn set_zero(&mut self) {
+            #[inline] fn set_zero(&mut self) {
                 self.re.set_zero();
                 self.im.set_zero();
             }
@@ -15808,18 +18371,15 @@ pub mod num
 
         impl<T: Clone + Num> One for Complex<T> 
         {
-            #[inline]
-            fn one() -> Self {
+            #[inline] fn one() -> Self {
                 Self::new(One::one(), Zero::zero())
             }
 
-            #[inline]
-            fn is_one(&self) -> bool {
+            #[inline] fn is_one(&self) -> bool {
                 self.re.is_one() && self.im.is_zero()
             }
 
-            #[inline]
-            fn set_one(&mut self) {
+            #[inline] fn set_one(&mut self) {
                 self.re.set_one();
                 self.im.set_zero();
             }
@@ -15912,6 +18472,7 @@ pub mod num
         
         impl<T> fmt::Display for Complex<T> where
         T: fmt::Display + Num + PartialOrd + Clone,
+        
         {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 write_complex!(f, "", "", self.re, self.im, T)
@@ -15920,6 +18481,7 @@ pub mod num
 
         impl<T> fmt::LowerExp for Complex<T> where
             T: fmt::LowerExp + Num + PartialOrd + Clone,
+        
         {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 write_complex!(f, "e", "", self.re, self.im, T)
@@ -15928,6 +18490,7 @@ pub mod num
 
         impl<T> fmt::UpperExp for Complex<T> where
             T: fmt::UpperExp + Num + PartialOrd + Clone,
+        
         {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 write_complex!(f, "E", "", self.re, self.im, T)
@@ -15936,6 +18499,7 @@ pub mod num
 
         impl<T> fmt::LowerHex for Complex<T> where
             T: fmt::LowerHex + Num + PartialOrd + Clone,
+        
         {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 write_complex!(f, "x", "0x", self.re, self.im, T)
@@ -15944,6 +18508,7 @@ pub mod num
 
         impl<T> fmt::UpperHex for Complex<T> where
             T: fmt::UpperHex + Num + PartialOrd + Clone,
+        
         {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 write_complex!(f, "X", "0x", self.re, self.im, T)
@@ -15952,6 +18517,7 @@ pub mod num
 
         impl<T> fmt::Octal for Complex<T> where
             T: fmt::Octal + Num + PartialOrd + Clone,
+        
         {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 write_complex!(f, "o", "0o", self.re, self.im, T)
@@ -15960,6 +18526,7 @@ pub mod num
 
         impl<T> fmt::Binary for Complex<T> where
             T: fmt::Binary + Num + PartialOrd + Clone,
+        
         {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 write_complex!(f, "b", "0b", self.re, self.im, T)
@@ -16076,6 +18643,7 @@ pub mod num
         }
 
         impl<T: Num + Clone> Sum for Complex<T> 
+        
         {
             fn sum<I>(iter: I) -> Self where
                 I: Iterator<Item = Self>,
@@ -16085,6 +18653,7 @@ pub mod num
         }
 
         impl<'a, T: 'a + Num + Clone> Sum<&'a Complex<T>> for Complex<T> 
+        
         {
             fn sum<I>(iter: I) -> Self where
                 I: Iterator<Item = &'a Complex<T>>,
@@ -16094,6 +18663,7 @@ pub mod num
         }
 
         impl<T: Num + Clone> Product for Complex<T> 
+        
         {
             fn product<I>(iter: I) -> Self where
                 I: Iterator<Item = Self>,
@@ -16103,6 +18673,7 @@ pub mod num
         }
 
         impl<'a, T: 'a + Num + Clone> Product<&'a Complex<T>> for Complex<T> 
+        
         {
             fn product<I>(iter: I) -> Self where
                 I: Iterator<Item = &'a Complex<T>>,
@@ -16126,6 +18697,7 @@ pub mod num
         }
 
         impl<E> ParseComplexError<E> 
+        
         {
             fn expr_error() -> Self 
             {
@@ -16150,6 +18722,7 @@ pub mod num
         }
         
         impl<E: Error> Error for ParseComplexError<E> 
+        
         {
             fn description(&self) -> &str 
             {
@@ -16162,6 +18735,7 @@ pub mod num
         }
 
         impl<E: fmt::Display> fmt::Display for ParseComplexError<E> 
+        
         {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result 
             {
@@ -17462,6 +20036,7 @@ pub mod num
         // From integer
         impl<T> From<T> for Ratio<T> where
             T: Clone + Integer,
+        
         {
             fn from(x: T) -> Ratio<T> {
                 Ratio::from_integer(x)
@@ -17471,6 +20046,7 @@ pub mod num
         // From pair (through the `new` constructor)
         impl<T> From<(T, T)> for Ratio<T> where
             T: Clone + Integer,
+        
         {
             fn from(pair: (T, T)) -> Ratio<T> {
                 Ratio::new(pair.0, pair.1)
@@ -17547,6 +20123,7 @@ pub mod num
         impl<T: Clone + Integer> Eq for Ratio<T> {}
         
         impl<T: Clone + Integer + Hash> Hash for Ratio<T> 
+        
         {
             fn hash<H: Hasher>(&self, state: &mut H) {
                 recurse(&self.numer, &self.denom, state);
@@ -18247,6 +20824,7 @@ pub mod num
         }
 
         impl<T> From<Ratio<T>> for (T, T) 
+        
         {
             fn from(val: Ratio<T>) -> Self {
                 (val.numer, val.denom)
@@ -18268,6 +20846,7 @@ pub mod num
         }
 
         impl fmt::Display for ParseRatioError 
+        
         {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 self.kind.description().fmt(f)
@@ -18275,6 +20854,7 @@ pub mod num
         }
         
         impl Error for ParseRatioError 
+        
         {
             fn description(&self) -> &str {
                 self.kind.description()
@@ -18282,6 +20862,7 @@ pub mod num
         }
 
         impl RatioErrorKind 
+        
         {
             fn description(&self) -> &'static str {
                 match *self {
@@ -18292,6 +20873,7 @@ pub mod num
         }
         
         impl FromPrimitive for Ratio<BigInt> 
+        
         {
             fn from_i64(n: i64) -> Option<Self> {
                 Some(Ratio::from_integer(n.into()))
@@ -18491,6 +21073,7 @@ pub mod num
         }
         
         impl<T: Clone + Integer + ToPrimitive + ToBigInt> ToPrimitive for Ratio<T> 
+        
         {
             fn to_i64(&self) -> Option<i64> {
                 self.to_integer().to_i64()
@@ -18529,11 +21112,13 @@ pub mod num
         }
 
         trait Bits 
+        
         {
             fn bits(&self) -> u64;
         }
         
         impl Bits for BigInt 
+        
         {
             fn bits(&self) -> u64 {
                 self.bits()
@@ -18541,6 +21126,7 @@ pub mod num
         }
 
         impl Bits for i128 
+        
         {
             fn bits(&self) -> u64 {
                 (128 - self.wrapping_abs().leading_zeros()).into()
@@ -18711,6 +21297,8 @@ pub mod num
         //! Numeric traits for generic mathematics
         use ::
         {
+            cmp::{ Ordering },
+            hash::{ Hash, Hasher },
             num::
             {
                 Wrapping 
@@ -22198,6 +24786,7 @@ pub mod num
         }
 
         impl fmt::Display for ParseFloatError 
+        
         {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 let description = match self.kind {
@@ -22420,6 +25009,126 @@ pub mod num
                 input
             }
         }
+        
+        macro_rules! define_valid_range_type 
+        {
+            ($(
+                $(#[$m:meta])*
+                $vis:vis struct $name:ident($int:ident as $uint:ident in $low:literal..=$high:literal);
+            )+) => 
+            {$(
+                #[derive(Clone, Copy, Eq)]
+                #[repr(transparent)]
+                $(#[$m])*
+                $vis struct $name($int);
+
+                const _: () = 
+                {
+                    assert!(<$uint>::MIN == 0);
+                    let ulow: $uint = $low;
+                    let uhigh: $uint = $high;
+                    assert!(ulow <= uhigh);
+                    assert!(size_of::<$int>() == size_of::<$uint>());
+                };
+
+                impl $name 
+                {
+                    #[inline] pub const fn new(val: $int) -> Option<Self>
+                    {
+                        if (val as $uint) >= ($low as $uint) && (val as $uint) <= ($high as $uint)
+                        { Some(unsafe { $name(val) }) } 
+                        
+                        else { None }
+                    }
+
+                    /// Constructs an instance of this type from the underlying integer primitive without checking whether its zero.
+                    #[inline] pub const unsafe fn new_unchecked(val: $int) -> Self { unsafe { $name(val) } }
+                    #[inline] pub const fn as_inner(self) -> $int { unsafe { ::mem::transmute(self) } }
+                }
+                
+                /* impl StructuralPartialEq for $name {} */
+
+                impl PartialEq for $name
+                {
+                    #[inline] fn eq(&self, other: &Self) -> bool { self.as_inner() == other.as_inner() }
+                }
+
+                impl Ord for $name
+                {
+                    #[inline] fn cmp(&self, other: &Self) -> Ordering { Ord::cmp(&self.as_inner(), &other.as_inner()) }
+                }
+
+                impl PartialOrd for $name
+                {
+                    #[inline] fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(Ord::cmp(self, other)) }
+                }
+
+                impl Hash for $name
+                {
+                    fn hash<H: Hasher>(&self, state: &mut H) { Hash::hash(&self.as_inner(), state); }
+                }
+
+                impl fmt::Debug for $name
+                {
+                    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                    { <$int as fmt::Debug>::fmt(&self.as_inner(), f) }
+                }
+            )+};
+        }
+
+        define_valid_range_type! { pub struct Nanoseconds(u32 as u32 in 0..=999_999_999); }
+
+        impl Nanoseconds
+        { 
+            pub const ZERO: Self = unsafe { Nanoseconds::new_unchecked(0) };
+        }
+
+        impl Default for Nanoseconds
+        {
+            #[inline] fn default() -> Self { Self::ZERO }
+        }
+
+        define_valid_range_type! 
+        {
+            pub struct NonZeroU8Inner(u8 as u8 in 1..=0xff);
+            pub struct NonZeroU16Inner(u16 as u16 in 1..=0xff_ff);
+            pub struct NonZeroU32Inner(u32 as u32 in 1..=0xffff_ffff);
+            pub struct NonZeroU64Inner(u64 as u64 in 1..=0xffffffff_ffffffff);
+            pub struct NonZeroU128Inner(u128 as u128 in 1..=0xffffffffffffffff_ffffffffffffffff);
+
+            pub struct NonZeroI8Inner(i8 as u8 in 1..=0xff);
+            pub struct NonZeroI16Inner(i16 as u16 in 1..=0xff_ff);
+            pub struct NonZeroI32Inner(i32 as u32 in 1..=0xffff_ffff);
+            pub struct NonZeroI64Inner(i64 as u64 in 1..=0xffffffff_ffffffff);
+            pub struct NonZeroI128Inner(i128 as u128 in 1..=0xffffffffffffffff_ffffffffffffffff);
+        }
+        
+        define_valid_range_type! 
+        {
+            pub struct UsizeNoHighBit(usize as usize in 0..=0x7fff_ffff_ffff_ffff);
+            pub struct NonZeroUsizeInner(usize as usize in 1..=0xffff_ffff_ffff_ffff);
+            pub struct NonZeroIsizeInner(isize as usize in 1..=0xffff_ffff_ffff_ffff);
+        }
+
+        define_valid_range_type! 
+        {
+            pub struct U32NotAllOnes(u32 as u32 in 0..=0xffff_fffe);
+            pub struct I32NotAllOnes(i32 as u32 in 0..=0xffff_fffe);
+
+            pub struct U64NotAllOnes(u64 as u64 in 0..=0xffff_ffff_ffff_fffe);
+            pub struct I64NotAllOnes(i64 as u64 in 0..=0xffff_ffff_ffff_fffe);
+        }
+
+        pub trait NotAllOnesHelper
+        {
+            type Type;
+        }
+
+        pub type NotAllOnes<T> = <T as NotAllOnesHelper>::Type;
+        impl NotAllOnesHelper for u32 { type Type = U32NotAllOnes; }
+        impl NotAllOnesHelper for i32 { type Type = I32NotAllOnes; }
+        impl NotAllOnesHelper for u64 { type Type = U64NotAllOnes; }
+        impl NotAllOnesHelper for i64 { type Type = I64NotAllOnes; }
     }
 }
 
@@ -30076,8 +32785,30 @@ pub mod str
 
         Ok(contents)
     }
+    /// Iterator over string prefixes.
+    pub struct Prefixes<'a>
+    {
+        s: &'a str,
+        iter: CharIndices<'a>,
+    }
+    /// Returns an iterator over all non-empty prefixes of `s`, beginning with the shortest.
+    #[inline] pub fn prefixes(s: &str) -> Prefixes
+    {
+        Prefixes
+        {
+            s,
+            iter: s.char_indices(),
+        }
+    }
 
-
+    impl<'a> Iterator for Prefixes<'a>
+    {
+        type Item = &'a str;
+        fn next(&mut self) -> Option<&'a str>
+        {
+            self.iter.next().map(|(idx, ch)| &self.s[..idx + ch.len_utf8()])
+        }
+    }
 }
 
 pub mod string
@@ -30146,6 +32877,15 @@ pub mod system
         *,
     };
     
+}
+
+pub mod time
+{
+    pub use ::timed::{ * };
+    mod std
+    {
+        pub use std::time::{ * };
+    }
 }
 
 pub mod vec
@@ -30217,4 +32957,4 @@ fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 30220
+// 32960
