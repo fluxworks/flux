@@ -19,6 +19,7 @@ extern crate fnv;
 extern crate memchr;
 extern crate nix;
 extern crate regex as re;
+extern crate smallvec;
 extern crate time as timed;
 extern crate unicode_normalization;
 extern crate unicode_width;
@@ -213,11 +214,12 @@ pub mod char
             Self::from_string_impl(Some(String::from(path)), contents)
         }
 
-        pub fn from_string(contents: String) -> io::Result<CharStream> {
+        pub fn from_string(contents: String) -> io::Result<CharStream>
+        {
             Self::from_string_impl(None, contents)
         }
 
-        fn from_string_impl(file: Option<String>, contents: String) -> io::Result<CharStream>
+        pub fn from_string_impl(file: Option<String>, contents: String) -> io::Result<CharStream>
         {
             let chars: Chars = unsafe { mem::transmute(contents.chars()) };
             let stream = chars.peekable();
@@ -334,6 +336,14 @@ pub mod char
             _ => None,
         }
     }
+    /*
+    pub fn char_width(ch: char) -> Option<usize> */
+    /// Returns the width of a character in the terminal.
+    #[inline] pub fn width(ch: char) -> Option<usize>
+    {
+        use unicode_width::UnicodeWidthChar;
+        ch.width()
+    }
 }
 
 pub mod cmp
@@ -354,11 +364,1504 @@ pub mod convert
 mortal*/
 pub mod common
 {
+    //! Platform-independent terminal interface
     use ::
     {
+        sync::{ LockResult, PoisonError, TryLockError, TryLockResult },
         *,
     };
-    
+    /*
+    #[macro_use] extern crate bitflags;
+    extern crate smallstr;
+    extern crate unicode_normalization;
+    extern crate unicode_width;
+
+    #[cfg(unix)] extern crate libc;
+    #[cfg(unix)] extern crate nix;
+    #[cfg(unix)] extern crate terminfo;
+
+    #[cfg(windows)] extern crate winapi;
+
+    pub use crate::screen::{Screen, ScreenReadGuard, ScreenWriteGuard};
+    pub use crate::sequence::{FindResult, SequenceMap};
+    pub use crate::signal::{Signal, SignalSet};
+    pub use crate::terminal::{
+        Color, Cursor, CursorMode, Size, Style, Theme,
+        Event, Key, MouseEvent, MouseInput, MouseButton, ModifierState,
+        PrepareConfig, PrepareState,
+        Terminal, TerminalReadGuard, TerminalWriteGuard,
+    }; */
+
+    #[macro_use] pub mod buffer
+    {
+        use ::
+        { 
+            common::
+            {
+                terminal::{Color, Cursor, Size, Style, Theme},
+            },
+            is::{ visible },
+            mem::{ swap },
+            ops::{ Range },
+            str::{ SmallString },
+            *,
+        };
+        const TAB_STOP: usize = 8;
+
+        pub struct ScreenBuffer
+        {
+            buffer: Vec<Cell>,
+            back_buffer: Vec<Cell>,
+            size: Size,
+            cursor: Cursor,
+            fg: Option<Color>,
+            bg: Option<Color>,
+            style: Style,
+        }
+
+        impl ScreenBuffer 
+        {
+            pub fn new(size: Size) -> ScreenBuffer 
+            {
+                let area = size.area();
+
+                ScreenBuffer
+                {
+                    buffer: vec![Cell::default(); area],
+                    back_buffer: vec![Cell::default(); area],
+                    size: size,
+                    cursor: Cursor::default(),
+                    fg: None,
+                    bg: None,
+                    style: Style::empty(),
+                }
+            }
+
+            pub fn cursor(&self) -> Cursor { self.cursor }
+
+            pub fn size(&self) -> Size { self.size }
+
+            pub fn resize(&mut self, new_size: Size)
+            {
+                resize_buffer(&mut self.buffer, self.size, new_size);
+                new_buffer(&mut self.back_buffer, new_size);
+                self.size = new_size;
+            }
+
+            pub fn set_cursor(&mut self, pos: Cursor) { self.cursor = pos; }
+
+            pub fn next_line(&mut self, column: usize)
+            {
+                self.cursor.line += 1;
+                self.cursor.column = column;
+            }
+
+            pub fn clear_attributes(&mut self)
+            {
+                self.fg = None;
+                self.bg = None;
+                self.style = Style::empty();
+            }
+
+            pub fn add_style(&mut self, style: Style) { self.style |= style; }
+            pub fn remove_style(&mut self, style: Style) { self.style -= style; }
+            pub fn set_style(&mut self, style: Style)  { self.style = style; }
+            pub fn set_fg(&mut self, fg: Option<Color>) { self.fg = fg; }
+            pub fn set_bg(&mut self, bg: Option<Color>) { self.bg = bg; }
+
+            pub fn set_theme(&mut self, theme: Theme)
+            {
+                self.set_fg(theme.fg);
+                self.set_bg(theme.bg);
+                self.set_style(theme.style);
+            }
+
+            pub fn clear_screen(&mut self)
+            {
+                for cell in &mut self.buffer
+                {
+                    *cell = Cell::default();
+                }
+            }
+
+            pub fn indices(&self) -> Range<usize> {  0..self.size.area() }
+            
+            pub fn next_cell(&mut self, indices: &mut Range<usize>) -> Option<(Cursor, Cell)>
+            {
+                while let Some(idx) = indices.next()
+                {
+                    let first = self.buffer[idx].first_char();
+                    let width = char::width(first).unwrap_or(0);
+
+                    if width == 2 { let _ = indices.next(); }
+
+                    if self.buffer[idx] != self.back_buffer[idx]
+                    {
+                        let cell = self.buffer[idx].clone();
+                        let line = idx / self.size.columns;
+                        let column = idx % self.size.columns;
+                        self.back_buffer[idx] = cell.clone();
+                        return Some((Cursor{line, column}, cell));
+                    }
+                }
+
+                None
+            }
+
+            fn cell_mut(&mut self, pos: Cursor) -> &mut Cell
+            {
+                let size = self.size;
+                &mut self.buffer[pos.as_index(size)]
+            }
+
+            fn set_cell(&mut self, pos: Cursor, ch: char)
+            {
+                let fg = self.fg;
+                let bg = self.bg;
+                let style = self.style;
+                let cell = self.cell_mut(pos);
+                cell.fg = fg;
+                cell.bg = bg;
+                cell.style = style;
+                cell.text = ch.into();
+            }
+
+            pub fn write_char(&mut self, ch: char) -> Result<(), OutOfBounds>
+            {
+                if ch == '\t'
+                {
+                    self.try_cursor()?;
+                    let rem = self.size.columns - self.cursor.column;
+                    let n = rem.min(TAB_STOP - (self.cursor.column % TAB_STOP));
+
+                    for _ in 0..n
+                    {
+                        self.write_char(' ')?;
+                    }
+                }
+                
+                else if ch == '\r' { self.cursor.column = 0; }
+                
+                else if ch == '\n'
+                {
+                    self.cursor.line += 1;
+                    self.cursor.column = 0;
+                }
+                
+                else if is::combining_mark(ch)
+                {
+                    if let Some(prev) = self.cursor.previous(self.size)
+                    {
+                        self.try_cursor_at(prev)?;
+                        self.cell_mut(prev).text.push(ch);
+                    }
+                }
+                
+                else if is::visible(ch)
+                {
+                    self.try_cursor()?;
+
+                    if let Some(prev) = self.cursor.previous(self.size)
+                    {
+                        let cell = self.cell_mut(prev);
+                        if cell.is_wide() { *cell = Cell::default(); }
+                    }
+
+                    let rem = self.size.columns - self.cursor.column;
+                    let width = char_width(ch).unwrap_or(0);
+                    
+                    if rem < width
+                    {
+                        self.try_cursor()?;
+                        let mut pos = self.cursor;
+
+                        for _ in 0..rem
+                        {
+                            self.set_cell(pos, ch);
+                            pos.column += 1;
+                        }
+
+                        self.cursor.column = 0;
+                        self.cursor.line += 1;
+                    }
+
+                    self.try_cursor()?;
+                    let mut pos = self.cursor;
+                    self.set_cell(pos, ch);
+
+                    for _ in 1..width
+                    {
+                        pos.column += 1;
+                        self.set_cell(pos, ' ');
+                    }
+
+                    self.cursor.column += width;
+
+                    if self.cursor.column >= self.size.columns
+                    {
+                        self.cursor.line += 1;
+                        self.cursor.column = 0;
+                    }
+                }
+
+                Ok(())
+            }
+
+            pub fn write_str(&mut self, s: &str) -> Result<(), OutOfBounds>
+            {
+                for ch in s.chars()
+                {
+                    self.write_char(ch)?;
+                }
+
+                Ok(())
+            }
+
+            pub fn write_at(&mut self, pos: Cursor, text: &str) -> Result<(), OutOfBounds>
+            {
+                self.try_cursor_at(pos)?;
+                self.cursor = pos;
+                self.write_str(text)
+            }
+
+            pub fn write_styled(&mut self, fg: Option<Color>, bg: Option<Color>, style: Style, text: &str) 
+            -> Result<(), OutOfBounds>
+            {
+                self.fg = fg;
+                self.bg = bg;
+                self.style = style;
+                self.write_str(text)?;
+                self.clear_attributes();
+                Ok(())
+            }
+
+            pub fn write_styled_at
+            (&mut self, pos: Cursor, fg: Option<Color>, bg: Option<Color>, style: Style, text: &str)
+            -> Result<(), OutOfBounds>
+            {
+                self.try_cursor_at(pos)?;
+                self.cursor = pos;
+                self.write_styled(fg, bg, style, text)
+            }
+
+            fn try_cursor(&self) -> Result<(), OutOfBounds> { self.try_cursor_at(self.cursor) }
+
+            fn try_cursor_at(&self, pos: Cursor) -> Result<(), OutOfBounds>
+            {
+                if pos.line >= self.size.lines || pos.column >= self.size.columns { Err(OutOfBounds(())) }
+                else { Ok(()) }
+            }
+        }
+        
+        macro_rules! forward_screen_buffer_methods
+        {
+            ( |$slf:ident| $field:expr ) =>
+            {
+                pub fn size(&self) -> ::common::terminal::Size {
+                    let $slf = self;
+                    $field.size()
+                }
+
+                pub fn cursor(&self) -> ::common::terminal::Cursor {
+                    let $slf = self;
+                    $field.cursor()
+                }
+
+                pub fn set_cursor(&self, pos: ::common::terminal::Cursor) {
+                    let $slf = self;
+                    $field.set_cursor(pos);
+                }
+
+                pub fn next_line(&self, column: usize) {
+                    let $slf = self;
+                    $field.next_line(column);
+                }
+
+                pub fn clear_screen(&self) {
+                    let $slf = self;
+                    $field.clear_screen();
+                }
+
+                pub fn clear_attributes(&self) {
+                    let $slf = self;
+                    $field.clear_attributes();
+                }
+
+                pub fn add_style(&self, style: ::common::terminal::Style) {
+                    let $slf = self;
+                    $field.add_style(style);
+                }
+
+                pub fn remove_style(&self, style: ::common::terminal::Style) {
+                    let $slf = self;
+                    $field.remove_style(style);
+                }
+
+                pub fn set_style(&self, style: ::common::terminal::Style) {
+                    let $slf = self;
+                    $field.set_style(style);
+                }
+
+                pub fn set_fg(&self, fg: Option<::common::terminal::Color>) {
+                    let $slf = self;
+                    $field.set_fg(fg);
+                }
+
+                pub fn set_bg(&self, bg: Option<::common::terminal::Color>) {
+                    let $slf = self;
+                    $field.set_bg(bg);
+                }
+
+                pub fn set_theme(&self, theme: ::common::terminal::Theme) {
+                    let $slf = self;
+                    $field.set_theme(theme)
+                }
+
+                pub fn write_char(&self, ch: char) {
+                    let $slf = self;
+                    let _ = $field.write_char(ch);
+                }
+
+                pub fn write_str(&self, s: &str) {
+                    let $slf = self;
+                    let _ = $field.write_str(s);
+                }
+
+                pub fn write_at(&self, pos: ::common::terminal::Cursor, text: &str) {
+                    let $slf = self;
+                    let _ = $field.write_at(pos, text);
+                }
+
+                pub fn write_styled(&self,
+                        fg: Option<::common::terminal::Color>, bg: Option<::common::terminal::Color>,
+                        style: ::common::terminal::Style, text: &str) {
+                    let $slf = self;
+                    let _ = $field.write_styled(fg, bg, style, text);
+                }
+
+                pub fn write_styled_at(&self, pos: ::common::terminal::Cursor,
+                        fg: Option<::common::terminal::Color>, bg: Option<::common::terminal::Color>,
+                        style: ::common::terminal::Style, text: &str) {
+                    let $slf = self;
+                    let _ = $field.write_styled_at(pos, fg, bg, style, text);
+                }
+            }
+        }
+        
+        macro_rules! forward_screen_buffer_mut_methods
+        {
+            ( |$slf:ident| $field:expr ) =>
+            {
+                pub fn size(&self) -> ::common::terminal::Size {
+                    let $slf = self;
+                    $field.size()
+                }
+
+                pub fn cursor(&self) -> ::common::terminal::Cursor {
+                    let $slf = self;
+                    $field.cursor()
+                }
+
+                pub fn set_cursor(&mut self, pos: ::common::terminal::Cursor) {
+                    let $slf = self;
+                    $field.set_cursor(pos);
+                }
+
+                pub fn next_line(&mut self, column: usize) {
+                    let $slf = self;
+                    $field.next_line(column);
+                }
+
+                pub fn clear_screen(&mut self) {
+                    let $slf = self;
+                    $field.clear_screen();
+                }
+
+                pub fn clear_attributes(&mut self) {
+                    let $slf = self;
+                    $field.clear_attributes();
+                }
+
+                pub fn add_style(&mut self, style: ::common::terminal::Style) {
+                    let $slf = self;
+                    $field.add_style(style);
+                }
+
+                pub fn remove_style(&mut self, style: ::common::terminal::Style) {
+                    let $slf = self;
+                    $field.remove_style(style);
+                }
+
+                pub fn set_style(&mut self, style: ::common::terminal::Style) {
+                    let $slf = self;
+                    $field.set_style(style);
+                }
+
+                pub fn set_fg(&mut self, fg: Option<::common::terminal::Color>) {
+                    let $slf = self;
+                    $field.set_fg(fg);
+                }
+
+                pub fn set_bg(&mut self, bg: Option<::common::terminal::Color>) {
+                    let $slf = self;
+                    $field.set_bg(bg);
+                }
+
+                pub fn set_theme(&mut self, theme: ::common::terminal::Theme) {
+                    let $slf = self;
+                    $field.set_theme(theme);
+                }
+
+                pub fn write_char(&mut self, ch: char) {
+                    let $slf = self;
+                    let _ = $field.write_char(ch);
+                }
+
+                pub fn write_str(&mut self, s: &str) {
+                    let $slf = self;
+                    let _ = $field.write_str(s);
+                }
+
+                pub fn write_at(&mut self, pos: ::common::terminal::Cursor, text: &str) {
+                    let $slf = self;
+                    let _ = $field.write_at(pos, text);
+                }
+
+                pub fn write_styled(&mut self,
+                        fg: Option<::common::terminal::Color>, bg: Option<::common::terminal::Color>,
+                        style: ::common::terminal::Style, text: &str) {
+                    let $slf = self;
+                    let _ = $field.write_styled(fg, bg, style, text);
+                }
+
+                pub fn write_styled_at(&mut self, pos: ::common::terminal::Cursor,
+                        fg: Option<crate::terminal::Color>, bg: Option<::common::terminal::Color>,
+                        style: ::common::terminal::Style, text: &str) {
+                    let $slf = self;
+                    let _ = $field.write_styled_at(pos, fg, bg, style, text);
+                }
+            }
+        }
+
+        #[derive(Debug)]
+        pub struct OutOfBounds(());
+
+        #[derive(Clone, Debug, Eq, PartialEq)]
+        pub struct Cell
+        {
+            fg: Option<Color>,
+            bg: Option<Color>,
+            style: Style,
+            text: SmallString<[u8; 8]>,
+        }
+
+        impl Cell
+        {
+            fn new(fg: Option<Color>, bg: Option<Color>, style: Style, chr: char) -> Cell
+            {
+                Cell
+                {
+                    fg,
+                    bg,
+                    style,
+                    text: chr.into(),
+                }
+            }
+
+            fn invalid() -> Cell
+            {
+                Cell
+                {
+                    fg: None,
+                    bg: None,
+                    style: Style::empty(),
+                    text: SmallString::new(),
+                }
+            }
+
+            pub fn attrs(&self) -> (Option<Color>, Option<Color>, Style) { (self.fg, self.bg, self.style) }
+
+            pub fn text(&self) -> &str { &self.text }
+
+            fn first_char(&self) -> char { self.text.chars().next().expect("empty cell text") }
+
+            fn is_wide(&self) -> bool { self.text.chars().next().and_then(char::width).unwrap_or(0) == 2 }
+        }
+
+        impl Default for Cell
+        {
+            fn default() -> Cell { Cell::new(None, None, Style::empty(), ' ') }
+        }
+
+        fn resize_buffer(buf: &mut Vec<Cell>, old: Size, new: Size)
+        {
+            if old != new
+            {
+                let mut new_buf = vec![Cell::default(); new.area()];
+
+                if !buf.is_empty()
+                {
+                    let n_cols = old.columns.min(new.columns);
+
+                    for (old, new) in buf.chunks_mut(old.columns).zip(new_buf.chunks_mut(new.columns))
+                    {
+                        for i in 0..n_cols
+                        {
+                            swap(&mut new[i], &mut old[i]);
+                        }
+                    }
+                }
+
+                *buf = new_buf;
+            }
+        }
+
+        fn new_buffer(buf: &mut Vec<Cell>, new_size: Size) { *buf = vec![Cell::invalid(); new_size.area()]; }
+    }
+
+    #[macro_use] pub mod macros
+    {
+        //! Provides macros easier printing with colors and styles.
+        use ::
+        {
+            *,
+        };
+        /// Writes attributes and formatted text to a `Terminal` or `Screen`.
+        #[macro_export] macro_rules! term_write
+        {
+            // Entry rule
+            ( $term:expr , $first:tt $($rest:tt)* ) => {
+                match $term.borrow_term_write_guard() {
+                    mut term => {
+                        let init = $crate::macros::Chain::init();
+                        term_write!(@_INTERNAL main: term ; init ; $first $($rest)*)
+                    }
+                }
+            };
+
+            // Final rule
+            ( @_INTERNAL main: $term:expr ; $result:expr ; ) => {
+                $result
+            };
+
+            // Color/style rules
+            ( @_INTERNAL main: $term:expr ; $result:expr ; [ $($tt:tt)* ] $($rest:tt)* ) => {
+                term_write!(
+                    @_INTERNAL main: $term;
+                    term_write!(@_INTERNAL style: $term; $result; $($tt)*);
+                    $($rest)*
+                )
+            };
+
+            // Formatting rules
+            ( @_INTERNAL main: $term:expr ; $result:expr ; ( $($tt:tt)* ) $($rest:tt)* ) => {
+                term_write!(
+                    @_INTERNAL main: $term;
+                    term_write!(@_INTERNAL format: $term; $result; $($tt)*);
+                    $($rest)*
+                )
+            };
+            ( @_INTERNAL main: $term:expr ; $result:expr ; $tt:tt $($rest:tt)* ) => {
+                term_write!(
+                    @_INTERNAL main: $term;
+                    term_write!(@_INTERNAL literal: $term; $result; $tt);
+                    $($rest)*
+                )
+            };
+
+            // Set foreground color
+            ( @_INTERNAL style: $term:expr ; $result:expr ; black ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.set_fg($crate::Color::Black))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; blue ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.set_fg($crate::Color::Blue))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; cyan ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.set_fg($crate::Color::Cyan))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; green ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.set_fg($crate::Color::Green))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; magenta ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.set_fg($crate::Color::Magenta))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; red ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.set_fg($crate::Color::Red))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; white ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.set_fg($crate::Color::White))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; yellow ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.set_fg($crate::Color::Yellow))
+            };
+
+            // Set background color
+            ( @_INTERNAL style: $term:expr ; $result:expr ; # black ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.set_bg($crate::Color::Black))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; # blue ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.set_bg($crate::Color::Blue))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; # cyan ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.set_bg($crate::Color::Cyan))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; # green ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.set_bg($crate::Color::Green))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; # magenta ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.set_bg($crate::Color::Magenta))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; # red ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.set_bg($crate::Color::Red))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; # white ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.set_bg($crate::Color::White))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; # yellow ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.set_bg($crate::Color::Yellow))
+            };
+
+            // Add style
+            ( @_INTERNAL style: $term:expr ; $result:expr ; bold ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.add_style($crate::Style::BOLD))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; italic ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.add_style($crate::Style::ITALIC))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; reverse ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.add_style($crate::Style::REVERSE))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; underline ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.add_style($crate::Style::UNDERLINE))
+            };
+
+            // Remove style
+            ( @_INTERNAL style: $term:expr ; $result:expr ; ! bold ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.remove_style($crate::Style::BOLD))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; ! italic ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.remove_style($crate::Style::ITALIC))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; ! reverse ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.remove_style($crate::Style::REVERSE))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; ! underline ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.remove_style($crate::Style::UNDERLINE))
+            };
+
+            // Clear attributes
+            ( @_INTERNAL style: $term:expr ; $result:expr ; reset ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.clear_attributes())
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; ! fg ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.set_fg(None))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; ! bg ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.set_bg(None))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; ! style ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.set_style(None))
+            };
+
+            // Color/style expressions
+            ( @_INTERNAL style: $term:expr ; $result:expr ; fg = $e:expr ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.set_fg($e))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; bg = $e:expr ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.set_bg($e))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; style = $e:expr ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.set_style($e))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; style += $e:expr ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.add_style($e))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; style -= $e:expr ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.remove_style($e))
+            };
+            ( @_INTERNAL style: $term:expr ; $result:expr ; theme = $e:expr ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.set_theme($e))
+            };
+
+            // std::fmt formatting
+            ( @_INTERNAL format: $term:expr ; $result:expr ; : $e:expr ) => {
+                $crate::macros::Chain::chain(
+                    $result, || write!($term, "{}", $e))
+            };
+            ( @_INTERNAL format: $term:expr ; $result:expr ; ? $e:expr ) => {
+                $crate::macros::Chain::chain(
+                    $result, || write!($term, "{:?}", $e))
+            };
+            ( @_INTERNAL format: $term:expr ; $result:expr ; $($tt:tt)* ) => {
+                $crate::macros::Chain::chain(
+                    $result, || write!($term, $($tt)*))
+            };
+
+            // Literal formatting
+            ( @_INTERNAL literal: $term:expr ; $result:expr ; $lit:tt ) => {
+                $crate::macros::Chain::chain(
+                    $result, || $term.write_str(concat!($lit)))
+            };
+        }
+        /// Writes attributes and formatted text to a `Terminal` or `Screen`.
+        #[macro_export] macro_rules! term_writeln
+        {
+            ( $term:expr ) => {
+                term_write!($term, "\n")
+            };
+            ( $term:expr , $($tt:tt)* ) => {
+                term_write!($term, $($tt)* "\n")
+            };
+        }
+        // Facilitates chaining calls from either a `Terminal` or `Screen` lock.
+        pub trait Chain: Sized
+        {
+            fn chain<F: FnOnce() -> Self>(self, f: F) -> Self;
+            fn init() -> Self;
+        }
+
+        impl Chain for ()
+        {
+            fn chain<F: FnOnce() -> Self>(self, f: F) -> Self { f() }
+            fn init() -> Self {}
+        }
+
+        impl Chain for io::Result<()>
+        {
+            fn chain<F: FnOnce() -> Self>(self, f: F) -> Self { self.and_then(|_| f()) }
+            fn init() -> Self { Ok(()) }
+        }
+    }    
+
+    pub mod screen
+    {
+        use ::
+        {
+            *,
+        };
+
+        //! Provides a drawable buffer on terminal devices
+
+use std::fmt;
+use std::io;
+use std::sync::{LockResult, TryLockResult};
+use std::time::Duration;
+
+use crate::priv_util::{map_lock_result, map_try_lock_result};
+use crate::sys;
+use crate::terminal::{
+    Color, Cursor, CursorMode, Event, PrepareConfig, Size, Style, Theme,
+    Terminal,
+};
+
+/// Provides operations on an underlying terminal device in screen mode.
+///
+/// `Screen` uses an internal buffer to store rendered text, colors, and style.
+///
+/// Each set of changes must be followed by a call to [`refresh`] to flush these
+/// changes to the terminal device.
+///
+/// # Concurrency
+///
+/// Access to read and write operations is controlled by two internal locks:
+/// One for [reading] and one for [writing]. Each lock may be held independently
+/// of the other.
+///
+/// If any one thread wishes to hold both locks, the read lock
+/// must be acquired first, in order to prevent deadlocks.
+///
+/// [`refresh`]: #method.refresh
+/// [reading]: struct.ScreenReadGuard.html
+/// [writing]: struct.ScreenWriteGuard.html
+pub struct Screen(sys::Screen);
+
+/// Holds an exclusive lock for read operations on a `Screen`
+///
+/// See [`Screen`] documentation for details on locking.
+///
+/// [`Screen`]: struct.Screen.html
+pub struct ScreenReadGuard<'a>(sys::ScreenReadGuard<'a>);
+
+/// Holds an exclusive lock for write operations on a `Screen`
+///
+/// See [`Screen`] documentation for details on locking.
+///
+/// [`Screen`]: struct.Screen.html
+pub struct ScreenWriteGuard<'a>(sys::ScreenWriteGuard<'a>);
+
+impl Screen {
+    /// Opens a new screen interface on `stdout`.
+    pub fn new(config: PrepareConfig) -> io::Result<Screen> {
+        sys::Screen::stdout(config).map(Screen)
+    }
+
+    /// Opens a new screen interface on `stderr`.
+    pub fn stderr(config: PrepareConfig) -> io::Result<Screen> {
+        sys::Screen::stderr(config).map(Screen)
+    }
+
+    /// Begins a new screen session using the given `Terminal` instance.
+    pub fn with_terminal(term: Terminal, config: PrepareConfig) -> io::Result<Screen> {
+        sys::Screen::new(term.0, config).map(Screen)
+    }
+
+    /// Returns the name of the terminal.
+    ///
+    /// # Notes
+    ///
+    /// On Unix, this method returns the contents of the `TERM` environment variable.
+    ///
+    /// On Windows, this method always returns the string `"windows-console"`.
+    #[inline]
+    pub fn name(&self) -> &str {
+        self.0.name()
+    }
+
+    /// Attempts to acquire an exclusive lock on terminal read operations.
+    ///
+    /// The current thread will block until the lock can be acquired.
+    #[inline]
+    pub fn lock_read(&self) -> LockResult<ScreenReadGuard> {
+        map_lock_result(self.0.lock_read(), ScreenReadGuard)
+    }
+
+    /// Attempts to acquire an exclusive lock on terminal write operations.
+    ///
+    /// The current thread will block until the lock can be acquired.
+    #[inline]
+    pub fn lock_write(&self) -> LockResult<ScreenWriteGuard> {
+        map_lock_result(self.0.lock_write(), ScreenWriteGuard)
+    }
+
+    /// Attempts to acquire an exclusive lock on terminal read operations.
+    ///
+    /// If the lock cannot be acquired immediately, `Err(_)` is returned.
+    #[inline]
+    pub fn try_lock_read(&self) -> TryLockResult<ScreenReadGuard> {
+        map_try_lock_result(self.0.try_lock_read(), ScreenReadGuard)
+    }
+
+    /// Attempts to acquire an exclusive lock on terminal write operations.
+    ///
+    /// If the lock cannot be acquired immediately, `Err(_)` is returned.
+    #[inline]
+    pub fn try_lock_write(&self) -> TryLockResult<ScreenWriteGuard> {
+        map_try_lock_result(self.0.try_lock_write(), ScreenWriteGuard)
+    }
+}
+
+/// # Locking
+///
+/// The following methods internally acquire the read lock.
+///
+/// The lock is released before the method returns.
+///
+/// These methods are also implemented on [`ScreenReadGuard`],
+/// which holds the `Screen` read lock until the value is dropped.
+///
+/// [`ScreenReadGuard`]: struct.ScreenReadGuard.html
+impl Screen {
+    /// Waits for an event from the terminal.
+    ///
+    /// Returns `Ok(false)` if `timeout` elapses without an event occurring.
+    ///
+    /// If `timeout` is `None`, this method will wait indefinitely.
+    ///
+    /// # Notes
+    ///
+    /// Some low-level terminal events may not generate an `Event` value.
+    /// Therefore, this method may return `Ok(true)`, while a follow-up call
+    /// to `read_event` may not immediately return an event.
+    pub fn wait_event(&self, timeout: Option<Duration>) -> io::Result<bool> {
+        self.0.wait_event(timeout)
+    }
+
+    /// Reads an event from the terminal.
+    ///
+    /// If `timeout` elapses without an event occurring, this method will return
+    /// `Ok(None)`.
+    ///
+    /// If `timeout` is `None`, this method will wait indefinitely.
+    pub fn read_event(&self, timeout: Option<Duration>) -> io::Result<Option<Event>>  {
+        self.0.read_event(timeout)
+    }
+}
+
+/// # Locking
+///
+/// The following methods internally acquire the write lock.
+///
+/// The lock is released before the method returns.
+///
+/// These methods are also implemented on [`ScreenWriteGuard`],
+/// which holds the `Screen` write lock until the value is dropped.
+///
+/// [`ScreenWriteGuard`]: struct.ScreenWriteGuard.html
+impl Screen {
+    /// Returns the current size of the terminal screen.
+    #[inline]
+    pub fn size(&self) -> Size {
+        self.0.size()
+    }
+
+    /// Returns the current cursor position.
+    #[inline]
+    pub fn cursor(&self) -> Cursor {
+        self.0.cursor()
+    }
+
+    /// Sets the cursor position.
+    #[inline]
+    pub fn set_cursor<C: Into<Cursor>>(&self, pos: C) {
+        self.0.set_cursor(pos.into());
+    }
+
+    /// Moves the cursor to the given column on the next line.
+    #[inline]
+    pub fn next_line(&self, column: usize) {
+        self.0.next_line(column);
+    }
+
+    /// Set the current cursor mode.
+    ///
+    /// This setting is a visible hint to the user.
+    /// It produces no change in behavior.
+    ///
+    /// # Notes
+    ///
+    /// On Unix systems, this setting may have no effect.
+    pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> {
+        self.0.set_cursor_mode(mode)
+    }
+
+    /// Clears the internal screen buffer.
+    pub fn clear_screen(&self) {
+        self.0.clear_screen();
+    }
+
+    /// Adds a set of `Style` flags to the current style setting.
+    #[inline]
+    pub fn add_style(&self, style: Style) {
+        self.0.add_style(style);
+    }
+
+    /// Removes a set of `Style` flags to the current style setting.
+    #[inline]
+    pub fn remove_style(&self, style: Style) {
+        self.0.remove_style(style);
+    }
+
+    /// Sets the current style setting to the given set of flags.
+    #[inline]
+    pub fn set_style<S: Into<Option<Style>>>(&self, style: S) {
+        self.0.set_style(style.into().unwrap_or_default());
+    }
+
+    /// Sets or removes foreground text color.
+    #[inline]
+    pub fn set_fg<C: Into<Option<Color>>>(&self, fg: C) {
+        self.0.set_fg(fg.into());
+    }
+
+    /// Sets or removes background text color.
+    #[inline]
+    pub fn set_bg<C: Into<Option<Color>>>(&self, bg: C) {
+        self.0.set_bg(bg.into());
+    }
+
+    /// Sets all attributes for the screen.
+    #[inline]
+    pub fn set_theme(&self, theme: Theme) {
+        self.0.set_theme(theme)
+    }
+
+    /// Removes color and style attributes.
+    #[inline]
+    pub fn clear_attributes(&self) {
+        self.0.clear_attributes();
+    }
+
+    /// Adds bold to the current style setting.
+    ///
+    /// This is equivalent to `self.add_style(Style::BOLD)`.
+    #[inline]
+    pub fn bold(&self) {
+        self.add_style(Style::BOLD);
+    }
+
+    /// Adds italic to the current style setting.
+    ///
+    /// This is equivalent to `self.add_style(Style::ITALIC)`.
+    #[inline]
+    pub fn italic(&self) {
+        self.add_style(Style::ITALIC);
+    }
+
+    /// Adds underline to the current style setting.
+    ///
+    /// This is equivalent to `self.add_style(Style::UNDERLINE)`.
+    #[inline]
+    pub fn underline(&self) {
+        self.add_style(Style::UNDERLINE);
+    }
+
+    /// Adds reverse to the current style setting.
+    ///
+    /// This is equivalent to `self.add_style(Style::REVERSE)`.
+    #[inline]
+    pub fn reverse(&self) {
+        self.add_style(Style::REVERSE);
+    }
+
+    /// Renders the internal buffer to the terminal screen.
+    pub fn refresh(&self) -> io::Result<()> {
+        self.0.refresh()
+    }
+
+    /// Writes text at the given position within the screen buffer.
+    ///
+    /// Any non-printable characters, such as escape sequences, will be ignored.
+    pub fn write_at<C>(&self, position: C, text: &str)
+            where C: Into<Cursor> {
+        self.0.write_at(position.into(), text);
+    }
+
+    /// Writes text with the given attributes at the current cursor position.
+    ///
+    /// Any non-printable characters, such as escape sequences, will be ignored.
+    pub fn write_styled<F, B, S>(&self, fg: F, bg: B, style: S, text: &str) where
+            F: Into<Option<Color>>,
+            B: Into<Option<Color>>,
+            S: Into<Option<Style>>,
+            {
+        self.0.write_styled(fg.into(), bg.into(), style.into().unwrap_or_default(), text);
+    }
+
+    /// Writes text with the given attributes at the given position within
+    /// the screen buffer.
+    ///
+    /// Any non-printable characters, such as escape sequences, will be ignored.
+    pub fn write_styled_at<C, F, B, S>(&self, position: C,
+            fg: F, bg: B, style: S, text: &str) where
+            C: Into<Cursor>,
+            F: Into<Option<Color>>,
+            B: Into<Option<Color>>,
+            S: Into<Option<Style>>,
+            {
+        self.0.write_styled_at(position.into(),
+            fg.into(), bg.into(), style.into().unwrap_or_default(), text);
+    }
+
+    /// Writes a single character at the cursor position
+    /// using the current style and color settings.
+    ///
+    /// If the character is a non-printable character, it will be ignored.
+    pub fn write_char(&self, ch: char) {
+        self.0.write_char(ch);
+    }
+
+    /// Writes a string at the cursor position
+    /// using the current style and color settings.
+    ///
+    /// Any non-printable characters, such as escape sequences, will be ignored.
+    pub fn write_str(&self, s: &str) {
+        self.0.write_str(s);
+    }
+
+    /// Writes formatted text at the cursor position
+    /// using the current style and color settings.
+    ///
+    /// This method enables `Screen` to be used as the receiver to
+    /// the [`write!`] and [`writeln!`] macros.
+    ///
+    /// Any non-printable characters, such as escape sequences, will be ignored.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use std::io;
+    /// # use mortal::Screen;
+    /// # fn example() -> io::Result<()> {
+    /// let screen = Screen::new(Default::default())?;
+    ///
+    /// writeln!(screen, "Hello, world!");
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// [`write!`]: https://doc.rust-lang.org/std/macro.write.html
+    /// [`writeln!`]: https://doc.rust-lang.org/std/macro.writeln.html
+    pub fn write_fmt(&self, args: fmt::Arguments) {
+        let s = args.to_string();
+        self.write_str(&s)
+    }
+
+    #[doc(hidden)]
+    pub fn borrow_term_write_guard(&self) -> ScreenWriteGuard {
+        self.lock_write().unwrap()
+    }
+}
+
+impl<'a> ScreenReadGuard<'a> {
+    /// Waits for an event from the terminal.
+    ///
+    /// Returns `Ok(false)` if `timeout` elapses without an event occurring.
+    ///
+    /// If `timeout` is `None`, this method will wait indefinitely.
+    ///
+    /// # Notes
+    ///
+    /// Some low-level terminal events may not generate an `Event` value.
+    /// Therefore, this method may return `Ok(true)`, while a follow-up call
+    /// to `read_event` may not immediately return an event.
+    pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool> {
+        self.0.wait_event(timeout)
+    }
+
+    /// Reads an event from the terminal.
+    ///
+    /// If `timeout` elapses without an event occurring, this method will return
+    /// `Ok(None)`.
+    ///
+    /// If `timeout` is `None`, this method will wait indefinitely.
+    pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
+        self.0.read_event(timeout)
+    }
+}
+
+impl<'a> ScreenWriteGuard<'a> {
+    /// Returns the current size of the terminal screen.
+    #[inline]
+    pub fn size(&self) -> Size {
+        self.0.size()
+    }
+
+    /// Sets the cursor position.
+    #[inline]
+    pub fn cursor(&self) -> Cursor {
+        self.0.cursor()
+    }
+
+    /// Moves the cursor to the given column on the next line.
+    #[inline]
+    pub fn set_cursor<C: Into<Cursor>>(&mut self, pos: C) {
+        self.0.set_cursor(pos.into());
+    }
+
+    /// Set the current cursor mode.
+    #[inline]
+    pub fn next_line(&mut self, column: usize) {
+        self.0.next_line(column);
+    }
+
+    /// Set the current cursor mode.
+    ///
+    /// This setting is a visible hint to the user.
+    /// It produces no change in behavior.
+    ///
+    /// # Notes
+    ///
+    /// On Unix systems, this setting may have no effect.
+    pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> {
+        self.0.set_cursor_mode(mode)
+    }
+
+    /// Adds a set of `Style` flags to the current style setting.
+    pub fn clear_screen(&mut self) {
+        self.0.clear_screen();
+    }
+
+    /// Removes a set of `Style` flags to the current style setting.
+    /// Adds a set of `Style` flags to the current style setting.
+    #[inline]
+    pub fn add_style(&mut self, style: Style) {
+        self.0.add_style(style)
+    }
+
+    /// Sets the current style setting to the given set of flags.
+    #[inline]
+    pub fn remove_style(&mut self, style: Style) {
+        self.0.remove_style(style)
+    }
+
+    /// Sets or removes foreground text color.
+    #[inline]
+    pub fn set_style<S: Into<Option<Style>>>(&mut self, style: S) {
+        self.0.set_style(style.into().unwrap_or_default())
+    }
+
+    /// Sets or removes background text color.
+    #[inline]
+    pub fn set_fg<C: Into<Option<Color>>>(&mut self, fg: C) {
+        self.0.set_fg(fg.into())
+    }
+
+    /// Removes color and style attributes.
+    #[inline]
+    pub fn set_bg<C: Into<Option<Color>>>(&mut self, bg: C) {
+        self.0.set_bg(bg.into())
+    }
+
+    /// Sets all attributes for the screen.
+    #[inline]
+    pub fn set_theme(&mut self, theme: Theme) {
+        self.0.set_theme(theme)
+    }
+
+    /// Adds bold to the current style setting.
+    #[inline]
+    pub fn clear_attributes(&mut self) {
+        self.0.clear_attributes()
+    }
+
+    /// Adds bold to the current style setting.
+    ///
+    /// This is equivalent to `self.add_style(Style::BOLD)`.
+    #[inline]
+    pub fn bold(&mut self) {
+        self.add_style(Style::BOLD)
+    }
+
+    /// Adds italic to the current style setting.
+    ///
+    /// This is equivalent to `self.add_style(Style::ITALIC)`.
+    #[inline]
+    pub fn italic(&mut self) {
+        self.add_style(Style::ITALIC);
+    }
+
+    /// Adds underline to the current style setting.
+    ///
+    /// This is equivalent to `self.add_style(Style::UNDERLINE)`.
+    #[inline]
+    pub fn underline(&mut self) {
+        self.add_style(Style::UNDERLINE)
+    }
+
+    /// Adds reverse to the current style setting.
+    ///
+    /// This is equivalent to `self.add_style(Style::REVERSE)`.
+    #[inline]
+    pub fn reverse(&mut self) {
+        self.add_style(Style::REVERSE)
+    }
+
+    /// Renders the internal buffer to the terminal screen.
+    ///
+    /// This is called automatically when the `ScreenWriteGuard` is dropped.
+    pub fn refresh(&mut self) -> io::Result<()> {
+        self.0.refresh()
+    }
+
+    /// Writes text at the given position within the screen buffer.
+    ///
+    /// Any non-printable characters, such as escape sequences, will be ignored.
+    pub fn write_at<C>(&mut self, position: C, text: &str)
+            where C: Into<Cursor> {
+        self.0.write_at(position.into(), text)
+    }
+
+    /// Writes text with the given attributes at the current cursor position.
+    ///
+    /// Any non-printable characters, such as escape sequences, will be ignored.
+    pub fn write_styled<F, B, S>(&mut self, fg: F, bg: B, style: S, text: &str) where
+            F: Into<Option<Color>>,
+            B: Into<Option<Color>>,
+            S: Into<Option<Style>>,
+            {
+        self.0.write_styled(fg.into(), bg.into(), style.into().unwrap_or_default(), text)
+    }
+
+    /// Writes text with the given attributes at the given position within
+    /// the screen buffer.
+    ///
+    /// Any non-printable characters, such as escape sequences, will be ignored.
+    pub fn write_styled_at<C, F, B, S>(&mut self, position: C,
+            fg: F, bg: B, style: S, text: &str) where
+            C: Into<Cursor>,
+            F: Into<Option<Color>>,
+            B: Into<Option<Color>>,
+            S: Into<Option<Style>>,
+            {
+        self.0.write_styled_at(position.into(),
+            fg.into(), bg.into(), style.into().unwrap_or_default(), text)
+    }
+
+    /// Writes a single character at the cursor position
+    /// using the current style and color settings.
+    ///
+    /// If the character is a non-printable character, it will be ignored.
+    pub fn write_char(&mut self, ch: char) {
+        self.0.write_char(ch)
+    }
+
+    /// Writes a string at the cursor position
+    /// using the current style and color settings.
+    ///
+    /// Any non-printable characters, such as escape sequences, will be ignored.
+    pub fn write_str(&mut self, s: &str) {
+        self.0.write_str(s)
+    }
+
+    /// Writes formatted text at the cursor position
+    /// using the current style and color settings.
+    ///
+    /// This method enables `ScreenWriteGuard` to be used as the receiver to
+    /// the [`write!`] and [`writeln!`] macros.
+    ///
+    /// Any non-printable characters, such as escape sequences, will be ignored.
+    ///
+    /// [`write!`]: https://doc.rust-lang.org/std/macro.write.html
+    /// [`writeln!`]: https://doc.rust-lang.org/std/macro.writeln.html
+    pub fn write_fmt(&mut self, args: fmt::Arguments) {
+        let s = args.to_string();
+        self.write_str(&s)
+    }
+
+    #[doc(hidden)]
+    pub fn borrow_term_write_guard(&mut self) -> &mut Self {
+        self
+    }
+}
+
+#[cfg(unix)]
+impl crate::unix::TerminalExt for Screen {
+    fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> {
+        self.0.read_raw(buf, timeout)
+    }
+}
+
+#[cfg(unix)]
+impl<'a> crate::unix::TerminalExt for ScreenReadGuard<'a> {
+    fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> {
+        self.0.read_raw(buf, timeout)
+    }
+}
+
+#[cfg(windows)]
+impl crate::windows::TerminalExt for Screen {
+    fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>> {
+        self.0.read_raw(buf, timeout)
+    }
+
+    fn read_raw_event(&mut self, events: &mut [::winapi::um::wincon::INPUT_RECORD],
+            timeout: Option<Duration>) -> io::Result<Option<Event>> {
+        self.0.read_raw_event(events, timeout)
+    }
+}
+
+#[cfg(windows)]
+impl<'a> crate::windows::TerminalExt for ScreenReadGuard<'a> {
+    fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>> {
+        self.0.read_raw(buf, timeout)
+    }
+
+    fn read_raw_event(&mut self, events: &mut [::winapi::um::wincon::INPUT_RECORD],
+            timeout: Option<Duration>) -> io::Result<Option<Event>> {
+        self.0.read_raw_event(events, timeout)
+    }
+}
+    }
+
+    pub mod sequence
+    {
+        use ::
+        {
+            *,
+        };
+    }
+
+    pub mod signal
+    {
+        use ::
+        {
+            *,
+        };
+    }
+
+    pub mod terminal
+    {
+        use ::
+        {
+            *,
+        };
+    }
+
+    pub mod util
+    {
+        use ::
+        {
+            *,
+        };
+    }
+
+    pub mod system
+    {
+        pub mod unix
+        {
+            use ::
+            {
+                *,
+            };
+        }
+
+        pub mod windows
+        {
+            use ::
+            {
+                *,
+            };
+        }
+    }
+
+
+    #[cfg(unix)] pub use self::system::unix as sys;
+    #[cfg(unix)] pub use self::sys::ext as unix;
+
+    #[cfg(windows)] pub use self::system::windows as sys;
+    #[cfg(windows)] pub use self::sys::ext as windows;
+
+    // Private trait used to prevent external crates from implementing extension traits
+    pub trait Private {}
+
+    impl Private for Screen {}
+    impl<'a> Private for ScreenReadGuard<'a> {}
+    impl Private for Terminal {}
+    impl<'a> Private for TerminalReadGuard<'a> {}
 }
 /*
 over | the best data format. */
@@ -4249,6 +5752,24 @@ pub mod is
         {
             '0'..='9' => true,
             _ => false,
+        }
+    }
+    /*
+    pub fn is_combining_mark(ch: char) -> bool */
+    /// Returns whether the given character is a combining mark.
+    #[inline] pub fn combining_mark(ch: char) -> bool
+    {
+        use unicode_normalization::char::is_combining_mark;
+        is_combining_mark(ch)
+    }
+    /*
+    pub fn is_visible(ch: char) -> bool */
+    pub fn visible(ch: char) -> bool
+    {
+        match ch
+        {
+            '\t' | '\r' | '\n' => true,
+            _ => char::width(ch).unwrap_or(0) != 0
         }
     }
 }
@@ -12947,8 +14468,7 @@ pub mod num
             impl<'a, T: Float> Pow<Complex<T>> for &'a Complex<T> {
                 type Output = Complex<T>;
 
-                #[inline]
-                fn pow(self, exp: Complex<T>) -> Self::Output {
+                #[inline] fn pow(self, exp: Complex<T>) -> Self::Output {
                     self.powc(exp)
                 }
             }
@@ -12957,8 +14477,7 @@ pub mod num
             impl<'a, 'b, T: Float> Pow<&'b Complex<T>> for &'a Complex<T> {
                 type Output = Complex<T>;
 
-                #[inline]
-                fn pow(self, &exp: &'b Complex<T>) -> Self::Output {
+                #[inline] fn pow(self, &exp: &'b Complex<T>) -> Self::Output {
                     self.powc(exp)
                 }
             }
@@ -12967,8 +14486,7 @@ pub mod num
             impl<T: Float> Pow<Complex<T>> for Complex<T> {
                 type Output = Complex<T>;
 
-                #[inline]
-                fn pow(self, exp: Complex<T>) -> Self::Output {
+                #[inline] fn pow(self, exp: Complex<T>) -> Self::Output {
                     self.powc(exp)
                 }
             }
@@ -12977,8 +14495,7 @@ pub mod num
             impl<'b, T: Float> Pow<&'b Complex<T>> for Complex<T> {
                 type Output = Complex<T>;
 
-                #[inline]
-                fn pow(self, &exp: &'b Complex<T>) -> Self::Output {
+                #[inline] fn pow(self, &exp: &'b Complex<T>) -> Self::Output {
                     self.powc(exp)
                 }
             }
@@ -15803,8 +17320,7 @@ pub mod num
                 }
                 let g: T = self.numer.gcd(&self.denom);
                 
-                #[inline]
-                fn replace_with<T: Zero>(x: &mut T, f: impl FnOnce(T) -> T) {
+                #[inline] fn replace_with<T: Zero>(x: &mut T, f: impl FnOnce(T) -> T) {
                     let y = ::mem::replace(x, T::zero());
                     *x = f(y);
                 }
@@ -27856,6 +29372,11 @@ pub mod path
     pub use std::path::{ * };
 }
 
+pub mod ptr
+{
+    pub use std::ptr::{ * };
+}
+
 pub mod rc
 {
     pub use std::rc::{ * };
@@ -27876,10 +29397,663 @@ pub mod str
     pub use std::str::{ * };    
     use ::
     {
+        borrow::{ Borrow, BorrowMut, Cow },
+        boxed::{ Box },
+        cmp::{ Ordering },
         fs::{ File },
+        hash::{Hash, Hasher},
+        iter::{ FromIterator },
         io::{ self, Read, Write },
+        string::{ String },
+        vec::{ Array, SmallVec },
         *,
     };
+    /* smallstr v0.3.0 */
+    use std::ffi::{OsStr, OsString};
+    /// A `String`-like container that can store a small number of bytes inline.
+    #[derive(Clone, Default)]
+    pub struct SmallString<A: Array<Item = u8>>
+    {
+        data: SmallVec<A>,
+    }
+
+    impl<A: Array<Item = u8>> SmallString<A>
+    {
+        /// Construct an empty string.
+        #[inline] pub fn new() -> SmallString<A>
+        {
+            SmallString
+            {
+                data: SmallVec::new(),
+            }
+        }
+        /// Construct an empty string with enough capacity pre-allocated to store  at least `n` bytes.
+        #[inline] pub fn with_capacity(n: usize) -> SmallString<A>
+        {
+            SmallString
+            {
+                data: SmallVec::with_capacity(n),
+            }
+        }
+        /// Construct a `SmallString` by copying data from a `&str`.
+        #[inline] pub fn from_str(s: &str) -> SmallString<A>
+        {
+            SmallString
+            {
+                data: SmallVec::from_slice(s.as_bytes()),
+            }
+        }
+        /// Construct a `SmallString` by using an existing allocation.
+        #[inline] pub fn from_string(s: String) -> SmallString<A>
+        {
+            SmallString
+            {
+                data: SmallVec::from_vec(s.into_bytes()),
+            }
+        }
+        /// Constructs a new `SmallString` on the stack using UTF-8 bytes.
+        #[inline] pub fn from_buf(buf: A) -> Result<SmallString<A>, FromUtf8Error<A>>
+        {
+            let data = SmallVec::from_buf(buf);
+
+            match str::from_utf8(&data)
+            {
+                Ok(_) => Ok(SmallString { data }),
+                Err(error) =>
+                {
+                    let buf = data.into_inner().ok().unwrap();
+
+                    Err(FromUtf8Error { buf, error })
+                }
+            }
+        }
+        /// Constructs a new `SmallString` on the stack using the provided byte array
+        /// without checking that the array contains valid UTF-8.
+        #[inline] pub unsafe fn from_buf_unchecked(buf: A) -> SmallString<A>
+        {
+            SmallString
+            {
+                data: SmallVec::from_buf(buf),
+            }
+        }
+        /// The maximum number of bytes this string can hold inline.
+        #[inline] pub fn inline_size(&self) -> usize { A::size() }
+        /// Returns the length of this string, in bytes.
+        #[inline] pub fn len(&self) -> usize { self.data.len() }
+        /// Returns `true` if this string is empty.
+        #[inline] pub fn is_empty(&self) -> bool { self.data.is_empty() }
+        /// Returns the number of bytes this string can hold without reallocating.
+        #[inline] pub fn capacity(&self) -> usize { self.data.capacity() }
+        /// Returns `true` if the data has spilled into a separate heap-allocated buffer.
+        #[inline] pub fn spilled(&self) -> bool { self.data.spilled() }
+        /// Empties the string and returns an iterator over its former contents.
+        pub fn drain(&mut self) -> Drain
+        {
+            unsafe
+            {
+                let len = self.len();
+                self.data.set_len(0);
+                let ptr = self.as_ptr();
+                let slice = slice::from_raw_parts(ptr, len);
+                let s = str::from_utf8_unchecked(slice);
+                Drain { iter: s.chars() }
+            }
+        }
+        /// Appends the given `char` to the end of this string.
+        #[inline] pub fn push(&mut self, ch: char)
+        {
+            match ch.len_utf8()
+            {
+                1 => self.data.push(ch as u8),
+                _ => self.push_str(ch.encode_utf8(&mut [0; 4])),
+            }
+        }
+        /// Appends the given string slice to the end of this string.
+        #[inline] pub fn push_str(&mut self, s: &str)
+        {
+            self.data.extend_from_slice(s.as_bytes());
+        }
+        /// Removes the last character from this string and returns it.
+        #[inline] pub fn pop(&mut self) -> Option<char>
+        {
+            match self.chars().next_back()
+            {
+                Some(ch) => unsafe
+                {
+                    let new_len = self.len() - ch.len_utf8();
+                    self.data.set_len(new_len);
+                    Some(ch)
+                },
+                None => None,
+            }
+        }
+        /// Reallocates to set the new capacity to `new_cap`.
+        #[inline] pub fn grow(&mut self, new_cap: usize) { self.data.grow(new_cap); }
+        /// Ensures that this string's capacity is at least `additional` bytes larger than its length.
+        #[inline] pub fn reserve(&mut self, additional: usize) { self.data.reserve(additional); }
+        /// Ensures that this string's capacity is `additional` bytes larger than its length.
+        #[inline] pub fn reserve_exact(&mut self, additional: usize) { self.data.reserve(additional); }
+        /// Shrink the capacity of the string as much as possible.
+        #[inline] pub fn shrink_to_fit(&mut self) { self.data.shrink_to_fit(); }
+        /// Shorten the string, keeping the first `len` bytes.
+        #[inline] pub fn truncate(&mut self, len: usize)
+        {
+            assert!(self.is_char_boundary(len));
+            self.data.truncate(len);
+        }
+        /// Extracts a string slice containing the entire string.
+        #[inline] pub fn as_str(&self) -> &str
+        {
+            self
+        }
+        /// Extracts a string slice containing the entire string.
+        #[inline] pub fn as_mut_str(&mut self) -> &mut str
+        {
+            self
+        }
+        /// Removes all contents of the string.
+        #[inline] pub fn clear(&mut self)
+        {
+            self.data.clear();
+        }
+        /// Removes a `char` from this string at a byte position and returns it.
+        #[inline] pub fn remove(&mut self, idx: usize) -> char
+        {
+            unsafe
+            {
+                let ch = match self[idx..].chars().next()
+                {
+                    Some(ch) => ch,
+                    None => panic!("cannot remove a char from the end of a string"),
+                };
+
+                let ch_len = ch.len_utf8();
+                let next = idx + ch_len;
+                let len = self.len();
+                ptr::copy
+                (
+                    self.as_ptr().add(next),
+                    self.as_mut_ptr().add(idx),
+                    len - next,
+                );
+                self.data.set_len(len - ch_len);
+                ch
+            }
+        }
+        /// Inserts a `char` into this string at the given byte position.
+        #[inline] pub fn insert(&mut self, idx: usize, ch: char)
+        {
+            assert!(self.is_char_boundary(idx));
+
+            match ch.len_utf8()
+            {
+                1 => self.data.insert(idx, ch as u8),
+                _ => self.insert_str(idx, ch.encode_utf8(&mut [0; 4])),
+            }
+        }
+        /// Inserts a `&str` into this string at the given byte position.
+        #[inline] pub fn insert_str(&mut self, idx: usize, s: &str)
+        {
+            unsafe
+            {
+                assert!(self.is_char_boundary(idx));
+                let len = self.len();
+                let amt = s.len();
+                self.data.reserve(amt);
+                ptr::copy
+                (
+                    self.as_ptr().add(idx),
+                    self.as_mut_ptr().add(idx + amt),
+                    len - idx,
+                );
+                ptr::copy_nonoverlapping(s.as_ptr(), self.as_mut_ptr().add(idx), amt);
+                self.data.set_len(len + amt);
+            }
+        }
+        /// Returns a mutable reference to the contents of the `SmallString`.
+        #[inline] pub unsafe fn as_mut_vec(&mut self) -> &mut SmallVec<A> { &mut self.data }
+        /// Converts the `SmallString` into a `String`, without reallocating if the
+        /// `SmallString` has already spilled onto the heap.
+        #[inline] pub fn into_string(self) -> String { unsafe { String::from_utf8_unchecked(self.data.into_vec()) } }
+        /// Converts the `SmallString` into a `Box<str>`, without reallocating if the
+        /// `SmallString` has already spilled onto the heap.
+        #[inline] pub fn into_boxed_str(self) -> Box<str> { self.into_string().into_boxed_str() }
+        /// Convert the `SmallString` into `A`, if possible. Otherwise, return `Err(self)`.
+        #[inline] pub fn into_inner(self) -> Result<A, Self> 
+        { self.data.into_inner().map_err(|data| SmallString { data }) }
+        /// Retains only the characters specified by the predicate.
+        #[inline] pub fn retain<F: FnMut(char) -> bool>(&mut self, mut f: F)
+        {
+            struct SetLenOnDrop<'a, A: Array<Item = u8>>
+            {
+                s: &'a mut SmallString<A>,
+                idx: usize,
+                del_bytes: usize,
+            }
+
+            impl<'a, A: Array<Item = u8>> Drop for SetLenOnDrop<'a, A>
+            {
+                fn drop(&mut self)
+                {
+                    let new_len = self.idx - self.del_bytes;
+                    debug_assert!(new_len <= self.s.len());
+                    unsafe { self.s.data.set_len(new_len) };
+                }
+            }
+
+            let len = self.len();
+            let mut guard = SetLenOnDrop
+            {
+            
+                s: self,
+                idx: 0,
+                del_bytes: 0,
+            };
+
+            while guard.idx < len
+            {
+                let ch = unsafe
+                {
+                    guard
+                        .s
+                        .get_unchecked(guard.idx..len)
+                        .chars()
+                        .next()
+                        .unwrap()
+                };
+
+                let ch_len = ch.len_utf8();
+
+                if !f(ch) { guard.del_bytes += ch_len; }
+
+                else if guard.del_bytes > 0
+                {
+                    unsafe
+                    {
+                        ptr::copy
+                        (
+                            guard.s.data.as_ptr().add(guard.idx),
+                            guard.s.data.as_mut_ptr().add(guard.idx - guard.del_bytes),
+                            ch_len,
+                        );
+                    }
+                }
+                
+                guard.idx += ch_len;
+            }
+
+            drop(guard);
+        }
+
+        fn as_mut_ptr(&mut self) -> *mut u8 { self.as_ptr() as *mut u8 }
+    }
+
+    impl<A: Array<Item = u8>> ops::Deref for SmallString<A> 
+    {
+        type Target = str;
+        #[inline] fn deref(&self) -> &str
+        {
+            let bytes: &[u8] = &self.data;
+            unsafe { str::from_utf8_unchecked(bytes) }
+        }
+    }
+
+    impl<A: Array<Item = u8>> ops::DerefMut for SmallString<A>
+    {
+        #[inline] fn deref_mut(&mut self) -> &mut str
+        {
+            let bytes: &mut [u8] = &mut self.data;
+            unsafe { str::from_utf8_unchecked_mut(bytes) }
+        }
+    }
+
+    impl<A: Array<Item = u8>> AsRef<str> for SmallString<A>
+    {
+        #[inline] fn as_ref(&self) -> &str
+        {
+            self
+        }
+    }
+
+    impl<A: Array<Item = u8>> AsMut<str> for SmallString<A>
+    {
+        #[inline] fn as_mut(&mut self) -> &mut str
+        {
+            self
+        }
+    }
+
+    impl<A: Array<Item = u8>> Borrow<str> for SmallString<A>
+    {
+        #[inline] fn borrow(&self) -> &str { self }
+    }
+
+    impl<A: Array<Item = u8>> BorrowMut<str> for SmallString<A>
+    {
+        #[inline] fn borrow_mut(&mut self) -> &mut str { self }
+    }
+
+    impl<A: Array<Item = u8>> AsRef<[u8]> for SmallString<A>
+    {
+        #[inline] fn as_ref(&self) -> &[u8] { self.data.as_ref() }
+    }
+
+    impl<A: Array<Item = u8>> fmt::Write for SmallString<A>
+    {
+        #[inline] fn write_str(&mut self, s: &str) -> fmt::Result
+        {
+            self.push_str(s);
+            Ok(())
+        }
+
+        #[inline] fn write_char(&mut self, ch: char) -> fmt::Result
+        {
+            self.push(ch);
+            Ok(())
+        }
+    }
+
+    impl<A: Array<Item = u8>> From<char> for SmallString<A>
+    {
+        #[inline] fn from(ch: char) -> SmallString<A> { SmallString::from_str(ch.encode_utf8(&mut [0; 4])) }
+    }
+
+    impl<'a, A: Array<Item = u8>> From<&'a str> for SmallString<A>
+    {
+        #[inline] fn from(s: &str) -> SmallString<A> { SmallString::from_str(s) }
+    }
+
+    impl<A: Array<Item = u8>> From<Box<str>> for SmallString<A>
+    {
+        #[inline] fn from(s: Box<str>) -> SmallString<A> { SmallString::from_string(s.into()) }
+    }
+
+    impl<A: Array<Item = u8>> From<String> for SmallString<A>
+    {
+        #[inline] fn from(s: String) -> SmallString<A> { SmallString::from_string(s) }
+    }
+
+    impl<'a, A: Array<Item = u8>> From<Cow<'a, str>> for SmallString<A>
+    {
+        fn from(value: Cow<'a, str>) -> Self
+        {
+            match value
+            {
+                Cow::Borrowed(s) => Self::from_str(s),
+                Cow::Owned(s) => Self::from_string(s),
+            }
+        }
+    }
+
+    macro_rules! impl_index_str
+    {
+        ($index_type: ty) =>
+        {
+            impl<A: Array<Item = u8>> ops::Index<$index_type> for SmallString<A>
+            {
+                type Output = str;
+                #[inline] fn index(&self, index: $index_type) -> &str { &self.as_str()[index] }
+            }
+
+            impl<A: Array<Item = u8>> ops::IndexMut<$index_type> for SmallString<A>
+            {
+                #[inline] fn index_mut(&mut self, index: $index_type) -> &mut str {  &mut self.as_mut_str()[index] }
+            }
+        };
+    }
+
+    impl_index_str!(ops::Range<usize>);
+    impl_index_str!(ops::RangeFrom<usize>);
+    impl_index_str!(ops::RangeTo<usize>);
+    impl_index_str!(ops::RangeFull);
+
+    impl<A: Array<Item = u8>> FromIterator<char> for SmallString<A>
+    {
+        fn from_iter<I: IntoIterator<Item = char>>(iter: I) -> SmallString<A>
+        {
+            let mut s = SmallString::new();
+            s.extend(iter);
+            s
+        }
+    }
+
+    impl<'a, A: Array<Item = u8>> FromIterator<&'a char> for SmallString<A>
+    {
+        fn from_iter<I: IntoIterator<Item = &'a char>>(iter: I) -> SmallString<A>
+        {
+            let mut s = SmallString::new();
+            s.extend(iter.into_iter().cloned());
+            s
+        }
+    }
+
+    impl<'a, A: Array<Item = u8>> FromIterator<Cow<'a, str>> for SmallString<A>
+    {
+        fn from_iter<I: IntoIterator<Item = Cow<'a, str>>>(iter: I) -> SmallString<A>
+        {
+            let mut s = SmallString::new();
+            s.extend(iter);
+            s
+        }
+    }
+
+    impl<'a, A: Array<Item = u8>> FromIterator<&'a str> for SmallString<A>
+    {
+        fn from_iter<I: IntoIterator<Item = &'a str>>(iter: I) -> SmallString<A>
+        {
+            let mut s = SmallString::new();
+            s.extend(iter);
+            s
+        }
+    }
+
+    impl<A: Array<Item = u8>> FromIterator<String> for SmallString<A>
+    {
+        fn from_iter<I: IntoIterator<Item = String>>(iter: I) -> SmallString<A>
+        {
+            let mut s = SmallString::new();
+            s.extend(iter);
+            s
+        }
+    }
+
+    impl<A: Array<Item = u8>> Extend<char> for SmallString<A>
+    {
+        fn extend<I: IntoIterator<Item = char>>(&mut self, iter: I)
+        {
+            let iter = iter.into_iter();
+            let (lo, _) = iter.size_hint();
+
+            self.reserve(lo);
+
+            for ch in iter
+            {
+                self.push(ch);
+            }
+        }
+    }
+
+    impl<'a, A: Array<Item = u8>> Extend<&'a char> for SmallString<A>
+    {
+        fn extend<I: IntoIterator<Item = &'a char>>(&mut self, iter: I)
+        {
+            self.extend(iter.into_iter().cloned());
+        }
+    }
+
+    impl<'a, A: Array<Item = u8>> Extend<Cow<'a, str>> for SmallString<A>
+    {
+        fn extend<I: IntoIterator<Item = Cow<'a, str>>>(&mut self, iter: I)
+        {
+            for s in iter
+            {
+                self.push_str(&s);
+            }
+        }
+    }
+
+    impl<'a, A: Array<Item = u8>> Extend<&'a str> for SmallString<A>
+    {
+        fn extend<I: IntoIterator<Item = &'a str>>(&mut self, iter: I)
+        {
+            for s in iter
+            {
+                self.push_str(s);
+            }
+        }
+    }
+
+    impl<A: Array<Item = u8>> Extend<String> for SmallString<A>
+    {
+        fn extend<I: IntoIterator<Item = String>>(&mut self, iter: I)
+        {
+            for s in iter
+            {
+                self.push_str(&s);
+            }
+        }
+    }
+
+    impl<A: Array<Item = u8>> fmt::Debug for SmallString<A>
+    {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { fmt::Debug::fmt(&**self, f) }
+    }
+
+    impl<A: Array<Item = u8>> fmt::Display for SmallString<A>
+    {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { fmt::Display::fmt(&**self, f) }
+    }
+
+    macro_rules! eq_str
+    {
+        ( $rhs:ty ) =>
+        {
+            impl<'a, A: Array<Item = u8>> PartialEq<$rhs> for SmallString<A>
+            {
+                #[inline] fn eq(&self, rhs: &$rhs) -> bool { &self[..] == &rhs[..] }
+                #[inline] fn ne(&self, rhs: &$rhs) -> bool { &self[..] != &rhs[..] }
+            }
+        };
+    }
+
+    eq_str!(str);
+    eq_str!(&'a str);
+    eq_str!(String);
+    eq_str!(Cow<'a, str>);
+    
+    impl<A: Array<Item = u8>> PartialEq<OsStr> for SmallString<A>
+    {
+        #[inline] fn eq(&self, rhs: &OsStr) -> bool
+        {
+            &self[..] == rhs
+        }
+
+        #[inline] fn ne(&self, rhs: &OsStr) -> bool
+        {
+            &self[..] != rhs
+        }
+    }
+    
+    impl<'a, A: Array<Item = u8>> PartialEq<&'a OsStr> for SmallString<A>
+    {
+        #[inline] fn eq(&self, rhs: &&OsStr) -> bool { &self[..] == *rhs }
+        #[inline] fn ne(&self, rhs: &&OsStr) -> bool { &self[..] != *rhs }
+    }
+    
+    impl<A: Array<Item = u8>> PartialEq<OsString> for SmallString<A>
+    {
+        #[inline] fn eq(&self, rhs: &OsString) -> bool { &self[..] == rhs }
+        #[inline] fn ne(&self, rhs: &OsString) -> bool { &self[..] != rhs }
+    }
+    
+    impl<'a, A: Array<Item = u8>> PartialEq<Cow<'a, OsStr>> for SmallString<A>
+    {
+        #[inline] fn eq(&self, rhs: &Cow<OsStr>) -> bool { self[..] == **rhs }
+        #[inline] fn ne(&self, rhs: &Cow<OsStr>) -> bool { self[..] != **rhs }
+    }
+
+    impl<A, B> PartialEq<SmallString<B>> for SmallString<A> where
+    A: Array<Item = u8>,
+    B: Array<Item = u8>
+    {
+        #[inline] fn eq(&self, rhs: &SmallString<B>) -> bool { &self[..] == &rhs[..] }
+
+        #[inline] fn ne(&self, rhs: &SmallString<B>) -> bool { &self[..] != &rhs[..] }
+    }
+
+    impl<A: Array<Item = u8>> Eq for SmallString<A> {}
+
+    impl<A: Array<Item = u8>> PartialOrd for SmallString<A>
+    {
+        #[inline] fn partial_cmp(&self, rhs: &SmallString<A>) -> Option<Ordering>
+        {
+            self[..].partial_cmp(&rhs[..])
+        }
+    }
+
+    impl<A: Array<Item = u8>> Ord for SmallString<A>
+    {
+        #[inline] fn cmp(&self, rhs: &SmallString<A>) -> Ordering
+        {
+            self[..].cmp(&rhs[..])
+        }
+    }
+
+    impl<A: Array<Item = u8>> Hash for SmallString<A>
+    {
+        #[inline] fn hash<H: Hasher>(&self, state: &mut H)
+        {
+            self[..].hash(state)
+        }
+    }
+    /// A draining iterator for `SmallString`.
+    pub struct Drain<'a>
+    {
+        iter: Chars<'a>,
+    }
+
+    impl<'a> Iterator for Drain<'a>
+    {
+        type Item = char;
+
+        #[inline] fn next(&mut self) -> Option<char> { self.iter.next() }
+
+        #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
+    }
+
+    impl<'a> DoubleEndedIterator for Drain<'a>
+    {
+        #[inline] fn next_back(&mut self) -> Option<char> { self.iter.next_back() }
+    }
+    /// A possible error value when creating a `SmallString` from a byte array.
+    #[derive(Debug)]
+    pub struct FromUtf8Error<A: Array<Item = u8>>
+    {
+        buf: A,
+        error: Utf8Error,
+    }
+
+    impl<A: Array<Item = u8>> FromUtf8Error<A>
+    {
+        /// Returns the slice of `[u8]` bytes that were attempted to convert to a `SmallString`.
+        #[inline] pub fn as_bytes(&self) -> &[u8] 
+        {
+            let ptr = &self.buf as *const _ as *const u8;
+            unsafe { slice::from_raw_parts(ptr, A::size()) }
+        }
+        /// Returns the byte array that was attempted to convert into a `SmallString`.
+        #[inline] pub fn into_buf(self) -> A  { self.buf }
+        /// Returns the `Utf8Error` to get more details about the conversion failure.
+        #[inline] pub fn utf8_error(&self) -> Utf8Error  { self.error }
+    }
+
+    impl<A: Array<Item = u8>> fmt::Display for FromUtf8Error<A>
+    {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+        {
+            fmt::Display::fmt(&self.error, f)
+        }
+    }
     /*
     pub fn write_file_str(...) -> io::Result<()> */
     /// Writes a strand to a file.
@@ -27902,6 +30076,8 @@ pub mod str
 
         Ok(contents)
     }
+
+
 }
 
 pub mod string
@@ -27912,6 +30088,54 @@ pub mod string
 pub mod sync
 {
     pub use std::sync::{ * };
+
+    pub fn map_lock_result<F, T, U>(res: LockResult<T>, f: F) -> LockResult<U> where F: FnOnce(T) -> U
+    {
+        match res
+        {
+            Ok(t) => Ok(f(t)),
+            Err(e) => Err(PoisonError::new(f(e.into_inner()))),
+        }
+    }
+
+    pub fn map_try_lock_result<F, T, U>(res: TryLockResult<T>, f: F) -> TryLockResult<U> where 
+    F: FnOnce(T) -> U
+    {
+        match res
+        {
+            Ok(t) => Ok(f(t)),
+            Err(TryLockError::Poisoned(p)) => Err(TryLockError::Poisoned( PoisonError::new(f(p.into_inner())))),
+            Err(TryLockError::WouldBlock) => Err(TryLockError::WouldBlock),
+        }
+    }
+
+    pub fn map2_lock_result<F, T, U, R>(res: LockResult<T>, res2: LockResult<U>, f: F) -> 
+    LockResult<R> where 
+    F: FnOnce(T, U) -> R
+    {
+        match (res, res2)
+        {
+            (Ok(a), Ok(b)) => Ok(f(a, b)),
+            (Ok(a), Err(b)) => Err(PoisonError::new(f(a, b.into_inner()))),
+            (Err(a), Ok(b)) => Err(PoisonError::new(f(a.into_inner(), b))),
+            (Err(a), Err(b)) => Err(PoisonError::new(f(a.into_inner(), b.into_inner()))),
+        }
+    }
+
+    pub fn map2_try_lock_result<F, T, U, R>( res: TryLockResult<T>, res2: TryLockResult<U>, f: F) -> 
+    TryLockResult<R> where 
+    F: FnOnce(T, U) -> R
+    {
+        match (res, res2)
+        {
+            (Ok(a), Ok(b)) => Ok(f(a, b)),
+            (Err(TryLockError::WouldBlock), _) => Err(TryLockError::WouldBlock),
+            (_, Err(TryLockError::WouldBlock)) => Err(TryLockError::WouldBlock),
+            (Ok(a), Err(TryLockError::Poisoned(b))) => Err(TryLockError::Poisoned(PoisonError::new(f(a, b.into_inner())))),
+            (Err(TryLockError::Poisoned(a)), Ok(b)) => Err(TryLockError::Poisoned(PoisonError::new(f(a.into_inner(), b)))),
+            (Err(TryLockError::Poisoned(a)), Err(TryLockError::Poisoned(b))) => Err(TryLockError::Poisoned(PoisonError::new( f(a.into_inner(), b.into_inner())))),
+        }
+    }
 }
 /*
 linefeed*/
@@ -27927,6 +30151,12 @@ pub mod system
 pub mod vec
 {
     pub use std::vec::{ * };
+    pub use ::smallvec::
+    { 
+        Drain as SmallDrain,
+        IntoIter as SmallIntoIter,
+        *
+    };
 }
 
 fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
@@ -27987,4 +30217,4 @@ fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 27990
+// 30220
