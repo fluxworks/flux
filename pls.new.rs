@@ -9,6 +9,7 @@
     unused_imports,
     unused_macros,
     unused_mut,
+    unused_unsafe,
     unused_variables,
 )]
 /**/
@@ -2885,7 +2886,9 @@ pub mod common
 
             pub mod terminal
             {
-                use std::os::fd::RawFd;
+                use ffi::c_int;
+                use ffi::c_ushort;
+                use std::os::fd::{ * };
                 use ::
                 {
                     common::
@@ -3245,11 +3248,13 @@ pub mod common
 
                 impl<'a> TerminalReadGuard<'a> 
                 {
-                    fn new(term: &'a Terminal, reader: MutexGuard<'a, Reader>) -> TerminalReadGuard<'a> {
+                    fn new(term: &'a Terminal, reader: MutexGuard<'a, Reader>) -> TerminalReadGuard<'a> 
+                    {
                         TerminalReadGuard{term, reader}
                     }
 
-                    pub fn prepare(&mut self, config: PrepareConfig) -> io::Result<PrepareState> {
+                    pub fn prepare(&mut self, config: PrepareConfig) -> io::Result<PrepareState> 
+                    {
                         let mut writer = self.term.lock_writer();
                         self.prepare_with_lock(&mut writer, config)
                     }
@@ -3336,13 +3341,16 @@ pub mod common
                         Ok(state)
                     }
 
-                    pub fn restore(&mut self, state: PrepareState) -> io::Result<()> {
+                    pub fn restore(&mut self, state: PrepareState) -> io::Result<()> 
+                    {
                         let mut writer = self.term.lock_writer();
                         self.restore_with_lock(&mut writer, state)
                     }
 
-                    pub fn restore_with_lock(&mut self, writer: &mut TerminalWriteGuard,
-                            state: PrepareState) -> io::Result<()> {
+                    pub fn restore_with_lock(&mut self, writer: &mut TerminalWriteGuard, state: PrepareState) -> 
+                    io::Result<()>
+                    {
+                        /*
                         self.reader.resume = state.prev_resume;
 
                         if state.restore_mouse {
@@ -3373,12 +3381,14 @@ pub mod common
                             if let Some(ref old) = state.old_sigwinch {
                                 sigaction(NixSignal::SIGWINCH, old).map_err(nix_to_io)?;
                             }
-                        }
+                        } */
 
                         Ok(())
                     }
 
-                    pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool> {
+                    pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool> 
+                    {
+                        /*
                         if get_signal().is_some() {
                             return Ok(true);
                         }
@@ -3411,10 +3421,12 @@ pub mod common
                             }
                         };
 
-                        Ok(n != 0)
+                        Ok(n != 0) */
+                        Ok( true )
                     }
 
-                    pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                    pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> 
+                    {
                         if let Some(ev) = self.try_read()? {
                             return Ok(Some(ev));
                         }
@@ -3432,7 +3444,8 @@ pub mod common
                         }
                     }
 
-                    pub fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                    pub fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> 
+                    {
                         if !self.reader.in_buffer.is_empty() {
                             let n = buf.len().min(self.reader.in_buffer.len());
                             buf[..n].copy_from_slice(&self.reader.in_buffer[..n]);
@@ -3454,8 +3467,8 @@ pub mod common
                         }
                     }
 
-                    fn read_into_buffer(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                        // Temporarily replace the buffer to prevent borrow errors
+                    fn read_into_buffer(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> 
+                    {
                         let mut buf = replace(&mut self.reader.in_buffer, Vec::new());
 
                         buf.reserve(128);
@@ -3474,14 +3487,14 @@ pub mod common
                                 _ => buf.set_len(len)
                             }
                         }
-
-                        // Restore the buffer before returning
+                        
                         self.reader.in_buffer = buf;
 
                         r
                     }
 
-                    fn read_input(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                    fn read_input(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> 
+                    {
                         // Check for a signal that may have already arrived.
                         if let Some(sig) = take_signal() {
                             return Ok(Some(Event::Signal(sig)));
@@ -3509,7 +3522,8 @@ pub mod common
                         }
                     }
 
-                    fn try_read(&mut self) -> io::Result<Option<Event>> {
+                    fn try_read(&mut self) -> io::Result<Option<Event>> 
+                    {
                         let in_buffer = &mut self.reader.in_buffer;
 
                         if in_buffer.is_empty() {
@@ -3526,7 +3540,8 @@ pub mod common
                         }
                     }
 
-                    fn handle_signal(&mut self, sig: Signal) -> io::Result<Option<Event>> {
+                    fn handle_signal(&mut self, sig: Signal) -> io::Result<Option<Event>> 
+                    {
                         match sig {
                             Signal::Continue => {
                                 self.resume()?;
@@ -3545,7 +3560,8 @@ pub mod common
                         }
                     }
 
-                    fn resume(&mut self) -> io::Result<()> {
+                    fn resume(&mut self) -> io::Result<()> 
+                    {
                         if let Some(resume) = self.reader.resume {
                             let _ = self.prepare(resume.config)?;
                         }
@@ -4406,7 +4422,8 @@ pub mod common
             
             impl OpenTerminalExt for Terminal 
             {
-                fn from_path<P: AsRef<Path>>(path: P) -> io::Result<Self> { sys::Terminal::open(path).map(Terminal) }
+                fn from_path<P: AsRef<Path>>(path: P) -> ::io::Result<Self> 
+                { common::system::Terminal::open(path).map(Terminal) }
             }
             
             impl TerminalExt for Terminal
@@ -4420,7 +4437,6 @@ pub mod common
                 fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> ::io::Result<Option<Event>>
                 { self.0.read_raw(buf, timeout) }
             }
-
             
             impl ::common::Private for Screen {} 
             impl<'a> ::common::Private for ScreenReadGuard<'a> {}
@@ -5009,12 +5025,13 @@ pub mod common
                         Ok(Some(Event::Raw(n as usize)))
                     }
 
-                    fn mouse_event(&mut self, event: &INPUT_RECORD) -> Option<MouseEvent> {
+                    fn mouse_event(&mut self, event: &INPUT_RECORD) -> Option<Mouse>
+                    {
+                        /*
                         if event.EventType == MOUSE_EVENT {
                             let mouse = unsafe { event.Event.MouseEvent() };
 
-                            let input = if mouse.dwEventFlags & wincon::MOUSE_WHEELED != 0 {
-                                // The high word of `dwButtonState` indicates wheel direction
+                            let input = if mouse.dwEventFlags & MOUSE_WHEELED != 0 {
                                 let direction = (mouse.dwButtonState >> 16) as i16;
 
                                 if direction > 0 {
@@ -5053,14 +5070,15 @@ pub mod common
                                 mods |= ModifierState::SHIFT;
                             }
 
-                            Some(MouseEvent{
+                            Some(Mouse{
                                 position,
                                 input,
                                 modifiers: mods,
                             })
                         } else {
                             None
-                        }
+                        } */
+                        None
                     }
                 }
 
@@ -5440,13 +5458,13 @@ pub mod common
                 {
                     (match color {
                         Color::Black => 0,
-                        Color::Blue => wincon::FOREGROUND_BLUE,
-                        Color::Cyan => wincon::FOREGROUND_BLUE | wincon::FOREGROUND_GREEN,
-                        Color::Green => wincon::FOREGROUND_GREEN,
-                        Color::Magenta => wincon::FOREGROUND_BLUE | wincon::FOREGROUND_RED,
-                        Color::Red => wincon::FOREGROUND_RED,
-                        Color::White => wincon::FOREGROUND_RED | wincon::FOREGROUND_GREEN | wincon::FOREGROUND_BLUE,
-                        Color::Yellow => wincon::FOREGROUND_RED | wincon::FOREGROUND_GREEN,
+                        Color::Blue => FOREGROUND_BLUE,
+                        Color::Cyan => FOREGROUND_BLUE | FOREGROUND_GREEN,
+                        Color::Green => FOREGROUND_GREEN,
+                        Color::Magenta => FOREGROUND_BLUE | FOREGROUND_RED,
+                        Color::Red => FOREGROUND_RED,
+                        Color::White => FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
+                        Color::Yellow => FOREGROUND_RED | FOREGROUND_GREEN,
                     }) as WORD
                 }
 
@@ -5454,13 +5472,13 @@ pub mod common
                 {
                     (match color {
                         Color::Black => 0,
-                        Color::Blue => wincon::BACKGROUND_BLUE,
-                        Color::Cyan => wincon::BACKGROUND_BLUE | wincon::BACKGROUND_GREEN,
-                        Color::Green => wincon::BACKGROUND_GREEN,
-                        Color::Magenta => wincon::BACKGROUND_BLUE | wincon::BACKGROUND_RED,
-                        Color::Red => wincon::BACKGROUND_RED,
-                        Color::White => wincon::BACKGROUND_RED | wincon::BACKGROUND_GREEN | wincon::BACKGROUND_BLUE,
-                        Color::Yellow => wincon::BACKGROUND_RED | wincon::BACKGROUND_GREEN,
+                        Color::Blue => BACKGROUND_BLUE,
+                        Color::Cyan => BACKGROUND_BLUE | BACKGROUND_GREEN,
+                        Color::Green => BACKGROUND_GREEN,
+                        Color::Magenta => BACKGROUND_BLUE | BACKGROUND_RED,
+                        Color::Red => BACKGROUND_RED,
+                        Color::White => BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE,
+                        Color::Yellow => BACKGROUND_RED | BACKGROUND_GREEN,
                     }) as WORD
                 }
 
@@ -5470,7 +5488,7 @@ pub mod common
 
                     if style.contains(Style::BOLD) {
                         // Closest available approximation for bold text
-                        code |= wincon::FOREGROUND_INTENSITY as WORD;
+                        code |= FOREGROUND_INTENSITY as WORD;
                     }
 
                     code
@@ -5637,17 +5655,17 @@ pub mod common
 
                 fn has_alt(state: DWORD) -> bool 
                 {
-                    state & (wincon::LEFT_ALT_PRESSED | wincon::RIGHT_ALT_PRESSED) != 0
+                    state & ( LEFT_ALT_PRESSED | RIGHT_ALT_PRESSED) != 0
                 }
 
                 fn has_ctrl(state: DWORD) -> bool 
                 {
-                    state & (wincon::LEFT_CTRL_PRESSED | wincon::RIGHT_CTRL_PRESSED) != 0
+                    state & ( LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED) != 0
                 }
 
                 fn has_shift(state: DWORD) -> bool 
                 {
-                    state & wincon::SHIFT_PRESSED != 0
+                    state & SHIFT_PRESSED != 0
                 }
 
                 fn to_dword(n: usize) -> DWORD 
@@ -5731,7 +5749,7 @@ pub mod common
                                 {
                                     match char::from_u32(u_char as u32)
                                     {
-                                        Some(ch) if is::ctrl( u_char ) => Key::Ctrl(char::unctrl_lower(ch)),
+                                        Some(ch) if is::ctrl( u_char as char  ) => Key::Ctrl(char::unctrl_lower( ch as char)),
                                         Some(ch) => ch.into(),
                                         None => return None
                                     }
@@ -5805,8 +5823,10 @@ pub mod common
                     CATCH_SIGNALS.store(sigs, Ordering::Relaxed);
                 }
 
-                unsafe extern "system" fn ctrl_handler(ctrl_type: DWORD) -> BOOL {
-                    match ctrl_type {
+                unsafe extern "system" fn ctrl_handler(ctrl_type: DWORD) -> BOOL
+                {
+                    match ctrl_type
+                    {
                         CTRL_BREAK_EVENT | CTRL_C_EVENT => {
                             let catch = CATCH_SIGNALS.load(Ordering::Relaxed);
 
@@ -5818,17 +5838,12 @@ pub mod common
 
                             if let Ok(handle) = result_handle(
                                     GetStdHandle(STD_INPUT_HANDLE)) {
-                                // Wake up the `WaitForSingleObject` call by
-                                // generating a key up event, which will be ignored.
                                 let input = INPUT_RECORD{
                                     EventType: KEY_EVENT,
-                                    // KEY_EVENT { bKeyDown: FALSE, ... }
                                     Event: zeroed(),
                                 };
 
                                 let mut n = 0;
-
-                                // Ignore any errors from this
                                 let _ = WriteConsoleInputW(
                                     handle,
                                     &input,
@@ -5866,10 +5881,282 @@ pub mod common
             {
                 use ::
                 {
+                    common::
+                    {
+                        buffer::ScreenBuffer,
+                        sys::terminal::{ size_event, PrepareState, Terminal, TerminalReadGuard, TerminalWriteGuard },
+                        terminal::{Color, Cursor, CursorMode, Event, PrepareConfig, Size, Style},
+                    },
+                    libc::windows::{ * },
+                    sync::{LockResult, Mutex, MutexGuard, TryLockResult, map_lock_result, map_try_lock_result, map2_lock_result, map2_try_lock_result, },
+                    time::Duration,
                     *,
-                }; 
-            } pub use self::screen::{ * };
+                };
+                /*
+                use winapi::shared::ntdef::HANDLE;
+                use winapi::um::wincon::INPUT_RECORD;
+                */
+                pub struct Screen {
+                    term: Terminal,
 
+                    state: Option<PrepareState>,
+                    old_handle: HANDLE,
+                    writer: Mutex<Writer>,
+                }
+
+                pub struct ScreenReadGuard<'a> {
+                    screen: &'a Screen,
+                    reader: TerminalReadGuard<'a>,
+                }
+
+                pub struct ScreenWriteGuard<'a> {
+                    writer: TerminalWriteGuard<'a>,
+                    data: MutexGuard<'a, Writer>,
+                }
+
+                struct Writer {
+                    buffer: ScreenBuffer,
+                    clear_screen: bool,
+                    real_cursor: Cursor,
+                }
+
+                impl Screen {
+                    pub fn new(term: Terminal, config: PrepareConfig) -> io::Result<Screen> {
+                        let size = term.size()?;
+
+                        let old_handle = term.enter_screen()?;
+                        let state = term.prepare(config)?;
+
+                        Ok(Screen{
+                            term,
+                            state: Some(state),
+                            writer: Mutex::new(Writer{
+                                buffer: ScreenBuffer::new(size),
+                                clear_screen: false,
+                                real_cursor: Cursor::default(),
+                            }),
+                            old_handle,
+                        })
+                    }
+
+                    pub fn stdout(config: PrepareConfig) -> io::Result<Screen> {
+                        Screen::new(Terminal::stdout()?, config)
+                    }
+
+                    pub fn stderr(config: PrepareConfig) -> io::Result<Screen> {
+                        Screen::new(Terminal::stderr()?, config)
+                    }
+
+                    forward_screen_buffer_methods!{ |slf| slf.lock_write_data().buffer }
+
+                    pub fn lock_read(&self) -> LockResult<ScreenReadGuard> {
+                        map_lock_result(self.term.lock_read(),
+                            |r| ScreenReadGuard::new(self, r))
+                    }
+
+                    pub fn try_lock_read(&self) -> TryLockResult<ScreenReadGuard> {
+                        map_try_lock_result(self.term.try_lock_read(),
+                            |r| ScreenReadGuard::new(self, r))
+                    }
+
+                    pub fn lock_write(&self) -> LockResult<ScreenWriteGuard> {
+                        map2_lock_result(self.term.lock_write(), self.writer.lock(),
+                            |a, b| ScreenWriteGuard::new(a, b))
+                    }
+
+                    pub fn try_lock_write(&self) -> TryLockResult<ScreenWriteGuard> {
+                        map2_try_lock_result(self.term.try_lock_write(), self.writer.try_lock(),
+                            |a, b| ScreenWriteGuard::new(a, b))
+                    }
+
+                    fn lock_reader(&self) -> ScreenReadGuard {
+                        self.lock_read().expect("Screen::lock_reader")
+                    }
+
+                    fn lock_writer(&self) -> ScreenWriteGuard {
+                        self.lock_write().expect("Screen::lock_writer")
+                    }
+
+                    fn lock_write_data(&self) -> MutexGuard<Writer> {
+                        self.writer.lock().expect("Screen::lock_writer")
+                    }
+
+                    pub fn name(&self) -> &str {
+                        self.term.name()
+                    }
+
+                    pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> {
+                        self.term.set_cursor_mode(mode)
+                    }
+
+                    pub fn wait_event(&self, timeout: Option<Duration>) -> io::Result<bool> {
+                        self.lock_reader().wait_event(timeout)
+                    }
+
+                    pub fn read_event(&self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                        self.lock_reader().read_event(timeout)
+                    }
+
+                    pub fn read_raw(&self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                        self.lock_reader().read_raw(buf, timeout)
+                    }
+
+                    pub fn read_raw_event(&self, events: &mut [INPUT_RECORD],
+                            timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                        self.lock_reader().read_raw_event(events, timeout)
+                    }
+
+                    pub fn refresh(&self) -> io::Result<()> {
+                        self.lock_writer().refresh()
+                    }
+                }
+
+                impl Drop for Screen {
+                    fn drop(&mut self) {
+                        let res = if let Some(state) = self.state.take() {
+                            self.term.restore(state)
+                        } else {
+                            Ok(())
+                        };
+
+                        if let Err(e) = res.and_then(
+                                |_| unsafe { self.term.exit_screen(self.old_handle) }) {
+                            eprintln!("failed to restore terminal: {}", e);
+                        }
+                    }
+                }
+
+                unsafe impl Send for Screen {}
+                unsafe impl Sync for Screen {}
+
+                impl<'a> ScreenReadGuard<'a> {
+                    fn new(screen: &'a Screen, reader: TerminalReadGuard<'a>) -> ScreenReadGuard<'a> {
+                        ScreenReadGuard{screen, reader}
+                    }
+
+                    pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool> {
+                        self.reader.wait_event(timeout)
+                    }
+
+                    pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                        let r = self.reader.read_event(timeout)?;
+
+                        if let Some(Event::Resize(size)) = r {
+                            self.screen.lock_write_data().update_size(size);
+                        }
+
+                        Ok(r)
+                    }
+
+                    pub fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>>
+                    {
+                        let r = self.reader.read_raw(buf, timeout)?;
+
+                        if let Some(Event::Resize(size)) = r {
+                            self.screen.lock_write_data().update_size(size);
+                        }
+
+                        Ok(r)
+                    }
+
+                    pub fn read_raw_event(&mut self, events: &mut [INPUT_RECORD], timeout: Option<Duration>) ->
+                    io::Result<Option<Event>>
+                    {
+                        let r = self.reader.read_raw_event(events, timeout)?;
+
+                        if let Some(Event::Raw(n)) = r
+                        {
+                            for ev in events[..n].iter().rev() {
+                                if let Some(size) = size_event(ev) {
+                                    self.screen.lock_write_data().update_size(size);
+                                    break;
+                                }
+                            }
+                        }
+
+                        Ok(r)
+                    }
+                }
+
+                impl<'a> ScreenWriteGuard<'a>
+                {
+                    fn new(writer: TerminalWriteGuard<'a>, data: MutexGuard<'a, Writer>) -> ScreenWriteGuard<'a>
+                    { ScreenWriteGuard{writer, data} }
+
+                    forward_screen_buffer_mut_methods!{ |slf| slf.data.buffer }
+
+                    pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()>
+                    { self.writer.set_cursor_mode(mode) }
+
+                    pub fn refresh(&mut self) -> io::Result<()>
+                    {
+                        if self.data.clear_screen
+                        {
+                            self.writer.clear_screen()?;
+                            self.data.clear_screen = false;
+                        }
+
+                        let mut real_attrs = (None, None, Style::empty());
+                        self.writer.clear_attributes()?;
+                        let mut indices = self.data.buffer.indices();
+
+                        while let Some((pos, cell)) = self.data.buffer.next_cell(&mut indices)
+                        {
+                            self.move_cursor(pos)?;
+                            self.apply_attrs(real_attrs, cell.attrs())?;
+                            self.writer.write_str(cell.text())?;
+                            self.data.real_cursor.column += 1;
+                            real_attrs = cell.attrs();
+                        }
+
+                        self.writer.clear_attributes()?;
+                        let size = self.data.buffer.size();
+                        let pos = self.data.buffer.cursor();
+
+                        if pos.is_out_of_bounds(size) { self.move_cursor(Cursor::last(size))?; }
+                        else { self.move_cursor(pos)?; }
+
+                        Ok(())
+                    }
+
+                    fn apply_attrs(&mut self, src: (Option<Color>, Option<Color>, Style), dest: (Option<Color>, Option<Color>, Style)) ->
+                    io::Result<()>
+                    {
+                        if src != dest { self.writer.set_attributes(dest.0, dest.1, dest.2)?; }
+                        Ok(())
+                    }
+
+                    fn move_cursor(&mut self, pos: Cursor) -> io::Result<()>
+                    {
+                        if self.data.real_cursor != pos
+                        {
+                            self.writer.move_cursor(pos)?;
+                            self.data.real_cursor = pos;
+                        }
+
+                        Ok(())
+                    }
+                }
+
+                impl<'a> Drop for ScreenWriteGuard<'a>
+                {
+                    fn drop(&mut self)
+                    {
+                        if let Err(e) = self.refresh() { eprintln!("failed to refresh screen: {}", e); }
+                    }
+                }
+
+                impl Writer
+                {
+                    fn update_size(&mut self, new_size: Size)
+                    {
+                        if self.real_cursor.is_out_of_bounds(new_size) { self.real_cursor = (!0, !0).into(); }
+                        self.buffer.resize(new_size);
+                        self.clear_screen = true;
+                    }
+                }
+
+            } pub use self::screen::{ * };
             
             impl TerminalExt for Screen
             {
@@ -10290,10 +10577,7 @@ pub mod libc
             pub fn GetStdHandle( nStdHandle: DWORD ) -> HANDLE;
             pub fn SetStdHandle( nStdHandle: DWORD, hHandle: HANDLE ) -> BOOL;
             pub fn SetStdHandleEx( nStdHandle: DWORD, hHandle: HANDLE, phPrevValue: PHANDLE ) -> BOOL;
-        }
-
-        extern "system"
-        {
+        
             pub fn GetConsoleScreenBufferInfo(
                 hConsoleOutput: HANDLE,
                 lpConsoleScreenBufferInfo: PCONSOLE_SCREEN_BUFFER_INFO,
@@ -10393,21 +10677,7 @@ pub mod libc
             pub fn AttachConsole(
                 dwProcessId: DWORD,
             ) -> BOOL;
-        }
-
-        pub type PCONSOLE_FONT_INFO = *mut CONSOLE_FONT_INFO;
-        pub type PCONSOLE_FONT_INFOEX = *mut CONSOLE_FONT_INFOEX;
-        pub type PCONSOLE_CURSOR_INFO = *mut CONSOLE_CURSOR_INFO;
-        pub type PCONSOLE_SELECTION_INFO = *mut CONSOLE_SELECTION_INFO;
-        pub type PCONSOLE_HISTORY_INFO = *mut CONSOLE_HISTORY_INFO;
-        pub type PCONSOLE_SCREEN_BUFFER_INFO = *mut CONSOLE_SCREEN_BUFFER_INFO;
-        pub type PCONSOLE_SCREEN_BUFFER_INFOEX = *mut CONSOLE_SCREEN_BUFFER_INFOEX;
-        pub type COLORREF = DWORD;
-
-        pub const ATTACH_PARENT_PROCESS: DWORD = 0xFFFFFFFF;
-        
-        extern "system"
-        {
+            
             pub fn GetConsoleTitleA(
                 lpConsoleTitle: LPSTR,
                 nSize: DWORD,
@@ -10427,9 +10697,72 @@ pub mod libc
             pub fn SetConsoleTitleA(
                 lpConsoleTitle: LPCSTR,
             ) -> BOOL;
-            pub fn SetConsoleTitleW(
-                lpConsoleTitle: LPCWSTR,
+
+            pub fn WriteConsoleInputW
+            (
+                hConsoleInput: HANDLE,
+                lpBuffer: *const INPUT_RECORD,
+                nLength: DWORD,
+                lpNumberOfEventsWritten: LPDWORD,
             ) -> BOOL;
+
+            pub fn CloseHandle(
+                hObject: HANDLE,
+            ) -> BOOL;
+
+            pub fn CreateConsoleScreenBuffer(
+                dwDesiredAccess: DWORD,
+                dwShareMode: DWORD,
+                lpSecurityAttributes: *const SECURITY_ATTRIBUTES,
+                dwFlags: DWORD,
+                lpScreenBufferData: LPVOID,
+            ) -> HANDLE;
+        }
+
+        pub type PCONSOLE_FONT_INFO = *mut CONSOLE_FONT_INFO;
+        pub type PCONSOLE_FONT_INFOEX = *mut CONSOLE_FONT_INFOEX;
+        pub type PCONSOLE_CURSOR_INFO = *mut CONSOLE_CURSOR_INFO;
+        pub type PCONSOLE_SELECTION_INFO = *mut CONSOLE_SELECTION_INFO;
+        pub type PCONSOLE_HISTORY_INFO = *mut CONSOLE_HISTORY_INFO;
+        pub type PCONSOLE_SCREEN_BUFFER_INFO = *mut CONSOLE_SCREEN_BUFFER_INFO;
+        pub type PCONSOLE_SCREEN_BUFFER_INFOEX = *mut CONSOLE_SCREEN_BUFFER_INFOEX;
+        pub type COLORREF = DWORD;
+
+        pub type PINPUT_RECORD = *mut INPUT_RECORD;
+        pub const KEY_EVENT: WORD = 0x0001;
+        pub const MOUSE_EVENT: WORD = 0x0002;
+        pub const WINDOW_BUFFER_SIZE_EVENT: WORD = 0x0004;
+        pub const MENU_EVENT: WORD = 0x0008;
+        pub const FOCUS_EVENT: WORD = 0x0010;
+
+        pub const ATTACH_PARENT_PROCESS: DWORD = 0xFFFFFFFF;
+        
+        #[repr(C)] #[derive( Clone, Copy )]
+        pub struct WINDOW_BUFFER_SIZE_RECORD
+        {
+            pub dwSize: COORD,
+        }
+
+        #[repr(C)] #[derive( Clone, Copy )]
+        pub struct SECURITY_ATTRIBUTES
+        {
+            pub nLength: DWORD,
+            pub lpSecurityDescriptor: LPVOID,
+            pub bInheritHandle: BOOL,
+        }
+
+        #[repr(C)] #[derive( Clone, Copy )]
+        pub struct CHAR_INFO_Char(()); 
+
+        impl CHAR_INFO_Char
+        {
+            pub unsafe fn UnicodeChar_mut(&mut self) -> &mut WCHAR
+            {
+                unsafe
+                {
+                    mem::transmute( ptr::null_mut::<&mut WCHAR>() )
+                }
+            }
         }
 
         #[repr(C)] #[derive( Clone, Copy )]
@@ -10500,15 +10833,31 @@ pub mod libc
         #[repr(C)] #[derive( Clone, Copy )]
         pub struct INPUT_RECORD_Event( () );
 
+        impl INPUT_RECORD_Event
+        {
+            pub unsafe fn WindowBufferSizeEvent(&self) -> &WINDOW_BUFFER_SIZE_RECORD
+            {
+                unsafe
+                {
+                    mem::transmute( ptr::null::<&WINDOW_BUFFER_SIZE_RECORD>() )
+                }
+            }
+            
+            pub unsafe fn KeyEvent(&self) -> &KEY_EVENT_RECORD
+            {
+                unsafe
+                {
+                    mem::transmute( ptr::null::<&KEY_EVENT_RECORD>() )
+                }
+            }
+        }
+
         #[repr(C)] #[derive( Clone, Copy )]
         pub struct INPUT_RECORD 
         {
             pub EventType: WORD,
             pub Event: INPUT_RECORD_Event,
         }
-
-        #[repr(C)] #[derive( Clone, Copy )]
-        pub struct CHAR_INFO_Char(());
 
         #[repr(C)] #[derive( Clone, Copy )]
         pub struct CHAR_INFO 
@@ -10543,6 +10892,41 @@ pub mod libc
             pub dwMaximumWindowSize: COORD,
         }
 
+        #[repr(C)] #[derive( Clone, Copy )]
+        pub struct KEY_EVENT_RECORD_uChar( () );
+
+        impl KEY_EVENT_RECORD_uChar
+        {
+            pub unsafe fn UnicodeChar(&self) -> &WCHAR
+            {
+                unsafe
+                {
+                    mem::transmute( ptr::null::<&WCHAR>() )
+                }
+            }
+        }
+
+        #[repr(C)] #[derive( Clone, Copy )]
+        pub struct KEY_EVENT_RECORD
+        {
+            pub bKeyDown: BOOL,
+            pub wRepeatCount: WORD,
+            pub wVirtualKeyCode: WORD,
+            pub wVirtualScanCode: WORD,
+            pub uChar: KEY_EVENT_RECORD_uChar,
+            pub dwControlKeyState: DWORD,
+        }
+
+        impl KEY_EVENT_RECORD
+        {
+            pub unsafe fn UnicodeChar(&self) -> &WCHAR
+            {
+                unsafe
+                {
+                    mem::transmute( ptr::null::<&WCHAR>() )
+                }
+            }
+        }
     } #[cfg(windows)] pub use self::windows::*;
 
 }
@@ -35231,4 +35615,4 @@ fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 35234
+// 35618
