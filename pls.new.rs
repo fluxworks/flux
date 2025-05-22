@@ -1938,6 +1938,16 @@ pub mod common
             ITALIC = 1,
             REVERSE = 2,
             UNDERLINE = 3,
+            NORMAL = 4,
+            EMPTY = 5,
+        }
+
+        impl Style
+        {
+            pub fn empty() -> Self
+            {
+                Self::EMPTY
+            }
         }
         /*
         bitflags!
@@ -2307,9 +2317,10 @@ pub mod common
         /// The following methods internally acquire both the read and write locks.
         impl Terminal
         {
+            /*
             /// Prepares the terminal to read input.
             pub fn prepare(&self, config: PrepareConfig) -> io::Result<PrepareState>
-            { self.0.prepare(config).map(PrepareState) }
+            { self.0.prepare(config).map(PrepareState)  } */
             /// Restores the terminal to its previous state.
             pub fn restore(&self, state: PrepareState) -> io::Result<()> { self.0.restore(state.0) }
         }
@@ -2399,13 +2410,14 @@ pub mod common
 
         impl<'a> TerminalReadGuard<'a>
         {
+            /*
             /// Prepares the terminal to read input.
             pub fn prepare(&mut self, config: PrepareConfig) -> io::Result<PrepareState>
             { self.0.prepare(config).map(PrepareState) }
             /// Performs terminal preparation using both [`Terminal`] locks.
             pub fn prepare_with_lock(&mut self, writer: &mut TerminalWriteGuard, config: PrepareConfig) -> 
             io::Result<PrepareState>
-            { self.0.prepare_with_lock(&mut writer.0, config).map(PrepareState) }
+            { self.0.prepare_with_lock(&mut writer.0, config).map(PrepareState) } */
             /// Restores the terminal to its previous state.
             pub fn restore(&mut self, state: PrepareState) -> io::Result<()> { self.0.restore(state.0) }
             /// Performs terminal state restoration using both [`Terminal`] locks.
@@ -2513,20 +2525,19 @@ pub mod common
                 //! Unix extension trait
                 use ::
                 {
+                    common::{ Event },
                     path::{ Path },
                     time::{ Duration },
                     *,
-                };                
-                use ::common::Private;
-                use ::common::terminal::Event;
+                };
                 /// Implements Unix-only extensions for terminal interfaces.
-                pub trait OpenTerminalExt: Sized + Private
+                pub trait OpenTerminalExt: Sized
                 {
                     /// Opens a terminal interface on the device at the given path.
                     fn from_path<P: AsRef<Path>>(path: P) -> io::Result<Self>;
                 }
                 /// Implements Unix-only extensions for terminal interfaces.
-                pub trait TerminalExt: Private
+                pub trait TerminalExt
                 {
                     /// Reads raw data from the terminal.
                     fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> ::io::Result<Option<Event>>;
@@ -2657,35 +2668,17 @@ pub mod common
                     writer: Mutex<Writer>,
                 }
 
-                pub struct ScreenReadGuard<'a> 
-                {
-                    screen: &'a Screen,
-                    reader: TerminalReadGuard<'a>,
-                }
-
-                pub struct ScreenWriteGuard<'a> 
-                {
-                    writer: TerminalWriteGuard<'a>,
-                    data: MutexGuard<'a, Writer>,
-                }
-
-                struct Writer 
-                {
-                    buffer: ScreenBuffer,
-                    clear_screen: bool,
-                    real_cursor: Cursor,
-                }
-
                 impl Screen 
                 {
                     pub fn new(term: Terminal, config: PrepareConfig) -> io::Result<Screen> 
                     {
                         let size = term.size()?;
-                        let state = term.prepare(config)?;
+                        // let state = term.prepare(config)?;
                         let screen = Screen
                         {
                             term: term,
-                            state: Some(state),
+                            //state: Some(state),
+                            state: None,
 
                             writer: Mutex::new(Writer
                             {
@@ -2777,6 +2770,25 @@ pub mod common
                         if let Err(e) = res.and_then(|_| self.term.exit_screen()) 
                         { eprintln!("failed to restore terminal: {}", e); }
                     }
+                }
+
+                pub struct ScreenReadGuard<'a> 
+                {
+                    screen: &'a Screen,
+                    reader: TerminalReadGuard<'a>,
+                }
+
+                pub struct ScreenWriteGuard<'a> 
+                {
+                    writer: TerminalWriteGuard<'a>,
+                    data: MutexGuard<'a, Writer>,
+                }
+
+                struct Writer 
+                {
+                    buffer: ScreenBuffer,
+                    clear_screen: bool,
+                    real_cursor: Cursor,
                 }
 
                 impl<'a> ScreenReadGuard<'a> 
@@ -3079,12 +3091,12 @@ pub mod common
                     {
                         self.lock_writer().exit_screen()
                     }
-
+                    /*
                     pub fn prepare(&self, config: PrepareConfig) -> io::Result<PrepareState> 
                     {
                         self.lock_reader().prepare(config)
-                    }
-
+                    } 
+                    */
                     pub fn restore(&self, state: PrepareState) -> io::Result<()> 
                     {
                         self.lock_reader().restore(state)
@@ -3252,13 +3264,12 @@ pub mod common
                     {
                         TerminalReadGuard{term, reader}
                     }
-
+                    /*
                     pub fn prepare(&mut self, config: PrepareConfig) -> io::Result<PrepareState> 
                     {
                         let mut writer = self.term.lock_writer();
                         self.prepare_with_lock(&mut writer, config)
                     }
-
                     pub fn prepare_with_lock(&mut self, writer: &mut TerminalWriteGuard, config: PrepareConfig) -> 
                     io::Result<PrepareState>
                     {
@@ -3340,7 +3351,7 @@ pub mod common
 
                         Ok(state)
                     }
-
+                    */
                     pub fn restore(&mut self, state: PrepareState) -> io::Result<()> 
                     {
                         let mut writer = self.term.lock_writer();
@@ -3524,6 +3535,7 @@ pub mod common
 
                     fn try_read(&mut self) -> io::Result<Option<Event>> 
                     {
+                        /*
                         let in_buffer = &mut self.reader.in_buffer;
 
                         if in_buffer.is_empty() {
@@ -3537,11 +3549,13 @@ pub mod common
                                 Ok(None) => Ok(None),
                                 Err(e) => Err(e)
                             }
-                        }
+                        } */
+                        Ok( None )
                     }
 
                     fn handle_signal(&mut self, sig: Signal) -> io::Result<Option<Event>> 
                     {
+                        /*
                         match sig {
                             Signal::Continue => {
                                 self.resume()?;
@@ -3557,14 +3571,16 @@ pub mod common
                             Ok(Some(Event::Signal(sig)))
                         } else {
                             Ok(None)
-                        }
+                        } */
+                        Ok( None )
                     }
 
                     fn resume(&mut self) -> io::Result<()> 
                     {
+                        /*
                         if let Some(resume) = self.reader.resume {
                             let _ = self.prepare(resume.config)?;
-                        }
+                        } */
                         Ok(())
                     }
                 }
@@ -3783,7 +3799,9 @@ pub mod common
                         Ok(())
                     }
 
-                    pub fn set_style(&mut self, style: Style) -> io::Result<()> {
+                    pub fn set_style(&mut self, style: Style) -> io::Result<()>
+                    {
+                        /*
                         let add = style - self.writer.cur_style;
                         let remove = self.writer.cur_style - style;
 
@@ -3799,13 +3817,15 @@ pub mod common
                         } else {
                             self.add_style(add)?;
                             self.remove_style(remove)?;
-                        }
+                        } */
 
                         Ok(())
                     }
 
-                    pub fn set_theme(&mut self, theme: Theme) -> io::Result<()> {
-                        self.set_attrs(theme.fg, theme.bg, theme.style)
+                    pub fn set_theme(&mut self, theme: Theme) -> io::Result<()>
+                    {
+                        //self.set_attrs(theme.fg, theme.bg, theme.style)
+                        Ok(())
                     }
 
                     pub fn set_attrs(&mut self, fg: Option<Color>, bg: Option<Color>, style: Style) -> io::Result<()> {
@@ -3975,6 +3995,7 @@ pub mod common
 
                     fn write_data(&self, buf: &[u8]) -> (usize, io::Result<()>) 
                     {
+                        /*
                         let mut offset = 0;
 
                         let r = loop {
@@ -3990,7 +4011,8 @@ pub mod common
                             }
                         };
 
-                        (offset, r)
+                        (offset, r) */
+                        ( 0, Ok(()) )
                     }
                     /*
                     fn expand<T: AsRef<[u8]>>(&mut self, exp: Expansion<T>) -> io::Result<()> {
@@ -4158,6 +4180,7 @@ pub mod common
 
                 fn to_timeval(d: Duration) -> TimeVal 
                 {
+                    /*
                     const MAX_SECS: i64 = i64::max_value() / 1_000;
 
                     let secs = match d.as_secs() {
@@ -4165,9 +4188,10 @@ pub mod common
                         n => n as i64,
                     };
 
-                    let millis = d.subsec_millis() as i64;
+                    let millis = d.subsec_millis() as i64; */
 
-                    TimeVal::milliseconds(secs * 1_000 + millis)
+                    //TimeVal::milliseconds(secs * 1_000 + millis)
+                    TimeVal::milliseconds( 0 )
                 }
 
                 fn peek_event(buf: &[u8], sequences: &SeqMap) -> io::Result<Option<(Event, usize)>>
@@ -4222,6 +4246,7 @@ pub mod common
 
                 fn parse_mouse_data(mut buf: &[u8]) -> Option<(Mouse, usize)> 
                 {
+                    /*
                     let orig_len = buf.len();
 
                     let (mut input, end) = parse_integer(&mut buf)?;
@@ -4275,7 +4300,8 @@ pub mod common
                         position,
                         input,
                         modifiers: mods,
-                    }, orig_len - buf.len()))
+                    }, orig_len - buf.len())) */
+                    None
                 }
 
                 fn parse_integer(buf: &mut &[u8]) -> Option<(u32, u8)> 
@@ -4407,47 +4433,13 @@ pub mod common
                     u as u32
                 }
             } pub use self::terminal::{ PrepareState, Terminal, TerminalReadGuard, TerminalWriteGuard };
-                   
-            impl self::TerminalExt for Screen
-            {
-                fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> ::io::Result<Option<::common::terminal::Event>>
-                { self.0.read_raw(buf, timeout) }
-            }
-            
-            impl<'a> self::TerminalExt for ScreenReadGuard<'a>
-            {
-                fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>>
-                { self.0.read_raw(buf, timeout) }
-            }
-            
-            impl OpenTerminalExt for Terminal 
-            {
-                fn from_path<P: AsRef<Path>>(path: P) -> ::io::Result<Self> 
-                { common::system::Terminal::open(path).map(Terminal) }
-            }
-            
-            impl TerminalExt for Terminal
-            {
-                fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>>
-                { self.0.read_raw(buf, timeout) }
-            }
-            
-            impl<'a> TerminalExt for TerminalReadGuard<'a>
-            {
-                fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> ::io::Result<Option<Event>>
-                { self.0.read_raw(buf, timeout) }
-            }
-            
-            impl ::common::Private for Screen {} 
-            impl<'a> ::common::Private for ScreenReadGuard<'a> {}
-            impl ::common::Private for Terminal {}
-            impl<'a> ::common::Private for TerminalReadGuard<'a> {}
         }
 
         pub mod windows
         {
             use ::
             {
+                common::{ Event },
                 time::{ Duration },
                 libc::windows::INPUT_RECORD,
                 *,
@@ -4458,13 +4450,13 @@ pub mod common
                 //! Windows console extension trait
                 use ::
                 {
-                    common::{ Private, Event },
+                    common::{ Event },
                     libc::windows::{ * },
                     time::{ Duration },
                     *,
                 }; 
                 /// Implements Windows-only extensions for terminal interfaces.
-                pub trait TerminalExt: Private
+                pub trait TerminalExt
                 {
                     /// Reads raw data from the console.
                     fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> ::io::Result<Option<Event>>;
@@ -4484,13 +4476,17 @@ pub mod common
                         {
                             Color, Cursor, CursorMode, Event, Key, PrepareConfig, Size, Style, Theme, MouseButton, 
                             Mouse, MouseInput, ModifierState,
-                        },
+                        }, Signal, SignalSet,
                     },
                     ffi::OsStr,
                     libc::windows::{ * },
                     mem::{replace, zeroed},
                     //os::windows::ffi::OsStrExt,
-                    sync::{ atomic::{AtomicUsize, Ordering}, LockResult, Mutex, MutexGuard, TryLockResult},
+                    sync::
+                    { 
+                        atomic::{ AtomicUsize, Ordering }, 
+                        LockResult, Mutex, MutexGuard, TryLockResult, map_lock_result, map_try_lock_result,
+                    },
                     time::Duration,
                     *,
                 };
@@ -4934,7 +4930,9 @@ pub mod common
                         Ok(())
                     }
 
-                    pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool> {
+                    pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool>
+                    {
+                        /*
                         if get_signal().is_some() {
                             return Ok(true);
                         }
@@ -4946,7 +4944,12 @@ pub mod common
                             WAIT_OBJECT_0 => Ok(true),
                             WAIT_TIMEOUT => Ok(false),
                             WAIT_FAILED | _ => Err(io::Error::last_os_error())
+                                                    }
+                                                                        }
+                                                                         | _ => Err(io::Error::last_os_error())
                         }
+                        */
+                        Ok( true )
                     }
 
                     pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
@@ -5003,8 +5006,9 @@ pub mod common
                         }
                     }
 
-                    pub fn read_raw_event(&mut self, events: &mut [INPUT_RECORD],
-                            timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                    pub fn read_raw_event(&mut self, events: &mut [INPUT_RECORD], timeout: Option<Duration>) -> io::Result<Option<Event>> 
+                    {
+                        /*
                         if !self.wait_event(timeout)? {
                             return Ok(None);
                         }
@@ -5023,6 +5027,8 @@ pub mod common
                             &mut n) })?;
 
                         Ok(Some(Event::Raw(n as usize)))
+                        */
+                        Ok( None )
                     }
 
                     fn mouse_event(&mut self, event: &INPUT_RECORD) -> Option<Mouse>
@@ -5088,19 +5094,20 @@ pub mod common
                         TerminalWriteGuard{term, writer: writer}
                     }
 
-                    fn enter_screen(&mut self) -> io::Result<HANDLE> {
+                    fn enter_screen(&mut self) -> io::Result<HANDLE>
+                    {
                         let size = self.size()?;
 
-                        let handle = result_handle(unsafe { CreateConsoleScreenBuffer(
+                        let handle = result_handle(unsafe { CreateConsoleScreenBuffer
+                        (
                             GENERIC_READ | GENERIC_WRITE,
                             FILE_SHARE_READ | FILE_SHARE_WRITE,
                             ptr::null(),
                             CONSOLE_TEXTMODE_BUFFER,
                             ptr::null_mut()) })?;
 
-                        if let Err(e) = unsafe { setup_screen(handle, size) } {
-                            // If setup fails, close the screen buffer handle,
-                            // but preserve the original error
+                        if let Err(e) = unsafe { setup_screen(handle, size) }
+                        {
                             let _ = unsafe { close_handle(handle) };
                             return Err(e);
                         }
@@ -5108,8 +5115,7 @@ pub mod common
                         let old_handle = self.swap_out_handle(handle);
 
                         let mut out_mode = unsafe { console_mode(handle)? };
-
-                        // Disable wrapping when cursor passes last column
+                        
                         out_mode &= !(ENABLE_WRAP_AT_EOL_OUTPUT | DISABLE_NEWLINE_AUTO_RETURN);
 
                         unsafe { set_console_mode(handle, out_mode)?; }
@@ -5269,23 +5275,23 @@ pub mod common
                     }
 
                     pub fn add_style(&mut self, style: Style) -> io::Result<()> {
-                        let add = style - self.writer.style;
+                        /*let add = style - self.writer.style;
 
                         if !add.is_empty() {
                             self.writer.style |= add;
                             self.update_attrs()?;
-                        }
+                        } */
 
                         Ok(())
                     }
 
                     pub fn remove_style(&mut self, style: Style) -> io::Result<()> {
-                        let remove = style & self.writer.style;
+                        /* let remove = style & self.writer.style;
 
                         if !remove.is_empty() {
                             self.writer.style -= remove;
                             self.update_attrs()?;
-                        }
+                        } */
 
                         Ok(())
                     }
@@ -5315,8 +5321,10 @@ pub mod common
                         Ok(())
                     }
 
-                    pub fn set_theme(&mut self, theme: Theme) -> io::Result<()> {
-                        self.set_attributes(theme.fg, theme.bg, theme.style)
+                    pub fn set_theme(&mut self, theme: Theme) -> io::Result<()> 
+                    {
+                        /*self.set_attributes(theme.fg, theme.bg, theme.style)*/
+                        Ok(())
                     }
 
                     // Clears any previous attributes
@@ -5332,7 +5340,9 @@ pub mod common
                         Ok(())
                     }
 
-                    fn update_attrs(&mut self) -> io::Result<()> {
+                    fn update_attrs(&mut self) -> io::Result<()>
+                    {
+                        /*
                         let mut attrs = self.term.default_attrs;
 
                         if let Some(fg) = self.writer.fg {
@@ -5351,15 +5361,19 @@ pub mod common
                             attrs = swap_colors(attrs);
                         }
 
-                        self.set_attrs(attrs)
+                        self.set_attrs(attrs) */
+                        Ok(())
                     }
 
-                    pub fn write_char(&mut self, ch: char) -> io::Result<()> {
+                    pub fn write_char(&mut self, ch: char) -> io::Result<()> 
+                    {
                         let mut buf = [0; 4];
                         self.write_str(ch.encode_utf8(&mut buf))
                     }
 
-                    pub fn write_str(&mut self, s: &str) -> io::Result<()> {
+                    pub fn write_str(&mut self, s: &str) -> io::Result<()>
+                    {
+                        /*
                         let buf = OsStr::new(s).encode_wide().collect::<Vec<_>>();
                         let mut n = 0;
 
@@ -5375,8 +5389,7 @@ pub mod common
                                 ptr::null_mut()) })?;
 
                             n += n_dw as usize;
-                        }
-
+                        } */
                         Ok(())
                     }
 
@@ -5443,7 +5456,7 @@ pub mod common
                 
                 fn as_millis(timeout: Option<Duration>) -> DWORD 
                 {
-                    match timeout {
+                    /*match timeout {
                         Some(t) => {
                             let s = (t.as_secs() * 1_000) as DWORD;
                             let ms = (t.subsec_nanos() / 1_000_000) as DWORD;
@@ -5451,12 +5464,14 @@ pub mod common
                             s + ms
                         }
                         None => INFINITE,
-                    }
+                    } */
+                    0
                 }
 
                 fn fg_code(color: Color) -> WORD 
                 {
-                    (match color {
+                    (match color 
+                    {
                         Color::Black => 0,
                         Color::Blue => FOREGROUND_BLUE,
                         Color::Cyan => FOREGROUND_BLUE | FOREGROUND_GREEN,
@@ -5486,10 +5501,10 @@ pub mod common
                 {
                     let mut code = 0;
 
-                    if style.contains(Style::BOLD) {
+                    /* if style.contains(Style::BOLD) {
                         // Closest available approximation for bold text
                         code |= FOREGROUND_INTENSITY as WORD;
-                    }
+                    } */
 
                     code
                 }
@@ -5544,8 +5559,7 @@ pub mod common
                 {
                     result_bool(SetConsoleMode(handle, mode))
                 }
-
-                // Perform remaining screen buffer setup
+                
                 unsafe fn setup_screen(handle: HANDLE, size: Size) -> io::Result<()> 
                 {
                     result_bool(SetConsoleScreenBufferSize(handle, size_to_coord(size)))?;
@@ -5557,11 +5571,9 @@ pub mod common
                     let old_out_mode = console_mode(handle)?;
 
                     let mut out_mode = old_out_mode;
-
-                    // Enable interpreting escape sequences in output
+                    
                     out_mode |= ENABLE_PROCESSED_OUTPUT;
-
-                    // Enable wrapping when cursor passes last column
+                    
                     out_mode |= ENABLE_WRAP_AT_EOL_OUTPUT;
 
                     set_console_mode(handle, out_mode)?;
@@ -5639,7 +5651,8 @@ pub mod common
 
                 fn cursor_to_coord(pos: Cursor) -> COORD 
                 {
-                    COORD{
+                    COORD
+                    {
                         Y: to_short(pos.line),
                         X: to_short(pos.column),
                     }
@@ -5739,6 +5752,7 @@ pub mod common
                             VK_F12 => Key::F(12),
                             _ =>
                             {
+                                /*
                                 if has_alt(key.dwControlKeyState) { return None; }
 
                                 let is_ctrl = has_ctrl(key.dwControlKeyState);
@@ -5755,7 +5769,8 @@ pub mod common
                                     }
                                 }
 
-                                else { return None; }
+                                else { return None; } */
+                                return None;
                             }
                         };
 
@@ -5884,7 +5899,7 @@ pub mod common
                     common::
                     {
                         buffer::ScreenBuffer,
-                        sys::terminal::{ size_event, PrepareState, Terminal, TerminalReadGuard, TerminalWriteGuard },
+                        sys::terminal::{ PrepareState, Terminal, TerminalReadGuard, TerminalWriteGuard },
                         terminal::{Color, Cursor, CursorMode, Event, PrepareConfig, Size, Style},
                     },
                     libc::windows::{ * },
@@ -5892,36 +5907,39 @@ pub mod common
                     time::Duration,
                     *,
                 };
-                /*
-                use winapi::shared::ntdef::HANDLE;
-                use winapi::um::wincon::INPUT_RECORD;
-                */
-                pub struct Screen {
+                
+                pub struct Screen 
+                {
                     term: Terminal,
-
                     state: Option<PrepareState>,
                     old_handle: HANDLE,
                     writer: Mutex<Writer>,
                 }
 
-                pub struct ScreenReadGuard<'a> {
+                pub struct ScreenReadGuard<'a> 
+                {
                     screen: &'a Screen,
                     reader: TerminalReadGuard<'a>,
                 }
 
-                pub struct ScreenWriteGuard<'a> {
+                pub struct ScreenWriteGuard<'a> 
+                {
                     writer: TerminalWriteGuard<'a>,
                     data: MutexGuard<'a, Writer>,
                 }
 
-                struct Writer {
+                struct Writer 
+                {
                     buffer: ScreenBuffer,
                     clear_screen: bool,
                     real_cursor: Cursor,
                 }
 
-                impl Screen {
-                    pub fn new(term: Terminal, config: PrepareConfig) -> io::Result<Screen> {
+                impl Screen 
+                {
+                    /*
+                    pub fn new(term: Terminal, config: PrepareConfig) -> io::Result<Screen> 
+                    {
                         let size = term.size()?;
 
                         let old_handle = term.enter_screen()?;
@@ -5939,61 +5957,74 @@ pub mod common
                         })
                     }
 
-                    pub fn stdout(config: PrepareConfig) -> io::Result<Screen> {
+                    pub fn stdout(config: PrepareConfig) -> io::Result<Screen> 
+                    {
                         Screen::new(Terminal::stdout()?, config)
                     }
 
-                    pub fn stderr(config: PrepareConfig) -> io::Result<Screen> {
+                    pub fn stderr(config: PrepareConfig) -> io::Result<Screen> 
+                    {
                         Screen::new(Terminal::stderr()?, config)
-                    }
+                    }  */
 
                     forward_screen_buffer_methods!{ |slf| slf.lock_write_data().buffer }
 
-                    pub fn lock_read(&self) -> LockResult<ScreenReadGuard> {
+                    pub fn lock_read(&self) -> LockResult<ScreenReadGuard> 
+                    {
                         map_lock_result(self.term.lock_read(),
                             |r| ScreenReadGuard::new(self, r))
                     }
 
-                    pub fn try_lock_read(&self) -> TryLockResult<ScreenReadGuard> {
+                    pub fn try_lock_read(&self) -> TryLockResult<ScreenReadGuard> 
+                    {
                         map_try_lock_result(self.term.try_lock_read(),
                             |r| ScreenReadGuard::new(self, r))
                     }
 
-                    pub fn lock_write(&self) -> LockResult<ScreenWriteGuard> {
+                    pub fn lock_write(&self) -> LockResult<ScreenWriteGuard> 
+                    {
                         map2_lock_result(self.term.lock_write(), self.writer.lock(),
                             |a, b| ScreenWriteGuard::new(a, b))
                     }
 
-                    pub fn try_lock_write(&self) -> TryLockResult<ScreenWriteGuard> {
+                    pub fn try_lock_write(&self) -> TryLockResult<ScreenWriteGuard> 
+                    {
                         map2_try_lock_result(self.term.try_lock_write(), self.writer.try_lock(),
                             |a, b| ScreenWriteGuard::new(a, b))
                     }
 
-                    fn lock_reader(&self) -> ScreenReadGuard {
+                    fn lock_reader(&self) -> ScreenReadGuard 
+                    {
                         self.lock_read().expect("Screen::lock_reader")
                     }
 
-                    fn lock_writer(&self) -> ScreenWriteGuard {
+                    fn lock_writer(&self) -> ScreenWriteGuard 
+                    {
                         self.lock_write().expect("Screen::lock_writer")
                     }
 
-                    fn lock_write_data(&self) -> MutexGuard<Writer> {
+                    fn lock_write_data(&self) -> MutexGuard<Writer> 
+                    {
                         self.writer.lock().expect("Screen::lock_writer")
                     }
 
-                    pub fn name(&self) -> &str {
+                    pub fn name(&self) -> &str 
+                    {
                         self.term.name()
                     }
 
-                    pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> {
+                    pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> 
+                    {
                         self.term.set_cursor_mode(mode)
                     }
 
-                    pub fn wait_event(&self, timeout: Option<Duration>) -> io::Result<bool> {
+                    pub fn wait_event(&self, timeout: Option<Duration>) -> io::Result<bool> 
+                    {
                         self.lock_reader().wait_event(timeout)
                     }
 
-                    pub fn read_event(&self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                    pub fn read_event(&self, timeout: Option<Duration>) -> io::Result<Option<Event>> 
+                    {
                         self.lock_reader().read_event(timeout)
                     }
 
@@ -6001,18 +6032,21 @@ pub mod common
                         self.lock_reader().read_raw(buf, timeout)
                     }
 
-                    pub fn read_raw_event(&self, events: &mut [INPUT_RECORD],
-                            timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                        self.lock_reader().read_raw_event(events, timeout)
-                    }
+                    pub fn read_raw_event(&self, events: &mut [INPUT_RECORD], timeout: Option<Duration>) -> 
+                    io::Result<Option<Event>>
+                    { self.lock_reader().read_raw_event( events, timeout ) }
 
-                    pub fn refresh(&self) -> io::Result<()> {
+                    pub fn refresh(&self) -> io::Result<()> 
+                    {
                         self.lock_writer().refresh()
                     }
                 }
 
-                impl Drop for Screen {
-                    fn drop(&mut self) {
+                impl Drop for Screen 
+                {
+                    fn drop(&mut self)
+                    {
+                        /*
                         let res = if let Some(state) = self.state.take() {
                             self.term.restore(state)
                         } else {
@@ -6022,23 +6056,28 @@ pub mod common
                         if let Err(e) = res.and_then(
                                 |_| unsafe { self.term.exit_screen(self.old_handle) }) {
                             eprintln!("failed to restore terminal: {}", e);
-                        }
+                        } */
                     }
                 }
 
                 unsafe impl Send for Screen {}
                 unsafe impl Sync for Screen {}
 
-                impl<'a> ScreenReadGuard<'a> {
-                    fn new(screen: &'a Screen, reader: TerminalReadGuard<'a>) -> ScreenReadGuard<'a> {
+                impl<'a> ScreenReadGuard<'a> 
+                {
+                    fn new(screen: &'a Screen, reader: TerminalReadGuard<'a>) -> ScreenReadGuard<'a> 
+                    {
                         ScreenReadGuard{screen, reader}
                     }
 
-                    pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool> {
+                    pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool> 
+                    {
                         self.reader.wait_event(timeout)
                     }
 
-                    pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                    pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> 
+                    {
+                        /*
                         let r = self.reader.read_event(timeout)?;
 
                         if let Some(Event::Resize(size)) = r {
@@ -6046,10 +6085,13 @@ pub mod common
                         }
 
                         Ok(r)
+                        */
+                        Ok( None )
                     }
 
                     pub fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>>
                     {
+                        /*
                         let r = self.reader.read_raw(buf, timeout)?;
 
                         if let Some(Event::Resize(size)) = r {
@@ -6057,11 +6099,14 @@ pub mod common
                         }
 
                         Ok(r)
+                        */
+                        Ok( None )
                     }
 
                     pub fn read_raw_event(&mut self, events: &mut [INPUT_RECORD], timeout: Option<Duration>) ->
                     io::Result<Option<Event>>
                     {
+                        /*
                         let r = self.reader.read_raw_event(events, timeout)?;
 
                         if let Some(Event::Raw(n)) = r
@@ -6075,6 +6120,8 @@ pub mod common
                         }
 
                         Ok(r)
+                        */
+                        Ok( None )
                     }
                 }
 
@@ -6090,6 +6137,7 @@ pub mod common
 
                     pub fn refresh(&mut self) -> io::Result<()>
                     {
+                        /*
                         if self.data.clear_screen
                         {
                             self.writer.clear_screen()?;
@@ -6115,6 +6163,7 @@ pub mod common
 
                         if pos.is_out_of_bounds(size) { self.move_cursor(Cursor::last(size))?; }
                         else { self.move_cursor(pos)?; }
+                        */
 
                         Ok(())
                     }
@@ -6122,7 +6171,7 @@ pub mod common
                     fn apply_attrs(&mut self, src: (Option<Color>, Option<Color>, Style), dest: (Option<Color>, Option<Color>, Style)) ->
                     io::Result<()>
                     {
-                        if src != dest { self.writer.set_attributes(dest.0, dest.1, dest.2)?; }
+                        //if src != dest { self.writer.set_attributes(dest.0, dest.1, dest.2)?; }
                         Ok(())
                     }
 
@@ -6157,76 +6206,6 @@ pub mod common
                 }
 
             } pub use self::screen::{ * };
-            
-            impl TerminalExt for Screen
-            {
-                fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> ::io::Result<Option<Event>>
-                { self.0.read_raw(buf, timeout) }
-
-                fn read_raw_event
-                (&mut self, events: &mut [INPUT_RECORD], timeout: Option<Duration>) 
-                -> io::Result<Option<Event>>
-                {
-                    self.0.read_raw_event(events, timeout)
-                }
-            }
-            
-            impl<'a> TerminalExt for ScreenReadGuard<'a> 
-            {
-                fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> ::io::Result<Option<Event>> 
-                { 
-                    //self.0.read_raw(buf, timeout)
-                    Ok( None )
-                }
-
-                fn read_raw_event
-                (&mut self, events: &mut [INPUT_RECORD], timeout: Option<Duration>) 
-                -> io::Result<Option<Event>>
-                { 
-                    //self.0.read_raw_event(events, timeout) 
-                    Ok( None )
-                }
-            }
-            
-            impl TerminalExt for Terminal
-            {
-                fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> ::io::Result<Option<Event>>
-                { 
-                    //self.0.read_raw(buf, timeout)
-                    Ok(None)
-                }
-
-                fn read_raw_event
-                (
-                    &mut self, 
-                    events: &mut [INPUT_RECORD], 
-                    timeout: Option<Duration>
-                ) -> io::Result<Option<Event>>
-                { 
-                    //self.0.read_raw_event(events, timeout) 
-                    Ok(None)
-                }
-            }
-            
-            impl<'a> TerminalExt for TerminalReadGuard<'a> 
-            {
-                fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> ::io::Result<Option<Event>>
-                { 
-                    //self.0.read_raw(buf, timeout)
-                    Ok( None )
-                }
-
-                fn read_raw_event
-                (
-                    &mut self, 
-                    events: &mut [INPUT_RECORD], 
-                    timeout: Option<Duration>
-                ) -> io::Result<Option<Event>>
-                { 
-                    // self.0.read_raw_event(events, timeout) 
-                    Ok( None )
-                }
-            }
         }
     }
     
@@ -6235,13 +6214,6 @@ pub mod common
 
     #[cfg(windows)] pub use self::system::windows as sys;
     #[cfg(windows)] pub use self::sys::ext as windows;
-
-    // Private trait used to prevent external crates from implementing extension traits
-    pub trait Private {}
-    impl Private for screen::Screen {} 
-    impl<'a> Private for ScreenReadGuard<'a> {}
-    impl Private for Terminal {}
-    impl<'a> Private for TerminalReadGuard<'a> {}
 }
 /*
 over | the best data format. */
@@ -10397,12 +10369,51 @@ pub mod libc
         pub type KAFFINITY = ULONG_PTR;
         pub type PKAFFINITY = *mut KAFFINITY;
 
+        pub type PKEY_EVENT_RECORD = *mut KEY_EVENT_RECORD;
+        pub const RIGHT_ALT_PRESSED: DWORD = 0x0001;
+        pub const LEFT_ALT_PRESSED: DWORD = 0x0002;
+        pub const RIGHT_CTRL_PRESSED: DWORD = 0x0004;
+        pub const LEFT_CTRL_PRESSED: DWORD = 0x0008;
+        pub const SHIFT_PRESSED: DWORD = 0x0010;
+        pub const NUMLOCK_ON: DWORD = 0x0020;
+        pub const SCROLLLOCK_ON: DWORD = 0x0040;
+        pub const CAPSLOCK_ON: DWORD = 0x0080;
+        pub const ENHANCED_KEY: DWORD = 0x0100;
+        pub const NLS_DBCSCHAR: DWORD = 0x00010000;
+        pub const NLS_ALPHANUMERIC: DWORD = 0x00000000;
+        pub const NLS_KATAKANA: DWORD = 0x00020000;
+        pub const NLS_HIRAGANA: DWORD = 0x00040000;
+        pub const NLS_ROMAN: DWORD = 0x00400000;
+        pub const NLS_IME_CONVERSION: DWORD = 0x00800000;
+        pub const NLS_IME_DISABLE: DWORD = 0x20000000;
+
         #[repr( C )] struct GROUP_AFFINITY 
         {
             Mask: KAFFINITY,
             Group: USHORT,
             Reserved: [USHORT; 3],
         }
+        
+        pub const CTRL_C_EVENT: DWORD = 0;
+        pub const CTRL_BREAK_EVENT: DWORD = 1;
+        pub const CTRL_CLOSE_EVENT: DWORD = 2;
+        pub const CTRL_LOGOFF_EVENT: DWORD = 5;
+        pub const CTRL_SHUTDOWN_EVENT: DWORD = 6;
+        pub const ENABLE_PROCESSED_INPUT: DWORD = 0x0001;
+        pub const ENABLE_LINE_INPUT: DWORD = 0x0002;
+        pub const ENABLE_ECHO_INPUT: DWORD = 0x0004;
+        pub const ENABLE_WINDOW_INPUT: DWORD = 0x0008;
+        pub const ENABLE_MOUSE_INPUT: DWORD = 0x0010;
+        pub const ENABLE_INSERT_MODE: DWORD = 0x0020;
+        pub const ENABLE_QUICK_EDIT_MODE: DWORD = 0x0040;
+        pub const ENABLE_EXTENDED_FLAGS: DWORD = 0x0080;
+        pub const ENABLE_AUTO_POSITION: DWORD = 0x0100;
+        pub const ENABLE_VIRTUAL_TERMINAL_INPUT: DWORD = 0x0200;
+        pub const ENABLE_PROCESSED_OUTPUT: DWORD = 0x0001;
+        pub const ENABLE_WRAP_AT_EOL_OUTPUT: DWORD = 0x0002;
+        pub const ENABLE_VIRTUAL_TERMINAL_PROCESSING: DWORD = 0x0004;
+        pub const DISABLE_NEWLINE_AUTO_RETURN: DWORD = 0x0008;
+        pub const ENABLE_LVB_GRID_WORLDWIDE: DWORD = 0x0010;
 
         pub type PGROUP_AFFINITY = *mut GROUP_AFFINITY;
         pub const MAXIMUM_PROC_PER_GROUP: UCHAR = 64;
@@ -10493,16 +10504,41 @@ pub mod libc
         pub type PCZZSTR = *const CHAR;
         pub type PNZCH = *mut CHAR;
         pub type PCNZCH = *const CHAR;
+
+        pub const FILE_SHARE_READ: DWORD = 0x00000001;
+        pub const FILE_SHARE_WRITE: DWORD = 0x00000002;
+        pub const FILE_SHARE_DELETE: DWORD = 0x00000004;
         // Skipping TCHAR things
         pub type DOUBLE = c_double;
 
         pub const WAIT_TIMEOUT: DWORD = 258;
-        
-        pub const CTRL_C_EVENT: DWORD = 0;
-        pub const CTRL_BREAK_EVENT: DWORD = 1;
-        pub const CTRL_CLOSE_EVENT: DWORD = 2;
-        pub const CTRL_LOGOFF_EVENT: DWORD = 5;
-        pub const CTRL_SHUTDOWN_EVENT: DWORD = 6;
+
+        pub type PCONSOLE_READCONSOLE_CONTROL = *mut CONSOLE_READCONSOLE_CONTROL;
+        pub const CONSOLE_TEXTMODE_BUFFER: DWORD = 1;
+        pub type PEXCEPTION_POINTERS = *mut EXCEPTION_POINTERS;
+        pub type PACCESS_TOKEN = PVOID;
+        pub type PSECURITY_DESCRIPTOR = PVOID;
+        pub type PSID = PVOID;
+        pub type PCLAIMS_BLOB = PVOID;
+        pub type ACCESS_MASK = DWORD;
+        pub type PACCESS_MASK = *mut ACCESS_MASK;
+        pub const DELETE: DWORD = 0x00010000;
+        pub const READ_CONTROL: DWORD = 0x00020000;
+        pub const WRITE_DAC: DWORD = 0x00040000;
+        pub const WRITE_OWNER: DWORD = 0x00080000;
+        pub const SYNCHRONIZE: DWORD = 0x00100000;
+        pub const STANDARD_RIGHTS_REQUIRED: DWORD = 0x000F0000;
+        pub const STANDARD_RIGHTS_READ: DWORD = READ_CONTROL;
+        pub const STANDARD_RIGHTS_WRITE: DWORD = READ_CONTROL;
+        pub const STANDARD_RIGHTS_EXECUTE: DWORD = READ_CONTROL;
+        pub const STANDARD_RIGHTS_ALL: DWORD = 0x001F0000;
+        pub const SPECIFIC_RIGHTS_ALL: DWORD = 0x0000FFFF;
+        pub const ACCESS_SYSTEM_SECURITY: DWORD = 0x01000000;
+        pub const MAXIMUM_ALLOWED: DWORD = 0x02000000;
+        pub const GENERIC_READ: DWORD = 0x80000000;
+        pub const GENERIC_WRITE: DWORD = 0x40000000;
+        pub const GENERIC_EXECUTE: DWORD = 0x20000000;
+        pub const GENERIC_ALL: DWORD = 0x10000000;
         
         pub const STD_INPUT_HANDLE: DWORD = -10i32 as u32;
         pub const STD_OUTPUT_HANDLE: DWORD = -11i32 as u32;
@@ -10566,6 +10602,23 @@ pub mod libc
         pub const VK_RWIN: c_int = 0x5C;
         pub const VK_APPS: c_int = 0x5D;
         pub const VK_SLEEP: c_int = 0x5F;
+
+        pub const FOREGROUND_BLUE: WORD = 0x0001;
+        pub const FOREGROUND_GREEN: WORD = 0x0002;
+        pub const FOREGROUND_RED: WORD = 0x0004;
+        pub const FOREGROUND_INTENSITY: WORD = 0x0008;
+        pub const BACKGROUND_BLUE: WORD = 0x0010;
+        pub const BACKGROUND_GREEN: WORD = 0x0020;
+        pub const BACKGROUND_RED: WORD = 0x0040;
+        pub const BACKGROUND_INTENSITY: WORD = 0x0080;
+        pub const COMMON_LVB_LEADING_BYTE: WORD = 0x0100;
+        pub const COMMON_LVB_TRAILING_BYTE: WORD = 0x0200;
+        pub const COMMON_LVB_GRID_HORIZONTAL: WORD = 0x0400;
+        pub const COMMON_LVB_GRID_LVERTICAL: WORD = 0x0800;
+        pub const COMMON_LVB_GRID_RVERTICAL: WORD = 0x1000;
+        pub const COMMON_LVB_REVERSE_VIDEO: WORD = 0x4000;
+        pub const COMMON_LVB_UNDERSCORE: WORD = 0x8000;
+        pub const COMMON_LVB_SBCSDBCS: WORD = 0x0300;
 
         extern "system"
         {
@@ -10717,7 +10770,88 @@ pub mod libc
                 dwFlags: DWORD,
                 lpScreenBufferData: LPVOID,
             ) -> HANDLE;
+
+            pub fn SetConsoleMode
+            (
+                hConsoleHandle: HANDLE,
+                dwMode: DWORD,
+            ) -> BOOL;
+
+            pub fn AllocConsole() -> BOOL;
+            pub fn GetConsoleCP() -> UINT;
+            pub fn GetConsoleMode(
+                hConsoleHandle: HANDLE,
+                lpMode: LPDWORD,
+            ) -> BOOL;
+
+            
+            pub fn FillConsoleOutputCharacterA
+            (
+                hConsoleOutput: HANDLE,
+                cCharacter: CHAR,
+                nLength: DWORD,
+                dwWriteCoord: COORD,
+                lpNumberOfCharsWritten: LPDWORD,
+            ) -> BOOL;
+
+            pub fn FillConsoleOutputCharacterW
+            (
+                hConsoleOutput: HANDLE,
+                cCharacter: WCHAR,
+                nLength: DWORD,
+                dwWriteCoord: COORD,
+                lpNumberOfCharsWritten: LPDWORD,
+            ) -> BOOL;
+
+            pub fn FillConsoleOutputAttribute
+            (
+                hConsoleOutput: HANDLE,
+                wAttribute: WORD,
+                nLength: DWORD,
+                dwWriteCoord: COORD,
+                lpNumberOfAttrsWritten: LPDWORD,
+            ) -> BOOL;
+
+            pub fn ReadConsoleInputW
+            (
+                hConsoleInput: HANDLE,
+                lpBuffer: PINPUT_RECORD,
+                nLength: DWORD,
+                lpNumberOfEventsRead: LPDWORD,
+            ) -> BOOL;
+
+            pub fn ReadConsoleW
+            (
+                hConsoleInput: HANDLE,
+                lpBuffer: LPVOID,
+                nNumberOfCharsToRead: DWORD,
+                lpNumberOfCharsRead: LPDWORD,
+                pInputControl: PCONSOLE_READCONSOLE_CONTROL,
+            ) -> BOOL;
+
+            pub fn WaitForSingleObject(
+                hHandle: HANDLE,
+                dwMilliseconds: DWORD,
+            ) -> DWORD;
+
+            pub fn SetConsoleCtrlHandler(
+                HandlerRoutine: PHANDLER_ROUTINE,
+                Add: BOOL,
+            ) -> BOOL;
         }
+
+        pub type PHANDLER_ROUTINE = Option<unsafe extern "system" fn(CtrlType: DWORD) -> BOOL>;
+
+        pub type NTSTATUS = LONG;
+        
+        pub const STATUS_USER_APC: NTSTATUS = 0x000000C0;
+        pub const STATUS_WAIT_0: NTSTATUS = 0x00000000;
+        pub const STATUS_ABANDONED_WAIT_0: NTSTATUS = 0x00000080;
+        pub const WAIT_FAILED: DWORD = 0xFFFFFFFF;
+        pub const WAIT_OBJECT_0: DWORD = STATUS_WAIT_0 as u32;
+        pub const WAIT_ABANDONED: DWORD = STATUS_ABANDONED_WAIT_0 as u32;
+        pub const WAIT_ABANDONED_0: DWORD = STATUS_ABANDONED_WAIT_0 as u32;
+        pub const WAIT_IO_COMPLETION: DWORD = STATUS_USER_APC as u32;
 
         pub type PCONSOLE_FONT_INFO = *mut CONSOLE_FONT_INFO;
         pub type PCONSOLE_FONT_INFOEX = *mut CONSOLE_FONT_INFOEX;
@@ -10734,9 +10868,111 @@ pub mod libc
         pub const WINDOW_BUFFER_SIZE_EVENT: WORD = 0x0004;
         pub const MENU_EVENT: WORD = 0x0008;
         pub const FOCUS_EVENT: WORD = 0x0010;
-
         pub const ATTACH_PARENT_PROCESS: DWORD = 0xFFFFFFFF;
+
+        pub type PFLOAT128 = *mut FLOAT128;
+        pub type LONGLONG = __int64;
+        pub type ULONGLONG = __uint64;
+        pub const MAXLONGLONG: LONGLONG = 0x7fffffffffffffff;
+        pub type PLONGLONG = *mut LONGLONG;
+        pub type PULONGLONG = *mut ULONGLONG;
+        pub type USN = LONGLONG;
+
+        #[repr( C )] #[derive( Clone, Copy )]
+        pub struct FLOAT128
+        {
+            pub LowPart: __int64,
+            pub HighPart: __int64,
+        }
         
+        #[repr( C )] #[derive( Clone, Copy )]
+        pub struct CONTEXT_u( () );
+
+        #[repr( C )] #[derive( Clone, Copy )]
+        pub struct M128A {
+            pub Low: ULONGLONG,
+            pub High: LONGLONG,
+        }
+
+        #[repr( C )] #[derive( Clone, Copy )]
+        pub struct CONTEXT {
+
+            pub P1Home: DWORD64,
+            pub P2Home: DWORD64,
+            pub P3Home: DWORD64,
+            pub P4Home: DWORD64,
+            pub P5Home: DWORD64,
+            pub P6Home: DWORD64,
+            pub ContextFlags: DWORD,
+            pub MxCsr: DWORD,
+            pub SegCs: WORD,
+            pub SegDs: WORD,
+            pub SegEs: WORD,
+            pub SegFs: WORD,
+            pub SegGs: WORD,
+            pub SegSs: WORD,
+            pub EFlags: DWORD,
+            pub Dr0: DWORD64,
+            pub Dr1: DWORD64,
+            pub Dr2: DWORD64,
+            pub Dr3: DWORD64,
+            pub Dr6: DWORD64,
+            pub Dr7: DWORD64,
+            pub Rax: DWORD64,
+            pub Rcx: DWORD64,
+            pub Rdx: DWORD64,
+            pub Rbx: DWORD64,
+            pub Rsp: DWORD64,
+            pub Rbp: DWORD64,
+            pub Rsi: DWORD64,
+            pub Rdi: DWORD64,
+            pub R8: DWORD64,
+            pub R9: DWORD64,
+            pub R10: DWORD64,
+            pub R11: DWORD64,
+            pub R12: DWORD64,
+            pub R13: DWORD64,
+            pub R14: DWORD64,
+            pub R15: DWORD64,
+            pub Rip: DWORD64,
+            pub u: CONTEXT_u,
+            pub VectorRegister: [M128A; 26],
+            pub VectorControl: DWORD64,
+            pub DebugControl: DWORD64,
+            pub LastBranchToRip: DWORD64,
+            pub LastBranchFromRip: DWORD64,
+            pub LastExceptionToRip: DWORD64,
+            pub LastExceptionFromRip: DWORD64,
+        }
+        pub type PCONTEXT = *mut CONTEXT;
+
+        #[repr( C )] #[derive( Clone, Copy )]
+        pub struct EXCEPTION_RECORD {
+            pub ExceptionCode: DWORD,
+            pub ExceptionFlags: DWORD,
+            pub ExceptionRecord: *mut EXCEPTION_RECORD,
+            pub ExceptionAddress: PVOID,
+            pub NumberParameters: DWORD,
+            pub ExceptionInformation: [ULONG_PTR; 15],
+        }
+
+        pub type PEXCEPTION_RECORD = *mut EXCEPTION_RECORD;
+
+        #[repr( C )] #[derive( Clone, Copy )]
+        pub struct EXCEPTION_POINTERS {
+            pub ExceptionRecord: PEXCEPTION_RECORD,
+            pub ContextRecord: PCONTEXT,
+        }
+
+        #[repr( C )] #[derive( Clone, Copy )]
+        pub struct CONSOLE_READCONSOLE_CONTROL
+        {
+            pub nLength: ULONG,
+            pub nInitialChars: ULONG,
+            pub dwCtrlWakeupMask: ULONG,
+            pub dwControlKeyState: ULONG,
+        }
+
         #[repr(C)] #[derive( Clone, Copy )]
         pub struct WINDOW_BUFFER_SIZE_RECORD
         {
@@ -35615,4 +35851,4 @@ fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 35618
+// 35854
