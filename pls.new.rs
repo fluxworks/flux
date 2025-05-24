@@ -1,10 +1,14 @@
 #![allow
 (
+    ambiguous_glob_reexports,
     dead_code,
     elided_named_lifetimes,
     non_camel_case_types,
+    non_snake_case,
+    private_interfaces,
     stable_features,
     unknown_lints,
+    unreachable_patterns,
     unused_assignments,
     unused_imports,
     unused_macros,
@@ -12,8 +16,9 @@
     unused_unsafe,
     unused_variables,
 )]
-/**/
+/*
 #[macro_use] extern crate bitflags;
+*/
 #[macro_use] extern crate lazy_static;
 /**/
 extern crate rand;
@@ -144,6 +149,1048 @@ extern crate unicode_width;
             }
         };
     }
+
+    #[macro_export] macro_rules! bitflags
+    {
+        (
+            $(#[$outer:meta])*
+            $vis:vis struct $BitFlags:ident: $T:ty {
+                $(
+                    $(#[$inner:ident $($args:tt)*])*
+                    const $Flag:tt = $value:expr;
+                )*
+            }
+
+            $($t:tt)*
+        ) =>
+        {
+            ::bit::flags::__declare_public_bitflags!
+            {
+                $(#[$outer])*
+                $vis struct $BitFlags
+            }
+            
+            ::bit::flags::__impl_public_bitflags_consts!
+            {
+                $BitFlags: $T
+                {
+                    $(
+                        $(#[$inner $($args)*])*
+                        const $Flag = $value;
+                    )*
+                }
+            }
+            
+            const _: () =
+            {
+                ::bit::flags::__declare_internal_bitflags! { $vis struct InternalBitFlags: $T }
+
+                $crate::__impl_internal_bitflags!
+                {
+                    InternalBitFlags: $T, $BitFlags
+                    {$(
+                        $(#[$inner $($args)*])*
+                        const $Flag = $value;
+                    )*}
+                }
+                
+                ::bit::flags::__impl_external_bitflags!
+                {
+                    InternalBitFlags: $T, $BitFlags
+                    {$(
+                        $(#[$inner $($args)*])*
+                        const $Flag;
+                    )*}
+                }
+
+                ::bit::flags::__impl_public_bitflags_forward!
+                {
+                    $BitFlags: $T, InternalBitFlags
+                }
+
+                ::bit::flags::__impl_public_bitflags_ops!
+                {
+                    $BitFlags
+                }
+
+                ::bit::flags::__impl_public_bitflags_iter!
+                {
+                    $BitFlags: $T, $BitFlags
+                }
+            };
+
+            ::bit::flags::bitflags!
+            {
+                $($t)*
+            }
+        };
+
+        (
+            $(#[$outer:meta])*
+            impl $BitFlags:ident: $T:ty
+            {$(
+                $(#[$inner:ident $($args:tt)*])*
+                const $Flag:tt = $value:expr;
+            )*}
+
+            $($t:tt)*
+        ) => 
+        {
+            ::bit::flags::__impl_public_bitflags_consts!
+            {
+                $BitFlags: $T {
+                    $(
+                        $(#[$inner $($args)*])*
+                        const $Flag = $value;
+                    )*
+                }
+            }
+            
+            const _: () =
+            {
+                ::bit::flags::__impl_public_bitflags!
+                {
+                    $(#[$outer])*
+                    $BitFlags: $T, $BitFlags
+                    {$(
+                        $(#[$inner $($args)*])*
+                        const $Flag = $value;
+                    )*}
+                }
+
+                ::bit::flags::__impl_public_bitflags_ops!
+                {
+                    $BitFlags
+                }
+
+                ::bit::flags::__impl_public_bitflags_iter!
+                {
+                    $BitFlags: $T, $BitFlags
+                }
+            };
+
+            ::bit::flags::bitflags!
+            {
+                $($t)*
+            }
+        };
+
+        () => {};
+    }
+    /// Implement functions on bitflags types.
+    #[macro_export] macro_rules! __impl_bitflags
+    {
+        (
+            $(#[$outer:meta])*
+            $PublicBitFlags:ident: $T:ty
+            {
+                fn empty() $empty:block
+                fn all() $all:block
+                fn bits($bits0:ident) $bits:block
+                fn from_bits($from_bits0:ident) $from_bits:block
+                fn from_bits_truncate($from_bits_truncate0:ident) $from_bits_truncate:block
+                fn from_bits_retain($from_bits_retain0:ident) $from_bits_retain:block
+                fn from_name($from_name0:ident) $from_name:block
+                fn is_empty($is_empty0:ident) $is_empty:block
+                fn is_all($is_all0:ident) $is_all:block
+                fn intersects($intersects0:ident, $intersects1:ident) $intersects:block
+                fn contains($contains0:ident, $contains1:ident) $contains:block
+                fn insert($insert0:ident, $insert1:ident) $insert:block
+                fn remove($remove0:ident, $remove1:ident) $remove:block
+                fn toggle($toggle0:ident, $toggle1:ident) $toggle:block
+                fn set($set0:ident, $set1:ident, $set2:ident) $set:block
+                fn intersection($intersection0:ident, $intersection1:ident) $intersection:block
+                fn union($union0:ident, $union1:ident) $union:block
+                fn difference($difference0:ident, $difference1:ident) $difference:block
+                fn symmetric_difference($symmetric_difference0:ident, $symmetric_difference1:ident) $symmetric_difference:block
+                fn complement($complement0:ident) $complement:block
+            }
+        ) =>
+        {
+            $(#[$outer])*
+            impl $PublicBitFlags
+            {
+                /// Get a flags value with all bits unset.
+                #[inline] pub const fn empty() -> Self { $empty }
+                /// Get a flags value with all known bits set.
+                #[inline] pub const fn all() -> Self { $all }
+                /// Get the underlying bits value.
+                #[inline] pub const fn bits(&self) -> $T
+                {
+                    let $bits0 = self;
+                    $bits
+                }
+                /// Convert from a bits value.
+                #[inline] pub const fn from_bits(bits: $T) -> ::option::Option<Self>
+                {
+                    let $from_bits0 = bits;
+                    $from_bits
+                }
+                /// Convert from a bits value, unsetting any unknown bits.
+                #[inline] pub const fn from_bits_truncate(bits: $T) -> Self
+                {
+                    let $from_bits_truncate0 = bits;
+                    $from_bits_truncate
+                }
+                /// Convert from a bits value exactly.
+                #[inline] pub const fn from_bits_retain(bits: $T) -> Self
+                {
+                    let $from_bits_retain0 = bits;
+                    $from_bits_retain
+                }
+                /// Get a flags value with the bits of a flag with the given name set.
+                #[inline] pub fn from_name(name: &str) -> ::option::Option<Self>
+                {
+                    let $from_name0 = name;
+                    $from_name
+                }
+                /// Whether all bits in this flags value are unset.
+                #[inline] pub const fn is_empty(&self) -> bool
+                {
+                    let $is_empty0 = self;
+                    $is_empty
+                }
+                /// Whether all known bits in this flags value are set.
+                #[inline] pub const fn is_all(&self) -> bool
+                {
+                    let $is_all0 = self;
+                    $is_all
+                }
+                /// Whether any set bits in a source flags value are also set in a target flags value.
+                #[inline] pub const fn intersects(&self, other: Self) -> bool
+                {
+                    let $intersects0 = self;
+                    let $intersects1 = other;
+                    $intersects
+                }
+                /// Whether all set bits in a source flags value are also set in a target flags value.
+                #[inline] pub const fn contains(&self, other: Self) -> bool
+                {
+                    let $contains0 = self;
+                    let $contains1 = other;
+                    $contains
+                }
+                /// The bitwise or (`|`) of the bits in two flags values.
+                #[inline] pub fn insert(&mut self, other: Self)
+                {
+                    let $insert0 = self;
+                    let $insert1 = other;
+                    $insert
+                }
+                /// The intersection of a source flags value with the complement of a target flags value (`&!`).
+                #[inline] pub fn remove(&mut self, other: Self) 
+                {
+                    let $remove0 = self;
+                    let $remove1 = other;
+                    $remove
+                }
+                /// The bitwise exclusive-or (`^`) of the bits in two flags values.
+                #[inline] pub fn toggle(&mut self, other: Self) 
+                {
+                    let $toggle0 = self;
+                    let $toggle1 = other;
+                    $toggle
+                }
+                /// Call `insert` when `value` is `true` or `remove` when `value` is `false`.
+                #[inline] pub fn set(&mut self, other: Self, value: bool) 
+                {
+                    let $set0 = self;
+                    let $set1 = other;
+                    let $set2 = value;
+                    $set
+                }
+                /// The bitwise and (`&`) of the bits in two flags values.
+                #[inline] #[must_use] pub const fn intersection(self, other: Self) -> Self 
+                {
+                    let $intersection0 = self;
+                    let $intersection1 = other;
+                    $intersection
+                }
+                /// The bitwise or (`|`) of the bits in two flags values.
+                #[inline] #[must_use] pub const fn union(self, other: Self) -> Self 
+                {
+                    let $union0 = self;
+                    let $union1 = other;
+                    $union
+                }
+                /// The intersection of a source flags value with the complement of a target flags value (`&!`).
+                #[inline] #[must_use] pub const fn difference(self, other: Self) -> Self 
+                {
+                    let $difference0 = self;
+                    let $difference1 = other;
+                    $difference
+                }
+                /// The bitwise exclusive-or (`^`) of the bits in two flags values.
+                #[inline] #[must_use] pub const fn symmetric_difference(self, other: Self) -> Self 
+                {
+                    let $symmetric_difference0 = self;
+                    let $symmetric_difference1 = other;
+                    $symmetric_difference
+                }
+                /// The bitwise negation (`!`) of the bits in a flags value, truncating the result.
+                #[inline] #[must_use] pub const fn complement(self) -> Self 
+                {
+                    let $complement0 = self;
+                    $complement
+                }
+            }
+        };
+    }
+    /// A macro that matches flags values, similar to Rust's `match` statement.
+    #[macro_export] macro_rules! bitflags_match
+    {
+        ($operation:expr,
+        {
+            $($t:tt)*
+        }) =>
+        {
+            (|| 
+            {
+                ::bit::flags::__bitflags_match!($operation, { $($t)* })
+            })()
+        };
+    }
+    /// Expand the `bitflags_match` macro
+    #[macro_export] macro_rules! __bitflags_match
+    {
+        ($operation:expr, { $pattern:expr => { $($body:tt)* } , $($t:tt)+ }) =>
+        {
+            ::bit::flags::__bitflags_match!($operation, { $pattern => { $($body)* } $($t)+ })
+        };
+        // Expand a block match arm `A => { .. }`
+        ($operation:expr, { $pattern:expr => { $($body:tt)* } $($t:tt)+ }) =>
+        {{
+                if $operation == $pattern
+                {
+                    return { $($body)* };
+                }
+
+                ::bit::flags::__bitflags_match!($operation, { $($t)+ })
+        }};
+        // Expand an expression match arm `A => x,`
+        ($operation:expr, { $pattern:expr => $body:expr , $($t:tt)+ }) =>
+        { {
+            if $operation == $pattern { return $body; }
+            ::bit::flags::__bitflags_match!($operation, { $($t)+ })
+        }};
+        // Expand the default case
+        ($operation:expr, { _ => $default:expr $(,)? }) => { $default }
+    }
+    /// A macro that processed the input to `bitflags!`
+    /// and shuffles attributes around based on whether or not they're "expression-safe".
+    #[macro_export] macro_rules! __bitflags_expr_safe_attrs
+    {
+        (
+            $(#[$inner:ident $($args:tt)*])*
+            { $e:expr }
+        ) =>
+        {
+            ::bit::flags::__bitflags_expr_safe_attrs!
+            {
+                expr: { $e },
+                attrs:
+                {
+                    unprocessed: [$(#[$inner $($args)*])*],
+                    processed: [],
+                },
+            }
+        };
+        
+        (
+            expr: { $e:expr },
+            attrs: 
+            {
+                unprocessed:
+                [
+                    #[cfg $($args:tt)*]
+                    $($attrs_rest:tt)*
+                ],
+                processed: [$($expr:tt)*],
+            },
+        ) =>
+        {
+            ::bit::flags::__bitflags_expr_safe_attrs!
+            {
+                expr: { $e },
+                attrs:
+                {
+                    unprocessed:
+                    [
+                        $($attrs_rest)*
+                    ],
+                    processed:
+                    [
+                        $($expr)*
+                        #[cfg $($args)*]
+                    ],
+                },
+            }
+        };
+        
+        (
+            expr: { $e:expr },
+                attrs: {
+                unprocessed: [
+                    // $other matched here
+                    #[$other:ident $($args:tt)*]
+                    $($attrs_rest:tt)*
+                ],
+                processed: [$($expr:tt)*],
+            },
+        ) =>
+        {
+            ::bit::flags::__bitflags_expr_safe_attrs!
+            {
+                expr: { $e },
+                attrs:
+                {
+                    unprocessed: 
+                    [
+                        $($attrs_rest)*
+                    ],
+                    processed:
+                    [
+                        $($expr)*
+                    ],
+                },
+            }
+        };
+        
+        (
+            expr: { $e:expr },
+            attrs:
+            {
+                unprocessed: [],
+                processed: [$(#[$expr:ident $($exprargs:tt)*])*],
+            },
+        ) => 
+        {
+            $(#[$expr $($exprargs)*])*
+            { $e }
+        }
+    }
+    /// Implement a flag, which may be a wildcard `_`.
+    #[macro_export] macro_rules! __bitflags_flag
+    {
+        ({
+            name: _,
+            named: { $($named:tt)* },
+            unnamed: { $($unnamed:tt)* },
+        }) => { $($unnamed)* };
+
+        ({
+            name: $Flag:ident,
+            named: { $($named:tt)* },
+            unnamed: { $($unnamed:tt)* },
+        }) => { $($named)* };
+    }
+    /// Declare the `bitflags`-facing bitflags struct.
+    #[macro_export] macro_rules! __declare_internal_bitflags
+    {
+        (
+            $vis:vis struct $InternalBitFlags:ident: $T:ty
+        ) =>
+        {
+            #[repr( transparent )] #[derive( Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash )]            
+            $vis struct $InternalBitFlags($T);
+        };
+    }
+    /// Implement functions on the private (bitflags-facing) bitflags type.
+    #[macro_export] macro_rules! __impl_internal_bitflags
+    {
+        (
+            $InternalBitFlags:ident: $T:ty, $PublicBitFlags:ident
+            {
+                $(
+                    $(#[$inner:ident $($args:tt)*])*
+                    const $Flag:tt = $value:expr;
+                )*
+            }
+        ) =>
+        {
+            impl $crate::__private::PublicFlags for $PublicBitFlags
+            {
+                type Primitive = $T;
+                type Internal = $InternalBitFlags;
+            }
+
+            impl ::default::Default for $InternalBitFlags
+            {
+                #[inline] fn default() -> Self {
+                    $InternalBitFlags::empty()
+                }
+            }
+
+            impl ::fmt::Debug for $InternalBitFlags {
+                fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result {
+                    if self.is_empty() {
+                        // If no flags are set then write an empty hex flag to avoid
+                        // writing an empty string. In some contexts, like serialization,
+                        // an empty string is preferable, but it may be unexpected in
+                        // others for a format not to produce any output.
+                        //
+                        // We can remove this `0x0` and remain compatible with `FromStr`,
+                        // because an empty string will still parse to an empty set of flags,
+                        // just like `0x0` does.
+                        ::write!(f, "{:#x}", <$T as $crate::Bits>::EMPTY)
+                    } else {
+                        ::fmt::Display::fmt(self, f)
+                    }
+                }
+            }
+
+            impl ::fmt::Display for $InternalBitFlags {
+                fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result {
+                    $crate::parser::to_writer(&$PublicBitFlags(*self), f)
+                }
+            }
+
+            impl ::str::FromStr for $InternalBitFlags {
+                type Err = $crate::parser::ParseError;
+
+                fn from_str(s: &str) -> ::result::Result<Self, Self::Err> {
+                    $crate::parser::from_str::<$PublicBitFlags>(s).map(|flags| flags.0)
+                }
+            }
+
+            impl ::convert::AsRef<$T> for $InternalBitFlags {
+                fn as_ref(&self) -> &$T {
+                    &self.0
+                }
+            }
+
+            impl ::convert::From<$T> for $InternalBitFlags {
+                fn from(bits: $T) -> Self {
+                    Self::from_bits_retain(bits)
+                }
+            }
+
+            // The internal flags type offers a similar API to the public one
+
+            $crate::__impl_public_bitflags! {
+                $InternalBitFlags: $T, $PublicBitFlags {
+                    $(
+                        $(#[$inner $($args)*])*
+                        const $Flag = $value;
+                    )*
+                }
+            }
+
+            $crate::__impl_public_bitflags_ops! {
+                $InternalBitFlags
+            }
+
+            $crate::__impl_public_bitflags_iter! {
+                $InternalBitFlags: $T, $PublicBitFlags
+            }
+
+            impl $InternalBitFlags {
+                /// Returns a mutable reference to the raw value of the flags currently stored.
+                #[inline]
+                pub fn bits_mut(&mut self) -> &mut $T {
+                    &mut self.0
+                }
+            }
+        };
+    }
+    
+    #[macro_export] macro_rules! impl_bits
+    {
+        ($($u:ty, $i:ty,)*) => {
+            $(
+                impl Bits for $u {
+                    const EMPTY: $u = 0;
+                    const ALL: $u = <$u>::MAX;
+                }
+
+                impl Bits for $i {
+                    const EMPTY: $i = 0;
+                    const ALL: $i = <$u>::MAX as $i;
+                }
+
+                impl ParseHex for $u {
+                    fn parse_hex(input: &str) -> Result<Self, ParseError> {
+                        <$u>::from_str_radix(input, 16).map_err(|_| ParseError::invalid_hex_flag(input))
+                    }
+                }
+
+                impl ParseHex for $i {
+                    fn parse_hex(input: &str) -> Result<Self, ParseError> {
+                        <$i>::from_str_radix(input, 16).map_err(|_| ParseError::invalid_hex_flag(input))
+                    }
+                }
+
+                impl WriteHex for $u {
+                    fn write_hex<W: fmt::Write>(&self, mut writer: W) -> fmt::Result {
+                        write!(writer, "{:x}", self)
+                    }
+                }
+
+                impl WriteHex for $i {
+                    fn write_hex<W: fmt::Write>(&self, mut writer: W) -> fmt::Result {
+                        write!(writer, "{:x}", self)
+                    }
+                }
+
+                impl Primitive for $i {}
+                impl Primitive for $u {}
+            )*
+        }
+    }
+    /// Declare the user-facing bitflags struct.
+    #[macro_export] macro_rules! __declare_public_bitflags
+    {
+        (
+            $(#[$outer:meta])*
+            $vis:vis struct $PublicBitFlags:ident
+        ) =>
+        {
+            $(#[$outer])*
+            $vis struct $PublicBitFlags(<$PublicBitFlags as ::bit::flags::__private::PublicFlags>::Internal);
+        };
+    }
+    /// Implement functions on the public (user-facing) bitflags type.
+    #[macro_export] macro_rules! __impl_public_bitflags_forward
+    {
+        (
+            $(#[$outer:meta])*
+            $PublicBitFlags:ident: $T:ty, $InternalBitFlags:ident
+        ) =>
+        {
+            ::bit::flags::__impl_bitflags!
+            {
+                $(#[$outer])*
+                $PublicBitFlags: $T
+                {
+                    fn empty() {
+                        Self($InternalBitFlags::empty())
+                    }
+
+                    fn all() {
+                        Self($InternalBitFlags::all())
+                    }
+
+                    fn bits(f) {
+                        f.0.bits()
+                    }
+
+                    fn from_bits(bits) 
+                    {
+                        match $InternalBitFlags::from_bits(bits)
+                        {
+                            ::option::Option::Some(bits) => ::option::Option::Some(Self(bits)),
+                            ::option::Option::None => ::option::Option::None,
+                        }
+                    }
+
+                    fn from_bits_truncate(bits){ Self($InternalBitFlags::from_bits_truncate(bits)) }
+
+                    fn from_bits_retain(bits){ Self($InternalBitFlags::from_bits_retain(bits)) }
+
+                    fn from_name(name)
+                    {
+                        match $InternalBitFlags::from_name(name)
+                        {
+                            ::option::Option::Some(bits) => ::option::Option::Some(Self(bits)),
+                            ::option::Option::None => ::option::Option::None,
+                        }
+                    }
+
+                    fn is_empty(f) { f.0.is_empty() }
+                    fn is_all(f) { f.0.is_all() }
+                    fn intersects(f, other) { f.0.intersects(other.0) }
+                    fn contains(f, other) { f.0.contains(other.0) }
+                    fn insert(f, other) { f.0.insert(other.0) }
+                    fn remove(f, other) { f.0.remove(other.0) }
+                    fn toggle(f, other) { f.0.toggle(other.0) }
+                    fn set(f, other, value) { f.0.set(other.0, value) }
+                    fn intersection(f, other) { Self(f.0.intersection(other.0)) }
+                    fn union(f, other) { Self(f.0.union(other.0)) }
+                    fn difference(f, other) { Self(f.0.difference(other.0)) }
+                    fn symmetric_difference(f, other) { Self(f.0.symmetric_difference(other.0)) }
+                    fn complement(f) { Self(f.0.complement()) }
+                }
+            }
+        };
+    }
+    /// Implement functions on the public (user-facing) bitflags type.
+    #[macro_export] macro_rules! __impl_public_bitflags
+    {
+        (
+            $(#[$outer:meta])*
+            $BitFlags:ident: $T:ty, $PublicBitFlags:ident
+            {$(
+                    $(#[$inner:ident $($args:tt)*])*
+                    const $Flag:tt = $value:expr;
+            )*}
+        ) =>
+        {
+            ::bit::flags::__impl_bitflags!
+            {
+                $(#[$outer])*
+                $BitFlags: $T
+                {
+                    fn empty() { Self(<$T as ::bit::flags::Bits>::EMPTY) }
+
+                    fn all()
+                    {
+                        let mut truncated = <$T as ::bit::flags::Bits>::EMPTY;
+                        let mut i = 0;
+
+                        $(
+                            ::bit::flags::__bitflags_expr_safe_attrs!
+                            ($(
+                                #[$inner $($args)*])*
+                                {{
+                                    let flag = <$PublicBitFlags as ::bit::flags::Flags>::FLAGS[i].value().bits();
+                                    truncated = truncated | flag;
+                                    i += 1;
+                                }}
+                            );
+                        )*
+
+                        let _ = i;
+                        Self::from_bits_retain(truncated)
+                    }
+
+                    fn bits(f) { f.0 }
+
+                    fn from_bits(bits)
+                    {
+                        let truncated = Self::from_bits_truncate(bits).0;
+
+                        if truncated == bits { ::option::Option::Some(Self(bits)) }
+                        else { ::option::Option::None }
+                    }
+
+                    fn from_bits_truncate(bits) { Self(bits & Self::all().bits()) }
+
+                    fn from_bits_retain(bits) { Self(bits) }
+
+                    fn from_name(name)
+                    {
+                        $(
+                            ::bit::flags::__bitflags_flag!
+                            ({
+                                name: $Flag,
+                                named:
+                                {
+                                    ::bit::flags::__bitflags_expr_safe_attrs!
+                                    (
+                                        $(#[$inner $($args)*])*
+                                        {
+                                            if name == stringify!($Flag)
+                                            {
+                                                return ::option::Option::Some(Self($PublicBitFlags::$Flag.bits()));
+                                            }
+                                        }
+                                    );
+                                },
+                                unnamed: {},
+                            });
+                        )*
+
+                        let _ = name;
+                        ::option::Option::None
+                    }
+
+                    fn is_empty(f) { f.bits() == <$T as ::bit::flags::Bits>::EMPTY }
+
+                    fn is_all(f) { Self::all().bits() | f.bits() == f.bits() }
+
+                    fn intersects(f, other) { f.bits() & other.bits() != <$T as ::bit::flags::Bits>::EMPTY }
+
+                    fn contains(f, other) { f.bits() & other.bits() == other.bits() }
+
+                    fn insert(f, other) { *f = Self::from_bits_retain(f.bits()).union(other); }
+
+                    fn remove(f, other) { *f = Self::from_bits_retain(f.bits()).difference(other); }
+
+                    fn toggle(f, other) { *f = Self::from_bits_retain(f.bits()).symmetric_difference(other); }
+
+                    fn set(f, other, value)
+                    {
+                        if value { f.insert(other); }
+                        else { f.remove(other); }
+                    }
+
+                    fn intersection(f, other) { Self::from_bits_retain(f.bits() & other.bits()) }
+
+                    fn union(f, other) { Self::from_bits_retain(f.bits() | other.bits()) }
+
+                    fn difference(f, other) { Self::from_bits_retain(f.bits() & !other.bits()) }
+
+                    fn symmetric_difference(f, other) { Self::from_bits_retain(f.bits() ^ other.bits()) }
+
+                    fn complement(f) { Self::from_bits_truncate(!f.bits()) }
+                }
+            }
+        };
+    }
+    /// Implement iterators on the public (user-facing) bitflags type.
+    #[macro_export] macro_rules! __impl_public_bitflags_iter
+    {
+        (
+            $(#[$outer:meta])*
+            $BitFlags:ident: $T:ty, $PublicBitFlags:ident
+        ) =>
+        {
+            $(#[$outer])*
+            impl $BitFlags
+            {
+                /// Yield a set of contained flags values.
+                #[inline] pub const fn iter(&self) -> ::bit::flags::iter::Iter<$PublicBitFlags>
+                {
+                    ::bit::flags::iter::Iter::__private_const_new
+                    (
+                        <$PublicBitFlags as ::bit::flags::Flags>::FLAGS,
+                        $PublicBitFlags::from_bits_retain(self.bits()),
+                        $PublicBitFlags::from_bits_retain(self.bits()),
+                    )
+                }
+                /// Yield a set of contained named flags values.
+                #[inline] pub const fn iter_names(&self) -> ::bit::flags::iter::IterNames<$PublicBitFlags>
+                {
+                    ::bit::flags::iter::IterNames::__private_const_new
+                    (
+                        <$PublicBitFlags as ::bit::flags::Flags>::FLAGS,
+                        $PublicBitFlags::from_bits_retain(self.bits()),
+                        $PublicBitFlags::from_bits_retain(self.bits()),
+                    )
+                }
+            }
+
+            $(#[$outer:meta])*
+            impl ::iter::IntoIterator for $BitFlags
+            {
+                type Item = $PublicBitFlags;
+                type IntoIter = ::bit::flags::iter::Iter<$PublicBitFlags>;
+                fn into_iter(self) -> Self::IntoIter { self.iter() }
+            }
+        };
+    }
+    /// Implement traits on the public (user-facing) bitflags type.
+    #[macro_export] macro_rules! __impl_public_bitflags_ops
+    {
+        (
+            $(#[$outer:meta])*
+            $PublicBitFlags:ident
+        ) =>
+        {
+            $(#[$outer])*
+            impl ::fmt::Binary for $PublicBitFlags
+            {
+                fn fmt( &self, f: &mut ::fmt::Formatter ) -> ::fmt::Result
+                {
+                    let inner = self.0;
+                    ::fmt::Binary::fmt(&inner, f)
+                }
+            }
+
+            $(#[$outer])*
+            impl ::fmt::Octal for $PublicBitFlags
+            {
+                fn fmt( &self, f: &mut ::fmt::Formatter ) -> ::fmt::Result
+                {
+                    let inner = self.0;
+                    ::fmt::Octal::fmt(&inner, f)
+                }
+            }
+
+            $(#[$outer])*
+            impl ::fmt::LowerHex for $PublicBitFlags
+            {
+                fn fmt( &self, f: &mut ::fmt::Formatter ) -> ::fmt::Result
+                {
+                    let inner = self.0;
+                    ::fmt::LowerHex::fmt(&inner, f)
+                }
+            }
+
+            $(#[$outer])*
+            impl ::fmt::UpperHex for $PublicBitFlags
+            {
+                fn fmt( &self, f: &mut ::fmt::Formatter ) -> ::fmt::Result
+                {
+                    let inner = self.0;
+                    ::fmt::UpperHex::fmt(&inner, f)
+                }
+            }
+
+            $(#[$outer])*
+            impl ::ops::BitOr for $PublicBitFlags
+            {
+                type Output = Self;
+                /// The bitwise or (`|`) of the bits in two flags values.
+                #[inline] fn bitor(self, other: $PublicBitFlags) -> Self { self.union(other) }
+            }
+
+            $(#[$outer])*
+            impl ::ops::BitOrAssign for $PublicBitFlags
+            {
+                /// The bitwise or (`|`) of the bits in two flags values.
+                #[inline] fn bitor_assign(&mut self, other: Self) { self.insert(other); }
+            }
+
+            $(#[$outer])*
+            impl ::ops::BitXor for $PublicBitFlags
+            {
+                type Output = Self;
+                /// The bitwise exclusive-or (`^`) of the bits in two flags values.
+                #[inline] fn bitxor(self, other: Self) -> Self { self.symmetric_difference(other) }
+            }
+
+            $(#[$outer])*
+            impl ::ops::BitXorAssign for $PublicBitFlags
+            {
+                /// The bitwise exclusive-or (`^`) of the bits in two flags values.
+                #[inline] fn bitxor_assign(&mut self, other: Self) { self.toggle(other); }
+            }
+
+            $(#[$outer])*
+            impl ::ops::BitAnd for $PublicBitFlags
+            {
+                type Output = Self;
+                /// The bitwise and (`&`) of the bits in two flags values.
+                #[inline] fn bitand(self, other: Self) -> Self { self.intersection(other) }
+            }
+
+            $(#[$outer])*
+            impl ::ops::BitAndAssign for $PublicBitFlags
+            {
+                /// The bitwise and (`&`) of the bits in two flags values.
+                #[inline] fn bitand_assign(&mut self, other: Self) 
+                { *self = Self::from_bits_retain(self.bits()).intersection(other); }
+            }
+
+            $(#[$outer])*
+            impl ::ops::Sub for $PublicBitFlags
+            {
+                type Output = Self;
+                /// The intersection of a source flags value with the complement of a target flags value (`&!`).
+                #[inline] fn sub(self, other: Self) -> Self { self.difference(other) }
+            }
+
+            $(#[$outer])*
+            impl ::ops::SubAssign for $PublicBitFlags
+            {
+                /// The intersection of a source flags value with the complement of a target flags value (`&!`).
+                #[inline] fn sub_assign(&mut self, other: Self) { self.remove(other); }
+            }
+
+            $(#[$outer])*
+            impl ::ops::Not for $PublicBitFlags
+            {
+                type Output = Self;
+                /// The bitwise negation (`!`) of the bits in a flags value, truncating the result.
+                #[inline] fn not(self) -> Self { self.complement() }
+            }
+
+            $(#[$outer])*
+            impl ::iter::Extend<$PublicBitFlags> for $PublicBitFlags
+            {
+                /// The bitwise or (`|`) of the bits in each flags value.
+                fn extend<T: ::iter::IntoIterator<Item = Self>>
+                (
+                    &mut self,
+                    iterator: T,
+                )
+                {
+                    for item in iterator
+                    {
+                        self.insert(item)
+                    }
+                }
+            }
+
+            $(#[$outer])*
+            impl ::iter::FromIterator<$PublicBitFlags> for $PublicBitFlags
+            {
+                /// The bitwise or (`|`) of the bits in each flags value.
+                fn from_iter<T: ::iter::IntoIterator<Item = Self>>( iterator:T ) -> Self
+                {
+                    use ::iter::Extend;
+                    let mut result = Self::empty();
+                    result.extend(iterator);
+                    result
+                }
+            }
+        };
+    }
+    /// Implement constants on the public (user-facing) bitflags type.
+    #[macro_export] macro_rules! __impl_public_bitflags_consts
+    {
+        (
+            $(#[$outer:meta])*
+            $PublicBitFlags:ident: $T:ty
+            {
+                $(
+                    $(#[$inner:ident $($args:tt)*])*
+                    const $Flag:tt = $value:expr;
+                )*
+            }
+        ) =>
+        {
+            $(#[$outer])*
+            impl $PublicBitFlags
+            {
+                $(
+                    ::bit::flags::__bitflags_flag!
+                    ({
+                        name: $Flag,
+                        named:
+                        {
+                            $(#[$inner $($args)*])*
+                            pub const $Flag: Self = Self::from_bits_retain($value);
+                        },
+                        unnamed: {},
+                    });
+                )*
+            }
+
+            $(#[$outer])*
+            impl ::bit::flags::Flags for $PublicBitFlags
+            {
+                const FLAGS: &'static [$crate::Flag<$PublicBitFlags>] = 
+                &[
+                    $(
+                        ::bit::flags::__bitflags_flag!
+                        ({
+                            name: $Flag,
+                            named:
+                            {
+                                ::bit::flags::__bitflags_expr_safe_attrs!
+                                (
+                                    $(#[$inner $($args)*])*
+                                    {
+                                        #[allow(
+                                            deprecated,
+                                            non_upper_case_globals,
+                                        )]
+                                        ::bit::flags::Flag::new( stringify!($Flag), $PublicBitFlags::$Flag )
+                                    }
+                                )
+                            },
+                            unnamed:
+                            {
+                                ::bit::flags::__bitflags_expr_safe_attrs!
+                                (
+                                    $(#[$inner $($args)*])*
+                                    {
+                                        ::bit::flags::Flag::new("", $PublicBitFlags::from_bits_retain($value))
+                                    }
+                                )
+                            },
+                        }),
+                    )*
+                ];
+
+                type Bits = $T;
+                fn bits(&self) -> $T { $PublicBitFlags::bits(self) }
+                fn from_bits_retain(bits: $T) -> $PublicBitFlags { $PublicBitFlags::from_bits_retain(bits) }
+            }
+        };
+    }
 }
 
 pub mod alloc
@@ -154,6 +1201,536 @@ pub mod alloc
 pub mod arch
 {
     pub use std::arch::{ x86_64::{ * }, * };
+}
+
+pub mod bit
+{
+    use ::
+    {
+        *,
+    };
+
+    pub mod flags
+    {
+        //! Generate types for C-style flags with ergonomic APIs.
+        use ::
+        {
+            *,
+        }; 
+
+        pub mod iter
+        {
+            /// Yield the bits of a source flags value in a set of contained flags values.
+            use ::
+            {
+                bit::flags::
+                {
+                    Flag, Flags,
+                },
+                *,
+            };
+
+            /// An iterator over flags values.
+            pub struct Iter<B: 'static>
+            {
+                inner: IterNames<B>,
+                done: bool,
+            }
+
+            impl<B: Flags> Iter<B>
+            {
+                pub fn new(flags: &B) -> Self
+                {
+                    Iter
+                    {
+                        inner: IterNames::new(flags),
+                        done: false,
+                    }
+                }
+            }
+
+            impl<B: 'static> Iter<B>
+            {
+                pub const fn __private_const_new(flags: &'static [Flag<B>], source: B, remaining: B) -> Self
+                {
+                    Iter
+                    {
+                        inner: IterNames::__private_const_new(flags, source, remaining),
+                        done: false,
+                    }
+                }
+            }
+
+            impl<B: Flags> Iterator for Iter<B>
+            {
+                type Item = B;
+                fn next(&mut self) -> Option<Self::Item>
+                {
+                    match self.inner.next()
+                    {
+                        Some((_, flag)) => Some(flag),
+                        None if !self.done =>
+                        {
+                            self.done = true;
+                            if !self.inner.remaining().is_empty()
+                            {
+                                Some(B::from_bits_retain(self.inner.remaining.bits()))
+                            } else { None }
+                        }
+                        None => None,
+                    }
+                }
+            }
+            /// An iterator over flags values.
+            pub struct IterNames<B: 'static>
+            {
+                flags: &'static [Flag<B>],
+                idx: usize,
+                source: B,
+                remaining: B,
+            }
+
+            impl<B: Flags> IterNames<B>
+            {
+                pub fn new(flags: &B) -> Self
+                {
+                    IterNames
+                    {
+                        flags: B::FLAGS,
+                        idx: 0,
+                        remaining: B::from_bits_retain(flags.bits()),
+                        source: B::from_bits_retain(flags.bits()),
+                    }
+                }
+            }
+
+            impl<B: 'static> IterNames<B>
+            {
+                pub const fn __private_const_new(flags: &'static [Flag<B>], source: B, remaining: B) -> Self
+                {
+                    IterNames
+                    {
+                        flags,
+                        idx: 0,
+                        remaining,
+                        source,
+                    }
+                }
+                /// Get a flags value of any remaining bits that haven't been yielded yet.
+                pub fn remaining(&self) -> &B { &self.remaining }
+            }
+
+            impl<B: Flags> Iterator for IterNames<B>
+            {
+                type Item = (&'static str, B);
+                fn next(&mut self) -> Option<Self::Item>
+                {
+                    while let Some(flag) = self.flags.get(self.idx)
+                    {
+                        if self.remaining.is_empty() { return None; }
+                        self.idx += 1;
+                        
+                        if flag.name().is_empty() { continue; }
+
+                        let bits = flag.value().bits();
+                        
+                        if self.source.contains(B::from_bits_retain(bits)) && 
+                        self.remaining.intersects(B::from_bits_retain(bits))
+                        {
+                            self.remaining.remove(B::from_bits_retain(bits));
+                            return Some((flag.name(), B::from_bits_retain(bits)));
+                        }
+                    }
+
+                    None
+                }
+            }
+        } pub use self::iter::{ * };
+
+        pub mod parser
+        {
+            //! Parsing flags from text.
+            use ::
+            {
+                bit::flags::{ Bits, Flags },
+                fmt::{ Write },
+                *,
+            };
+            /// Write a flags value as text.
+            pub fn to_writer<B: Flags>(flags: &B, mut writer: impl Write) -> Result<(), fmt::Error> where
+            B::Bits: WriteHex,
+            {
+                let mut first = true;
+                let mut iter = flags.iter_names();
+                
+                for (name, _) in &mut iter
+                {
+                    if !first { writer.write_str(" | ")?; }
+
+                    first = false;
+                    writer.write_str(name)?;
+                }
+                
+                let remaining = iter.remaining().bits();
+                if remaining != B::Bits::EMPTY
+                {
+                    if !first { writer.write_str(" | ")?; }
+
+                    writer.write_str("0x")?;
+                    remaining.write_hex(writer)?;
+                }
+
+                fmt::Result::Ok(())
+            }
+            /// Parse a flags value from text.
+            pub fn from_str<B: Flags>(input: &str) -> Result<B, ParseError> where
+            B::Bits: ParseHex,
+            {
+                let mut parsed_flags = B::empty();
+
+                if input.trim().is_empty() { return Ok(parsed_flags); }
+
+                for flag in input.split('|')
+                {
+                    let flag = flag.trim();
+                    
+                    if flag.is_empty() { return Err(ParseError::empty_flag()); }
+                    
+                    let parsed_flag = if let Some(flag) = flag.strip_prefix("0x")
+                    {
+                        let bits = <B::Bits>::parse_hex(flag).map_err(|_| ParseError::invalid_hex_flag(flag))?;
+                        B::from_bits_retain(bits)
+                    }
+                    
+                    else { B::from_name(flag).ok_or_else(|| ParseError::invalid_named_flag(flag))? };
+
+                    parsed_flags.insert(parsed_flag);
+                }
+
+                Ok(parsed_flags)
+            }
+            /// Write a flags value as text, ignoring any unknown bits.
+            pub fn to_writer_truncate<B: Flags>(flags: &B, writer: impl Write) -> Result<(), fmt::Error> where
+            B::Bits: WriteHex,
+            { to_writer(&B::from_bits_truncate(flags.bits()), writer) }
+            /// Parse a flags value from text.
+            pub fn from_str_truncate<B: Flags>(input: &str) -> Result<B, ParseError> where
+            B::Bits: ParseHex,
+            { Ok(B::from_bits_truncate(from_str::<B>(input)?.bits())) }
+            /// Write only the contained, defined, named flags in a flags value as text.
+            pub fn to_writer_strict<B: Flags>(flags: &B, mut writer: impl Write) -> Result<(), fmt::Error>
+            {
+                let mut first = true;
+                let mut iter = flags.iter_names();
+                
+                for (name, _) in &mut iter
+                {
+                    if !first {
+                        writer.write_str(" | ")?;
+                    }
+
+                    first = false;
+                    writer.write_str(name)?;
+                }
+
+                fmt::Result::Ok(())
+            }
+            /// Parse a flags value from text.
+            pub fn from_str_strict<B: Flags>(input: &str) -> Result<B, ParseError>
+            {
+                let mut parsed_flags = B::empty();
+                
+                if input.trim().is_empty() { return Ok(parsed_flags); }
+
+                for flag in input.split('|')
+                {
+                    let flag = flag.trim();
+                    
+                    if flag.is_empty() { return Err(ParseError::empty_flag()); }
+                    
+                    if flag.starts_with("0x"){ return Err(ParseError::invalid_hex_flag("unsupported hex value")); }
+
+                    let parsed_flag = B::from_name(flag).ok_or_else(|| ParseError::invalid_named_flag(flag))?;
+
+                    parsed_flags.insert(parsed_flag);
+                }
+
+                Ok(parsed_flags)
+            }
+            /// Encode a value as a hex string.
+            pub trait WriteHex
+            {
+                /// Write the value as hex.
+                fn write_hex<W: fmt::Write>(&self, writer: W) -> fmt::Result;
+            }
+            /// Parse a value from a hex string.
+            pub trait ParseHex
+            {
+                /// Parse the value from hex.
+                fn parse_hex(input: &str) -> Result<Self, ParseError> where Self: Sized;
+            }
+            /// An error encountered while parsing flags from text.
+            #[derive(Debug)]
+            pub struct ParseError(ParseErrorKind);
+
+            #[derive(Debug)]
+            pub enum ParseErrorKind
+            {
+                EmptyFlag,
+                InvalidNamedFlag
+                {
+                    got: String,
+                },
+                InvalidHexFlag
+                {
+                    got: String,
+                },
+            }
+
+            impl ParseError
+            {
+                /// An invalid hex flag was encountered.
+                pub fn invalid_hex_flag(flag: impl fmt::Display) -> Self
+                {
+                    let _flag = flag;
+                    let got = _flag.to_string();
+                    ParseError(ParseErrorKind::InvalidHexFlag { got })
+                }
+                /// A named flag that doesn't correspond to any on the flags type was encountered.
+                pub fn invalid_named_flag(flag: impl fmt::Display) -> Self
+                {
+                    let _flag = flag;
+                    let got = _flag.to_string();
+                    ParseError(ParseErrorKind::InvalidNamedFlag { got })
+                }
+                /// A hex or named flag wasn't found between separators.
+                pub const fn empty_flag() -> Self
+                {
+                    ParseError(ParseErrorKind::EmptyFlag)
+                }
+            }
+
+            impl fmt::Display for ParseError
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    match &self.0
+                    {
+                        ParseErrorKind::InvalidNamedFlag { got } =>
+                        {
+                            let _got = got;
+                            write!(f, "unrecognized named flag")?;
+                            write!(f, " `{}`", _got)?;
+                        }
+
+                        ParseErrorKind::InvalidHexFlag { got } =>
+                        {
+                            let _got = got;
+                            write!(f, "invalid hex flag")?;
+                            write!(f, " `{}`", _got)?;
+                        }
+
+                        ParseErrorKind::EmptyFlag => { write!(f, "encountered empty flag")?; }
+                    }
+
+                    Ok(())
+                }
+            }
+            
+            impl ::error::Error for ParseError {}
+        } pub use self::parser::{ * };
+
+        pub mod traits
+        {
+            use ::
+            {
+                bit::flags::
+                {
+                    iter::{ self },
+                    parser::{ ParseError, ParseHex, WriteHex },
+                },
+                ops::{ BitAnd, BitOr, BitXor, Not },
+                *,
+            };
+            /// A defined flags value that may be named or unnamed.
+            #[derive(Debug)]
+            pub struct Flag<B>
+            {
+                name: &'static str,
+                value: B,
+            }
+
+            impl<B> Flag<B>
+            {
+                /// Define a flag.
+                pub const fn new(name: &'static str, value: B) -> Self { Flag { name, value } }
+                /// Get the name of this flag.
+                pub const fn name(&self) -> &'static str { self.name }
+                /// Get the flags value of this flag.
+                pub const fn value(&self) -> &B { &self.value }
+                /// Whether the flag is named.
+                pub const fn is_named(&self) -> bool { !self.name.is_empty() }
+                /// Whether the flag is unnamed.
+                pub const fn is_unnamed(&self) -> bool { self.name.is_empty() }
+            }
+            /// A set of defined flags using a bits type as storage.
+            pub trait Flags: Sized + 'static
+            {
+                /// The set of defined flags.
+                const FLAGS: &'static [Flag<Self>];
+                /// The underlying bits type.
+                type Bits: Bits;
+                /// Get a flags value with all bits unset.
+                fn empty() -> Self { Self::from_bits_retain(Self::Bits::EMPTY) }
+                /// Get a flags value with all known bits set.
+                fn all() -> Self
+                {
+                    let mut truncated = Self::Bits::EMPTY;
+
+                    for flag in Self::FLAGS.iter()
+                    {
+                        truncated = truncated | flag.value().bits();
+                    }
+
+                    Self::from_bits_retain(truncated)
+                }
+                /// This method will return `true` if any unknown bits are set.
+                fn contains_unknown_bits(&self) -> bool { Self::all().bits() & self.bits() != self.bits() }
+                /// Get the underlying bits value.
+                fn bits(&self) -> Self::Bits;
+                /// Convert from a bits value.
+                fn from_bits(bits: Self::Bits) -> Option<Self>
+                {
+                    let truncated = Self::from_bits_truncate(bits);
+
+                    if truncated.bits() == bits { Some( truncated ) } else { None }
+                }
+                /// Convert from a bits value, unsetting any unknown bits.
+                fn from_bits_truncate(bits: Self::Bits) -> Self { Self::from_bits_retain(bits & Self::all().bits()) }
+                /// Convert from a bits value exactly.
+                fn from_bits_retain(bits: Self::Bits) -> Self;
+                /// Get a flags value with the bits of a flag with the given name set.
+                fn from_name(name: &str) -> Option<Self>
+                {
+                    if name.is_empty() { return None; }
+
+                    for flag in Self::FLAGS
+                    {
+                        if flag.name() == name { return Some(Self::from_bits_retain(flag.value().bits())); }
+                    }
+
+                    None
+                }
+                /// Yield a set of contained flags values.
+                fn iter(&self) -> iter::Iter<Self> { iter::Iter::new(self) }
+                /// Yield a set of contained named flags values.
+                fn iter_names(&self) -> iter::IterNames<Self> { iter::IterNames::new(self) }
+                /// Whether all bits in this flags value are unset.
+                fn is_empty(&self) -> bool { self.bits() == Self::Bits::EMPTY }
+                /// Whether all known bits in this flags value are set.
+                fn is_all(&self) -> bool { Self::all().bits() | self.bits() == self.bits() }
+                /// Whether any set bits in a source flags value are also set in a target flags value.
+                fn intersects(&self, other: Self) -> bool where
+                Self: Sized,
+                { self.bits() & other.bits() != Self::Bits::EMPTY }
+                /// Whether all set bits in a source flags value are also set in a target flags value.
+                fn contains(&self, other: Self) -> bool where
+                Self: Sized,
+                { self.bits() & other.bits() == other.bits() }
+                /// Remove any unknown bits from the flags.
+                fn truncate(&mut self) where Self: Sized,
+                { *self = Self::from_bits_truncate(self.bits()); }
+                /// The bitwise or (`|`) of the bits in two flags values.
+                fn insert(&mut self, other: Self) where
+                Self: Sized,
+                { *self = Self::from_bits_retain(self.bits()).union(other); }
+                /// The intersection of a source flags value with the complement of a target flags value (`&!`).
+                fn remove(&mut self, other: Self) where
+                Self: Sized,
+                { *self = Self::from_bits_retain(self.bits()).difference(other); }
+                /// The bitwise exclusive-or (`^`) of the bits in two flags values.
+                fn toggle(&mut self, other: Self) where
+                Self: Sized,
+                { *self = Self::from_bits_retain(self.bits()).symmetric_difference(other); }
+                /// Call [`Flags::insert`] when `value` is `true` or [`Flags::remove`] when `value` is `false`.
+                fn set(&mut self, other: Self, value: bool) where
+                Self: Sized,
+                {
+                    if value { self.insert(other); }
+                    else { self.remove(other); }
+                }
+                /// Unsets all bits in the flags.
+                fn clear(&mut self) where
+                Self: Sized,
+                { *self = Self::empty(); }
+                /// The bitwise and (`&`) of the bits in two flags values.
+                #[must_use] fn intersection(self, other: Self) -> Self
+                { Self::from_bits_retain(self.bits() & other.bits()) }
+                /// The bitwise or (`|`) of the bits in two flags values.
+                #[must_use] fn union(self, other: Self) -> Self { Self::from_bits_retain(self.bits() | other.bits()) }
+                /// The intersection of a source flags value with the complement of a target flags value (`&!`).
+                #[must_use] fn difference(self, other: Self) -> Self
+                { Self::from_bits_retain(self.bits() & !other.bits()) }
+                /// The bitwise exclusive-or (`^`) of the bits in two flags values.
+                #[must_use] fn symmetric_difference(self, other: Self) -> Self
+                { Self::from_bits_retain(self.bits() ^ other.bits()) }
+                /// The bitwise negation (`!`) of the bits in a flags value, truncating the result.
+                #[must_use] fn complement(self) -> Self { Self::from_bits_truncate(!self.bits()) }
+            }
+            /// A bits type that can be used as storage for a flags type.
+            pub trait Bits:
+            Clone
+            + Copy
+            + PartialEq
+            + BitAnd<Output = Self>
+            + BitOr<Output = Self>
+            + BitXor<Output = Self>
+            + Not<Output = Self>
+            + Sized
+            + 'static
+            {
+                /// A value with all bits unset.
+                const EMPTY: Self;
+                /// A value with all bits set.
+                const ALL: Self;
+            }
+            
+            pub trait Primitive {}
+
+            impl_bits! { u8, i8, u16, i16, u32, i32, u64, i64, u128, i128, usize, isize, }
+            /// A trait for referencing the `bitflags`-owned internal type without exposing it publicly.
+            pub trait PublicFlags
+            {
+                /// The type of the underlying storage.
+                type Primitive: Primitive;
+                /// The type of the internal field on the generated flags type.
+                type Internal;
+            }
+            
+            pub trait BitFlags: ImplementedByBitFlagsMacro + Flags
+            {
+                /// An iterator over enabled flags in an instance of the type.
+                type Iter: Iterator<Item = Self>;
+                /// An iterator over the raw names and bits for enabled flags in an instance of the type.
+                type IterNames: Iterator<Item = (&'static str, Self)>;
+            }
+            
+            impl<B: Flags> BitFlags for B
+            {
+                type Iter = iter::Iter<Self>;
+                type IterNames = iter::IterNames<Self>;
+            }
+
+            impl<B: Flags> ImplementedByBitFlagsMacro for B {}
+            /// A marker trait that signals that an implementation of `BitFlags` came from the `bitflags!` macro.
+            pub trait ImplementedByBitFlagsMacro {}
+
+            pub mod __private 
+            {
+                pub use super::{ImplementedByBitFlagsMacro, PublicFlags};
+            }
+        } pub use self::traits::{ * };
+    }
 }
 
 pub mod borrow
@@ -10017,6 +11594,190 @@ pub mod fmt
 pub mod fs
 {
     pub use std::fs::{ * };
+    /*
+    dirs-system v6.0.0*/
+    pub mod system
+    {
+        use ::
+        {
+            *,
+        };
+        
+        pub mod unix
+        {
+            use ::
+            {
+                collections::{ HashMap },
+                ffi::{ OsString },
+                io::{ self, Read },
+                libc::{ unix::{ * }, * },
+                os::unix::ffi::{ OsStringExt },
+                path::{ Path, PathBuf },
+                *,
+            };
+            /// Returns all XDG user directories obtained from $(XDG_CONFIG_HOME)/user-dirs.dirs.
+            pub fn all(home_dir_path: &Path, user_dir_file_path: &Path) -> HashMap<String, PathBuf>
+            {
+                let bytes = read_all(user_dir_file_path).unwrap_or(Vec::new());
+                parse_user_dirs(home_dir_path, None, &bytes)
+            }
+            /// Returns a single XDG user directory obtained from $(XDG_CONFIG_HOME)/user-dirs.dirs.
+            pub fn single(home_dir_path: &Path, user_dir_file_path: &Path, user_dir_name: &str) -> HashMap<String, PathBuf>
+            {
+                let bytes = read_all(user_dir_file_path).unwrap_or(Vec::new());
+                parse_user_dirs(home_dir_path, Some(user_dir_name), &bytes)
+            }
+
+            fn parse_user_dirs(home_dir: &Path, user_dir: Option<&str>, bytes: &[u8]) -> HashMap<String, PathBuf>
+            {
+                let mut user_dirs = HashMap::new();
+
+                for line in bytes.split(|b| *b == b'\n')
+                {
+                    let mut single_dir_found = false;
+                    let (key, value) = match split_once(line, b'=')
+                    {
+                        Some(kv) => kv,
+                        None => continue,
+                    };
+
+                    let key = trim_blank(key);
+                    let key = if key.starts_with(b"XDG_") && key.ends_with(b"_DIR")
+                    {
+                        match str::from_utf8(&key[4..key.len()-4])
+                        {
+                            Ok(key) => if user_dir.contains(&key)
+                            {
+                                single_dir_found = true;
+                                key
+                            } else if user_dir.is_none() { key } else { continue },
+                            
+                            Err(_)  => continue,
+                        }
+                    } else { continue };
+                    
+                    let value = trim_blank(value);
+                    
+                    let mut value = if value.starts_with(b"\"") && value.ends_with(b"\"")
+                    { &value[1..value.len()-1] } else { continue };
+                    
+                    let is_relative = if value == b"$HOME/" { continue } else if value.starts_with(b"$HOME/")
+                    {
+                        value = &value[b"$HOME/".len()..];
+                        true
+                    } else if value.starts_with(b"/") { false } else { continue };
+
+                    let value = OsString::from_vec(shell_unescape(value));
+
+                    let path = if is_relative
+                    {
+                        let mut path = PathBuf::from(&home_dir);
+                        path.push(value);
+                        path
+                    } 
+                    else { PathBuf::from(value) };
+
+                    user_dirs.insert(key.to_owned(), path);
+
+                    if single_dir_found { break; }
+                }
+
+                user_dirs
+            }
+            /// Reads the entire contents of a file into a byte vector.
+            fn read_all(path: &Path) -> io::Result<Vec<u8>>
+            {
+                let mut file = fs::File::open(path)?;
+                let mut bytes = Vec::with_capacity(1024);
+                file.read_to_end(&mut bytes)?;
+                Ok(bytes)
+            }
+            /// Returns bytes before and after first occurrence of separator.
+            fn split_once(bytes: &[u8], separator: u8) -> Option<(&[u8], &[u8])>
+            {
+                bytes.iter().position(|b| *b == separator).map(|i|
+                {
+                    (&bytes[..i], &bytes[i+1..])
+                })
+            }
+            /// Returns a slice with leading and trailing <blank> characters removed.
+            fn trim_blank(bytes: &[u8]) -> &[u8]
+            {
+                let i = bytes.iter().cloned().take_while(|b| *b == b' ' || *b == b'\t').count();
+                let bytes = &bytes[i..];
+                let i = bytes.iter().cloned().rev().take_while(|b| *b == b' ' || *b == b'\t').count();
+                &bytes[..bytes.len()-i]
+            }
+            /// Unescape bytes escaped with POSIX shell double-quotes rules (as used by xdg-user-dirs-update).
+            fn shell_unescape(escaped: &[u8]) -> Vec<u8>
+            {
+
+                let mut unescaped: Vec<u8> = Vec::with_capacity(escaped.len());
+                let mut i = escaped.iter().cloned();
+
+                while let Some(b) = i.next()
+                {
+                    if b == b'\\'
+                    {
+                        if let Some(b) = i.next() { unescaped.push(b); }
+                    } else { unescaped.push(b); }
+                }
+
+                unescaped
+            }
+            
+            pub fn home_dir() -> Option<PathBuf>
+            {
+                return env::var_os("HOME")
+                .and_then(|h| if h.is_empty() { None } else { Some(h) })
+                .or_else(|| unsafe { fallback() })
+                .map(PathBuf::from);
+                
+                unsafe fn fallback() -> Option<OsString>
+                {
+                    let amt = match sysconf( _SC_GETPW_R_SIZE_MAX )
+                    {
+                        n if n < 0 => 512 as usize,
+                        n => n as usize,
+                    };
+
+                    let mut buf = Vec::with_capacity(amt);
+                    let mut passwd: passwd = mem::zeroed();
+                    let mut result = ptr::null_mut();
+                    match getpwuid_r
+                    (
+                        libc::getuid(),
+                        &mut passwd,
+                        buf.as_mut_ptr(),
+                        buf.capacity(),
+                        &mut result,
+                    )
+                    {
+                        0 if !result.is_null() => {
+                            let ptr = passwd.pw_dir as *const _;
+                            let bytes = CStr::from_ptr(ptr).to_bytes();
+                            if bytes.is_empty() {
+                                None
+                            } else {
+                                Some(OsStringExt::from_vec(bytes.to_vec()))
+                            }
+                        }
+                        _ => None,
+                    }
+                }
+            }
+        }
+
+        pub mod windows
+        {
+            use ::
+            {
+                *,
+            };
+        }
+    }
+    /*
+    dirs v6.0.0*/
 }
 
 pub mod hash
@@ -10038,6 +11799,8 @@ pub mod is
 {
     use ::
     {
+        ffi::{ OsString },
+        path::{ PathBuf },
         *,
     };
     /*
@@ -10072,18 +11835,18 @@ pub mod is
     /*
     pub fn is_value_end_char(...) -> bool */
     /// Returns true if this character signifies the legal end of a value.
-    pub fn value_end_char(ch: char) -> bool {
-        whitespace(ch) || end_delimiter(ch) || operator(ch)
-    }
+    pub fn value_end_char(ch: char) -> bool { whitespace(ch) || end_delimiter(ch) || operator(ch) }
     /*
     pub fn is_whitespace(...) -> bool */
     /// Returns true if the character is either whitespace or '#' (start of a comment).
-    pub fn whitespace(ch: char) -> bool {
+    pub fn whitespace(ch: char) -> bool 
+    {
         ch.is_whitespace() || ch == '#'
     }
     /*
     pub fn is_end_delimiter(...) -> bool */
-    pub fn end_delimiter(ch: char) -> bool {
+    pub fn end_delimiter(ch: char) -> bool 
+    {
         match ch {
             ')' | ']' | '}' | '>' => true,
             _ => false,
@@ -10091,7 +11854,8 @@ pub mod is
     }
     /*
     pub fn is_numeric_char(...) -> bool */
-    pub fn numeric_char(ch: char) -> bool {
+    pub fn numeric_char(ch: char) -> bool 
+    {
         match ch {
             _ch if is::char_digit(_ch) => true,
             '.' | ',' => true,
@@ -10100,7 +11864,8 @@ pub mod is
     }
     /*
     pub fn is_priority_operator(...) -> bool */
-    pub fn priority_operator(ch: char) -> bool {
+    pub fn priority_operator(ch: char) -> bool 
+    {
         match ch {
             '*' | '/' | '%' => true,
             _ => false,
@@ -10117,7 +11882,8 @@ pub mod is
     }
     /*
     pub fn is_reserved(...) -> bool */
-    pub fn reserved(field: &str) -> bool {
+    pub fn reserved(field: &str) -> bool 
+    {
         match field {
             "@" | "null" | "true" | "false" | "Obj" | "Str" | "Arr" | "Tup" => true,
             _ => false,
@@ -10159,6 +11925,15 @@ pub mod is
     {
         let ch = ch as u32;
         ch & ( 0x1f as u32 ) == ch
+    }
+    /*
+    pub fn is_absolute_path(...) -> Option<PathBuf> */
+    pub fn absolute_path( path:OsString ) -> Option<PathBuf>
+    {
+        let path = PathBuf::from(path);
+        
+        if path.is_absolute() { Some(path) }
+        else { None }
     }
 }
 /*
@@ -11175,6 +12950,11 @@ pub mod marker
 pub mod mem
 {
     pub use std::mem::{ * };
+}
+
+pub mod net
+{
+    pub use std::net::{ * };
 }
 
 pub mod num
@@ -19769,8 +21549,7 @@ pub mod num
                     impl<'a, T: Clone + Num> Pow<$U> for &'a Complex<T> {
                         type Output = Complex<T>;
 
-                        #[inline]
-                        fn pow(self, mut exp: $U) -> Self::Output {
+                        #[inline] fn pow(self, mut exp: $U) -> Self::Output {
                             if exp == 0 {
                                 return Complex::one();
                             }
@@ -19800,8 +21579,7 @@ pub mod num
                     impl<'a, 'b, T: Clone + Num> Pow<&'b $U> for &'a Complex<T> {
                         type Output = Complex<T>;
 
-                        #[inline]
-                        fn pow(self, exp: &$U) -> Self::Output {
+                        #[inline] fn pow(self, exp: &$U) -> Self::Output {
                             self.pow(*exp)
                         }
                     }
@@ -19809,8 +21587,7 @@ pub mod num
                     impl<'a, T: Clone + Num + Neg<Output = T>> Pow<$S> for &'a Complex<T> {
                         type Output = Complex<T>;
 
-                        #[inline]
-                        fn pow(self, exp: $S) -> Self::Output {
+                        #[inline] fn pow(self, exp: $S) -> Self::Output {
                             if exp < 0 {
                                 Pow::pow(&self.inv(), exp.wrapping_neg() as $U)
                             } else {
@@ -19822,8 +21599,7 @@ pub mod num
                     impl<'a, 'b, T: Clone + Num + Neg<Output = T>> Pow<&'b $S> for &'a Complex<T> {
                         type Output = Complex<T>;
 
-                        #[inline]
-                        fn pow(self, exp: &$S) -> Self::Output {
+                        #[inline] fn pow(self, exp: &$S) -> Self::Output {
                             self.pow(*exp)
                         }
                     }
@@ -19845,8 +21621,7 @@ pub mod num
                     {
                         type Output = Complex<T>;
 
-                        #[inline]
-                        fn pow(self, exp: $F) -> Self::Output {
+                        #[inline] fn pow(self, exp: $F) -> Self::Output {
                             self.powf(exp.into())
                         }
                     }
@@ -19857,8 +21632,7 @@ pub mod num
                     {
                         type Output = Complex<T>;
 
-                        #[inline]
-                        fn pow(self, &exp: &$F) -> Self::Output {
+                        #[inline] fn pow(self, &exp: &$F) -> Self::Output {
                             self.powf(exp.into())
                         }
                     }
@@ -19869,8 +21643,7 @@ pub mod num
                     {
                         type Output = Complex<T>;
 
-                        #[inline]
-                        fn pow(self, exp: $F) -> Self::Output {
+                        #[inline] fn pow(self, exp: $F) -> Self::Output {
                             self.powf(exp.into())
                         }
                     }
@@ -19881,8 +21654,7 @@ pub mod num
                     {
                         type Output = Complex<T>;
 
-                        #[inline]
-                        fn pow(self, &exp: &$F) -> Self::Output {
+                        #[inline] fn pow(self, &exp: &$F) -> Self::Output {
                             self.powf(exp.into())
                         }
                     }
@@ -20029,8 +21801,7 @@ pub mod num
             {
                 ($( $base:ident :: $method:ident ( self $( , $arg:ident : $ty:ty )* ) -> $ret:ty ; )*)
                     => {$(
-                        #[inline]
-                        fn $method(self $( , $arg : $ty )* ) -> $ret {
+                        #[inline] fn $method(self $( , $arg : $ty )* ) -> $ret {
                             $base::$method(self $( , $arg )* )
                         }
                     )*};
@@ -20040,8 +21811,7 @@ pub mod num
             {
                 ($( Self :: $method:ident ( & self $( , $arg:ident : $ty:ty )* ) -> $ret:ty ; )*)
                     => {$(
-                        #[inline]
-                        fn $method(self $( , $arg : $ty )* ) -> $ret {
+                        #[inline] fn $method(self $( , $arg : $ty )* ) -> $ret {
                             Self::$method(&self $( , $arg )* )
                         }
                     )*};
@@ -20951,14 +22721,12 @@ pub mod num
             {
                 (impl $imp:ident, $method:ident) => {
                     impl<'a, T: Clone + NumAssign> $imp<&'a Complex<T>> for Complex<T> {
-                        #[inline]
-                        fn $method(&mut self, other: &Self) {
+                        #[inline] fn $method(&mut self, other: &Self) {
                             self.$method(other.clone())
                         }
                     }
                     impl<'a, T: Clone + NumAssign> $imp<&'a T> for Complex<T> {
-                        #[inline]
-                        fn $method(&mut self, other: &T) {
+                        #[inline] fn $method(&mut self, other: &T) {
                             self.$method(other.clone())
                         }
                     }
@@ -21036,24 +22804,21 @@ pub mod num
                     impl<'a> $imp<&'a Complex<$real>> for $real {
                         type Output = Complex<$real>;
 
-                        #[inline]
-                        fn $method(self, other: &Complex<$real>) -> Complex<$real> {
+                        #[inline] fn $method(self, other: &Complex<$real>) -> Complex<$real> {
                             self.$method(other.clone())
                         }
                     }
                     impl<'a> $imp<Complex<$real>> for &'a $real {
                         type Output = Complex<$real>;
 
-                        #[inline]
-                        fn $method(self, other: Complex<$real>) -> Complex<$real> {
+                        #[inline] fn $method(self, other: Complex<$real>) -> Complex<$real> {
                             self.clone().$method(other)
                         }
                     }
                     impl<'a, 'b> $imp<&'a Complex<$real>> for &'b $real {
                         type Output = Complex<$real>;
 
-                        #[inline]
-                        fn $method(self, other: &Complex<$real>) -> Complex<$real> {
+                        #[inline] fn $method(self, other: &Complex<$real>) -> Complex<$real> {
                             self.clone().$method(other.clone())
                         }
                     }
@@ -21070,8 +22835,7 @@ pub mod num
                     impl Add<Complex<$real>> for $real {
                         type Output = Complex<$real>;
 
-                        #[inline]
-                        fn add(self, other: Complex<$real>) -> Self::Output {
+                        #[inline] fn add(self, other: Complex<$real>) -> Self::Output {
                             Self::Output::new(self + other.re, other.im)
                         }
                     }
@@ -21079,8 +22843,7 @@ pub mod num
                     impl Sub<Complex<$real>> for $real {
                         type Output = Complex<$real>;
 
-                        #[inline]
-                        fn sub(self, other: Complex<$real>) -> Self::Output  {
+                        #[inline] fn sub(self, other: Complex<$real>) -> Self::Output  {
                             Self::Output::new(self - other.re, $real::zero() - other.im)
                         }
                     }
@@ -21088,8 +22851,7 @@ pub mod num
                     impl Mul<Complex<$real>> for $real {
                         type Output = Complex<$real>;
 
-                        #[inline]
-                        fn mul(self, other: Complex<$real>) -> Self::Output {
+                        #[inline] fn mul(self, other: Complex<$real>) -> Self::Output {
                             Self::Output::new(self * other.re, self * other.im)
                         }
                     }
@@ -21097,8 +22859,7 @@ pub mod num
                     impl Div<Complex<$real>> for $real {
                         type Output = Complex<$real>;
 
-                        #[inline]
-                        fn div(self, other: Complex<$real>) -> Self::Output {
+                        #[inline] fn div(self, other: Complex<$real>) -> Self::Output {
                             // a / (c + i d) == [a * (c - i d)] / (c*c + d*d)
                             let norm_sqr = other.norm_sqr();
                             Self::Output::new(self * other.re / norm_sqr.clone(),
@@ -21109,8 +22870,7 @@ pub mod num
                     impl Rem<Complex<$real>> for $real {
                         type Output = Complex<$real>;
 
-                        #[inline]
-                        fn rem(self, other: Complex<$real>) -> Self::Output {
+                        #[inline] fn rem(self, other: Complex<$real>) -> Self::Output {
                             Self::Output::new(self, Self::zero()) % other
                         }
                     }
@@ -22506,8 +24266,7 @@ pub mod num
                     }
                     impl<'b, T: Clone + Integer + Pow<$exp, Output = T>> Pow<&'b $exp> for Ratio<T> {
                         type Output = Ratio<T>;
-                        #[inline]
-                        fn pow(self, expon: &'b $exp) -> Ratio<T> {
+                        #[inline] fn pow(self, expon: &'b $exp) -> Ratio<T> {
                             Pow::pow(self, *expon)
                         }
                     }
@@ -22516,8 +24275,7 @@ pub mod num
                         &'a T: Pow<$exp, Output = T>,
                     {
                         type Output = Ratio<T>;
-                        #[inline]
-                        fn pow(self, expon: &'b $exp) -> Ratio<T> {
+                        #[inline] fn pow(self, expon: &'b $exp) -> Ratio<T> {
                             Pow::pow(self, *expon)
                         }
                     }
@@ -22568,8 +24326,7 @@ pub mod num
                     }
                     impl<'b, T: Clone + Integer + Pow<$unsigned, Output = T>> Pow<&'b $exp> for Ratio<T> {
                         type Output = Ratio<T>;
-                        #[inline]
-                        fn pow(self, expon: &'b $exp) -> Ratio<T> {
+                        #[inline] fn pow(self, expon: &'b $exp) -> Ratio<T> {
                             Pow::pow(self, *expon)
                         }
                     }
@@ -22578,8 +24335,7 @@ pub mod num
                         &'a T: Pow<$unsigned, Output = T>,
                     {
                         type Output = Ratio<T>;
-                        #[inline]
-                        fn pow(self, expon: &'b $exp) -> Ratio<T> {
+                        #[inline] fn pow(self, expon: &'b $exp) -> Ratio<T> {
                             Pow::pow(self, *expon)
                         }
                     }
@@ -23152,14 +24908,12 @@ pub mod num
             macro_rules! forward_op_assign {
                 (impl $imp:ident, $method:ident) => {
                     impl<'a, T: Clone + Integer + NumAssign> $imp<&'a Ratio<T>> for Ratio<T> {
-                        #[inline]
-                        fn $method(&mut self, other: &Ratio<T>) {
+                        #[inline] fn $method(&mut self, other: &Ratio<T>) {
                             self.$method(other.clone())
                         }
                     }
                     impl<'a, T: Clone + Integer + NumAssign> $imp<&'a T> for Ratio<T> {
-                        #[inline]
-                        fn $method(&mut self, other: &T) {
+                        #[inline] fn $method(&mut self, other: &T) {
                             self.$method(other.clone())
                         }
                     }
@@ -27966,6 +29720,78 @@ pub mod ops
 pub mod option
 {
     pub use std::option::{ * };
+
+    pub mod implementation
+    {
+        use ::
+        {
+            option::{ OptionExt },
+            *,
+        };
+
+        impl<T> OptionExt<T> for Option<T>
+        {
+            fn contains<U>(&self, x: &U) -> bool where U: PartialEq<T>
+            {
+                match *self
+                {
+                    Some(ref y) => x == y,
+                    None => false,
+                }
+            }
+
+            #[inline] fn map_or2<U, F: FnOnce(T) -> U>(self, f: F, default: U) -> U { self.map_or(default, f) }
+
+            #[inline] fn map_or_else2<U, F: FnOnce(T) -> U, D: FnOnce() -> U>(self, f: F, default: D) -> U
+            { self.map_or_else(default, f) }
+        }
+    }
+    /// Extension trait providing additional methods for `Option`.
+    pub trait OptionExt<T>
+    {
+        /// Returns `true` if the option is a [`Some`] value containing the given value.
+        #[must_use] fn contains<U>(&self, x: &U) -> bool where U: PartialEq<T>;
+        /// Returns the result from applying the function `f` to the contained value if the option is [`Some`],
+        /// or returns provided `default` value if the option is [`None`].
+        #[must_use] fn map_or2<U, F: FnOnce(T) -> U>(self, f: F, default: U) -> U;
+        /// Returns the result from applying the function `f` to the contained value if the option is [`Some`],
+        /// or returns the result from evaluating the provided function `default` if the option is [`None`].
+        #[must_use] fn map_or_else2<U, F: FnOnce(T) -> U, D: FnOnce() -> U>(self, f: F, default: D) -> U;
+    }
+}
+
+pub mod os
+{
+    use ::
+    {  
+        *,
+    };
+
+    pub mod fd
+    {
+        //! Owned and borrowed Unix-like file descriptors.
+        pub use std::os::fd::{ * };
+    }
+
+    pub mod raw
+    {
+        //! Compatibility module for C platform-specific types. Use [`core::ffi`] instead.
+        pub use std::os::raw::{ * };
+    }
+
+    pub mod unix
+    {
+        //! Platform-specific extensions to `std` for Unix platforms.
+        #[cfg( unix )] pub use std::os::unix::{ * };
+    } #[cfg( unix )] pub use self::unix::{ * };
+
+    pub mod windows
+    {
+        //! Platform-specific extensions to `std` for Windows.
+        #[cfg( windows )] pub use std::os::windows::{ * };
+    } #[cfg( windows )] pub use self::windows::{ * };
+
+    pub use std::os::{ * };
 }
 
 pub mod parsers
@@ -35851,4 +37677,4 @@ fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 35854
+// 37680
