@@ -11594,190 +11594,6 @@ pub mod fmt
 pub mod fs
 {
     pub use std::fs::{ * };
-    /*
-    dirs-system v6.0.0*/
-    pub mod system
-    {
-        use ::
-        {
-            *,
-        };
-        
-        pub mod unix
-        {
-            use ::
-            {
-                collections::{ HashMap },
-                ffi::{ OsString },
-                io::{ self, Read },
-                libc::{ unix::{ * }, * },
-                os::unix::ffi::{ OsStringExt },
-                path::{ Path, PathBuf },
-                *,
-            };
-            /// Returns all XDG user directories obtained from $(XDG_CONFIG_HOME)/user-dirs.dirs.
-            pub fn all(home_dir_path: &Path, user_dir_file_path: &Path) -> HashMap<String, PathBuf>
-            {
-                let bytes = read_all(user_dir_file_path).unwrap_or(Vec::new());
-                parse_user_dirs(home_dir_path, None, &bytes)
-            }
-            /// Returns a single XDG user directory obtained from $(XDG_CONFIG_HOME)/user-dirs.dirs.
-            pub fn single(home_dir_path: &Path, user_dir_file_path: &Path, user_dir_name: &str) -> HashMap<String, PathBuf>
-            {
-                let bytes = read_all(user_dir_file_path).unwrap_or(Vec::new());
-                parse_user_dirs(home_dir_path, Some(user_dir_name), &bytes)
-            }
-
-            fn parse_user_dirs(home_dir: &Path, user_dir: Option<&str>, bytes: &[u8]) -> HashMap<String, PathBuf>
-            {
-                let mut user_dirs = HashMap::new();
-
-                for line in bytes.split(|b| *b == b'\n')
-                {
-                    let mut single_dir_found = false;
-                    let (key, value) = match split_once(line, b'=')
-                    {
-                        Some(kv) => kv,
-                        None => continue,
-                    };
-
-                    let key = trim_blank(key);
-                    let key = if key.starts_with(b"XDG_") && key.ends_with(b"_DIR")
-                    {
-                        match str::from_utf8(&key[4..key.len()-4])
-                        {
-                            Ok(key) => if user_dir.contains(&key)
-                            {
-                                single_dir_found = true;
-                                key
-                            } else if user_dir.is_none() { key } else { continue },
-                            
-                            Err(_)  => continue,
-                        }
-                    } else { continue };
-                    
-                    let value = trim_blank(value);
-                    
-                    let mut value = if value.starts_with(b"\"") && value.ends_with(b"\"")
-                    { &value[1..value.len()-1] } else { continue };
-                    
-                    let is_relative = if value == b"$HOME/" { continue } else if value.starts_with(b"$HOME/")
-                    {
-                        value = &value[b"$HOME/".len()..];
-                        true
-                    } else if value.starts_with(b"/") { false } else { continue };
-
-                    let value = OsString::from_vec(shell_unescape(value));
-
-                    let path = if is_relative
-                    {
-                        let mut path = PathBuf::from(&home_dir);
-                        path.push(value);
-                        path
-                    } 
-                    else { PathBuf::from(value) };
-
-                    user_dirs.insert(key.to_owned(), path);
-
-                    if single_dir_found { break; }
-                }
-
-                user_dirs
-            }
-            /// Reads the entire contents of a file into a byte vector.
-            fn read_all(path: &Path) -> io::Result<Vec<u8>>
-            {
-                let mut file = fs::File::open(path)?;
-                let mut bytes = Vec::with_capacity(1024);
-                file.read_to_end(&mut bytes)?;
-                Ok(bytes)
-            }
-            /// Returns bytes before and after first occurrence of separator.
-            fn split_once(bytes: &[u8], separator: u8) -> Option<(&[u8], &[u8])>
-            {
-                bytes.iter().position(|b| *b == separator).map(|i|
-                {
-                    (&bytes[..i], &bytes[i+1..])
-                })
-            }
-            /// Returns a slice with leading and trailing <blank> characters removed.
-            fn trim_blank(bytes: &[u8]) -> &[u8]
-            {
-                let i = bytes.iter().cloned().take_while(|b| *b == b' ' || *b == b'\t').count();
-                let bytes = &bytes[i..];
-                let i = bytes.iter().cloned().rev().take_while(|b| *b == b' ' || *b == b'\t').count();
-                &bytes[..bytes.len()-i]
-            }
-            /// Unescape bytes escaped with POSIX shell double-quotes rules (as used by xdg-user-dirs-update).
-            fn shell_unescape(escaped: &[u8]) -> Vec<u8>
-            {
-
-                let mut unescaped: Vec<u8> = Vec::with_capacity(escaped.len());
-                let mut i = escaped.iter().cloned();
-
-                while let Some(b) = i.next()
-                {
-                    if b == b'\\'
-                    {
-                        if let Some(b) = i.next() { unescaped.push(b); }
-                    } else { unescaped.push(b); }
-                }
-
-                unescaped
-            }
-            
-            pub fn home_dir() -> Option<PathBuf>
-            {
-                return env::var_os("HOME")
-                .and_then(|h| if h.is_empty() { None } else { Some(h) })
-                .or_else(|| unsafe { fallback() })
-                .map(PathBuf::from);
-                
-                unsafe fn fallback() -> Option<OsString>
-                {
-                    let amt = match sysconf( _SC_GETPW_R_SIZE_MAX )
-                    {
-                        n if n < 0 => 512 as usize,
-                        n => n as usize,
-                    };
-
-                    let mut buf = Vec::with_capacity(amt);
-                    let mut passwd: passwd = mem::zeroed();
-                    let mut result = ptr::null_mut();
-                    match getpwuid_r
-                    (
-                        libc::getuid(),
-                        &mut passwd,
-                        buf.as_mut_ptr(),
-                        buf.capacity(),
-                        &mut result,
-                    )
-                    {
-                        0 if !result.is_null() => {
-                            let ptr = passwd.pw_dir as *const _;
-                            let bytes = CStr::from_ptr(ptr).to_bytes();
-                            if bytes.is_empty() {
-                                None
-                            } else {
-                                Some(OsStringExt::from_vec(bytes.to_vec()))
-                            }
-                        }
-                        _ => None,
-                    }
-                }
-            }
-        }
-
-        pub mod windows
-        {
-            use ::
-            {
-                *,
-            };
-        }
-    }
-    /*
-    dirs v6.0.0*/
 }
 
 pub mod hash
@@ -11993,6 +11809,9 @@ pub mod libc
         pub type sighandler_t = size_t;
         pub type cc_t = c_uchar;
         pub type tcflag_t = c_uint;
+        
+        pub type uid_t = u32;
+        pub type gid_t = u32;
 
         pub const NCCS: usize = 32;
 
@@ -12005,11 +11824,41 @@ pub mod libc
         pub const TIOCSWINSZ: c_int = 0x5402;
         pub const TIOCLINUX: c_int = 0x5403;
         pub const TIOCGPGRP: c_int = 0x540f;
-        pub const TIOCSPGRP: c_int = 0x5410;                
+        pub const TIOCSPGRP: c_int = 0x5410;
+
+        pub const _SC_GETPW_R_SIZE_MAX: c_int = 51;
+        
+        #[repr(C)]
+        pub struct passwd
+        {
+            pub pw_name: *mut c_char,
+            pub pw_passwd: *mut c_char,
+            pub pw_uid: uid_t,
+            pub pw_gid: gid_t,
+            pub pw_gecos: *mut c_char,
+            pub pw_dir: *mut c_char,
+            pub pw_shell: *mut c_char,
+        }
 
         extern "C"
         {
-            pub fn ioctl(fd: c_int, request: c_int, ...) -> c_int;
+            pub fn ioctl( fd:c_int, request:c_int, ... ) -> c_int;
+            pub fn sysconf( name:c_int ) -> c_long;
+            pub fn getopt(argc: c_int, argv: *const *mut c_char, optstr: *const c_char) -> c_int;
+            pub fn getpgid(pid: pid_t) -> pid_t;
+            pub fn getpgrp() -> pid_t;
+            pub fn getpid() -> pid_t;
+            pub fn getppid() -> pid_t;
+            pub fn getuid() -> uid_t;
+            pub fn isatty(fd: c_int) -> c_int;
+            pub fn getpwuid_r
+            (
+                uid: uid_t,
+                pwd: *mut passwd,
+                buf: *mut c_char,
+                buflen: size_t,
+                result: *mut *mut passwd,
+            ) -> c_int;
         }
 
         pub struct termios
@@ -12032,6 +11881,10 @@ pub mod libc
         };
         
         pub use std::os::raw::c_void;
+
+        pub const S_OK: HRESULT = 0;
+        pub const S_FALSE: HRESULT = 1;
+
         pub type c_char = i8;
         pub type c_schar = i8;
         pub type c_uchar = u8;
@@ -12145,6 +11998,17 @@ pub mod libc
         pub type PKAFFINITY = *mut KAFFINITY;
 
         pub type PKEY_EVENT_RECORD = *mut KEY_EVENT_RECORD;
+        
+
+        #[repr( C )] struct GROUP_AFFINITY 
+        {
+            Mask: KAFFINITY,
+            Group: USHORT,
+            Reserved: [USHORT; 3],
+        }
+        
+        pub type PGROUP_AFFINITY = *mut GROUP_AFFINITY;
+        
         pub const RIGHT_ALT_PRESSED: DWORD = 0x0001;
         pub const LEFT_ALT_PRESSED: DWORD = 0x0002;
         pub const RIGHT_CTRL_PRESSED: DWORD = 0x0004;
@@ -12161,14 +12025,6 @@ pub mod libc
         pub const NLS_ROMAN: DWORD = 0x00400000;
         pub const NLS_IME_CONVERSION: DWORD = 0x00800000;
         pub const NLS_IME_DISABLE: DWORD = 0x20000000;
-
-        #[repr( C )] struct GROUP_AFFINITY 
-        {
-            Mask: KAFFINITY,
-            Group: USHORT,
-            Reserved: [USHORT; 3],
-        }
-        
         pub const CTRL_C_EVENT: DWORD = 0;
         pub const CTRL_BREAK_EVENT: DWORD = 1;
         pub const CTRL_CLOSE_EVENT: DWORD = 2;
@@ -12189,114 +12045,18 @@ pub mod libc
         pub const ENABLE_VIRTUAL_TERMINAL_PROCESSING: DWORD = 0x0004;
         pub const DISABLE_NEWLINE_AUTO_RETURN: DWORD = 0x0008;
         pub const ENABLE_LVB_GRID_WORLDWIDE: DWORD = 0x0010;
-
-        pub type PGROUP_AFFINITY = *mut GROUP_AFFINITY;
         pub const MAXIMUM_PROC_PER_GROUP: UCHAR = 64;
         pub const MAXIMUM_PROCESSORS: UCHAR = MAXIMUM_PROC_PER_GROUP;
-        pub type HANDLE = *mut c_void;
-        pub type PHANDLE = *mut HANDLE;
-        pub type FCHAR = UCHAR;
-        pub type FSHORT = USHORT;
-        pub type FLONG = ULONG;
-        pub type HRESULT = c_long;
         pub const OBJ_HANDLE_TAGBITS: usize = 0x00000003;
-        pub type CCHAR = c_char;
-        pub type CSHORT = c_short;
-        pub type CLONG = ULONG;
-        pub type PCCHAR = *mut CCHAR;
-        pub type PCSHORT = *mut CSHORT;
-        pub type PCLONG = *mut CLONG;
-        pub type LCID = ULONG;
-        pub type PLCID = PULONG;
-        pub type LANGID = USHORT;
-
         pub const SYSTEM_CACHE_ALIGNMENT_SIZE: usize = 128;
-        pub type PVOID = *mut c_void;
-        pub type PVOID64 = u64; // This is a 64-bit pointer, even when in 32-bit
-        pub type VOID = c_void;
-        pub type CHAR = c_char;
-        pub type SHORT = c_short;
-        pub type LONG = c_long;
-        pub type WCHAR = wchar_t;
-        pub type PWCHAR = *mut WCHAR;
-        pub type LPWCH = *mut WCHAR;
-        pub type PWCH = *mut WCHAR;
-        pub type LPCWCH = *const WCHAR;
-        pub type PCWCH = *const WCHAR;
-        pub type NWPSTR = *mut WCHAR;
-        pub type LPWSTR = *mut WCHAR;
-        pub type LPTSTR = LPSTR;
-        pub type PWSTR = *mut WCHAR;
-        pub type PZPWSTR = *mut PWSTR;
-        pub type PCZPWSTR = *const PWSTR;
-        pub type LPUWSTR = *mut WCHAR; // Unaligned pointer
-        pub type PUWSTR = *mut WCHAR; // Unaligned pointer
-        pub type LPCWSTR = *const WCHAR;
-        pub type PCWSTR = *const WCHAR;
-        pub type PZPCWSTR = *mut PCWSTR;
-        pub type PCZPCWSTR = *const PCWSTR;
-        pub type LPCUWSTR = *const WCHAR; // Unaligned pointer
-        pub type PCUWSTR = *const WCHAR; // Unaligned pointer
-        pub type PZZWSTR = *mut WCHAR;
-        pub type PCZZWSTR = *const WCHAR;
-        pub type PUZZWSTR = *mut WCHAR; // Unaligned pointer
-        pub type PCUZZWSTR = *const WCHAR; // Unaligned pointer
-        pub type PNZWCH = *mut WCHAR;
-        pub type PCNZWCH = *const WCHAR;
-        pub type PUNZWCH = *mut WCHAR; // Unaligned pointer
-        pub type PCUNZWCH = *const WCHAR; // Unaligned pointer
-        pub type LPCWCHAR = *const WCHAR;
-        pub type PCWCHAR = *const WCHAR;
-        pub type LPCUWCHAR = *const WCHAR; // Unaligned pointer
-        pub type PCUWCHAR = *const WCHAR; // Unaligned pointer
-        pub type UCSCHAR = c_ulong;
         pub const UCSCHAR_INVALID_CHARACTER: UCSCHAR = 0xffffffff;
         pub const MIN_UCSCHAR: UCSCHAR = 0;
         pub const MAX_UCSCHAR: UCSCHAR = 0x0010FFFF;
-        pub type PUCSCHAR = *mut UCSCHAR;
-        pub type PCUCSCHAR = *const UCSCHAR;
-        pub type PUCSSTR = *mut UCSCHAR;
-        pub type PUUCSSTR = *mut UCSCHAR; // Unaligned pointer
-        pub type PCUCSSTR = *const UCSCHAR;
-        pub type PCUUCSSTR = *const UCSCHAR; // Unaligned pointer
-        pub type PUUCSCHAR = *mut UCSCHAR; // Unaligned pointer
-        pub type PCUUCSCHAR = *const UCSCHAR; // Unaligned pointer
-        pub type PCHAR = *mut CHAR;
-        pub type LPCH = *mut CHAR;
-        pub type PCH = *mut CHAR;
-        pub type LPCCH = *const CHAR;
-        pub type PCCH = *const CHAR;
-        pub type NPSTR = *mut CHAR;
-        pub type LPSTR = *mut CHAR;
-        pub type PSTR = *mut CHAR;
-        pub type PZPSTR = *mut PSTR;
-        pub type PCZPSTR = *const PSTR;
-        pub type LPCSTR = *const CHAR;
-        pub type PCSTR = *const CHAR;
-        pub type PZPCSTR = *mut PCSTR;
-        pub type PCZPCSTR = *const PCSTR;
-        pub type PZZSTR = *mut CHAR;
-        pub type PCZZSTR = *const CHAR;
-        pub type PNZCH = *mut CHAR;
-        pub type PCNZCH = *const CHAR;
-
+        pub const WAIT_TIMEOUT: DWORD = 258;
         pub const FILE_SHARE_READ: DWORD = 0x00000001;
         pub const FILE_SHARE_WRITE: DWORD = 0x00000002;
         pub const FILE_SHARE_DELETE: DWORD = 0x00000004;
-        // Skipping TCHAR things
-        pub type DOUBLE = c_double;
-
-        pub const WAIT_TIMEOUT: DWORD = 258;
-
-        pub type PCONSOLE_READCONSOLE_CONTROL = *mut CONSOLE_READCONSOLE_CONTROL;
         pub const CONSOLE_TEXTMODE_BUFFER: DWORD = 1;
-        pub type PEXCEPTION_POINTERS = *mut EXCEPTION_POINTERS;
-        pub type PACCESS_TOKEN = PVOID;
-        pub type PSECURITY_DESCRIPTOR = PVOID;
-        pub type PSID = PVOID;
-        pub type PCLAIMS_BLOB = PVOID;
-        pub type ACCESS_MASK = DWORD;
-        pub type PACCESS_MASK = *mut ACCESS_MASK;
         pub const DELETE: DWORD = 0x00010000;
         pub const READ_CONTROL: DWORD = 0x00020000;
         pub const WRITE_DAC: DWORD = 0x00040000;
@@ -12314,12 +12074,9 @@ pub mod libc
         pub const GENERIC_WRITE: DWORD = 0x40000000;
         pub const GENERIC_EXECUTE: DWORD = 0x20000000;
         pub const GENERIC_ALL: DWORD = 0x10000000;
-        
         pub const STD_INPUT_HANDLE: DWORD = -10i32 as u32;
         pub const STD_OUTPUT_HANDLE: DWORD = -11i32 as u32;
         pub const STD_ERROR_HANDLE: DWORD = -12i32 as u32;
-        
-        pub type PMOUSE_EVENT_RECORD = *mut MOUSE_EVENT_RECORD;
         pub const FROM_LEFT_1ST_BUTTON_PRESSED: DWORD = 0x0001;
         pub const RIGHTMOST_BUTTON_PRESSED: DWORD = 0x0002;
         pub const FROM_LEFT_2ND_BUTTON_PRESSED: DWORD = 0x0004;
@@ -12329,7 +12086,6 @@ pub mod libc
         pub const DOUBLE_CLICK: DWORD = 0x0002;
         pub const MOUSE_WHEELED: DWORD = 0x0004;
         pub const MOUSE_HWHEELED: DWORD = 0x0008;
-
         pub const VK_LBUTTON: c_int = 0x01;
         pub const VK_RBUTTON: c_int = 0x02;
         pub const VK_CANCEL: c_int = 0x03;
@@ -12377,7 +12133,6 @@ pub mod libc
         pub const VK_RWIN: c_int = 0x5C;
         pub const VK_APPS: c_int = 0x5D;
         pub const VK_SLEEP: c_int = 0x5F;
-
         pub const FOREGROUND_BLUE: WORD = 0x0001;
         pub const FOREGROUND_GREEN: WORD = 0x0002;
         pub const FOREGROUND_RED: WORD = 0x0004;
@@ -12394,6 +12149,144 @@ pub mod libc
         pub const COMMON_LVB_REVERSE_VIDEO: WORD = 0x4000;
         pub const COMMON_LVB_UNDERSCORE: WORD = 0x8000;
         pub const COMMON_LVB_SBCSDBCS: WORD = 0x0300;
+        pub const KEY_EVENT: WORD = 0x0001;
+        pub const MOUSE_EVENT: WORD = 0x0002;
+        pub const WINDOW_BUFFER_SIZE_EVENT: WORD = 0x0004;
+        pub const MENU_EVENT: WORD = 0x0008;
+        pub const FOCUS_EVENT: WORD = 0x0010;
+        pub const ATTACH_PARENT_PROCESS: DWORD = 0xFFFFFFFF;
+        pub const STATUS_USER_APC: NTSTATUS = 0x000000C0;
+        pub const STATUS_WAIT_0: NTSTATUS = 0x00000000;
+        pub const STATUS_ABANDONED_WAIT_0: NTSTATUS = 0x00000080;
+        pub const WAIT_FAILED: DWORD = 0xFFFFFFFF;
+        pub const WAIT_OBJECT_0: DWORD = STATUS_WAIT_0 as u32;
+        pub const WAIT_ABANDONED: DWORD = STATUS_ABANDONED_WAIT_0 as u32;
+        pub const WAIT_ABANDONED_0: DWORD = STATUS_ABANDONED_WAIT_0 as u32;
+        pub const WAIT_IO_COMPLETION: DWORD = STATUS_USER_APC as u32;
+        pub const FOLDERID_Profile:GUID = GUID::create( 0x5E6C858F, 0x0E22, 0x4760, [ 0x9A, 0xFE, 0xEA, 0x33, 0x17, 0xB6, 0x71, 0x73 ] );
+        pub const FOLDERID_RoamingAppData:GUID = GUID::create( 0x3EB685DB, 0x65F9, 0x4CF6, [ 0xA0, 0x3A, 0xE3, 0xEF, 0x65, 0x72, 0x9F, 0x3D ] );
+        pub const FOLDERID_LocalAppData:GUID = GUID::create( 0xF1B32785, 0x6FBA, 0x4FCF, [ 0x9D, 0x55, 0x7B, 0x8E, 0x7F, 0x15, 0x70, 0x91 ] );
+        pub const FOLDERID_Music:GUID = GUID::create( 0x4BD8D571, 0x6D19, 0x48D3, [ 0xBE, 0x97, 0x42, 0x22, 0x20, 0x08, 0x0E, 0x43 ] );
+        pub const FOLDERID_Desktop:GUID = GUID::create( 0xB4BFCC3A, 0xDB2C, 0x424C, [ 0xB0, 0x29, 0x7F, 0xE9, 0x9A, 0x87, 0xC6, 0x41 ] );
+        pub const FOLDERID_Documents:GUID = GUID::create( 0xFDD39AD0, 0x238F, 0x46AF, [ 0xAD, 0xB4, 0x6C, 0x85, 0x48, 0x03, 0x69, 0xC7 ] );
+        pub const FOLDERID_Downloads:GUID = GUID::create( 0x374de290, 0x123f, 0x4565, [ 0x91, 0x64, 0x39, 0xc4, 0x92, 0x5e, 0x46, 0x7b ] );
+        pub const FOLDERID_Pictures:GUID = GUID::create( 0xa990ae9f, 0xa03b, 0x4e80, [ 0x94, 0xbc, 0x99, 0x12, 0xd7, 0x50, 0x41, 0x4 ] );
+        pub const FOLDERID_Public:GUID = GUID::create( 0xDFDF76A2, 0xC82A, 0x4D63, [ 0x90, 0x6A, 0x56, 0x44, 0xAC, 0x45, 0x73, 0x85 ] );
+        pub const FOLDERID_Templates:GUID = GUID::create( 0xA63293E8, 0x664E, 0x48DB, [ 0xA0, 0x79, 0xDF, 0x75, 0x9E, 0x05, 0x09, 0xF7 ] );
+        pub const FOLDERID_Videos:GUID = GUID::create( 0x18989B1D, 0x99B5, 0x455B, [ 0xA0, 0x79, 0xDF, 0x75, 0x9E, 0x05, 0x09, 0xF7 ] );
+
+        pub type PHANDLER_ROUTINE = Option<unsafe extern "system" fn(CtrlType: DWORD) -> BOOL>;
+        pub type NTSTATUS = LONG;
+        pub type PCONSOLE_FONT_INFO = *mut CONSOLE_FONT_INFO;
+        pub type PCONSOLE_FONT_INFOEX = *mut CONSOLE_FONT_INFOEX;
+        pub type PCONSOLE_CURSOR_INFO = *mut CONSOLE_CURSOR_INFO;
+        pub type PCONSOLE_SELECTION_INFO = *mut CONSOLE_SELECTION_INFO;
+        pub type PCONSOLE_HISTORY_INFO = *mut CONSOLE_HISTORY_INFO;
+        pub type PCONSOLE_SCREEN_BUFFER_INFO = *mut CONSOLE_SCREEN_BUFFER_INFO;
+        pub type PCONSOLE_SCREEN_BUFFER_INFOEX = *mut CONSOLE_SCREEN_BUFFER_INFOEX;
+        pub type COLORREF = DWORD;
+        pub type PINPUT_RECORD = *mut INPUT_RECORD;
+        pub type PFLOAT128 = *mut FLOAT128;
+        pub type LONGLONG = __int64;
+        pub type ULONGLONG = __uint64;
+        pub const MAXLONGLONG: LONGLONG = 0x7fffffffffffffff;
+        pub type PLONGLONG = *mut LONGLONG;
+        pub type PULONGLONG = *mut ULONGLONG;
+        pub type USN = LONGLONG;
+        pub type HANDLE = *mut c_void;
+        pub type PHANDLE = *mut HANDLE;
+        pub type FCHAR = UCHAR;
+        pub type FSHORT = USHORT;
+        pub type FLONG = ULONG;
+        pub type HRESULT = c_long;        
+        pub type CCHAR = c_char;
+        pub type CSHORT = c_short;
+        pub type CLONG = ULONG;
+        pub type PCCHAR = *mut CCHAR;
+        pub type PCSHORT = *mut CSHORT;
+        pub type PCLONG = *mut CLONG;
+        pub type LCID = ULONG;
+        pub type PLCID = PULONG;
+        pub type LANGID = USHORT;        
+        pub type PVOID = *mut c_void;
+        pub type PVOID64 = u64; // This is a 64-bit pointer, even when in 32-bit
+        pub type VOID = c_void;
+        pub type CHAR = c_char;
+        pub type SHORT = c_short;
+        pub type LONG = c_long;
+        pub type WCHAR = wchar_t;
+        pub type PWCHAR = *mut WCHAR;
+        pub type LPWCH = *mut WCHAR;
+        pub type PWCH = *mut WCHAR;
+        pub type LPCWCH = *const WCHAR;
+        pub type PCWCH = *const WCHAR;
+        pub type NWPSTR = *mut WCHAR;
+        pub type LPWSTR = *mut WCHAR;
+        pub type LPTSTR = LPSTR;
+        pub type PWSTR = *mut WCHAR;
+        pub type PZPWSTR = *mut PWSTR;
+        pub type PCZPWSTR = *const PWSTR;
+        pub type LPUWSTR = *mut WCHAR; // Unaligned pointer
+        pub type PUWSTR = *mut WCHAR; // Unaligned pointer
+        pub type LPCWSTR = *const WCHAR;
+        pub type PCWSTR = *const WCHAR;
+        pub type PZPCWSTR = *mut PCWSTR;
+        pub type PCZPCWSTR = *const PCWSTR;
+        pub type LPCUWSTR = *const WCHAR; // Unaligned pointer
+        pub type PCUWSTR = *const WCHAR; // Unaligned pointer
+        pub type PZZWSTR = *mut WCHAR;
+        pub type PCZZWSTR = *const WCHAR;
+        pub type PUZZWSTR = *mut WCHAR; // Unaligned pointer
+        pub type PCUZZWSTR = *const WCHAR; // Unaligned pointer
+        pub type PNZWCH = *mut WCHAR;
+        pub type PCNZWCH = *const WCHAR;
+        pub type PUNZWCH = *mut WCHAR; // Unaligned pointer
+        pub type PCUNZWCH = *const WCHAR; // Unaligned pointer
+        pub type LPCWCHAR = *const WCHAR;
+        pub type PCWCHAR = *const WCHAR;
+        pub type LPCUWCHAR = *const WCHAR; // Unaligned pointer
+        pub type PCUWCHAR = *const WCHAR; // Unaligned pointer
+        pub type UCSCHAR = c_ulong;
+        pub type PUCSCHAR = *mut UCSCHAR;
+        pub type PCUCSCHAR = *const UCSCHAR;
+        pub type PUCSSTR = *mut UCSCHAR;
+        pub type PUUCSSTR = *mut UCSCHAR; // Unaligned pointer
+        pub type PCUCSSTR = *const UCSCHAR;
+        pub type PCUUCSSTR = *const UCSCHAR; // Unaligned pointer
+        pub type PUUCSCHAR = *mut UCSCHAR; // Unaligned pointer
+        pub type PCUUCSCHAR = *const UCSCHAR; // Unaligned pointer
+        pub type PCHAR = *mut CHAR;
+        pub type LPCH = *mut CHAR;
+        pub type PCH = *mut CHAR;
+        pub type LPCCH = *const CHAR;
+        pub type PCCH = *const CHAR;
+        pub type NPSTR = *mut CHAR;
+        pub type LPSTR = *mut CHAR;
+        pub type PSTR = *mut CHAR;
+        pub type PZPSTR = *mut PSTR;
+        pub type PCZPSTR = *const PSTR;
+        pub type LPCSTR = *const CHAR;
+        pub type PCSTR = *const CHAR;
+        pub type PZPCSTR = *mut PCSTR;
+        pub type PCZPCSTR = *const PCSTR;
+        pub type PZZSTR = *mut CHAR;
+        pub type PCZZSTR = *const CHAR;
+        pub type PNZCH = *mut CHAR;
+        pub type PCNZCH = *const CHAR;
+        pub type DOUBLE = c_double;
+        pub type PCONSOLE_READCONSOLE_CONTROL = *mut CONSOLE_READCONSOLE_CONTROL;
+        pub type PEXCEPTION_POINTERS = *mut EXCEPTION_POINTERS;
+        pub type PACCESS_TOKEN = PVOID;
+        pub type PSECURITY_DESCRIPTOR = PVOID;
+        pub type PSID = PVOID;
+        pub type PCLAIMS_BLOB = PVOID;
+        pub type ACCESS_MASK = DWORD;
+        pub type PACCESS_MASK = *mut ACCESS_MASK;
+        pub type PMOUSE_EVENT_RECORD = *mut MOUSE_EVENT_RECORD;
+        pub type PCONTEXT = *mut CONTEXT;
+        pub type PEXCEPTION_RECORD = *mut EXCEPTION_RECORD;
+        pub type KNOWNFOLDERID = GUID;
+        pub type REFKNOWNFOLDERID = *const KNOWNFOLDERID;
 
         extern "system"
         {
@@ -12613,45 +12506,133 @@ pub mod libc
                 HandlerRoutine: PHANDLER_ROUTINE,
                 Add: BOOL,
             ) -> BOOL;
+            
+            pub fn CoTaskMemFree(
+                pv: LPVOID,
+            );
+
+            pub fn SHGetKnownFolderPath
+            (
+                rfid: REFKNOWNFOLDERID,
+                dwFlags: DWORD,
+                hToken: HANDLE,
+                pszPath: *mut PWSTR,
+            ) -> HRESULT;
+
+            pub fn lstrlenW( lpString: LPCWSTR ) -> c_int;
+
         }
 
-        pub type PHANDLER_ROUTINE = Option<unsafe extern "system" fn(CtrlType: DWORD) -> BOOL>;
+        #[repr(C)] #[derive( Clone, Copy )]
+        pub struct GUID
+        {
+            pub Data1: c_ulong,
+            pub Data2: c_ushort,
+            pub Data3: c_ushort,
+            pub Data4: [c_uchar; 8],
+        }
 
-        pub type NTSTATUS = LONG;
-        
-        pub const STATUS_USER_APC: NTSTATUS = 0x000000C0;
-        pub const STATUS_WAIT_0: NTSTATUS = 0x00000000;
-        pub const STATUS_ABANDONED_WAIT_0: NTSTATUS = 0x00000080;
-        pub const WAIT_FAILED: DWORD = 0xFFFFFFFF;
-        pub const WAIT_OBJECT_0: DWORD = STATUS_WAIT_0 as u32;
-        pub const WAIT_ABANDONED: DWORD = STATUS_ABANDONED_WAIT_0 as u32;
-        pub const WAIT_ABANDONED_0: DWORD = STATUS_ABANDONED_WAIT_0 as u32;
-        pub const WAIT_IO_COMPLETION: DWORD = STATUS_USER_APC as u32;
+        impl GUID
+        {
+            pub const fn create( Data1:c_ulong, Data2:c_ushort, Data3:c_ushort, Data4:[c_uchar; 8] ) -> Self
+            {
+                Self
+                {
+                    Data1,
+                    Data2,
+                    Data3,
+                    Data4,
+                }
+            }
 
-        pub type PCONSOLE_FONT_INFO = *mut CONSOLE_FONT_INFO;
-        pub type PCONSOLE_FONT_INFOEX = *mut CONSOLE_FONT_INFOEX;
-        pub type PCONSOLE_CURSOR_INFO = *mut CONSOLE_CURSOR_INFO;
-        pub type PCONSOLE_SELECTION_INFO = *mut CONSOLE_SELECTION_INFO;
-        pub type PCONSOLE_HISTORY_INFO = *mut CONSOLE_HISTORY_INFO;
-        pub type PCONSOLE_SCREEN_BUFFER_INFO = *mut CONSOLE_SCREEN_BUFFER_INFO;
-        pub type PCONSOLE_SCREEN_BUFFER_INFOEX = *mut CONSOLE_SCREEN_BUFFER_INFOEX;
-        pub type COLORREF = DWORD;
+            pub fn folder_id_profile() -> *const Self
+            {
+                unsafe
+                {
+                    ::mem::transmute( &FOLDERID_Profile )
+                }
+            }
 
-        pub type PINPUT_RECORD = *mut INPUT_RECORD;
-        pub const KEY_EVENT: WORD = 0x0001;
-        pub const MOUSE_EVENT: WORD = 0x0002;
-        pub const WINDOW_BUFFER_SIZE_EVENT: WORD = 0x0004;
-        pub const MENU_EVENT: WORD = 0x0008;
-        pub const FOCUS_EVENT: WORD = 0x0010;
-        pub const ATTACH_PARENT_PROCESS: DWORD = 0xFFFFFFFF;
+            pub fn folder_id_roaming_app_data() -> *const Self
+            {
+                unsafe
+                {
+                    ::mem::transmute( &FOLDERID_RoamingAppData )
+                }
+            }
 
-        pub type PFLOAT128 = *mut FLOAT128;
-        pub type LONGLONG = __int64;
-        pub type ULONGLONG = __uint64;
-        pub const MAXLONGLONG: LONGLONG = 0x7fffffffffffffff;
-        pub type PLONGLONG = *mut LONGLONG;
-        pub type PULONGLONG = *mut ULONGLONG;
-        pub type USN = LONGLONG;
+            pub fn folder_id_local_app_data() -> *const Self
+            {
+                unsafe
+                {
+                    ::mem::transmute( &FOLDERID_LocalAppData )
+                }
+            }
+            
+            pub fn folder_id_music() -> *const Self
+            {
+                unsafe
+                {
+                    ::mem::transmute( &FOLDERID_Music )
+                }
+            }
+            
+            pub fn folder_id_desktop() -> *const Self
+            {
+                unsafe
+                {
+                    ::mem::transmute( &FOLDERID_Desktop )
+                }
+            }
+            
+            pub fn folder_id_documents() -> *const Self
+            {
+                unsafe
+                {
+                    ::mem::transmute( &FOLDERID_Documents )
+                }
+            }
+            
+            pub fn folder_id_downloads() -> *const Self
+            {
+                unsafe
+                {
+                    ::mem::transmute( &FOLDERID_Downloads )
+                }
+            }
+            
+            pub fn folder_id_pictures() -> *const Self
+            {
+                unsafe
+                {
+                    ::mem::transmute( &FOLDERID_Pictures )
+                }
+            }
+            
+            pub fn folder_id_public() -> *const Self
+            {
+                unsafe
+                {
+                    ::mem::transmute( &FOLDERID_Public )
+                }
+            }
+            
+            pub fn folder_id_templates() -> *const Self
+            {
+                unsafe
+                {
+                    ::mem::transmute( &FOLDERID_Templates )
+                }
+            }
+            
+            pub fn folder_id_videos() -> *const Self
+            {
+                unsafe
+                {
+                    ::mem::transmute( &FOLDERID_Videos )
+                }
+            }
+        }
 
         #[repr( C )] #[derive( Clone, Copy )]
         pub struct FLOAT128
@@ -12719,7 +12700,7 @@ pub mod libc
             pub LastExceptionToRip: DWORD64,
             pub LastExceptionFromRip: DWORD64,
         }
-        pub type PCONTEXT = *mut CONTEXT;
+        
 
         #[repr( C )] #[derive( Clone, Copy )]
         pub struct EXCEPTION_RECORD {
@@ -12730,8 +12711,6 @@ pub mod libc
             pub NumberParameters: DWORD,
             pub ExceptionInformation: [ULONG_PTR; 15],
         }
-
-        pub type PEXCEPTION_RECORD = *mut EXCEPTION_RECORD;
 
         #[repr( C )] #[derive( Clone, Copy )]
         pub struct EXCEPTION_POINTERS {
@@ -22539,7 +22518,8 @@ pub mod num
         {
             type Output = Complex<T>;
 
-            #[inline] fn mul_add(self, other: Complex<T>, add: Complex<T>) -> Complex<T> {
+            #[inline] fn mul_add(self, other: Complex<T>, add: Complex<T>) -> Complex<T>
+            {
                 let re = self.re.clone().mul_add(other.re.clone(), add.re)
                     - (self.im.clone() * other.im.clone()); // FIXME: use mulsub when available in rust
                 let im = self.re.mul_add(other.im, self.im.mul_add(other.re, add.im));
@@ -24450,7 +24430,8 @@ pub mod num
         impl<T: Clone + Integer> Ratio<T>
         {
             /// Creates a new `Ratio`.
-            #[inline] pub fn new(numer: T, denom: T) -> Ratio<T> {
+            #[inline] pub fn new(numer: T, denom: T) -> Ratio<T>
+            {
                 let mut ret = Ratio::new_raw(numer, denom);
                 ret.reduce();
                 ret
@@ -24500,7 +24481,8 @@ pub mod num
                 }
             }
             /// Returns a reduced copy of self.
-            pub fn reduced(&self) -> Ratio<T> {
+            pub fn reduced(&self) -> Ratio<T>
+            {
                 let mut ret = self.clone();
                 ret.reduce();
                 ret
@@ -24540,7 +24522,8 @@ pub mod num
                 }
             }
             /// Rounds to the nearest integer. Rounds half-way cases away from zero.
-            #[inline] pub fn round(&self) -> Ratio<T> {
+            #[inline] pub fn round(&self) -> Ratio<T>
+            {
                 let zero: Ratio<T> = Zero::zero();
                 let one: T = One::one();
                 let two: T = one.clone() + one.clone();
@@ -25015,7 +24998,8 @@ pub mod num
             T: Clone + Integer,
         {
             type Output = Ratio<T>;
-            #[inline] fn mul(self, rhs: Ratio<T>) -> Ratio<T> {
+            #[inline] fn mul(self, rhs: Ratio<T>) -> Ratio<T>
+            {
                 let gcd_ad = self.numer.gcd(&rhs.denom);
                 let gcd_bc = self.denom.gcd(&rhs.numer);
                 Ratio::new(
@@ -25029,7 +25013,8 @@ pub mod num
             T: Clone + Integer,
         {
             type Output = Ratio<T>;
-            #[inline] fn mul(self, rhs: T) -> Ratio<T> {
+            #[inline] fn mul(self, rhs: T) -> Ratio<T>
+            {
                 let gcd = self.denom.gcd(&rhs);
                 Ratio::new(self.numer * (rhs / gcd.clone()), self.denom / gcd)
             }
@@ -25042,7 +25027,8 @@ pub mod num
         {
             type Output = Ratio<T>;
 
-            #[inline] fn div(self, rhs: Ratio<T>) -> Ratio<T> {
+            #[inline] fn div(self, rhs: Ratio<T>) -> Ratio<T>
+            {
                 let gcd_ac = self.numer.gcd(&rhs.numer);
                 let gcd_bd = self.denom.gcd(&rhs.denom);
                 Ratio::new(
@@ -25057,7 +25043,8 @@ pub mod num
         {
             type Output = Ratio<T>;
 
-            #[inline] fn div(self, rhs: T) -> Ratio<T> {
+            #[inline] fn div(self, rhs: T) -> Ratio<T>
+            {
                 let gcd = self.numer.gcd(&rhs);
                 Ratio::new(self.numer / gcd.clone(), self.denom * (rhs / gcd))
             }
@@ -25098,7 +25085,8 @@ pub mod num
         impl<T> CheckedMul for Ratio<T> where
             T: Clone + Integer + CheckedMul,
         {
-            #[inline] fn checked_mul(&self, rhs: &Ratio<T>) -> Option<Ratio<T>> {
+            #[inline] fn checked_mul(&self, rhs: &Ratio<T>) -> Option<Ratio<T>>
+            {
                 let gcd_ad = self.numer.gcd(&rhs.denom);
                 let gcd_bc = self.denom.gcd(&rhs.numer);
                 Some(Ratio::new(
@@ -25377,7 +25365,8 @@ pub mod num
             type Err = ParseRatioError;
 
             /// Parses `numer/denom` or just `numer`.
-            fn from_str(s: &str) -> Result<Ratio<T>, ParseRatioError> {
+            fn from_str(s: &str) -> Result<Ratio<T>, ParseRatioError>
+            {
                 let mut split = s.splitn(2, '/');
 
                 let n = split.next().ok_or(ParseRatioError {
@@ -25671,7 +25660,8 @@ pub mod num
                 self.to_integer().to_u128()
             }
 
-            fn to_f64(&self) -> Option<f64> {
+            fn to_f64(&self) -> Option<f64>
+            {
                 let float = match (self.numer.to_i64(), self.denom.to_i64()) {
                     (Some(numer), Some(denom)) => ratio_to_f64(
                         <i128 as From<_>>::from(numer),
@@ -29789,6 +29779,7 @@ pub mod os
     {
         //! Platform-specific extensions to `std` for Windows.
         #[cfg( windows )] pub use std::os::windows::{ * };
+
     } #[cfg( windows )] pub use self::windows::{ * };
 
     pub use std::os::{ * };
@@ -36736,6 +36727,370 @@ pub mod parsers
 pub mod path
 {
     pub use std::path::{ * };
+    /*
+    dirs-system v6.0.0*/
+    pub mod system
+    {
+        use ::
+        {
+            *,
+        };
+        
+        pub mod unix
+        {
+            use ::
+            {
+                collections::{ HashMap },
+                ffi::{ CStr, OsString },
+                libc::{ unix::{ * }, * },
+                os::unix::ffi::{ OsStringExt },
+                path::{ Path, PathBuf },
+                *,
+            }; 
+
+            fn user_dir_file(home_dir: &Path) -> PathBuf 
+            {
+                env::var_os("XDG_CONFIG_HOME")
+                    .and_then(is::absolute_path)
+                    .unwrap_or_else(|| home_dir.join(".config"))
+                    .join("user-dirs.dirs")
+            }
+            
+            pub fn user_dir(user_dir_name: &str) -> Option<PathBuf>
+            {
+                if let Some(home_dir) = home_dir() {
+                    single(&home_dir, &user_dir_file(&home_dir), user_dir_name).remove(user_dir_name)
+                } else {
+                    None
+                }
+            }
+
+            pub fn user_dirs(home_dir_path: &Path) -> HashMap<String, PathBuf> 
+            {
+                all(home_dir_path, &user_dir_file(home_dir_path))
+            }
+
+            pub fn home_directory() -> Option<PathBuf>
+            {
+                return env::var_os("HOME")
+                    .and_then(|h| if h.is_empty() { None } else { Some(h) })
+                    .or_else(|| unsafe { fallback() })
+                    .map(PathBuf::from);
+                    
+                unsafe fn fallback() -> Option<OsString>
+                {
+                    let amt = match sysconf( _SC_GETPW_R_SIZE_MAX) {
+                        n if n < 0 => 512 as usize,
+                        n => n as usize,
+                    };
+                    let mut buf = Vec::with_capacity(amt);
+                    let mut passwd:passwd = mem::zeroed();
+                    let mut result = ptr::null_mut();
+                    match getpwuid_r( getuid(), &mut passwd, buf.as_mut_ptr(), buf.capacity(), &mut result)
+                    {
+                        0 if !result.is_null() => {
+                            let ptr = passwd.pw_dir as *const _;
+                            let bytes = CStr::from_ptr(ptr).to_bytes();
+                            if bytes.is_empty() {
+                                None
+                            } else {
+                                Some(OsStringExt::from_vec(bytes.to_vec()))
+                            }
+                        }
+                        _ => None,
+                    }
+                }
+            }
+            /// Returns all XDG user directories obtained from $(XDG_CONFIG_HOME)/user-dirs.dirs.
+            pub fn all(home_dir_path: &Path, user_dir_file_path: &Path) -> HashMap<String, PathBuf>
+            {
+                let bytes = fs::read(user_dir_file_path).unwrap_or_default();
+                parse_user_dirs(home_dir_path, None, &bytes)
+            }
+            /// Returns a single XDG user directory obtained from $(XDG_CONFIG_HOME)/user-dirs.dirs.
+            pub fn single(home_dir_path: &Path, user_dir_file_path: &Path, user_dir_name: &str) -> HashMap<String, PathBuf>
+            {
+                let bytes = fs::read(user_dir_file_path).unwrap_or_default();
+                parse_user_dirs(home_dir_path, Some(user_dir_name), &bytes)
+            }
+
+            fn parse_user_dirs(home_dir: &Path, user_dir: Option<&str>, bytes: &[u8]) -> HashMap<String, PathBuf>
+            {
+                let mut user_dirs = HashMap::new();
+
+                for line in bytes.split(|b| *b == b'\n') {
+                    let mut single_dir_found = false;
+                    let (key, value) = match split_once(line, b'=') {
+                        Some(kv) => kv,
+                        None => continue,
+                    };
+
+                    let key = trim_blank(key);
+                    let key = if key.starts_with(b"XDG_") && key.ends_with(b"_DIR") {
+                        match str::from_utf8(&key[4..key.len() - 4]) {
+                            Ok(key) => {
+                                if user_dir.is_some() && option_contains(user_dir, key) {
+                                    single_dir_found = true;
+                                    key
+                                } else if user_dir.is_none() {
+                                    key
+                                } else {
+                                    continue;
+                                }
+                            }
+                            Err(_) => continue,
+                        }
+                    } else {
+                        continue;
+                    };
+                    
+                    let value = trim_blank(value);
+                    let mut value =
+                        if value.starts_with(b"\"") && value.ends_with(b"\"") { &value[1..value.len() - 1] } else { continue };
+
+                    let is_relative = if value == b"$HOME/"
+                    {
+                        continue;
+                    } else if value.starts_with(b"$HOME/") {
+                        value = &value[b"$HOME/".len()..];
+                        true
+                    } else if value.starts_with(b"/") {
+                        false
+                    } else {
+                        continue;
+                    };
+
+                    let value = OsString::from_vec(shell_unescape(value));
+
+                    let path = if is_relative {
+                        let mut path = PathBuf::from(&home_dir);
+                        path.push(value);
+                        path
+                    } else {
+                        PathBuf::from(value)
+                    };
+
+                    user_dirs.insert(key.to_owned(), path);
+                    if single_dir_found {
+                        break;
+                    }
+                }
+
+                user_dirs
+            }
+            /// Returns bytes before and after first occurrence of separator.
+            fn split_once(bytes: &[u8], separator: u8) -> Option<(&[u8], &[u8])>
+            {
+                bytes.iter().position(|b| *b == separator).map(|i| (&bytes[..i], &bytes[i + 1..]))
+            }
+            /// Returns a slice with leading and trailing <blank> characters removed.
+            fn trim_blank(bytes: &[u8]) -> &[u8]
+            {
+                let i = bytes.iter().cloned().take_while(|b| *b == b' ' || *b == b'\t').count();
+                let bytes = &bytes[i..];
+                let i = bytes.iter().cloned().rev().take_while(|b| *b == b' ' || *b == b'\t').count();
+                &bytes[..bytes.len() - i]
+            }
+            /// Unescape bytes escaped with POSIX shell double-quotes rules (as used by xdg-user-dirs-update).
+            fn shell_unescape(escaped: &[u8]) -> Vec<u8>
+            {
+                let mut unescaped: Vec<u8> = Vec::with_capacity(escaped.len());
+                let mut i = escaped.iter().cloned();
+
+                while let Some(b) = i.next() {
+                    if b == b'\\' {
+                        if let Some(b) = i.next() {
+                            unescaped.push(b);
+                        }
+                    } else {
+                        unescaped.push(b);
+                    }
+                }
+
+                unescaped
+            }
+
+            fn option_contains<T: PartialEq>(option: Option<T>, value: T) -> bool
+            {
+                match option
+                {
+                    Some(val) => val == value,
+                    None => false,
+                }
+            }
+
+            pub fn home_dir() -> Option<PathBuf> { home_directory() }
+
+            pub fn cache_dir() -> Option<PathBuf> 
+            {
+                env::var_os("XDG_CACHE_HOME")
+                    .and_then( is::absolute_path )
+                    .or_else(|| home_dir().map(|h| h.join(".cache")))
+            }
+            
+            pub fn config_dir() -> Option<PathBuf>
+            {
+                env::var_os("XDG_CONFIG_HOME")
+                    .and_then( is::absolute_path )
+                    .or_else(|| home_dir().map(|h| h.join(".config")))
+            }
+            
+            pub fn data_dir() -> Option<PathBuf>
+            {
+                env::var_os("XDG_DATA_HOME")
+                    .and_then( is::absolute_path )
+                    .or_else(|| home_dir().map(|h| h.join(".local/share")))
+            }
+            
+            pub fn data_local_dir() -> Option<PathBuf> { data_dir() }
+
+            pub fn runtime_dir() -> Option<PathBuf> { env::var_os("XDG_RUNTIME_DIR").and_then( is::absolute_path ) }
+
+            pub fn executable_dir() -> Option<PathBuf>
+            {
+                env::var_os("XDG_BIN_HOME").and_then( is::absolute_path ).or_else(||
+                {
+                    data_dir().map(|mut e|
+                    {
+                        e.pop();
+                        e.push("bin");
+                        e
+                    })
+                })
+            }
+
+            pub fn audio_dir() -> Option<PathBuf> { user_dir("MUSIC") }
+
+            pub fn desktop_dir() -> Option<PathBuf> { user_dir("DESKTOP") }
+
+            pub fn document_dir() -> Option<PathBuf> { user_dir("DOCUMENTS") }
+
+            pub fn download_dir() -> Option<PathBuf> { user_dir("DOWNLOAD") }
+
+            pub fn font_dir() -> Option<PathBuf> { data_dir().map(|d| d.join("fonts")) }
+
+            pub fn picture_dir() -> Option<PathBuf> { user_dir("PICTURES") }
+
+            pub fn public_dir() -> Option<PathBuf> { user_dir("PUBLICSHARE") }
+
+            pub fn template_dir() -> Option<PathBuf> { user_dir("TEMPLATES") }
+
+            pub fn video_dir() -> Option<PathBuf> { user_dir("VIDEOS") }
+        } #[cfg( unix )] pub use self::unix::{ * };
+
+        pub mod windows
+        {
+            use ::
+            {
+                ffi::{ OsString },
+                libc::windows::{ * },
+                path::{ PathBuf },
+                *,
+            };
+            
+            pub fn known_folder( folder_id: REFKNOWNFOLDERID ) -> Option<PathBuf>
+            {
+                /*
+                unsafe
+                {
+                    let mut path_ptr: winnt::PWSTR = ptr::null_mut();
+                    let result = shlobj::SHGetKnownFolderPath(folder_id, 0, ptr::null_mut(), &mut path_ptr);
+                    if result == S_OK
+                    {
+                        let len = winbase::lstrlenW(path_ptr) as usize;
+                        let path = slice::from_raw_parts(path_ptr, len);
+                        let ostr: OsString = OsStringExt::from_wide(path);
+                        combaseapi::CoTaskMemFree(path_ptr as *mut winapi::ctypes::c_void);
+                        Some(PathBuf::from(ostr))
+                    } else { None }
+                }*/
+                None
+            }
+
+            pub fn known_folder_profile() -> Option<PathBuf> { known_folder( GUID::folder_id_profile() ) }
+
+            pub fn known_folder_roaming_app_data() -> Option<PathBuf>
+            { known_folder( GUID::folder_id_roaming_app_data() ) }
+
+            pub fn known_folder_local_app_data() -> Option<PathBuf>
+            { known_folder( GUID::folder_id_local_app_data() ) }
+
+            pub fn known_folder_music() -> Option<PathBuf>
+            { known_folder( GUID::folder_id_music() ) }
+
+            pub fn known_folder_desktop() -> Option<PathBuf>
+            { known_folder( GUID::folder_id_desktop() ) }
+
+            pub fn known_folder_documents() -> Option<PathBuf>
+            { known_folder( GUID::folder_id_documents() ) }
+
+            pub fn known_folder_downloads() -> Option<PathBuf>
+            { known_folder( GUID::folder_id_downloads() ) }
+
+            pub fn known_folder_pictures() -> Option<PathBuf>
+            { known_folder( GUID::folder_id_pictures() ) }
+
+            pub fn known_folder_public() -> Option<PathBuf>
+            { known_folder( GUID::folder_id_pictures() ) }
+            
+            pub fn known_folder_templates() -> Option<PathBuf>
+            { known_folder( GUID::folder_id_templates() ) }
+            
+            pub fn known_folder_videos() -> Option<PathBuf>
+            { known_folder( GUID::folder_id_videos() ) }
+
+            pub fn home_dir() -> Option<PathBuf> { dirs_sys_next::known_folder_profile() }
+            pub fn data_dir() -> Option<PathBuf> { dirs_sys_next::known_folder_roaming_app_data() }
+            pub fn data_local_dir() -> Option<PathBuf> { dirs_sys_next::known_folder_local_app_data() }
+            pub fn cache_dir() -> Option<PathBuf> { data_local_dir() }
+            pub fn config_dir() -> Option<PathBuf> { data_dir() }
+            pub fn executable_dir() -> Option<PathBuf> { None }
+            pub fn runtime_dir() -> Option<PathBuf> { None }
+            pub fn audio_dir() -> Option<PathBuf> { dirs_sys_next::known_folder_music() }
+            pub fn desktop_dir() -> Option<PathBuf> { dirs_sys_next::known_folder_desktop() }
+            pub fn document_dir() -> Option<PathBuf> { dirs_sys_next::known_folder_documents() }
+            pub fn download_dir() -> Option<PathBuf> { dirs_sys_next::known_folder_downloads() }
+            pub fn font_dir() -> Option<PathBuf> { None }
+            pub fn picture_dir() -> Option<PathBuf> { dirs_sys_next::known_folder_pictures() }
+            pub fn public_dir() -> Option<PathBuf> { dirs_sys_next::known_folder_public() }
+            pub fn template_dir() -> Option<PathBuf> { dirs_sys_next::known_folder_templates() }
+            pub fn video_dir() -> Option<PathBuf> { dirs_sys_next::known_folder_videos() }
+        } #[cfg( windows )] pub use self::windows::{ * };
+    } pub use self::system as sys;
+    /*
+    dirs v6.0.0*/
+    /// Returns the path to the user's home directory.
+    pub fn home_dir() -> Option<PathBuf> { sys::home_dir() }
+    /// Returns the path to the user's cache directory.
+    pub fn cache_dir() -> Option<PathBuf> { sys::cache_dir() }
+    /// Returns the path to the user's config directory.
+    pub fn config_dir() -> Option<PathBuf> { sys::config_dir() }
+    /// Returns the path to the user's data directory.
+    pub fn data_dir() -> Option<PathBuf> { sys::data_dir() }
+    /// Returns the path to the user's local data directory.
+    pub fn data_local_dir() -> Option<PathBuf> { sys::data_local_dir() }
+    /// Returns the path to the user's executable directory.
+    pub fn executable_dir() -> Option<PathBuf> { sys::executable_dir() }
+    /// Returns the path to the user's runtime directory.
+    pub fn runtime_dir() -> Option<PathBuf> { sys::runtime_dir() }
+    /// Returns the path to the user's audio directory.
+    pub fn audio_dir() -> Option<PathBuf> { sys::audio_dir() }
+    /// Returns the path to the user's desktop directory.
+    pub fn desktop_dir() -> Option<PathBuf> { sys::desktop_dir() }
+    /// Returns the path to the user's document directory.
+    pub fn document_dir() -> Option<PathBuf> { sys::document_dir() }
+    /// Returns the path to the user's download directory.
+    pub fn download_dir() -> Option<PathBuf> { sys::download_dir() }
+    /// Returns the path to the user's font directory.
+    pub fn font_dir() -> Option<PathBuf> { sys::font_dir() }
+    /// Returns the path to the user's picture directory.
+    pub fn picture_dir() -> Option<PathBuf> { sys::picture_dir() }
+    /// Returns the path to the user's public directory.
+    pub fn public_dir() -> Option<PathBuf> { sys::public_dir() }
+    /// Returns the path to the user's template directory.
+    pub fn template_dir() -> Option<PathBuf> { sys::template_dir() }
+    /// Returns the path to the user's video directory.
+    pub fn video_dir() -> Option<PathBuf> { sys::video_dir() }
 }
 
 pub mod ptr
@@ -37677,4 +38032,4 @@ fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 37680
+// 38035
