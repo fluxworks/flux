@@ -648,7 +648,7 @@ extern crate unicode_width;
             impl ::str::FromStr for $InternalBitFlags {
                 type Err = $crate::parser::ParseError;
 
-                fn from_str(s: &str) -> ::result::Result<Self, Self::Err> {
+                fn from_str( s:&str ) -> ::result::Result<Self, Self::Err> {
                     $crate::parser::from_str::<$PublicBitFlags>(s).map(|flags| flags.0)
                 }
             }
@@ -1951,7 +1951,7 @@ pub mod char
     /*
     pub fn parse_char_name(...) -> Option<String> */
     /// Returns a character name as a key sequence, e.g. `Control-x` or `Meta-x`.
-    pub fn parser_name(name: &str) -> Option<String>
+    pub fn parse_name(name: &str) -> Option<String>
     {
         let name_lc = name.to_lowercase();
         let is_ctrl = contains_any(&name_lc, &["c-", "ctrl-", "control-"]);
@@ -1986,7 +1986,7 @@ pub mod char
         Some(ch)
     }
     /// Returns a character sequence escaped for user-facing display.
-    pub fn escape_sequence(s: &str) -> String
+    pub fn escape_sequence( s:&str ) -> String
     {
         let mut res = String::with_capacity(s.len());
 
@@ -2574,7 +2574,7 @@ pub mod common
         }
 
         fn new_buffer(buf: &mut Vec<Cell>, new_size: Size) { *buf = vec![Cell::invalid(); new_size.area()]; }
-    }
+    } pub use self::buffer::{ * };
 
     #[macro_use] pub mod macros
     {
@@ -2823,7 +2823,7 @@ pub mod common
             fn chain<F: FnOnce() -> Self>(self, f: F) -> Self { self.and_then(|_| f()) }
             fn init() -> Self { Ok(()) }
         }
-    }    
+    } pub use self::macros::{ * };
 
     pub mod screen
     {
@@ -3042,7 +3042,7 @@ pub mod common
             
             pub fn borrow_term_write_guard(&mut self) -> &mut Self { self }
         }
-    } pub use self::screen::{ Screen, ScreenReadGuard, ScreenWriteGuard };
+    } pub use self::screen::{ * };
 
     pub mod sequence
     {
@@ -3350,7 +3350,7 @@ pub mod common
                 .finish()
             }
         }
-    } pub use self::sequence::{ FindResult, SequenceMap };
+    } pub use self::sequence::{ * };
     
     pub mod signal
     {
@@ -3551,7 +3551,7 @@ pub mod common
         impl_mut_op!{ BitOrAssign, bitor_assign, union }
         impl_mut_op!{ BitXorAssign, bitxor_assign, symmetric_difference }
         impl_mut_op!{ SubAssign, sub_assign, difference }
-    } pub use self::signal::{Signal, SignalSet};
+    } pub use self::signal::{ * };
     
     pub mod terminal
     {
@@ -4157,11 +4157,7 @@ pub mod common
             
             pub fn borrow_term_write_guard(&mut self) -> &mut Self { self }
         }
-    } pub use self::terminal::
-    {
-        Color, Cursor, CursorMode, Size, Style, Theme, Event, Key, Mouse, MouseInput, MouseButton, ModifierState,
-        PrepareConfig, PrepareState, Terminal, TerminalReadGuard, TerminalWriteGuard,
-    };
+    } pub use self::terminal::{ * };
 
     pub mod system
     {
@@ -6074,7 +6070,7 @@ pub mod common
                 }
 
                 #[cfg(target_pointer_width = "64")]
-                fn to_u32(u: usize) -> u32 {
+                fn to_u32( u:usize ) -> u32 {
                     if u > u32::max_value() as usize {
                         u32::max_value()
                     } else {
@@ -6083,7 +6079,7 @@ pub mod common
                 }
 
                 #[cfg(any(target_pointer_width = "16", target_pointer_width = "32"))]
-                fn to_u32(u: usize) -> u32 {
+                fn to_u32( u:usize ) -> u32 {
                     u as u32
                 }
             } pub use self::terminal::{ PrepareState, Terminal, TerminalReadGuard, TerminalWriteGuard };
@@ -8490,7 +8486,7 @@ pub mod database
         {
             type Err = OverError;
 
-            fn from_str(s: &str) -> Result<Self, Self::Err> 
+            fn from_str( s:&str ) -> Result<Self, Self::Err> 
             {
                 Ok(parses::load_from_str(s)?)
             }
@@ -9555,7 +9551,7 @@ pub mod database
                 }
             }
 
-            fn replace_all(s: &str) -> String
+            fn replace_all( s:&str ) -> String
             {
                 let mut string = String::with_capacity(s.len());
 
@@ -11815,11 +11811,7 @@ pub mod is
     /*
     pub fn is_combining_mark(ch: char) -> bool */
     /// Returns whether the given character is a combining mark.
-    #[inline] pub fn combining_mark(ch: char) -> bool
-    {
-        use unicode_normalization::char::is_combining_mark;
-        is_combining_mark(ch)
-    }
+    #[inline] pub fn combining_mark(ch: char) -> bool { ::unicode_normalization::char::is_combining_mark(ch) }
     /*
     pub fn is_visible(ch: char) -> bool */
     pub fn visible(ch: char) -> bool
@@ -16027,7 +16019,7 @@ pub mod num
                 impl FromStr for BigInt {
                     type Err = ParseBigIntError;
 
-                    #[inline] fn from_str(s: &str) -> Result<BigInt, ParseBigIntError> {
+                    #[inline] fn from_str( s:&str ) -> Result<BigInt, ParseBigIntError> {
                         BigInt::from_str_radix(s, 10)
                     }
                 }
@@ -19446,7 +19438,7 @@ pub mod num
                 {
                     type Err = ParseBigIntError;
 
-                    #[inline] fn from_str(s: &str) -> Result<BigUint, ParseBigIntError>
+                    #[inline] fn from_str( s:&str ) -> Result<BigUint, ParseBigIntError>
                     {
                         BigUint::from_str_radix(s, 10)
                     }
@@ -23764,7 +23756,7 @@ pub mod num
             type Err = ParseComplexError<T::Err>;
 
             /// Parses `a +/- bi`; `ai +/- b`; `a`; or `bi` where `a` and `b` are of type `T`
-            fn from_str(s: &str) -> Result<Self, Self::Err> {
+            fn from_str( s:&str ) -> Result<Self, Self::Err> {
                 from_str_generic(s, T::from_str)
             }
         }
@@ -25941,7 +25933,7 @@ pub mod num
             type Err = ParseRatioError;
 
             /// Parses `numer/denom` or just `numer`.
-            fn from_str(s: &str) -> Result<Ratio<T>, ParseRatioError>
+            fn from_str( s:&str ) -> Result<Ratio<T>, ParseRatioError>
             {
                 let mut split = s.splitn(2, '/');
 
@@ -37737,7 +37729,7 @@ pub mod str
             }
         }
         /// Construct a `SmallString` by copying data from a `&str`.
-        #[inline] pub fn from_str(s: &str) -> SmallString<A>
+        #[inline] pub fn from_str( s:&str ) -> SmallString<A>
         {
             SmallString
             {
@@ -38061,7 +38053,7 @@ pub mod str
 
     impl<'a, A: Array<Item = u8>> From<&'a str> for SmallString<A>
     {
-        #[inline] fn from(s: &str) -> SmallString<A> { SmallString::from_str(s) }
+        #[inline] fn from( s:&str ) -> SmallString<A> { SmallString::from_str(s) }
     }
 
     impl<A: Array<Item = u8>> From<Box<str>> for SmallString<A>
@@ -38384,7 +38376,7 @@ pub mod str
         iter: CharIndices<'a>,
     }
     /// Returns an iterator over all non-empty prefixes of `s`, beginning with the shortest.
-    #[inline] pub fn prefixes(s: &str) -> Prefixes
+    #[inline] pub fn prefixes( s:&str ) -> Prefixes
     {
         Prefixes
         {
@@ -38556,7 +38548,7 @@ pub mod system
                             .unwrap_or_else(|| Command::Custom(Owned(name.into())))
                     }
 
-                    fn opt_from_str(s: &str) -> Option<Command>
+                    fn opt_from_str( s:&str ) -> Option<Command>
                     {
                         match s
                         {
@@ -38730,6 +38722,7 @@ pub mod system
                     common::
                     {
                         system::unix::{ TerminalExt },
+                        Event, TerminalReadGuard,
                     },
                     system::terminal::{ RawRead },
                     time::{ Duration },
@@ -38767,15 +38760,19 @@ pub mod system
             {
                 use ::
                 {
+                    common::system::windows::TerminalReadGuard,
+                    libc::windows::{ * },
+                    system::RawRead,
+                    time::Duration,
                     *,
                 };
                 
-                const HOME_SEQ: &str = "\x1b[H";
-                const END_SEQ: &str = "\x1b[F";
-                const INSERT_SEQ: &str = "\x1b[2~";
-                const DELETE_SEQ: &str = "\x1b[3~";
-                const PAGE_UP_SEQ: &str = "\x1b[5~";
-                const PAGE_DOWN_SEQ: &str = "\x1b[6~";
+                pub const HOME_SEQ: &str = "\x1b[H";
+                pub const END_SEQ: &str = "\x1b[F";
+                pub const INSERT_SEQ: &str = "\x1b[2~";
+                pub const DELETE_SEQ: &str = "\x1b[3~";
+                pub const PAGE_UP_SEQ: &str = "\x1b[5~";
+                pub const PAGE_DOWN_SEQ: &str = "\x1b[6~";
 
                 struct SeqGroup
                 {
@@ -39173,7 +39170,7 @@ pub mod system
             start
         }
         /// Returns the start position of a word with non-word characters escaped by backslash (`\\`).
-        pub fn escaped_word_start(s: &str) -> usize {
+        pub fn escaped_word_start( s:&str ) -> usize {
             let mut chars = s.char_indices().rev();
             let mut start = s.len();
 
@@ -39212,7 +39209,7 @@ pub mod system
             start
         }
         /// Escapes a word by prefixing a backslash (`\\`) to non-word characters.
-        pub fn escape(s: &str) -> Cow<str> {
+        pub fn escape( s:&str ) -> Cow<str> {
             let n = s.chars().filter(|&ch| needs_escape(ch)).count();
 
             if n == 0 {
@@ -39231,7 +39228,7 @@ pub mod system
             }
         }
         /// Unescapes a word by removing the backslash (`\\`) from escaped characters.
-        pub fn unescape(s: &str) -> Cow<str> {
+        pub fn unescape( s:&str ) -> Cow<str> {
             if s.contains('\\') {
                 let mut res = String::with_capacity(s.len());
                 let mut chars = s.chars();
@@ -39301,12 +39298,12 @@ pub mod system
         //! Parses configuration files in the format of GNU Readline `inputrc`
         use ::
         {
-            char::{ from_u32, ctrl, meta, parse_char_name },
-            command::Command,
+            char::{ from_u32, ctrl, meta, parse_name },
             fs::{ File },
             io::{ stderr, Read, Write },
             path::{ Path },
             str::{ Chars, Lines },
+            system::Command,
             *,
         };
         /// Parsed configuration directive
@@ -39587,7 +39584,7 @@ pub mod system
                             }
                         }
 
-                        let seq = match parse_char_name(name) {
+                        let seq = match parse_name(name) {
                             Some(seq) => seq,
                             None => {
                                 self.invalid();
@@ -39767,7 +39764,7 @@ pub mod system
             Some(esc.to_string())
         }
 
-        fn parse_string(s: &str) -> (Token, &str) {
+        fn parse_string( s:&str ) -> (Token, &str) {
             let mut chars = s.chars();
             let mut res = String::new();
 
@@ -39792,7 +39789,7 @@ pub mod system
             (Token::Invalid, "")
         }
 
-        fn parse_word(s: &str) -> (&str, &str) {
+        fn parse_word( s:&str ) -> (&str, &str) {
             let mut chars = s.char_indices();
 
             loop {
@@ -40101,7 +40098,7 @@ pub mod system
         use ::
         {
             char::{  DELETE, EOF },
-            commmon::{ FindResult },
+            common::{ CursorMode, FindResult, Signal, Size, Terminal },
             mem::{ replace },
             ops::{ Range },
             sync::{ Arc },
@@ -40114,7 +40111,6 @@ pub mod system
         use super::function::Function;
         use super::reader::{BindingIter, InputState, ReadLock, ReadResult};
         use super::table::{format_columns, Line, Table};
-        use super::terminal::{CursorMode, Signal, Size, Terminal};
         use super::util::{
             get_open_paren, find_matching_paren, first_word,
             longest_common_prefix, repeat_char,
@@ -40246,7 +40242,7 @@ pub mod system
                             self.write.search_history_update()?;
                         } else if self.is_abort(ch) {
                             self.abort_search_history()?;
-                        } else if is_ctrl(ch) {
+                        } else if is::ctrl(ch) {
                             // End search, handle input after cancelling
                             self.end_search_history()?;
                             self.read.macro_buffer.insert(0, ch);
@@ -41480,8 +41476,8 @@ pub mod system
         use super::inputrc::{parse_file, Directive};
         use super::interface::Interface;
         use super::prompter::Prompter;
-        use super::sys::path::{env_init_file, system_init_file, user_init_file};
-        use super::terminal::{
+        use super::terminal::
+        {
             RawRead, Signal, SignalSet, Size,
             Terminal, TerminalReader,
         };
@@ -41652,7 +41648,6 @@ pub mod system
                     }
                 }
 
-                // Acquire the write lock and process all available input
                 {
                     let mut prompter = self.prompter();
 
@@ -42600,7 +42595,7 @@ pub mod system
             },
             time::{ Duration },
             *,
-        }; use super::sys;
+        };
         /// Default `Terminal` interface
         pub struct DefaultTerminal(common::Terminal);
         /// Represents the result of a `Terminal` read operation
@@ -42616,8 +42611,6 @@ pub mod system
         /// Defines a low-level interface to the terminal
         pub trait Terminal: Sized + Send + Sync 
         {
-            // TODO: When generic associated types are implemented (and stabilized),
-            // boxed trait objects may be replaced by `Reader` and `Writer`.
             /// Returned by `prepare`; passed to `restore` to restore state.
             type PrepareState;
             /*
@@ -42848,7 +42841,7 @@ pub mod system
             *,
         };
 
-        pub fn filter_visible(s: &str) -> Cow<str> {
+        pub fn filter_visible( s:&str ) -> Cow<str> {
             use super::reader::{START_INVISIBLE, END_INVISIBLE};
 
             if !s.contains(START_INVISIBLE) {
@@ -42898,7 +42891,6 @@ pub mod system
 
             Some(pfx)
         }
-
         /// Returns a string consisting of a `char`, repeated `n` times.
         pub fn repeat_char(ch: char, n: usize) -> String {
             let mut buf = [0; 4];
@@ -42907,8 +42899,6 @@ pub mod system
             s.repeat(n)
         }
 
-        /// Implemented for built-in range types
-        // Waiting for stabilization of `std` trait of the same name
         pub trait RangeArgument<T> {
             /// Returns the start of range, if present.
             fn start(&self) -> Option<&T> { None }
@@ -42935,7 +42925,7 @@ pub mod system
 
         pub fn backward_char(n: usize, s: &str, cur: usize) -> usize {
             let mut chars = s[..cur].char_indices()
-                .filter(|&(_, ch)| !is_combining_mark(ch));
+                .filter(|&(_, ch)| !is::combining_mark(ch));
             let mut res = cur;
 
             for _ in 0..n {
@@ -42950,7 +42940,7 @@ pub mod system
 
         pub fn forward_char(n: usize, s: &str, cur: usize) -> usize {
             let mut chars = s[cur..].char_indices()
-                .filter(|&(_, ch)| !is_combining_mark(ch));
+                .filter(|&(_, ch)| !is::combining_mark(ch));
 
             for _ in 0..n {
                 match chars.next() {
@@ -42984,8 +42974,8 @@ pub mod system
         pub fn forward_search_char(n: usize, buf: &str, mut cur: usize, ch: char) -> Option<usize> {
             let mut pos = None;
 
-            for _ in 0..n {
-                // Skip past the character under the cursor
+            for _ in 0..n 
+            {
                 let off = match buf[cur..].chars().next() {
                     Some(ch) => ch.len_utf8(),
                     None => break
@@ -43183,24 +43173,11 @@ pub mod system
 
             None
         }
+        
+        pub fn is_wide(ch: char) -> bool { char::width(ch) == Some(2) }
 
-        pub fn is_combining_mark(ch: char) -> bool {
-            use common::util::is_combining_mark;
-
-            is_combining_mark(ch)
-        }
-
-        pub fn is_wide(ch: char) -> bool {
-            use common::util::char_width;
-
-            char_width(ch) == Some(2)
-        }
-
-        pub fn match_name(name: &str, value: &str) -> bool {
-            // A value of "foo" matches both "foo" and "foo-bar"
-            name == value ||
-                (name.starts_with(value) && name.as_bytes()[value.len()] == b'-')
-        }
+        pub fn match_name(name: &str, value: &str) -> bool
+        { name == value || (name.starts_with(value) && name.as_bytes()[value.len()] == b'-') }
     }
 
     pub mod variables
@@ -43375,14 +43352,14 @@ pub mod system
                     completion_query_items: 100,
                     disable_completion: false,
                     echo_control_characters: true,
-                    keyseq_timeout: Some(Duration::from_millis(KEYSEQ_TIMEOUT_MS)),
+                    keyseq_timeout: Some(Duration::milliseconds(KEYSEQ_TIMEOUT_MS)),
                     page_completions: true,
                     print_completions_horizontally: false,
                 }
             }
         }
 
-        fn parse_bool(s: &str) -> Option<bool>
+        fn parse_bool( s:&str ) -> Option<bool>
         {
             match s
             {
@@ -43394,7 +43371,7 @@ pub mod system
             }
         }
 
-        fn parse_string(s: &str) -> Option<String> { Some(s.to_owned()) }
+        fn parse_string( s:&str ) -> Option<String> { Some(s.to_owned()) }
 
         fn as_millis(timeout: Option<Duration>) -> i32 
         {
@@ -43410,17 +43387,17 @@ pub mod system
             }
         }
 
-        fn parse_duration(s: &str) -> Option<Option<Duration>> 
+        fn parse_duration( s:&str ) -> Option<Option<Duration>> 
         {
             match s.parse::<i32>() 
             {
                 Ok(n) if n <= 0 => Some(None),
-                Ok(n) => Some(Some(Duration::from_millis(n as u64))),
+                Ok(n) => Some(Some( std::time::Duration::milliseconds( n as u64 ) ) ),
                 Err(_) => Some(None)
             }
         }
 
-        fn usize_as_i32(u: usize) -> i32 
+        fn usize_as_i32( u:usize ) -> i32 
         {
             match u 
             {
@@ -43429,7 +43406,7 @@ pub mod system
             }
         }
 
-        fn parse_usize(s: &str) -> Option<usize> 
+        fn parse_usize( s:&str ) -> Option<usize> 
         {
             match s.parse::<i32>() 
             {
@@ -43456,14 +43433,14 @@ pub mod system
             *,
         };
         use super::reader::{START_INVISIBLE, END_INVISIBLE};
-        use super::terminal::{CursorMode, Size, Terminal, TerminalWriter};
+        use super::terminal::{ * };
         use super::util::
         {
             backward_char, forward_char, backward_search_char, forward_search_char,
-            filter_visible, is_combining_mark, is_wide, RangeArgument,
+            filter_visible, is_wide, RangeArgument,
         };
         /// Duration to wait for input when "blinking"
-        pub const BLINK_DURATION: Duration = Duration::from_millis(500);
+        pub const BLINK_DURATION: Duration = Duration::milliseconds( 500 );
         pub const COMPLETE_MORE: &'static str = "--More--";
         /// Default maximum history size
         pub const MAX_HISTORY: usize = !0;
@@ -43749,7 +43726,7 @@ pub mod system
 
                                 out.push('\n');
                                 col = 0;
-                            } else if is_combining_mark(ch) {
+                            } else if is::combining_mark(ch) {
                                 out.push(ch);
                             } else if is_wide(ch) {
                                 if col == width - 1 {
@@ -44169,7 +44146,7 @@ pub mod system
             {
                 let moves_combining = match self.buffer[self.cursor..].chars().next()
                 {
-                    Some(ch) if is_combining_mark(ch) => true,
+                    Some(ch) if is::combining_mark(ch) => true,
                     _ => false
                 };
 
@@ -44535,7 +44512,7 @@ pub mod system
                     {
                         '\n' => width - (col % width),
                         '\t' => TAB_STOP - (col % TAB_STOP),
-                        ch if is_combining_mark(ch) => 0,
+                        ch if is::combining_mark(ch) => 0,
                         ch if is_wide(ch) =>
                         {
                             if col % width == width - 1 { 3 }
@@ -44762,7 +44739,7 @@ pub mod system
             }
         }
     } pub use self::writer::{ * };
-}
+} pub use self::system as sys;
 
 pub mod time
 {
@@ -44770,6 +44747,17 @@ pub mod time
     mod std
     {
         pub use std::time::{ * };
+    }
+
+    pub const fn from_millis(millis: u64) -> Duration
+    {
+        let secs = millis / MILLIS_PER_SEC;
+        let subsec_millis = (millis % MILLIS_PER_SEC) as u32;
+        // SAFETY: (x % 1_000) * 1_000_000 < 1_000_000_000
+        //         => x % 1_000 < 1_000
+        let subsec_nanos = unsafe { Nanoseconds::new_unchecked(subsec_millis * NANOS_PER_MILLI) };
+
+        Duration { secs, nanos: subsec_nanos }
     }
 }
 
@@ -44842,4 +44830,4 @@ fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 44845
+// 44833
