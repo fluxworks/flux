@@ -5,7 +5,6 @@
     elided_named_lifetimes,
     non_camel_case_types,
     non_snake_case,
-    non_upper_case_globals,
     private_interfaces,
     stable_features,
     unknown_lints,
@@ -449,7 +448,7 @@ extern crate unicode_width;
         {
             __bitflags_match!($operation, { $pattern => { $($body)* } $($t)+ })
         };
-
+        // Expand a block match arm `A => { .. }`
         ($operation:expr, { $pattern:expr => { $($body:tt)* } $($t:tt)+ }) =>
         {{
                 if $operation == $pattern
@@ -459,13 +458,13 @@ extern crate unicode_width;
 
                 __bitflags_match!($operation, { $($t)+ })
         }};
-        
+        // Expand an expression match arm `A => x,`
         ($operation:expr, { $pattern:expr => $body:expr , $($t:tt)+ }) =>
         { {
             if $operation == $pattern { return $body; }
             __bitflags_match!($operation, { $($t)+ })
         }};
-        
+        // Expand the default case
         ($operation:expr, { _ => $default:expr $(,)? }) => { $default }
     }
     /// A macro that processed the input to `bitflags!`
@@ -523,6 +522,7 @@ extern crate unicode_width;
             expr: { $e:expr },
                 attrs: {
                 unprocessed: [
+                    // $other matched here
                     #[$other:ident $($args:tt)*]
                     $($attrs_rest:tt)*
                 ],
@@ -2189,6 +2189,28 @@ pub mod char
     fn contains_any(s: &str, strs: &[&str]) -> bool { strs.iter().any(|a| s.contains(a)) }
     /// Returns whether the given character is a control character.
     pub fn is_ctrl(c: char) -> bool { c != '\0' && c as u32 <= CTRL_MAX }
+    
+    #[inline] #[must_use] pub const fn len_utf16(code: u32) -> usize { if (code & 0xFFFF) == code { 1 } else { 2 } }
+    /// Encodes a raw `u32` value as native endian UTF-16 into the provided `u16` buffer,
+    /// and then returns the subslice of the buffer that contains the encoded character.
+    #[inline] pub const fn encodes_utf16_raw(mut code: u32, dst: &mut [u16]) -> Option<&mut [u16]>
+    {
+        let len = len_utf16(code);
+        match (len, &mut *dst)
+        {
+            (1, [a, ..]) => { *a = code as u16; }
+
+            (2, [a, b, ..]) =>
+            {
+                code -= 0x1_0000;
+                *a = (code >> 10) as u16 | 0xD800;
+                *b = (code & 0x3FF) as u16 | 0xDC00;
+            }
+            _ => { return None; }
+        };
+        
+        unsafe { Some( slice::from_raw_parts_mut(dst.as_mut_ptr(), len) ) }
+    }
 }
 
 pub mod cmp
@@ -2356,6 +2378,7 @@ pub mod database
         {
             fn eq(&self, other: &Self) -> bool 
             {
+                // Quickly return false if the types don't match.
                 if self.inner.inner_t != other.inner.inner_t {
                     return false;
                 }
@@ -2367,38 +2390,29 @@ pub mod database
 
     pub mod capability
     {
+        //! Standard capabilities.
         use ::
         {
+            borrow::{ Cow },
+            database::
+            {
+                //value::{ Value },
+            },
+            io::{ Write },
             *,
         };
-        /// An expansion parameter.
-        #[derive(Eq, PartialEq, Clone, Debug)]
-        pub enum Parameter
+        /*
+        use crate::error;
+        use crate::expand::{Context, Expand, Parameter};*/
+        /// A trait for any object that will represent a terminal capability.
+        pub trait Capable<'a>: Sized
         {
-            /// A number.
-            Number(i32),
-            /// An ASCII string.
-            String(Vec<u8>),
-        }
-
-        impl Default for Parameter
-        {
-            fn default() -> Self { Parameter::Number(0) }
-        }
-        /// The expansion context.
-        #[derive(Eq, PartialEq, Default, Debug)]
-        pub struct Context
-        {
-            pub fixed: [Parameter; 26],
-            pub dynamic: [Parameter; 26],
-        }
-        /// Expansion helper struct.
-        #[derive(Debug)]
-        pub struct Expansion<'a, T: 'a + AsRef<[u8]>>
-        {
-            string: &'a T,
-            params: [Parameter; 9],
-            context: Option<&'a mut Context>,
+            /// Returns the name of the capability in its long form.
+            fn name() -> &'static str;
+            /// Parse the capability from its raw value.
+            fn from(value: Option<&'a Value>) -> Option<Self>;
+            /// Convert the capability into its raw value.
+            fn into(self) -> Option<Value>;
         }
     }
 
@@ -2877,7 +2891,8 @@ pub mod database
             {
                 let inner = &self.inner;
                 let other_inner = &other.inner;
-                
+
+                // Check parent equality.
                 if inner.parent.is_some() && other_inner.parent.is_some() {
                     let parent = self.get_parent().unwrap();
                     let other_parent = other.get_parent().unwrap();
@@ -2887,7 +2902,8 @@ pub mod database
                 } else if !(inner.parent.is_none() && other_inner.parent.is_none()) {
                     return false;
                 }
-                
+
+                // Check HashMap equality.
                 inner.map == other_inner.map
             }
         }
@@ -3012,6 +3028,7 @@ pub mod database
         
         {
             fn eq(&self, other: &Self) -> bool {
+                // Quickly return false if the types don't match.
                 if self.inner.inner_tvec != other.inner.inner_tvec {
                     return false;
                 }
@@ -3213,7 +3230,8 @@ pub mod database
         {
             fn eq(&self, other: &Self) -> bool {
                 use self::Type::*;
-                
+
+                // If either is Any, always return `true`.
                 if let Any = *other {
                     return true;
                 }
@@ -3379,6 +3397,7 @@ pub mod database
         {
             /// A null value.
             Null,
+            // Copy values.
             /// A boolean value.
             Bool(bool),
             /// A signed integer value.
@@ -3389,12 +3408,20 @@ pub mod database
             Char(char),
             /// A string value.
             Str(String),
+
+            // Reference values.
             /// An array value.
             Arr(arrays::Arr),
             /// A tuple value.
             Tup(tuples::Tup),
             /// An object value.
             Obj(objects::Obj),
+            /// A Capability Boolean.
+            True,
+            /// A Capability  number.
+            Number(i32),
+            /// A Capability string requiring expansion.
+	        String(Vec<u8>),
         }
 
         impl Value 
@@ -3491,8 +3518,7 @@ pub mod database
             }
         }
 
-        impl fmt::Display for Value 
-        
+        impl fmt::Display for Value
         {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
                 {write!(f, "{}", self.format(true, INDENT_STEP))
@@ -3508,7 +3534,6 @@ pub mod database
         impl_eq!(Obj, objects::Obj);
 
         impl<'a> PartialEq<&'a str> for Value 
-        
         {
             fn eq(&self, other: &&str) -> bool {
                 match *self {
@@ -3519,7 +3544,6 @@ pub mod database
         }
 
         impl<'a> PartialEq<Value> for &'a str 
-        
         {
             fn eq(&self, other: &Value) -> bool {
                 match *other {
@@ -3530,15 +3554,13 @@ pub mod database
         }
 
         impl PartialEq<String> for Value 
-        
         {
             fn eq(&self, other: &String) -> bool {
                 &other.as_str() == self
             }
         }
 
-        impl PartialEq<Value> for String 
-        
+        impl PartialEq<Value> for String
         {
             fn eq(&self, other: &Value) -> bool
             {
@@ -4211,7 +4233,8 @@ pub mod database
             #[inline] fn parse_obj_stream(mut stream: CharStream, mut included: &mut IncludedMap) -> ParseResult<Obj> 
             {
                 let mut obj: ObjMap = HashMap::new();
-                
+
+                // Go to the first non-whitespace character, or return if there is none.
                 if !find_char(stream.clone()) 
                 {
                     return Ok(Obj::from_map_unchecked(obj));
@@ -4219,7 +4242,8 @@ pub mod database
 
                 let mut globals: GlobalMap = HashMap::new();
                 let mut parent = None;
-                
+
+                // Parse all field/value pairs for this Obj.
                 while parse_field_value_pair
                 (
                     &mut stream,
@@ -4246,14 +4270,17 @@ pub mod database
                 depth: usize,
             ) -> ParseResult<Value> 
             {
+                // Check depth.
                 if depth > MAX_DEPTH 
                 {
                     return parse_err(stream.file(), MaxDepth(stream.line(), stream.col()));
                 }
-                
+
+                // We must already be at a '{'.
                 let ch = stream.next().unwrap();
                 assert_eq!(ch, '{');
-                
+
+                // Go to the first non-whitespace character, or error if there is none.
                 if !find_char(stream.clone()) 
                 {
                     return parse_err(stream.file(), UnexpectedEnd(stream.line()));
@@ -4261,7 +4288,8 @@ pub mod database
 
                 let mut obj: ObjMap = HashMap::new();
                 let mut parent = None;
-                
+
+                // Parse field/value pairs.
                 while parse_field_value_pair
                 (
                     &mut stream,
@@ -4292,6 +4320,7 @@ pub mod database
                 cur_brace: Option<char>,
             ) -> ParseResult<bool>
             {
+                // Check if we're at an end delimiter instead of a field.
                 let peek = stream.peek().unwrap();
                 if peek == '}' && cur_brace.is_some() 
                 {
@@ -4305,9 +4334,11 @@ pub mod database
                         InvalidClosingBracket(cur_brace, peek, stream.line(), stream.col()),
                     );
                 }
-                
+
+                // Get the field line/col.
                 let (field_line, field_col) = (stream.line(), stream.col());
-                
+
+                // Parse field.
                 let (field, is_global, is_parent) = parse_field(stream.clone(), field_line, field_col)?;
 
                 if !is_global && !is_parent && obj.contains_key(&field) 
@@ -4320,12 +4351,14 @@ pub mod database
                         DuplicateField("^".into(), field_line, field_col),
                     );
                 }
-                
+
+                // Deal with extra whitespace between field and value.
                 if !find_char(stream.clone()) 
                 {
                     return parse_err(stream.file(), UnexpectedEnd(stream.line()));
                 }
-                
+
+                // At a non-whitespace character, parse value.
                 let (value_line, value_col) = (stream.line(), stream.col());
                 let value = parse_value
                 (
@@ -4339,7 +4372,8 @@ pub mod database
                     cur_brace,
                     true,
                 )?;
-                
+
+                // Add value either to the globals map or to the current Obj.
                 if is_global 
                 {
                     if globals.contains_key(&field) 
@@ -4357,7 +4391,8 @@ pub mod database
                 {
                     obj.insert(field, value);
                 }
-                
+
+                // Go to the next non-whitespace character.
                 if !find_char(stream.clone()) 
                 {
                     match cur_brace 
@@ -4383,11 +4418,13 @@ pub mod database
 
                 loop 
                 {
+                    // Go to the first non-whitespace character, or error if there is none.
                     if !find_char(stream.clone()) 
                     {
                         break;
                     }
-                    
+
+                    // At a non-whitespace character, parse value.
                     let (value_line, value_col) = (stream.line(), stream.col());
                     let value = parse_value
                     (
@@ -4448,10 +4485,12 @@ pub mod database
                 depth: usize,
             ) -> ParseResult<Value>
             {
+                // Check depth.
                 if depth > MAX_DEPTH {
                     return parse_err(stream.file(), MaxDepth(stream.line(), stream.col()));
                 }
-                
+
+                // We must already be at a '['.
                 let ch = stream.next().unwrap();
                 assert_eq!(ch, '[');
 
@@ -4460,6 +4499,7 @@ pub mod database
                 let mut has_any = true;
 
                 loop {
+                    // Go to the first non-whitespace character, or error if there is none.
                     if !find_char(stream.clone()) {
                         return parse_err(stream.file(), UnexpectedEnd(stream.line()));
                     }
@@ -4474,7 +4514,8 @@ pub mod database
                             InvalidClosingBracket(Some(']'), peek, stream.line(), stream.col()),
                         );
                     }
-                    
+
+                    // At a non-whitespace character, parse value.
                     let (value_line, value_col) = (stream.line(), stream.col());
                     let value = parse_value(
                         &mut stream,
@@ -4527,10 +4568,12 @@ pub mod database
                 let mut globals: GlobalMap = HashMap::new();
 
                 loop {
+                    // Go to the first non-whitespace character, or error if there is none.
                     if !find_char(stream.clone()) {
                         break;
                     }
-                    
+
+                    // At a non-whitespace character, parse value.
                     let (value_line, value_col) = (stream.line(), stream.col());
                     let value = parse_value(
                         &mut stream,
@@ -4616,8 +4659,8 @@ pub mod database
                 let mut field = String::new();
                 let mut first = true;
                 let mut is_global = false;
-                let ch = stream.peek().unwrap();
 
+                let ch = stream.peek().unwrap();
                 if ch == '@' {
                     let ch = stream.next().unwrap();
                     is_global = true;
@@ -4640,7 +4683,8 @@ pub mod database
 
                     first = false;
                 }
-                
+
+                // Check for invalid field names.
                 match field.as_str() {
                     _field_str if is::reserved(_field_str) => {
                         parse_err(stream.file(), InvalidFieldName(field.clone(), line, col))
@@ -4666,6 +4710,7 @@ pub mod database
                 is_first: bool,
             ) -> ParseResult<Value>
             {
+                // Peek to determine what kind of value we'll be parsing.
                 let res = match stream.peek().unwrap() {
                     '"' => parse_str(&mut stream)?,
                     '\'' => parse_char(&mut stream)?,
@@ -4701,7 +4746,8 @@ pub mod database
                         return parse_err(stream.file(), InvalidValueChar(ch, line, col));
                     }
                 };
-                
+
+                // Process operations if this is the first value.
                 if is_first {
                     let mut val_deque: VecDeque<(Value, usize, usize)> = VecDeque::new();
                     let mut op_deque: VecDeque<char> = VecDeque::new();
@@ -4716,7 +4762,8 @@ pub mod database
                                 }
 
                                 let (line2, col2) = (stream.line(), stream.col());
-                                
+
+                                // Parse another value.
                                 let val2 = parse_value(
                                     &mut stream,
                                     obj,
@@ -4741,7 +4788,8 @@ pub mod database
                             _ => break,
                         }
                     }
-                    
+
+                    // Check for valid characters after the value.
                     check_value_end(stream, cur_brace)?;
 
                     let (mut val1, _, _) = val_deque.pop_front().unwrap();
@@ -4848,6 +4896,7 @@ pub mod database
                 }
 
                 if dec {
+                    // Parse a Frac from a number with a decimal.
                     if s1.is_empty() && s2.is_empty() {
                         return parse_err(stream.file(), InvalidNumeric(line, col));
                     }
@@ -4857,7 +4906,8 @@ pub mod database
                     } else {
                         s1.parse()?
                     };
-                    
+
+                    // Remove trailing zeros.
                     let s2 = s2.trim_end_matches('0');
 
                     let (decimal, dec_len): (BigInt, usize) = if s2.is_empty() {
@@ -4869,6 +4919,7 @@ pub mod database
                     let f = frac_from_whole_and_dec(whole, decimal, dec_len);
                     Ok(f.into())
                 } else {
+                    // Parse an Int.
                     if s1.is_empty() {
                         return parse_err(stream.file(), InvalidNumeric(line, col));
                     }
@@ -4947,6 +4998,7 @@ pub mod database
 
                     var @ "@" => return parse_err(stream.file(), InvalidValue(var.into(), line, col)),
                     var if is_global => {
+                        // Global variable, get value from globals map.
                         match globals.get(var) {
                             Some(value) => value.clone(),
                             None => {
@@ -4956,6 +5008,7 @@ pub mod database
                         }
                     }
                     var => {
+                        // Regular variable, get value from the current Obj.
                         match obj.get(var) {
                             Some(value) => value.clone(),
                             None => {
@@ -5136,7 +5189,8 @@ pub mod database
                         None => return parse_err(stream.file(), UnexpectedEnd(stream.line())),
                     }
                 }
-                
+
+                // Replace \r\n line endings with \n for consistency in internal handling.
                 let s = s.replace("\r\n", "\n");
 
                 Ok(s.into())
@@ -5157,14 +5211,16 @@ pub mod database
                     Arr,
                     Tup,
                 }
-                
+
+                // Check depth.
                 if depth > MAX_DEPTH {
                     return parse_err(stream.file(), MaxDepth(stream.line(), stream.col()));
                 }
 
                 let ch = stream.next().unwrap();
                 assert_eq!(ch, '<');
-                
+
+                // Go to the next non-whitespace character, or error if there is none.
                 if !find_char(stream.clone()) {
                     return parse_err(stream.file(), UnexpectedEnd(stream.line()));
                 }
@@ -5182,8 +5238,8 @@ pub mod database
                     true,
                 )?;
 
-                let mut include_type = IncludeType::Obj;
-                let mut parse_again = true;
+                let mut include_type = IncludeType::Obj; // Default include type if no token is present.
+                let mut parse_again = true; // True if an include token was found.
                 match value {
                     Value::Obj(ref obj) if obj.ptr_eq(&OBJ_SENTINEL) => include_type = IncludeType::Obj,
                     Value::Obj(ref obj) if obj.ptr_eq(&STR_SENTINEL) => include_type = IncludeType::Str,
@@ -5199,6 +5255,7 @@ pub mod database
                 }
 
                 if parse_again {
+                    // Go to the next non-whitespace character, or error if there is none.
                     if !find_char(stream.clone()) {
                         return parse_err(stream.file(), UnexpectedEnd(stream.line()));
                     }
@@ -5217,7 +5274,8 @@ pub mod database
                         true,
                     )?;
                 }
-                
+
+                // Go to the next non-whitespace character, or error if there is none.
                 if !find_char(stream.clone()) {
                     return parse_err(stream.file(), UnexpectedEnd(stream.line()));
                 }
@@ -5231,7 +5289,8 @@ pub mod database
                         );
                     }
                 }
-                
+
+                // Get the full path of the include file.
                 let include_file = match value {
                     Value::Str(s) => s,
                     _ => {
@@ -5253,12 +5312,14 @@ pub mod database
                 if !path.is_file() {
                     return parse_err(stream.file(), InvalidIncludePath(include_file, line, col));
                 }
-                
+
+                // Get the include file as a path relative to the current working directory.
                 let path_str = match path.to_str() {
                     Some(path) => path,
                     None => return parse_err(stream.file(), InvalidIncludePath(include_file, line, col)),
                 };
-                
+
+                // Get the include file as an absolute path.
                 let path = match path.canonicalize() {
                     Ok(path) => path,
                     Err(_) => return parse_err(stream.file(), InvalidIncludePath(include_file, line, col)),
@@ -5267,7 +5328,8 @@ pub mod database
                     Some(path) => path,
                     None => return parse_err(stream.file(), InvalidIncludePath(include_file, line, col)),
                 };
-                
+
+                // Prevent cyclic includes by temporarily storing the current file path.
                 let storing = if let Some(file) = stream.file() {
                     let full_file = String::from(Path::new(&file).canonicalize().unwrap().to_str().unwrap());
                     included.1.insert(full_file.clone());
@@ -5278,7 +5340,8 @@ pub mod database
                 if included.1.contains(full_path_str) {
                     return parse_err(stream.file(), CyclicInclude(include_file, line, col));
                 }
-                
+
+                // Get either the tracked value or parse it if it's our first time seeing the include.
                 let value = if included.0.contains_key(full_path_str) {
                     let value = &included.0[full_path_str];
                     value.clone()
@@ -5289,10 +5352,12 @@ pub mod database
                         IncludeType::Arr => parse_arr_file(path_str, included)?.into(),
                         IncludeType::Tup => parse_tup_file(path_str, included)?.into(),
                     };
+                    // Use full path as included key.
                     included.0.insert(full_path_str.into(), value.clone());
                     value
                 };
-                
+
+                // Remove the stored file path.
                 if let Some(file) = storing {
                     included.1.remove(&file);
                 }
@@ -5409,9 +5474,11 @@ pub mod database
                                         let mut vec = Vec::with_capacity(vec1.len() + vec2.len());
                                         vec.append(&mut vec1);
                                         vec.append(&mut vec2);
-                                        
+
+                                        // Get the inner type.
                                         let arr = if let Arr(ref t) = t 
                                         {
+                                            // Because we know the type already, we can safely use `_unchecked`.
                                             arrays::Arr::from_vec_unchecked(vec, t.deref().clone())
                                         } else 
                                         {
@@ -5520,6 +5587,7 @@ pub mod database
                     {
                         '#' => 
                         {
+                            // Comment found; eat the rest of the line.
                             loop {
                                 let ch = stream.next();
                                 if ch.is_none() 
@@ -5993,63 +6061,6 @@ pub mod error
             *,
         };
     }
-
-    #[derive(Debug)]
-    pub enum TerminalError
-    {
-        /// IO error.
-        Io( ::io::Error ),
-        /// Database not found.
-        NotFound,
-        /// Parsing error.
-        Parse,
-        /// Expansion error.
-        Expand( Expand ),
-    }
-
-    impl From<::io::Error> for TerminalError
-    {
-        fn from(value: ::io::Error) -> Self { TerminalError::Io(value) }
-    }
-
-    impl From<Expand> for TerminalError
-    {
-        fn from(value: Expand) -> Self {
-            TerminalError::Expand(value)
-        }
-    }
-    
-    impl ::fmt::Display for TerminalError
-    {
-        fn fmt(&self, f: &mut ::fmt::Formatter) -> ::result::Result<(), ::fmt::Error>
-        {
-            match *self
-            {
-                TerminalError::Io(ref err) => err.fmt(f),
-                TerminalError::NotFound => f.write_str("Capability database not found."),
-                TerminalError::Parse => f.write_str("Failed to parse capability database."),
-                TerminalError::Expand(ref err) => match *err
-                {
-                    Expand::Invalid => f.write_str("The expansion string is invalid."),
-                    Expand::StackUnderflow => f.write_str("Not enough elements on the stack."),
-                    Expand::TypeMismatch => f.write_str("Type mismatch."),
-                },
-            }
-        }
-    }
-
-    impl Error for TerminalError {}
-    
-    #[derive(Eq, PartialEq, Copy, Clone, Debug)]
-    pub enum Expand
-    {
-        /// The expansion string is invalid.
-        Invalid,
-        /// There was a type mismatch while expanding.
-        TypeMismatch,
-        /// The stack underflowed while expanding.
-        StackUnderflow,
-    }
 }
 
 pub mod ffi
@@ -6226,9 +6237,6 @@ pub mod is
     pub fn is_printable(c: char) -> bool */
     /// Returns whether the character is printable.
     pub fn printable(c: char) -> bool { c == '\t' || c == '\n' || !(c == '\0' || is::ctrl(c)) }
-    /*
-    pub fn is_wide(ch: char) -> bool */
-    pub fn wide(ch: char) -> bool { char::width(ch) == Some(2) }
 }
 /*
 libc */
@@ -6353,16 +6361,19 @@ pub mod libc
 
     pub mod windows
     {
+        use ffi::OsStr;
         use ::
         {
+            ffi::{ OsStr },
+            os::
+            {
+                raw::{ c_void },
+            },
             *,
         };
         
-        pub use std::os::raw::c_void;
-
         pub const S_OK: HRESULT = 0;
         pub const S_FALSE: HRESULT = 1;
-
         pub type c_char = i8;
         pub type c_schar = i8;
         pub type c_uchar = u8;
@@ -6688,7 +6699,7 @@ pub mod libc
         pub type PLCID = PULONG;
         pub type LANGID = USHORT;        
         pub type PVOID = *mut c_void;
-        pub type PVOID64 = u64;
+        pub type PVOID64 = u64; // This is a 64-bit pointer, even when in 32-bit
         pub type VOID = c_void;
         pub type CHAR = c_char;
         pub type SHORT = c_short;
@@ -6705,35 +6716,35 @@ pub mod libc
         pub type PWSTR = *mut WCHAR;
         pub type PZPWSTR = *mut PWSTR;
         pub type PCZPWSTR = *const PWSTR;
-        pub type LPUWSTR = *mut WCHAR;
-        pub type PUWSTR = *mut WCHAR;
+        pub type LPUWSTR = *mut WCHAR; // Unaligned pointer
+        pub type PUWSTR = *mut WCHAR; // Unaligned pointer
         pub type LPCWSTR = *const WCHAR;
         pub type PCWSTR = *const WCHAR;
         pub type PZPCWSTR = *mut PCWSTR;
         pub type PCZPCWSTR = *const PCWSTR;
-        pub type LPCUWSTR = *const WCHAR;
-        pub type PCUWSTR = *const WCHAR;
+        pub type LPCUWSTR = *const WCHAR; // Unaligned pointer
+        pub type PCUWSTR = *const WCHAR; // Unaligned pointer
         pub type PZZWSTR = *mut WCHAR;
         pub type PCZZWSTR = *const WCHAR;
-        pub type PUZZWSTR = *mut WCHAR;
-        pub type PCUZZWSTR = *const WCHAR;
+        pub type PUZZWSTR = *mut WCHAR; // Unaligned pointer
+        pub type PCUZZWSTR = *const WCHAR; // Unaligned pointer
         pub type PNZWCH = *mut WCHAR;
         pub type PCNZWCH = *const WCHAR;
-        pub type PUNZWCH = *mut WCHAR;
-        pub type PCUNZWCH = *const WCHAR;
+        pub type PUNZWCH = *mut WCHAR; // Unaligned pointer
+        pub type PCUNZWCH = *const WCHAR; // Unaligned pointer
         pub type LPCWCHAR = *const WCHAR;
         pub type PCWCHAR = *const WCHAR;
-        pub type LPCUWCHAR = *const WCHAR;
-        pub type PCUWCHAR = *const WCHAR;
+        pub type LPCUWCHAR = *const WCHAR; // Unaligned pointer
+        pub type PCUWCHAR = *const WCHAR; // Unaligned pointer
         pub type UCSCHAR = c_ulong;
         pub type PUCSCHAR = *mut UCSCHAR;
         pub type PCUCSCHAR = *const UCSCHAR;
         pub type PUCSSTR = *mut UCSCHAR;
-        pub type PUUCSSTR = *mut UCSCHAR;
+        pub type PUUCSSTR = *mut UCSCHAR; // Unaligned pointer
         pub type PCUCSSTR = *const UCSCHAR;
-        pub type PCUUCSSTR = *const UCSCHAR;
-        pub type PUUCSCHAR = *mut UCSCHAR;
-        pub type PCUUCSCHAR = *const UCSCHAR;
+        pub type PCUUCSSTR = *const UCSCHAR; // Unaligned pointer
+        pub type PUUCSCHAR = *mut UCSCHAR; // Unaligned pointer
+        pub type PCUUCSCHAR = *const UCSCHAR; // Unaligned pointer
         pub type PCHAR = *mut CHAR;
         pub type LPCH = *mut CHAR;
         pub type PCH = *mut CHAR;
@@ -6926,7 +6937,8 @@ pub mod libc
 
             pub fn AllocConsole() -> BOOL;
             pub fn GetConsoleCP() -> UINT;
-            pub fn GetConsoleMode(
+            pub fn GetConsoleMode
+            (
                 hConsoleHandle: HANDLE,
                 lpMode: LPDWORD,
             ) -> BOOL;
@@ -7000,6 +7012,23 @@ pub mod libc
 
             pub fn lstrlenW( lpString: LPCWSTR ) -> c_int;
 
+            pub fn WriteConsoleA
+            (
+                hConsoleOutput: HANDLE,
+                lpBuffer: *const VOID,
+                nNumberOfCharsToWrite: DWORD,
+                lpNumberOfCharsWritten: LPDWORD,
+                lpReserved: LPVOID,
+            ) -> BOOL;
+
+            pub fn WriteConsoleW
+            (
+                hConsoleOutput: HANDLE,
+                lpBuffer: *const VOID,
+                nNumberOfCharsToWrite: DWORD,
+                lpNumberOfCharsWritten: LPDWORD,
+                lpReserved: LPVOID,
+            ) -> BOOL;
         }
 
         #[repr(C)] #[derive( Clone, Copy )]
@@ -7124,14 +7153,15 @@ pub mod libc
         pub struct CONTEXT_u( () );
 
         #[repr( C )] #[derive( Clone, Copy )]
-        pub struct M128A {
+        pub struct M128A 
+        {
             pub Low: ULONGLONG,
             pub High: LONGLONG,
         }
 
         #[repr( C )] #[derive( Clone, Copy )]
-        pub struct CONTEXT {
-
+        pub struct CONTEXT 
+        {
             pub P1Home: DWORD64,
             pub P2Home: DWORD64,
             pub P3Home: DWORD64,
@@ -7319,6 +7349,14 @@ pub mod libc
                     mem::transmute( ptr::null::<&KEY_EVENT_RECORD>() )
                 }
             }
+            
+            pub unsafe fn MouseEvent(&self) -> &MOUSE_EVENT_RECORD
+            {
+                unsafe
+                {
+                    mem::transmute( ptr::null::<&MOUSE_EVENT_RECORD>() )
+                }
+            }
         }
 
         #[repr(C)] #[derive( Clone, Copy )]
@@ -7396,6 +7434,90 @@ pub mod libc
                 }
             }
         }
+
+
+        /// A Unicode code point: from U+0000 to U+10FFFF.
+        #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy)]
+        pub struct CodePoint {
+            value: u32,
+        }
+        /// Iterator for the code points of a WTF-8 string.
+        #[derive(Clone)]
+        pub struct Wtf8CodePoints<'a>
+        {
+            pub bytes: slice::Iter<'a, u8>,
+        }
+
+        impl Iterator for Wtf8CodePoints<'_> 
+        {
+            type Item = CodePoint;
+
+            #[inline] fn next(&mut self) -> Option<CodePoint>
+            {
+                unsafe { str::next_code_point(&mut self.bytes).map(|c| CodePoint { value: c }) }
+            }
+
+            #[inline] fn size_hint(&self) -> (usize, Option<usize>)
+            {
+                let len = self.bytes.len();
+                (len.saturating_add(3) / 4, Some(len))
+            }
+        }
+        /// Generates a wide character sequence for potentially ill-formed UTF-16.
+        #[derive(Clone)]
+        pub struct EncodeWide<'a>
+        {
+            pub code_points: Wtf8CodePoints<'a>,
+            pub extra: u16,
+        }
+
+        impl Iterator for EncodeWide<'_>
+        {
+            type Item = u16;
+
+            #[inline] fn next(&mut self) -> Option<u16> 
+            {
+                if self.extra != 0 {
+                    let tmp = self.extra;
+                    self.extra = 0;
+                    return Some(tmp);
+                }
+
+                let mut buf = [0; 2];
+                self.code_points.next().map(|code_point| {
+                    let n = char::encodes_utf16_raw(code_point.value, &mut buf).len();
+                    if n == 2 {
+                        self.extra = buf[1];
+                    }
+                    buf[0]
+                })
+            }
+
+            #[inline] fn size_hint(&self) -> (usize, Option<usize>) 
+            {
+                let (low, high) = self.code_points.size_hint();
+                let ext = (self.extra != 0) as usize;
+                (low + ext, high.and_then(|n| n.checked_mul(2)).and_then(|n| n.checked_add(ext)))
+            }
+        }
+        
+        impl ::iter::FusedIterator for EncodeWide<'_> {}
+
+        impl ::hash::Hash for CodePoint
+        {
+            #[inline] fn hash<H: ::hash::Hasher>(&self, state: &mut H) { self.value.hash(state) }
+        }
+        
+        pub trait OsStrExt
+        {
+            /// Re-encodes an `OsStr` as a wide character sequence, i.e., potentially ill-formed UTF-16.
+            fn encodes_wide( &self ) -> EncodeWide<'_>;
+        }
+        
+        impl OsStrExt for OsStr
+        {
+            #[inline] fn encodes_wide(&self) -> EncodeWide<'_> { self.as_inner().inner.encode_wide() }
+        }
     } #[cfg(windows)] pub use self::windows::*;
 
 }
@@ -7470,10 +7592,6 @@ pub mod mem
             MemoryTerminal::default()
         }
         /// Returns a new `MemoryTerminal` with the given buffer size.
-        ///
-        /// # Panics
-        ///
-        /// If either of the `lines` or `columns` fields are `0`.
         pub fn with_size(size: Size) -> MemoryTerminal {
             MemoryTerminal{
                 read: Arc::new(Mutex::new(Reader::new())),
@@ -7497,15 +7615,10 @@ pub mod mem
             self.lock_reader().has_input()
         }
         /// Returns an iterator over lines in the buffer.
-        ///
-        /// # Notes
-        ///
-        /// The returned iterator immutably borrows the contents of the
-        /// `MemoryTerminal`. Attempting to perform a mutating operation on the
-        /// parent `MemoryTerminal` while the `Lines` iterator lives will cause
-        /// a panic.
-        pub fn lines(&self) -> Lines {
-            Lines{
+        pub fn lines(&self) -> Lines 
+        {
+            Lines
+            {
                 writer: self.lock_writer(),
                 line: 0,
             }
@@ -7539,18 +7652,11 @@ pub mod mem
             self.lock_reader().read_input(buf)
         }
         /// Changes the size of the terminal buffer.
-        /// The buffer will be truncated or filled with spaces, as necessary.
-        ///
-        /// # Panics
-        ///
-        /// If either of the `lines` or `columns` fields are `0` or if the area
-        /// exceeds `usize` maximum.
         pub fn resize(&self, new_size: Size) {
             self.lock_writer().resize(new_size);
             self.lock_reader().resize(new_size);
         }
         /// Moves the contents of the buffer up `n` lines.
-        /// The first `n` lines of text will be erased.
         pub fn scroll_up(&self, n: usize) {
             self.lock_writer().scroll_up(n);
         }
@@ -7572,9 +7678,6 @@ pub mod mem
             self.lock_writer().size
         }
         /// Writes some text into the buffer.
-        ///
-        /// If the text extends beyond the length of the current line without a
-        /// newline character (`'\n'`), the extraneous text will be dropped.
         pub fn write(&self, s: &str) {
             self.lock_writer().write(s);
         }
@@ -7796,6 +7899,7 @@ pub mod mem
 
     impl Terminals for MemoryTerminal 
     {
+        // No preparation needed for in-memory terminal
         type PrepareState = ();
         //type Reader = MemoryReadGuard;
         //type Writer = MemoryWriteGuard;
@@ -7814,27 +7918,17 @@ pub mod mem
 
     impl<'a> TerminalReader<MemoryTerminal> for MemoryReadGuard<'a> 
     {
-        fn wait_for_input(&mut self, _timeout: Option<Duration>) -> io::Result<bool>
-        {
+        fn wait_for_input(&mut self, _timeout: Option<Duration>) -> io::Result<bool> {
             Ok(!self.0.input.is_empty())
         }
 
-        fn prepare(&mut self, _block_signals: bool, _report_signals: SignalSet) -> io::Result<Option<()>>
-        { 
-            /*
-            TODO */
-            Ok( None )
-        }
+        fn prepare(&mut self, _block_signals: bool, _report_signals: SignalSet)
+                -> io::Result<()> { Ok(()) }
 
         unsafe fn prepare_with_lock(&mut self,
                 _lock: &mut dyn TerminalWriter<MemoryTerminal>,
                 _block_signals: bool, _report_signals: SignalSet)
-                -> io::Result<Option<()>>
-        { 
-            /*
-            TODO*/
-            Ok( None )
-        }
+                -> io::Result<()> { Ok(()) }
 
         fn restore(&mut self, _state: ()) -> io::Result<()> { Ok(()) }
 
@@ -7842,11 +7936,7 @@ pub mod mem
                 _lock: &mut dyn TerminalWriter<MemoryTerminal>, _state: ())
                 -> io::Result<()> { Ok(()) }
 
-        fn read(&mut self, buf: &mut Vec<u8>) -> io::Result<Option<RawRead>>
-        {
-            /*
-            TODO
-
+        fn read(&mut self, buf: &mut Vec<u8>) -> io::Result<RawRead> {
             if let Some(size) = self.0.resize.take() {
                 return Ok(RawRead::Resize(size));
             }
@@ -7863,8 +7953,7 @@ pub mod mem
                 buf.set_len(len + n);
             }
 
-            Ok(RawRead::Bytes(n)) */
-            Ok( None )
+            Ok(RawRead::Bytes(n))
         }
     }
 
@@ -8000,6 +8089,7 @@ pub mod num
 
                         #[inline] fn $method(self, other: $res) -> $res 
                         {
+                            // forward to val-ref
                             $imp::$method(self, &other)
                         }
                     }
@@ -8015,6 +8105,7 @@ pub mod num
 
                         #[inline] fn $method(self, other: $res) -> $res 
                         {
+                            // forward to val-ref, with the larger capacity as val
                             if self.capacity() >= other.capacity() 
                             {
                                 $imp::$method(self, &other)
@@ -8037,6 +8128,7 @@ pub mod num
 
                         #[inline] fn $method(self, other: $res) -> $res 
                         {
+                            // forward to ref-ref
                             $imp::$method(self, &other)
                         }
                     }
@@ -8052,6 +8144,7 @@ pub mod num
 
                         #[inline] fn $method(self, other: $res) -> $res 
                         {
+                            // reverse, forward to val-ref
                             $imp::$method(other, self)
                         }
                     }
@@ -8068,6 +8161,7 @@ pub mod num
 
                         #[inline] fn $method(self, other: &$res) -> $res 
                         {
+                            // forward to ref-ref
                             $imp::$method(&self, other)
                         }
                     }
@@ -8084,6 +8178,7 @@ pub mod num
 
                         #[inline] fn $method(self, other: &$res) -> $res 
                         {
+                            // forward to val-ref
                             $imp::$method(self.clone(), other)
                         }
                     }
@@ -8099,6 +8194,7 @@ pub mod num
 
                         #[inline] fn $method(self, other: &$res) -> $res 
                         {
+                            // forward to val-ref, choosing the larger to clone
                             if self.len() >= other.len() 
                             {
                                 $imp::$method(self.clone(), other)
@@ -8154,7 +8250,8 @@ pub mod num
                     }
                 };
             }
-            
+
+            // Forward scalar to ref-val, when reusing storage is not helpful
             macro_rules! forward_scalar_val_val_binop_to_ref_val 
             {
                 (impl $imp:ident<$scalar:ty> for $res:ty, $method:ident) => 
@@ -8396,7 +8493,8 @@ pub mod num
                     promote_scalars_assign!(impl $imp<IsizePromotion> for $res, $method, isize);
                 }
             }
-            
+
+            // Forward everything to ref-ref, when reusing storage is not helpful
             macro_rules! forward_all_binop_to_ref_ref 
             {
                 (impl $imp:ident for $res:ty, $method:ident) => 
@@ -8406,7 +8504,8 @@ pub mod num
                     forward_ref_val_binop!(impl $imp for $res, $method);
                 };
             }
-            
+
+            // Forward everything to val-ref, so LHS storage can be reused
             macro_rules! forward_all_binop_to_val_ref 
             {
                 (impl $imp:ident for $res:ty, $method:ident) => 
@@ -8416,7 +8515,8 @@ pub mod num
                     forward_ref_ref_binop!(impl $imp for $res, $method);
                 };
             }
-            
+
+            // Forward everything to val-ref, commutatively, so either LHS or RHS storage can be reused
             macro_rules! forward_all_binop_to_val_ref_commutative 
             {
                 (impl $imp:ident for $res:ty, $method:ident) => 
@@ -8559,7 +8659,9 @@ pub mod num
                         match ($a.sign, $b.sign) {
                             (_, NoSign) => $a_owned,
                             (NoSign, _) => $b_owned,
+                            // same sign => keep the sign with the sum of magnitudes
                             (Plus, Plus) | (Minus, Minus) => BigInt::from_biguint($a.sign, $a_data + $b_data),
+                            // opposite signs => keep the sign of the larger with the difference of magnitudes
                             (Plus, Minus) | (Minus, Plus) => match $a.data.cmp(&$b.data) {
                                 Less => BigInt::from_biguint($b.sign, $b_data - $a_data),
                                 Greater => BigInt::from_biguint($a.sign, $a_data - $b_data),
@@ -9357,6 +9459,7 @@ pub mod num
 
                             #[inline]
                             fn mul(self, other: $Other) -> BigInt {
+                                // automatically match value/ref
                                 let BigInt { data: x, .. } = self;
                                 let BigInt { data: y, .. } = other;
                                 BigInt::from_biguint(self.sign * other.sign, x * y)
@@ -9378,6 +9481,7 @@ pub mod num
                         impl MulAssign<$Other> for BigInt {
                             #[inline]
                             fn mul_assign(&mut self, other: $Other) {
+                                // automatically match value/ref
                                 let BigInt { data: y, .. } = other;
                                 self.data *= y;
                                 if self.data.is_zero() {
@@ -9579,7 +9683,9 @@ pub mod num
                         match ($a.sign, $b.sign) {
                             (_, NoSign) => $a_owned,
                             (NoSign, _) => -$b_owned,
+                            // opposite signs => keep the sign of the left with the sum of magnitudes
                             (Plus, Minus) | (Minus, Plus) => BigInt::from_biguint($a.sign, $a_data + $b_data),
+                            // same sign => keep or toggle the sign of the left with the difference of magnitudes
                             (Plus, Plus) | (Minus, Minus) => match $a.data.cmp(&$b.data) {
                                 Less => BigInt::from_biguint(-$a.sign, $b_data - $a_data),
                                 Greater => BigInt::from_biguint($a.sign, $a_data - $b_data),
@@ -9891,14 +9997,18 @@ pub mod num
                     vec::{ Vec },
                     *,
                 };
-                
+                // Negation in two's complement.
+                // acc must be initialized as 1 for least-significant digit.
                 #[inline] fn negate_carry(a: BigDigit, acc: &mut DoubleBigDigit) -> BigDigit {
                     *acc += DoubleBigDigit::from(!a);
                     let lo = *acc as BigDigit;
                     *acc >>= big_digit::BITS;
                     lo
                 }
-                
+
+                // + 1 & -ff = ...0 01 & ...f 01 = ...0 01 = + 1
+                // +ff & - 1 = ...0 ff & ...f ff = ...0 ff = +ff
+                // answer is pos, has length of a
                 fn bitand_pos_neg(a: &mut [BigDigit], b: &[BigDigit]) {
                     let mut carry_b = 1;
                     for (ai, &bi) in a.iter_mut().zip(b.iter()) 
@@ -9908,7 +10018,10 @@ pub mod num
                     }
                     debug_assert!(b.len() > a.len() || carry_b == 0);
                 }
-                
+
+                // - 1 & +ff = ...f ff & ...0 ff = ...0 ff = +ff
+                // -ff & + 1 = ...f 01 & ...0 01 = ...0 01 = + 1
+                // answer is pos, has length of b
                 fn bitand_neg_pos(a: &mut Vec<BigDigit>, b: &[BigDigit]) {
                     let mut carry_a = 1;
                     for (ai, &bi) in a.iter_mut().zip(b.iter()) 
@@ -9926,7 +10039,11 @@ pub mod num
                         }
                     }
                 }
-                
+
+                // - 1 & -ff = ...f ff & ...f 01 = ...f 01 = - ff
+                // -ff & - 1 = ...f 01 & ...f ff = ...f 01 = - ff
+                // -ff & -fe = ...f 01 & ...f 02 = ...f 00 = -100
+                // answer is neg, has length of longest with a possible carry
                 fn bitand_neg_neg(a: &mut Vec<BigDigit>, b: &[BigDigit]) {
                     let mut carry_a = 1;
                     let mut carry_b = 1;
@@ -9964,7 +10081,9 @@ pub mod num
 
                 forward_val_val_binop!(impl BitAnd for BigInt, bitand);
                 forward_ref_val_binop!(impl BitAnd for BigInt, bitand);
-                
+
+                // do not use forward_ref_ref_binop_commutative! for bitand so that we can
+                // clone as needed, avoiding over-allocation
                 impl BitAnd<&BigInt> for &BigInt {
                     type Output = BigInt;
 
@@ -9975,6 +10094,7 @@ pub mod num
                             (Plus, Minus) => self.clone() & other,
                             (Minus, Plus) => other.clone() & self,
                             (Minus, Minus) => {
+                                // forward to val-ref, choosing the larger to clone
                                 if self.len() >= other.len() {
                                     self.clone() & other
                                 } else {
@@ -10023,7 +10143,10 @@ pub mod num
                         }
                     }
                 }
-                
+
+                // + 1 | -ff = ...0 01 | ...f 01 = ...f 01 = -ff
+                // +ff | - 1 = ...0 ff | ...f ff = ...f ff = - 1
+                // answer is neg, has length of b
                 fn bitor_pos_neg(a: &mut Vec<BigDigit>, b: &[BigDigit]) {
                     let mut carry_b = 1;
                     let mut carry_or = 1;
@@ -10047,10 +10170,13 @@ pub mod num
                             debug_assert!(carry_b == 0);
                         }
                     }
-                    
+                    // for carry_or to be non-zero, we would need twos_b == 0
                     debug_assert!(carry_or == 0);
                 }
-                
+
+                // - 1 | +ff = ...f ff | ...0 ff = ...f ff = - 1
+                // -ff | + 1 = ...f 01 | ...0 01 = ...f 01 = -ff
+                // answer is neg, has length of a
                 fn bitor_neg_pos(a: &mut [BigDigit], b: &[BigDigit]) {
                     let mut carry_a = 1;
                     let mut carry_or = 1;
@@ -10067,10 +10193,13 @@ pub mod num
                         }
                         debug_assert!(carry_a == 0);
                     }
-                    
+                    // for carry_or to be non-zero, we would need twos_a == 0
                     debug_assert!(carry_or == 0);
                 }
-                
+
+                // - 1 | -ff = ...f ff | ...f 01 = ...f ff = -1
+                // -ff | - 1 = ...f 01 | ...f ff = ...f ff = -1
+                // answer is neg, has length of shortest
                 fn bitor_neg_neg(a: &mut Vec<BigDigit>, b: &[BigDigit]) {
                     let mut carry_a = 1;
                     let mut carry_b = 1;
@@ -10086,13 +10215,15 @@ pub mod num
                     if a.len() > b.len() {
                         a.truncate(b.len());
                     }
-                    
+                    // for carry_or to be non-zero, we would need twos_a == 0 or twos_b == 0
                     debug_assert!(carry_or == 0);
                 }
 
                 forward_val_val_binop!(impl BitOr for BigInt, bitor);
                 forward_ref_val_binop!(impl BitOr for BigInt, bitor);
-                
+
+                // do not use forward_ref_ref_binop_commutative! for bitor so that we can
+                // clone as needed, avoiding over-allocation
                 impl BitOr<&BigInt> for &BigInt {
                     type Output = BigInt;
 
@@ -10104,6 +10235,7 @@ pub mod num
                             (Plus, Minus) => other.clone() | self,
                             (Minus, Plus) => self.clone() | other,
                             (Minus, Minus) => {
+                                // forward to val-ref, choosing the smaller to clone
                                 if self.len() <= other.len() {
                                     self.clone() | other
                                 } else {
@@ -10147,7 +10279,10 @@ pub mod num
                         }
                     }
                 }
-                
+
+                // + 1 ^ -ff = ...0 01 ^ ...f 01 = ...f 00 = -100
+                // +ff ^ - 1 = ...0 ff ^ ...f ff = ...f 00 = -100
+                // answer is neg, has length of longest with a possible carry
                 fn bitxor_pos_neg(a: &mut Vec<BigDigit>, b: &[BigDigit]) {
                     let mut carry_b = 1;
                     let mut carry_xor = 1;
@@ -10178,7 +10313,10 @@ pub mod num
                         a.push(1);
                     }
                 }
-                
+
+                // - 1 ^ +ff = ...f ff ^ ...0 ff = ...f 00 = -100
+                // -ff ^ + 1 = ...f 01 ^ ...0 01 = ...f 00 = -100
+                // answer is neg, has length of longest with a possible carry
                 fn bitxor_neg_pos(a: &mut Vec<BigDigit>, b: &[BigDigit]) {
                     let mut carry_a = 1;
                     let mut carry_xor = 1;
@@ -10209,7 +10347,10 @@ pub mod num
                         a.push(1);
                     }
                 }
-                
+
+                // - 1 ^ -ff = ...f ff ^ ...f 01 = ...0 fe = +fe
+                // -ff & - 1 = ...f 01 ^ ...f ff = ...0 fe = +fe
+                // answer is pos, has length of longest
                 fn bitxor_neg_neg(a: &mut Vec<BigDigit>, b: &[BigDigit]) {
                     let mut carry_a = 1;
                     let mut carry_b = 1;
@@ -10295,10 +10436,21 @@ pub mod num
                             data.set_bit(bit, true);
                         }
                     } else {
+                        // If the Uint number is
+                        //   ... 0  x 1 0 ... 0
+                        // then the two's complement is
+                        //   ... 1 !x 1 0 ... 0
+                        //            |-- bit at position 'trailing_zeros'
+                        // where !x is obtained from x by flipping each bit
                         let trailing_zeros = data.trailing_zeros().unwrap();
                         if bit > trailing_zeros {
                             data.set_bit(bit, !value);
                         } else if bit == trailing_zeros && !value {
+                            // Clearing the bit at position `trailing_zeros` is dealt with by doing
+                            // similarly to what `bitand_neg_pos` does, except we start at digit
+                            // `bit_index`. All digits below `bit_index` are guaranteed to be zero,
+                            // so initially we have `carry_in` = `carry_out` = 1. Furthermore, we
+                            // stop traversing the digits when there are no more carries.
                             let bit_index = (bit / bits_per_digit).to_usize().unwrap();
                             let bit_mask = (1 as BigDigit) << (bit % bits_per_digit);
                             let mut digit_iter = data.digits_mut().iter_mut().skip(bit_index);
@@ -10312,6 +10464,7 @@ pub mod num
 
                             for digit in digit_iter {
                                 if carry_in == 0 && carry_out == 0 {
+                                    // Exit the loop since no more digits can change
                                     break;
                                 }
                                 let twos = negate_carry(*digit, &mut carry_in);
@@ -10319,10 +10472,17 @@ pub mod num
                             }
 
                             if carry_out != 0 {
+                                // All digits have been traversed and there is a carry
                                 debug_assert_eq!(carry_in, 0);
                                 data.digits_mut().push(1);
                             }
                         } else if bit < trailing_zeros && value {
+                            // Flip each bit from position 'bit' to 'trailing_zeros', both inclusive
+                            //       ... 1 !x 1 0 ... 0 ... 0
+                            //                        |-- bit at position 'bit'
+                            //                |-- bit at position 'trailing_zeros'
+                            // bit_mask:      1 1 ... 1 0 .. 0
+                            // This is done by xor'ing with the bit_mask
                             let index_lo = (bit / bits_per_digit).to_usize().unwrap();
                             let index_hi = (trailing_zeros / bits_per_digit).to_usize().unwrap();
                             let bit_mask_lo = big_digit::MAX << (bit % bits_per_digit);
@@ -10340,6 +10500,9 @@ pub mod num
                                 digits[index_hi] ^= bit_mask_hi;
                             }
                         } else {
+                            // We end up here in two cases:
+                            //   bit == trailing_zeros && value: Bit is already set
+                            //   bit < trailing_zeros && !value: Bit is already cleared
                         }
                     }
                 }
@@ -10715,6 +10878,7 @@ pub mod num
                     };
 
                     if sign == Sign::Minus {
+                        // two's-complement the content to retrieve the magnitude
                         let mut digits = Vec::from(digits);
                         twos_complement_be(&mut digits);
                         BigInt::from_biguint(sign, BigUint::from_bytes_be(&digits))
@@ -10731,6 +10895,7 @@ pub mod num
                     };
 
                     if sign == Sign::Minus {
+                        // two's-complement the content to retrieve the magnitude
                         let mut digits = Vec::from(digits);
                         twos_complement_le(&mut digits);
                         BigInt::from_biguint(sign, BigUint::from_bytes_le(&digits))
@@ -10745,6 +10910,7 @@ pub mod num
                     if first_byte > 0x7f
                         && !(first_byte == 0x80 && bytes.iter().skip(1).all(Zero::is_zero) && x.sign == Sign::Minus)
                     {
+                        // msb used by magnitude, extend by 1 byte
                         bytes.insert(0, 0);
                     }
                     if x.sign == Sign::Minus {
@@ -10761,6 +10927,7 @@ pub mod num
                             && bytes.iter().rev().skip(1).all(Zero::is_zero)
                             && x.sign == Sign::Minus)
                     {
+                        // msb used by magnitude, extend by 1 byte
                         bytes.push(0);
                     }
                     if x.sign == Sign::Minus {
@@ -10768,11 +10935,13 @@ pub mod num
                     }
                     bytes
                 }
-                /// Perform in-place two's complement of the given binary representation, in little-endian byte order.
+                /// Perform in-place two's complement of the given binary representation,
+                /// in little-endian byte order.
                 #[inline] fn twos_complement_le(digits: &mut [u8]) {
                     twos_complement(digits)
                 }
-                /// Perform in-place two's complement of the given binary representation in big-endian byte order.
+                /// Perform in-place two's complement of the given binary representation
+                /// in big-endian byte order.
                 #[inline] fn twos_complement_be(digits: &mut [u8]) {
                     twos_complement(digits.iter_mut().rev())
                 }
@@ -10882,7 +11051,8 @@ pub mod num
                     if result.is_zero() {
                         return BigInt::ZERO;
                     }
-                    
+
+                    // The sign of the result follows the modulus, like `mod_floor`.
                     let (sign, mag) = match (x.is_negative() && exponent.is_odd(), modulus.is_negative()) {
                         (false, false) => (Plus, result),
                         (true, false) => (Plus, &modulus.data - result),
@@ -10999,10 +11169,9 @@ pub mod num
                 impl_shift! { u8, u16, u32, u64, u128, usize }
                 impl_shift! { i8, i16, i32, i64, i128, isize }
 
-                /// Negative values need a rounding adjustment
-                /// if there are any ones in the bits that are getting shifted out.
-                pub fn shr_round_down<T: PrimInt>(i: &BigInt, shift: T) -> bool 
-                {
+                // Negative values need a rounding adjustment if there are any ones in the
+                // bits that are getting shifted out.
+                fn shr_round_down<T: PrimInt>(i: &BigInt, shift: T) -> bool {
                     if i.is_negative() 
                     {
                         let zeros = i.trailing_zeros().expect("negative values are non-zero");
@@ -11039,7 +11208,9 @@ pub mod num
                 sign: Sign,
                 data: BigUint,
             }
-            
+
+            // Note: derived `Clone` doesn't specialize `clone_from`,
+            // but we want to keep the allocation in `data`.
             impl Clone for BigInt 
             {
                 #[inline] fn clone(&self) -> Self {
@@ -11203,6 +11374,7 @@ pub mod num
 
             impl ConstZero for BigInt 
             {
+                // forward to the inherent const
                 const ZERO: Self = Self::ZERO;
             }
 
@@ -11318,8 +11490,8 @@ pub mod num
 
             impl Integer for BigInt 
             {
-                #[inline] fn div_rem(&self, other: &BigInt) -> (BigInt, BigInt)
-                {
+                #[inline] fn div_rem(&self, other: &BigInt) -> (BigInt, BigInt) {
+                    // r.sign == self.sign
                     let (d_ui, r_ui) = self.data.div_rem(&other.data);
                     let d = BigInt::from_biguint(self.sign, d_ui);
                     let r = BigInt::from_biguint(self.sign, r_ui);
@@ -11346,8 +11518,8 @@ pub mod num
                     }
                 }
 
-                #[inline] fn mod_floor(&self, other: &BigInt) -> BigInt
-                {
+                #[inline] fn mod_floor(&self, other: &BigInt) -> BigInt {
+                    // m.sign == other.sign
                     let m_ui = self.data.mod_floor(&other.data);
                     let m = BigInt::from_biguint(other.sign, m_ui);
                     match (self.sign, other.sign) {
@@ -11363,8 +11535,8 @@ pub mod num
                     }
                 }
 
-                fn div_mod_floor(&self, other: &BigInt) -> (BigInt, BigInt)
-                {
+                fn div_mod_floor(&self, other: &BigInt) -> (BigInt, BigInt) {
+                    // m.sign == other.sign
                     let (d_ui, m_ui) = self.data.div_mod_floor(&other.data);
                     let d = BigInt::from(d_ui);
                     let m = BigInt::from_biguint(other.sign, m_ui);
@@ -11397,6 +11569,8 @@ pub mod num
                     }
                 }
                 /// Calculates the Greatest Common Divisor (GCD) of the number and `other`.
+                ///
+                /// The result is always positive.
                 #[inline] fn gcd(&self, other: &BigInt) -> BigInt {
                     BigInt::from(self.data.gcd(&other.data))
                 }
@@ -11691,6 +11865,7 @@ pub mod num
                 /// Returns the modular multiplicative inverse if it exists, otherwise `None`.
                 pub fn modinv(&self, modulus: &Self) -> Option<Self> {
                     let result = self.data.modinv(&modulus.data)?;
+                    // The sign of the result follows the modulus, like `mod_floor`.
                     let (sign, mag) = match (self.is_negative(), modulus.is_negative()) {
                         (false, false) => (Plus, result),
                         (true, false) => (Plus, &modulus.data - result),
@@ -11720,6 +11895,11 @@ pub mod num
                 /// using the two's complement for negative numbers
                 pub fn bit(&self, bit: u64) -> bool {
                     if self.is_negative() {
+                        // Let the binary representation of a number be
+                        //   ... 0  x 1 0 ... 0
+                        // Then the two's complement is
+                        //   ... 1 !x 1 0 ... 0
+                        // where !x is obtained from x by flipping each bit
                         if bit >= u64::from( big_digit::BITS ) * self.len() as u64 {
                             true
                         } else {
@@ -11734,7 +11914,8 @@ pub mod num
                         self.data.bit(bit)
                     }
                 }
-                /// Sets or clears the bit in the given position, using the two's complement for negative numbers
+                /// Sets or clears the bit in the given position,
+                /// using the two's complement for negative numbers
                 pub fn set_bit(&mut self, bit: u64, value: bool) {
                     match self.sign {
                         Sign::Plus => self.data.set_bit(bit, value),
@@ -11744,9 +11925,11 @@ pub mod num
                                 self.data.set_bit(bit, true);
                                 self.sign = Sign::Plus;
                             } else {
+                                // Clearing a bit for zero is a no-op
                             }
                         }
                     }
+                    // The top bit may have been cleared, so normalize
                     self.normalize();
                 }
             }
@@ -11819,6 +12002,7 @@ pub mod num
             }
 
             fn gen_bits<R: Rng + ?Sized>(rng: &mut R, data: &mut [u32], rem: u64) {
+                // `fill` is faster than many `gen::<u32>` calls
                 rng.fill(data);
                 if rem > 0 {
                     let last = data.len() - 1;
@@ -11839,6 +12023,7 @@ pub mod num
                     let native_len = native_digits.to_usize().expect("capacity overflow");
                     let mut data = vec![0u64; native_len];
                     unsafe {
+                        // Generate bits in a `&mut [u32]` slice for value stability
                         let ptr = data.as_mut_ptr() as *mut u32;
                         debug_assert!(native_len * 2 >= len);
                         let data = slice::from_raw_parts_mut(ptr, len);
@@ -11846,6 +12031,7 @@ pub mod num
                     }
                     #[cfg(target_endian = "big")]
                     for digit in &mut data {
+                        // swap u32 digits into u64 endianness
                         *digit = (*digit << 32) | (*digit >> 32);
                     }
                     biguint_from_vec(data)
@@ -11853,8 +12039,14 @@ pub mod num
 
                 fn gen_bigint(&mut self, bit_size: u64) -> BigInt {
                     loop {
+                        // Generate a random BigUint...
                         let biguint = self.gen_biguint(bit_size);
+                        // ...and then randomly assign it a Sign...
                         let sign = if biguint.is_zero() {
+                            // ...except that if the BigUint is zero, we need to try
+                            // again with probability 0.5. This is because otherwise,
+                            // the probability of generating a zero BigInt would be
+                            // double that of any other number.
                             if self.gen() {
                                 continue;
                             } else {
@@ -12064,14 +12256,21 @@ pub mod num
                     *,
                 };
                 
+                // Add with carry:
                 #[inline] fn adc(carry: u8, a: u64, b: u64, out: &mut u64) -> u8 {
                     // Safety: There are absolutely no safety concerns with calling `_addcarry_u64`.
                     // It's just unsafe for API consistency with other intrinsics.
                     unsafe { arch::_addcarry_u64(carry, a, b, out) }
                 }
+                
+
                 /// Two argument addition of raw slices, `a += b`, returning the carry.
-                #[inline] pub fn __add2(a: &mut [BigDigit], b: &[BigDigit]) -> BigDigit
-                {
+                ///
+                /// This is used when the data `Vec` might need to resize to push a non-zero carry, so we perform
+                /// the addition first hoping that it will fit.
+                ///
+                /// The caller _must_ ensure that `a` is at least as long as `b`.
+                #[inline] pub fn __add2(a: &mut [BigDigit], b: &[BigDigit]) -> BigDigit {
                     debug_assert!(a.len() >= b.len());
 
                     let mut carry = 0;
@@ -12092,9 +12291,12 @@ pub mod num
 
                     carry as BigDigit
                 }
-                /// Two argument addition of raw slices | a += b
-                pub fn add2(a: &mut [BigDigit], b: &[BigDigit])
-                {
+                /// Two argument addition of raw slices:
+                /// a += b
+                ///
+                /// The caller _must_ ensure that a is big enough to store the result - typically this means
+                /// resizing a to max(a.len(), b.len()) + 1, to fit a possible carry.
+                pub fn add2(a: &mut [BigDigit], b: &[BigDigit]) {
                     let carry = __add2(a, b);
 
                     debug_assert!(carry == 0);
@@ -12103,8 +12305,7 @@ pub mod num
                 forward_all_binop_to_val_ref_commutative!(impl Add for BigUint, add);
                 forward_val_assign!(impl AddAssign for BigUint, add_assign);
 
-                impl Add<&BigUint> for BigUint 
-                {
+                impl Add<&BigUint> for BigUint {
                     type Output = BigUint;
 
                     fn add(mut self, other: &BigUint) -> BigUint {
@@ -12112,9 +12313,7 @@ pub mod num
                         self
                     }
                 }
-
-                impl AddAssign<&BigUint> for BigUint
-                {
+                impl AddAssign<&BigUint> for BigUint {
                     #[inline] fn add_assign(&mut self, other: &BigUint) 
                     {
                         let self_len = self.data.len();
@@ -12137,8 +12336,7 @@ pub mod num
                 forward_all_scalar_binop_to_val_val_commutative!(impl Add<u64> for BigUint, add);
                 forward_all_scalar_binop_to_val_val_commutative!(impl Add<u128> for BigUint, add);
 
-                impl Add<u32> for BigUint
-                {
+                impl Add<u32> for BigUint {
                     type Output = BigUint;
 
                     #[inline] fn add(mut self, other: u32) -> BigUint {
@@ -12147,8 +12345,7 @@ pub mod num
                     }
                 }
 
-                impl AddAssign<u32> for BigUint
-                {
+                impl AddAssign<u32> for BigUint {
                     #[inline] fn add_assign(&mut self, other: u32) {
                         if other != 0 {
                             if self.data.is_empty() {
@@ -12163,8 +12360,7 @@ pub mod num
                     }
                 }
 
-                impl Add<u64> for BigUint
-                {
+                impl Add<u64> for BigUint {
                     type Output = BigUint;
 
                     #[inline] fn add(mut self, other: u64) -> BigUint {
@@ -12173,8 +12369,7 @@ pub mod num
                     }
                 }
 
-                impl AddAssign<u64> for BigUint
-                {
+                impl AddAssign<u64> for BigUint {
                     cfg_digit!(
                         #[inline] fn add_assign(&mut self, other: u64) {
                             let (hi, lo) = big_digit::from_doublebigdigit(other);
@@ -12207,8 +12402,7 @@ pub mod num
                     );
                 }
 
-                impl Add<u128> for BigUint
-                {
+                impl Add<u128> for BigUint {
                     type Output = BigUint;
 
                     #[inline] fn add(mut self, other: u128) -> BigUint {
@@ -12217,8 +12411,7 @@ pub mod num
                     }
                 }
 
-                impl AddAssign<u128> for BigUint
-                {
+                impl AddAssign<u128> for BigUint {
                     cfg_digit!(
                         #[inline] fn add_assign(&mut self, other: u128) {
                             if other <= u128::from(u64::MAX) {
@@ -12262,8 +12455,7 @@ pub mod num
                     );
                 }
 
-                impl CheckedAdd for BigUint
-                {
+                impl CheckedAdd for BigUint {
                     #[inline] fn checked_add(&self, v: &BigUint) -> Option<BigUint> {
                         Some(self.add(v))
                     }
@@ -12295,8 +12487,15 @@ pub mod num
                 pub(super) const FAST_DIV_WIDE: bool = true;
                 /// Divide a two digit numerator by a one digit divisor, returns quotient and remainder.
                 #[inline] fn div_wide(hi: BigDigit, lo: BigDigit, divisor: BigDigit) -> (BigDigit, BigDigit) {
+                    // This debug assertion covers the potential #DE for divisor==0 or a quotient too large for one
+                    // register, otherwise in release mode it will become a target-specific fault like SIGFPE.
+                    // This should never occur with the inputs from our few `div_wide` callers.
                     debug_assert!(hi < divisor);
-                    
+
+                    // SAFETY: The `div` instruction only affects registers, reading the explicit operand as the
+                    // divisor, and implicitly reading RDX:RAX or EDX:EAX as the dividend. The result is implicitly
+                    // written back to RAX or EAX for the quotient and RDX or EDX for the remainder. No memory is
+                    // used, and flags are not preserved.
                     unsafe
                     {
                         let (div, rem);
@@ -12374,12 +12573,20 @@ pub mod num
                     rem
                 }
                 /// Subtract a multiple.
-                fn sub_mul_digit_same_len(a: &mut [BigDigit], b: &[BigDigit], c: BigDigit) -> BigDigit 
-                {
-                    debug_assert!(a.len() == b.len());                    
+                /// a -= b * c
+                /// Returns a borrow (if a < b then borrow > 0).
+                fn sub_mul_digit_same_len(a: &mut [BigDigit], b: &[BigDigit], c: BigDigit) -> BigDigit {
+                    debug_assert!(a.len() == b.len());
+
+                    // carry is between -big_digit::MAX and 0, so to avoid overflow we store
+                    // offset_carry = carry + big_digit::MAX
                     let mut offset_carry = big_digit::MAX;
 
                     for (x, y) in a.iter_mut().zip(b) {
+                        // We want to calculate sum = x - y * c + carry.
+                        // sum >= -(big_digit::MAX * big_digit::MAX) - big_digit::MAX
+                        // sum <= big_digit::MAX
+                        // Offsetting sum by (big_digit::MAX << big_digit::BITS) puts it in DoubleBigDigit range.
                         let offset_sum = big_digit::to_doublebigdigit(big_digit::MAX, *x)
                             - big_digit::MAX as DoubleBigDigit
                             + offset_carry as DoubleBigDigit
@@ -12389,7 +12596,8 @@ pub mod num
                         offset_carry = new_offset_carry;
                         *x = new_x;
                     }
-                    
+
+                    // Return the borrow.
                     big_digit::MAX - offset_carry
                 }
 
@@ -12486,8 +12694,28 @@ pub mod num
                 fn div_rem_core(mut a: BigUint, b: &[BigDigit]) -> (BigUint, BigUint) {
                     debug_assert!(a.data.len() >= b.len() && b.len() > 1);
                     debug_assert!(b.last().unwrap().leading_zeros() == 0);
-                    
+
+                    // The algorithm works by incrementally calculating "guesses", q0, for the next digit of the
+                    // quotient. Once we have any number q0 such that (q0 << j) * b <= a, we can set
+                    //
+                    //     q += q0 << j
+                    //     a -= (q0 << j) * b
+                    //
+                    // and then iterate until a < b. Then, (q, a) will be our desired quotient and remainder.
+                    //
+                    // q0, our guess, is calculated by dividing the last three digits of a by the last two digits of
+                    // b - this will give us a guess that is close to the actual quotient, but is possibly greater.
+                    // It can only be greater by 1 and only in rare cases, with probability at most
+                    // 2^-(big_digit::BITS-1) for random a, see TAOCP 4.3.1 exercise 21.
+                    //
+                    // If the quotient turns out to be too large, we adjust it by 1:
+                    // q -= 1 << j
+                    // a += b << j
+
+                    // a0 stores an additional extra most significant digit of the dividend, not stored in a.
                     let mut a0 = 0;
+
+                    // [b1, b0] are the two most significant digits of the divisor. They never change.
                     let b0 = b[b.len() - 1];
                     let b1 = b[b.len() - 2];
 
@@ -12501,13 +12729,27 @@ pub mod num
 
                         let a1 = *a.data.last().unwrap();
                         let a2 = a.data[a.data.len() - 2];
+
+                        // The first q0 estimate is [a1,a0] / b0. It will never be too small, it may be too large
+                        // by at most 2.
                         let (mut q0, mut r) = if a0 < b0 {
                             let (q0, r) = div_wide(a0, a1, b0);
                             (q0, r as DoubleBigDigit)
                         } else {
                             debug_assert!(a0 == b0);
+                            // Avoid overflowing q0, we know the quotient fits in BigDigit.
+                            // [a1,a0] = b0 * (1<<BITS - 1) + (a0 + a1)
                             (big_digit::MAX, a0 as DoubleBigDigit + a1 as DoubleBigDigit)
                         };
+
+                        // r = [a1,a0] - q0 * b0
+                        //
+                        // Now we want to compute a more precise estimate [a2,a1,a0] / [b1,b0] which can only be
+                        // less or equal to the current q0.
+                        //
+                        // q0 is too large if:
+                        // [a2,a1,a0] < q0 * [b1,b0]
+                        // (r << BITS) + a2 < q0 * b1
                         while r <= big_digit::MAX as DoubleBigDigit
                             && big_digit::to_doublebigdigit(r as BigDigit, a2)
                                 < q0 as DoubleBigDigit * b1 as DoubleBigDigit
@@ -12515,15 +12757,22 @@ pub mod num
                             q0 -= 1;
                             r += b0 as DoubleBigDigit;
                         }
+
+                        // q0 is now either the correct quotient digit, or in rare cases 1 too large.
+                        // Subtract (q0 << j) from a. This may overflow, in which case we will have to correct.
+
                         let mut borrow = sub_mul_digit_same_len(&mut a.data[j..], b, q0);
                         if borrow > a0 {
+                            // q0 is too large. We need to add back one multiple of b.
                             q0 -= 1;
                             borrow -= __add2(&mut a.data[j..], b);
                         }
+                        // The top digit of a, stored in a0, has now been zeroed.
                         debug_assert!(borrow == a0);
 
                         q.data[j] = q0;
-                        
+
+                        // Pop off the next top digit of a.
                         a0 = a.data.pop().unwrap();
                     }
 
@@ -12604,6 +12853,7 @@ pub mod num
                 }
                 impl DivAssign<u64> for BigUint {
                     #[inline] fn div_assign(&mut self, other: u64) {
+                        // a vec of size 0 does not allocate, so this is fairly cheap
                         let temp = mem::replace(self, Self::ZERO);
                         *self = temp / other;
                     }
@@ -12756,7 +13006,8 @@ pub mod num
                         }
                     }
                 }
-                
+
+                // we can scalar %= BigUint for any scalar, including signed types
                 impl_rem_assign_scalar!(u128, to_u128);
                 impl_rem_assign_scalar!(usize, to_usize);
                 impl_rem_assign_scalar!(u64, to_u64);
@@ -12848,14 +13099,17 @@ pub mod num
 
                 impl Euclid for BigUint {
                     #[inline] fn div_euclid(&self, v: &BigUint) -> BigUint {
+                        // trivially same as regular division
                         self / v
                     }
 
                     #[inline] fn rem_euclid(&self, v: &BigUint) -> BigUint {
+                        // trivially same as regular remainder
                         self % v
                     }
 
                     fn div_rem_euclid(&self, v: &Self) -> (Self, Self) {
+                        // trivially same as regular division and remainder
                         self.div_rem(v)
                     }
                 }
@@ -12936,6 +13190,7 @@ pub mod num
                 /// acc += b * c
                 #[allow(clippy::many_single_char_names)]
                 fn mac3(mut acc: &mut [BigDigit], mut b: &[BigDigit], mut c: &[BigDigit]) {
+                    // Least-significant zeros have no effect on the output.
                     if let Some(&0) = b.first() {
                         if let Some(nz) = b.iter().position(|&d| d != 0) {
                             b = &b[nz..];
@@ -12957,33 +13212,52 @@ pub mod num
                     let (x, y) = if b.len() < c.len() { (b, c) } else { (c, b) };
                     
                     if x.len() <= 32 {
+                        // Long multiplication:
                         for (i, xi) in x.iter().enumerate() {
                             mac_digit(&mut acc[i..], y, *xi);
                         }
                     } else if x.len() * 2 <= y.len() 
                     {
+                        // Karatsuba Multiplication for factors with significant length disparity.
                         let m2 = y.len() / 2;
                         let (low2, high2) = y.split_at(m2);
+
+                        // (x * high2) * NBASE ^ m2 + z0
                         mac3(acc, x, low2);
                         mac3(&mut acc[m2..], x, high2);
                     } else if x.len() <= 256 {
+                        // Karatsuba multiplication:
                         let b = x.len() / 2;
                         let (x0, x1) = x.split_at(b);
                         let (y0, y1) = y.split_at(b);
+
+                        // We reuse the same BigUint for all the intermediate multiplies and have to size p
+                        // appropriately here: x1.len() >= x0.len and y1.len() >= y0.len():
                         let len = x1.len() + y1.len() + 1;
                         let mut p = BigUint { data: vec![0; len] };
 
+                        // p2 = x1 * y1
                         mac3(&mut p.data, x1, y1);
+
+                        // Not required, but the adds go faster if we drop any unneeded 0s from the end:
                         p.normalize();
+
                         add2(&mut acc[b..], &p.data);
                         add2(&mut acc[b * 2..], &p.data);
+
+                        // Zero out p before the next multiply:
                         p.data.truncate(0);
                         p.data.resize(len, 0);
+
+                        // p0 = x0 * y0
                         mac3(&mut p.data, x0, y0);
                         p.normalize();
 
                         add2(acc, &p.data);
                         add2(&mut acc[b..], &p.data);
+
+                        // p1 = (x1 - x0) * (y1 - y0)
+                        // We do this one last, since it may be negative and acc can't ever be negative:
                         let (j0_sign, j0) = sub_sign(x1, x0);
                         let (j1_sign, j1) = sub_sign(y1, y0);
 
@@ -13003,6 +13277,7 @@ pub mod num
                             NoSign => (),
                         }
                     } else {
+                        // Toom-3 multiplication:
                         let i = y.len() / 3 + 1;
 
                         let x0_len = Ord::min(x.len(), i);
@@ -13014,36 +13289,47 @@ pub mod num
                         let x0 = bigint_from_slice(&x[..x0_len]);
                         let x1 = bigint_from_slice(&x[x0_len..x0_len + x1_len]);
                         let x2 = bigint_from_slice(&x[x0_len + x1_len..]);
-                        
+
+                        // y(t) = y2*t^2 + y1*t + y0
                         let y0 = bigint_from_slice(&y[..y0_len]);
                         let y1 = bigint_from_slice(&y[y0_len..y0_len + y1_len]);
                         let y2 = bigint_from_slice(&y[y0_len + y1_len..]);
                         
                         let p = &x0 + &x2;
-                        
+
+                        // y0 + y2, avoiding temporaries
                         let q = &y0 + &y2;
-                        
+
+                        // x2 - x1 + x0, avoiding temporaries
                         let p2 = &p - &x1;
-                        
+
+                        // y2 - y1 + y0, avoiding temporaries
                         let q2 = &q - &y1;
-                        
+
+                        // w(0)
                         let r0 = &x0 * &y0;
-                        
+
+                        // w(inf)
                         let r4 = &x2 * &y2;
-                        
+
+                        // w(1)
                         let r1 = (p + x1) * (q + y1);
-                        
+
+                        // w(-1)
                         let r2 = &p2 * &q2;
-                        
+
+                        // w(-2)
                         let r3 = ((p2 + x2) * 2 - x0) * ((q2 + y2) * 2 - y0);
-                        
+
+                        // Evaluating these points gives us the following system of linear equations.
                         let mut comp3: BigInt = (r3 - &r1) / 3u32;
                         let mut comp1: BigInt = (r1 - &r2) >> 1;
                         let mut comp2: BigInt = r2 - &r0;
                         comp3 = ((&comp2 - comp3) >> 1) + (&r4 << 1);
                         comp2 += &comp1 - &r4;
                         comp1 -= &comp3;
-                        
+
+                        // Recomposition. The coefficients of the polynomial are now known.
                         for (j, result) in [&r0, &comp1, &comp2, &comp3, &r4].iter().enumerate().rev() {
                             match result.sign() {
                                 Plus => add2(&mut acc[i * j..], result.digits()),
@@ -13083,6 +13369,7 @@ pub mod num
                 }
 
                 fn sub_sign(mut a: &[BigDigit], mut b: &[BigDigit]) -> (Sign, BigUint) {
+                    // Normalize:
                     if let Some(&0) = a.last() {
                         a = &a[..a.iter().rposition(|&x| x != 0).map_or(0, |i| i + 1)];
                     }
@@ -13113,9 +13400,12 @@ pub mod num
                             #[inline]
                             fn mul(self, other: $Other) -> BigUint {
                                 match (&*self.data, &*other.data) {
+                                    // multiply by zero
                                     (&[], _) | (_, &[]) => BigUint::ZERO,
+                                    // multiply by a scalar
                                     (_, &[digit]) => self * digit,
                                     (&[digit], _) => other * digit,
+                                    // full multiplication
                                     (x, y) => mul3(x, y),
                                 }
                             }
@@ -13135,10 +13425,13 @@ pub mod num
                             #[inline]
                             fn mul_assign(&mut self, other: $Other) {
                                 match (&*self.data, &*other.data) {
+                                    // multiply by zero
                                     (&[], _) => {},
                                     (_, &[]) => self.set_zero(),
+                                    // multiply by a scalar
                                     (_, &[digit]) => *self *= digit,
                                     (&[digit], _) => *self = other * digit,
+                                    // full multiplication
                                     (x, y) => *self = mul3(x, y),
                                 }
                             }
@@ -13259,6 +13552,8 @@ pub mod num
                 
                 
                 #[inline] fn sbb(borrow: u8, a: u64, b: u64, out: &mut u64) -> u8 {
+                    // Safety: There are absolutely no safety concerns with calling `_subborrow_u64`.
+                    // It's just unsafe for API consistency with other intrinsics.
                     unsafe { ::arch::_subborrow_u64(borrow, a, b, out) }
                 }
                 
@@ -13288,7 +13583,8 @@ pub mod num
                         "Cannot subtract b from a because b is larger than a."
                     );
                 }
-                
+
+                // Only for the Sub impl. `a` and `b` must have same length.
                 #[inline] fn __sub2rev(a: &[BigDigit], b: &mut [BigDigit]) -> u8 {
                     debug_assert!(b.len() == a.len());
 
@@ -13311,7 +13607,8 @@ pub mod num
                     let borrow = __sub2rev(a_lo, b_lo);
 
                     assert!(a_hi.is_empty());
-                    
+
+                    // note: we're _required_ to fail on underflow
                     assert!(
                         borrow == 0 && b_hi.iter().all(|x| *x == 0),
                         "Cannot subtract b from a because b is larger than a."
@@ -13530,11 +13827,14 @@ pub mod num
 
                 forward_val_val_binop!(impl BitAnd for BigUint, bitand);
                 forward_ref_val_binop!(impl BitAnd for BigUint, bitand);
-                
+
+                // do not use forward_ref_ref_binop_commutative! for bitand so that we can
+                // clone the smaller value rather than the larger, avoiding over-allocation
                 impl BitAnd<&BigUint> for &BigUint {
                     type Output = BigUint;
 
                     #[inline] fn bitand(self, other: &BigUint) -> BigUint {
+                        // forward to val-ref, choosing the smaller to clone
                         if self.data.len() <= other.data.len() {
                             self.clone() & other
                         } else {
@@ -13640,6 +13940,7 @@ pub mod num
                 };
                 
                 /// Find last set bit
+                /// fls(0) == 0, fls(u32::MAX) == 32
                 fn fls<T: PrimInt>(v: T) -> u8 
                 {
                     mem::size_of::<T>() as u8 * 8 - v.leading_zeros() as u8
@@ -13659,7 +13960,9 @@ pub mod num
                         BigUint::from_str_radix(s, 10)
                     }
                 }
-                
+
+                // Convert from a power of two radix (bits == ilog2(radix)) where bits evenly divides
+                // BigDigit::BITS
                 pub fn from_bitwise_digits_le(v: &[u8], bits: u8) -> BigUint 
                 {
                     debug_assert!(!v.is_empty() && bits <= 8 && big_digit::BITS % bits == 0);
@@ -13692,8 +13995,10 @@ pub mod num
                     let mut data = Vec::with_capacity(big_digits);
 
                     let mut d = 0;
-                    let mut dbits = 0;
+                    let mut dbits = 0; // number of bits we currently have in d
 
+                    // walk v accumululating bits in d; whenever we accumulate big_digit::BITS in d, spit out a
+                    // big_digit:
                     for &c in v {
                         d |= BigDigit::from(c) << dbits;
                         dbits += bits;
@@ -13701,6 +14006,8 @@ pub mod num
                         if dbits >= big_digit::BITS {
                             data.push(d);
                             dbits -= big_digit::BITS;
+                            // if dbits was > big_digit::BITS, we dropped some of the bits in c (they couldn't fit
+                            // in d) - grab the bits we lost here:
                             d = BigDigit::from(c) >> (bits - dbits);
                         }
                     }
@@ -13712,12 +14019,14 @@ pub mod num
 
                     biguint_from_vec(data)
                 }
-                
+
+                // Read little-endian radix digits
                 fn from_radix_digits_be(v: &[u8], radix: u32) -> BigUint 
                 {
                     debug_assert!(!v.is_empty() && !radix.is_power_of_two());
                     debug_assert!(v.iter().all(|&c| u32::from(c) < radix));
 
+                    // Estimate how big the result will be, so we can pre-allocate it.
                     let big_digits = {
                         let radix_log2 = f64::from(radix).log2();
                         let bits = radix_log2 * v.len() as f64;
@@ -13775,6 +14084,7 @@ pub mod num
                     }
 
                     let res = if radix.is_power_of_two() {
+                        // Powers of two can use bitwise masks and shifting instead of multiplication
                         let bits = ilog2(radix);
                         let mut v = Vec::from(buf);
                         v.reverse();
@@ -13806,6 +14116,7 @@ pub mod num
                     }
 
                     let res = if radix.is_power_of_two() {
+                        // Powers of two can use bitwise masks and shifting instead of multiplication
                         let bits = ilog2(radix);
                         if big_digit::BITS % bits == 0 {
                             from_bitwise_digits_le(buf, bits)
@@ -13840,9 +14151,11 @@ pub mod num
                         }
 
                         if s.starts_with('_') {
+                            // Must lead with a real digit!
                             return Err(ParseBigIntError::invalid());
                         }
-                        
+
+                        // First normalize all characters to plain digit values
                         let mut v = Vec::with_capacity(s.len());
                         for b in s.bytes() {
                             let d = match b {
@@ -13860,6 +14173,7 @@ pub mod num
                         }
 
                         let res = if radix.is_power_of_two() {
+                            // Powers of two can use bitwise masks and shifting instead of multiplication
                             let bits = ilog2(radix);
                             v.reverse();
                             if big_digit::BITS % bits == 0 {
@@ -13879,6 +14193,8 @@ pub mod num
                     match v.data.len() {
                         0 => 0,
                         1 => {
+                            // XXX Conversion is useless if already 64-bit.
+                            #[allow(clippy::useless_conversion)]
                             let v0 = u64::from(v.data[0]);
                             v0
                         }
@@ -13895,11 +14211,20 @@ pub mod num
                                     if bits_want != 64 {
                                         ret <<= bits_want;
                                     }
+                                    // XXX Conversion is useless if already 64-bit.
+                                    #[allow(clippy::useless_conversion)]
                                     let d0 = u64::from(*d) >> (digit_bits - bits_want);
                                     ret |= d0;
                                 }
-                                
+
+                                // Implement round-to-odd: If any lower bits are 1, set LSB to 1
+                                // so that rounding again to floating point value using
+                                // nearest-ties-to-even is correct.
+                                //
+                                // See: https://en.wikipedia.org/wiki/Rounding#Rounding_to_prepare_for_shorter_precision
+
                                 if digit_bits - bits_want != 0 {
+                                    // XXX Conversion is useless if already 64-bit.
                                     #[allow(clippy::useless_conversion)]
                                     let masked = u64::from(*d) << (64 - (digit_bits - bits_want) as u32);
                                     ret |= (masked != 0) as u64;
@@ -13933,7 +14258,8 @@ pub mod num
                             if bits >= 64 {
                                 return None;
                             }
-                            
+
+                            // XXX Conversion is useless if already 64-bit.
                             ret += u64::from(*i) << bits;
                             bits += big_digit::BITS;
                         }
@@ -14049,12 +14375,15 @@ pub mod num
 
                     #[inline] fn from_f64(mut n: f64) -> Option<BigUint> 
                     {
+                        // handle NAN, INFINITY, NEG_INFINITY
                         if !n.is_finite() {
                             return None;
                         }
-                        
+
+                        // match the rounding of casting from float to int
                         n = n.trunc();
-                        
+
+                        // handle 0.x, -0.x
                         if n.is_zero() {
                             return Some(Self::ZERO);
                         }
@@ -14082,6 +14411,7 @@ pub mod num
 
                         while n != 0 {
                             ret.data.push(n as BigDigit);
+                            // don't overflow if BITS is 64:
                             n = (n >> 1) >> (big_digit::BITS - 1);
                         }
 
@@ -14187,7 +14517,8 @@ pub mod num
                         }
                     }
                 }
-                
+
+                // Extract bitwise digits that evenly divide BigDigit
                 pub fn to_bitwise_digits_le(u: &BigUint, bits: u8) -> Vec<u8> 
                 {
                     debug_assert!(!u.is_zero() && bits <= 8 && big_digit::BITS % bits == 0);
@@ -14215,7 +14546,8 @@ pub mod num
 
                     res
                 }
-                
+
+                // Extract bitwise digits that don't evenly divide BigDigit
                 fn to_inexact_bitwise_digits_le(u: &BigUint, bits: u8) -> Vec<u8> 
                 {
                     debug_assert!(!u.is_zero() && bits <= 8 && big_digit::BITS % bits != 0);
@@ -14257,8 +14589,9 @@ pub mod num
                     res
                 }
 
-                /// Extract little-endian radix digits
-                #[inline(always)] pub fn to_radix_digits_le(u: &BigUint, radix: u32) -> Vec<u8> 
+                // Extract little-endian radix digits
+                #[inline(always)] // forced inline to get const-prop for radix=10
+                pub fn to_radix_digits_le(u: &BigUint, radix: u32) -> Vec<u8> 
                 {
                     debug_assert!(!u.is_zero() && !radix.is_power_of_two());
 
@@ -14266,32 +14599,43 @@ pub mod num
                         let radix_log2 = f64::from(radix).log2();
                         ((u.bits() as f64) / radix_log2).ceil()
                     };
-                    
+
+                    // Estimate how big the result will be, so we can pre-allocate it.
                     let mut res = Vec::with_capacity(radix_digits.to_usize().unwrap_or(0));
 
                     let mut digits = u.clone();
-                    
+
+                    // X86 DIV can quickly divide by a full digit, otherwise we choose a divisor
+                    // that's suitable for `div_half` to avoid slow `DoubleBigDigit` division.
                     let (base, power) = if FAST_DIV_WIDE {
                         get_radix_base(radix)
                     } else {
                         get_half_radix_base(radix)
                     };
                     let radix = radix as BigDigit;
-                    
+
+                    // For very large numbers, the O(n²) loop of repeated `div_rem_digit` dominates the
+                    // performance. We can mitigate this by dividing into chunks of a larger base first.
+                    // The threshold for this was chosen by anecdotal performance measurements to
+                    // approximate where this starts to make a noticeable difference.
                     if digits.data.len() >= 64 {
                         let mut big_base = BigUint::from(base);
                         let mut big_power = 1usize;
-                        
+
+                        // Choose a target base length near √n.
                         let target_len = digits.data.len().sqrt();
                         while big_base.data.len() < target_len {
                             big_base = &big_base * &big_base;
                             big_power *= 2;
                         }
-                        
+
+                        // This outer loop will run approximately √n times.
                         while digits > big_base {
+                            // This is still the dominating factor, with n digits divided by √n digits.
                             let (q, mut big_r) = digits.div_rem(&big_base);
                             digits = q;
-                            
+
+                            // This inner loop now has O(√n²)=O(n) behavior altogether.
                             for _ in 0..big_power {
                                 let (q, mut r) = div_rem_digit(big_r, base);
                                 big_r = q;
@@ -14326,6 +14670,7 @@ pub mod num
                     if u.is_zero() {
                         vec![0]
                     } else if radix.is_power_of_two() {
+                        // Powers of two can use bitwise masks and shifting instead of division
                         let bits = ilog2(radix);
                         if big_digit::BITS % bits == 0 {
                             to_bitwise_digits_le(u, bits)
@@ -14333,6 +14678,8 @@ pub mod num
                             to_inexact_bitwise_digits_le(u, bits)
                         }
                     } else if radix == 10 {
+                        // 10 is so common that it's worth separating out for const-propagation.
+                        // Optimizers can often turn constant division into a faster multiplication.
                         to_radix_digits_le(u, 10)
                     } else {
                         to_radix_digits_le(u, radix)
@@ -14348,7 +14695,8 @@ pub mod num
                     }
 
                     let mut res = to_radix_le(u, radix);
-                    
+
+                    // Now convert everything to ASCII digits.
                     for r in &mut res {
                         debug_assert!(u32::from(*r) < radix);
                         if *r < 10 {
@@ -14606,7 +14954,8 @@ pub mod num
                 {
                     n0inv: BigDigit,
                 }
-                
+
+                // k0 = -m**-1 mod 2**BITS.
                 fn inv_mod_alt(b: BigDigit) -> BigDigit 
                 {
                     assert_ne!(b & 1, 0);
@@ -14634,6 +14983,10 @@ pub mod num
                 /// Computes z mod m = x * y * 2 ** (-n*_W) mod m, assuming k = -1/m mod 2**_W
                 fn montgomery(x: &BigUint, y: &BigUint, m: &BigUint, k: BigDigit, n: usize) -> BigUint 
                 {
+                    // This code assumes x, y, m are all the same length, n.
+                    // (required by addMulVVW and the for loop).
+                    // It also assumes that x, y are already reduced mod m,
+                    // or else the result will not be properly reduced.
                     assert!(
                         x.data.len() == n && y.data.len() == n && m.data.len() == n,
                         "{:?} {:?} {:?} {}",
@@ -14695,6 +15048,7 @@ pub mod num
                     {
                         let zi = xi.wrapping_sub(*yi).wrapping_sub(c);
                         z[i] = zi;
+                        // see "Hacker's Delight", section 2-12 (overflow detection)
                         c = ((yi & !xi) | ((yi | !xi) & zi)) >> (big_digit::BITS - 1)
                     }
 
@@ -14724,38 +15078,44 @@ pub mod num
                     let num_words = m.data.len();
 
                     let mut x = x.clone();
-                    
+
+                    // We want the lengths of x and m to be equal.
+                    // It is OK if x >= m as long as len(x) == len(m).
                     if x.data.len() > num_words {
                         x %= m;
+                        // Note: now len(x) <= numWords, not guaranteed ==.
                     }
                     if x.data.len() < num_words {
                         x.data.resize(num_words, 0);
                     }
-                    
+
+                    // rr = 2**(2*_W*len(m)) mod m
                     let mut rr = BigUint::one();
                     rr = (rr.shl(2 * num_words as u64 * u64::from(big_digit::BITS))) % m;
                     if rr.data.len() < num_words {
                         rr.data.resize(num_words, 0);
                     }
-                    
+                    // one = 1, with equal length to that of m
                     let mut one = BigUint::one();
                     one.data.resize(num_words, 0);
 
                     let n = 4;
+                    // powers[i] contains x^i
                     let mut powers = Vec::with_capacity(1 << n);
                     powers.push(montgomery(&one, &rr, m, mr.n0inv, num_words));
                     powers.push(montgomery(&x, &rr, m, mr.n0inv, num_words));
-
                     for i in 2..1 << n {
                         let r = montgomery(&powers[i - 1], &powers[1], m, mr.n0inv, num_words);
                         powers.push(r);
                     }
-                    
+
+                    // initialize z = 1 (Montgomery 1)
                     let mut z = powers[0].clone();
                     z.data.resize(num_words, 0);
                     let mut zz = BigUint::ZERO;
                     zz.data.resize(num_words, 0);
-                    
+
+                    // same windowed exponent, but with Montgomery multiplications
                     for i in (0..y.data.len()).rev() 
                     {
                         let mut yi = y.data[i];
@@ -14779,11 +15139,21 @@ pub mod num
                             j += n;
                         }
                     }
-                    
+
+                    // convert to regular number
                     zz = montgomery(&z, &one, m, mr.n0inv, num_words);
 
                     zz.normalize();
+                    // One last reduction, just in case.
+                    // See golang.org/issue/13907.
                     if zz >= *m {
+                        // Common case is m has high bit set; in that case,
+                        // since zz is the same length as m, there can be just
+                        // one multiple of m to remove. Just subtract.
+                        // We think that the subtract should be sufficient in general,
+                        // so do that unconditionally, but double-check,
+                        // in case our beliefs are wrong.
+                        // The div is not expected to be reached.
                         zz -= m;
                         if zz >= *m {
                             zz %= m;
@@ -14829,6 +15199,8 @@ pub mod num
                         } else if let Some(exp) = exp.to_u128() {
                             self.pow(exp)
                         } else {
+                            // At this point, `self >= 2` and `exp >= 2¹²⁸`. The smallest possible result given
+                            // `2.pow(2¹²⁸)` would require far more memory than 64-bit targets can address!
                             panic!("memory overflow")
                         }
                     }
@@ -14942,8 +15314,10 @@ pub mod num
                     );
 
                     if modulus.is_odd() {
+                        // For an odd modulus, we can use Montgomery multiplication in base 2^32.
                         monty_modpow(x, exponent, modulus)
                     } else {
+                        // Otherwise do basically the same as `num::pow`, but with a modulus.
                         plain_modpow(x, &exponent.data, modulus)
                     }
                 }
@@ -14993,11 +15367,13 @@ pub mod num
                         };
 
                         if let Some(&last) = exp_iter.next_back() {
+                            // consume exp_data[i]
                             for _ in b..big_digit::BITS {
                                 unit(r.is_odd());
                                 r >>= 1;
                             }
-                            
+
+                            // consume all other digits before the last
                             for &r in exp_iter {
                                 let mut r = r;
                                 for _ in 0..big_digit::BITS {
@@ -15318,7 +15694,8 @@ pub mod num
             }
 
             impl ConstZero for BigUint {
-                const ZERO: Self = Self::ZERO;
+                // forward to the inherent const
+                const ZERO: Self = Self::ZERO; // BigUint { data: Vec::new() };
             }
 
             impl One for BigUint {
@@ -15366,11 +15743,14 @@ pub mod num
                     }
                 }
                 /// Calculates the Greatest Common Divisor (GCD) of the number and `other`.
+                ///
+                /// The result is always positive.
                 #[inline] fn gcd(&self, other: &Self) -> Self {
                     #[inline] fn twos(x: &BigUint) -> u64 {
                         x.trailing_zeros().unwrap_or(0)
                     }
-                    
+
+                    // Stein's algorithm
                     if self.is_zero() {
                         return other.clone();
                     }
@@ -15379,9 +15759,12 @@ pub mod num
                     }
                     let mut m = self.clone();
                     let mut n = other.clone();
-                    
+
+                    // find common factors of 2
                     let shift = cmp::min(twos(&n), twos(&m));
-                    
+
+                    // divide m and n by 2 until odd
+                    // m inside loop
                     n >>= twos(&n);
 
                     while !m.is_zero() {
@@ -15426,6 +15809,7 @@ pub mod num
                 }
                 /// Returns `true` if the number is divisible by `2`.
                 #[inline] fn is_even(&self) -> bool {
+                    // Considering only the last digit.
                     match self.data.first() {
                         Some(x) => x.is_even(),
                         None => true,
@@ -15463,7 +15847,9 @@ pub mod num
                 F: Fn(&BigUint) -> BigUint,
             {
                 let mut xn = f(&x);
-                
+
+                // If the value increased, then the initial guess must have been low.
+                // Repeat until we reverse course.
                 while x < xn {
                     // Sometimes an increase will go way too far, especially with large
                     // powers, and then take a long time to walk back.  We know an upper
@@ -15475,7 +15861,8 @@ pub mod num
                     };
                     xn = f(&x);
                 }
-                
+
+                // Now keep repeating while the estimate is decreasing.
                 while x > xn {
                     x = xn;
                     xn = f(&x);
@@ -15484,6 +15871,11 @@ pub mod num
             }
 
             impl Roots for BigUint {
+                // nth_root, sqrt and cbrt use Newton's method to compute
+                // principal root of a given degree for a given integer.
+
+                // Reference:
+                // Brent & Zimmermann, Modern Computer Arithmetic, v0.5.9, Algorithm 1.14
                 fn nth_root(&self, n: u32) -> Self {
                     assert!(n > 0, "root degree n must be at least 1");
 
@@ -15541,12 +15933,15 @@ pub mod num
                         t / n
                     })
                 }
-                
+
+                // Reference:
+                // Brent & Zimmermann, Modern Computer Arithmetic, v0.5.9, Algorithm 1.13
                 fn sqrt(&self) -> Self {
                     if self.is_zero() || self.is_one() {
                         return self.clone();
                     }
-                    
+
+                    // If we fit in `u64`, compute the root that way.
                     if let Some(x) = self.to_u64() {
                         return x.sqrt().into();
                     }
@@ -15556,10 +15951,13 @@ pub mod num
                     let guess = match self.to_f64() {
                         Some(f) if f.is_finite() => {
                             use ::num::traits::FromPrimitive;
-                            
+
+                            // We fit in `f64` (lossy), so get a better initial guess from that.
                             BigUint::from_f64(f.sqrt()).unwrap()
                         }
                         _ => {
+                            // Try to guess by scaling down such that it does fit in `f64`.
+                            // With some (x * 2²ᵏ), its sqrt ≈ (√x * 2ᵏ)
                             let extra_bits = bits - (f64::MAX_EXP as u64 - 1);
                             let root_scale = (extra_bits + 1) / 2;
                             let scale = root_scale * 2;
@@ -15578,7 +15976,8 @@ pub mod num
                     if self.is_zero() || self.is_one() {
                         return self.clone();
                     }
-                    
+
+                    // If we fit in `u64`, compute the root that way.
                     if let Some(x) = self.to_u64() {
                         return x.cbrt().into();
                     }
@@ -15589,10 +15988,13 @@ pub mod num
                     let guess = match self.to_f64() {
                         Some(f) if f.is_finite() => {
                             use ::num::traits::FromPrimitive;
-                            
+
+                            // We fit in `f64` (lossy), so get a better initial guess from that.
                             BigUint::from_f64(f.cbrt()).unwrap()
                         }
                         _ => {
+                            // Try to guess by scaling down such that it does fit in `f64`.
+                            // With some (x * 2³ᵏ), its cbrt ≈ (∛x * 2ᵏ)
                             let extra_bits = bits - (f64::MAX_EXP as u64 - 1);
                             let root_scale = (extra_bits + 2) / 3;
                             let scale = root_scale * 3;
@@ -15770,6 +16172,9 @@ pub mod num
                 }
                 /// Returns the modular multiplicative inverse if it exists, otherwise `None`.
                 pub fn modinv(&self, modulus: &Self) -> Option<Self> {
+                    // Based on the inverse pseudocode listed here:
+                    // https://en.wikipedia.org/wiki/Extended_Euclidean_algorithm#Modular_integers
+                    // TODO: consider Binary or Lehmer's GCD algorithms for optimization.
 
                     assert!(
                         !modulus.is_zero(),
@@ -15779,11 +16184,12 @@ pub mod num
                         return Some(Self::zero());
                     }
 
-                    let mut r0;
+                    let mut r0; // = modulus.clone();
                     let mut r1 = self % modulus;
-                    let mut t0;
-                    let mut t1;
-                    
+                    let mut t0; // = Self::zero();
+                    let mut t1; // = Self::one();
+
+                    // Lift and simplify the first iteration to avoid some initial allocations.
                     if r1.is_zero() {
                         return None;
                     } else if r1.is_one() {
@@ -15804,7 +16210,8 @@ pub mod num
                         let (q, r2) = r0.div_rem(&r1);
                         r0 = r1;
                         r1 = r2;
-                        
+
+                        // let t2 = (t0 - q * t1) % modulus;
                         let qt1 = q * &t1 % modulus;
                         let t2 = if t0 < qt1 {
                             t0 + (modulus - qt1)
@@ -15931,6 +16338,7 @@ pub mod num
             }
             /// Convert a `u32` chunk (len is either 1 or 2) to a single `u64` digit
             #[inline] fn u32_chunk_to_u64(chunk: &[u32]) -> u64 {
+                // raw could have odd length
                 let mut digit = chunk[0] as u64;
                 if let Some(&hi) = chunk.get(1) {
                     digit |= (hi as u64) << 32;
@@ -16118,8 +16526,9 @@ pub mod num
                         }
                     }
                 };
-            }
-            
+            } // impl_to_primitive
+
+            // Returns None if Complex part is non-zero
             impl<T: ToPrimitive + Num> ToPrimitive for Complex<T> {
                 impl_to_primitive!(usize, to_usize);
                 impl_to_primitive!(isize, to_isize);
@@ -16146,7 +16555,7 @@ pub mod num
                         })
                     }
                 };
-            }
+            } // impl_from_primitive
 
             impl<T: FromPrimitive + Num> FromPrimitive for Complex<T> {
                 impl_from_primitive!(usize, from_usize);
@@ -16558,11 +16967,15 @@ pub mod num
                 fn recip(self) -> Self {
                     self.finv()
                 }
-                
+
+                // `Complex::l1_norm` uses `Signed::abs` to let it work
+                // for integers too, but we can just use `Float::abs`.
                 fn l1_norm(&self) -> Self::Real {
                     self.re.abs() + self.im.abs()
                 }
-                
+
+                // `Complex::is_*` methods use `T: FloatCore`, but we
+                // have `T: Float` that can do them as well.
                 fn is_nan(self) -> bool {
                     self.re.is_nan() || self.im.is_nan()
                 }
@@ -16785,7 +17198,10 @@ pub mod num
             /// Computes `e^(self)`, where `e` is the base of the natural logarithm.
             #[inline] pub fn exp(self) -> Self 
             {
+                // formula: e^(a + bi) = e^a (cos(b) + i*sin(b)) = from_polar(e^a, b)
+
                 let Complex { re, mut im } = self;
+                // Treat the corner cases +∞, -∞, and NaN
                 if re.is_infinite() {
                     if re < T::zero() {
                         if !im.is_finite() {
@@ -16806,6 +17222,7 @@ pub mod num
             /// Computes the principal value of natural logarithm of `self`.
             #[inline] pub fn ln(self) -> Self 
             {
+                // formula: ln(z) = ln|z| + i*arg(z)
                 let (r, theta) = self.to_polar();
                 Self::new(r.ln(), theta)
             }
@@ -16814,8 +17231,11 @@ pub mod num
             {
                 if self.im.is_zero() {
                     if self.re.is_sign_positive() {
+                        // simple positive real √r, and copy `im` for its sign
                         Self::new(self.re.sqrt(), self.im)
                     } else {
+                        // √(r e^(iπ)) = √r e^(iπ/2) = i√r
+                        // √(r e^(-iπ)) = √r e^(-iπ/2) = -i√r
                         let re = T::zero();
                         let im = (-self.re).sqrt();
                         if self.im.is_sign_positive() {
@@ -16825,6 +17245,8 @@ pub mod num
                         }
                     }
                 } else if self.re.is_zero() {
+                    // √(r e^(iπ/2)) = √r e^(iπ/4) = √(r/2) + i√(r/2)
+                    // √(r e^(-iπ/2)) = √r e^(-iπ/4) = √(r/2) - i√(r/2)
                     let one = T::one();
                     let two = one + one;
                     let x = (self.im.abs() / two).sqrt();
@@ -16834,6 +17256,7 @@ pub mod num
                         Self::new(x, -x)
                     }
                 } else {
+                    // formula: sqrt(r e^(it)) = sqrt(r) e^(it/2)
                     let one = T::one();
                     let two = one + one;
                     let (r, theta) = self.to_polar();
@@ -16845,8 +17268,11 @@ pub mod num
             {
                 if self.im.is_zero() {
                     if self.re.is_sign_positive() {
+                        // simple positive real ∛r, and copy `im` for its sign
                         Self::new(self.re.cbrt(), self.im)
                     } else {
+                        // ∛(r e^(iπ)) = ∛r e^(iπ/3) = ∛r/2 + i∛r√3/2
+                        // ∛(r e^(-iπ)) = ∛r e^(-iπ/3) = ∛r/2 - i∛r√3/2
                         let one = T::one();
                         let two = one + one;
                         let three = two + one;
@@ -16859,6 +17285,8 @@ pub mod num
                         }
                     }
                 } else if self.re.is_zero() {
+                    // ∛(r e^(iπ/2)) = ∛r e^(iπ/6) = ∛r√3/2 + i∛r/2
+                    // ∛(r e^(-iπ/2)) = ∛r e^(-iπ/6) = ∛r√3/2 - i∛r/2
                     let one = T::one();
                     let two = one + one;
                     let three = two + one;
@@ -16870,6 +17298,7 @@ pub mod num
                         Self::new(re, -im)
                     }
                 } else {
+                    // formula: cbrt(r e^(it)) = cbrt(r) e^(it/3)
                     let one = T::one();
                     let three = one + one + one;
                     let (r, theta) = self.to_polar();
@@ -16882,12 +17311,17 @@ pub mod num
                 if exp.is_zero() {
                     return Self::one();
                 }
+                // formula: x^y = (ρ e^(i θ))^y = ρ^y e^(i θ y)
+                // = from_polar(ρ^y, θ y)
                 let (r, theta) = self.to_polar();
                 Self::from_polar(r.powf(exp), theta * exp)
             }
             /// Returns the logarithm of `self` with respect to an arbitrary base.
             #[inline] pub fn log(self, base: T) -> Self 
             {
+                // formula: log_y(x) = log_y(ρ e^(i θ))
+                // = log_y(ρ) + log_y(e^(i θ)) = log_y(ρ) + ln(e^(i θ)) / ln(y)
+                // = log_y(ρ) + i θ / ln(y)
                 let (r, theta) = self.to_polar();
                 Self::new(r.log(base), theta / base.ln())
             }
@@ -16897,17 +17331,20 @@ pub mod num
                 if exp.is_zero() {
                     return Self::one();
                 }
-
+                // formula: x^y = exp(y * ln(x))
                 (exp * self.ln()).exp()
             }
             /// Raises a floating point number to the complex power `self`.
             #[inline] pub fn expf(self, base: T) -> Self 
             {
+                // formula: x^(a+bi) = x^a x^bi = x^a e^(b ln(x) i)
+                // = from_polar(x^a, b ln(x))
                 Self::from_polar(base.powf(self.re), self.im * base.ln())
             }
             /// Computes the sine of `self`.
             #[inline] pub fn sin(self) -> Self 
             {
+                // formula: sin(a + bi) = sin(a)cosh(b) + i*cos(a)sinh(b)
                 Self::new(
                     self.re.sin() * self.im.cosh(),
                     self.re.cos() * self.im.sinh(),
@@ -16916,6 +17353,7 @@ pub mod num
             /// Computes the cosine of `self`.
             #[inline] pub fn cos(self) -> Self 
             {
+                // formula: cos(a + bi) = cos(a)cosh(b) - i*sin(a)sinh(b)
                 Self::new(
                     self.re.cos() * self.im.cosh(),
                     -self.re.sin() * self.im.sinh(),
@@ -16924,24 +17362,28 @@ pub mod num
             /// Computes the tangent of `self`.
             #[inline] pub fn tan(self) -> Self 
             {
+                // formula: tan(a + bi) = (sin(2a) + i*sinh(2b))/(cos(2a) + cosh(2b))
                 let (two_re, two_im) = (self.re + self.re, self.im + self.im);
                 Self::new(two_re.sin(), two_im.sinh()).unscale(two_re.cos() + two_im.cosh())
             }
             /// Computes the principal value of the inverse sine of `self`.
             #[inline] pub fn asin(self) -> Self 
             {
+                // formula: arcsin(z) = -i ln(sqrt(1-z^2) + iz)
                 let i = Self::i();
                 -i * ((Self::one() - self * self).sqrt() + i * self).ln()
             }
             /// Computes the principal value of the inverse cosine of `self`.
             #[inline] pub fn acos(self) -> Self 
             {
+                // formula: arccos(z) = -i ln(i sqrt(1-z^2) + z)
                 let i = Self::i();
                 -i * (i * (Self::one() - self * self).sqrt() + self).ln()
             }
             /// Computes the principal value of the inverse tangent of `self`.
             #[inline] pub fn atan(self) -> Self 
             {
+                // formula: arctan(z) = (ln(1+iz) - ln(1-iz))/(2i)
                 let i = Self::i();
                 let one = Self::one();
                 let two = one + one;
@@ -16955,6 +17397,7 @@ pub mod num
             /// Computes the hyperbolic sine of `self`.
             #[inline] pub fn sinh(self) -> Self 
             {
+                // formula: sinh(a + bi) = sinh(a)cos(b) + i*cosh(a)sin(b)
                 Self::new(
                     self.re.sinh() * self.im.cos(),
                     self.re.cosh() * self.im.sin(),
@@ -16963,6 +17406,7 @@ pub mod num
             /// Computes the hyperbolic cosine of `self`.
             #[inline] pub fn cosh(self) -> Self 
             {
+                // formula: cosh(a + bi) = cosh(a)cos(b) + i*sinh(a)sin(b)
                 Self::new(
                     self.re.cosh() * self.im.cos(),
                     self.re.sinh() * self.im.sin(),
@@ -16971,18 +17415,21 @@ pub mod num
             /// Computes the hyperbolic tangent of `self`.
             #[inline] pub fn tanh(self) -> Self 
             {
+                // formula: tanh(a + bi) = (sinh(2a) + i*sin(2b))/(cosh(2a) + cos(2b))
                 let (two_re, two_im) = (self.re + self.re, self.im + self.im);
                 Self::new(two_re.sinh(), two_im.sin()).unscale(two_re.cosh() + two_im.cos())
             }
             /// Computes the principal value of inverse hyperbolic sine of `self`.
             #[inline] pub fn asinh(self) -> Self 
             {
+                // formula: arcsinh(z) = ln(z + sqrt(1+z^2))
                 let one = Self::one();
                 (self + (one + self * self).sqrt()).ln()
             }
             /// Computes the principal value of inverse hyperbolic cosine of `self`.
             #[inline] pub fn acosh(self) -> Self 
             {
+                // formula: arccosh(z) = 2 ln(sqrt((z+1)/2) + sqrt((z-1)/2))
                 let one = Self::one();
                 let two = one + one;
                 two * (((self + one) / two).sqrt() + ((self - one) / two).sqrt()).ln()
@@ -16990,6 +17437,7 @@ pub mod num
             /// Computes the principal value of inverse hyperbolic tangent of `self`.
             #[inline] pub fn atanh(self) -> Self 
             {
+                // formula: arctanh(z) = (ln(1+z) - ln(1-z))/2
                 let one = Self::one();
                 let two = one + one;
                 if self == one {
@@ -17015,8 +17463,9 @@ pub mod num
         impl<T: Float + FloatConst> Complex<T> 
         {
             /// Computes `2^(self)`.
-            #[inline] pub fn exp2(self) -> Self 
-            {
+            #[inline] pub fn exp2(self) -> Self {
+                // formula: 2^(a + bi) = 2^a (cos(b*log2) + i*sin(b*log2))
+                // = from_polar(2^a, b*log2)
                 Self::from_polar(self.re.exp2(), self.im * T::LN_2())
             }
             /// Computes the principal value of log base 2 of `self`.
@@ -17153,7 +17602,7 @@ pub mod num
             #[inline] fn mul_add(self, other: Complex<T>, add: Complex<T>) -> Complex<T>
             {
                 let re = self.re.clone().mul_add(other.re.clone(), add.re)
-                    - (self.im.clone() * other.im.clone());
+                    - (self.im.clone() * other.im.clone()); // FIXME: use mulsub when available in rust
                 let im = self.re.mul_add(other.im, self.im.mul_add(other.re, add.im));
                 Complex::new(re, im)
             }
@@ -17228,7 +17677,8 @@ pub mod num
                     self.im -= other.im;
                 }
             }
-            
+
+            // (a + i b) * (c + i d) == (a*c - b*d) + i (a*d + b*c)
             impl<T: Clone + NumAssign> MulAssign for Complex<T> 
             {
                 fn mul_assign(&mut self, other: Self) {
@@ -17241,18 +17691,19 @@ pub mod num
                     self.im += a * other.im;
                 }
             }
-            
+
+            // (a + i b) * (c + i d) + (e + i f) == ((a*c + e) - b*d) + i (b*c + (a*d + f))
             impl<T: Clone + NumAssign + MulAddAssign> MulAddAssign for Complex<T> 
             {
                 fn mul_add_assign(&mut self, other: Complex<T>, add: Complex<T>) {
                     let a = self.re.clone();
 
-                    self.re.mul_add_assign(other.re.clone(), add.re);
-                    self.re -= self.im.clone() * other.im.clone();
+                    self.re.mul_add_assign(other.re.clone(), add.re); // (a*c + e)
+                    self.re -= self.im.clone() * other.im.clone(); // ((a*c + e) - b*d)
 
                     let mut adf = a;
-                    adf.mul_add_assign(other.im, add.im);
-                    self.im.mul_add_assign(other.re, adf);
+                    adf.mul_add_assign(other.im, add.im); // (a*d + f)
+                    self.im.mul_add_assign(other.re, adf); // (b*c + (a*d + f))
                 }
             }
 
@@ -17263,7 +17714,9 @@ pub mod num
                     self.mul_add_assign(other.clone(), add.clone());
                 }
             }
-            
+
+            // (a + i b) / (c + i d) == [(a + i b) * (c - i d)] / (c*c + d*d)
+            //   == [(a*c + b*d) / (c*c + d*d)] + i [(b*c - a*d) / (c*c + d*d)]
             impl<T: Clone + NumAssign> DivAssign for Complex<T> 
             {
                 fn div_assign(&mut self, other: Self) {
@@ -17469,6 +17922,7 @@ pub mod num
                         type Output = Complex<$real>;
 
                         #[inline] fn div(self, other: Complex<$real>) -> Self::Output {
+                            // a / (c + i d) == [a * (c - i d)] / (c*c + d*d)
                             let norm_sqr = other.norm_sqr();
                             Self::Output::new(self * other.re / norm_sqr.clone(),
                                             $real::zero() - self * other.im / norm_sqr)
@@ -17662,6 +18116,7 @@ pub mod num
                     }
                 }
                 
+                // Currently, we can only apply width using an intermediate `String` (and thus `std`)
                 fn fmt_complex(f: &mut fmt::Formatter<'_>, complex: fmt::Arguments<'_>) -> fmt::Result {
                     use std::string::ToString;
                     if let Some(width) = f.width() {
@@ -17752,7 +18207,8 @@ pub mod num
             for (i, w) in s.as_bytes().windows(2).enumerate() {
                 let p = w[0];
                 let c = w[1];
-                
+
+                // ignore '+'/'-' if part of an exponent
                 if (c == b'+' || c == b'-') && !(p == b'e' || p == b'E') {
                     // trim whitespace around the separator
                     a = s[..=i].trim_end_matches(char::is_whitespace);
@@ -17765,8 +18221,10 @@ pub mod num
                     break;
                 }
             }
-            
+
+            // split off real and imaginary parts
             if b.is_empty() {
+                // input was either pure real or pure imaginary
                 b = if a.ends_with(imag) { "0" } else { "0i" };
             }
 
@@ -17787,18 +18245,21 @@ pub mod num
             } else {
                 return Err(ParseComplexError::expr_error());
             }
-            
+
+            // parse re
             let re = from(re).map_err(ParseComplexError::from_error)?;
             let re = if neg_re { T::zero() - re } else { re };
-            
+
+            // pop imaginary unit off
             let mut im = &im[..im.len() - 1];
-            
+            // handle im == "i" or im == "-i"
             if im.is_empty() || im == "+" {
                 im = "1";
             } else if im == "-" {
                 im = "-1";
             }
-            
+
+            // parse im
             let im = from(im).map_err(ParseComplexError::from_error)?;
             let im = if neg_im { T::zero() - im } else { im };
 
@@ -17825,7 +18286,8 @@ pub mod num
                     radix <= 36,
                     "from_str_radix: radix is too high (maximum 36)"
                 );
-                
+
+                // larger radix would include 'i' and 'j' as digits, which cannot be supported
                 if radix > 18 {
                     return Err(ParseComplexError::unsupported_radix());
                 }
@@ -17920,8 +18382,7 @@ pub mod num
         {
             fn description(&self) -> &str 
             {
-                match self.kind
-                {
+                match self.kind {
                     ComplexErrorKind::ParseError(ref e) => e.description(),
                     ComplexErrorKind::ExprError => "invalid or unsupported complex expression",
                     ComplexErrorKind::UnsupportedRadix => "unsupported radix for conversion",
@@ -18077,6 +18538,7 @@ pub mod num
                     impl Roots for $T {
                         #[inline] fn nth_root(&self, n: u32) -> Self {
                             fn go(a: $T, n: u32) -> $T {
+                                // Specialize small roots
                                 match n {
                                     0 => panic!("can't find a root of degree 0!"),
                                     1 => return a,
@@ -18084,18 +18546,21 @@ pub mod num
                                     3 => return a.cbrt(),
                                     _ => (),
                                 }
-                                
+
+                                // The root of values less than 2ⁿ can only be 0 or 1.
                                 if bits::<$T>() <= n || a < (1 << n) {
                                     return (a > 0) as $T;
                                 }
 
                                 if bits::<$T>() > 64 {
+                                    // 128-bit division is slow, so do a bitwise `nth_root` until it's small enough.
                                     return if a <= std::u64::MAX as $T {
                                         (a as u64).nth_root(n) as $T
                                     } else {
                                         let lo = (a >> n).nth_root(n) << 1;
                                         let hi = lo + 1;
-
+                                        // 128-bit `checked_mul` also involves division, but we can't always
+                                        // compute `hiⁿ` without risking overflow.  Try to avoid it though...
                                         if hi.next_power_of_two().trailing_zeros() * n >= bits::<$T>() {
                                             match checked_pow(hi, n as usize) {
                                                 Some(x) if x <= a => hi,
@@ -18113,13 +18578,15 @@ pub mod num
                                 
                                 #[inline]
                                 fn guess(x: $T, n: u32) -> $T {
+                                    // for smaller inputs, `f64` doesn't justify its cost.
                                     if bits::<$T>() <= 32 || x <= std::u32::MAX as $T {
                                         1 << ((log2(x) + n - 1) / n)
                                     } else {
                                         ((x as f64).ln() / f64::from(n)).exp() as $T
                                     }
                                 }
-                                
+
+                                // https://en.wikipedia.org/wiki/Nth_root_algorithm
                                 let n1 = n - 1;
                                 let next = |x: $T| {
                                     let y = match checked_pow(x, n1 as usize) {
@@ -18136,6 +18603,7 @@ pub mod num
                         #[inline] fn sqrt(&self) -> Self {
                             fn go(a: $T) -> $T {
                                 if bits::<$T>() > 64 {
+                                    // 128-bit division is slow, so do a bitwise `sqrt` until it's small enough.
                                     return if a <= std::u64::MAX as $T {
                                         (a as u64).sqrt() as $T
                                     } else {
@@ -18157,7 +18625,8 @@ pub mod num
                                 fn guess(x: $T) -> $T {
                                     (x as f64).sqrt() as $T
                                 }
-                                
+
+                                // https://en.wikipedia.org/wiki/Methods_of_computing_square_roots#Babylonian_method
                                 let next = |x: $T| (a / x + x) >> 1;
                                 fixpoint(guess(a), next)
                             }
@@ -18167,6 +18636,7 @@ pub mod num
                         #[inline] fn cbrt(&self) -> Self {
                             fn go(a: $T) -> $T {
                                 if bits::<$T>() > 64 {
+                                    // 128-bit division is slow, so do a bitwise `cbrt` until it's small enough.
                                     return if a <= std::u64::MAX as $T {
                                         (a as u64).cbrt() as $T
                                     } else {
@@ -18181,6 +18651,7 @@ pub mod num
                                 }
 
                                 if bits::<$T>() <= 32 {
+                                    // Implementation based on Hacker's Delight `icbrt2`
                                     let mut x = a;
                                     let mut y2 = 0;
                                     let mut y = 0;
@@ -18211,6 +18682,7 @@ pub mod num
                                     (x as f64).cbrt() as $T
                                 }
                                 
+                                // https://en.wikipedia.org/wiki/Cube_root#Numerical_methods
                                 let next = |x: $T| (a / (x * x) + x * 2) / 3;
                                 fixpoint(guess(a), next)
                             }
@@ -18252,6 +18724,9 @@ pub mod num
                 for<'a, 'b> &'a I:
                     BitAnd<&'b I, Output = I> + BitOr<&'b I, Output = I> + BitXor<&'b I, Output = I>,
             {
+                // The Henry Gordon Dietz implementation as shown in the Hacker's Delight,
+                // see http://aggregate.org/MAGIC/#Average%20of%20Integers
+
                 /// Returns the floor value of the average of `self` and `other`.
                 #[inline] fn average_floor(&self, other: &I) -> I {
                     (self & other) + ((self ^ other) >> 1)
@@ -18262,10 +18737,12 @@ pub mod num
                 }
             }
             /// Returns the floor value of the average of `x` and `y` --
+            /// see [Average::average_floor](trait.Average.html#tymethod.average_floor).
             #[inline] pub fn average_floor<T: Average>(x: T, y: T) -> T
                 {    x.average_floor(&y)
             }
             /// Returns the ceiling value of the average of `x` and `y` --
+            /// see [Average::average_ceil](trait.Average.html#tymethod.average_ceil).
             #[inline] pub fn average_ceil<T: Average>(x: T, y: T) -> T
                 {    x.average_ceil(&y)
             }
@@ -18432,6 +18909,8 @@ pub mod num
                 impl Integer for $T {
                     /// Floored integer division
                     #[inline] fn div_floor(&self, other: &Self) -> Self {
+                        // Algorithm from [Daan Leijen. _Division and Modulus for Computer Scientists_,
+                        // December 2001](http://research.microsoft.com/pubs/151917/divmodnote-letter.pdf)
                         let (d, r) = self.div_rem(other);
                         if (r > 0 && *other < 0) || (r < 0 && *other > 0) {
                             d - 1
@@ -18442,6 +18921,8 @@ pub mod num
 
                     /// Floored integer modulo
                     #[inline] fn mod_floor(&self, other: &Self) -> Self {
+                        // Algorithm from [Daan Leijen. _Division and Modulus for Computer Scientists_,
+                        // December 2001](http://research.microsoft.com/pubs/151917/divmodnote-letter.pdf)
                         let r = *self % *other;
                         if (r > 0 && *other < 0) || (r < 0 && *other > 0) {
                             r + *other
@@ -18452,6 +18933,8 @@ pub mod num
 
                     /// Calculates `div_floor` and `mod_floor` simultaneously
                     #[inline] fn div_mod_floor(&self, other: &Self) -> (Self, Self) {
+                        // Algorithm from [Daan Leijen. _Division and Modulus for Computer Scientists_,
+                        // December 2001](http://research.microsoft.com/pubs/151917/divmodnote-letter.pdf)
                         let (d, r) = self.div_rem(other);
                         if (r > 0 && *other < 0) || (r < 0 && *other > 0) {
                             (d - 1, r + *other)
@@ -18472,6 +18955,7 @@ pub mod num
                     /// Calculates the Greatest Common Divisor (GCD) of the number and
                     /// `other`. The result is always non-negative.
                     #[inline] fn gcd(&self, other: &Self) -> Self {
+                        // Use Stein's algorithm
                         let mut m = *self;
                         let mut n = *other;
                         if m == 0 || n == 0 {
@@ -18483,10 +18967,12 @@ pub mod num
                         if m == Self::min_value() || n == Self::min_value() {
                             return (1 << shift).abs();
                         }
-                        
+
+                        // guaranteed to be positive now, rest like unsigned algorithm
                         m = m.abs();
                         n = n.abs();
-                        
+
+                        // divide n and m by 2 until odd
                         m >>= m.trailing_zeros();
                         n >>= n.trailing_zeros();
 
@@ -18505,6 +18991,7 @@ pub mod num
                     #[inline] fn extended_gcd_lcm(&self, other: &Self) -> (ExtendedGcd<Self>, Self) 
                     {
                         let egcd = self.extended_gcd(other);
+                        // should not have to recalculate abs
                         let lcm = if egcd.gcd.is_zero() {
                             Self::zero()
                         } else {
@@ -18513,7 +19000,8 @@ pub mod num
                         (egcd, lcm)
                     }
 
-                    /// Calculates the Lowest Common Multiple (LCM) of the number and `other`.
+                    /// Calculates the Lowest Common Multiple (LCM) of the number and
+                    /// `other`.
                     #[inline] fn lcm(&self, other: &Self) -> Self {
                         self.gcd_lcm(other).1
                     }
@@ -18525,6 +19013,7 @@ pub mod num
                             return (Self::zero(), Self::zero());
                         }
                         let gcd = self.gcd(other);
+                        // should not have to recalculate abs
                         let lcm = (*self * (*other / gcd)).abs();
                         (gcd, lcm)
                     }
@@ -18554,6 +19043,7 @@ pub mod num
 
                     /// Rounds up to nearest multiple of argument.
                     #[inline] fn next_multiple_of(&self, other: &Self) -> Self {
+                        // Avoid the overflow of `MIN % -1`
                         if *other == -1 {
                             return *self;
                         }
@@ -18564,6 +19054,7 @@ pub mod num
 
                     /// Rounds down to nearest multiple of argument.
                     #[inline] fn prev_multiple_of(&self, other: &Self) -> Self {
+                        // Avoid the overflow of `MIN % -1`
                         if *other == -1 {
                             return *self;
                         }
@@ -18600,13 +19091,17 @@ pub mod num
 
                     /// Calculates the Greatest Common Divisor (GCD) of the number and `other`
                     #[inline] fn gcd(&self, other: &Self) -> Self {
+                        // Use Stein's algorithm
                         let mut m = *self;
                         let mut n = *other;
                         if m == 0 || n == 0 {
                             return m | n;
                         }
-                        
+
+                        // find common factors of 2
                         let shift = (m | n).trailing_zeros();
+
+                        // divide n and m by 2 until odd
                         m >>= m.trailing_zeros();
                         n >>= n.trailing_zeros();
 
@@ -18625,6 +19120,7 @@ pub mod num
                     #[inline] fn extended_gcd_lcm(&self, other: &Self) -> (ExtendedGcd<Self>, Self) 
                     {
                         let egcd = self.extended_gcd(other);
+                        // should not have to recalculate abs
                         let lcm = if egcd.gcd.is_zero() {
                             Self::zero()
                         } else {
@@ -19042,10 +19538,14 @@ pub mod num
                     let y = ::mem::replace(x, T::zero());
                     *x = f(y);
                 }
-                
+
+                // self.numer /= g;
                 replace_with(&mut self.numer, |x| x / g.clone());
+
+                // self.denom /= g;
                 replace_with(&mut self.denom, |x| x / g);
 
+                // keep denom positive!
                 if self.denom < T::zero() {
                     replace_with(&mut self.numer, |x| T::zero() - x);
                     replace_with(&mut self.denom, |x| T::zero() - x);
@@ -19099,12 +19599,16 @@ pub mod num
                 let zero: Ratio<T> = Zero::zero();
                 let one: T = One::one();
                 let two: T = one.clone() + one.clone();
-                
+
+                // Find unsigned fractional part of rational number
                 let mut fractional = self.fract();
                 if fractional < zero {
                     fractional = zero - fractional
                 };
-                
+
+                // The algorithm compares the unsigned fractional part with 1/2, that
+                // is, a/b >= 1/2, or a >= b/2. For odd denominators, we use
+                // a >= (b/2)+1. This avoids overflow issues.
                 let half_or_larger = if fractional.denom.is_even() {
                     fractional.numer >= fractional.denom / two
                 } else {
@@ -19171,7 +19675,8 @@ pub mod num
                 Ratio::zero()
             }
         }
-        
+
+        // From integer
         impl<T> From<T> for Ratio<T> where
             T: Clone + Integer,
         
@@ -19180,7 +19685,8 @@ pub mod num
                 Ratio::from_integer(x)
             }
         }
-        
+
+        // From pair (through the `new` constructor)
         impl<T> From<(T, T)> for Ratio<T> where
             T: Clone + Integer,
         
@@ -19193,6 +19699,7 @@ pub mod num
         impl<T: Clone + Integer> Ord for Ratio<T> 
         {
             #[inline] fn cmp(&self, other: &Self) -> cmp::Ordering {
+                // With equal denominators, the numerators can be directly compared
                 if self.denom == other.denom {
                     let ord = self.numer.cmp(&other.numer);
                     return if self.denom < T::zero() {
@@ -19201,7 +19708,8 @@ pub mod num
                         ord
                     };
                 }
-                
+
+                // With equal numerators, the denominators can be inversely compared
                 if self.numer == other.numer {
                     if self.numer.is_zero() {
                         return cmp::Ordering::Equal;
@@ -19213,7 +19721,12 @@ pub mod num
                         ord.reverse()
                     };
                 }
-                
+
+                // Unfortunately, we don't have CheckedMul to try.  That could sometimes avoid all the
+                // division below, or even always avoid it for BigInt and BigUint.
+                // FIXME- future breaking change to add Checked* to Integer?
+
+                // Compare as floored integers and remainders
                 let (self_int, self_rem) = self.numer.div_mod_floor(&self.denom);
                 let (other_int, other_rem) = other.numer.div_mod_floor(&other.denom);
                 match self_int.cmp(&other_int) {
@@ -19225,6 +19738,7 @@ pub mod num
                             (true, false) => cmp::Ordering::Less,
                             (false, true) => cmp::Ordering::Greater,
                             (false, false) => {
+                                // Compare the reciprocals of the remaining fractions in reverse
                                 let self_recip = Ratio::new_raw(self.denom.clone(), self_rem);
                                 let other_recip = Ratio::new_raw(other.denom.clone(), other_rem);
                                 self_recip.cmp(&other_recip).reverse()
@@ -19347,7 +19861,8 @@ pub mod num
                     self.reduce();
                 }
             }
-            
+
+            // (a/b) / (c/d) = (a/gcd_ac)*(d/gcd_bd) / ((c/gcd_ac)*(b/gcd_bd))
             impl<T: Clone + Integer + NumAssign> DivAssign for Ratio<T> {
                 fn div_assign(&mut self, other: Ratio<T>) {
                     let gcd_ac = self.numer.gcd(&other.numer);
@@ -19359,7 +19874,8 @@ pub mod num
                     self.reduce(); // TODO: remove this line. see #8.
                 }
             }
-            
+
+            // a/b * c/d = (a/gcd_ad)*(c/gcd_bc) / ((d/gcd_ad)*(b/gcd_bc))
             impl<T: Clone + Integer + NumAssign> MulAssign for Ratio<T> {
                 fn mul_assign(&mut self, other: Ratio<T>) {
                     let gcd_ad = self.numer.gcd(&other.denom);
@@ -19401,7 +19917,8 @@ pub mod num
                     self.reduce();
                 }
             }
-            
+
+            // a/b + c/1 = (a*1 + b*c) / (b*1) = (a + b*c) / b
             impl<T: Clone + Integer + NumAssign> AddAssign<T> for Ratio<T> {
                 fn add_assign(&mut self, other: T) {
                     self.numer += self.denom.clone() * other;
@@ -19426,14 +19943,16 @@ pub mod num
                     self.reduce(); // TODO: remove this line. see #8.
                 }
             }
-            
+
+            // a/b % c/1 = (a*1 % b*c) / (b*1) = (a % b*c) / b
             impl<T: Clone + Integer + NumAssign> RemAssign<T> for Ratio<T> {
                 fn rem_assign(&mut self, other: T) {
                     self.numer %= self.denom.clone() * other;
                     self.reduce();
                 }
             }
-            
+
+            // a/b - c/1 = (a*1 - b*c) / (b*1) = (a - b*c) / b
             impl<T: Clone + Integer + NumAssign> SubAssign<T> for Ratio<T> {
                 fn sub_assign(&mut self, other: T) {
                     self.numer -= self.denom.clone() * other;
@@ -19543,9 +20062,10 @@ pub mod num
                 forward_val_ref_binop!(impl $imp, $method);
             };
         }
-        
+
+        // Arithmetic
         forward_all_binop!(impl Mul, mul);
-        
+        // a/b * c/d = (a/gcd_ad)*(c/gcd_bc) / ((d/gcd_ad)*(b/gcd_bc))
         impl<T> Mul<Ratio<T>> for Ratio<T> where
             T: Clone + Integer,
         {
@@ -19560,7 +20080,7 @@ pub mod num
                 )
             }
         }
-        
+        // a/b * c/1 = (a*c) / (b*1) = (a*c) / b
         impl<T> Mul<T> for Ratio<T> where
             T: Clone + Integer,
         {
@@ -19573,7 +20093,7 @@ pub mod num
         }
 
         forward_all_binop!(impl Div, div);
-        
+        // (a/b) / (c/d) = (a/gcd_ac)*(d/gcd_bd) / ((c/gcd_ac)*(b/gcd_bd))
         impl<T> Div<Ratio<T>> for Ratio<T> where
             T: Clone + Integer,
         {
@@ -19589,7 +20109,7 @@ pub mod num
                 )
             }
         }
-        
+        // (a/b) / (c/1) = (a*1) / (b*c) = a / (b*c)
         impl<T> Div<T> for Ratio<T> where
             T: Clone + Integer,
         {
@@ -19632,7 +20152,8 @@ pub mod num
         arith_impl!(impl Add, add);
         arith_impl!(impl Sub, sub);
         arith_impl!(impl Rem, rem);
-        
+
+        // a/b * c/d = (a*c)/(b*d)
         impl<T> CheckedMul for Ratio<T> where
             T: Clone + Integer + CheckedMul,
         {
@@ -19647,7 +20168,8 @@ pub mod num
                 ))
             }
         }
-        
+
+        // (a/b) / (c/d) = (a*d)/(b*c)
         impl<T> CheckedDiv for Ratio<T> where
             T: Clone + Integer + CheckedMul,
         {
@@ -19691,7 +20213,8 @@ pub mod num
                 }
             }
         }
-        
+
+        // As arith_impl! but for Checked{Add,Sub} traits
         macro_rules! checked_arith_impl {
             (impl $imp:ident, $method:ident) => {
                 impl<T: Clone + Integer + CheckedMul + $imp> $imp for Ratio<T> {
@@ -19705,9 +20228,11 @@ pub mod num
                 }
             };
         }
-        
+
+        // a/b + c/d = (lcm/b*a + lcm/d*c)/lcm, where lcm = lcm(b,d)
         checked_arith_impl!(impl CheckedAdd, checked_add);
-        
+
+        // a/b - c/d = (lcm/b*a - lcm/d*c)/lcm, where lcm = lcm(b,d)
         checked_arith_impl!(impl CheckedSub, checked_sub);
 
         impl<T> Neg for Ratio<T> where
@@ -19751,7 +20276,8 @@ pub mod num
                 self.recip()
             }
         }
-        
+
+        // Constants
         impl<T: ConstZero + ConstOne> Ratio<T> 
         {
             /// A constant `Ratio` 0/1.
@@ -19872,7 +20398,8 @@ pub mod num
                     || (self.numer.is_positive() && self.denom.is_negative())
             }
         }
-        
+
+        // String conversions
         macro_rules! impl_formatting 
         {
             ($fmt_trait:ident, $prefix:expr, $fmt_str:expr, $fmt_alt:expr) => {
@@ -19943,7 +20470,8 @@ pub mod num
                 (val.numer, val.denom)
             }
         } 
-        
+
+        // FIXME: Bubble up specific errors
         #[derive(Copy, Clone, Debug, PartialEq)]
         pub struct ParseRatioError 
         {
@@ -20061,6 +20589,9 @@ pub mod num
         impl<T: Integer + Signed + Bounded + NumCast + Clone> Ratio<T> 
         {
             pub fn approximate_float<F: FloatCore + NumCast>(f: F) -> Option<Ratio<T>> {
+                // 1/10e-20 < 1/2**32 which seems like a good default, and 30 seems
+                // to work well. Might want to choose something based on the types in the future, e.g.
+                // T::max().recip() and T::bits() or something similar.
                 let epsilon = <F as NumCast>::from(10e-20).expect("Can't convert 10e-20");
                 approximate_float(f, epsilon, 30)
             }
@@ -20089,7 +20620,9 @@ pub mod num
             // Make negative again if needed
             Some(if negative { r.neg() } else { r })
         }
-        
+
+        // No Unsigned constraint because this also works on positive integers and is called
+        // like that, see above
         fn approximate_float_unsigned<T, F>(val: F, max_error: F, max_iterations: usize) -> Option<Ratio<T>> where
             T: Integer + Bounded + NumCast + Clone,
             F: FloatCore + NumCast,
@@ -20181,6 +20714,7 @@ pub mod num
         }
         
         impl<T: Clone + Integer + ToPrimitive + ToBigInt> ToPrimitive for Ratio<T> 
+        
         {
             fn to_i64(&self) -> Option<i64> 
             {
@@ -20254,7 +20788,8 @@ pub mod num
                 RADIX, 2,
                 "only floating point implementations with radix 2 are supported"
             );
-            
+
+            // Inclusive upper and lower bounds to the range of exactly-representable ints in an f64.
             const MAX_EXACT_INT: i64 = 1i64 << MANTISSA_DIGITS;
             const MIN_EXACT_INT: i64 = -MAX_EXACT_INT;
 
@@ -20262,21 +20797,30 @@ pub mod num
             if !flo_sign.is_normal() {
                 return flo_sign;
             }
-            
+
+            // Fast track: both sides can losslessly be converted to f64s. In this case, letting the
+            // FPU do the job is faster and easier. In any other case, converting to f64s may lead
+            // to an inexact result: https://stackoverflow.com/questions/56641441/.
             if let (Some(n), Some(d)) = (numer.to_i64(), denom.to_i64()) {
                 let exact = MIN_EXACT_INT..=MAX_EXACT_INT;
                 if exact.contains(&n) && exact.contains(&d) {
                     return n.to_f64().unwrap() / d.to_f64().unwrap();
                 }
             }
-            
+
+            // Otherwise, the goal is to obtain a quotient with at least 55 bits. 53 of these bits will
+            // be used as the mantissa of the resulting float, and the remaining two are for rounding.
+            // There's an error of up to 1 on the number of resulting bits, so we may get either 55 or
+            // 56 bits.
             let mut numer = numer.abs();
             let mut denom = denom.abs();
             let (is_diff_positive, absolute_diff) = match numer.bits().checked_sub(denom.bits()) {
                 Some(diff) => (true, diff),
                 None => (false, denom.bits() - numer.bits()),
             };
-            
+
+            // Filter out overflows and underflows. After this step, the signed difference fits in an
+            // isize.
             if is_diff_positive && absolute_diff > MAX_EXP as u64 {
                 return INFINITY * flo_sign;
             }
@@ -20288,7 +20832,9 @@ pub mod num
             } else {
                 -absolute_diff.to_isize().unwrap()
             };
-            
+
+            // Shift is chosen so that the quotient will have 55 or 56 bits. The exception is if the
+            // quotient is going to be subnormal, in which case it may have fewer bits.
             let shift: isize = diff.max(MIN_EXP as isize) - MANTISSA_DIGITS as isize - 2;
             if shift >= 0 {
                 denom <<= shift as usize
@@ -20297,7 +20843,8 @@ pub mod num
             };
 
             let (quotient, remainder) = numer.div_rem(&denom);
-            
+
+            // This is guaranteed to fit since we've set up quotient to be at most 56 bits.
             let mut quotient = quotient.to_u64().unwrap();
             let n_rounding_bits = {
                 let quotient_bits = 64 - quotient.leading_zeros() as isize;
@@ -20306,7 +20853,9 @@ pub mod num
             } as usize;
             debug_assert!(n_rounding_bits == 2 || n_rounding_bits == 3);
             let rounding_bit_mask = (1u64 << n_rounding_bits) - 1;
-            
+
+            // Round to 53 bits with round-to-even. For rounding, we need to take into account both
+            // our rounding bits and the division's remainder.
             let ls_bit = quotient & (1u64 << n_rounding_bits) != 0;
             let ms_rounding_bit = quotient & (1u64 << (n_rounding_bits - 1)) != 0;
             let ls_rounding_bits = quotient & (rounding_bit_mask >> 1) != 0;
@@ -20314,7 +20863,9 @@ pub mod num
                 quotient += 1u64 << n_rounding_bits;
             }
             quotient &= !rounding_bit_mask;
-            
+
+            // The quotient is guaranteed to be exactly representable as it's now 53 bits + 2 or 3
+            // trailing zeros, so there is no risk of a rounding error here.
             let q_float = quotient as f64 * flo_sign;
             ldexp(q_float, shift as i32)
         }
@@ -20335,13 +20886,15 @@ pub mod num
             if x.is_zero() || x.is_infinite() || x.is_nan() {
                 return x;
             }
-            
+
+            // Filter out obvious over / underflows to make sure the resulting exponent fits in an isize.
             if exp > 3 * MAX_EXP {
                 return INFINITY * x.signum();
             } else if exp < -3 * MAX_EXP {
                 return 0.0 * x.signum();
             }
-            
+
+            // curr_exp is the x's *biased* exponent, and is in the [-54, MAX_UNSIGNED_EXPONENT] range.
             let (bits, curr_exp) = if !x.is_normal() {
                 // If x is subnormal, we make it normal by multiplying by 2^53. This causes no loss of
                 // precision or rounding.
@@ -20358,20 +20911,28 @@ pub mod num
                 // This cast is safe because the exponent is at most 0x7fe, which fits in an i32.
                 (bits, curr_exp as i32)
             };
-            
+
+            // The addition can't overflow because exponent is between 0 and 0x7fe, and exp is between
+            // -2*MAX_EXP and 2*MAX_EXP.
             let new_exp = curr_exp + exp;
 
             if new_exp > MAX_UNSIGNED_EXPONENT {
                 INFINITY * x.signum()
             } else if new_exp > 0 {
+                // Normal case: exponent is not too large nor subnormal.
                 let new_bits = (bits & !EXPONENT_MASK) | ((new_exp as u64) << 52);
                 f64::from_bits(new_bits)
             } else if new_exp >= -(MANTISSA_DIGITS as i32) {
+                // Result is subnormal but may not be zero.
+                // In this case, we increase the exponent by 54 to make it normal, then multiply the end
+                // result by 2^-53. This results in a single multiplication with no prior rounding error,
+                // so there is no risk of double rounding.
                 let new_exp = new_exp + MIN_SUBNORMAL_POWER;
                 debug_assert!(new_exp >= 0);
                 let new_bits = (bits & !EXPONENT_MASK) | ((new_exp as u64) << 52);
                 f64::from_bits(new_bits) * 2f64.powi(-MIN_SUBNORMAL_POWER)
             } else {
+                // Result is zero.
                 return 0.0 * x.signum();
             }
         }
@@ -20391,7 +20952,8 @@ pub mod num
             ops::{ Add, AddAssign, Div, DivAssign, Mul, MulAssign, Rem, RemAssign, Sub, SubAssign },
             *,
         };
-        
+        /*   
+        // pub use real::{FloatCore, Real}; // NOTE: Don't do this, it breaks `use num_traits::*;`. */
         #[macro_use] pub mod macros
         {
             use ::
@@ -20449,6 +21011,7 @@ pub mod num
             /// Numbers which have upper and lower bounds
             pub trait Bounded 
             {
+                // FIXME (#5527): These should be associated constants
                 /// Returns the smallest finite number this type can represent
                 fn min_value() -> Self;
                 /// Returns the largest finite number this type can represent
@@ -20789,12 +21352,16 @@ pub mod num
             macro_rules! impl_to_primitive_float_to_float {
                 ($SrcT:ident : $( fn $method:ident -> $DstT:ident ; )*) => {$(
                     #[inline] fn $method(&self) -> Option<$DstT> {
+                        // We can safely cast all values, whether NaN, +-inf, or finite.
+                        // Finite values that are reducing size may saturate to +-inf.
                         Some(*self as $DstT)
                     }
                 )*}
             }
 
             macro_rules! float_to_int_unchecked {
+                // SAFETY: Must not be NaN or infinite; must be representable as the integer after truncating.
+                // We already checked that the float is in the exclusive range `(MIN-1, MAX+1)`.
                 ($float:expr => $int:ty) => {
                     unsafe { $float.to_int_unchecked::<$int>() }
                 };
@@ -20805,14 +21372,21 @@ pub mod num
                     #[inline]
                     $(#[$cfg])*
                     fn $method(&self) -> Option<$i> {
+                        // Float as int truncates toward zero, so we want to allow values
+                        // in the exclusive range `(MIN-1, MAX+1)`.
                         if size_of::<$f>() > size_of::<$i>() {
+                            // With a larger size, we can represent the range exactly.
                             const MIN_M1: $f = $i::MIN as $f - 1.0;
                             const MAX_P1: $f = $i::MAX as $f + 1.0;
                             if *self > MIN_M1 && *self < MAX_P1 {
                                 return Some(float_to_int_unchecked!(*self => $i));
                             }
                         } else {
+                            // We can't represent `MIN-1` exactly, but there's no fractional part
+                            // at this magnitude, so we can just use a `MIN` inclusive boundary.
                             const MIN: $f = $i::MIN as $f;
+                            // We can't represent `MAX` exactly, but it will round up to exactly
+                            // `MAX+1` (a power of two) when we cast it.
                             const MAX_P1: $f = $i::MAX as $f;
                             if *self >= MIN && *self < MAX_P1 {
                                 return Some(float_to_int_unchecked!(*self => $i));
@@ -20828,12 +21402,18 @@ pub mod num
                     #[inline]
                     $(#[$cfg])*
                     fn $method(&self) -> Option<$u> {
+                        // Float as int truncates toward zero, so we want to allow values
+                        // in the exclusive range `(-1, MAX+1)`.
                         if size_of::<$f>() > size_of::<$u>() {
+                            // With a larger size, we can represent the range exactly.
                             const MAX_P1: $f = $u::MAX as $f + 1.0;
                             if *self > -1.0 && *self < MAX_P1 {
                                 return Some(float_to_int_unchecked!(*self => $u));
                             }
                         } else {
+                            // We can't represent `MAX` exactly, but it will round up to exactly
+                            // `MAX+1` (a power of two) when we cast it.
+                            // (`u128::MAX as f32` is infinity, but this is still ok.)
                             const MAX_P1: $f = $u::MAX as $f;
                             if *self > -1.0 && *self < MAX_P1 {
                                 return Some(float_to_int_unchecked!(*self => $u));
@@ -21083,6 +21663,8 @@ pub mod num
                         #[inline]
                         #[allow(deprecated)]
                         fn from<N: ToPrimitive>(n: N) -> Option<$T> {
+                            // `$conv` could be generated using `concat_idents!`, but that
+                            // macro seems to be broken at the moment
                             n.$conv()
                         }
                     }
@@ -21687,7 +22269,7 @@ pub mod num
                 } else {
                     (bits & 0x7fffff) | 0x800000
                 };
-                
+                // Exponent bias + mantissa shift
                 exponent -= 127 + 23;
                 (mantissa as u64, exponent, sign)
             }
@@ -21701,6 +22283,7 @@ pub mod num
                 } else {
                     (bits & 0xfffffffffffff) | 0x10000000000000
                 };
+                // Exponent bias + mantissa shift
                 exponent -= 1023 + 52;
                 (mantissa, exponent, sign)
             }
@@ -21777,7 +22360,8 @@ pub mod num
                 #[doc = "Return `sqrt(2.0)`."]
                 SQRT_2,
             }
-            /// Trait for floating point numbers that provide an implementation of the `totalOrder` predicate as defined in the IEEE 754 (2008 revision)
+            /// Trait for floating point numbers that provide an implementation
+            /// of the `totalOrder` predicate as defined in the IEEE 754 (2008 revision)
             /// floating point standard.
             pub trait TotalOrder 
             {
@@ -21791,11 +22375,13 @@ pub mod num
                         #[inline]
                         #[cfg(has_total_cmp)]
                         fn total_cmp(&self, other: &Self) -> Ordering {
+                            // Forward to the core implementation
                             Self::total_cmp(&self, other)
                         }
                         #[inline]
                         #[cfg(not(has_total_cmp))]
                         fn total_cmp(&self, other: &Self) -> Ordering {
+                            // Backport the core implementation (since 1.62)
                             let mut left = self.to_bits() as $I;
                             let mut right = other.to_bits() as $I;
 
@@ -21969,6 +22555,9 @@ pub mod num
             {
                 const ONE: Self = Wrapping(T::ONE);
             }
+
+            // Some helper functions provided for backwards compatibility.
+
             /// Returns the additive identity, `0`.
             #[inline( always )] pub fn zero<T: Zero>() -> T
                 {    Zero::zero()
@@ -22087,15 +22676,16 @@ pub mod num
                 ret
             }
 
-            fn reverse_bits_fallback<P: PrimInt>(i: P) -> P 
-            {
+            fn reverse_bits_fallback<P: PrimInt>(i: P) -> P {
                 let rep_01: P = one_per_byte();
                 let rep_03 = (rep_01 << 1) | rep_01;
                 let rep_05 = (rep_01 << 2) | rep_01;
                 let rep_0f = (rep_03 << 2) | rep_03;
                 let rep_33 = (rep_03 << 4) | rep_03;
                 let rep_55 = (rep_05 << 4) | rep_05;
-                
+
+                // code above only used to determine rep_0f, rep_33, rep_55;
+                // optimizer should be able to do it in compile time
                 let mut ret = i.swap_bytes();
                 ret = ((ret & rep_0f) << 4) | ((ret >> 4) & rep_0f);
                 ret = ((ret & rep_33) << 2) | ((ret >> 2) & rep_33);
@@ -22184,7 +22774,8 @@ pub mod num
                     }
                 };
             }
-            
+
+            // prim_int_impl!(type, signed, unsigned);
             prim_int_impl!(u8, i8, u8);
             prim_int_impl!(u16, i16, u16);
             prim_int_impl!(u32, i32, u32);
@@ -23145,7 +23736,8 @@ pub mod num
                 wrapping_shift_impl!(WrappingShr, wrapping_shr, i64);
                 wrapping_shift_impl!(WrappingShr, wrapping_shr, isize);
                 wrapping_shift_impl!(WrappingShr, wrapping_shr, i128);
-                
+
+                // Well this is a bit funny, but all the more appropriate.
                 impl<T: WrappingAdd> WrappingAdd for Wrapping<T>
                 where
                     Wrapping<T>: Add<Output = Wrapping<T>>,
@@ -23872,13 +24464,15 @@ pub mod num
                     {
                         use self::FloatErrorKind::*;
                         use self::ParseFloatError as PFE;
-                        
+
+                        // Special case radix 10 to use more accurate standard library implementation
                         if radix == 10 {
                             return src.parse().map_err(|_| PFE {
                                 kind: if src.is_empty() { Empty } else { Invalid },
                             });
                         }
-                        
+
+                        // Special values
                         if str_to_ascii_lower_eq_str(src, "inf")
                             || str_to_ascii_lower_eq_str(src, "infinity")
                         {
@@ -23904,29 +24498,38 @@ pub mod num
                             Some(('-', src)) => (false, src),
                             Some((_, _))     => (true,  src),
                         };
-                        
+
+                        // The significand to accumulate
                         let mut sig = if is_positive { 0.0 } else { -0.0 };
+                        // Necessary to detect overflow
                         let mut prev_sig = sig;
                         let mut cs = src.chars().enumerate();
+                        // Exponent prefix and exponent index offset
                         let mut exp_info = None::<(char, usize)>;
 
+                        // Parse the integer part of the significand
                         for (i, c) in cs.by_ref() {
                             match c.to_digit(radix) {
                                 Some(digit) => {
+                                    // shift significand one digit left
                                     sig *= radix as $t;
-                                    
+
+                                    // add/subtract current digit depending on sign
                                     if is_positive {
                                         sig += (digit as isize) as $t;
                                     } else {
                                         sig -= (digit as isize) as $t;
                                     }
-                                    
+
+                                    // Detect overflow by comparing to last value, except
+                                    // if we've not seen any non-zero digits.
                                     if prev_sig != 0.0 {
                                         if is_positive && sig <= prev_sig
                                             { return Ok(std::$t::INFINITY); }
                                         if !is_positive && sig >= prev_sig
                                             { return Ok(std::$t::NEG_INFINITY); }
-                                            
+
+                                        // Detect overflow by reversing the shift-and-add process
                                         if is_positive && (prev_sig != (sig - digit as $t) / radix as $t)
                                             { return Ok(std::$t::INFINITY); }
                                         if !is_positive && (prev_sig != (sig + digit as $t) / radix as $t)
@@ -23937,10 +24540,10 @@ pub mod num
                                 None => match c {
                                     'e' | 'E' | 'p' | 'P' => {
                                         exp_info = Some((c, i + 1));
-                                        break;
+                                        break;  // start of exponent
                                     },
                                     '.' => {
-                                        break;
+                                        break;  // start of fractional part
                                     },
                                     _ => {
                                         return Err(PFE { kind: Invalid });
@@ -23954,13 +24557,15 @@ pub mod num
                             for (i, c) in cs.by_ref() {
                                 match c.to_digit(radix) {
                                     Some(digit) => {
+                                        // Decrease power one order of magnitude
                                         power /= radix as $t;
+                                        // add/subtract current digit depending on sign
                                         sig = if is_positive {
                                             sig + (digit as $t) * power
                                         } else {
                                             sig - (digit as $t) * power
                                         };
-                                        
+                                        // Detect overflow by comparing to last value
                                         if is_positive && sig < prev_sig
                                             { return Ok(std::$t::INFINITY); }
                                         if !is_positive && sig > prev_sig
@@ -23970,7 +24575,7 @@ pub mod num
                                     None => match c {
                                         'e' | 'E' | 'p' | 'P' => {
                                             exp_info = Some((c, i + 1));
-                                            break;
+                                            break; // start of exponent
                                         },
                                         _ => {
                                             return Err(PFE { kind: Invalid });
@@ -23979,7 +24584,8 @@ pub mod num
                                 }
                             }
                         }
-                        
+
+                        // Parse and calculate the exponent
                         let exp = match exp_info {
                             Some((c, offset)) => {
                                 let base = match c {
@@ -23987,7 +24593,8 @@ pub mod num
                                     'P' | 'p' if radix == 16 => 2.0,
                                     _ => return Err(PFE { kind: Invalid }),
                                 };
-                                
+
+                                // Parse the exponent as decimal integer
                                 let src = &src[offset..];
                                 let (is_positive, exp) = match slice_shift_char(src) {
                                     Some(('-', src)) => (false, src.parse::<usize>()),
@@ -23999,6 +24606,7 @@ pub mod num
                                 fn pow(base: $t, exp: usize) -> $t {
                                     Float::powi(base, exp as i32)
                                 }
+                                // otherwise uses the generic `pow` from the root
 
                                 match (is_positive, exp) {
                                     (true,  Ok(exp)) => pow(base, exp),
@@ -24006,7 +24614,7 @@ pub mod num
                                     (_, Err(_))      => return Err(PFE { kind: Invalid }),
                                 }
                             },
-                            None => 1.0,
+                            None => 1.0, // no exponent
                         };
 
                         Ok(sig * exp)
@@ -25607,7 +26215,7 @@ pub mod parsers
             E: fmt::Debug,
             {
                 fn source(&self) -> Option<&(dyn Error + 'static)> {
-                    None
+                    None // no underlying error
                 }
             }
             /// All nom parsers implement this trait
@@ -25843,7 +26451,7 @@ pub mod parsers
                         Err(Err::Error(_)) => return Ok((i, acc)),
                         Err(e) => return Err(e),
                         Ok((i1, o)) => {
-                        
+                        // infinite loop check: the parser must always consume
                         if i1.input_len() == len {
                             return Err(Err::Error(E::from_error_kind(i, ErrorKind::Many0)));
                         }
@@ -25875,7 +26483,7 @@ pub mod parsers
                         Err(Err::Error(_)) => return Ok((i, acc)),
                         Err(e) => return Err(e),
                         Ok((i1, o)) => {
-                            
+                            // infinite loop check: the parser must always consume
                             if i1.input_len() == len {
                             return Err(Err::Error(E::from_error_kind(i, ErrorKind::Many1)));
                             }
@@ -25909,7 +26517,7 @@ pub mod parsers
                             Err(Err::Error(err)) => return Err(Err::Error(E::append(i, ErrorKind::ManyTill, err))),
                             Err(e) => return Err(e),
                             Ok((i1, o)) => {
-                            
+                            // infinite loop check: the parser must always consume
                             if i1.input_len() == len {
                                 return Err(Err::Error(E::from_error_kind(i1, ErrorKind::ManyTill)));
                             }
@@ -25952,7 +26560,7 @@ pub mod parsers
                         Err(Err::Error(_)) => return Ok((i, res)),
                         Err(e) => return Err(e),
                         Ok((i1, _)) => {
-                        
+                        // infinite loop check: the parser must always consume
                         if i1.input_len() == len {
                             return Err(Err::Error(E::from_error_kind(i1, ErrorKind::SeparatedList)));
                         }
@@ -25982,7 +26590,8 @@ pub mod parsers
             {
                 move |mut i: I| {
                     let mut res = Vec::new();
-                    
+
+                    // Parse the first element
                     match f.parse(i.clone()) {
                     Err(e) => return Err(e),
                     Ok((i1, o)) => {
@@ -25997,7 +26606,7 @@ pub mod parsers
                         Err(Err::Error(_)) => return Ok((i, res)),
                         Err(e) => return Err(e),
                         Ok((i1, _)) => {
-                        
+                        // infinite loop check: the parser must always consume
                         if i1.input_len() == len {
                             return Err(Err::Error(E::from_error_kind(i1, ErrorKind::SeparatedList)));
                         }
@@ -26036,7 +26645,7 @@ pub mod parsers
                     let len = input.input_len();
                     match parse.parse(input.clone()) {
                         Ok((tail, value)) => {
-                        
+                        // infinite loop check: the parser must always consume
                         if tail.input_len() == len {
                             return Err(Err::Error(E::from_error_kind(input, ErrorKind::ManyMN)));
                         }
@@ -26075,7 +26684,7 @@ pub mod parsers
                     let len = input.input_len();
                     match f.parse(input_) {
                         Ok((i, _)) => {
-                        
+                        // infinite loop check: the parser must always consume
                         if i.input_len() == len {
                             return Err(Err::Error(E::from_error_kind(input, ErrorKind::Many0Count)));
                         }
@@ -26113,6 +26722,7 @@ pub mod parsers
                             Err(Err::Error(_)) => return Ok((input, count)),
                             Err(e) => return Err(e),
                             Ok((i, _)) => {
+                            // infinite loop check: the parser must always consume
                             if i.input_len() == len {
                                 return Err(Err::Error(E::from_error_kind(i, ErrorKind::Many1Count)));
                             }
@@ -26205,6 +26815,7 @@ pub mod parsers
                     let len = input.input_len();
                     match f.parse(i_) {
                         Ok((i, o)) => {
+                        // infinite loop check: the parser must always consume
                         if i.input_len() == len {
                             return Err(Err::Error(E::from_error_kind(input, ErrorKind::Many0)));
                         }
@@ -26253,6 +26864,7 @@ pub mod parsers
                             }
                             Err(e) => return Err(e),
                             Ok((i, o)) => {
+                            // infinite loop check: the parser must always consume
                             if i.input_len() == len {
                                 return Err(Err::Failure(E::from_error_kind(i, ErrorKind::Many1)));
                             }
@@ -27272,6 +27884,7 @@ pub mod parsers
                     P: Fn(Self::Item) -> bool,
                 {
                     match self.find(predicate) {
+                    // find() returns a byte index that is already in the slice at a char boundary
                     Some(i) => unsafe { Ok((self.get_unchecked(i..), self.get_unchecked(..i))) },
                     None => Err(Err::Incomplete(Needed::new(1))),
                     }
@@ -27286,6 +27899,7 @@ pub mod parsers
                 {
                     match self.find(predicate) {
                     Some(0) => Err(Err::Error(E::from_error_kind(self, e))),
+                    // find() returns a byte index that is already in the slice at a char boundary
                     Some(i) => unsafe { Ok((self.get_unchecked(i..), self.get_unchecked(..i))) },
                     None => Err(Err::Incomplete(Needed::new(1))),
                     }
@@ -27298,7 +27912,9 @@ pub mod parsers
                     P: Fn(Self::Item) -> bool,
                 {
                     match self.find(predicate) {
+                    // find() returns a byte index that is already in the slice at a char boundary
                     Some(i) => unsafe { Ok((self.get_unchecked(i..), self.get_unchecked(..i))) },
+                    // the end of slice is a char boundary
                     None => unsafe {
                         Ok((
                         self.get_unchecked(self.len()..),
@@ -27317,11 +27933,13 @@ pub mod parsers
                 {
                     match self.find(predicate) {
                     Some(0) => Err(Err::Error(E::from_error_kind(self, e))),
+                    // find() returns a byte index that is already in the slice at a char boundary
                     Some(i) => unsafe { Ok((self.get_unchecked(i..), self.get_unchecked(..i))) },
                     None => {
                         if self.is_empty() {
                         Err(Err::Error(E::from_error_kind(self, e)))
                         } else {
+                        // the end of slice is a char boundary
                         unsafe {
                             Ok((
                             self.get_unchecked(self.len()..),
@@ -28878,6 +29496,7 @@ pub mod parsers
                             }
                             }
                             Err(Err::Error(_)) => {
+                            // unwrap() should be safe here since index < $i.input_len()
                             if remainder.iter_elements().next().unwrap().as_char() == control_char {
                                 let next = index + control_char.len_utf8();
                                 let input_len = input.input_len();
@@ -29861,6 +30480,7 @@ pub mod parsers
                 #[inline] pub fn be_i24<I, E: ParseError<I>>( input:I ) -> IResult<I, i32, E> where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
+                    // Same as the unsigned version but we need to sign-extend manually here
                     be_u24
                         .map(|x| {
                         if x & 0x80_00_00 != 0 {
@@ -30327,10 +30947,13 @@ pub mod parsers
                 T: AsBytes,
                 {
                     let (i, sign) = sign(input.clone())?;
+
+                    //let (i, zeroes) = take_while(|c: <T as InputTakeAtPosition>::Item| c.as_char() == '0')(i)?;
                     let (i, zeroes) = match i.as_bytes().iter().position(|c| *c != b'0') {
                         Some(index) => i.take_split(index),
                         None => i.take_split(i.input_len()),
                     };
+                    //let (i, mut integer) = digit0(i)?;
                     let (i, mut integer) = match i
                         .as_bytes()
                         .iter()
@@ -30341,6 +30964,7 @@ pub mod parsers
                     };
 
                     if integer.input_len() == 0 && zeroes.input_len() > 0 {
+                        // keep the last zero if integer is empty
                         integer = zeroes.slice(zeroes.input_len() - 1..);
                     }
 
@@ -30350,6 +30974,7 @@ pub mod parsers
                         let i2 = i.clone();
                         (i2, i.slice(..0))
                     } else {
+                        // match number, trim right zeroes
                         let mut zero_count = 0usize;
                         let mut position = None;
                         for (pos, c) in i.as_bytes().iter().enumerate() {
@@ -31038,12 +31663,14 @@ pub mod parsers
                 T: AsBytes,
                 {
                     let (i, sign) = sign(input.clone())?;
-                    
+
+                    //let (i, zeroes) = take_while(|c: <T as InputTakeAtPosition>::Item| c.as_char() == '0')(i)?;
                     let (i, zeroes) = match i.as_bytes().iter().position(|c| *c != b'0') {
                         Some(index) => i.take_split(index),
                         None => i.take_split(i.input_len()),
                     };
-                    
+
+                    //let (i, mut integer) = digit0(i)?;
                     let (i, mut integer) = match i
                         .as_bytes()
                         .iter()
@@ -31054,6 +31681,7 @@ pub mod parsers
                     };
 
                     if integer.input_len() == 0 && zeroes.input_len() > 0 {
+                        // keep the last zero if integer is empty
                         integer = zeroes.slice(zeroes.input_len() - 1..);
                     }
 
@@ -31063,6 +31691,7 @@ pub mod parsers
                         let i2 = i.clone();
                         (i2, i.slice(..0))
                     } else {
+                        // match number, trim right zeroes
                         let mut zero_count = 0usize;
                         let mut position = None;
                         for (pos, c) in i.as_bytes().iter().enumerate() {
@@ -32246,7 +32875,9 @@ pub mod str
     /// Reads a file and returns its contents in a string.
     pub fn read_file(fname: &str) -> io::Result<String>
     {
+        // Open a file in read-only mode
         let mut file = File::open(fname)?;
+
         let mut contents = String::new();
         let _ = file.read_to_string(&mut contents)?;
 
@@ -32432,9 +33063,12 @@ pub mod system
                 self.size
             }
 
-            pub fn resize(&mut self, new_size: Size) 
-            {
+            pub fn resize(&mut self, new_size: Size) {
+                // Try our best to maintain the contents of the buffer;
+                // though it's really best if users redraw when Resize event is read.
                 resize_buffer(&mut self.buffer, self.size, new_size);
+                // Totally invalidate the back buffer.
+                // Screen implementations will clear the screen and redraw.
                 new_buffer(&mut self.back_buffer, new_size);
                 self.size = new_size;
             }
@@ -32741,6 +33375,7 @@ pub mod system
 
         fn new_buffer(buf: &mut Vec<Cell>, new_size: Size) 
         {
+            // Invalidate the buffer; all cells will be redrawn
             *buf = vec![Cell::invalid(); new_size.area()];
         }
     } pub use self::buffer::{ * };
@@ -32766,7 +33401,6 @@ pub mod system
                     /// Execute a given key sequence
                     Macro(Cow<'static, str>),
                 }
-
                 /// List of all command names
                 pub static COMMANDS: &[&str] = &[ $( $str ),+ ];
 
@@ -32980,8 +33614,7 @@ pub mod system
         use linefeed::terminal::Terminal; */
         /// Represents a single possible completion
         #[derive(Clone, Debug)]
-        pub struct Completion 
-        {
+        pub struct Completion {
             /// Whole completion text
             pub completion: String,
             /// Listing display string; `None` if matches completion
@@ -32991,8 +33624,7 @@ pub mod system
         }
         /// Specifies an optional suffix to override the default value
         #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-        pub enum Suffix 
-        {
+        pub enum Suffix {
             /// Use the default suffix
             Default,
             /// Use no suffix
@@ -33001,8 +33633,7 @@ pub mod system
             Some(char),
         }
 
-        impl Completion 
-        {
+        impl Completion {
             /// Returns a simple `Completion` value, with display string matching
             /// completion and using the default completion suffix.
             pub fn simple(s: String) -> Completion {
@@ -33047,8 +33678,7 @@ pub mod system
             }
         }
 
-        impl Suffix 
-        {
+        impl Suffix {
             /// Returns whether the `Suffix` value is the `Default` variant.
             pub fn is_default(&self) -> bool {
                 match *self {
@@ -33080,47 +33710,36 @@ pub mod system
             }
         }
 
-        impl Default for Suffix 
-        {
+        impl Default for Suffix {
             fn default() -> Suffix {
                 Suffix::Default
             }
         }
         /// Performs completion for `Prompter` when triggered by a user input sequence
-        pub trait Completer<Term: Terminals>: Send + Sync 
-        {
+        pub trait Completer<Term: Terminals>: Send + Sync {
             /// Returns the set of possible completions for the prefix `word`.
             fn complete(&self, word: &str, prompter: &Prompter<Term>,
                 start: usize, end: usize) -> Option<Vec<Completion>>;
             /// Returns the starting position of the word under the cursor.
-            ///
-            /// The default implementation uses `Prompter::word_break_chars()` to
-            /// detect the start of a word.
             fn word_start(&self, line: &str, end: usize, prompter: &Prompter<Term>) -> usize {
                 word_break_start(&line[..end], prompter.word_break_chars())
             }
             /// Quotes a possible completion for insertion into input.
-            ///
-            /// The default implementation returns the word, as is.
             fn quote<'a>(&self, word: &'a str) -> Cow<'a, str> { Borrowed(word) }
             /// Unquotes a piece of user input before searching for completions.
-            ///
-            /// The default implementation returns the word, as is.
             fn unquote<'a>(&self, word: &'a str) -> Cow<'a, str> { Borrowed(word) }
         }
         /// `Completer` type that performs no completion
         pub struct DummyCompleter;
 
-        impl<Term: Terminals> Completer<Term> for DummyCompleter 
-        {
+        impl<Term: Terminals> Completer<Term> for DummyCompleter {
             fn complete(&self, _word: &str, _reader: &Prompter<Term>,
                     _start: usize, _end: usize) -> Option<Vec<Completion>> { None }
         }
         /// Performs completion by searching for filenames matching the word prefix.
         pub struct PathCompleter;
 
-        impl<Term: Terminals> Completer<Term> for PathCompleter 
-        {
+        impl<Term: Terminals> Completer<Term> for PathCompleter {
             fn complete(&self, word: &str, _reader: &Prompter<Term>, _start: usize, _end: usize)
                     -> Option<Vec<Completion>> {
                 Some(complete_path(word))
@@ -33139,21 +33758,18 @@ pub mod system
             }
         }
         /// Returns a sorted list of paths whose prefix matches the given path.
-        pub fn complete_path(path: &str) -> Vec<Completion>
-        {
+        pub fn complete_path(path: &str) -> Vec<Completion> {
             let (base_dir, fname) = split_path(path);
             let mut res = Vec::new();
 
             let lookup_dir = base_dir.unwrap_or(".");
 
-            if let Ok(list) = read_dir(lookup_dir)
-            {
-                for ent in list
-                {
-                    if let Ok(ent) = ent
-                    {
+            if let Ok(list) = read_dir(lookup_dir) {
+                for ent in list {
+                    if let Ok(ent) = ent {
                         let ent_name = ent.file_name();
 
+                        // TODO: Deal with non-UTF8 paths in some way
                         if let Ok(path) = ent_name.into_string() {
                             if path.starts_with(fname) {
                                 let (name, display) = if let Some(dir) = base_dir {
@@ -33199,7 +33815,8 @@ pub mod system
 
             start
         }
-        /// Returns the start position of a word with non-word characters escaped by backslash (`\\`).
+        /// Returns the start position of a word with non-word characters escaped by
+        /// backslash (`\\`).
         pub fn escaped_word_start(s: &str) -> usize {
             let mut chars = s.char_indices().rev();
             let mut start = s.len();
@@ -33258,8 +33875,7 @@ pub mod system
             }
         }
         /// Unescapes a word by removing the backslash (`\\`) from escaped characters.
-        pub fn unescape(s: &str) -> Cow<str>
-        {
+        pub fn unescape(s: &str) -> Cow<str> {
             if s.contains('\\') {
                 let mut res = String::with_capacity(s.len());
                 let mut chars = s.chars();
@@ -33280,16 +33896,14 @@ pub mod system
             }
         }
 
-        pub fn needs_escape(ch: char) -> bool
-        {
+        fn needs_escape(ch: char) -> bool {
             match ch {
                 ' ' | '\t' | '\n' | '\\' => true,
                 _ => false
             }
         }
 
-        pub fn split_path(path: &str) -> (Option<&str>, &str)
-        {
+        fn split_path(path: &str) -> (Option<&str>, &str) {
             match path.rfind(is_separator) {
                 Some(pos) => (Some(&path[..pos]), &path[pos + 1..]),
                 None => (None, path)
@@ -33716,8 +34330,7 @@ pub mod system
         {
             let ch = chars.next()?;
 
-            let esc = match ch
-            {
+            let esc = match ch {
                 'C'  => {
                     match chars.next() {
                         Some('-') => (),
@@ -33770,36 +34383,38 @@ pub mod system
                     from_u32(n)?
                 }
                 'v'  => '\x0b',
-                'x'  =>
-                {
+                'x'  => {
                     let mut n = 0;
 
-                    for _ in 0..2
-                    {
+                    for _ in 0..2 {
+                        // Peek the next character
                         let digit = chars.clone().next()?.to_digit(16)? as u8;
+
+                        // Consume if valid
                         chars.next();
+
                         n <<= 4;
                         n |= digit;
                     }
 
                     n as char
                 }
-                
-                '0' ..= '3' =>
-                {
+                '0' ..= '3' => {
                     let mut n = ch as u8 - b'0';
 
-                    for _ in 0..2
-                    {
+                    for _ in 0..2 {
+                        // Peek the next character
                         let digit = chars.clone().next()?.to_digit(8)? as u8;
+
+                        // Consume if valid
                         chars.next();
+
                         n <<= 3;
                         n |= digit;
                     }
 
                     n as char
                 }
-
                 _ => return None
             };
 
@@ -33810,6 +34425,8 @@ pub mod system
         {
             let mut chars = s.chars();
             let mut res = String::new();
+
+            // Skip open quote
             chars.next();
 
             while let Some(ch) = chars.next() {
@@ -33886,22 +34503,16 @@ pub mod system
         impl Interface<DefaultTerminal> 
         {
             /// Creates a new `Interface` with the given application name.
-            pub fn new<T>(application: T) -> io::Result<Option<Interface<DefaultTerminal>>> where
-            T: Into<Cow<'static, str>>
-            {
-                /*
-                TODO
+            pub fn new<T>(application: T) -> io::Result<Interface<DefaultTerminal>>
+                    where T: Into<Cow<'static, str>> {
                 let term = DefaultTerminal::new()?;
-                Interface::with_term(application, term) */
-                Ok( None )
+                Interface::with_term(application, term)
             }
         }
 
         impl<Term: Terminals> Interface<Term> 
         {
             /// Creates a new `Interface` instance with a particular terminal implementation.
-            ///
-            /// To use the default terminal interface, call `Interface::new` instead.
             pub fn with_term<T>(application: T, term: Term) -> io::Result<Interface<Term>>
                     where T: Into<Cow<'static, str>> {
                 let size = term.lock_write().size()?;
@@ -33914,34 +34525,14 @@ pub mod system
                 })
             }
             /// Acquires the read lock and returns a `Reader` instance.
-            ///
-            /// The `Reader` instance allows exclusive access to variables, bindings,
-            /// and command implementations.
             pub fn lock_reader(&self) -> Reader<Term> {
                 Reader::new(self, self.lock_read())
             }
             /// Acquires the write lock and returns a `Writer` instance.
-            ///
-            /// If a `read_line` call is in progress, this method will move the cursor
-            /// to a new line after the prompt, allowing output to be written without
-            /// corrupting the prompt text. The prompt will be redrawn when the `Writer`
-            /// instance is dropped.
-            ///
-            /// To instead erase the prompt and write text, use [`lock_writer_erase`].
-            ///
-            /// [`lock_writer_erase`]: #method.lock_writer_erase
             pub fn lock_writer_append(&self) -> io::Result<Writer<Term>> {
                 Writer::with_lock(self.lock_write(), false)
             }
             /// Acquires the write lock and returns a `Writer` instance.
-            ///
-            /// If a `read_line` call is in progress, this method will erase the prompt,
-            /// allowing output to be written without corrupting the prompt text.
-            /// The prompt will be redrawn when the `Writer` instance is dropped.
-            ///
-            /// To instead write text after the prompt, use [`lock_writer_append`].
-            ///
-            /// [`lock_writer_append`]: #method.lock_writer_append
             pub fn lock_writer_erase(&self) -> io::Result<Writer<Term>> {
                 Writer::with_lock(self.lock_write(), true)
             }
@@ -33967,56 +34558,15 @@ pub mod system
         impl<Term: Terminals> Interface<Term> 
         {
             /// Interactively reads a line from the terminal device.
-            ///
-            /// User input is collected until one of the following conditions is met:
-            ///
-            /// * If the user issues an end-of-file, `ReadResult::Eof` is returned.
-            /// * When the user inputs a newline (`'\n'`), the resulting input
-            ///   (not containing a trailing newline character) is returned as
-            ///   `ReadResult::Input(_)`.
-            /// * When a reported signal (see [`set_report_signal`]) is received,
-            ///   it is returned as `ReadResult::Signal(_)`. The `read_line` operation may
-            ///   then be either resumed with another call to `read_line` or ended by
-            ///   calling [`cancel_read_line`].
-            ///
-            /// [`cancel_read_line`]: #method.cancel_read_line
-            /// [`set_report_signal`]: #method.set_report_signal
             pub fn read_line(&self) -> io::Result<ReadResult> {
                 self.lock_reader().read_line()
             }
             /// Performs one step of the interactive `read_line` loop.
-            ///
-            /// This method can be used to drive the `read_line` process asynchronously.
-            /// It will wait for input only up to the specified duration, then process
-            /// any available input from the terminal.
-            ///
-            /// If the user completes the input process, `Ok(Some(result))` is returned.
-            /// Otherwise, `Ok(None)` is returned to indicate that the interactive loop
-            /// may continue.
-            ///
-            /// The interactive prompt may be cancelled prematurely using the
-            /// [`cancel_read_line`] method.
-            ///
-            /// See [`read_line`] for details on the return value.
-            ///
-            /// [`cancel_read_line`]: #method.cancel_read_line
-            /// [`read_line`]: #method.read_line
             pub fn read_line_step(&self, timeout: Option<Duration>)
                     -> io::Result<Option<ReadResult>> {
                 self.lock_reader().read_line_step(timeout)
             }
             /// Cancels an in-progress `read_line` operation.
-            ///
-            /// This method will reset internal data structures to their original state
-            /// and move the terminal cursor to a new, empty line.
-            ///
-            /// This method is called to prematurely end the interactive loop when
-            /// using the [`read_line_step`] method.
-            ///
-            /// It is not necessary to call this method if using the [`read_line`] method.
-            ///
-            /// [`read_line`]: #method.read_line
-            /// [`read_line_step`]: #method.read_line_step
             pub fn cancel_read_line(&self) -> io::Result<()> {
                 self.lock_reader().cancel_read_line()
             }
@@ -34029,16 +34579,11 @@ pub mod system
                     -> Arc<dyn Completer<Term>> {
                 self.lock_reader().set_completer(completer)
             }
-            /// Returns the value of the named variable or `None`
-            /// if no such variable exists.
+            /// Returns the value of the named variable or `None` if no such variable exists.
             pub fn get_variable(&self, name: &str) -> Option<Variable> {
                 self.lock_reader().get_variable(name)
             }
-            /// Sets the value of the named variable and returns the previous
-            /// value.
-            ///
-            /// If `name` does not refer to a variable or the `value` is not
-            /// a valid value for the variable, `None` is returned.
+            /// Sets the value of the named variable and returns the previous value.
             pub fn set_variable(&self, name: &str, value: &str) -> Option<Variable> {
                 self.lock_reader().set_variable(name, value)
             }
@@ -34059,40 +34604,25 @@ pub mod system
                 self.lock_reader().set_report_signal(signal, set)
             }
             /// Binds a sequence to a command.
-            ///
-            /// Returns the previously bound command.
             pub fn bind_sequence<T>(&self, seq: T, cmd: Command) -> Option<Command>
                     where T: Into<Cow<'static, str>> {
                 self.lock_reader().bind_sequence(seq, cmd)
             }
-            /// Binds a sequence to a command, if and only if the given sequence
-            /// is not already bound to a command.
-            ///
-            /// Returns `true` if a new binding was created.
+            /// Binds a sequence to a command, if and only if the given sequence is not already bound to a command.
             pub fn bind_sequence_if_unbound<T>(&self, seq: T, cmd: Command) -> bool
                     where T: Into<Cow<'static, str>> {
                 self.lock_reader().bind_sequence_if_unbound(seq, cmd)
             }
             /// Removes a binding for the given sequence.
-            ///
-            /// Returns the previously bound command.
             pub fn unbind_sequence(&self, seq: &str) -> Option<Command> {
                 self.lock_reader().unbind_sequence(seq)
             }
             /// Defines a named function to which sequences may be bound.
-            ///
-            /// The name should consist of lowercase ASCII letters and numbers,
-            /// containing no spaces, with words separated by hyphens. However,
-            /// this is not a requirement.
-            ///
-            /// Returns the function previously defined with the same name.
             pub fn define_function<T>(&self, name: T, cmd: Arc<dyn Function<Term>>)
                     -> Option<Arc<dyn Function<Term>>> where T: Into<Cow<'static, str>> {
                 self.lock_reader().define_function(name, cmd)
             }
             /// Removes a function defined with the given name.
-            ///
-            /// Returns the defined function.
             pub fn remove_function(&self, name: &str) -> Option<Arc<dyn Function<Term>>> {
                 self.lock_reader().remove_function(name)
             }
@@ -34118,24 +34648,10 @@ pub mod system
                 self.lock_write().history_len()
             }
             /// Returns the maximum number of history entries.
-            ///
-            /// Not to be confused with [`history_len`], which returns the *current*
-            /// number of history entries.
-            ///
-            /// [`history_len`]: #method.history_len
             pub fn history_size(&self) -> usize {
                 self.lock_write().history_size()
             }
             /// Save history entries to the specified file.
-            ///
-            /// If the file does not exist, it is created and all history entries are
-            /// written to the new file.
-            ///
-            /// If the file does exist, entries added since the last call to `save_history`
-            /// (or since the start of the application) are appended to the named file.
-            ///
-            /// If the file would contain more than `self.history_size()` entries,
-            /// it is first truncated, discarding the oldest entries.
             pub fn save_history<P: AsRef<Path>>(&self, path: P) -> io::Result<()> {
                 let path = path.as_ref();
                 let mut w = self.lock_write();
@@ -34236,48 +34752,39 @@ pub mod system
         impl<Term: Terminals> Interface<Term> 
         {
             /// Sets the prompt that will be displayed when `read_line` is called.
-            pub fn set_prompt(&self, prompt: &str) -> io::Result<()> 
-            {
+            pub fn set_prompt(&self, prompt: &str) -> io::Result<()> {
                 self.lock_reader().set_prompt(prompt)
             }
             /// Sets the input buffer to the given string.
-            pub fn set_buffer(&self, buf: &str) -> io::Result<()> 
-            {
+            pub fn set_buffer(&self, buf: &str) -> io::Result<()> {
                 self.lock_reader().set_buffer(buf)
             }
             /// Sets the cursor position in the input buffer.
-            pub fn set_cursor(&self, pos: usize) -> io::Result<()> 
-            {
+            pub fn set_cursor(&self, pos: usize) -> io::Result<()> {
                 self.lock_reader().set_cursor(pos)
             }
-            
-            pub fn add_history(&self, line: String) 
-            {
+            /// Adds a line to history.
+            pub fn add_history(&self, line: String) {
                 self.lock_reader().add_history(line);
             }
             /// Adds a line to history, unless it is identical to the most recent entry.
-            pub fn add_history_unique(&self, line: String) 
-            {
+            pub fn add_history_unique(&self, line: String) {
                 self.lock_reader().add_history_unique(line);
             }
             /// Removes all history entries.
-            pub fn clear_history(&self) 
-            {
+            pub fn clear_history(&self) {
                 self.lock_reader().clear_history();
             }
             /// Removes the history entry at the given index.
-            pub fn remove_history(&self, idx: usize) 
-            {
+            pub fn remove_history(&self, idx: usize) {
                 self.lock_reader().remove_history(idx);
             }
             /// Sets the maximum number of history entries.
-            pub fn set_history_size(&self, n: usize) 
-            {
+            pub fn set_history_size(&self, n: usize) {
                 self.lock_reader().set_history_size(n);
             }
             /// Truncates history to the only the most recent `n` entries.
-            pub fn truncate_history(&self, n: usize) 
-            {
+            pub fn truncate_history(&self, n: usize) {
                 self.lock_reader().truncate_history(n);
             }
         }
@@ -34581,8 +35088,6 @@ pub mod system
                 self.write.history()
             }
             /// Returns the index into history currently being edited.
-            ///
-            /// If the user is not editing a line of history, `None` is returned.
             pub fn history_index(&self) -> Option<usize> {
                 self.write.history_index
             }
@@ -34599,39 +35104,18 @@ pub mod system
                 self.write.prev_history(n)
             }
             /// Selects the history entry currently being edited by the user.
-            ///
-            /// Setting the entry to `None` will result in editing the input buffer.
-            ///
-            /// # Panics
-            ///
-            /// If the index is out of bounds.
             pub fn select_history_entry(&mut self, new: Option<usize>) -> io::Result<()> {
                 self.write.select_history_entry(new)
             }
             /// Returns the current set of completions.
-            ///
-            /// Unless the most recent command executed was one operating on completion
-            /// sets, the result is `None`.
             pub fn completions(&self) -> Option<&[Completion]> {
                 self.read.completions.as_ref().map(|v| &v[..])
             }
             /// Sets the current set of completions.
-            ///
-            /// This completion set is accessed by commands such as `complete` and
-            /// `possible-completions`.
-            ///
-            /// This set will only remain active until the end of the next
-            /// non-completion command's execution. Therefore, any `Function`
-            /// that uses this method must be of the `Complete` category.
             pub fn set_completions(&mut self, completions: Option<Vec<Completion>>) {
                 self.read.completions = completions;
             }
             /// Attempts to execute the current sequence.
-            ///
-            /// If no bindings match and the sequence contains only printable characters,
-            /// the sequence will be inserted as text.
-            ///
-            /// Returns `true` if a complete sequence was found and executed.
             fn execute_sequence(&mut self) -> io::Result<()> {
                 match self.find_binding(&self.read.sequence) {
                     FindResult::Found(cmd) => {
@@ -34679,9 +35163,7 @@ pub mod system
 
                 Ok(())
             }
-            /// Execute the command `SelfInsert` on the first character in the input
-            /// sequence, if it is printable. Then, queue the remaining characters
-            /// so they may be reinterpreted.
+            /// Execute the command `SelfInsert` on the first character in the input sequence, if it is printable.
             fn insert_first_char(&mut self) -> io::Result<()> {
                 let (first, rest) = {
                     let mut chars = self.read.sequence.chars();
@@ -35140,16 +35622,6 @@ pub mod system
                 Ok(())
             }
             /// Accepts the current input buffer as user input.
-            ///
-            /// This method may be called by a [`Function`] implementation, immediately
-            /// before ending execution, in order to simulate the `accept-line` command;
-            /// e.g. to implement a command that extends the default behavior of the
-            /// `accept-line` action.
-            ///
-            /// Behavior of this method is undefined if called outside of a `Function`
-            /// implementation.
-            ///
-            /// [`Function`]: ../function/trait.Function.html
             pub fn accept_input(&mut self) -> io::Result<()> {
                 self.write.move_to_end()?;
                 self.write.write_str("\n")?;
@@ -35159,10 +35631,6 @@ pub mod system
             }
             /// Moves the cursor to the given position, waits for 500 milliseconds
             /// (or until next user input), then restores the original cursor position.
-            ///
-            /// # Panics
-            ///
-            /// If the given position is out of bounds or is not aligned to `char` boundaries.
             pub fn blink(&mut self, pos: usize) -> io::Result<()> {
                 self.write.blink(pos)?;
 
@@ -35311,11 +35779,12 @@ pub mod system
 
                 let n_completions = completions.len();
 
-                if self.read.page_completions && n_completions >= self.read.completion_query_items
-                { self.start_page_completions(n_completions) }
-                
-                else
-                {
+                if self.read.page_completions &&
+                        n_completions >= self.read.completion_query_items {
+                    // TODO: Replace borrowed data in `Table` with owned data.
+                    // Then, store table here to avoid regenerating column widths
+                    self.start_page_completions(n_completions)
+                } else {
                     self.show_list_completions(table)?;
                     self.write.draw_prompt()
                 }
@@ -35542,19 +36011,10 @@ pub mod system
                 self.write.move_to(pos)
             }
             /// Deletes a range of text from the input buffer.
-            ///
-            /// # Panics
-            ///
-            /// If the given range is out of bounds or is not aligned to `char` boundaries.
             pub fn delete_range<R: RangeArgument<usize>>(&mut self, range: R) -> io::Result<()> {
                 self.write.delete_range(range)
             }
-            /// Deletes a range from the buffer and adds the removed text to the
-            /// kill ring.
-            ///
-            /// # Panics
-            ///
-            /// If the given range is out of bounds or is not aligned to `char` boundaries.
+            /// Deletes a range from the buffer and adds the removed text to the kill ring.
             pub fn kill_range<R: RangeArgument<usize>>(&mut self, range: R) -> io::Result<()> {
                 let start = range.start().cloned().unwrap_or(0);
                 let end = range.end().cloned().unwrap_or_else(|| self.write.buffer.len());
@@ -35606,18 +36066,11 @@ pub mod system
                 self.push_kill_ring(s);
             }
             /// Transposes two regions of the buffer, `src` and `dest`.
-            /// The cursor is placed at the end of the new location of `src`.
-            ///
-            /// # Panics
-            ///
-            /// If `src` and `dest` overlap, are out of bounds,
-            /// or are not aligned to `char` boundaries.
             pub fn transpose_range(&mut self, src: Range<usize>, dest: Range<usize>)
                     -> io::Result<()> {
                 self.write.transpose_range(src, dest)
             }
             /// Insert text from the front of the kill ring at the current cursor position.
-            /// The cursor is placed at the end of the new text.
             pub fn yank(&mut self) -> io::Result<()> {
                 if let Some(kill) = self.read.kill_ring.front().cloned() {
                     let start = self.write.cursor;
@@ -35629,8 +36082,6 @@ pub mod system
                 Ok(())
             }
             /// Rotates the kill ring and replaces yanked text with the new front.
-            ///
-            /// If the previous operation was not `yank`, this has no effect.
             pub fn yank_pop(&mut self) -> io::Result<()> {
                 if let Some((start, end)) = self.read.last_yank {
                     self.rotate_kill_ring();
@@ -35702,8 +36153,6 @@ pub mod system
                 Ok(())
             }
             /// Insert a given character at the current cursor position `n` times.
-            ///
-            /// The cursor position remains the same.
             pub fn insert(&mut self, n: usize, ch: char) -> io::Result<()> {
                 if n != 0 {
                     let s = repeat_char(ch, n);
@@ -35713,14 +36162,10 @@ pub mod system
                 Ok(())
             }
             /// Insert a string at the current cursor position.
-            ///
-            /// The cursor is placed at the end of the new string.
             pub fn insert_str(&mut self, s: &str) -> io::Result<()> {
                 self.write.insert_str(s)
             }
             /// Replaces a range in the buffer and redraws.
-            ///
-            /// The cursor is placed at the start of the range.
             pub fn replace_str_backward<R: RangeArgument<usize>>(&mut self,
                     range: R, s: &str) -> io::Result<()> {
                 self.replace_str_impl(range, s)?;
@@ -35728,8 +36173,6 @@ pub mod system
                 self.write.move_from(len)
             }
             /// Replaces a range in the buffer and redraws.
-            ///
-            /// The cursor is placed at the end of the new string.
             pub fn replace_str_forward<R: RangeArgument<usize>>(&mut self,
                     range: R, s: &str) -> io::Result<()> {
                 self.replace_str_impl(range, s)?;
@@ -35738,9 +36181,6 @@ pub mod system
                 self.write.move_from(len)
             }
             /// Replaces a range in the buffer and redraws.
-            ///
-            /// The cursor position is set to start of range, on-screen cursor remains
-            /// at end of buffer.
             fn replace_str_impl<R: RangeArgument<usize>>(&mut self,
                     range: R, s: &str) -> io::Result<()> {
                 let start = range.start().cloned().unwrap_or(0);
@@ -35911,15 +36351,15 @@ pub mod system
                 }
             }
             /// Performs one step of the interactive `read_line` loop.
-            pub fn read_line_step(&mut self, timeout: Option<Duration>) -> io::Result<Option<ReadResult>>
-            {
-                /*
+            pub fn read_line_step(&mut self, timeout: Option<Duration>)
+                    -> io::Result<Option<ReadResult>> {
                 self.initialize_read_line()?;
+
                 let state = self.prepare_term()?;
                 let res = self.read_line_step_impl(timeout);
                 self.lock.term.restore(state)?;
-                res */
-                Ok( None )
+
+                res
             }
             /// Cancels an in-progress `read_line` operation.
             pub fn cancel_read_line(&mut self) -> io::Result<()> {
@@ -35994,10 +36434,7 @@ pub mod system
                 Ok(())
             }
 
-            fn prepare_term(&mut self) -> io::Result<Option<Term::PrepareState>>
-            {
-                /*
-                TODO
+            fn prepare_term(&mut self) -> io::Result<Term::PrepareState> {
                 if self.read_next_raw() {
                     self.lock.term.prepare(true, SignalSet::new())
                 } else {
@@ -36010,8 +36447,7 @@ pub mod system
                     let block_signals = !self.lock.catch_signals;
 
                     self.lock.term.prepare(block_signals, signals)
-                }*/
-                Ok( None )
+                }
             }
 
             fn read_next_raw(&self) -> bool {
@@ -36021,8 +36457,7 @@ pub mod system
                 }
             }
             /// Sets the input buffer to the given string.
-            pub fn set_buffer(&mut self, buf: &str) -> io::Result<()> 
-            {
+            pub fn set_buffer(&mut self, buf: &str) -> io::Result<()> {
                 if self.lock.is_active() {
                     self.prompter().set_buffer(buf)
                 } else {
@@ -36206,8 +36641,6 @@ pub mod system
                 self.lock.keyseq_timeout = timeout;
             }
             /// Returns whether to list possible completions one page at a time.
-            ///
-            /// The default value is `true`.
             pub fn page_completions(&self) -> bool {
                 self.lock.page_completions
             }
@@ -36311,10 +36744,7 @@ pub mod system
                 }
             }
 
-            fn read_input(&mut self) -> io::Result<()>
-            {
-                /*
-                TODO
+            fn read_input(&mut self) -> io::Result<()> {
                 match self.term.read(&mut self.data.input_buffer)? {
                     RawRead::Bytes(_) => (),
                     RawRead::Resize(new_size) => {
@@ -36323,7 +36753,7 @@ pub mod system
                     RawRead::Signal(sig) => {
                         self.last_signal = Some(sig);
                     }
-                }*/
+                }
 
                 Ok(())
             }
@@ -36508,6 +36938,7 @@ pub mod system
             pub fn bind_sequence_if_unbound<T>(&mut self, seq: T, cmd: Command) -> bool where 
             T:Into<Cow<'static, str>> 
             {
+                // use ::sequence::Entry;
                 match self.bindings.entry(seq.into())
                 {
                     Entry::Occupied(_) => false,
@@ -36732,76 +37163,40 @@ pub mod system
         }
         */
         /// Provides operations on an underlying terminal device in screen mode.
-        pub struct Screen( sys::Screen );
+        pub struct Screen(sys::Screen);
 
         impl Screen 
         {
             /// Opens a new screen interface on `stdout`.
-            pub fn new(config: PrepareConfig) -> io::Result<Option<Screen>>
-            {
-                /*
-                TODO
-                sys::Screen::stdout(config).map(Screen) */
-                Ok( None )
+            pub fn new(config: PrepareConfig) -> io::Result<Screen> {
+                sys::Screen::stdout(config).map(Screen)
             }
             /// Opens a new screen interface on `stderr`.
-            pub fn stderr(config: PrepareConfig) -> io::Result<Option<Screen>>
-            {
-                /*
-                TODO
-                sys::Screen::stderr(config).map(Screen) */
-                Ok( None )
+            pub fn stderr(config: PrepareConfig) -> io::Result<Screen> {
+                sys::Screen::stderr(config).map(Screen)
             }
             /// Begins a new screen session using the given `Terminal` instance.
-            pub fn with_terminal(term: Terminal, config: PrepareConfig) -> io::Result<Option<Screen>>
-            {
-                /*
-                TODO
-                sys::Screen::new(term.0, config).map(Screen) */
-                Ok( None )
+            pub fn with_terminal(term: Terminal, config: PrepareConfig) -> io::Result<Screen> {
+                sys::Screen::new(term.0, config).map(Screen)
             }
             /// Returns the name of the terminal.
-            ///
-            /// # Notes
-            ///
-            /// On Unix, this method returns the contents of the `TERM` environment variable.
-            ///
-            /// On Windows, this method always returns the string `"windows-console"`.
-            #[inline]
-            pub fn name(&self) -> &str 
-            {
+            #[inline] pub fn name(&self) -> &str {
                 self.0.name()
             }
             /// Attempts to acquire an exclusive lock on terminal read operations.
-            ///
-            /// The current thread will block until the lock can be acquired.
-            #[inline]
-            pub fn lock_read(&self) -> LockResult<ScreenReadGuard>
-            {
+            #[inline] pub fn lock_read(&self) -> LockResult<ScreenReadGuard> {
                 map_lock_result(self.0.lock_read(), ScreenReadGuard)
             }
             /// Attempts to acquire an exclusive lock on terminal write operations.
-            ///
-            /// The current thread will block until the lock can be acquired.
-            #[inline]
-            pub fn lock_write(&self) -> LockResult<ScreenWriteGuard> 
-            {
+            #[inline] pub fn lock_write(&self) -> LockResult<ScreenWriteGuard> {
                 map_lock_result(self.0.lock_write(), ScreenWriteGuard)
             }
             /// Attempts to acquire an exclusive lock on terminal read operations.
-            ///
-            /// If the lock cannot be acquired immediately, `Err(_)` is returned.
-            #[inline]
-            pub fn try_lock_read(&self) -> TryLockResult<ScreenReadGuard> 
-            {
+            #[inline] pub fn try_lock_read(&self) -> TryLockResult<ScreenReadGuard> {
                 map_try_lock_result(self.0.try_lock_read(), ScreenReadGuard)
             }
             /// Attempts to acquire an exclusive lock on terminal write operations.
-            ///
-            /// If the lock cannot be acquired immediately, `Err(_)` is returned.
-            #[inline]
-            pub fn try_lock_write(&self) -> TryLockResult<ScreenWriteGuard> 
-            {
+            #[inline] pub fn try_lock_write(&self) -> TryLockResult<ScreenWriteGuard> {
                 map_try_lock_result(self.0.try_lock_write(), ScreenWriteGuard)
             }
         }
@@ -36823,33 +37218,22 @@ pub mod system
         impl Screen 
         {
             /// Returns the current size of the terminal screen.
-            #[inline]
-            pub fn size(&self) -> Size {
+            #[inline] pub fn size(&self) -> Size {
                 self.0.size()
             }
             /// Returns the current cursor position.
-            #[inline]
-            pub fn cursor(&self) -> Cursor {
+            #[inline] pub fn cursor(&self) -> Cursor {
                 self.0.cursor()
             }
             /// Sets the cursor position.
-            #[inline]
-            pub fn set_cursor<C: Into<Cursor>>(&self, pos: C) {
+            #[inline] pub fn set_cursor<C: Into<Cursor>>(&self, pos: C) {
                 self.0.set_cursor(pos.into());
             }
             /// Moves the cursor to the given column on the next line.
-            #[inline]
-            pub fn next_line(&self, column: usize) {
+            #[inline] pub fn next_line(&self, column: usize) {
                 self.0.next_line(column);
             }
             /// Set the current cursor mode.
-            ///
-            /// This setting is a visible hint to the user.
-            /// It produces no change in behavior.
-            ///
-            /// # Notes
-            ///
-            /// On Unix systems, this setting may have no effect.
             pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> {
                 self.0.set_cursor_mode(mode)
             }
@@ -36858,66 +37242,47 @@ pub mod system
                 self.0.clear_screen();
             }
             /// Adds a set of `Style` flags to the current style setting.
-            #[inline]
-            pub fn add_style(&self, style: Style) {
+            #[inline] pub fn add_style(&self, style: Style) {
                 self.0.add_style(style);
             }
             /// Removes a set of `Style` flags to the current style setting.
-            #[inline]
-            pub fn remove_style(&self, style: Style) {
+            #[inline] pub fn remove_style(&self, style: Style) {
                 self.0.remove_style(style);
             }
             /// Sets the current style setting to the given set of flags.
-            #[inline]
-            pub fn set_style<S: Into<Option<Style>>>(&self, style: S) {
+            #[inline] pub fn set_style<S: Into<Option<Style>>>(&self, style: S) {
                 self.0.set_style(style.into().unwrap_or_default());
             }
             /// Sets or removes foreground text color.
-            #[inline]
-            pub fn set_fg<C: Into<Option<Color>>>(&self, fg: C) {
+            #[inline] pub fn set_fg<C: Into<Option<Color>>>(&self, fg: C) {
                 self.0.set_fg(fg.into());
             }
             /// Sets or removes background text color.
-            #[inline]
-            pub fn set_bg<C: Into<Option<Color>>>(&self, bg: C) {
+            #[inline] pub fn set_bg<C: Into<Option<Color>>>(&self, bg: C) {
                 self.0.set_bg(bg.into());
             }
             /// Sets all attributes for the screen.
-            #[inline]
-            pub fn set_theme(&self, theme: Theme) {
+            #[inline] pub fn set_theme(&self, theme: Theme) {
                 self.0.set_theme(theme)
             }
             /// Removes color and style attributes.
-            #[inline]
-            pub fn clear_attributes(&self) {
+            #[inline] pub fn clear_attributes(&self) {
                 self.0.clear_attributes();
             }
             /// Adds bold to the current style setting.
-            ///
-            /// This is equivalent to `self.add_style(Style::BOLD)`.
-            #[inline]
-            pub fn bold(&self) {
+            #[inline] pub fn bold(&self) {
                 self.add_style(Style::BOLD);
             }
             /// Adds italic to the current style setting.
-            ///
-            /// This is equivalent to `self.add_style(Style::ITALIC)`.
-            #[inline]
-            pub fn italic(&self) {
+            #[inline] pub fn italic(&self) {
                 self.add_style(Style::ITALIC);
             }
             /// Adds underline to the current style setting.
-            ///
-            /// This is equivalent to `self.add_style(Style::UNDERLINE)`.
-            #[inline]
-            pub fn underline(&self) {
+            #[inline] pub fn underline(&self) {
                 self.add_style(Style::UNDERLINE);
             }
             /// Adds reverse to the current style setting.
-            ///
-            /// This is equivalent to `self.add_style(Style::REVERSE)`.
-            #[inline]
-            pub fn reverse(&self) {
+            #[inline] pub fn reverse(&self) {
                 self.add_style(Style::REVERSE);
             }
             /// Renders the internal buffer to the terminal screen.
@@ -36925,26 +37290,20 @@ pub mod system
                 self.0.refresh()
             }
             /// Writes text at the given position within the screen buffer.
-            ///
-            /// Any non-printable characters, such as escape sequences, will be ignored.
             pub fn write_at<C>(&self, position: C, text: &str)
                     where C: Into<Cursor> {
                 self.0.write_at(position.into(), text);
             }
             /// Writes text with the given attributes at the current cursor position.
-            ///
-            /// Any non-printable characters, such as escape sequences, will be ignored.
             pub fn write_styled<F, B, S>(&self, fg: F, bg: B, style: S, text: &str) where
-                    F: Into<Option<Color>>,
-                    B: Into<Option<Color>>,
-                    S: Into<Option<Style>>,
-                    {
+            F: Into<Option<Color>>,
+            B: Into<Option<Color>>,
+            S: Into<Option<Style>>,
+            {
                 self.0.write_styled(fg.into(), bg.into(), style.into().unwrap_or_default(), text);
             }
             /// Writes text with the given attributes at the given position within
             /// the screen buffer.
-            ///
-            /// Any non-printable characters, such as escape sequences, will be ignored.
             pub fn write_styled_at<C, F, B, S>(&self, position: C,
                     fg: F, bg: B, style: S, text: &str) where
                     C: Into<Cursor>,
@@ -36957,41 +37316,16 @@ pub mod system
             }
             /// Writes a single character at the cursor position
             /// using the current style and color settings.
-            ///
-            /// If the character is a non-printable character, it will be ignored.
             pub fn write_char(&self, ch: char) {
                 self.0.write_char(ch);
             }
             /// Writes a string at the cursor position
             /// using the current style and color settings.
-            ///
-            /// Any non-printable characters, such as escape sequences, will be ignored.
             pub fn write_str(&self, s: &str) {
                 self.0.write_str(s);
             }
             /// Writes formatted text at the cursor position
             /// using the current style and color settings.
-            ///
-            /// This method enables `Screen` to be used as the receiver to
-            /// the [`write!`] and [`writeln!`] macros.
-            ///
-            /// Any non-printable characters, such as escape sequences, will be ignored.
-            ///
-            /// # Examples
-            ///
-            /// ```no_run
-            /// # use std::io;
-            /// # use mortal::Screen;
-            /// # fn example() -> io::Result<()> {
-            /// let screen = Screen::new(Default::default())?;
-            ///
-            /// writeln!(screen, "Hello, world!");
-            /// # Ok(())
-            /// # }
-            /// ```
-            ///
-            /// [`write!`]: https://doc.rust-lang.org/std/macro.write.html
-            /// [`writeln!`]: https://doc.rust-lang.org/std/macro.writeln.html
             pub fn write_fmt(&self, args: fmt::Arguments) {
                 let s = args.to_string();
                 self.write_str(&s)
@@ -37010,25 +37344,10 @@ pub mod system
         impl<'a> ScreenReadGuard<'a> 
         {
             /// Waits for an event from the terminal.
-            ///
-            /// Returns `Ok(false)` if `timeout` elapses without an event occurring.
-            ///
-            /// If `timeout` is `None`, this method will wait indefinitely.
-            ///
-            /// # Notes
-            ///
-            /// Some low-level terminal events may not generate an `Event` value.
-            /// Therefore, this method may return `Ok(true)`, while a follow-up call
-            /// to `read_event` may not immediately return an event.
             pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool> {
                 self.0.wait_event(timeout)
             }
             /// Reads an event from the terminal.
-            ///
-            /// If `timeout` elapses without an event occurring, this method will return
-            /// `Ok(None)`.
-            ///
-            /// If `timeout` is `None`, this method will wait indefinitely.
             pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
                 self.0.read_event(timeout)
             }
@@ -37037,33 +37356,22 @@ pub mod system
         impl<'a> ScreenWriteGuard<'a> 
         {
             /// Returns the current size of the terminal screen.
-            #[inline]
-            pub fn size(&self) -> Size {
+            #[inline] pub fn size(&self) -> Size {
                 self.0.size()
             }
             /// Sets the cursor position.
-            #[inline]
-            pub fn cursor(&self) -> Cursor {
+            #[inline] pub fn cursor(&self) -> Cursor {
                 self.0.cursor()
             }
             /// Moves the cursor to the given column on the next line.
-            #[inline]
-            pub fn set_cursor<C: Into<Cursor>>(&mut self, pos: C) {
+            #[inline] pub fn set_cursor<C: Into<Cursor>>(&mut self, pos: C) {
                 self.0.set_cursor(pos.into());
             }
             /// Set the current cursor mode.
-            #[inline]
-            pub fn next_line(&mut self, column: usize) {
+            #[inline] pub fn next_line(&mut self, column: usize) {
                 self.0.next_line(column);
             }
             /// Set the current cursor mode.
-            ///
-            /// This setting is a visible hint to the user.
-            /// It produces no change in behavior.
-            ///
-            /// # Notes
-            ///
-            /// On Unix systems, this setting may have no effect.
             pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> {
                 self.0.set_cursor_mode(mode)
             }
@@ -37072,96 +37380,68 @@ pub mod system
                 self.0.clear_screen();
             }
             /// Removes a set of `Style` flags to the current style setting.
-            /// Adds a set of `Style` flags to the current style setting.
-            #[inline]
-            pub fn add_style(&mut self, style: Style) {
+            #[inline] pub fn add_style(&mut self, style: Style) {
                 self.0.add_style(style)
             }
             /// Sets the current style setting to the given set of flags.
-            #[inline]
-            pub fn remove_style(&mut self, style: Style) {
+            #[inline] pub fn remove_style(&mut self, style: Style) {
                 self.0.remove_style(style)
             }
             /// Sets or removes foreground text color.
-            #[inline]
-            pub fn set_style<S: Into<Option<Style>>>(&mut self, style: S) {
+            #[inline] pub fn set_style<S: Into<Option<Style>>>(&mut self, style: S) {
                 self.0.set_style(style.into().unwrap_or_default())
             }
             /// Sets or removes background text color.
-            #[inline]
-            pub fn set_fg<C: Into<Option<Color>>>(&mut self, fg: C) {
+            #[inline] pub fn set_fg<C: Into<Option<Color>>>(&mut self, fg: C) {
                 self.0.set_fg(fg.into())
             }
             /// Removes color and style attributes.
-            #[inline]
-            pub fn set_bg<C: Into<Option<Color>>>(&mut self, bg: C) {
+            #[inline] pub fn set_bg<C: Into<Option<Color>>>(&mut self, bg: C) {
                 self.0.set_bg(bg.into())
             }
             /// Sets all attributes for the screen.
-            #[inline]
-            pub fn set_theme(&mut self, theme: Theme) {
+            #[inline] pub fn set_theme(&mut self, theme: Theme) {
                 self.0.set_theme(theme)
             }
             /// Adds bold to the current style setting.
-            #[inline]
-            pub fn clear_attributes(&mut self) {
+            #[inline] pub fn clear_attributes(&mut self) {
                 self.0.clear_attributes()
             }
             /// Adds bold to the current style setting.
-            ///
-            /// This is equivalent to `self.add_style(Style::BOLD)`.
-            #[inline]
-            pub fn bold(&mut self) {
+            #[inline] pub fn bold(&mut self) {
                 self.add_style(Style::BOLD)
             }
             /// Adds italic to the current style setting.
-            ///
-            /// This is equivalent to `self.add_style(Style::ITALIC)`.
-            #[inline]
-            pub fn italic(&mut self) {
+            #[inline] pub fn italic(&mut self) {
                 self.add_style(Style::ITALIC);
             }
             /// Adds underline to the current style setting.
-            ///
-            /// This is equivalent to `self.add_style(Style::UNDERLINE)`.
-            #[inline]
-            pub fn underline(&mut self) {
+            #[inline] pub fn underline(&mut self) {
                 self.add_style(Style::UNDERLINE)
             }
             /// Adds reverse to the current style setting.
-            ///
-            /// This is equivalent to `self.add_style(Style::REVERSE)`.
-            #[inline]
-            pub fn reverse(&mut self) {
+            #[inline] pub fn reverse(&mut self) {
                 self.add_style(Style::REVERSE)
             }
             /// Renders the internal buffer to the terminal screen.
-            ///
-            /// This is called automatically when the `ScreenWriteGuard` is dropped.
             pub fn refresh(&mut self) -> io::Result<()> {
                 self.0.refresh()
             }
             /// Writes text at the given position within the screen buffer.
-            ///
-            /// Any non-printable characters, such as escape sequences, will be ignored.
             pub fn write_at<C>(&mut self, position: C, text: &str)
                     where C: Into<Cursor> {
                 self.0.write_at(position.into(), text)
             }
             /// Writes text with the given attributes at the current cursor position.
-            ///
-            /// Any non-printable characters, such as escape sequences, will be ignored.
             pub fn write_styled<F, B, S>(&mut self, fg: F, bg: B, style: S, text: &str) where
-                    F: Into<Option<Color>>,
-                    B: Into<Option<Color>>,
-                    S: Into<Option<Style>>,
-                    {
+            F: Into<Option<Color>>,
+            B: Into<Option<Color>>,
+            S: Into<Option<Style>>,
+            {
                 self.0.write_styled(fg.into(), bg.into(), style.into().unwrap_or_default(), text)
             }
             /// Writes text with the given attributes at the given position within
             /// the screen buffer.
-            ///
-            /// Any non-printable characters, such as escape sequences, will be ignored.
             pub fn write_styled_at<C, F, B, S>(&mut self, position: C,
                     fg: F, bg: B, style: S, text: &str) where
                     C: Into<Cursor>,
@@ -37174,28 +37454,16 @@ pub mod system
             }
             /// Writes a single character at the cursor position
             /// using the current style and color settings.
-            ///
-            /// If the character is a non-printable character, it will be ignored.
             pub fn write_char(&mut self, ch: char) {
                 self.0.write_char(ch)
             }
             /// Writes a string at the cursor position
             /// using the current style and color settings.
-            ///
-            /// Any non-printable characters, such as escape sequences, will be ignored.
             pub fn write_str(&mut self, s: &str) {
                 self.0.write_str(s)
             }
             /// Writes formatted text at the cursor position
             /// using the current style and color settings.
-            ///
-            /// This method enables `ScreenWriteGuard` to be used as the receiver to
-            /// the [`write!`] and [`writeln!`] macros.
-            ///
-            /// Any non-printable characters, such as escape sequences, will be ignored.
-            ///
-            /// [`write!`]: https://doc.rust-lang.org/std/macro.write.html
-            /// [`writeln!`]: https://doc.rust-lang.org/std/macro.writeln.html
             pub fn write_fmt(&mut self, args: fmt::Arguments) {
                 let s = args.to_string();
                 self.write_str(&s)
@@ -37254,71 +37522,33 @@ pub mod system
             iter::FromIterator,
             mem::replace,
             *,
-        };
-        
+        };        
         /// Contains a set of string sequences, mapped to a value.
         #[derive(Clone, Debug, Default)]
-        pub struct SequenceMap<K, V> {
-            sequences: Vec<(K, V)>,
-        }
-        /// Represents the result of a `SequenceMap::find` operation.
-        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-        pub enum FindResult<V> {
-            /// No contained sequences begin with the provided input sequence.
-            NotFound,
-            /// One or more sequences begin with the provided input sequence,
-            /// but the sequence does not represent a complete sequence.
-            Incomplete,
-            /// A sequence was found exactly matching the input sequence;
-            /// additionally, one or more sequences begin with the input sequence.
-            Undecided(V),
-            /// A sequence was found exactly matching the input sequence;
-            /// no additional partially-matching sequences exist.
-            Found(V),
+        pub struct SequenceMap<K, V> 
+        {
+            map: Vec<(K, V)>,
         }
 
-        impl<'a, V: Clone> FindResult<&'a V> {
-            /// Maps `FindResult<&V>` to `FindResult<V>` by cloning the contents
-            /// of the result value.
-            pub fn cloned(self) -> FindResult<V> {
-                match self {
-                    FindResult::NotFound => FindResult::NotFound,
-                    FindResult::Incomplete => FindResult::Incomplete,
-                    FindResult::Undecided(v) => FindResult::Undecided(v.clone()),
-                    FindResult::Found(v) => FindResult::Found(v.clone()),
-                }
-            }
-        }
-
-        impl<K: AsRef<str>, V> SequenceMap<K, V> {
+        impl<K: AsRef<str>, V> SequenceMap<K, V>
+        {
             /// Creates an empty `SequenceMap`.
-            pub fn new() -> SequenceMap<K, V> {
-                SequenceMap::with_capacity(0)
-            }
+            pub fn new() -> SequenceMap<K, V> { SequenceMap::with_capacity(0) }
             /// Creates an empty `SequenceMap` with allocated capacity for `n` elements.
-            pub fn with_capacity(n: usize) -> SequenceMap<K, V> {
-                SequenceMap{
-                    sequences: Vec::with_capacity(n),
+            pub fn with_capacity(n: usize) -> SequenceMap<K, V>
+            {
+                SequenceMap
+                {
+                    map: Vec::with_capacity(n),
                 }
             }
             /// Returns a slice of all contained sequences, sorted by key.
-            pub fn sequences(&self) -> &[(K, V)] {
-                &self.sequences
-            }
+            pub fn sequences(&self) -> &[(K, V)] { &self.map }
             /// Returns a mutable slice of all contained sequences, sorted by key.
-            ///
-            /// # Note
-            ///
-            /// Elements must remain sorted by key for the proper functioning of
-            /// `SequenceMap` operations. If keys are modified, the caller must ensure
-            /// that the slice is sorted.
-            pub fn sequences_mut(&mut self) -> &mut [(K, V)] {
-                &mut self.sequences
-            }
+            pub fn sequences_mut(&mut self) -> &mut [(K, V)] { &mut self.map }
             /// Returns an `Entry` for the given key.
-            ///
-            /// This API matches the entry API for the standard `HashMap` collection.
-            pub fn entry(&mut self, key: K) -> Entry<K, V> {
+            pub fn entry(&mut self, key: K) -> Entry<K, V>
+            {
                 match self.search(key.as_ref()) {
                     Ok(n) => Entry::Occupied(OccupiedEntry{
                         map: self,
@@ -37338,39 +37568,36 @@ pub mod system
                     Err(n) => (n, false)
                 };
 
-                let incomplete = self.sequences.get(n + (found as usize))
+                let incomplete = self.map.get(n + (found as usize))
                     .map_or(false, |&(ref next, _)| next.as_ref().starts_with(key));
 
                 match (found, incomplete) {
                     (false, false) => FindResult::NotFound,
                     (false, true) => FindResult::Incomplete,
-                    (true, false) => FindResult::Found(&self.sequences[n].1),
-                    (true, true) => FindResult::Undecided(&self.sequences[n].1),
+                    (true, false) => FindResult::Found(&self.map[n].1),
+                    (true, true) => FindResult::Undecided(&self.map[n].1),
                 }
             }
             /// Returns the corresponding value for the given sequence.
             pub fn get(&self, key: &str) -> Option<&V> {
                 match self.search(key) {
-                    Ok(n) => Some(&self.sequences[n].1),
+                    Ok(n) => Some(&self.map[n].1),
                     Err(_) => None
                 }
             }
             /// Returns a mutable reference to the corresponding value for the given sequence.
             pub fn get_mut(&mut self, key: &str) -> Option<&mut V> {
                 match self.search(key) {
-                    Ok(n) => Some(&mut self.sequences[n].1),
+                    Ok(n) => Some(&mut self.map[n].1),
                     Err(_) => None
                 }
             }
             /// Inserts a key-value pair into the map.
-            ///
-            /// If the key already exists in the map, the new value will replace the old
-            /// value and the old value will be returned.
             pub fn insert(&mut self, key: K, value: V) -> Option<V> {
                 match self.search(key.as_ref()) {
-                    Ok(n) => Some(replace(&mut self.sequences[n], (key, value)).1),
+                    Ok(n) => Some(replace(&mut self.map[n], (key, value)).1),
                     Err(n) => {
-                        self.sequences.insert(n, (key, value));
+                        self.map.insert(n, (key, value));
                         None
                     }
                 }
@@ -37378,34 +37605,30 @@ pub mod system
             /// Removes a key-value pair from the map.
             pub fn remove(&mut self, key: &str) -> Option<(K, V)> {
                 match self.search(key) {
-                    Ok(n) => Some(self.sequences.remove(n)),
+                    Ok(n) => Some(self.map.remove(n)),
                     Err(_) => None
                 }
             }
 
             fn search(&self, key: &str) -> Result<usize, usize> {
-                self.sequences.binary_search_by_key(&key, |&(ref k, _)| &k.as_ref())
+                self.map.binary_search_by_key(&key, |&(ref k, _)| &k.as_ref())
             }
         }
 
-        impl<K: AsRef<str>, V> From<Vec<(K, V)>> for SequenceMap<K, V> {
+        impl<K: AsRef<str>, V> From<Vec<(K, V)>> for SequenceMap<K, V> 
+        {
             /// Creates a `SequenceMap` from a `Vec` of key-value pairs.
-            ///
-            /// The input `Vec` will be sorted and deduplicated.
-            ///
-            /// If two elements exist with the same key, the first element is used.
-            fn from(mut sequences: Vec<(K, V)>) -> SequenceMap<K, V> {
-                sequences.sort_by(|a, b| a.0.as_ref().cmp(b.0.as_ref()));
-                sequences.dedup_by(|a, b| a.0.as_ref() == b.0.as_ref());
-
-                SequenceMap{sequences}
+            fn from(mut map: Vec<(K, V)>) -> SequenceMap<K, V> 
+            {
+                map.sort_by(|a, b| a.0.as_ref().cmp(b.0.as_ref()));
+                map.dedup_by(|a, b| a.0.as_ref() == b.0.as_ref());
+                SequenceMap{ map }
             }
         }
 
-        impl<K: AsRef<str>, V> FromIterator<(K, V)> for SequenceMap<K, V> {
+        impl<K: AsRef<str>, V> FromIterator<(K, V)> for SequenceMap<K, V> 
+        {
             /// Creates a `SequenceMap` from an iterator of key-value pairs.
-            ///
-            /// If two elements exist with the same key, the last element is used.
             fn from_iter<I: IntoIterator<Item=(K, V)>>(iter: I) -> Self {
                 let iter = iter.into_iter();
                 let mut map = SequenceMap::with_capacity(iter.size_hint().0);
@@ -37417,12 +37640,37 @@ pub mod system
                 map
             }
         }
-        /// A view into a single entry of a `SequenceMap`, which may be either occupied
-        /// or vacant.
-        ///
-        /// This value is returned from the [`SequenceMap::entry`] method.
-        ///
-        /// [`SequenceMap::entry`]: struct.SequenceMap.html#method.entry
+        /// Represents the result of a `SequenceMap::find` operation.
+        #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+        pub enum FindResult<V> {
+            /// No contained sequences begin with the provided input sequence.
+            NotFound,
+            /// One or more sequences begin with the provided input sequence,
+            /// but the sequence does not represent a complete sequence.
+            Incomplete,
+            /// A sequence was found exactly matching the input sequence;
+            /// additionally, one or more sequences begin with the input sequence.
+            Undecided(V),
+            /// A sequence was found exactly matching the input sequence;
+            /// no additional partially-matching sequences exist.
+            Found(V),
+        }
+        
+
+        impl<'a, V: Clone> FindResult<&'a V> 
+        {
+            /// Maps `FindResult<&V>` to `FindResult<V>` by cloning the contents of the result value.
+            pub fn cloned(self) -> FindResult<V>
+            {
+                match self {
+                    FindResult::NotFound => FindResult::NotFound,
+                    FindResult::Incomplete => FindResult::Incomplete,
+                    FindResult::Undecided(v) => FindResult::Undecided(v.clone()),
+                    FindResult::Found(v) => FindResult::Found(v.clone()),
+                }
+            }
+        }
+        /// A view into a single entry of a `SequenceMap`, which may be either occupied or vacant.
         pub enum Entry<'a, K: 'a, V: 'a> {
             /// An occupied entry
             Occupied(OccupiedEntry<'a, K, V>),
@@ -37580,9 +37828,6 @@ pub mod system
             Interrupt,
             /// Terminal window resize (`SIGWINCH` on Unix,
             /// `WINDOW_BUFFER_SIZE_EVENT` on Windows)
-            ///
-            /// When this signal is received, it will be translated into an
-            /// `Event::Resize(_)` value containing the new size of the terminal.
             Resize,
             /// Suspend signal (`SIGTSTP`); Unix only
             Suspend,
@@ -37667,45 +37912,22 @@ pub mod system
                 }
             }
             /// Returns the difference of two sets.
-            ///
-            /// The result is all signals contained in `self`, except for those
-            /// also contained in `other`.
-            ///
-            /// This is equivalent to `self - other` or `self & !other`.
             pub fn difference(&self, other: SignalSet) -> SignalSet {
                 SignalSet(self.0 & !other.0)
             }
             /// Returns the symmetric difference of two sets.
-            ///
-            /// The result is all signals contained in either set, but not those contained
-            /// in both.
-            ///
-            /// This is equivalent to `self ^ other`.
             pub fn symmetric_difference(&self, other: SignalSet) -> SignalSet {
                 SignalSet(self.0 ^ other.0)
             }
             /// Returns the intersection of two sets.
-            ///
-            /// The result is all signals contained in both sets, but not those contained
-            /// in either one or the other.
-            ///
-            /// This is equivalent to `self & other`.
             pub fn intersection(&self, other: SignalSet) -> SignalSet {
                 SignalSet(self.0 & other.0)
             }
             /// Returns the union of two sets.
-            ///
-            /// The result is all signals contained in either or both sets.
-            ///
-            /// This is equivalent to `self | other`.
             pub fn union(&self, other: SignalSet) -> SignalSet {
                 SignalSet(self.0 | other.0)
             }
             /// Returns the inverse of the set.
-            ///
-            /// The result is all valid signals not contained in this set.
-            ///
-            /// This is equivalent to `!self`.
             pub fn inverse(&self) -> SignalSet {
                 SignalSet(!self.0 & Signal::all_bits())
             }
@@ -37822,11 +38044,7 @@ pub mod system
         };
         const COL_SPACE: usize = 2;
 
-        /// Represents a table of strings, formatted into rows and columns
-        ///
-        /// A `Table` is an `Iterator` yielding `Line` elements, which are in turn
-        /// iterators yielding `(usize, &str)` elements, describing the width and content
-        /// of each cell in a given row.
+        /// Represents a table of strings, formatted into rows and columns.
         pub struct Table<'a, S: 'a> {
             strings: &'a [S],
             sizes: Option<&'a [usize]>,
@@ -37839,24 +38057,6 @@ pub mod system
         impl<'a, S: 'a + AsRef<str>> Table<'a, S> {
             /// Constructs a new table from the given set of strings, using the given
             /// column sizes.
-            ///
-            /// If `horizontal` is `true`, items will be list horizontally first.
-            ///
-            /// # Horizontal
-            ///
-            /// ```text
-            /// a b c
-            /// d e f
-            /// g h i
-            /// ```
-            ///
-            /// # Vertical
-            ///
-            /// ```text
-            /// a d g
-            /// b e h
-            /// c f i
-            /// ```
             pub fn new(strs: &'a [S], mut sizes: Option<&'a [usize]>,
                     horizontal: bool) -> Table<'a, S> {
                 if let Some(sz) = sizes {
@@ -37920,9 +38120,6 @@ pub mod system
             }
         }
         /// Represents a single line of the table
-        ///
-        /// A `Line` is an `Iterator` yielding `(usize, &str)` elements, describing
-        /// the width and content of each cell in a given row.
         pub struct Line<'a, S: 'a> {
             strings: &'a [S],
             sizes: Option<&'a [usize]>,
@@ -37961,10 +38158,12 @@ pub mod system
             let mut min_cols = min(n_strs, screen_width / max_len);
             let max_cols = min(n_strs, screen_width / min_len);
 
-            if min_cols <= 1 { min_cols = 2; }
+            if min_cols <= 1 {
+                // No point in checking whether text can fit within one column
+                min_cols = 2;
+            }
 
-            if max_cols <= 1
-            {
+            if max_cols <= 1 {
                 return None;
             }
 
@@ -38029,7 +38228,6 @@ pub mod system
         {
             char::{ unctrl_lower },
             sync::{LockResult, map_lock_result, map_try_lock_result, TryLockResult},
-            system::{ * },
             time::{ Duration },
             *,
         };
@@ -38073,18 +38271,18 @@ pub mod system
         {
             /// Prepares the terminal for line reading and editing operations.
             fn prepare(&mut self, block_signals: bool, report_signals: SignalSet)
-                -> io::Result<Option<Term::PrepareState>>;
+                -> io::Result<Term::PrepareState>;
             /// Like `prepare`, but called when the write lock is already held.
             unsafe fn prepare_with_lock(&mut self, lock: &mut dyn TerminalWriter<Term>,
                     block_signals: bool, report_signals: SignalSet)
-                    -> io::Result<Option<Term::PrepareState>>;
+                    -> io::Result<Term::PrepareState>;
             /// Restores the terminal state using the given state data.
             fn restore(&mut self, state: Term::PrepareState) -> io::Result<()>;
             /// Like `restore`, but called when the write lock is already held.
             unsafe fn restore_with_lock(&mut self, lock: &mut dyn TerminalWriter<Term>,
                     state: Term::PrepareState) -> io::Result<()>;
             /// Reads some input from the terminal and appends it to the given buffer.
-            fn read(&mut self, buf: &mut Vec<u8>) -> io::Result<Option<RawRead>>;
+            fn read(&mut self, buf: &mut Vec<u8>) -> io::Result<RawRead>;
             /// Waits `timeout` for user input. If `timeout` is `None`, waits indefinitely.
             fn wait_for_input(&mut self, timeout: Option<Duration>) -> io::Result<bool>;
         }
@@ -38094,15 +38292,9 @@ pub mod system
             /// Returns the size of the terminal window
             fn size(&self) -> io::Result<Size>;
             /// Presents a clear terminal screen, with cursor at first row, first column.
-            ///
-            /// If the terminal possesses a scrolling window over a buffer, this shall
-            /// have the effect of moving the visible window down such that it shows
-            /// an empty view of the buffer, preserving some or all of existing buffer
-            /// contents, where possible.
             fn clear_screen(&mut self) -> io::Result<()>;
-            /// Clears characters on the line occupied by the cursor, beginning with the
-            /// cursor and ending at the end of the line. Also clears all characters on
-            /// all lines after the cursor.
+            /// Clears characters on the line occupied by the cursor, 
+            /// beginning with the cursor and ending at the end of the line.
             fn clear_to_screen_end(&mut self) -> io::Result<()>;
             /// Moves the cursor up `n` cells; `n` may be zero.
             fn move_up(&mut self, n: usize) -> io::Result<()>;
@@ -38117,21 +38309,8 @@ pub mod system
             /// Set the current cursor mode
             fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()>;
             /// Writes output to the terminal.
-            ///
-            /// For each carriage return `'\r'` written to the terminal, the cursor
-            /// should be moved to the first column of the current line.
-            ///
-            /// For each newline `'\n'` written to the terminal, the cursor should
-            /// be moved to the first column of the following line.
-            ///
-            /// The terminal interface shall not automatically move the cursor to the next
-            /// line when `write` causes a character to be written to the final column.
             fn write(&mut self, s: &str) -> io::Result<()>;
             /// Flushes any currently buffered output data.
-            ///
-            /// `TerminalWriter` instances may not buffer data on all systems.
-            ///
-            /// Data must be flushed when the `TerminalWriter` instance is dropped.
             fn flush(&mut self) -> io::Result<()>;
         }
         /// Default `Terminal` interface
@@ -38140,42 +38319,33 @@ pub mod system
         impl DefaultTerminal 
         {
             /// Opens access to the terminal device associated with standard output.
-            pub fn new() -> io::Result<Option<DefaultTerminal>>
-            { 
-                /*
-                TODO
-                Terminal::new().map( DefaultTerminal ) */
-                Ok( None )
+            pub fn new() -> io::Result<DefaultTerminal> {
+                mortal::Terminal::new().map(DefaultTerminal)
             }
             /// Opens access to the terminal device associated with standard error.
-            pub fn stderr() -> io::Result<Option<DefaultTerminal>>
-            {
-                /*
-                TODO
-                Terminal::stderr().map( DefaultTerminal ) */
-                Ok( None )
+            pub fn stderr() -> io::Result<DefaultTerminal> {
+                mortal::Terminal::stderr().map(DefaultTerminal)
             }
 
-            unsafe fn cast_writer<'a>(writer: &'a mut dyn TerminalWriter<Self>) -> &'a mut TerminalWriteGuard<'a>
-            { &mut *(writer as *mut _ as *mut TerminalWriteGuard) }
+            unsafe fn cast_writer<'a>(writer: &'a mut dyn TerminalWriter<Self>)
+                    -> &'a mut TerminalWriteGuard<'a> {
+                &mut *(writer as *mut _ as *mut TerminalWriteGuard)
+            }
         }
 
         impl Terminals for DefaultTerminal 
         {
             type PrepareState = PrepareState;
 
-            fn name(&self) -> &str 
-            {
+            fn name(&self) -> &str {
                 self.0.name()
             }
 
-            fn lock_read<'a>(&'a self) -> Box<dyn TerminalReader<Self> + 'a> 
-            {
+            fn lock_read<'a>(&'a self) -> Box<dyn TerminalReader<Self> + 'a> {
                 Box::new(self.0.lock_read().unwrap())
             }
 
-            fn lock_write<'a>(&'a self) -> Box<dyn TerminalWriter<Self> + 'a> 
-            {
+            fn lock_write<'a>(&'a self) -> Box<dyn TerminalWriter<Self> + 'a> {
                 Box::new(self.0.lock_write().unwrap())
             }
         }
@@ -38183,27 +38353,20 @@ pub mod system
         impl<'a> TerminalReader<DefaultTerminal> for TerminalReadGuard<'a> 
         {
             fn prepare(&mut self, block_signals: bool, report_signals: SignalSet)
-            -> io::Result<Option<PrepareState>>
-            {
-                /*
-                TODO
+                    -> io::Result<PrepareState> {
                 self.prepare(PrepareConfig{
                     block_signals,
                     enable_control_flow: !block_signals,
                     enable_keypad: false,
                     report_signals,
                     .. PrepareConfig::default()
-                }) */
-                Ok( None )
+                })
             }
 
             unsafe fn prepare_with_lock(&mut self,
-            lock: &mut dyn TerminalWriter<DefaultTerminal>,
-            block_signals: bool, report_signals: SignalSet)
-            -> io::Result<Option<PrepareState>>
-            {
-                /*
-                TODO
+                    lock: &mut dyn TerminalWriter<DefaultTerminal>,
+                    block_signals: bool, report_signals: SignalSet)
+                    -> io::Result<PrepareState> {
                 let lock = DefaultTerminal::cast_writer(lock);
 
                 self.prepare_with_lock(lock, PrepareConfig{
@@ -38212,8 +38375,7 @@ pub mod system
                     enable_keypad: false,
                     report_signals,
                     .. PrepareConfig::default()
-                }) */
-                Ok( None )
+                })
             }
 
             fn restore(&mut self, state: PrepareState) -> io::Result<()> {
@@ -38227,16 +38389,11 @@ pub mod system
                 self.restore_with_lock(lock, state)
             }
 
-            fn read(&mut self, buf: &mut Vec<u8>) -> io::Result<Option<RawRead>>
-            {                
-                /*
-                TODO
-                sys::terminal_read(self, buf) */
-                Ok( None )
+            fn read(&mut self, buf: &mut Vec<u8>) -> io::Result<RawRead> {
+                sys::terminal_read(self, buf)
             }
 
-            fn wait_for_input(&mut self, timeout: Option<Duration>) -> io::Result<bool> 
-            {
+            fn wait_for_input(&mut self, timeout: Option<Duration>) -> io::Result<bool> {
                 self.wait_event(timeout)
             }
 
@@ -38338,11 +38495,6 @@ pub mod system
         impl Theme 
         {
             /// Creates a new theme with given values.
-            ///
-            /// # Note
-            ///
-            /// In order to create a Theme using default values you might want to use
-            /// `Theme::default()` instead.
             pub fn new<F,B,S>(fg: F, bg: B, style: S) -> Theme
                     where
                         F: Into<Option<Color>>,
@@ -38386,10 +38538,7 @@ pub mod system
         impl Cursor 
         {
             /// Returns the position of the next cell within a terminal of the given size.
-            ///
-            /// Returns `None` if this cursor position represents the last cell.
-            #[inline]
-            pub fn next(&self, size: Size) -> Option<Cursor> {
+            #[inline] pub fn next(&self, size: Size) -> Option<Cursor> {
                 let mut line = self.line;
                 let mut column = self.column + 1;
 
@@ -38405,10 +38554,7 @@ pub mod system
                 }
             }
             /// Returns the position of the previous cell within a terminal of the given size.
-            ///
-            /// Returns `None` if this cursor position represents the first cell.
-            #[inline]
-            pub fn previous(&self, size: Size) -> Option<Cursor> {
+            #[inline] pub fn previous(&self, size: Size) -> Option<Cursor> {
                 if self.column == 0 {
                     if self.line == 0 {
                         None
@@ -38420,28 +38566,24 @@ pub mod system
                 }
             }
             /// Returns a `Cursor` pointing to the first cell, i.e. `(0, 0)`.
-            #[inline]
-            pub fn first() -> Cursor {
+            #[inline] pub fn first() -> Cursor {
                 Cursor{
                     line: 0,
                     column: 0,
                 }
             }
             /// Returns a `Cursor` pointing to the last cell of a screen of the given size.
-            #[inline]
-            pub fn last(size: Size) -> Cursor {
+            #[inline] pub fn last(size: Size) -> Cursor {
                 Cursor{
                     line: size.lines - 1,
                     column: size.columns - 1,
                 }
             }
             /// Returns whether the cursor is out of bounds of the given size.
-            #[inline]
-            pub fn is_out_of_bounds(&self, size: Size) -> bool {
+            #[inline] pub fn is_out_of_bounds(&self, size: Size) -> bool {
                 self.line >= size.lines || self.column >= size.columns
             }
-            /// Returns the index of the cursor position within a one-dimensional array
-            /// of the given size.
+            /// Returns the index of the cursor position within a one-dimensional array of the given size.
             pub fn as_index(&self, size: Size) -> usize {
                 self.line * size.columns + self.column
             }
@@ -38474,25 +38616,12 @@ pub mod system
             /// Mouse event
             Mouse(MouseEvent),
             /// Raw data read
-            ///
-            /// A value of this variant can only be returned when using the
-            /// platform-dependent extension trait, `TerminalExt`.
-            ///
-            /// On Unix, this trait is [`mortal::unix::TerminalExt`].
-            ///
-            /// On Windows, this trait is [`mortal::windows::TerminalExt`].
-            ///
-            /// [`mortal::unix::TerminalExt`]: ../unix/trait.TerminalExt.html
-            /// [`mortal::windows::TerminalExt`]: ../windows/trait.TerminalExt.html
             Raw(usize),
             /// Terminal window size changed; contained value is the new size.
             Resize(Size),
             /// Terminal signal received
             Signal(Signal),
             /// No event
-            ///
-            /// Returned when a low-level terminal event does not correspond
-            /// to a reported event type.
             NoEvent,
         }
         /// Represents a keyboard key press event
@@ -38530,18 +38659,6 @@ pub mod system
             /// Character key
             Char(char),
             /// Control character
-            ///
-            /// # Notes
-            ///
-            /// The contained `char` value must always be lowercase;
-            /// e.g. `Ctrl('a')` and **not** `Ctrl('A')`.
-            ///
-            /// On Unix, certain special `Key` values are represented as control
-            /// characters; therefore, the following combinations will not generate a
-            /// `Ctrl(_)` value:
-            ///
-            /// * Ctrl-I instead generates `Tab`
-            /// * Ctrl-J and Ctrl-M instead generate `Enter`
             Ctrl(char),
             /// Function `n` key; e.g. F1, F2, ...
             F(u32),
@@ -38621,57 +38738,21 @@ pub mod system
         pub struct PrepareConfig 
         {
             /// Whether to block signals that result from user input.
-            ///
-            /// If `true`, e.g. when the user presses Ctrl-C,
-            /// `Key(Ctrl('c'))` will be read instead of `Signal(Interrupt)`.
-            ///
-            /// The default is `true`.
             pub block_signals: bool,
             /// Whether to enable control flow characters.
-            ///
-            /// The default is `false`.
-            ///
-            /// # Notes
-            ///
-            /// On Unix, when this setting is enabled, Ctrl-S and Ctrl-Q
-            /// will stop and start, respectively, terminal input from being processed.
-            ///
-            /// On Windows, this setting has no effect.
             pub enable_control_flow: bool,
             /// If `true`, the terminal will be configured to generate events from
             /// function keys.
-            ///
-            /// The default is `true`.
-            ///
-            /// # Notes
-            ///
-            /// On Unix, this may be required to receive events for arrow keys.
-            ///
-            /// On Windows, this setting has no effect.
             pub enable_keypad: bool,
             /// If `true`, the terminal will be configured to generate events for
             /// mouse input, if supported, and `read_event` may return `Event::Mouse(_)`.
-            ///
-            /// The default is `false`.
-            ///
-            /// # Notes
-            ///
-            /// This setting may not be supported on all systems.
             pub enable_mouse: bool,
             /// If `true`, mouse motion events will always be reported.
             /// If `false`, such events will only be reported while at least one mouse
             /// button is pressed.
-            ///
-            /// Mouse events are only reported if `enable_mouse` is `true`.
-            ///
-            /// The default is `false`.
             pub always_track_motion: bool,
             /// For each signal in the set, a signal handler will intercept the signal
             /// and report it by returning an `Event::Signal(_)` value.
-            ///
-            /// `block_signals` must be `false` for any of these signals to be received.
-            ///
-            /// By default, no signals are reported.
             pub report_signals: SignalSet,
         }
 
@@ -38705,71 +38786,50 @@ pub mod system
         impl Size 
         {
             /// Returns the total number of cells in a terminal of the given size.
-            ///
-            /// # Panics
-            ///
-            /// If `lines * columns` would overflow.
-            #[inline]
-            pub fn area(&self) -> usize {
+            #[inline] pub fn area(&self) -> usize {
                 self.checked_area().unwrap_or_else(
                     || panic!("overflow in Size::area {:?}", self))
             }
             /// Returns the total number of cells in a terminal of the given size.
-            ///
-            /// Returns `None` in case of overflow.
-            #[inline]
-            pub fn checked_area(&self) -> Option<usize> {
+            #[inline] pub fn checked_area(&self) -> Option<usize> {
                 self.lines.checked_mul(self.columns)
             }
         }
         /// Provides concurrent read and write access to a terminal device
         pub struct Terminal(pub sys::Terminal);
         /// Holds an exclusive lock for read operations on a `Terminal`
-        pub struct TerminalReadGuard<'a>( sys::TerminalReadGuard<'a> );
+        pub struct TerminalReadGuard<'a>(sys::TerminalReadGuard<'a>);
         /// Holds an exclusive lock for write operations on a `Terminal`
-        pub struct TerminalWriteGuard<'a>( sys::TerminalWriteGuard<'a> );
+        pub struct TerminalWriteGuard<'a>(sys::TerminalWriteGuard<'a>);
 
         impl Terminal 
         {
             /// Opens a new interface to the terminal on `stdout`.
-            pub fn new() -> io::Result<Option<Terminal>>
-            {
-                /*
-                TODO
-                Ok(Terminal(sys::Terminal::stdout()?)) */
-                Ok( None )
+            pub fn new() -> io::Result<Terminal> {
+                Ok(Terminal(sys::Terminal::stdout()?))
             }
             /// Opens a new interface to the terminal on `stderr`.
-            pub fn stderr() -> io::Result<Option<Terminal>>
-            {
-                /*
-                TODO
-                Ok(Terminal(sys::Terminal::stderr()?)) */
-                Ok( None )
+            pub fn stderr() -> io::Result<Terminal> {
+                Ok(Terminal(sys::Terminal::stderr()?))
             }
             /// Returns the name of the terminal.
-            #[inline]
-            pub fn name(&self) -> &str {
+            #[inline] pub fn name(&self) -> &str {
                 self.0.name()
             }
             /// Attempts to acquire an exclusive lock on terminal read operations.
-            #[inline]
-            pub fn lock_read(&self) -> LockResult<TerminalReadGuard> {
+            #[inline] pub fn lock_read(&self) -> LockResult<TerminalReadGuard> {
                 map_lock_result(self.0.lock_read(), TerminalReadGuard)
             }
             /// Attempts to acquire an exclusive lock on terminal write operations.
-            #[inline]
-            pub fn lock_write(&self) -> LockResult<TerminalWriteGuard> {
+            #[inline] pub fn lock_write(&self) -> LockResult<TerminalWriteGuard> {
                 map_lock_result(self.0.lock_write(), TerminalWriteGuard)
             }
             /// Attempts to acquire an exclusive lock on terminal read operations.
-            #[inline]
-            pub fn try_lock_read(&self) -> TryLockResult<TerminalReadGuard> {
+            #[inline] pub fn try_lock_read(&self) -> TryLockResult<TerminalReadGuard> {
                 map_try_lock_result(self.0.try_lock_read(), TerminalReadGuard)
             }
             /// Attempts to acquire an exclusive lock on terminal write operations.
-            #[inline]
-            pub fn try_lock_write(&self) -> TryLockResult<TerminalWriteGuard> {
+            #[inline] pub fn try_lock_write(&self) -> TryLockResult<TerminalWriteGuard> {
                 map_try_lock_result(self.0.try_lock_write(), TerminalWriteGuard)
             }
         }
@@ -38778,16 +38838,11 @@ pub mod system
         impl Terminal 
         {
             /// Prepares the terminal to read input.
-            pub fn prepare(&self, config: PrepareConfig) -> io::Result<Option<PrepareState>>
-            {
-                /*
-                TODO
-                self.0.prepare(config).map(PrepareState) */
-                Ok( None )
+            pub fn prepare(&self, config: PrepareConfig) -> io::Result<PrepareState> {
+                self.0.prepare(config).map(PrepareState)
             }
             /// Restores the terminal to its previous state.
-            pub fn restore(&self, state: PrepareState) -> io::Result<()>
-            {
+            pub fn restore(&self, state: PrepareState) -> io::Result<()> {
                 self.0.restore(state.0)
             }
         }
@@ -38796,18 +38851,10 @@ pub mod system
         impl Terminal 
         {
             /// Waits for an event from the terminal.
-            ///
-            /// Returns `Ok(false)` if `timeout` elapses without an event occurring.
-            ///
-            /// If `timeout` is `None`, this method will wait indefinitely.
             pub fn wait_event(&self, timeout: Option<Duration>) -> io::Result<bool> {
                 self.0.wait_event(timeout)
             }
             /// Waits for input and reads an event from the terminal.
-            ///
-            /// Returns `Ok(None)` if `timeout` elapses without an event occurring.
-            ///
-            /// If `timeout` is `None`, this method will wait indefinitely.
             pub fn read_event(&self, timeout: Option<Duration>) -> io::Result<Option<Event>>  {
                 self.0.read_event(timeout)
             }
@@ -38817,15 +38864,10 @@ pub mod system
         impl Terminal 
         {
             /// Returns the size of the terminal.
-            #[inline]
-            pub fn size(&self) -> io::Result<Size> {
+            #[inline] pub fn size(&self) -> io::Result<Size> {
                 self.0.size()
             }
             /// Clears the terminal screen, placing the cursor at the first line and column.
-            ///
-            /// If the terminal contains a scrolling window over a buffer, the window
-            /// will be scrolled downward, preserving as much of the existing buffer
-            /// as possible.
             pub fn clear_screen(&self) -> io::Result<()> {
                 self.0.clear_screen()
             }
@@ -38858,13 +38900,6 @@ pub mod system
                 self.0.move_to_first_column()
             }
             /// Set the current cursor mode.
-            ///
-            /// This setting is a visible hint to the user.
-            /// It produces no change in behavior.
-            ///
-            /// # Notes
-            ///
-            /// On some systems, this setting may have no effect.
             pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> {
                 self.0.set_cursor_mode(mode)
             }
@@ -38898,32 +38933,22 @@ pub mod system
                 self.0.clear_attributes()
             }
             /// Adds bold to the current style setting.
-            ///
-            /// This is equivalent to `self.add_style(Style::BOLD)`.
             pub fn bold(&self) -> io::Result<()> {
                 self.add_style(Style::BOLD)
             }
             /// Adds italic to the current style setting.
-            ///
-            /// This is equivalent to `self.add_style(Style::ITALIC)`.
             pub fn italic(&self) -> io::Result<()> {
                 self.add_style(Style::ITALIC)
             }
             /// Adds underline to the current style setting.
-            ///
-            /// This is equivalent to `self.add_style(Style::UNDERLINE)`.
             pub fn underline(&self) -> io::Result<()> {
                 self.add_style(Style::UNDERLINE)
             }
             /// Adds reverse to the current style setting.
-            ///
-            /// This is equivalent to `self.add_style(Style::REVERSE)`.
             pub fn reverse(&self) -> io::Result<()> {
                 self.add_style(Style::REVERSE)
             }
             /// Writes output to the terminal with the given color and style.
-            ///
-            /// All attributes are removed after the given text is written.
             pub fn write_styled<F, B, S>(&self, fg: F, bg: B, style: S, s: &str)
                     -> io::Result<()> where
                     F: Into<Option<Color>>,
@@ -38944,25 +38969,6 @@ pub mod system
             }
             /// Writes formatted text to the terminal
             /// using the current style and color settings.
-            ///
-            /// This method enables `Terminal` to be used as the receiver to
-            /// the [`write!`] and [`writeln!`] macros.
-            ///
-            /// # Examples
-            ///
-            /// ```no_run
-            /// # use std::io;
-            /// # use mortal::Terminal;
-            /// # fn example() -> io::Result<()> {
-            /// let term = Terminal::new()?;
-            ///
-            /// writeln!(term, "Hello, world!")?;
-            /// # Ok(())
-            /// # }
-            /// ```
-            ///
-            /// [`write!`]: https://doc.rust-lang.org/std/macro.write.html
-            /// [`writeln!`]: https://doc.rust-lang.org/std/macro.writeln.html
             pub fn write_fmt(&self, args: fmt::Arguments) -> io::Result<()> {
                 let s = args.to_string();
                 self.write_str(&s)
@@ -38977,39 +38983,29 @@ pub mod system
         impl<'a> TerminalReadGuard<'a> 
         {
             /// Prepares the terminal to read input.
-            pub fn prepare(&mut self, config: PrepareConfig) -> io::Result<Option<PrepareState>>
-            {
-                /*
-                TODO
-                self.0.prepare(config).map(PrepareState) */
-                Ok( None )
+            pub fn prepare(&mut self, config: PrepareConfig) -> io::Result<PrepareState> {
+                self.0.prepare(config).map(PrepareState)
             }
             /// Performs terminal preparation using both [`Terminal`] locks.
-            pub fn prepare_with_lock(&mut self, writer: &mut TerminalWriteGuard, config: PrepareConfig) -> 
-            io::Result<Option<PrepareState>>
-            {
-                /*
-                TODO
-                self.0.prepare_with_lock(&mut writer.0, config).map(PrepareState) */
-                Ok( None )
+            pub fn prepare_with_lock(&mut self, writer: &mut TerminalWriteGuard,
+                    config: PrepareConfig) -> io::Result<PrepareState> {
+                self.0.prepare_with_lock(&mut writer.0, config).map(PrepareState)
             }
             /// Restores the terminal to its previous state.
-            pub fn restore(&mut self, state: PrepareState) -> io::Result<()> 
-            {
+            pub fn restore(&mut self, state: PrepareState) -> io::Result<()> {
                 self.0.restore(state.0)
             }
             /// Performs terminal state restoration using both [`Terminal`] locks.
-            pub fn restore_with_lock(&mut self, writer: &mut TerminalWriteGuard, state: PrepareState)
-            -> io::Result<()>
-            { self.0.restore_with_lock(&mut writer.0, state.0) }
+            pub fn restore_with_lock(&mut self, writer: &mut TerminalWriteGuard,
+                    state: PrepareState) -> io::Result<()> {
+                self.0.restore_with_lock(&mut writer.0, state.0)
+            }
             /// Waits for an event from the terminal.
-            pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool>
-            {
+            pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool> {
                 self.0.wait_event(timeout)
             }
             /// Waits for input and reads an event from the terminal.
-            pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>>
-            {
+            pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>>  {
                 self.0.read_event(timeout)
             }
         }
@@ -39017,21 +39013,14 @@ pub mod system
         impl<'a> TerminalWriteGuard<'a> 
         {
             /// Flush all output to the terminal device.
-            ///
-            /// This is called automatically when the `TerminalWriteGuard` is dropped.
             pub fn flush(&mut self) -> io::Result<()> {
                 self.0.flush()
             }
             /// Returns the size of the terminal.
-            #[inline]
-            pub fn size(&self) -> io::Result<Size> {
+            #[inline] pub fn size(&self) -> io::Result<Size> {
                 self.0.size()
             }
             /// Clears the terminal screen, placing the cursor at the first line and column.
-            ///
-            /// If the terminal contains a scrolling window over a buffer, the window
-            /// will be scrolled downward, preserving as much of the existing buffer
-            /// as possible.
             pub fn clear_screen(&mut self) -> io::Result<()> {
                 self.0.clear_screen()
             }
@@ -39064,13 +39053,6 @@ pub mod system
                 self.0.move_to_first_column()
             }
             /// Set the current cursor mode.
-            ///
-            /// This setting is a visible hint to the user.
-            /// It produces no change in behavior.
-            ///
-            /// # Notes
-            ///
-            /// On some systems, this setting may have no effect.
             pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> {
                 self.0.set_cursor_mode(mode)
             }
@@ -39104,32 +39086,22 @@ pub mod system
                 self.0.clear_attributes()
             }
             /// Adds bold to the current style setting.
-            ///
-            /// This is equivalent to `self.add_style(Style::BOLD)`.
             pub fn bold(&mut self) -> io::Result<()> {
                 self.add_style(Style::BOLD)
             }
             /// Adds italic to the current style setting.
-            ///
-            /// This is equivalent to `self.add_style(Style::ITALIC)`.
             pub fn italic(&mut self) -> io::Result<()> {
                 self.add_style(Style::ITALIC)
             }
             /// Adds underline to the current style setting.
-            ///
-            /// This is equivalent to `self.add_style(Style::UNDERLINE)`.
             pub fn underline(&mut self) -> io::Result<()> {
                 self.add_style(Style::UNDERLINE)
             }
             /// Adds reverse to the current style setting.
-            ///
-            /// This is equivalent to `self.add_style(Style::REVERSE)`.
             pub fn reverse(&mut self) -> io::Result<()> {
                 self.add_style(Style::REVERSE)
             }
             /// Writes output to the terminal with the given color and style added.
-            ///
-            /// All attributes are removed after the given text is written.
             pub fn write_styled<F, B, S>(&mut self, fg: F, bg: B, style: S, s: &str)
                     -> io::Result<()> where
                     F: Into<Option<Color>>,
@@ -39150,12 +39122,6 @@ pub mod system
             }
             /// Writes formatted text to the terminal
             /// using the current style and color settings.
-            ///
-            /// This method enables `TerminalWriteGuard` to be used as the receiver to
-            /// the [`write!`] and [`writeln!`] macros.
-            ///
-            /// [`write!`]: https://doc.rust-lang.org/std/macro.write.html
-            /// [`writeln!`]: https://doc.rust-lang.org/std/macro.writeln.html
             pub fn write_fmt(&mut self, args: fmt::Arguments) -> io::Result<()> {
                 let s = args.to_string();
                 self.write_str(&s)
@@ -39166,24 +39132,31 @@ pub mod system
                 self
             }
         }
+        /*
+        TODO
+        fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>>
+        fn read_raw_event(&mut self, events: &mut [INPUT_RECORD], timeout: Option<Duration>) -> io::Result<Option<Event>>
 
+        ...
+
+        Add 
+        fn read_raw_unix( ... ) -> io::Result<Option<Event>>
+        fn read_raw_windows( ... ) -> io::Result<Option<Event>>
+        fn read_raw_event_unix( ... ) -> io::Result<Option<Event>>
+        fn read_raw_event_windows( ... ) -> io::Result<Option<Event>>
+        */
         #[cfg(unix)] use std::path::Path;
 
         #[cfg(unix)] impl super::unix::OpenTerminalExt for Terminal 
         {
-            fn from_path<P: AsRef<Path>>(path: P) -> io::Result<Option<Self>>
-            {
-                /*
-                TODO
-                sys::Terminal::open(path).map(Terminal) */
-                Ok( None )
+            fn from_path<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+                sys::Terminal::open(path).map(Terminal)
             }
         }
 
         #[cfg(unix)] impl super::unix::TerminalExt for Terminal 
         {
-            fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> 
-            {
+            fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> {
                 self.0.read_raw(buf, timeout)
             }
         }
@@ -39213,8 +39186,7 @@ pub mod system
                 self.0.read_raw(buf, timeout)
             }
 
-            fn read_raw_event(&mut self, events: &mut [::winapi::um::wincon::INPUT_RECORD],
-                    timeout: Option<Duration>) -> io::Result<Option<Event>> {
+            fn read_raw_event(&mut self, events: &mut [INPUT_RECORD], timeout: Option<Duration>) -> io::Result<Option<Event>> {
                 self.0.read_raw_event(events, timeout)
             }
         }
@@ -39388,7 +39360,7 @@ pub mod system
                     completion_query_items: 100,
                     disable_completion: false,
                     echo_control_characters: true,
-                    keyseq_timeout: None, // TODO: Some(Duration::milliseconds(KEYSEQ_TIMEOUT_MS)),
+                    keyseq_timeout: Some(Duration::from_millis(KEYSEQ_TIMEOUT_MS)),
                     page_completions: true,
                     print_completions_horizontally: false,
                 }
@@ -39409,33 +39381,24 @@ pub mod system
             Some(s.to_owned())
         }
 
-        fn as_millis(timeout: Option<Duration>) -> i32 
-        {
-            /*
-            TODO
+        fn as_millis(timeout: Option<Duration>) -> i32 {
             match timeout {
                 Some(t) => {
-                    let s = (t.as_seconds() * 1_000) as i32;
-                    let ms = (t.subsec_nanoseconds() / 1_000_000) as i32;
+                    let s = (t.as_secs() * 1_000) as i32;
+                    let ms = (t.subsec_nanos() / 1_000_000) as i32;
 
                     s + ms
                 }
                 None => -1
-            } */
-            -1
+            }
         }
 
-        fn parse_duration(s: &str) -> Option<Option<Duration>> 
-        {
-            /*
-            TODO
-            match s.parse::<i32>() 
-            {
+        fn parse_duration(s: &str) -> Option<Option<Duration>> {
+            match s.parse::<i32>() {
                 Ok(n) if n <= 0 => Some(None),
-                Ok(n) => Some(Some(Duration::milliseconds(n as u64))),
+                Ok(n) => Some(Some(Duration::from_millis(n as u64))),
                 Err(_) => Some(None)
-            } */
-            None
+            }
         }
 
         fn usize_as_i32(u: usize) -> i32 {
@@ -39479,24 +39442,24 @@ pub mod system
         };
         */
         /// Duration to wait for input when "blinking"
-        pub const BLINK_DURATION: Duration = Duration::milliseconds(500);
-        pub const COMPLETE_MORE: &'static str = "--More--";
+        pub const BLINK_DURATION: Duration = Duration::from_millis(500);
+        const COMPLETE_MORE: &'static str = "--More--";
         /// Default maximum history size
-        pub const MAX_HISTORY: usize = !0;
+        const MAX_HISTORY: usize = !0;
         /// Tab column interval
-        pub const TAB_STOP: usize = 8;
-        /// Length of "(arg: "
-        pub const PROMPT_NUM_PREFIX: usize = 6;
-        /// Length of ") "
-        pub const PROMPT_NUM_SUFFIX: usize = 2;
-        /// Length of "(i-search)`"
-        pub const PROMPT_SEARCH_PREFIX: usize = 11;
-        /// Length of "failed "
-        pub const PROMPT_SEARCH_FAILED_PREFIX: usize = 7;
-        /// Length of "reverse-"
-        pub const PROMPT_SEARCH_REVERSE_PREFIX: usize = 8;
-        /// Length of "': "
-        pub const PROMPT_SEARCH_SUFFIX: usize = 3;
+        const TAB_STOP: usize = 8;
+        // Length of "(arg: "
+        const PROMPT_NUM_PREFIX: usize = 6;
+        // Length of ") "
+        const PROMPT_NUM_SUFFIX: usize = 2;
+        // Length of "(i-search)`"
+        const PROMPT_SEARCH_PREFIX: usize = 11;
+        // Length of "failed "
+        const PROMPT_SEARCH_FAILED_PREFIX: usize = 7;
+        // Length of "reverse-"
+        const PROMPT_SEARCH_REVERSE_PREFIX: usize = 8;
+        // Length of "': "
+        const PROMPT_SEARCH_SUFFIX: usize = 3;
         /// Provides an interface to write line-by-line output to the terminal device.
         pub struct Writer<'a, 'b: 'a, Term: 'b + Terminals> 
         {
@@ -39652,6 +39615,7 @@ pub mod system
 
             pub fn draw_prompt_prefix(&mut self) -> io::Result<()> {
                 match self.prompt_type {
+                    // Prefix is not drawn when completions are shown
                     PromptType::CompleteMore => Ok(()),
                     _ => {
                         let pfx = self.prompt_prefix.clone();
@@ -39746,6 +39710,7 @@ pub mod system
                     } else if handle_invisible && ch == END_INVISIBLE {
                         hidden = false;
                     } else if hidden {
+                        // Render the character, but assume it has 0 width.
                         out.push(ch);
                     } else {
                         for ch in display(ch, disp) {
@@ -39777,9 +39742,9 @@ pub mod system
 
                                 out.push('\n');
                                 col = 0;
-                            } else if is::combining_mark(ch) {
+                            } else if is_combining_mark(ch) {
                                 out.push(ch);
-                            } else if is::wide(ch) {
+                            } else if is_wide(ch) {
                                 if col == width - 1 {
                                     out.push_str("  \r");
                                     out.push(ch);
@@ -39792,8 +39757,9 @@ pub mod system
                                 out.push(ch);
                                 col += 1;
 
-                                if col == width 
-                                {
+                                if col == width {
+                                    // Space pushes the cursor to the next line,
+                                    // CR brings back to the start of the line.
                                     out.push_str(" \r");
                                     col = 0;
                                 }
@@ -39940,6 +39906,7 @@ pub mod system
             }
 
             pub fn search_history_update(&mut self) -> io::Result<()> {
+                // Search for the next match, perhaps including the current position
                 let next_match = if self.reverse_search {
                     self.search_history_backward(&self.search_buffer, true)
                 } else {
@@ -39953,7 +39920,8 @@ pub mod system
                 if self.search_buffer.is_empty() {
                     return self.redraw_prompt(PromptType::Search);
                 }
-                
+
+                // Search for the next match
                 let next_match = if self.reverse_search {
                     self.search_history_backward(&self.search_buffer, false)
                 } else {
@@ -40183,7 +40151,8 @@ pub mod system
 
                 Ok(())
             }
-            /// Deletes a range from the buffer; the cursor is moved to the end of the given range.
+            /// Deletes a range from the buffer; the cursor is moved to the end
+            /// of the given range.
             pub fn delete_range<R: RangeArgument<usize>>(&mut self, range: R) -> io::Result<()> {
                 let start = range.start().cloned().unwrap_or(0);
                 let end = range.end().cloned().unwrap_or_else(|| self.buffer.len());
@@ -40200,10 +40169,11 @@ pub mod system
                 Ok(())
             }
 
-            pub fn insert_str(&mut self, s: &str) -> io::Result<()>
-            {
+            pub fn insert_str(&mut self, s: &str) -> io::Result<()> {
+                // If the string insertion moves a combining character,
+                // we must redraw starting from the character before the cursor.
                 let moves_combining = match self.buffer[self.cursor..].chars().next() {
-                    Some(ch) if is::combining_mark(ch) => true,
+                    Some(ch) if is_combining_mark(ch) => true,
                     _ => false
                 };
 
@@ -40212,6 +40182,7 @@ pub mod system
 
                 if moves_combining && cursor != 0 {
                     let pos = backward_char(1, &self.buffer, self.cursor);
+                    // Move without updating the cursor
                     let (lines, cols) = self.move_delta(cursor, pos, &self.buffer);
                     self.move_rel(lines, cols)?;
                     self.draw_buffer(pos)?;
@@ -40225,10 +40196,12 @@ pub mod system
                 self.move_from(len)
             }
 
-            pub fn transpose_range(&mut self, src: Range<usize>, dest: Range<usize>) -> io::Result<()>
-            {
+            pub fn transpose_range(&mut self, src: Range<usize>, dest: Range<usize>)
+                    -> io::Result<()> {
+                // Ranges must not overlap
                 assert!(src.end <= dest.start || src.start >= dest.end);
-                
+
+                // Final cursor position
                 let final_cur = if src.start < dest.start {
                     dest.end
                 } else {
@@ -40448,23 +40421,10 @@ pub mod system
                 self.write.history()
             }
             /// Writes some text to the terminal device.
-            ///
-            /// Before the `Writer` is dropped, any output written should be followed
-            /// by a newline. A newline is automatically written if the `writeln!`
-            /// macro is used.
             pub fn write_str(&mut self, s: &str) -> io::Result<()> {
                 self.write.write_str(s)
             }
             /// Writes formatted text to the terminal display.
-            ///
-            /// This method enables `Interface` to be used as the receiver to
-            /// the [`writeln!`] macro.
-            ///
-            /// If the text contains any unprintable characters (e.g. escape sequences),
-            /// those characters will be escaped before printing.
-            ///
-            /// [`read_line`]: ../interface/struct.Interface.html#method.read_line
-            /// [`writeln!`]: https://doc.rust-lang.org/std/macro.writeln.html
             pub fn write_fmt(&mut self, args: fmt::Arguments) -> io::Result<()> {
                 let s = args.to_string();
                 self.write_str(&s)
@@ -40475,6 +40435,7 @@ pub mod system
         {
             fn drop(&mut self) {
                 if self.write.is_prompt_drawn {
+                    // There's not really anything useful to be done with this error.
                     let _ = self.write.draw_prompt();
                 }
             }
@@ -40593,8 +40554,7 @@ pub mod system
                 self.prompt_suffix_len = self.display_size(&suf_virt, 0);
             }
 
-            pub fn display_size(&self, s: &str, start_col: usize) -> usize 
-            {
+            pub fn display_size(&self, s: &str, start_col: usize) -> usize {
                 let width = self.screen_size.columns;
                 let mut col = start_col;
 
@@ -40604,17 +40564,18 @@ pub mod system
                     .. Display::default()
                 };
 
-                for ch in s.chars().flat_map(|ch| display(ch, disp))
-                {
-                    let n = match ch
-                    {
+                for ch in s.chars().flat_map(|ch| display(ch, disp)) {
+                    let n = match ch {
                         '\n' => width - (col % width),
                         '\t' => TAB_STOP - (col % TAB_STOP),
-                        ch if is::combining_mark(ch) => 0,
-                        ch if is::wide(ch) =>
-                        {
-                            if col % width == width - 1 { 3 } 
-                            else { 2 }
+                        ch if is_combining_mark(ch) => 0,
+                        ch if is_wide(ch) => {
+                            if col % width == width - 1 {
+                                // Can't render a fullwidth character into last column
+                                3
+                            } else {
+                                2
+                            }
                         }
                         _ => 1
                     };
@@ -40626,7 +40587,7 @@ pub mod system
             }
         }
         /// Maximum value of digit input
-        pub const NUMBER_MAX: i32 = 1_000_000;
+        const NUMBER_MAX: i32 = 1_000_000;
 
         #[derive(Copy, Clone, Debug)]
         pub enum Digit 
@@ -40670,8 +40631,6 @@ pub mod system
         impl From<char> for Digit 
         {
             /// Convert a decimal digit character to a `Digit` value.
-            ///
-            /// The input must be in the range `'0' ..= '9'`.
             fn from(ch: char) -> Digit {
                 let n = (ch as u8) - b'0';
                 Digit::Num(n as i32)
@@ -40862,7 +40821,6 @@ pub mod system
             use ::
             {
                 path::{ * },
-                system::{ * },
                 time::{ Duration },
                 *,
             };
@@ -40873,10 +40831,11 @@ pub mod system
             pub trait OpenTerminalExt:Sized
             {
                 /// Opens a terminal interface on the device at the given path.
-                fn from_path<P: AsRef<Path>>(path: P) -> io::Result<Option<Self>>;
+                fn from_path<P: AsRef<Path>>(path: P) -> io::Result<Self>;
             }
             /// Implements Unix-only extensions for terminal interfaces.
             pub trait TerminalExt
+            
             {
                 /// Reads raw data from the terminal.
                 fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>>;
@@ -40904,7 +40863,6 @@ pub mod system
             use ::
             {
                 sync::{ LockResult, map_lock_result, map_try_lock_result, map2_lock_result, map2_try_lock_result, Mutex, MutexGuard, TryLockResult },
-                system::{ * },
                 time::{ Duration },
                 *,
             };
@@ -40913,8 +40871,7 @@ pub mod system
             use mortal::sys::{Terminal, TerminalReadGuard, TerminalWriteGuard, PrepareState};
             use mortal::terminal::{Color, Cursor, CursorMode, Event, Size, Style, PrepareConfig};
             */
-            pub struct Screen 
-            {
+            pub struct Screen {
                 term: Terminal,
 
                 state: Option<PrepareState>,
@@ -40931,19 +40888,14 @@ pub mod system
                 data: MutexGuard<'a, Writer>,
             }
 
-            struct Writer 
-            {
+            struct Writer {
                 buffer: ScreenBuffer,
                 clear_screen: bool,
                 real_cursor: Cursor,
             }
 
-            impl Screen 
-            {
-                pub fn new(term: Terminal, config: PrepareConfig) -> io::Result<Option<Screen>>
-                {
-                    /*
-                    TODO
+            impl Screen {
+                pub fn new(term: Terminal, config: PrepareConfig) -> io::Result<Screen> {
                     let size = term.size()?;
                     let state = term.prepare(config)?;
 
@@ -40960,24 +40912,15 @@ pub mod system
 
                     screen.term.enter_screen()?;
 
-                    Ok(screen) */
-                    Ok( None )
+                    Ok(screen)
                 }
 
-                pub fn stdout(config: PrepareConfig) -> io::Result<Option<Screen>>
-                {
-                    /*
-                    TODO
-                    Screen::new(Terminal::stdout()?, config) */
-                    Ok( None )
+                pub fn stdout(config: PrepareConfig) -> io::Result<Screen> {
+                    Screen::new(Terminal::stdout()?, config)
                 }
 
-                pub fn stderr(config: PrepareConfig) -> io::Result<Option<Screen>>
-                {
-                    /*
-                    TODO
-                    Screen::new(Terminal::stderr()?, config) */
-                    Ok( None )
+                pub fn stderr(config: PrepareConfig) -> io::Result<Screen> {
+                    Screen::new(Terminal::stderr()?, config)
                 }
 
                 forward_screen_buffer_methods!{ |slf| slf.lock_write_data().buffer }
@@ -41039,12 +40982,8 @@ pub mod system
                 }
             }
 
-            impl Drop for Screen
-            {
-                fn drop(&mut self)
-                {
-                    /*
-                    TODO
+            impl Drop for Screen {
+                fn drop(&mut self) {
                     let res = if let Some(state) = self.state.take() {
                         self.term.restore(state)
                     } else {
@@ -41053,12 +40992,11 @@ pub mod system
 
                     if let Err(e) = res.and_then(|_| self.term.exit_screen()) {
                         eprintln!("failed to restore terminal: {}", e);
-                    } */
+                    }
                 }
             }
 
-            impl<'a> ScreenReadGuard<'a> 
-            {
+            impl<'a> ScreenReadGuard<'a> {
                 fn new(screen: &'a Screen, reader: TerminalReadGuard<'a>) -> ScreenReadGuard<'a> {
                     ScreenReadGuard{screen, reader}
                 }
@@ -41077,23 +41015,18 @@ pub mod system
                     Ok(r)
                 }
 
-                pub fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>>
-                {
-                    /*
-                    TODO
+                pub fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> {
                     let r = self.reader.read_raw(buf, timeout)?;
 
                     if let Some(Event::Resize(size)) = r {
                         self.screen.lock_write_data().update_size(size);
                     }
 
-                    Ok(r) */
-                    Ok( None )
+                    Ok(r)
                 }
             }
 
-            impl<'a> ScreenWriteGuard<'a> 
-            {
+            impl<'a> ScreenWriteGuard<'a> {
                 fn new(writer: TerminalWriteGuard<'a>, data: MutexGuard<'a, Writer>)
                         -> ScreenWriteGuard<'a> {
                     ScreenWriteGuard{writer, data}
@@ -41137,31 +41070,27 @@ pub mod system
                     self.writer.flush()
                 }
 
-                fn move_cursor(&mut self, pos: Cursor) -> io::Result<()>
-                {
-                    /*
-                    TODO
+                fn move_cursor(&mut self, pos: Cursor) -> io::Result<()> {
                     if self.data.real_cursor != pos {
                         self.writer.move_cursor(pos)?;
                         self.data.real_cursor = pos;
-                    } */
+                    }
+
                     Ok(())
                 }
 
-                fn apply_attrs(&mut self, (fg, bg, style): (Option<Color>, Option<Color>, Style)) -> io::Result<()>
-                {
-                    /*
-                    TODO
-                    self.writer.set_attrs(fg, bg, style) */
-                    Ok( () )
+                fn apply_attrs(&mut self,
+                        (fg, bg, style): (Option<Color>, Option<Color>, Style))
+                        -> io::Result<()> {
+                    self.writer.set_attrs(fg, bg, style)
                 }
             }
 
-            impl<'a> Drop for ScreenWriteGuard<'a> 
-            {
-                fn drop(&mut self) 
-                {
-                    if let Err(e) = self.refresh() { eprintln!("failed to refresh screen: {}", e); }
+            impl<'a> Drop for ScreenWriteGuard<'a> {
+                fn drop(&mut self) {
+                    if let Err(e) = self.refresh() {
+                        eprintln!("failed to refresh screen: {}", e);
+                    }
                 }
             }
 
@@ -41181,7 +41110,7 @@ pub mod system
             use ::
             {
                 convert::{ TryFrom },
-                database::{ capability::{ Context, Expansion }, Database },
+                database::{ Database },
                 fs::{ File },
                 libc::{ unix::{ * }, * },
                 mem::{ replace, zeroed },
@@ -41278,10 +41207,7 @@ pub mod system
 
             impl Terminal 
             {
-                fn new(in_fd: RawFd, out_fd: RawFd, owned_fd: bool) -> io::Result<Option<Terminal>>
-                {
-                    /*
-                    TODO
+                fn new(in_fd: RawFd, out_fd: RawFd, owned_fd: bool) -> io::Result<Terminal> {
                     let info = Database::from_env().map_err(ti_to_io)?;
                     let sequences = sequences(&info);
 
@@ -41297,14 +41223,10 @@ pub mod system
                             report_signals: SignalSet::new(),
                         }),
                         writer: Mutex::new(Writer::new()),
-                    }) */
-                    Ok( None )
+                    })
                 }
 
-                pub fn open<P: AsRef<Path>>(path: P) -> io::Result<Option<Terminal>>
-                {
-                    /*
-                    TODO
+                pub fn open<P: AsRef<Path>>(path: P) -> io::Result<Terminal> {
                     let fd = open_rw(path)?;
 
                     let r = Terminal::new(fd, fd, true);
@@ -41313,32 +41235,19 @@ pub mod system
                         unsafe { close_fd(fd); }
                     }
 
-                    r */
-                    Ok( None )
+                    r
                 }
 
-                pub fn stdout() -> io::Result<Option<Terminal>>
-                {
-                    /*
-                    TODO
-                    Terminal::new(STDIN_FILENO, STDOUT_FILENO, false) */
-                    Ok( None )
+                pub fn stdout() -> io::Result<Terminal> {
+                    Terminal::new(STDIN_FILENO, STDOUT_FILENO, false)
                 }
 
-                pub fn stderr() -> io::Result<Option<Terminal>>
-                {
-                    /*
-                    TODO
-                    Terminal::new(STDIN_FILENO, STDERR_FILENO, false) */
-                    Ok( None )
+                pub fn stderr() -> io::Result<Terminal> {
+                    Terminal::new(STDIN_FILENO, STDERR_FILENO, false)
                 }
 
-                pub fn name(&self) -> &str 
-                {
-                    /*
-                    TODO
-                    self.info.name()*/
-                    ""
+                pub fn name(&self) -> &str {
+                    self.info.name()
                 }
 
                 fn is_xterm(&self) -> bool {
@@ -41369,12 +41278,8 @@ pub mod system
                     self.lock_writer().exit_screen()
                 }
 
-                pub fn prepare(&self, config: PrepareConfig) -> io::Result<Option<PrepareState>>
-                {
-                    /*
-                    TODO
-                    self.lock_reader().prepare(config) */
-                    Ok( None )
+                pub fn prepare(&self, config: PrepareConfig) -> io::Result<PrepareState> {
+                    self.lock_reader().prepare(config)
                 }
 
                 pub fn restore(&self, state: PrepareState) -> io::Result<()> {
@@ -41519,20 +41424,13 @@ pub mod system
                     TerminalReadGuard{term, reader}
                 }
 
-                pub fn prepare(&mut self, config: PrepareConfig) -> io::Result<Option<PrepareState>>
-                {
-                    /*
-                    TODO
+                pub fn prepare(&mut self, config: PrepareConfig) -> io::Result<PrepareState> {
                     let mut writer = self.term.lock_writer();
-                    self.prepare_with_lock(&mut writer, config) */
-                    Ok( None )
+                    self.prepare_with_lock(&mut writer, config)
                 }
 
-                pub fn prepare_with_lock(&mut self, writer: &mut TerminalWriteGuard, config: PrepareConfig) ->
-                io::Result<Option<PrepareState>>
-                {
-                    /*
-                    TODO
+                pub fn prepare_with_lock(&mut self, writer: &mut TerminalWriteGuard,
+                        config: PrepareConfig) -> io::Result<PrepareState> {
                     use nix::sys::termios::SpecialCharacterIndices::*;
 
                     let old_tio = tcgetattr(self.term.in_fd).map_err(nix_to_io)?;
@@ -41551,26 +41449,36 @@ pub mod system
                     };
 
                     tio.input_flags.remove(
+                        // Disable carriage return/line feed conversion
                         InputFlags::INLCR | InputFlags::ICRNL
                     );
 
                     tio.local_flags.remove(
+                        // Disable canonical mode;
+                        // this gives us input without waiting for newline or EOF
+                        // and disables line-editing, treating such inputs as characters.
+                        // Disable ECHO, preventing input from being written to output.
                         LocalFlags::ICANON | LocalFlags::ECHO
                     );
-                    
+
+                    // ISIG, when enabled, causes the process to receive signals when
+                    // Ctrl-C, Ctrl-\, etc. are input
                     if config.block_signals {
                         tio.local_flags.remove(LocalFlags::ISIG);
                     } else {
                         tio.local_flags.insert(LocalFlags::ISIG);
                     }
-                    
+
+                    // IXON, when enabled, allows Ctrl-S/Ctrl-Q to suspend and restart inputs
                     if config.enable_control_flow {
                         tio.input_flags.insert(InputFlags::IXON);
                     } else {
                         tio.input_flags.remove(InputFlags::IXON);
                     }
-                    
+
+                    // Allow a read to return with 0 characters ready
                     tio.control_chars[VMIN as usize] = 0;
+                    // Allow a read to return after 0 deciseconds
                     tio.control_chars[VTIME as usize] = 0;
 
                     tcsetattr(self.term.in_fd, SetArg::TCSANOW, &tio).map_err(nix_to_io)?;
@@ -41591,7 +41499,9 @@ pub mod system
 
                     let action = SigAction::new(SigHandler::Handler(handle_signal),
                         SaFlags::empty(), SigSet::all());
-                        
+
+                    // Continue and Resize are always handled by the internals,
+                    // but only reported if requested.
                     state.old_sigcont = Some(unsafe { sigaction(NixSignal::SIGCONT, &action).map_err(nix_to_io)? });
                     state.old_sigwinch = Some(unsafe { sigaction(NixSignal::SIGWINCH, &action).map_err(nix_to_io)? });
 
@@ -41608,21 +41518,16 @@ pub mod system
                     self.reader.report_signals = config.report_signals;
                     self.reader.resume = Some(Resume{config});
 
-                    Ok(state) */
-                    Ok( None )
+                    Ok(state)
                 }
 
-                pub fn restore(&mut self, state: PrepareState) -> io::Result<()> 
-                {
+                pub fn restore(&mut self, state: PrepareState) -> io::Result<()> {
                     let mut writer = self.term.lock_writer();
                     self.restore_with_lock(&mut writer, state)
                 }
 
-                pub fn restore_with_lock(&mut self, writer: &mut TerminalWriteGuard, state: PrepareState) ->
-                io::Result<()>
-                {
-                    /*
-                    TODO
+                pub fn restore_with_lock(&mut self, writer: &mut TerminalWriteGuard,
+                        state: PrepareState) -> io::Result<()> {
                     self.reader.resume = state.prev_resume;
 
                     if state.restore_mouse {
@@ -41653,14 +41558,12 @@ pub mod system
                         if let Some(ref old) = state.old_sigwinch {
                             sigaction(NixSignal::SIGWINCH, old).map_err(nix_to_io)?;
                         }
-                    } */
+                    }
+
                     Ok(())
                 }
 
-                pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool>
-                {
-                    /*
-                    TODO
+                pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool> {
                     if get_signal().is_some() {
                         return Ok(true);
                     }
@@ -41676,7 +41579,8 @@ pub mod system
 
                         let mut r_fds = FdSet::new();
                         r_fds.insert(in_fd);
-                        
+
+                        // FIXME: FdSet does not implement Copy or Clone
                         let mut e_fds = FdSet::new();
                         e_fds.insert(in_fd);
 
@@ -41692,12 +41596,10 @@ pub mod system
                         }
                     };
 
-                    Ok(n != 0) */
-                    Ok( false )
+                    Ok(n != 0)
                 }
 
-                pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> 
-                {
+                pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
                     if let Some(ev) = self.try_read()? {
                         return Ok(Some(ev));
                     }
@@ -41738,6 +41640,7 @@ pub mod system
                 }
 
                 fn read_into_buffer(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                    // Temporarily replace the buffer to prevent borrow errors
                     let mut buf = replace(&mut self.reader.in_buffer, Vec::new());
 
                     buf.reserve(128);
@@ -41756,13 +41659,15 @@ pub mod system
                             _ => buf.set_len(len)
                         }
                     }
-                    
+
+                    // Restore the buffer before returning
                     self.reader.in_buffer = buf;
 
                     r
                 }
 
                 fn read_input(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                    // Check for a signal that may have already arrived.
                     if let Some(sig) = take_signal() {
                         return Ok(Some(Event::Signal(sig)));
                     }
@@ -41770,7 +41675,8 @@ pub mod system
                     if !self.wait_event(timeout)? {
                         return Ok(None);
                     }
-                    
+
+                    // Check for a signal again after waiting
                     if let Some(sig) = take_signal() {
                         return Ok(Some(Event::Signal(sig)));
                     }
@@ -41866,63 +41772,56 @@ pub mod system
                     }
                 } }
             }
-            /*
-                macro_rules! expand_req 
-                {
-                    ( $slf:expr , $cap:path , $name:expr ) => { {
-                        $slf.term.info.get::<$cap>()
-                            .ok_or_else(|| not_supported($name))
-                            .and_then(|cap| $slf.expand(cap.expand()))
-                    } };
-                    ( $slf:expr , $cap:path , $name:expr , |$ex:ident| $expansion:expr ) => { {
-                        $slf.term.info.get::<$cap>()
-                            .ok_or_else(|| not_supported($name))
-                            .and_then(|cap| {
-                                let $ex = cap.expand();
-                                $slf.expand($expansion)
-                            })
-                    } }
-                } 
-            */
+
+            macro_rules! expand_req 
+            {
+                ( $slf:expr , $cap:path , $name:expr ) => { {
+                    $slf.term.info.get::<$cap>()
+                        .ok_or_else(|| not_supported($name))
+                        .and_then(|cap| $slf.expand(cap.expand()))
+                } };
+                ( $slf:expr , $cap:path , $name:expr , |$ex:ident| $expansion:expr ) => { {
+                    $slf.term.info.get::<$cap>()
+                        .ok_or_else(|| not_supported($name))
+                        .and_then(|cap| {
+                            let $ex = cap.expand();
+                            $slf.expand($expansion)
+                        })
+                } }
+            }
+
             impl<'a> TerminalWriteGuard<'a> 
             {
-                fn new(term: &'a Terminal, writer: MutexGuard<'a, Writer>) -> TerminalWriteGuard<'a>
-                { 
+                fn new(term: &'a Terminal, writer: MutexGuard<'a, Writer>) -> TerminalWriteGuard<'a> {
                     TerminalWriteGuard{term, writer}
                 }
 
-                pub fn size(&self) -> io::Result<Size> { get_winsize(self.term.out_fd) }
+                pub fn size(&self) -> io::Result<Size> {
+                    get_winsize(self.term.out_fd)
+                }
 
-                pub fn disable_keypad(&mut self) -> io::Result<()>
-                {
-                    /*
-                    TODO
+                fn disable_keypad(&mut self) -> io::Result<()> {
                     if let Some(local) = self.term.info.get::<cap::KeypadLocal>() {
                         self.expand(local.expand())?;
-                    } */
+                    }
                     Ok(())
                 }
 
-                fn enable_keypad(&mut self) -> io::Result<bool>
-                {
-                    /*
+                fn enable_keypad(&mut self) -> io::Result<bool> {
                     if let Some(xmit) = self.term.info.get::<cap::KeypadXmit>() {
                         self.expand(xmit.expand())?;
                         Ok(true)
                     } else {
                         Ok(false)
-                    } */
-                    Ok( false )
+                    }
                 }
 
-                fn disable_mouse(&mut self) -> io::Result<()>
-                {
+                fn disable_mouse(&mut self) -> io::Result<()> {
                     self.write_bytes(XTERM_DISABLE_MOUSE.as_bytes())?;
                     self.write_bytes(XTERM_DISABLE_MOUSE_MOTION.as_bytes())
                 }
 
-                fn enable_mouse(&mut self, track_motion: bool) -> io::Result<bool>
-                {
+                fn enable_mouse(&mut self, track_motion: bool) -> io::Result<bool> {
                     if self.term.is_xterm() {
                         self.write_bytes(XTERM_ENABLE_MOUSE.as_bytes())?;
                         if track_motion {
@@ -41934,10 +41833,7 @@ pub mod system
                     }
                 }
 
-                fn enter_screen(&mut self) -> io::Result<()> 
-                {
-                    /*
-                    TODO
+                fn enter_screen(&mut self) -> io::Result<()> {
                     match (self.term.info.get::<cap::EnterCaMode>(),
                             self.term.info.get::<cap::ChangeScrollRegion>(),
                             self.term.info.get::<cap::CursorHome>()) {
@@ -41957,32 +41853,29 @@ pub mod system
                     }
 
                     self.clear_attributes()?;
-                    self.clear_screen()?; */
+                    self.clear_screen()?;
+
                     Ok(())
                 }
 
                 fn exit_screen(&mut self) -> io::Result<()> {
-                    /*
-                    TODO
                     if let Some(exit) = self.term.info.get::<cap::ExitCaMode>() {
                         self.expand(exit.expand())?;
                         self.flush()?;
-                    } */
+                    }
 
                     Ok(())
                 }
 
-                pub fn clear_attributes(&mut self) -> io::Result<()> 
-                {
-                    /*
-                    TODO
+                pub fn clear_attributes(&mut self) -> io::Result<()> {
                     if self.writer.fg.is_some() || self.writer.bg.is_some() ||
                             !self.writer.cur_style.is_empty() {
                         self.writer.fg = None;
                         self.writer.bg = None;
                         self.writer.cur_style = Style::empty();
                         expand_opt!(self, cap::ExitAttributeMode)?;
-                    } */
+                    }
+
                     Ok(())
                 }
 
@@ -42016,10 +41909,7 @@ pub mod system
                     }
                 }
 
-                pub fn add_style(&mut self, style: Style) -> io::Result<()>
-                {
-                    /*
-                    TODO
+                pub fn add_style(&mut self, style: Style) -> io::Result<()> {
                     let add = style - self.writer.cur_style;
 
                     if add.contains(Style::BOLD) {
@@ -42035,18 +41925,17 @@ pub mod system
                         expand_opt!(self, cap::EnterUnderlineMode)?;
                     }
 
-                    self.writer.cur_style |= add; */
+                    self.writer.cur_style |= add;
 
                     Ok(())
                 }
 
-                pub fn remove_style(&mut self, style: Style) -> io::Result<()>
-                {
-                    /*
-                    TODO
+                pub fn remove_style(&mut self, style: Style) -> io::Result<()> {
                     let remove = style & self.writer.cur_style;
 
                     if remove.intersects(Style::BOLD | Style::REVERSE) {
+                        // terminfo does not contain entries to remove bold or reverse.
+                        // Instead, we must reset all attributes.
                         let new_style = self.writer.cur_style - remove;
                         let fg = self.writer.fg;
                         let bg = self.writer.bg;
@@ -42063,7 +41952,7 @@ pub mod system
                         }
 
                         self.writer.cur_style -= remove;
-                    } */
+                    }
 
                     Ok(())
                 }
@@ -42072,8 +41961,9 @@ pub mod system
                     let add = style - self.writer.cur_style;
                     let remove = self.writer.cur_style - style;
 
-                    if remove.intersects(Style::BOLD | Style::REVERSE)
-                    {
+                    if remove.intersects(Style::BOLD | Style::REVERSE) {
+                        // terminfo does not contain entries to remove bold or reverse.
+                        // Instead, we must reset all attributes.
                         let fg = self.writer.fg;
                         let bg = self.writer.bg;
                         self.clear_attributes()?;
@@ -42114,115 +42004,82 @@ pub mod system
                     self.set_style(style)
                 }
 
-                fn clear_bg(&mut self) -> io::Result<()>
-                {
-                    /*
-                    TODO
+                fn clear_bg(&mut self) -> io::Result<()> {
                     let fg = self.writer.fg;
                     let style = self.writer.cur_style;
 
                     self.clear_attributes()?;
                     self.set_fg(fg)?;
-                    self.set_style(style) */
-                    Ok( () )
+                    self.set_style(style)
                 }
 
-                fn set_fg_color(&mut self, fg: Color) -> io::Result<()> 
-                {
-                    /*
-                    TODO
-                    expand_opt!(self, cap::SetAForeground, |ex| ex.parameters(color_code(fg))) */
-                    Ok( () )
+                fn set_fg_color(&mut self, fg: Color) -> io::Result<()> {
+                    expand_opt!(self, cap::SetAForeground,
+                        |ex| ex.parameters(color_code(fg)))
                 }
 
-                fn set_bg_color(&mut self, bg: Color) -> io::Result<()>
-                {
-                    /*
-                    TODO
-                    |ex| ex.parameters(color_code(bg))) */
-                    Ok( () )
+                fn set_bg_color(&mut self, bg: Color) -> io::Result<()> {
+                    expand_opt!(self, cap::SetABackground,
+                        |ex| ex.parameters(color_code(bg)))
                 }
 
-                pub fn clear_screen(&mut self) -> io::Result<()>
-                {
-                    /*
-                    TODO
-                    expand_req!(self, cap::ClearScreen, "clear_screen") */
-                    Ok( () )
+                pub fn clear_screen(&mut self) -> io::Result<()> {
+                    expand_req!(self, cap::ClearScreen, "clear_screen")
                 }
 
-                pub fn clear_to_line_end(&mut self) -> io::Result<()>
-                {
-                    /*
-                    TODO
-                    expand_req!(self, cap::ClrEol, "clr_eol") */
-                    Ok( () )
+                pub fn clear_to_line_end(&mut self) -> io::Result<()> {
+                    expand_req!(self, cap::ClrEol, "clr_eol")
                 }
 
-                pub fn clear_to_screen_end(&mut self) -> io::Result<()>
-                {
-                    /*
-                    TODO
-                    expand_req!(self, cap::ClrEos, "clr_eos") */
-                    Ok( () )
+                pub fn clear_to_screen_end(&mut self) -> io::Result<()> {
+                    expand_req!(self, cap::ClrEos, "clr_eos")
                 }
 
-                pub fn move_up(&mut self, n: usize) -> io::Result<()>
-                {
-                    /*
-                    TODO
+                pub fn move_up(&mut self, n: usize) -> io::Result<()> {
                     if n == 1 {
                         expand_req!(self, cap::CursorUp, "cursor_up")?;
                     } else if n != 0 {
                         expand_req!(self, cap::ParmUpCursor, "parm_cursor_up",
                             |ex| ex.parameters(to_u32(n)))?;
-                    } */
-                    Ok( () )
-                }
-
-                pub fn move_down(&mut self, n: usize) -> io::Result<()>
-                {
-                    /*
-                    TODO
-                    if n != 0 {
-                        expand_req!(self, cap::ParmDownCursor, "parm_cursor_down",
-                            |ex| ex.parameters(to_u32(n)))?;
-                    } */
+                    }
                     Ok(())
                 }
 
-                pub fn move_left(&mut self, n: usize) -> io::Result<()>
-                {
-                    /*
-                    TODO
+                pub fn move_down(&mut self, n: usize) -> io::Result<()> {
+                    // Always use ParmDownCursor because CursorDown does not behave
+                    // as expected outside EnterCaMode state.
+                    if n != 0 {
+                        expand_req!(self, cap::ParmDownCursor, "parm_cursor_down",
+                            |ex| ex.parameters(to_u32(n)))?;
+                    }
+                    Ok(())
+                }
+
+                pub fn move_left(&mut self, n: usize) -> io::Result<()> {
                     if n == 1 {
                         expand_req!(self, cap::CursorLeft, "cursor_left")?;
                     } else if n != 0 {
                         expand_req!(self, cap::ParmLeftCursor, "parm_cursor_left",
                             |ex| ex.parameters(to_u32(n)))?;
-                    } */
+                    }
                     Ok(())
                 }
 
-                pub fn move_right(&mut self, n: usize) -> io::Result<()>
-                {
-                    /*
-                    TODO
+                pub fn move_right(&mut self, n: usize) -> io::Result<()> {
                     if n == 1 {
                         expand_req!(self, cap::CursorRight, "cursor_right")?;
                     } else if n != 0 {
                         expand_req!(self, cap::ParmRightCursor, "parm_cursor_right",
                             |ex| ex.parameters(to_u32(n)))?;
-                    } */
+                    }
                     Ok(())
                 }
 
-                pub fn move_to_first_column(&mut self) -> io::Result<()> { self.write_bytes(b"\r") }
+                pub fn move_to_first_column(&mut self) -> io::Result<()> {
+                    self.write_bytes(b"\r")
+                }
 
-                pub fn move_cursor(&mut self, pos: Cursor) -> io::Result<()>
-                {
-                    /*
-                    TODO
+                pub fn move_cursor(&mut self, pos: Cursor) -> io::Result<()> {
                     match (self.term.info.get::<cap::CursorAddress>(),
                             self.term.info.get::<cap::CursorHome>()) {
                         (_, Some(ref home)) if pos == Cursor::default() => {
@@ -42233,7 +42090,8 @@ pub mod system
                                 .parameters(to_u32(pos.line), to_u32(pos.column)))?;
                         }
                         (None, _) => return Err(not_supported("cursor_address"))
-                    } */
+                    }
+
                     Ok(())
                 }
 
@@ -42243,8 +42101,18 @@ pub mod system
                     TODO
                     match mode
                     {
-                        CursorMode::Normal | CursorMode::Overwrite => { expand_opt!(self, cap::CursorNormal)?; }
-                        CursorMode::Invisible => { expand_opt!(self, cap::CursorInvisible)?; }
+                        CursorMode::Normal | CursorMode::Overwrite =>
+                        {
+                            // Overwrite is not supported by Unix terminals.
+                            // We set to normal in this case as it will reverse
+                            // a setting of Invisible
+                            expand_opt!(self, cap::CursorNormal)?;
+                        }
+                        
+                        CursorMode::Invisible =>
+                        {
+                            expand_opt!(self, cap::CursorInvisible)?;
+                        }
                     } */
 
                     Ok(())
@@ -42286,10 +42154,7 @@ pub mod system
                     res
                 }
 
-                fn write_data(&self, buf: &[u8]) -> (usize, io::Result<()>)
-                {
-                    /*
-                    TODO
+                fn write_data(&self, buf: &[u8]) -> (usize, io::Result<()>) {
                     let mut offset = 0;
 
                     let r = loop {
@@ -42305,20 +42170,15 @@ pub mod system
                         }
                     };
 
-                    (offset, r) */
-                    ( 0,  Ok( () ))
+                    (offset, r)
                 }
 
-                fn expand<T: AsRef<[u8]>>(&mut self, exp: Expansion<T>) -> io::Result<()>
-                {
-                    /*
-                    TODO
+                fn expand<T: AsRef<[u8]>>(&mut self, exp: Expansion<T>) -> io::Result<()> {
                     let writer = &mut *self.writer;
                     exp
-                    .with(&mut writer.context)
-                    .to(&mut writer.out_buffer)
-                    .map_err(ti_to_io) */
-                    Ok(())
+                        .with(&mut writer.context)
+                        .to(&mut writer.out_buffer)
+                        .map_err(ti_to_io)
                 }
             }
 
@@ -42333,8 +42193,7 @@ pub mod system
 
             impl Writer 
             {
-                fn new() -> Writer 
-                {
+                fn new() -> Writer {
                     Writer{
                         context: Context::default(),
                         out_buffer: Vec::with_capacity(OUT_BUFFER_SIZE),
@@ -42345,50 +42204,54 @@ pub mod system
                 }
             }
 
-            fn is_xterm(name: &str) -> bool { name == "xterm" || name.starts_with("xterm-") }
+            fn is_xterm(name: &str) -> bool 
+            {
+                // Includes such terminal names as "xterm-256color"
+                name == "xterm" || name.starts_with("xterm-")
+            }
 
             fn sequences(info: &Database) -> SeqMap 
             {
-                let mut sequences = SequenceMap::new();
+                let mut map = SequenceMap::new();
                 /*
-                TODO
-                macro_rules! add {
-                    ( $seq:ty , $key:expr ) => { {
-                        if let Some(seq) = info.get::<$seq>() {
-                            if let Some(s) = ascii_str(seq.as_ref()) {
-                                sequences.insert(s.into(), SeqData::Key($key));
+                    macro_rules! add 
+                    {
+                        ( $seq:ty , $key:expr ) => { {
+                            if let Some(seq) = info.get::<$seq>() {
+                                if let Some(s) = ascii_str(seq.as_ref()) {
+                                    sequences.insert(s.into(), SeqData::Key($key));
+                                }
                             }
-                        }
-                    } }
-                }
+                        } }
+                    }
 
-                add!(cap::KeyUp,        Key::Up);
-                add!(cap::KeyDown,      Key::Down);
-                add!(cap::KeyLeft,      Key::Left);
-                add!(cap::KeyRight,     Key::Right);
-                add!(cap::KeyHome,      Key::Home);
-                add!(cap::KeyEnd,       Key::End);
-                add!(cap::KeyNPage,     Key::PageDown);
-                add!(cap::KeyPPage,     Key::PageUp);
-                add!(cap::KeyDc,        Key::Delete);
-                add!(cap::KeyIc,        Key::Insert);
-                add!(cap::KeyF1,        Key::F(1));
-                add!(cap::KeyF2,        Key::F(2));
-                add!(cap::KeyF3,        Key::F(3));
-                add!(cap::KeyF4,        Key::F(4));
-                add!(cap::KeyF5,        Key::F(5));
-                add!(cap::KeyF6,        Key::F(6));
-                add!(cap::KeyF7,        Key::F(7));
-                add!(cap::KeyF8,        Key::F(8));
-                add!(cap::KeyF9,        Key::F(9));
-                add!(cap::KeyF10,       Key::F(10));
-                add!(cap::KeyF11,       Key::F(11));
-                add!(cap::KeyF12,       Key::F(12));
+                    add!(cap::KeyUp,        Key::Up);
+                    add!(cap::KeyDown,      Key::Down);
+                    add!(cap::KeyLeft,      Key::Left);
+                    add!(cap::KeyRight,     Key::Right);
+                    add!(cap::KeyHome,      Key::Home);
+                    add!(cap::KeyEnd,       Key::End);
+                    add!(cap::KeyNPage,     Key::PageDown);
+                    add!(cap::KeyPPage,     Key::PageUp);
+                    add!(cap::KeyDc,        Key::Delete);
+                    add!(cap::KeyIc,        Key::Insert);
+                    add!(cap::KeyF1,        Key::F(1));
+                    add!(cap::KeyF2,        Key::F(2));
+                    add!(cap::KeyF3,        Key::F(3));
+                    add!(cap::KeyF4,        Key::F(4));
+                    add!(cap::KeyF5,        Key::F(5));
+                    add!(cap::KeyF6,        Key::F(6));
+                    add!(cap::KeyF7,        Key::F(7));
+                    add!(cap::KeyF8,        Key::F(8));
+                    add!(cap::KeyF9,        Key::F(9));
+                    add!(cap::KeyF10,       Key::F(10));
+                    add!(cap::KeyF11,       Key::F(11));
+                    add!(cap::KeyF12,       Key::F(12));
 
-                if is_xterm(info.name()) {
-                    sequences.insert(XTERM_MOUSE_INTRO.into(), SeqData::XTermMouse);
-                } */
-                sequences
+                    if is_xterm(info.name()) { sequences.insert(XTERM_MOUSE_INTRO.into(), SeqData::XTermMouse); }
+                */
+
+                map
             }
 
             pub struct PrepareState 
@@ -42439,6 +42302,9 @@ pub mod system
             fn get_winsize(fd: c_int) -> io::Result<Size> 
             {
                 let mut winsz: Winsize = unsafe { zeroed() };
+
+                // `TIOCGWINSZ.into()` is a workaround to a bug in the libc crate:
+                //  https://github.com/rust-lang/libc/pull/704
                 let res = unsafe { ioctl(fd, TIOCGWINSZ.into(), &mut winsz) };
 
                 if res == -1 {
@@ -42457,24 +42323,22 @@ pub mod system
             {
                 io::Error::from_raw_os_error(e as i32)
             }
-
-            fn ti_to_io(e: error::TerminalError) -> io::Error 
+            /*
+            fn ti_to_io(e: terminfo::Error) -> io::Error 
             {
                 match e {
-                    error::TerminalError::Io(e) => e,
-                    error::TerminalError::NotFound => io::Error::new(
+                    terminfo::Error::Io(e) => e,
+                    terminfo::Error::NotFound => io::Error::new(
                         io::ErrorKind::NotFound, "terminfo entry not found"),
-                    error::TerminalError::Parse => io::Error::new(
+                    terminfo::Error::Parse => io::Error::new(
                         io::ErrorKind::Other, "failed to parse terminfo entry"),
-                    error::TerminalError::Expand(_) => io::Error::new(
+                    terminfo::Error::Expand(_) => io::Error::new(
                         io::ErrorKind::Other, "failed to expand terminfo entry"),
                 }
-            }
+            } */
 
             fn to_timeval(d: Duration) -> TimeVal 
             {
-                /*
-                TODO
                 const MAX_SECS: i64 = i64::max_value() / 1_000;
 
                 let secs = match d.as_secs() {
@@ -42484,8 +42348,7 @@ pub mod system
 
                 let millis = d.subsec_millis() as i64;
 
-                TimeVal::milliseconds(secs * 1_000 + millis) */
-                TimeVal::milliseconds( 0 )
+                TimeVal::milliseconds(secs * 1_000 + millis)
             }
 
             fn peek_event(buf: &[u8], sequences: &SeqMap) -> io::Result<Option<(Event, usize)>>
@@ -42520,6 +42383,7 @@ pub mod system
                                 if let Some((data, len)) = parse_mouse_data(&buf[seq.len()..]) {
                                     Some((Event::Mouse(data), seq.len() + len))
                                 } else {
+                                    // Input sequence was incomplete
                                     None
                                 }
                             }
@@ -42583,6 +42447,7 @@ pub mod system
                 };
 
                 let position = Cursor{
+                    // Parsed line and column begin at 1; we begin at 0
                     line: (line - 1) as usize,
                     column: (column - 1) as usize,
                 };
@@ -42745,8 +42610,8 @@ pub mod system
             use ::
             {
                 libc::windows::{ * },
-                system::{ * },
                 time::{ Duration },
+                system::{ Event },
                 *,
             };
             /*
@@ -42762,7 +42627,8 @@ pub mod system
                 /// Reads raw data from the console.
                 fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>>;
                 /// Reads raw event data from the console.
-                fn read_raw_event(&mut self, events: &mut [INPUT_RECORD], timeout: Option<Duration>) -> io::Result<Option<Event>>;
+                fn read_raw_event(&mut self, events: &mut [INPUT_RECORD], timeout: Option<Duration>) ->
+                io::Result<Option<Event>>;
             }
         } pub use self::ext::{ * };
 
@@ -42794,7 +42660,7 @@ pub mod system
                 system::{ * },
                 time::Duration,
                 *,
-            };
+            };            
             /*
             use winapi::shared::ntdef::HANDLE;
             use winapi::um::wincon::INPUT_RECORD;
@@ -42807,8 +42673,9 @@ pub mod system
             };
             use mortal::terminal::{Color, Cursor, CursorMode, Event, PrepareConfig, Size, Style};
             */
+
             pub struct Screen
-            {
+             {
                 term: Terminal,
                 state: Option<PrepareState>,
                 old_handle: HANDLE,
@@ -42821,8 +42688,7 @@ pub mod system
                 reader: TerminalReadGuard<'a>,
             }
 
-            pub struct ScreenWriteGuard<'a> 
-            {
+            pub struct ScreenWriteGuard<'a> {
                 writer: TerminalWriteGuard<'a>,
                 data: MutexGuard<'a, Writer>,
             }
@@ -42836,10 +42702,8 @@ pub mod system
 
             impl Screen 
             {
-                pub fn new(term: Terminal, config: PrepareConfig) -> io::Result<Option<Screen>>
+                pub fn new(term: Terminal, config: PrepareConfig) -> io::Result<Screen> 
                 {
-                    /*
-                    TODO
                     let size = term.size()?;
                     let old_handle = term.enter_screen()?;
                     let state = term.prepare(config)?;
@@ -42855,98 +42719,79 @@ pub mod system
                             real_cursor: Cursor::default(),
                         }),
                         old_handle,
-                    }) */
-                    Ok( None )
+                    })
                 }
 
-                pub fn stdout(config: PrepareConfig) -> io::Result<Option<Screen>>
-                { 
-                    /*
-                    TODO
-                    //Screen::new(Terminal::stdout()?, config) */
-                    Ok( None )
-                }
+                pub fn stdout(config: PrepareConfig) -> io::Result<Screen> { Screen::new(Terminal::stdout()?, config) }
 
-                pub fn stderr(config: PrepareConfig) -> io::Result<Option<Screen>> 
-                { 
-                    /*
-                    Screen::new(Terminal::stderr()?, config)  */
-                    Ok( None )
-                }
+                pub fn stderr(config: PrepareConfig) -> io::Result<Screen> { Screen::new(Terminal::stderr()?, config) }
 
                 forward_screen_buffer_methods!{ |slf| slf.lock_write_data().buffer }
 
-                pub fn lock_read(&self) -> LockResult<ScreenReadGuard>
-                {
-                    map_lock_result
-                    (
-                        self.term.lock_read(),
-                        |r| ScreenReadGuard::new(self, r)
-                    )
+                pub fn lock_read(&self) -> LockResult<ScreenReadGuard> {
+                    map_lock_result(self.term.lock_read(),
+                        |r| ScreenReadGuard::new(self, r))
                 }
 
-                pub fn try_lock_read(&self) -> TryLockResult<ScreenReadGuard>
-                {
-                    map_try_lock_result
-                    (
-                        self.term.try_lock_read(),
-                        |r| ScreenReadGuard::new(self, r)
-                    )
+                pub fn try_lock_read(&self) -> TryLockResult<ScreenReadGuard> {
+                    map_try_lock_result(self.term.try_lock_read(),
+                        |r| ScreenReadGuard::new(self, r))
                 }
 
-                pub fn lock_write(&self) -> LockResult<ScreenWriteGuard>
-                {
-                    map2_lock_result
-                    (
-                        self.term.lock_write(),
-                        self.writer.lock(),
-                        |a, b| ScreenWriteGuard::new(a, b)
-                    )
+                pub fn lock_write(&self) -> LockResult<ScreenWriteGuard> {
+                    map2_lock_result(self.term.lock_write(), self.writer.lock(),
+                        |a, b| ScreenWriteGuard::new(a, b))
                 }
 
-                pub fn try_lock_write(&self) -> TryLockResult<ScreenWriteGuard>
-                {
-                    map2_try_lock_result
-                    (
-                        self.term.try_lock_write(), 
-                        self.writer.try_lock(), 
-                        |a, b| ScreenWriteGuard::new(a, b)
-                    )
+                pub fn try_lock_write(&self) -> TryLockResult<ScreenWriteGuard> {
+                    map2_try_lock_result(self.term.try_lock_write(), self.writer.try_lock(),
+                        |a, b| ScreenWriteGuard::new(a, b))
                 }
 
-                fn lock_reader(&self) -> ScreenReadGuard { self.lock_read().expect("Screen::lock_reader") }
+                fn lock_reader(&self) -> ScreenReadGuard {
+                    self.lock_read().expect("Screen::lock_reader")
+                }
 
-                fn lock_writer(&self) -> ScreenWriteGuard { self.lock_write().expect("Screen::lock_writer") }
+                fn lock_writer(&self) -> ScreenWriteGuard {
+                    self.lock_write().expect("Screen::lock_writer")
+                }
 
-                fn lock_write_data(&self) -> MutexGuard<Writer> { self.writer.lock().expect("Screen::lock_writer") }
+                fn lock_write_data(&self) -> MutexGuard<Writer> {
+                    self.writer.lock().expect("Screen::lock_writer")
+                }
 
-                pub fn name(&self) -> &str { self.term.name() }
+                pub fn name(&self) -> &str {
+                    self.term.name()
+                }
 
-                pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()>
-                { self.term.set_cursor_mode(mode) }
+                pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> {
+                    self.term.set_cursor_mode(mode)
+                }
 
-                pub fn wait_event(&self, timeout: Option<Duration>) -> io::Result<bool>
-                { self.lock_reader().wait_event(timeout) }
+                pub fn wait_event(&self, timeout: Option<Duration>) -> io::Result<bool> {
+                    self.lock_reader().wait_event(timeout)
+                }
 
-                pub fn read_event(&self, timeout: Option<Duration>) -> io::Result<Option<Event>>
-                { self.lock_reader().read_event(timeout) }
+                pub fn read_event(&self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                    self.lock_reader().read_event(timeout)
+                }
 
-                pub fn read_raw(&self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>>
-                { self.lock_reader().read_raw(buf, timeout) }
+                pub fn read_raw(&self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                    self.lock_reader().read_raw(buf, timeout)
+                }
 
-                pub fn read_raw_event(&self, events: &mut [INPUT_RECORD], timeout: Option<Duration>) ->
-                io::Result<Option<Event>>
-                { self.lock_reader().read_raw_event(events, timeout) }
+                pub fn read_raw_event(&self, events: &mut [INPUT_RECORD],
+                        timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                    self.lock_reader().read_raw_event(events, timeout)
+                }
 
-                pub fn refresh(&self) -> io::Result<()> { self.lock_writer().refresh() }
+                pub fn refresh(&self) -> io::Result<()> {
+                    self.lock_writer().refresh()
+                }
             }
 
-            impl Drop for Screen 
-            {
-                fn drop(&mut self)
-                {
-                    /*
-                    TODO
+            impl Drop for Screen {
+                fn drop(&mut self) {
                     let res = if let Some(state) = self.state.take() {
                         self.term.restore(state)
                     } else {
@@ -42956,27 +42801,23 @@ pub mod system
                     if let Err(e) = res.and_then(
                             |_| unsafe { self.term.exit_screen(self.old_handle) }) {
                         eprintln!("failed to restore terminal: {}", e);
-                    } */
+                    }
                 }
             }
 
             unsafe impl Send for Screen {}
             unsafe impl Sync for Screen {}
 
-            impl<'a> ScreenReadGuard<'a>
-            {
-                fn new(screen: &'a Screen, reader: TerminalReadGuard<'a>) -> ScreenReadGuard<'a> 
-                {
+            impl<'a> ScreenReadGuard<'a> {
+                fn new(screen: &'a Screen, reader: TerminalReadGuard<'a>) -> ScreenReadGuard<'a> {
                     ScreenReadGuard{screen, reader}
                 }
 
-                pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool> 
-                {
+                pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool> {
                     self.reader.wait_event(timeout)
                 }
 
-                pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> 
-                {
+                pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
                     let r = self.reader.read_event(timeout)?;
 
                     if let Some(Event::Resize(size)) = r {
@@ -42986,41 +42827,34 @@ pub mod system
                     Ok(r)
                 }
 
-                pub fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>>
-                {
-                    /*
+                pub fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>> {
                     let r = self.reader.read_raw(buf, timeout)?;
 
                     if let Some(Event::Resize(size)) = r {
                         self.screen.lock_write_data().update_size(size);
                     }
 
-                    Ok(r) */
-                    Ok( None )
+                    Ok(r)
                 }
 
-                pub fn read_raw_event(&mut self, events: &mut [INPUT_RECORD], timeout: Option<Duration>) -> 
-                io::Result<Option<Event>>
-                {
-                    /*
+                pub fn read_raw_event(&mut self, events: &mut [INPUT_RECORD],
+                        timeout: Option<Duration>) -> io::Result<Option<Event>> {
                     let r = self.reader.read_raw_event(events, timeout)?;
 
                     if let Some(Event::Raw(n)) = r {
                         for ev in events[..n].iter().rev() {
-                            if let Some(size) = windows::size_event(ev) {
+                            if let Some(size) = size_event(ev) {
                                 self.screen.lock_write_data().update_size(size);
                                 break;
                             }
                         }
                     }
 
-                    Ok(r) */
-                    Ok( None )
+                    Ok(r)
                 }
             }
 
-            impl<'a> ScreenWriteGuard<'a> 
-            {
+            impl<'a> ScreenWriteGuard<'a> {
                 fn new(writer: TerminalWriteGuard<'a>, data: MutexGuard<'a, Writer>)
                         -> ScreenWriteGuard<'a> {
                     ScreenWriteGuard{writer, data}
@@ -43068,35 +42902,25 @@ pub mod system
                     Ok(())
                 }
 
-                fn apply_attrs
-                (
-                    &mut self,
-                    src: (Option<Color>, Option<Color>, Style),
-                    dest: (Option<Color>, Option<Color>, Style)
-                ) -> io::Result<()>
-                {
-                    /*
+                fn apply_attrs(&mut self,
+                        src: (Option<Color>, Option<Color>, Style),
+                        dest: (Option<Color>, Option<Color>, Style)) -> io::Result<()> {
                     if src != dest {
                         self.writer.set_attributes(dest.0, dest.1, dest.2)?;
-                    } */
+                    }
                     Ok(())
                 }
 
-                fn move_cursor(&mut self, pos: Cursor) -> io::Result<()>
-                {
-                    /*
-                    if self.data.real_cursor != pos
-                    {
+                fn move_cursor(&mut self, pos: Cursor) -> io::Result<()> {
+                    if self.data.real_cursor != pos {
                         self.writer.move_cursor(pos)?;
                         self.data.real_cursor = pos;
-                    } */
-
+                    }
                     Ok(())
                 }
             }
 
-            impl<'a> Drop for ScreenWriteGuard<'a> 
-            {
+            impl<'a> Drop for ScreenWriteGuard<'a> {
                 fn drop(&mut self) {
                     if let Err(e) = self.refresh() {
                         eprintln!("failed to refresh screen: {}", e);
@@ -43104,12 +42928,12 @@ pub mod system
                 }
             }
 
-            impl Writer
-            {
-                fn update_size(&mut self, new_size: Size)
-                {
-                    if self.real_cursor.is_out_of_bounds(new_size) { self.real_cursor = (!0, !0).into(); }
-
+            impl Writer {
+                fn update_size(&mut self, new_size: Size) {
+                    if self.real_cursor.is_out_of_bounds(new_size) {
+                        // Force cursor move on next refresh
+                        self.real_cursor = (!0, !0).into();
+                    }
                     self.buffer.resize(new_size);
                     self.clear_screen = true;
                 }
@@ -43125,7 +42949,6 @@ pub mod system
                 libc::windows::{ * },
                 mem::{ replace, zeroed },
                 os::raw::{ c_int },
-                //os::windows::ffi::OsStrExt,
                 sync::{ atomic::{ AtomicUsize, Ordering }, LockResult, map_lock_result, map_try_lock_result, Mutex, MutexGuard, TryLockResult },
                 system::{ * },
                 time::Duration,
@@ -43321,7 +43144,9 @@ pub mod system
                             buf.push(b'\r');
                         }
                         VK_ESCAPE  => buf.push(b'\x1b'),
+                        // Page up
                         VK_PRIOR   => buf.extend(PAGE_UP_SEQ.as_bytes()),
+                        // Page down
                         VK_NEXT    => buf.extend(PAGE_DOWN_SEQ.as_bytes()),
                         VK_END     => buf.extend(END_SEQ.as_bytes()),
                         VK_HOME    => buf.extend(HOME_SEQ.as_bytes()),
@@ -43460,72 +43285,47 @@ pub mod system
                     "windows-console"
                 }
 
-                pub fn size(&self) -> io::Result<Size> {
-                    self.lock_writer().size()
-                }
+                pub fn size(&self) -> io::Result<Size> { self.lock_writer().size() }
 
-                pub fn clear_screen(&self) -> io::Result<()> {
-                    self.lock_writer().clear_screen()
-                }
+                pub fn clear_screen(&self) -> io::Result<()> { self.lock_writer().clear_screen() }
 
-                pub fn clear_to_line_end(&self) -> io::Result<()> {
-                    self.lock_writer().clear_to_line_end()
-                }
+                pub fn clear_to_line_end(&self) -> io::Result<()> { self.lock_writer().clear_to_line_end() }
 
-                pub fn clear_to_screen_end(&self) -> io::Result<()> {
-                    self.lock_writer().clear_to_screen_end()
-                }
+                pub fn clear_to_screen_end(&self) -> io::Result<()> { self.lock_writer().clear_to_screen_end() }
 
-                pub fn move_to_first_column(&self) -> io::Result<()> {
-                    self.lock_writer().move_to_first_column()
-                }
+                pub fn move_to_first_column(&self) -> io::Result<()> { self.lock_writer().move_to_first_column() }
 
-                pub fn move_up(&self, n: usize) -> io::Result<()> {
-                    if n != 0 {
-                        self.lock_writer().move_up(n)?;
-                    }
-                    Ok(())
-                }
-
-                pub fn move_down(&self, n: usize) -> io::Result<()> {
-                    if n != 0 {
-                        self.lock_writer().move_down(n)?;
-                    }
-                    Ok(())
-                }
-
-                pub fn move_left(&self, n: usize) -> io::Result<()> {
-                    if n != 0 {
-                        self.lock_writer().move_left(n)?;
-                    }
-                    Ok(())
-                }
-
-                pub fn move_right(&self, n: usize) -> io::Result<()> {
-                    if n != 0 {
-                        self.lock_writer().move_right(n)?;
-                    }
-                    Ok(())
-                }
-
-                pub fn enter_screen(&self) -> io::Result<Option<HANDLE>>
+                pub fn move_up(&self, n: usize) -> io::Result<()> 
                 {
-                    /*
-                    TODOD
-                    self.lock_writer().enter_screen() */
-                    Ok( None )
+                    if n != 0 { self.lock_writer().move_up(n)?; }
+                    Ok(())
                 }
+
+                pub fn move_down(&self, n: usize) -> io::Result<()> 
+                {
+                    if n != 0 { self.lock_writer().move_down(n)?; }
+                    Ok(())
+                }
+
+                pub fn move_left(&self, n: usize) -> io::Result<()> 
+                {
+                    if n != 0 { self.lock_writer().move_left(n)?; }
+                    Ok(())
+                }
+
+                pub fn move_right(&self, n: usize) -> io::Result<()> 
+                {
+                    if n != 0 { self.lock_writer().move_right(n)?; }
+                    Ok(())
+                }
+
+                pub fn enter_screen(&self) -> io::Result<HANDLE> { self.lock_writer().enter_screen() }
                 
                 pub unsafe fn exit_screen(&self, old_handle: HANDLE) -> io::Result<()> 
                 { self.lock_writer().exit_screen(old_handle) }
 
-                pub fn prepare(&self, config: PrepareConfig) -> io::Result<Option<PrepareState>>
-                {
-                    /*
-                    TODO
-                    self.lock_reader().prepare(config) */
-                    Ok( None )
-                }
+                pub fn prepare(&self, config: PrepareConfig) -> io::Result<PrepareState> 
+                { self.lock_reader().prepare(config) }
 
                 pub fn restore(&self, state: PrepareState) -> io::Result<()> { self.lock_reader().restore(state) }
 
@@ -43539,7 +43339,7 @@ pub mod system
                 { self.lock_reader().read_raw(buf, timeout) }
 
                 pub fn read_raw_event(&self, events: &mut [INPUT_RECORD], timeout: Option<Duration>) -> 
-                io::Result<Option<Event>>
+                io::Result<Option<Event>> 
                 { self.lock_reader().read_raw_event(events, timeout) }
 
                 pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> 
@@ -43564,8 +43364,8 @@ pub mod system
 
                 pub fn write_str(&self, s: &str) -> io::Result<()> { self.lock_writer().write_str(s) }
 
-                pub fn write_styled(&self, fg: Option<Color>, bg: Option<Color>, style: Style, text: &str) -> 
-                io::Result<()> 
+                pub fn write_styled(&self, fg: Option<Color>, bg: Option<Color>, style: Style, text: &str) ->
+                io::Result<()>
                 { self.lock_writer().write_styled(fg, bg, style, text) }
 
                 pub fn lock_read(&self) -> LockResult<TerminalReadGuard>
@@ -43615,20 +43415,13 @@ pub mod system
                     TerminalReadGuard{term, reader}
                 }
 
-                pub fn prepare(&mut self, config: PrepareConfig) -> io::Result<Option<PrepareState>>
-                {
-                    /*
-                    TODO
+                pub fn prepare(&mut self, config: PrepareConfig) -> io::Result<PrepareState> {
                     let mut writer = self.term.lock_writer();
-                    self.prepare_with_lock(&mut writer, config) */
-                    Ok( None )
+                    self.prepare_with_lock(&mut writer, config)
                 }
 
-                pub fn prepare_with_lock(&mut self, _writer: &mut TerminalWriteGuard, config: PrepareConfig) ->
-                io::Result<Option<PrepareState>>
-                {
-                    /*
-                    TODO
+                pub fn prepare_with_lock(&mut self, _writer: &mut TerminalWriteGuard,
+                        config: PrepareConfig) -> io::Result<PrepareState> {
                     let old_in_mode = unsafe { console_mode(self.term.in_handle)? };
 
                     let mut state = PrepareState{
@@ -43637,30 +43430,37 @@ pub mod system
                     };
 
                     let mut in_mode = old_in_mode;
-                    
+
+                    // Necessary to modify certain flags
                     in_mode |= ENABLE_EXTENDED_FLAGS;
-                    
+
+                    // Disable echoing input to console
                     in_mode &= !ENABLE_ECHO_INPUT;
-                    
+                    // Disable waiting for newline before input can be read
                     in_mode &= !ENABLE_LINE_INPUT;
-                    
+
+                    // Enable or disable processing Ctrl-C as interrupt
                     if config.block_signals {
                         in_mode &= !ENABLE_PROCESSED_INPUT;
                     } else {
                         in_mode |= ENABLE_PROCESSED_INPUT;
                     }
-                    
+
+                    // Enable or disable mouse events
                     if config.enable_mouse {
                         self.reader.always_track_motion = config.always_track_motion;
                         in_mode |= ENABLE_MOUSE_INPUT;
                     } else {
                         in_mode &= !ENABLE_MOUSE_INPUT;
                     }
-                    
+
+                    // Disable text editing using mouse
                     in_mode &= !ENABLE_QUICK_EDIT_MODE;
-                    
+
+                    // Enable window size events
                     in_mode |= ENABLE_WINDOW_INPUT;
-                    
+
+                    // Disable escape sequences in input
                     in_mode &= !ENABLE_VIRTUAL_TERMINAL_INPUT;
 
                     unsafe {
@@ -43673,8 +43473,7 @@ pub mod system
                         }
                     }
 
-                    Ok(state) */
-                    Ok( None )
+                    Ok(state)
                 }
 
                 pub fn restore(&mut self, state: PrepareState) -> io::Result<()> {
@@ -43787,14 +43586,14 @@ pub mod system
                     Ok(Some(Event::Raw(n as usize)))
                 }
 
-                fn mouse_event(&mut self, event: &INPUT_RECORD) -> Option<MouseEvent>
+                fn mouse_event(&mut self, event: &INPUT_RECORD) -> Option<MouseEvent> 
                 {
-                    /*
-                    if event.EventType == MOUSE_EVENT
+                    if event.EventType == MOUSE_EVENT 
                     {
                         let mouse = unsafe { event.Event.MouseEvent() };
 
-                        let input = if mouse.dwEventFlags & MOUSE_WHEELED != 0 {
+                        let input = if mouse.dwEventFlags & MOUSE_WHEELED != 0
+                        {
                             let direction = (mouse.dwButtonState >> 16) as i16;
 
                             if direction > 0 {
@@ -43840,8 +43639,7 @@ pub mod system
                         })
                     } else {
                         None
-                    } */
-                    None
+                    }
                 }
             }
 
@@ -44069,14 +43867,12 @@ pub mod system
                     Ok(())
                 }
 
-                pub fn set_theme(&mut self, theme: Theme) -> io::Result<()> {
-                    self.set_attributes(theme.fg, theme.bg, theme.style)
-                }
-
+                pub fn set_theme(&mut self, theme: Theme) -> io::Result<()> { self.set_attributes(theme.fg, theme.bg, theme.style) }
                 /// Clears any previous attributes
-                pub fn set_attributes(&mut self,
-                        fg: Option<Color>, bg: Option<Color>, style: Style) -> io::Result<()> {
-                    if self.writer.fg != fg || self.writer.bg != bg || self.writer.style != style {
+                pub fn set_attributes(&mut self, fg: Option<Color>, bg: Option<Color>, style: Style) -> io::Result<()>
+                {
+                    if self.writer.fg != fg || self.writer.bg != bg || self.writer.style != style
+                    {
                         self.writer.fg = fg;
                         self.writer.bg = bg;
                         self.writer.style = style;
@@ -44113,25 +43909,26 @@ pub mod system
                     self.write_str(ch.encode_utf8(&mut buf))
                 }
 
-                pub fn write_str(&mut self, s: &str) -> io::Result<()>
-                {
-                    /*
-                    let buf = OsStr::new(s).encode_wide().collect::<Vec<_>>();
+                pub fn write_str(&mut self, s: &str) -> io::Result<()> {
+                    let buf = OsStr::new(s).encodes_wide().collect::<Vec<_>>();
                     let mut n = 0;
 
-                    while buf.len() > n {
+                    while buf.len() > n
+                    {
                         let mut n_dw = 0;
                         let len = to_dword(buf.len() - n);
 
-                        result_bool(unsafe { WriteConsoleW(
+                        result_bool(unsafe { WriteConsoleW
+                        (
                             self.writer.out_handle,
                             buf[n..].as_ptr() as *const VOID,
                             len,
                             &mut n_dw,
-                            ptr::null_mut()) })?;
+                            ptr::null_mut()
+                        ) })?;
 
                         n += n_dw as usize;
-                    } */
+                    }
 
                     Ok(())
                 }
@@ -44199,19 +43996,16 @@ pub mod system
             
             fn as_millis(timeout: Option<Duration>) -> DWORD 
             {
-                /*
                 match timeout
                 {
                     Some(t) =>
                     {
-                        let s = (t.as_secs() * 1_000) as DWORD;
-                        let ms = (t.subsec_nanos() / 1_000_000) as DWORD;
-
+                        let s = (t.whole_seconds() * 1_000) as DWORD;
+                        let ms = (t.subsec_nanoseconds() / 1_000_000) as DWORD;
                         s + ms
                     }
                     None => INFINITE,
-                } */
-                0
+                }
             }
 
             fn fg_code(color: Color) -> WORD 
@@ -44230,7 +44024,8 @@ pub mod system
 
             fn bg_code(color: Color) -> WORD 
             {
-                (match color {
+                (match color 
+                {
                     Color::Black => 0,
                     Color::Blue => BACKGROUND_BLUE,
                     Color::Cyan => BACKGROUND_BLUE | BACKGROUND_GREEN,
@@ -44247,6 +44042,7 @@ pub mod system
                 let mut code = 0;
 
                 if style.contains(Style::BOLD) {
+                    // Closest available approximation for bold text
                     code |= FOREGROUND_INTENSITY as WORD;
                 }
 
@@ -44581,7 +44377,8 @@ pub mod system
                             };
 
                             let mut n = 0;
-                            
+
+                            // Ignore any errors from this
                             let _ = WriteConsoleInputW(
                                 handle,
                                 &input,
@@ -44643,8 +44440,7 @@ pub mod system
 
         let mut pfx = iter.next()?.as_ref();
 
-        for s in iter 
-        {
+        for s in iter {
             let s = s.as_ref();
 
             let n = pfx.chars().zip(s.chars())
@@ -45054,4 +44850,4 @@ fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 45057
+// 44853
