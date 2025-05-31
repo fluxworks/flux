@@ -72,8 +72,7 @@ extern crate unicode_width;
             ::num::rational::BigRational::new($int1.into(), $int2.into())
         }};
     }
-    /// Given a list of elements, converts each element to a `Value` and returns an `Arr` containing a
-    /// vector of the values.
+    /// Converts each element in a list to a `Value` and returns an `Arr` containing a vector of the values.
     #[macro_export] macro_rules! arr
     {
         [] =>
@@ -85,7 +84,7 @@ extern crate unicode_width;
 
         [ $( $elem:expr ),+ ] => { try_arr![ $( $elem ),+ ].unwrap() };
     }
-    /// Given a list of elements, converts each to a `Value` and returns an `Arr` containing a vector of the values.
+    /// Converts each element in a list to a `Value` and returns an `Arr` containing a vector of the values.
     #[macro_export] macro_rules! try_arr
     {
         [ $( $elem:expr ),+ , ] => { try_arr![ $( $elem ),+ ] };
@@ -97,8 +96,7 @@ extern crate unicode_width;
             }
         };
     }
-    /// Given a list of elements, converts each element to `Value`s and returns a `Tup` containing a
-    /// vector of the values.
+    /// Converts each element to `Value`s and returns a `Tup` containing a vector of the values.
     #[macro_export] macro_rules! tup
     {
         ( $( $elem:expr ),* , ) => { tup!( $( $elem ),* ) };
@@ -669,8 +667,7 @@ extern crate unicode_width;
 
             impl $InternalBitFlags {
                 /// Returns a mutable reference to the raw value of the flags currently stored.
-                #[inline]
-                pub fn bits_mut(&mut self) -> &mut $T {
+                #[inline] pub fn bits_mut(&mut self) -> &mut $T {
                     &mut self.0
                 }
             }
@@ -1361,6 +1358,35 @@ extern crate unicode_width;
                 let _ = $field.write_styled_at(pos, fg, bg, style, text);
             }
         }
+    }
+    /// Expand a parametrized string.
+    #[macro_export] macro_rules! expand 
+    {
+        ($value:expr) => ( ::expand!($value;) );
+
+        ($value:expr => $context:expr) => ( ::expand!($value => $context;) );
+
+        ($value:expr; $($item:expr),*) =>
+        ( ::expand!($value => &mut ::default::Default::default(); $($item),*) );
+
+        ($value:expr => $context:expr; $($item:expr),*) => 
+        ({
+            let mut output = ::vec::Vec::new();
+            ::expand!(&mut output, $value => $context; $($item),*).map(|()| output)
+        });
+
+        ($output:expr, $value:expr) => ( ::expand!($output, $value;) );
+
+        ($output:expr, $value:expr => $context:expr) => ( ::expand!($output, $value => $context;) );
+
+        ($output:expr, $value:expr; $($item:expr),*) =>
+        ( ::expand!($output, $value => &mut ::default::Default::default(); $($item),*) );
+
+        ($output:expr, $value:expr => $context:expr; $($item:expr),*) =>
+        ({
+            use ::mode::Expands;
+            $value.expand($output, &[$($item.into()),*], $context)
+        })
     }
 }
 
@@ -2213,6 +2239,11 @@ pub mod char
     }
 }
 
+pub mod clone
+{
+    pub use std::clone::{ * };
+}
+
 pub mod cmp
 {
     pub use std::cmp::{ * };
@@ -2240,8 +2271,6 @@ pub mod database
         },
         *,
     };
-    /// Result type for this crate.
-    pub type OverResult<T> = Result<T, OverError>;
     /// Indent step in .over files.
     const INDENT_STEP: usize = 4; 
 
@@ -2292,10 +2321,10 @@ pub mod database
                                 tcur = t;
                                 has_any = any;
                             }
-                            None => return Err(OverError::ArrTypeMismatch(tcur, tnew)),
+                            None => return Err(OverError::ArrayTypeMismatch(tcur, tnew)),
                         }
                     } else if tcur != tnew {
-                        return Err(OverError::ArrTypeMismatch(tcur, tnew));
+                        return Err(OverError::ArrayTypeMismatch(tcur, tnew));
                     }
                 }
 
@@ -2324,11 +2353,10 @@ pub mod database
                 }
             }
             /// Gets the value at `index`.
-            /// Returns an error if `index` is out of bounds.
             pub fn get(&self, index: usize) -> OverResult<Value> 
             {
                 if index >= self.inner.vec.len() {
-                    Err(OverError::ArrOutOfBounds(index))
+                    Err(OverError::IndexError(index))
                 } else {
                     Ok(self.inner.vec[index].clone())
                 }
@@ -2386,35 +2414,7 @@ pub mod database
                 self.inner.vec == other.inner.vec
             }
         }
-    } pub use self::arrays::Arr;
-
-    pub mod capability
-    {
-        //! Standard capabilities.
-        use ::
-        {
-            borrow::{ Cow },
-            database::
-            {
-                //value::{ Value },
-            },
-            io::{ Write },
-            *,
-        };
-        /*
-        use crate::error;
-        use crate::expand::{Context, Expand, Parameter};*/
-        /// A trait for any object that will represent a terminal capability.
-        pub trait Capable<'a>: Sized
-        {
-            /// Returns the name of the capability in its long form.
-            fn name() -> &'static str;
-            /// Parse the capability from its raw value.
-            fn from(value: Option<&'a Value>) -> Option<Self>;
-            /// Convert the capability into its raw value.
-            fn into(self) -> Option<Value>;
-        }
-    }
+    } pub use self::arrays::{ * };
 
     pub mod error
     {
@@ -2429,36 +2429,45 @@ pub mod database
             error::{ Error },
             *,
         };
+        /// Result type for this crate.
+        pub type OverResult<T> = Result<T, OverError>;
         /// The fabulous OVER error type.
         #[derive(Debug, PartialEq, Eq)]
         pub enum OverError
         {
-            ArrOutOfBounds(usize),
-            ArrTypeMismatch(Type, Type),
+            // Query Errors
             DatabaseNotFound,
-            EnvironmentFileNotFound,            
-            FieldNotFound(String),
-            InvalidFieldName(String),
+            EnvironmentFileNotFound,
             NoParentFound,
-            ParseError(String),
-            TupOutOfBounds(usize),
-            TupTypeMismatch(Type, Type, usize),
-            TypeMismatch(Type, Type),
+            Unfounded,               // NotFound
+            // Index Errors
+            BoundaryError(usize),    // TupOutOfBounds( u )
+            IndexError(usize),       // ArrOutOfBounds( u )
+            // Invalid Errors
             IoError(String),
+            ParseError(String), // Parse
+            ExpandError(String), // Expand( e )            
+            FieldNotFound(String),
+            InvalidFieldName(String),           
+            // Mismatch Errors
+            ArrayTypeMismatch(Type, Type),
+            TupleMismatch(Type, Type, usize), // TupTypeMismatch
+            TypeMismatch(Type, Type),
+            
         }
 
-        impl fmt::Display for OverError 
-        
+        impl fmt::Display for OverError
         {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
             {
                 use self::OverError::*;
                 match *self 
                 {
-                    ArrOutOfBounds(ref index) => write!(f, "Arr index {} out of bounds", index),
-                    ArrTypeMismatch(ref expected, ref found) => write!(
+                    IndexError(ref index) => write!(f, "Arr index {} out of bounds", index),
+                    ArrayTypeMismatch(ref expected, ref found) => write!
+                    (
                         f,
-                        "Arr inner types do not match: expected {}, found {}",
+                        "Array inner types do not match: expected {}, found {}",
                         expected, found
                     ),
                     DatabaseNotFound  => write!(f, "Database not found."),
@@ -2466,8 +2475,8 @@ pub mod database
                     FieldNotFound(ref field) => write!(f, "Field not found: \"{}\"", field),
                     InvalidFieldName(ref field) => write!(f, "Invalid field name: \"{}\"", field),
                     NoParentFound => write!(f, "No parent found for this obj"),
-                    TupOutOfBounds(ref index) => write!(f, "Tup index {} out of bounds", index),
-                    TupTypeMismatch(ref expected, ref found, ref index) => write!(
+                    BoundaryError(ref index) => write!(f, "Tup index {} out of bounds", index),
+                    TupleMismatch(ref expected, ref found, ref index) => write!(
                         f,
                         "Tup inner types do not match at index {}: expected {}, found {}",
                         index, expected, found
@@ -2476,36 +2485,35 @@ pub mod database
                         write!(f, "Type mismatch: expected {}, found {}", expected, found)
                     }
 
-                    ParseError(ref error) | IoError(ref error) => write!(f, "{}", error),
+                    ParseError(ref error) | IoError(ref error) | ExpandError(ref error) => write!(f, "{}", error),
+                    
                 }
             }
         }
 
-        impl Error for OverError 
-        
+        impl Error for OverError
         {
             fn description(&self) -> &str
             {
                 use self::OverError::*;
                 match *self
                 {
-                    ArrOutOfBounds(_) => "Arr index out of bounds",
-                    ArrTypeMismatch(_, _) => "Arr inner types do not match",
+                    IndexError(_) => "Arr index out of bounds",
+                    ArrayTypeMismatch(_, _) => "Arr inner types do not match",
                     DatabaseNotFound => "Database not found",
                     EnvironmentFileNotFound => "Environment File not found",
                     FieldNotFound(_) => "Field not found",
                     InvalidFieldName(_) => "Invalid field name",
                     NoParentFound => "No parent found for this obj",
-                    TupOutOfBounds(_) => "Tup index out of bounds",
-                    TupTypeMismatch(_, _, _) => "Tup inner types do not match",
+                    BoundaryError(_) => "Tup index out of bounds",
+                    TupleMismatch(_, _, _) => "Tup inner types do not match",
                     TypeMismatch(_, _) => "Type mismatch",
-                    ParseError(ref error) | IoError(ref error) => error,
+                    ParseError(ref error) | IoError(ref error) | ExpandError(ref error) => error,
                 }
             }
         }
 
-        impl From<io::Error> for OverError 
-        
+        impl From<io::Error> for OverError
         {
             fn from(e: io::Error) -> Self
             {
@@ -2513,8 +2521,7 @@ pub mod database
             }
         }
 
-        impl From<ParseError> for OverError 
-        
+        impl From<ParseError> for OverError
         {
             fn from(e: ParseError) -> Self
             {
@@ -2522,7 +2529,7 @@ pub mod database
             }
         }
 
-    } pub use self::error::OverError;
+    } pub use self::error::{ * };
 
     pub mod objects
     {
@@ -2909,7 +2916,7 @@ pub mod database
         }
         
         impl Eq for Obj {}
-    } pub use self::objects::Obj;
+    } pub use self::objects::{ * };
 
     pub mod tuples
     {
@@ -2970,7 +2977,7 @@ pub mod database
             /// Returns an error if `index` is out of bounds.
             pub fn get(&self, index: usize) -> OverResult<Value> {
                 if index >= self.inner.vec.len() {
-                    Err(OverError::TupOutOfBounds(index))
+                    Err(OverError::BoundaryError(index))
                 } else {
                     Ok(self.inner.vec[index].clone())
                 }
@@ -3036,7 +3043,7 @@ pub mod database
                 self.inner.vec == other.inner.vec
             }
         }
-    } pub use self::tuples::Tup;
+    } pub use self::tuples::{ * };
 
     pub mod types
     {
@@ -3053,7 +3060,8 @@ pub mod database
             Any,
             /// Null value.
             Null,
-
+            /// A Capability Marker
+            True,
             /// A boolean type.
             Bool,
             /// A signed integer type.
@@ -3064,103 +3072,117 @@ pub mod database
             Char,
             /// A string type.
             Str,
-
             /// An array type, containing the type of its sub-elements.
             Arr(Box<Type>),
             /// A tuple type, containing the types of its sub-elements.
             Tup(Vec<Type>),
             /// An object type.
             Obj,
+            /// A Capability Number
+            Number,
+            /// A Capability String
+            String,
         }
 
         impl Type 
         {
             /// Returns true if this type is strictly the same as `other`.
-            pub fn is(&self, other: &Type) -> bool {
+            pub fn is(&self, other: &Type) -> bool
+            {
                 use self::Type::*;
 
-                match *self {
-                    Any => {
-                        if let Any = *other {
-                            true
-                        } else {
-                            false
-                        }
+                match *self
+                {
+                    Any => 
+                    {
+                        if let Any = *other { true }
+                        else { false }
+                    }
+                    
+                    Null => 
+                    {
+                        if let Null = *other { true }
+                        else { false }
                     }
 
-                    Null => {
-                        if let Null = *other {
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                    Bool => {
-                        if let Bool = *other {
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                    Int => {
-                        if let Int = *other {
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                    Frac => {
-                        if let Frac = *other {
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                    Char => {
-                        if let Char = *other {
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                    Str => {
-                        if let Str = *other {
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                    Obj => {
-                        if let Obj = *other {
-                            true
-                        } else {
-                            false
-                        }
+                    True => 
+                    {
+                        if let True = *other { true }
+                        else { false }
                     }
 
-                    Arr(ref t1) => {
-                        if let Arr(ref t2) = *other {
-                            t1.is(t2)
-                        } else {
-                            false
-                        }
+                    Bool => 
+                    {
+                        if let Bool = *other { true }
+                        else { false }
                     }
 
-                    Tup(ref tvec1) => {
-                        if let Tup(ref tvec2) = *other {
-                            if tvec1.len() != tvec2.len() {
-                                return false;
-                            }
+                    Int => 
+                    {
+                        if let Int = *other { true }
+                        else { false }
+                    }
+
+                    Frac => 
+                    {
+                        if let Frac = *other { true }
+                        else { false }
+                    }
+
+                    Char => 
+                    {
+                        if let Char = *other { true }
+                        else { false }
+                    }
+
+                    Str => 
+                    {
+                        if let Str = *other { true }
+                        else { false }
+                    }
+
+                    Obj => 
+                    {
+                        if let Obj = *other { true }
+                        else { false }
+                    }
+                    
+                    Number =>
+                    {
+                        if let Number = *other { true }
+                        else { false }
+                    }
+
+                    String =>
+                    {
+                        if let String = *other { true }
+                        else { false }
+                    }
+
+                    Arr(ref t1) =>
+                    {
+                        if let Arr(ref t2) = *other { t1.is(t2) }
+                        else { false }
+                    }
+
+                    Tup( ref tvec1 ) =>
+                    {
+                        if let Tup( ref tvec2 ) = *other
+                        {
+                            if tvec1.len() != tvec2.len() { return false; }
+
                             tvec1.iter().zip(tvec2.iter()).all(|(t1, t2)| t1.is(t2))
-                        } else {
-                            false
                         }
+                        
+                        else { false }
                     }
                 }
             }
             /// Returns true if this `Type` contains `Any`.
-            pub fn has_any(&self) -> bool {
-                match *self {
+            pub fn has_any(&self) -> bool
+            {
+                match *self
+                {
                     Type::Any => true,
                     Type::Arr(ref t) => Self::has_any(t),
                     Type::Tup(ref tvec) => tvec.iter().any(|t| Self::has_any(t)),
@@ -3169,89 +3191,95 @@ pub mod database
             }
             /// Returns a type with the most specificity that can be applied to the two input types as well
             /// as `true` if the returned type is not maximally specific, that is, it contains `Any`.
-            pub fn most_specific(type1: &Type, type2: &Type) -> Option<(Type, bool)> {
+            pub fn most_specific(type1: &Type, type2: &Type) -> Option<(Type, bool)>
+            {
                 use self::Type::*;
 
-                if let Any = *type2 {
+                if let Any = *type2
+                {
                     return Some((type1.clone(), type1.has_any()));
                 }
 
-                match *type1 {
+                match *type1
+                {
                     Any => Some((type2.clone(), type2.has_any())),
 
-                    Arr(ref t1) => {
-                        if let Arr(ref t2) = *type2 {
+                    Arr(ref t1) =>
+                    {
+                        if let Arr(ref t2) = *type2
+                        {
                             Self::most_specific(t1, t2).map(|(t, any)| (Arr(Box::new(t)), any))
-                        } else {
-                            None
                         }
+
+                        else { None }
                     }
 
-                    Tup(ref tvec1) => {
-                        if let Tup(ref tvec2) = *type2 {
-                            if tvec1.len() == tvec2.len() {
+                    Tup(ref tvec1) =>
+                    {
+                        if let Tup(ref tvec2) = *type2
+                        {
+                            if tvec1.len() == tvec2.len()
+                            {
                                 let mut has_any = false;
 
                                 let tvec: Option<Vec<Type>> = tvec1
-                                    .iter()
-                                    .zip(tvec2.iter())
-                                    .map(|(t1, t2)| {
-                                        Self::most_specific(t1, t2).map(|(t, any)| {
-                                            if !has_any && any {
-                                                has_any = any;
-                                            }
-                                            t
-                                        })
+                                .iter()
+                                .zip(tvec2.iter())
+                                .map(|(t1, t2)|
+                                {
+                                    Self::most_specific(t1, t2).map(|(t, any)|
+                                    {
+                                        if !has_any && any { has_any = any; }
+
+                                        t
                                     })
-                                    .collect();
+                                }).collect();
 
                                 tvec.map(|tvec| (Tup(tvec), has_any))
-                            } else {
-                                None
                             }
+                            else { None }
                         } else {
                             None
                         }
                     }
 
-                    ref t => {
-                        if t == type2 {
-                            Some((t.clone(), false))
-                        } else {
-                            None
-                        }
+                    ref t =>
+                    {
+                        if t == type2 { Some((t.clone(), false)) }
+                        else { None }
                     }
                 }
             }
         }
         /// Two types are considered equal if one of them is Any or they have the same variant.
         impl PartialEq for Type 
-        
         {
-            fn eq(&self, other: &Self) -> bool {
+            fn eq(&self, other: &Self) -> bool
+            {
                 use self::Type::*;
 
                 // If either is Any, always return `true`.
-                if let Any = *other {
+                if let Any = *other
+                {
                     return true;
                 }
 
-                match *self {
+                match *self
+                {
                     Any => true,
-                    Arr(ref box1) => {
-                        if let Arr(ref box2) = *other {
-                            box1 == box2
-                        } else {
-                            false
-                        }
+
+                    Arr(ref box1) =>
+                    {
+                        if let Arr(ref box2) = *other { box1 == box2 }
+                        else { false }
                     }
-                    Tup(ref tvec1) => {
-                        if let Tup(ref tvec2) = *other {
-                            tvec1 == tvec2
-                        } else {
-                            false
-                        }
+                    
+                    Tup(ref tvec1) =>
+                    {
+                        if let Tup(ref tvec2) = *other { tvec1 == tvec2 }
+                        else { false }
                     }
+
                     _ => self.is(other),
                 }
             }
@@ -3260,40 +3288,46 @@ pub mod database
         impl Eq for Type {}
 
         impl fmt::Display for Type 
-        
         {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
-                {use self::Type::*;
+            {
+                use self::Type::*;
 
-                match *self {
+                match *self
+                {
                     Any => write!(f, "Any"),
                     Null => write!(f, "Null"),
+                    True => write!(f, "True"),
                     Bool => write!(f, "Bool"),
                     Int => write!(f, "Int"),
                     Frac => write!(f, "Frac"),
                     Char => write!(f, "Char"),
                     Str => write!(f, "Str"),
                     Arr(ref boxxy) => write!(f, "Arr({})", boxxy),
-                    Tup(ref tvec) => write!(
+                    Tup(ref tvec) => write!
+                    (
                         f,
                         "Tup({})",
-                        match tvec.get(0) {
+                        match tvec.get(0) 
+                        {
                             Some(t1) => tvec
-                                .iter()
-                                .skip(1)
-                                .fold(format!("{}", t1), |s, t| format!("{}, {}", s, t)),
-                            None => String::from(""),
+                            .iter()
+                            .skip(1)
+                            .fold(format!("{}", t1), |s, t| format!("{}, {}", s, t)),
+                            None => format!(""),
                         }
                     ),
                     Obj => write!(f, "Obj"),
+                    Number => write!(f, "Number"),
+                    String => write!(f, "String"),
                 }
             }
         }
-    }
+    } pub use self::types::{ * };
 
     pub mod values
     {
-        //! Module for values.
+        //! Module for values.5459
         use ::
         {
             database::
@@ -3391,6 +3425,33 @@ pub mod database
                 }
             };
         }
+
+        macro_rules! from_type_marker_to_value 
+        {
+            (number $ty:ty) => {
+                impl From<$ty> for Value {
+                    fn from(value: $ty) -> Self {
+                        Value::Number(value as i32)
+                    }
+                }
+            };
+
+            (string ref $ty:ty) => {
+                impl<'a> From<&'a $ty> for Value {
+                    fn from(value: &'a $ty) -> Self {
+                        Value::String(value.into())
+                    }
+                }
+            };
+
+            (string $ty:ty) => {
+                impl From<$ty> for Value {
+                    fn from(value: $ty) -> Self {
+                        Value::String(value.into())
+                    }
+                }
+            };
+        }
         /// Enum of possible values and their inner types.
         #[derive(Clone, Debug, PartialEq)]
         pub enum Value
@@ -3408,7 +3469,6 @@ pub mod database
             Char(char),
             /// A string value.
             Str(String),
-
             // Reference values.
             /// An array value.
             Arr(arrays::Arr),
@@ -3427,19 +3487,20 @@ pub mod database
         impl Value 
         {
             /// Returns true if this `Value` is null.
-            pub fn is_null(&self) -> bool {
-                if let Value::Null = *self {
-                    true
-                } else {
-                    false
-                }
+            pub fn is_null(&self) -> bool
+            {
+                if let Value::Null = *self { true }
+                else { false }
             }
             /// Returns the `Type` of this `Value`.
-            pub fn get_type(&self) -> Type {
+            pub fn get_type(&self) -> Type
+            {
                 use self::Value::*;
 
-                match *self {
+                match *self
+                {
                     Null => Type::Null,
+                    True => Type::True,
                     Bool(_) => Type::Bool,
                     Int(_) => Type::Int,
                     Frac(_) => Type::Frac,
@@ -3448,17 +3509,22 @@ pub mod database
                     Arr(ref arr) => Type::Arr(Box::new(arr.inner_type())),
                     Tup(ref tup) => Type::Tup(tup.inner_type_vec()),
                     Obj(_) => Type::Obj,
+                    Number( _ ) => Type::Number,
+                    String( _ ) => Type::String,
                 }
             }
 
-            get_fn!(
+            get_fn!
+            (
                 "Returns the `bool` contained in this `Value`. \
                 Returns an error if this `Value` is not `Bool`.",
                 get_bool,
                 bool,
                 Bool
             );
-            get_fn!(
+
+            get_fn!
+            (
                 "Returns the `BigInt` contained in this `Value`. \
                 Returns an error if this `Value` is not `Int`.",
                 get_int,
@@ -3466,53 +3532,63 @@ pub mod database
                 Int
             );
             /// Returns the `BigRational` contained in this `Value`.
-            /// Returns an error if this `Value` is not `Frac`.
-            pub fn get_frac(&self) -> OverResult<BigRational> {
-                match *self {
+            pub fn get_frac(&self) -> OverResult<BigRational>
+            {
+                match *self
+                {
                     Value::Frac(ref inner) => Ok(inner.clone()),
                     Value::Int(ref inner) => Ok(frac!(inner.clone(), 1)),
                     _ => Err(OverError::TypeMismatch(Type::Frac, self.get_type())),
                 }
             }
-            get_fn!(
-                "Returns the `char` contained in this `Value`. \
-                Returns an error if this `Value` is not `Char`.",
+
+            get_fn!
+            (
+                "Returns the `char` contained in this `Value`.",
                 get_char,
                 char,
                 Char
             );
-            get_fn!(
-                "Returns the `String` contained in this `Value`. \
-                Returns an error if this `Value` is not `Str`.",
+
+            get_fn!
+            (
+                "Returns the `String` contained in this `Value`.",
                 get_str,
                 String,
                 Str
             );
-            get_fn!(
-                "Returns the `Obj` contained in this `Value`. \
-                Returns an error if this `Value` is not `Obj`.",
+
+            get_fn!
+            (
+                "Returns the `Obj` contained in this `Value`.",
                 get_obj,
                 objects::Obj,
                 Obj
             );
             /// Returns the `Arr` contained in this `Value`.
-            /// Returns an error if this `Value` is not `Arr`.
-            pub fn get_arr(&self) -> OverResult<arrays::Arr> {
-                if let Value::Arr(ref inner) = *self {
-                    Ok(inner.clone())
-                } else {
-                    Err(OverError::TypeMismatch(
+            pub fn get_arr(&self) -> OverResult<arrays::Arr>
+            {
+                if let Value::Arr(ref inner) = *self { Ok(inner.clone()) }
+                
+                else
+                {
+                    Err(OverError::TypeMismatch
+                    (
                         Type::Arr(Box::new(Type::Any)),
                         self.get_type(),
                     ))
                 }
             }
             /// Returns the `Tup` contained in this `Value`.
-            /// Returns an error if this `Value` is not `Tup`.
-            pub fn get_tup(&self) -> OverResult<tuples::Tup> {
-                if let Value::Tup(ref inner) = *self {
+            pub fn get_tup(&self) -> OverResult<tuples::Tup>
+            {
+                if let Value::Tup(ref inner) = *self
+                {
                     Ok(inner.clone())
-                } else {
+                }
+
+                else
+                {
                     Err(OverError::TypeMismatch(Type::Tup(vec![]), self.get_type()))
                 }
             }
@@ -3520,9 +3596,7 @@ pub mod database
 
         impl fmt::Display for Value
         {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
-                {write!(f, "{}", self.format(true, INDENT_STEP))
-            }
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "{}", self.format(true, INDENT_STEP)) }
         }
         
         impl_eq!(Bool, bool);
@@ -3535,8 +3609,10 @@ pub mod database
 
         impl<'a> PartialEq<&'a str> for Value 
         {
-            fn eq(&self, other: &&str) -> bool {
-                match *self {
+            fn eq(&self, other: &&str) -> bool
+            {
+                match *self
+                {
                     Value::Str(ref value) => value == &other.replace("\r\n", "\n"),
                     _ => false,
                 }
@@ -3545,8 +3621,10 @@ pub mod database
 
         impl<'a> PartialEq<Value> for &'a str 
         {
-            fn eq(&self, other: &Value) -> bool {
-                match *other {
+            fn eq(&self, other: &Value) -> bool
+            {
+                match *other
+                {
                     Value::Str(ref value) => value == &self.replace("\r\n", "\n"),
                     _ => false,
                 }
@@ -3555,7 +3633,8 @@ pub mod database
 
         impl PartialEq<String> for Value 
         {
-            fn eq(&self, other: &String) -> bool {
+            fn eq(&self, other: &String) -> bool
+            {
                 &other.as_str() == self
             }
         }
@@ -3595,18 +3674,35 @@ pub mod database
         impl_from!(char, Char);
         impl_from!(String, Str);
 
-        impl<'a> From<&'a str> for Value 
-        
+        impl<'a> From<&'a str> for Value
         {
-            fn from(inner: &str) -> Self {
+            fn from(inner: &str) -> Self
+            {
                 Value::Str(inner.into())
             }
+        }
+
+        impl From<()> for Value
+        {
+            fn from(_: ()) -> Self { Value::True }
         }
 
         impl_from!(arrays::Arr, Arr);
         impl_from!(tuples::Tup, Tup);
         impl_from!(objects::Obj, Obj);
-    }
+
+        from_type_marker_to_value!(number u8);
+        from_type_marker_to_value!(number i8);
+        from_type_marker_to_value!(number u16);
+        from_type_marker_to_value!(number i16);
+        from_type_marker_to_value!(number u32);
+        from_type_marker_to_value!(number i32);
+
+        from_type_marker_to_value!(string String);
+        from_type_marker_to_value!(string ref str);
+        from_type_marker_to_value!(string Vec<u8>);
+        from_type_marker_to_value!(string ref [u8]);
+    } pub use self::values::{ * };
 
     pub mod parses
     {
@@ -3614,8 +3710,12 @@ pub mod database
         use ::
         {
             *,
-        };
+        }; use super::Obj;
 
+        pub const MAX_DEPTH: usize = 64;
+
+        pub type ParseResult<T> = Result<T, ParseError>;
+        
         pub mod error
         {
             //! Module for parse errors.
@@ -3947,11 +4047,8 @@ pub mod database
 
                 for ch in s.chars()
                 {
-                    if let Some(s) = get_char_map(ch) {
-                        string.push_str(s);
-                    } else {
-                        string.push(ch);
-                    }
+                    if let Some(s) = get_char_map(ch) { string.push_str(s); }
+                    else { string.push(ch); }
                 }
 
                 string
@@ -3976,11 +4073,8 @@ pub mod database
             {
                 fn format(&self, _full: bool, _indent_amt: usize) -> String
                 {
-                    if let Some(s) = get_char_map(*self) {
-                        format!("\'{}\'", s)
-                    } else {
-                        format!("\'{}\'", *self)
-                    }
+                    if let Some(s) = get_char_map(*self) { format!("\'{}\'", s) }
+                    else { format!("\'{}\'", *self) }
                 }
             }
 
@@ -3996,23 +4090,21 @@ pub mod database
                     match *self
                     {
                         Value::Null => String::from("null"),
-
-                        Value::Bool(ref inner) => {
-                            if *inner {
-                                String::from("true")
-                            } else {
-                                String::from("false")
-                            }
+                        Value::True => String::from("True"),
+                        Value::Bool(ref inner) =>
+                        {
+                            if *inner { String::from("true") }
+                            else { String::from("false") }
                         }
-
                         Value::Int(ref inner) => format!("{}", inner),
-
                         Value::Frac(ref inner) => inner.format(true, indent_amt),
                         Value::Char(ref inner) => inner.format(true, indent_amt),
                         Value::Str(ref inner) => inner.format(true, indent_amt),
                         Value::Arr(ref inner) => inner.format(true, indent_amt),
                         Value::Tup(ref inner) => inner.format(true, indent_amt),
                         Value::Obj(ref inner) => inner.format(true, indent_amt),
+                        Value::Number(ref inner) => format!("{}", inner),
+                        Value::String(ref inner) => format!("{:?}", inner),
                     }
                 }
             }
@@ -4025,47 +4117,41 @@ pub mod database
                     {
                         0 =>
                         {
-                            if full {
-                                String::from("[]")
-                            } else {
-                                String::new()
-                            }
+                            if full { String::from("[]") } 
+                            else { String::new() }
                         }
 
                         1 =>
                         {
                             let f = self.get(0).unwrap().format(true, indent_amt);
-                            if full {
-                                format!("[{}]", f)
-                            } else {
-                                f
-                            }
+
+                            if full { format!("[{}]", f) }
+                            else { f }
                         }
 
                         _ =>
                         {
-                            let mut s = if full {
-                                String::from("[\n")
-                            } else {
-                                String::new()
-                            };
+                            let mut s = if full { String::from("[\n") }
+                            else { String::new() };
 
-                            self.with_each(|value| {
-                                s.push_str(&format!(
+                            self.with_each(|value|
+                            {
+                                s.push_str(&format!
+                                (
                                     "{}{}\n",
                                     indent(indent_amt),
                                     value.format(true, indent_amt + INDENT_STEP)
                                 ))
                             });
 
-                            if full {
-                                let actual_indent_amt = if indent_amt == 0 {
-                                    0
-                                } else {
-                                    indent_amt - INDENT_STEP
-                                };
+                            if full
+                            {
+                                let actual_indent_amt = if indent_amt == 0 { 0 }
+                                else { indent_amt - INDENT_STEP };
+
                                 s.push_str(&format!("{}]", indent(actual_indent_amt)));
                             }
+
                             s
                         }
                     }
@@ -4080,42 +4166,35 @@ pub mod database
                     {
                         0 =>
                         {
-                            if full {
-                                String::from("()")
-                            } else {
-                                String::new()
-                            }
+                            if full { String::from("()") }
+                            else { String::new() }
                         }
 
                         1 =>
                         {
                             let f = self.get(0).unwrap().format(true, indent_amt);
-                            if full {
-                                format!("({})", f)
-                            } else {
-                                f
-                            }
+
+                            if full { format!("({})", f) }
+                            else { f }
                         }
 
                         _ =>
                         {
-                            let mut s = if full {
-                                String::from("(\n")
-                            } else {
-                                String::new()
-                            };
+                            let mut s = if full { String::from("(\n") }
+                            else { String::new() };
 
-                            self.with_each(|value| {
-                                s.push_str(&format!(
+                            self.with_each(|value|
+                            {
+                                s.push_str(&format!
+                                (
                                     "{}{}\n",
                                     indent(indent_amt),
                                     value.format(true, indent_amt + INDENT_STEP)
                                 ))
                             });
 
-                            if full {
-                                s.push_str(&format!("{})", indent(indent_amt - INDENT_STEP)));
-                            }
+                            if full { s.push_str(&format!("{})", indent(indent_amt - INDENT_STEP))); }
+
                             s
                         }
                     }
@@ -4159,6 +4238,7 @@ pub mod database
                         });
 
                         if full { s.push_str(&format!("{}}}", indent(indent_amt - INDENT_STEP))); }
+
                         s
                     }
                 }
@@ -5425,42 +5505,43 @@ pub mod database
                         match type1 
                         {
                             Int if type2 == Int => (val1.get_int().unwrap() + val2.get_int().unwrap()).into(),
-                            Frac if type2 == Frac => 
-                            {
-                                (val1.get_frac().unwrap() + val2.get_frac().unwrap()).into()
-                            }
+                            Frac if type2 == Frac => (val1.get_frac().unwrap() + val2.get_frac().unwrap()).into(),
                             Char if type2 == Char => 
                             {
-                                let mut s = String::with_capacity(2);
+                                let mut s = string::String::with_capacity(2);
                                 s.push(val1.get_char().unwrap());
                                 s.push(val2.get_char().unwrap());
                                 s.into()
                             }
+
                             Char if type2 == Str => 
                             {
                                 let str2 = val2.get_str().unwrap();
-                                let mut s = String::with_capacity(1 + str2.len());
+                                let mut s = string::String::with_capacity(1 + str2.len());
                                 s.push(val1.get_char().unwrap());
                                 s.push_str(&str2);
                                 s.into()
                             }
+
                             Str if type2 == Char => 
                             {
                                 let str1 = val1.get_str().unwrap();
-                                let mut s = String::with_capacity(str1.len() + 1);
+                                let mut s = string::String::with_capacity(str1.len() + 1);
                                 s.push_str(&str1);
                                 s.push(val2.get_char().unwrap());
                                 s.into()
                             }
+
                             Str if type2 == Str => 
                             {
                                 let str1 = val1.get_str().unwrap();
                                 let str2 = val2.get_str().unwrap();
-                                let mut s = String::with_capacity(str1.len() + str2.len());
+                                let mut s = string::String::with_capacity(str1.len() + str2.len());
                                 s.push_str(&str1);
                                 s.push_str(&str2);
                                 s.into()
                             }
+
                             Arr(_) => 
                             {
                                 match Type::most_specific(&type1, &type2) 
@@ -5474,20 +5555,15 @@ pub mod database
                                         let mut vec = Vec::with_capacity(vec1.len() + vec2.len());
                                         vec.append(&mut vec1);
                                         vec.append(&mut vec2);
-
-                                        // Get the inner type.
-                                        let arr = if let Arr(ref t) = t 
-                                        {
-                                            // Because we know the type already, we can safely use `_unchecked`.
-                                            arrays::Arr::from_vec_unchecked(vec, t.deref().clone())
-                                        } else 
-                                        {
-                                            panic!("Logic error")
-                                        };
+                                        
+                                        let arr = if let Arr(ref t) = t { arrays::Arr::from_vec_unchecked(vec, t.deref().clone()) }
+                                        else { panic!("Logic error") };
 
                                         arr.into()
                                     }
-                                    None => {
+
+                                    None =>
+                                    {
                                         return parse_err
                                         (
                                             stream.file(),
@@ -5643,16 +5719,11 @@ pub mod database
                 }
             }
         }
-        
-        use super::Obj;
-
-        pub type ParseResult<T> = Result<T, ParseError>;
-        pub const MAX_DEPTH: usize = 64;
         /// Load an `Obj` from a file.
         pub fn load_from_file(path: &str) -> ParseResult<Obj> { parser::parse_obj_file(path) }
         /// Load an `Obj` from a &str.
         pub fn load_from_str(contents: &str) -> ParseResult<Obj> { parser::parse_obj_str(contents) }
-    }
+    } pub use self::parses::{ * };
     /// pls custom database.
     #[derive(Eq, PartialEq, Clone, Debug)]
     pub struct Database
@@ -6237,6 +6308,9 @@ pub mod is
     pub fn is_printable(c: char) -> bool */
     /// Returns whether the character is printable.
     pub fn printable(c: char) -> bool { c == '\t' || c == '\n' || !(c == '\0' || is::ctrl(c)) }
+    /*
+    fn is_flag(...) -> bool */
+    pub fn flag(i: u8) -> bool { i == b' ' || i == b'-' || i == b'+' || i == b'#' }
 }
 /*
 libc */
@@ -6361,7 +6435,6 @@ pub mod libc
 
     pub mod windows
     {
-        use ffi::OsStr;
         use ::
         {
             ffi::{ OsStr },
@@ -6371,413 +6444,1280 @@ pub mod libc
             },
             *,
         };
-        
-        pub const S_OK: HRESULT = 0;
-        pub const S_FALSE: HRESULT = 1;
-        pub type c_char = i8;
-        pub type c_schar = i8;
-        pub type c_uchar = u8;
-        pub type c_short = i16;
-        pub type c_ushort = u16;
-        pub type c_int = i32;
-        pub type c_uint = u32;
-        pub type c_long = i32;
-        pub type c_ulong = u32;
-        pub type c_longlong = i64;
-        pub type c_ulonglong = u64;
-        pub type c_float = f32;
-        pub type c_double = f64;
-        pub type __int8 = i8;
-        pub type __uint8 = u8;
-        pub type __int16 = i16;
-        pub type __uint16 = u16;
-        pub type __int32 = i32;
-        pub type __uint32 = u32;
-        pub type __int64 = i64;
-        pub type __uint64 = u64;
-        pub type wchar_t = u16;
 
-        pub type ULONG = c_ulong;
-        pub type PULONG = *mut ULONG;
-        pub type USHORT = c_ushort;
-        pub type PUSHORT = *mut USHORT;
-        pub type UCHAR = c_uchar;
-        pub type PUCHAR = *mut UCHAR;
-        pub type PSZ = *mut c_char;
-        pub const MAX_PATH: usize = 260;
-        pub const FALSE: BOOL = 0;
-        pub const TRUE: BOOL = 1;
-        pub type DWORD = c_ulong;
-        pub type BOOL = c_int;
-        pub type BYTE = c_uchar;
-        pub type WORD = c_ushort;
-        pub type FLOAT = c_float;
-        pub type PFLOAT = *mut FLOAT;
-        pub type PBOOL = *mut BOOL;
-        pub type LPBOOL = *mut BOOL;
-        pub type PBYTE = *mut BYTE;
-        pub type LPBYTE = *mut BYTE;
-        pub type PINT = *mut c_int;
-        pub type LPINT = *mut c_int;
-        pub type PWORD = *mut WORD;
-        pub type LPWORD = *mut WORD;
-        pub type LPLONG = *mut c_long;
-        pub type PDWORD = *mut DWORD;
-        pub type LPDWORD = *mut DWORD;
-        pub type LPVOID = *mut c_void;
-        pub type LPCVOID = *const c_void;
-        pub type INT = c_int;
-        pub type UINT = c_uint;
-        pub type PUINT = *mut c_uint;
-        pub type POINTER_64_INT = usize;
-        pub type INT8 = c_schar;
-        pub type PINT8 = *mut c_schar;
-        pub type INT16 = c_short;
-        pub type PINT16 = *mut c_short;
-        pub type INT32 = c_int;
-        pub type PINT32 = *mut c_int;
-        pub type INT64 = __int64;
-        pub type PINT64 = *mut __int64;
-        pub type UINT8 = c_uchar;
-        pub type PUINT8 = *mut c_uchar;
-        pub type UINT16 = c_ushort;
-        pub type PUINT16 = *mut c_ushort;
-        pub type UINT32 = c_uint;
-        pub type PUINT32 = *mut c_uint;
-        pub type UINT64 = __uint64;
-        pub type PUINT64 = *mut __uint64;
-        pub type LONG32 = c_int;
-        pub type PLONG32 = *mut c_int;
-        pub type ULONG32 = c_uint;
-        pub type PULONG32 = *mut c_uint;
-        pub type DWORD32 = c_uint;
-        pub type PDWORD32 = *mut c_uint;
-        pub type INT_PTR = isize;
-        pub type PINT_PTR = *mut isize;
-        pub type UINT_PTR = usize;
-        pub type PUINT_PTR = *mut usize;
-        pub type LONG_PTR = isize;
-        pub type PLONG_PTR = *mut isize;
-        pub type ULONG_PTR = usize;
-        pub type PULONG_PTR = *mut usize;
-        pub type SHANDLE_PTR = isize;
-        pub type HANDLE_PTR = usize;
-        pub type WPARAM = UINT_PTR;
-        pub type LPARAM = LONG_PTR;
-        pub type LRESULT = LONG_PTR;
-
-        pub const INFINITE: DWORD = 0xFFFFFFFF;
-        
-        #[cfg(target_pointer_width = "32")]
-        pub type PHALF_PTR = *mut c_short;
-        #[cfg(target_pointer_width = "64")]
-        pub type PHALF_PTR = *mut c_int;
-        pub type SIZE_T = ULONG_PTR;
-        pub type PSIZE_T = *mut ULONG_PTR;
-        pub type SSIZE_T = LONG_PTR;
-        pub type PSSIZE_T = *mut LONG_PTR;
-        pub type DWORD_PTR = ULONG_PTR;
-        pub type PDWORD_PTR = *mut ULONG_PTR;
-        pub type LONG64 = __int64;
-        pub type PLONG64 = *mut __int64;
-        pub type ULONG64 = __uint64;
-        pub type PULONG64 = *mut __uint64;
-        pub type DWORD64 = __uint64;
-        pub type PDWORD64 = *mut __uint64;
-        pub type KAFFINITY = ULONG_PTR;
-        pub type PKAFFINITY = *mut KAFFINITY;
-
-        pub type PKEY_EVENT_RECORD = *mut KEY_EVENT_RECORD;
-        
-
-        #[repr( C )] struct GROUP_AFFINITY 
+        pub mod constants
         {
-            Mask: KAFFINITY,
-            Group: USHORT,
-            Reserved: [USHORT; 3],
-        }
-        
-        pub type PGROUP_AFFINITY = *mut GROUP_AFFINITY;
-        
-        pub const RIGHT_ALT_PRESSED: DWORD = 0x0001;
-        pub const LEFT_ALT_PRESSED: DWORD = 0x0002;
-        pub const RIGHT_CTRL_PRESSED: DWORD = 0x0004;
-        pub const LEFT_CTRL_PRESSED: DWORD = 0x0008;
-        pub const SHIFT_PRESSED: DWORD = 0x0010;
-        pub const NUMLOCK_ON: DWORD = 0x0020;
-        pub const SCROLLLOCK_ON: DWORD = 0x0040;
-        pub const CAPSLOCK_ON: DWORD = 0x0080;
-        pub const ENHANCED_KEY: DWORD = 0x0100;
-        pub const NLS_DBCSCHAR: DWORD = 0x00010000;
-        pub const NLS_ALPHANUMERIC: DWORD = 0x00000000;
-        pub const NLS_KATAKANA: DWORD = 0x00020000;
-        pub const NLS_HIRAGANA: DWORD = 0x00040000;
-        pub const NLS_ROMAN: DWORD = 0x00400000;
-        pub const NLS_IME_CONVERSION: DWORD = 0x00800000;
-        pub const NLS_IME_DISABLE: DWORD = 0x20000000;
-        pub const CTRL_C_EVENT: DWORD = 0;
-        pub const CTRL_BREAK_EVENT: DWORD = 1;
-        pub const CTRL_CLOSE_EVENT: DWORD = 2;
-        pub const CTRL_LOGOFF_EVENT: DWORD = 5;
-        pub const CTRL_SHUTDOWN_EVENT: DWORD = 6;
-        pub const ENABLE_PROCESSED_INPUT: DWORD = 0x0001;
-        pub const ENABLE_LINE_INPUT: DWORD = 0x0002;
-        pub const ENABLE_ECHO_INPUT: DWORD = 0x0004;
-        pub const ENABLE_WINDOW_INPUT: DWORD = 0x0008;
-        pub const ENABLE_MOUSE_INPUT: DWORD = 0x0010;
-        pub const ENABLE_INSERT_MODE: DWORD = 0x0020;
-        pub const ENABLE_QUICK_EDIT_MODE: DWORD = 0x0040;
-        pub const ENABLE_EXTENDED_FLAGS: DWORD = 0x0080;
-        pub const ENABLE_AUTO_POSITION: DWORD = 0x0100;
-        pub const ENABLE_VIRTUAL_TERMINAL_INPUT: DWORD = 0x0200;
-        pub const ENABLE_PROCESSED_OUTPUT: DWORD = 0x0001;
-        pub const ENABLE_WRAP_AT_EOL_OUTPUT: DWORD = 0x0002;
-        pub const ENABLE_VIRTUAL_TERMINAL_PROCESSING: DWORD = 0x0004;
-        pub const DISABLE_NEWLINE_AUTO_RETURN: DWORD = 0x0008;
-        pub const ENABLE_LVB_GRID_WORLDWIDE: DWORD = 0x0010;
-        pub const MAXIMUM_PROC_PER_GROUP: UCHAR = 64;
-        pub const MAXIMUM_PROCESSORS: UCHAR = MAXIMUM_PROC_PER_GROUP;
-        pub const OBJ_HANDLE_TAGBITS: usize = 0x00000003;
-        pub const SYSTEM_CACHE_ALIGNMENT_SIZE: usize = 128;
-        pub const UCSCHAR_INVALID_CHARACTER: UCSCHAR = 0xffffffff;
-        pub const MIN_UCSCHAR: UCSCHAR = 0;
-        pub const MAX_UCSCHAR: UCSCHAR = 0x0010FFFF;
-        pub const WAIT_TIMEOUT: DWORD = 258;
-        pub const FILE_SHARE_READ: DWORD = 0x00000001;
-        pub const FILE_SHARE_WRITE: DWORD = 0x00000002;
-        pub const FILE_SHARE_DELETE: DWORD = 0x00000004;
-        pub const CONSOLE_TEXTMODE_BUFFER: DWORD = 1;
-        pub const DELETE: DWORD = 0x00010000;
-        pub const READ_CONTROL: DWORD = 0x00020000;
-        pub const WRITE_DAC: DWORD = 0x00040000;
-        pub const WRITE_OWNER: DWORD = 0x00080000;
-        pub const SYNCHRONIZE: DWORD = 0x00100000;
-        pub const STANDARD_RIGHTS_REQUIRED: DWORD = 0x000F0000;
-        pub const STANDARD_RIGHTS_READ: DWORD = READ_CONTROL;
-        pub const STANDARD_RIGHTS_WRITE: DWORD = READ_CONTROL;
-        pub const STANDARD_RIGHTS_EXECUTE: DWORD = READ_CONTROL;
-        pub const STANDARD_RIGHTS_ALL: DWORD = 0x001F0000;
-        pub const SPECIFIC_RIGHTS_ALL: DWORD = 0x0000FFFF;
-        pub const ACCESS_SYSTEM_SECURITY: DWORD = 0x01000000;
-        pub const MAXIMUM_ALLOWED: DWORD = 0x02000000;
-        pub const GENERIC_READ: DWORD = 0x80000000;
-        pub const GENERIC_WRITE: DWORD = 0x40000000;
-        pub const GENERIC_EXECUTE: DWORD = 0x20000000;
-        pub const GENERIC_ALL: DWORD = 0x10000000;
-        pub const STD_INPUT_HANDLE: DWORD = -10i32 as u32;
-        pub const STD_OUTPUT_HANDLE: DWORD = -11i32 as u32;
-        pub const STD_ERROR_HANDLE: DWORD = -12i32 as u32;
-        pub const FROM_LEFT_1ST_BUTTON_PRESSED: DWORD = 0x0001;
-        pub const RIGHTMOST_BUTTON_PRESSED: DWORD = 0x0002;
-        pub const FROM_LEFT_2ND_BUTTON_PRESSED: DWORD = 0x0004;
-        pub const FROM_LEFT_3RD_BUTTON_PRESSED: DWORD = 0x0008;
-        pub const FROM_LEFT_4TH_BUTTON_PRESSED: DWORD = 0x0010;
-        pub const MOUSE_MOVED: DWORD = 0x0001;
-        pub const DOUBLE_CLICK: DWORD = 0x0002;
-        pub const MOUSE_WHEELED: DWORD = 0x0004;
-        pub const MOUSE_HWHEELED: DWORD = 0x0008;
-        pub const VK_LBUTTON: c_int = 0x01;
-        pub const VK_RBUTTON: c_int = 0x02;
-        pub const VK_CANCEL: c_int = 0x03;
-        pub const VK_MBUTTON: c_int = 0x04;
-        pub const VK_XBUTTON1: c_int = 0x05;
-        pub const VK_XBUTTON2: c_int = 0x06;
-        pub const VK_BACK: c_int = 0x08;
-        pub const VK_TAB: c_int = 0x09;
-        pub const VK_CLEAR: c_int = 0x0C;
-        pub const VK_RETURN: c_int = 0x0D;
-        pub const VK_SHIFT: c_int = 0x10;
-        pub const VK_CONTROL: c_int = 0x11;
-        pub const VK_MENU: c_int = 0x12;
-        pub const VK_PAUSE: c_int = 0x13;
-        pub const VK_CAPITAL: c_int = 0x14;
-        pub const VK_KANA: c_int = 0x15;
-        pub const VK_HANGEUL: c_int = 0x15;
-        pub const VK_HANGUL: c_int = 0x15;
-        pub const VK_JUNJA: c_int = 0x17;
-        pub const VK_FINAL: c_int = 0x18;
-        pub const VK_HANJA: c_int = 0x19;
-        pub const VK_KANJI: c_int = 0x19;
-        pub const VK_ESCAPE: c_int = 0x1B;
-        pub const VK_CONVERT: c_int = 0x1C;
-        pub const VK_NONCONVERT: c_int = 0x1D;
-        pub const VK_ACCEPT: c_int = 0x1E;
-        pub const VK_MODECHANGE: c_int = 0x1F;
-        pub const VK_SPACE: c_int = 0x20;
-        pub const VK_PRIOR: c_int = 0x21;
-        pub const VK_NEXT: c_int = 0x22;
-        pub const VK_END: c_int = 0x23;
-        pub const VK_HOME: c_int = 0x24;
-        pub const VK_LEFT: c_int = 0x25;
-        pub const VK_UP: c_int = 0x26;
-        pub const VK_RIGHT: c_int = 0x27;
-        pub const VK_DOWN: c_int = 0x28;
-        pub const VK_SELECT: c_int = 0x29;
-        pub const VK_PRINT: c_int = 0x2A;
-        pub const VK_EXECUTE: c_int = 0x2B;
-        pub const VK_SNAPSHOT: c_int = 0x2C;
-        pub const VK_INSERT: c_int = 0x2D;
-        pub const VK_DELETE: c_int = 0x2E;
-        pub const VK_HELP: c_int = 0x2F;
-        pub const VK_LWIN: c_int = 0x5B;
-        pub const VK_RWIN: c_int = 0x5C;
-        pub const VK_APPS: c_int = 0x5D;
-        pub const VK_SLEEP: c_int = 0x5F;
-        pub const FOREGROUND_BLUE: WORD = 0x0001;
-        pub const FOREGROUND_GREEN: WORD = 0x0002;
-        pub const FOREGROUND_RED: WORD = 0x0004;
-        pub const FOREGROUND_INTENSITY: WORD = 0x0008;
-        pub const BACKGROUND_BLUE: WORD = 0x0010;
-        pub const BACKGROUND_GREEN: WORD = 0x0020;
-        pub const BACKGROUND_RED: WORD = 0x0040;
-        pub const BACKGROUND_INTENSITY: WORD = 0x0080;
-        pub const COMMON_LVB_LEADING_BYTE: WORD = 0x0100;
-        pub const COMMON_LVB_TRAILING_BYTE: WORD = 0x0200;
-        pub const COMMON_LVB_GRID_HORIZONTAL: WORD = 0x0400;
-        pub const COMMON_LVB_GRID_LVERTICAL: WORD = 0x0800;
-        pub const COMMON_LVB_GRID_RVERTICAL: WORD = 0x1000;
-        pub const COMMON_LVB_REVERSE_VIDEO: WORD = 0x4000;
-        pub const COMMON_LVB_UNDERSCORE: WORD = 0x8000;
-        pub const COMMON_LVB_SBCSDBCS: WORD = 0x0300;
-        pub const KEY_EVENT: WORD = 0x0001;
-        pub const MOUSE_EVENT: WORD = 0x0002;
-        pub const WINDOW_BUFFER_SIZE_EVENT: WORD = 0x0004;
-        pub const MENU_EVENT: WORD = 0x0008;
-        pub const FOCUS_EVENT: WORD = 0x0010;
-        pub const ATTACH_PARENT_PROCESS: DWORD = 0xFFFFFFFF;
-        pub const STATUS_USER_APC: NTSTATUS = 0x000000C0;
-        pub const STATUS_WAIT_0: NTSTATUS = 0x00000000;
-        pub const STATUS_ABANDONED_WAIT_0: NTSTATUS = 0x00000080;
-        pub const WAIT_FAILED: DWORD = 0xFFFFFFFF;
-        pub const WAIT_OBJECT_0: DWORD = STATUS_WAIT_0 as u32;
-        pub const WAIT_ABANDONED: DWORD = STATUS_ABANDONED_WAIT_0 as u32;
-        pub const WAIT_ABANDONED_0: DWORD = STATUS_ABANDONED_WAIT_0 as u32;
-        pub const WAIT_IO_COMPLETION: DWORD = STATUS_USER_APC as u32;
-        pub const FOLDERID_Profile:GUID = GUID::create( 0x5E6C858F, 0x0E22, 0x4760, [ 0x9A, 0xFE, 0xEA, 0x33, 0x17, 0xB6, 0x71, 0x73 ] );
-        pub const FOLDERID_RoamingAppData:GUID = GUID::create( 0x3EB685DB, 0x65F9, 0x4CF6, [ 0xA0, 0x3A, 0xE3, 0xEF, 0x65, 0x72, 0x9F, 0x3D ] );
-        pub const FOLDERID_LocalAppData:GUID = GUID::create( 0xF1B32785, 0x6FBA, 0x4FCF, [ 0x9D, 0x55, 0x7B, 0x8E, 0x7F, 0x15, 0x70, 0x91 ] );
-        pub const FOLDERID_Music:GUID = GUID::create( 0x4BD8D571, 0x6D19, 0x48D3, [ 0xBE, 0x97, 0x42, 0x22, 0x20, 0x08, 0x0E, 0x43 ] );
-        pub const FOLDERID_Desktop:GUID = GUID::create( 0xB4BFCC3A, 0xDB2C, 0x424C, [ 0xB0, 0x29, 0x7F, 0xE9, 0x9A, 0x87, 0xC6, 0x41 ] );
-        pub const FOLDERID_Documents:GUID = GUID::create( 0xFDD39AD0, 0x238F, 0x46AF, [ 0xAD, 0xB4, 0x6C, 0x85, 0x48, 0x03, 0x69, 0xC7 ] );
-        pub const FOLDERID_Downloads:GUID = GUID::create( 0x374de290, 0x123f, 0x4565, [ 0x91, 0x64, 0x39, 0xc4, 0x92, 0x5e, 0x46, 0x7b ] );
-        pub const FOLDERID_Pictures:GUID = GUID::create( 0xa990ae9f, 0xa03b, 0x4e80, [ 0x94, 0xbc, 0x99, 0x12, 0xd7, 0x50, 0x41, 0x4 ] );
-        pub const FOLDERID_Public:GUID = GUID::create( 0xDFDF76A2, 0xC82A, 0x4D63, [ 0x90, 0x6A, 0x56, 0x44, 0xAC, 0x45, 0x73, 0x85 ] );
-        pub const FOLDERID_Templates:GUID = GUID::create( 0xA63293E8, 0x664E, 0x48DB, [ 0xA0, 0x79, 0xDF, 0x75, 0x9E, 0x05, 0x09, 0xF7 ] );
-        pub const FOLDERID_Videos:GUID = GUID::create( 0x18989B1D, 0x99B5, 0x455B, [ 0xA0, 0x79, 0xDF, 0x75, 0x9E, 0x05, 0x09, 0xF7 ] );
+            use super::{ * };
 
-        pub type PHANDLER_ROUTINE = Option<unsafe extern "system" fn(CtrlType: DWORD) -> BOOL>;
-        pub type NTSTATUS = LONG;
-        pub type PCONSOLE_FONT_INFO = *mut CONSOLE_FONT_INFO;
-        pub type PCONSOLE_FONT_INFOEX = *mut CONSOLE_FONT_INFOEX;
-        pub type PCONSOLE_CURSOR_INFO = *mut CONSOLE_CURSOR_INFO;
-        pub type PCONSOLE_SELECTION_INFO = *mut CONSOLE_SELECTION_INFO;
-        pub type PCONSOLE_HISTORY_INFO = *mut CONSOLE_HISTORY_INFO;
-        pub type PCONSOLE_SCREEN_BUFFER_INFO = *mut CONSOLE_SCREEN_BUFFER_INFO;
-        pub type PCONSOLE_SCREEN_BUFFER_INFOEX = *mut CONSOLE_SCREEN_BUFFER_INFOEX;
-        pub type COLORREF = DWORD;
-        pub type PINPUT_RECORD = *mut INPUT_RECORD;
-        pub type PFLOAT128 = *mut FLOAT128;
-        pub type LONGLONG = __int64;
-        pub type ULONGLONG = __uint64;
-        pub const MAXLONGLONG: LONGLONG = 0x7fffffffffffffff;
-        pub type PLONGLONG = *mut LONGLONG;
-        pub type PULONGLONG = *mut ULONGLONG;
-        pub type USN = LONGLONG;
-        pub type HANDLE = *mut c_void;
-        pub type PHANDLE = *mut HANDLE;
-        pub type FCHAR = UCHAR;
-        pub type FSHORT = USHORT;
-        pub type FLONG = ULONG;
-        pub type HRESULT = c_long;        
-        pub type CCHAR = c_char;
-        pub type CSHORT = c_short;
-        pub type CLONG = ULONG;
-        pub type PCCHAR = *mut CCHAR;
-        pub type PCSHORT = *mut CSHORT;
-        pub type PCLONG = *mut CLONG;
-        pub type LCID = ULONG;
-        pub type PLCID = PULONG;
-        pub type LANGID = USHORT;        
-        pub type PVOID = *mut c_void;
-        pub type PVOID64 = u64; // This is a 64-bit pointer, even when in 32-bit
-        pub type VOID = c_void;
-        pub type CHAR = c_char;
-        pub type SHORT = c_short;
-        pub type LONG = c_long;
-        pub type WCHAR = wchar_t;
-        pub type PWCHAR = *mut WCHAR;
-        pub type LPWCH = *mut WCHAR;
-        pub type PWCH = *mut WCHAR;
-        pub type LPCWCH = *const WCHAR;
-        pub type PCWCH = *const WCHAR;
-        pub type NWPSTR = *mut WCHAR;
-        pub type LPWSTR = *mut WCHAR;
-        pub type LPTSTR = LPSTR;
-        pub type PWSTR = *mut WCHAR;
-        pub type PZPWSTR = *mut PWSTR;
-        pub type PCZPWSTR = *const PWSTR;
-        pub type LPUWSTR = *mut WCHAR; // Unaligned pointer
-        pub type PUWSTR = *mut WCHAR; // Unaligned pointer
-        pub type LPCWSTR = *const WCHAR;
-        pub type PCWSTR = *const WCHAR;
-        pub type PZPCWSTR = *mut PCWSTR;
-        pub type PCZPCWSTR = *const PCWSTR;
-        pub type LPCUWSTR = *const WCHAR; // Unaligned pointer
-        pub type PCUWSTR = *const WCHAR; // Unaligned pointer
-        pub type PZZWSTR = *mut WCHAR;
-        pub type PCZZWSTR = *const WCHAR;
-        pub type PUZZWSTR = *mut WCHAR; // Unaligned pointer
-        pub type PCUZZWSTR = *const WCHAR; // Unaligned pointer
-        pub type PNZWCH = *mut WCHAR;
-        pub type PCNZWCH = *const WCHAR;
-        pub type PUNZWCH = *mut WCHAR; // Unaligned pointer
-        pub type PCUNZWCH = *const WCHAR; // Unaligned pointer
-        pub type LPCWCHAR = *const WCHAR;
-        pub type PCWCHAR = *const WCHAR;
-        pub type LPCUWCHAR = *const WCHAR; // Unaligned pointer
-        pub type PCUWCHAR = *const WCHAR; // Unaligned pointer
-        pub type UCSCHAR = c_ulong;
-        pub type PUCSCHAR = *mut UCSCHAR;
-        pub type PCUCSCHAR = *const UCSCHAR;
-        pub type PUCSSTR = *mut UCSCHAR;
-        pub type PUUCSSTR = *mut UCSCHAR; // Unaligned pointer
-        pub type PCUCSSTR = *const UCSCHAR;
-        pub type PCUUCSSTR = *const UCSCHAR; // Unaligned pointer
-        pub type PUUCSCHAR = *mut UCSCHAR; // Unaligned pointer
-        pub type PCUUCSCHAR = *const UCSCHAR; // Unaligned pointer
-        pub type PCHAR = *mut CHAR;
-        pub type LPCH = *mut CHAR;
-        pub type PCH = *mut CHAR;
-        pub type LPCCH = *const CHAR;
-        pub type PCCH = *const CHAR;
-        pub type NPSTR = *mut CHAR;
-        pub type LPSTR = *mut CHAR;
-        pub type PSTR = *mut CHAR;
-        pub type PZPSTR = *mut PSTR;
-        pub type PCZPSTR = *const PSTR;
-        pub type LPCSTR = *const CHAR;
-        pub type PCSTR = *const CHAR;
-        pub type PZPCSTR = *mut PCSTR;
-        pub type PCZPCSTR = *const PCSTR;
-        pub type PZZSTR = *mut CHAR;
-        pub type PCZZSTR = *const CHAR;
-        pub type PNZCH = *mut CHAR;
-        pub type PCNZCH = *const CHAR;
-        pub type DOUBLE = c_double;
-        pub type PCONSOLE_READCONSOLE_CONTROL = *mut CONSOLE_READCONSOLE_CONTROL;
-        pub type PEXCEPTION_POINTERS = *mut EXCEPTION_POINTERS;
-        pub type PACCESS_TOKEN = PVOID;
-        pub type PSECURITY_DESCRIPTOR = PVOID;
-        pub type PSID = PVOID;
-        pub type PCLAIMS_BLOB = PVOID;
-        pub type ACCESS_MASK = DWORD;
-        pub type PACCESS_MASK = *mut ACCESS_MASK;
-        pub type PMOUSE_EVENT_RECORD = *mut MOUSE_EVENT_RECORD;
-        pub type PCONTEXT = *mut CONTEXT;
-        pub type PEXCEPTION_RECORD = *mut EXCEPTION_RECORD;
-        pub type KNOWNFOLDERID = GUID;
-        pub type REFKNOWNFOLDERID = *const KNOWNFOLDERID;
+            pub const S_OK: HRESULT = 0;
+            pub const S_FALSE: HRESULT = 1;
+            pub const MAX_PATH: usize = 260;
+            pub const FALSE: BOOL = 0;
+            pub const TRUE: BOOL = 1;
+            pub const INFINITE: DWORD = 0xFFFFFFFF;            
+            pub const RIGHT_ALT_PRESSED: DWORD = 0x0001;
+            pub const LEFT_ALT_PRESSED: DWORD = 0x0002;
+            pub const RIGHT_CTRL_PRESSED: DWORD = 0x0004;
+            pub const LEFT_CTRL_PRESSED: DWORD = 0x0008;
+            pub const SHIFT_PRESSED: DWORD = 0x0010;
+            pub const NUMLOCK_ON: DWORD = 0x0020;
+            pub const SCROLLLOCK_ON: DWORD = 0x0040;
+            pub const CAPSLOCK_ON: DWORD = 0x0080;
+            pub const ENHANCED_KEY: DWORD = 0x0100;
+            pub const NLS_DBCSCHAR: DWORD = 0x00010000;
+            pub const NLS_ALPHANUMERIC: DWORD = 0x00000000;
+            pub const NLS_KATAKANA: DWORD = 0x00020000;
+            pub const NLS_HIRAGANA: DWORD = 0x00040000;
+            pub const NLS_ROMAN: DWORD = 0x00400000;
+            pub const NLS_IME_CONVERSION: DWORD = 0x00800000;
+            pub const NLS_IME_DISABLE: DWORD = 0x20000000;
+            pub const CTRL_C_EVENT: DWORD = 0;
+            pub const CTRL_BREAK_EVENT: DWORD = 1;
+            pub const CTRL_CLOSE_EVENT: DWORD = 2;
+            pub const CTRL_LOGOFF_EVENT: DWORD = 5;
+            pub const CTRL_SHUTDOWN_EVENT: DWORD = 6;
+            pub const ENABLE_PROCESSED_INPUT: DWORD = 0x0001;
+            pub const ENABLE_LINE_INPUT: DWORD = 0x0002;
+            pub const ENABLE_ECHO_INPUT: DWORD = 0x0004;
+            pub const ENABLE_WINDOW_INPUT: DWORD = 0x0008;
+            pub const ENABLE_MOUSE_INPUT: DWORD = 0x0010;
+            pub const ENABLE_INSERT_MODE: DWORD = 0x0020;
+            pub const ENABLE_QUICK_EDIT_MODE: DWORD = 0x0040;
+            pub const ENABLE_EXTENDED_FLAGS: DWORD = 0x0080;
+            pub const ENABLE_AUTO_POSITION: DWORD = 0x0100;
+            pub const ENABLE_VIRTUAL_TERMINAL_INPUT: DWORD = 0x0200;
+            pub const ENABLE_PROCESSED_OUTPUT: DWORD = 0x0001;
+            pub const ENABLE_WRAP_AT_EOL_OUTPUT: DWORD = 0x0002;
+            pub const ENABLE_VIRTUAL_TERMINAL_PROCESSING: DWORD = 0x0004;
+            pub const DISABLE_NEWLINE_AUTO_RETURN: DWORD = 0x0008;
+            pub const ENABLE_LVB_GRID_WORLDWIDE: DWORD = 0x0010;
+            pub const MAXIMUM_PROC_PER_GROUP: UCHAR = 64;
+            pub const MAXIMUM_PROCESSORS: UCHAR = MAXIMUM_PROC_PER_GROUP;
+            pub const OBJ_HANDLE_TAGBITS: usize = 0x00000003;
+            pub const SYSTEM_CACHE_ALIGNMENT_SIZE: usize = 128;
+            pub const UCSCHAR_INVALID_CHARACTER: UCSCHAR = 0xffffffff;
+            pub const MIN_UCSCHAR: UCSCHAR = 0;
+            pub const MAX_UCSCHAR: UCSCHAR = 0x0010FFFF;
+            pub const WAIT_TIMEOUT: DWORD = 258;
+            pub const FILE_SHARE_READ: DWORD = 0x00000001;
+            pub const FILE_SHARE_WRITE: DWORD = 0x00000002;
+            pub const FILE_SHARE_DELETE: DWORD = 0x00000004;
+            pub const CONSOLE_TEXTMODE_BUFFER: DWORD = 1;
+            pub const DELETE: DWORD = 0x00010000;
+            pub const READ_CONTROL: DWORD = 0x00020000;
+            pub const WRITE_DAC: DWORD = 0x00040000;
+            pub const WRITE_OWNER: DWORD = 0x00080000;
+            pub const SYNCHRONIZE: DWORD = 0x00100000;
+            pub const STANDARD_RIGHTS_REQUIRED: DWORD = 0x000F0000;
+            pub const STANDARD_RIGHTS_READ: DWORD = READ_CONTROL;
+            pub const STANDARD_RIGHTS_WRITE: DWORD = READ_CONTROL;
+            pub const STANDARD_RIGHTS_EXECUTE: DWORD = READ_CONTROL;
+            pub const STANDARD_RIGHTS_ALL: DWORD = 0x001F0000;
+            pub const SPECIFIC_RIGHTS_ALL: DWORD = 0x0000FFFF;
+            pub const ACCESS_SYSTEM_SECURITY: DWORD = 0x01000000;
+            pub const MAXIMUM_ALLOWED: DWORD = 0x02000000;
+            pub const GENERIC_READ: DWORD = 0x80000000;
+            pub const GENERIC_WRITE: DWORD = 0x40000000;
+            pub const GENERIC_EXECUTE: DWORD = 0x20000000;
+            pub const GENERIC_ALL: DWORD = 0x10000000;
+            pub const STD_INPUT_HANDLE: DWORD = -10i32 as u32;
+            pub const STD_OUTPUT_HANDLE: DWORD = -11i32 as u32;
+            pub const STD_ERROR_HANDLE: DWORD = -12i32 as u32;
+            pub const FROM_LEFT_1ST_BUTTON_PRESSED: DWORD = 0x0001;
+            pub const RIGHTMOST_BUTTON_PRESSED: DWORD = 0x0002;
+            pub const FROM_LEFT_2ND_BUTTON_PRESSED: DWORD = 0x0004;
+            pub const FROM_LEFT_3RD_BUTTON_PRESSED: DWORD = 0x0008;
+            pub const FROM_LEFT_4TH_BUTTON_PRESSED: DWORD = 0x0010;
+            pub const MOUSE_MOVED: DWORD = 0x0001;
+            pub const DOUBLE_CLICK: DWORD = 0x0002;
+            pub const MOUSE_WHEELED: DWORD = 0x0004;
+            pub const MOUSE_HWHEELED: DWORD = 0x0008;
+            pub const VK_LBUTTON: c_int = 0x01;
+            pub const VK_RBUTTON: c_int = 0x02;
+            pub const VK_CANCEL: c_int = 0x03;
+            pub const VK_MBUTTON: c_int = 0x04;
+            pub const VK_XBUTTON1: c_int = 0x05;
+            pub const VK_XBUTTON2: c_int = 0x06;
+            pub const VK_BACK: c_int = 0x08;
+            pub const VK_TAB: c_int = 0x09;
+            pub const VK_CLEAR: c_int = 0x0C;
+            pub const VK_RETURN: c_int = 0x0D;
+            pub const VK_SHIFT: c_int = 0x10;
+            pub const VK_CONTROL: c_int = 0x11;
+            pub const VK_MENU: c_int = 0x12;
+            pub const VK_PAUSE: c_int = 0x13;
+            pub const VK_CAPITAL: c_int = 0x14;
+            pub const VK_KANA: c_int = 0x15;
+            pub const VK_HANGEUL: c_int = 0x15;
+            pub const VK_HANGUL: c_int = 0x15;
+            pub const VK_JUNJA: c_int = 0x17;
+            pub const VK_FINAL: c_int = 0x18;
+            pub const VK_HANJA: c_int = 0x19;
+            pub const VK_KANJI: c_int = 0x19;
+            pub const VK_ESCAPE: c_int = 0x1B;
+            pub const VK_CONVERT: c_int = 0x1C;
+            pub const VK_NONCONVERT: c_int = 0x1D;
+            pub const VK_ACCEPT: c_int = 0x1E;
+            pub const VK_MODECHANGE: c_int = 0x1F;
+            pub const VK_SPACE: c_int = 0x20;
+            pub const VK_PRIOR: c_int = 0x21;
+            pub const VK_NEXT: c_int = 0x22;
+            pub const VK_END: c_int = 0x23;
+            pub const VK_HOME: c_int = 0x24;
+            pub const VK_LEFT: c_int = 0x25;
+            pub const VK_UP: c_int = 0x26;
+            pub const VK_RIGHT: c_int = 0x27;
+            pub const VK_DOWN: c_int = 0x28;
+            pub const VK_SELECT: c_int = 0x29;
+            pub const VK_PRINT: c_int = 0x2A;
+            pub const VK_EXECUTE: c_int = 0x2B;
+            pub const VK_SNAPSHOT: c_int = 0x2C;
+            pub const VK_INSERT: c_int = 0x2D;
+            pub const VK_DELETE: c_int = 0x2E;
+            pub const VK_HELP: c_int = 0x2F;
+            pub const VK_LWIN: c_int = 0x5B;
+            pub const VK_RWIN: c_int = 0x5C;
+            pub const VK_APPS: c_int = 0x5D;
+            pub const VK_SLEEP: c_int = 0x5F;
+            pub const FOREGROUND_BLUE: WORD = 0x0001;
+            pub const FOREGROUND_GREEN: WORD = 0x0002;
+            pub const FOREGROUND_RED: WORD = 0x0004;
+            pub const FOREGROUND_INTENSITY: WORD = 0x0008;
+            pub const BACKGROUND_BLUE: WORD = 0x0010;
+            pub const BACKGROUND_GREEN: WORD = 0x0020;
+            pub const BACKGROUND_RED: WORD = 0x0040;
+            pub const BACKGROUND_INTENSITY: WORD = 0x0080;
+            pub const COMMON_LVB_LEADING_BYTE: WORD = 0x0100;
+            pub const COMMON_LVB_TRAILING_BYTE: WORD = 0x0200;
+            pub const COMMON_LVB_GRID_HORIZONTAL: WORD = 0x0400;
+            pub const COMMON_LVB_GRID_LVERTICAL: WORD = 0x0800;
+            pub const COMMON_LVB_GRID_RVERTICAL: WORD = 0x1000;
+            pub const COMMON_LVB_REVERSE_VIDEO: WORD = 0x4000;
+            pub const COMMON_LVB_UNDERSCORE: WORD = 0x8000;
+            pub const COMMON_LVB_SBCSDBCS: WORD = 0x0300;
+            pub const KEY_EVENT: WORD = 0x0001;
+            pub const MOUSE_EVENT: WORD = 0x0002;
+            pub const WINDOW_BUFFER_SIZE_EVENT: WORD = 0x0004;
+            pub const MENU_EVENT: WORD = 0x0008;
+            pub const FOCUS_EVENT: WORD = 0x0010;
+            pub const ATTACH_PARENT_PROCESS: DWORD = 0xFFFFFFFF;
+            pub const STATUS_USER_APC: NTSTATUS = 0x000000C0;
+            pub const STATUS_WAIT_0: NTSTATUS = 0x00000000;
+            pub const STATUS_ABANDONED_WAIT_0: NTSTATUS = 0x00000080;
+            pub const WAIT_FAILED: DWORD = 0xFFFFFFFF;
+            pub const WAIT_OBJECT_0: DWORD = STATUS_WAIT_0 as u32;
+            pub const WAIT_ABANDONED: DWORD = STATUS_ABANDONED_WAIT_0 as u32;
+            pub const WAIT_ABANDONED_0: DWORD = STATUS_ABANDONED_WAIT_0 as u32;
+            pub const WAIT_IO_COMPLETION: DWORD = STATUS_USER_APC as u32;
+            pub const FOLDERID_Profile:GUID = GUID::create( 0x5E6C858F, 0x0E22, 0x4760, [ 0x9A, 0xFE, 0xEA, 0x33, 0x17, 0xB6, 0x71, 0x73 ] );
+            pub const FOLDERID_RoamingAppData:GUID = GUID::create( 0x3EB685DB, 0x65F9, 0x4CF6, [ 0xA0, 0x3A, 0xE3, 0xEF, 0x65, 0x72, 0x9F, 0x3D ] );
+            pub const FOLDERID_LocalAppData:GUID = GUID::create( 0xF1B32785, 0x6FBA, 0x4FCF, [ 0x9D, 0x55, 0x7B, 0x8E, 0x7F, 0x15, 0x70, 0x91 ] );
+            pub const FOLDERID_Music:GUID = GUID::create( 0x4BD8D571, 0x6D19, 0x48D3, [ 0xBE, 0x97, 0x42, 0x22, 0x20, 0x08, 0x0E, 0x43 ] );
+            pub const FOLDERID_Desktop:GUID = GUID::create( 0xB4BFCC3A, 0xDB2C, 0x424C, [ 0xB0, 0x29, 0x7F, 0xE9, 0x9A, 0x87, 0xC6, 0x41 ] );
+            pub const FOLDERID_Documents:GUID = GUID::create( 0xFDD39AD0, 0x238F, 0x46AF, [ 0xAD, 0xB4, 0x6C, 0x85, 0x48, 0x03, 0x69, 0xC7 ] );
+            pub const FOLDERID_Downloads:GUID = GUID::create( 0x374de290, 0x123f, 0x4565, [ 0x91, 0x64, 0x39, 0xc4, 0x92, 0x5e, 0x46, 0x7b ] );
+            pub const FOLDERID_Pictures:GUID = GUID::create( 0xa990ae9f, 0xa03b, 0x4e80, [ 0x94, 0xbc, 0x99, 0x12, 0xd7, 0x50, 0x41, 0x4 ] );
+            pub const FOLDERID_Public:GUID = GUID::create( 0xDFDF76A2, 0xC82A, 0x4D63, [ 0x90, 0x6A, 0x56, 0x44, 0xAC, 0x45, 0x73, 0x85 ] );
+            pub const FOLDERID_Templates:GUID = GUID::create( 0xA63293E8, 0x664E, 0x48DB, [ 0xA0, 0x79, 0xDF, 0x75, 0x9E, 0x05, 0x09, 0xF7 ] );
+            pub const FOLDERID_Videos:GUID = GUID::create( 0x18989B1D, 0x99B5, 0x455B, [ 0xA0, 0x79, 0xDF, 0x75, 0x9E, 0x05, 0x09, 0xF7 ] );
+            pub const MAXLONGLONG: LONGLONG = 0x7fffffffffffffff;
+            pub const UTF8_REPLACEMENT_CHARACTER: &str = "\u{FFFD}";
+            
+        } pub use self::constants::{ * };
+        
+        pub mod structs
+        {
+            use borrow::Cow;
+            use sync::Arc;
+            use rc::Rc;
+            use ::hash::Hasher;
+            use ::hash::Hash;
+            use ::system::AsInner;
+            use super::{ * };
 
+            #[repr( C )]
+            pub struct GROUP_AFFINITY 
+            {
+                Mask: KAFFINITY,
+                Group: USHORT,
+                Reserved: [USHORT; 3],
+            }
+            
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct GUID
+            {
+                pub Data1: c_ulong,
+                pub Data2: c_ushort,
+                pub Data3: c_ushort,
+                pub Data4: [c_uchar; 8],
+            }
+
+            impl GUID
+            {
+                pub const fn create( Data1:c_ulong, Data2:c_ushort, Data3:c_ushort, Data4:[c_uchar; 8] ) -> Self
+                {
+                    Self
+                    {
+                        Data1,
+                        Data2,
+                        Data3,
+                        Data4,
+                    }
+                }
+
+                pub fn folder_id_profile() -> *const Self
+                {
+                    unsafe
+                    {
+                        ::mem::transmute( &FOLDERID_Profile )
+                    }
+                }
+
+                pub fn folder_id_roaming_app_data() -> *const Self
+                {
+                    unsafe
+                    {
+                        ::mem::transmute( &FOLDERID_RoamingAppData )
+                    }
+                }
+
+                pub fn folder_id_local_app_data() -> *const Self
+                {
+                    unsafe
+                    {
+                        ::mem::transmute( &FOLDERID_LocalAppData )
+                    }
+                }
+                
+                pub fn folder_id_music() -> *const Self
+                {
+                    unsafe
+                    {
+                        ::mem::transmute( &FOLDERID_Music )
+                    }
+                }
+                
+                pub fn folder_id_desktop() -> *const Self
+                {
+                    unsafe
+                    {
+                        ::mem::transmute( &FOLDERID_Desktop )
+                    }
+                }
+                
+                pub fn folder_id_documents() -> *const Self
+                {
+                    unsafe
+                    {
+                        ::mem::transmute( &FOLDERID_Documents )
+                    }
+                }
+                
+                pub fn folder_id_downloads() -> *const Self
+                {
+                    unsafe
+                    {
+                        ::mem::transmute( &FOLDERID_Downloads )
+                    }
+                }
+                
+                pub fn folder_id_pictures() -> *const Self
+                {
+                    unsafe
+                    {
+                        ::mem::transmute( &FOLDERID_Pictures )
+                    }
+                }
+                
+                pub fn folder_id_public() -> *const Self
+                {
+                    unsafe
+                    {
+                        ::mem::transmute( &FOLDERID_Public )
+                    }
+                }
+                
+                pub fn folder_id_templates() -> *const Self
+                {
+                    unsafe
+                    {
+                        ::mem::transmute( &FOLDERID_Templates )
+                    }
+                }
+                
+                pub fn folder_id_videos() -> *const Self
+                {
+                    unsafe
+                    {
+                        ::mem::transmute( &FOLDERID_Videos )
+                    }
+                }
+            }
+
+            #[repr( C )] #[derive( Clone, Copy )]
+            pub struct FLOAT128
+            {
+                pub LowPart: __int64,
+                pub HighPart: __int64,
+            }
+            
+            #[repr( C )] #[derive( Clone, Copy )]
+            pub struct CONTEXT_u( () );
+
+            #[repr( C )] #[derive( Clone, Copy )]
+            pub struct M128A 
+            {
+                pub Low: ULONGLONG,
+                pub High: LONGLONG,
+            }
+
+            #[repr( C )] #[derive( Clone, Copy )]
+            pub struct CONTEXT 
+            {
+                pub P1Home: DWORD64,
+                pub P2Home: DWORD64,
+                pub P3Home: DWORD64,
+                pub P4Home: DWORD64,
+                pub P5Home: DWORD64,
+                pub P6Home: DWORD64,
+                pub ContextFlags: DWORD,
+                pub MxCsr: DWORD,
+                pub SegCs: WORD,
+                pub SegDs: WORD,
+                pub SegEs: WORD,
+                pub SegFs: WORD,
+                pub SegGs: WORD,
+                pub SegSs: WORD,
+                pub EFlags: DWORD,
+                pub Dr0: DWORD64,
+                pub Dr1: DWORD64,
+                pub Dr2: DWORD64,
+                pub Dr3: DWORD64,
+                pub Dr6: DWORD64,
+                pub Dr7: DWORD64,
+                pub Rax: DWORD64,
+                pub Rcx: DWORD64,
+                pub Rdx: DWORD64,
+                pub Rbx: DWORD64,
+                pub Rsp: DWORD64,
+                pub Rbp: DWORD64,
+                pub Rsi: DWORD64,
+                pub Rdi: DWORD64,
+                pub R8: DWORD64,
+                pub R9: DWORD64,
+                pub R10: DWORD64,
+                pub R11: DWORD64,
+                pub R12: DWORD64,
+                pub R13: DWORD64,
+                pub R14: DWORD64,
+                pub R15: DWORD64,
+                pub Rip: DWORD64,
+                pub u: CONTEXT_u,
+                pub VectorRegister: [M128A; 26],
+                pub VectorControl: DWORD64,
+                pub DebugControl: DWORD64,
+                pub LastBranchToRip: DWORD64,
+                pub LastBranchFromRip: DWORD64,
+                pub LastExceptionToRip: DWORD64,
+                pub LastExceptionFromRip: DWORD64,
+            }
+            
+            #[repr( C )] #[derive( Clone, Copy )]
+            pub struct EXCEPTION_RECORD {
+                pub ExceptionCode: DWORD,
+                pub ExceptionFlags: DWORD,
+                pub ExceptionRecord: *mut EXCEPTION_RECORD,
+                pub ExceptionAddress: PVOID,
+                pub NumberParameters: DWORD,
+                pub ExceptionInformation: [ULONG_PTR; 15],
+            }
+
+            #[repr( C )] #[derive( Clone, Copy )]
+            pub struct EXCEPTION_POINTERS {
+                pub ExceptionRecord: PEXCEPTION_RECORD,
+                pub ContextRecord: PCONTEXT,
+            }
+
+            #[repr( C )] #[derive( Clone, Copy )]
+            pub struct CONSOLE_READCONSOLE_CONTROL
+            {
+                pub nLength: ULONG,
+                pub nInitialChars: ULONG,
+                pub dwCtrlWakeupMask: ULONG,
+                pub dwControlKeyState: ULONG,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct WINDOW_BUFFER_SIZE_RECORD
+            {
+                pub dwSize: COORD,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct SECURITY_ATTRIBUTES
+            {
+                pub nLength: DWORD,
+                pub lpSecurityDescriptor: LPVOID,
+                pub bInheritHandle: BOOL,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct CHAR_INFO_Char(()); 
+
+            impl CHAR_INFO_Char
+            {
+                pub unsafe fn UnicodeChar_mut(&mut self) -> &mut WCHAR
+                {
+                    unsafe
+                    {
+                        mem::transmute( ptr::null_mut::<&mut WCHAR>() )
+                    }
+                }
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct CONSOLE_FONT_INFO
+            {
+                pub nFont: DWORD,
+                pub dwFontSize: COORD,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct CONSOLE_FONT_INFOEX
+            {
+                pub cbSize: ULONG,
+                pub nFont: DWORD,
+                pub dwFontSize: COORD,
+                pub FontFamily: UINT,
+                pub FontWeight: UINT,
+                pub FaceName: [WCHAR; 32],
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct CONSOLE_SCREEN_BUFFER_INFOEX
+            {
+                pub cbSize: ULONG,
+                pub dwSize: COORD,
+                pub dwCursorPosition: COORD,
+                pub wAttributes: WORD,
+                pub srWindow: SMALL_RECT,
+                pub dwMaximumWindowSize: COORD,
+                pub wPopupAttributes: WORD,
+                pub bFullscreenSupported: BOOL,
+                pub ColorTable: [COLORREF; 16],
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct MOUSE_EVENT_RECORD
+            {
+                pub dwMousePosition: COORD,
+                pub dwButtonState: DWORD,
+                pub dwControlKeyState: DWORD,
+                pub dwEventFlags: DWORD,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct CONSOLE_HISTORY_INFO 
+            {
+                pub cbSize: UINT,
+                pub HistoryBufferSize: UINT,
+                pub NumberOfHistoryBuffers: UINT,
+                pub dwFlags: DWORD,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct CONSOLE_SELECTION_INFO
+            {
+                pub dwFlags: DWORD,
+                pub dwSelectionAnchor: COORD,
+                pub srSelection: SMALL_RECT,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct CONSOLE_CURSOR_INFO
+            {
+                pub dwSize: DWORD,
+                pub bVisible: BOOL,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct INPUT_RECORD_Event( () );
+
+            impl INPUT_RECORD_Event
+            {
+                pub unsafe fn WindowBufferSizeEvent(&self) -> &WINDOW_BUFFER_SIZE_RECORD
+                {
+                    unsafe
+                    {
+                        mem::transmute( ptr::null::<&WINDOW_BUFFER_SIZE_RECORD>() )
+                    }
+                }
+                
+                pub unsafe fn KeyEvent(&self) -> &KEY_EVENT_RECORD
+                {
+                    unsafe
+                    {
+                        mem::transmute( ptr::null::<&KEY_EVENT_RECORD>() )
+                    }
+                }
+                
+                pub unsafe fn MouseEvent(&self) -> &MOUSE_EVENT_RECORD
+                {
+                    unsafe
+                    {
+                        mem::transmute( ptr::null::<&MOUSE_EVENT_RECORD>() )
+                    }
+                }
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct INPUT_RECORD 
+            {
+                pub EventType: WORD,
+                pub Event: INPUT_RECORD_Event,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct CHAR_INFO 
+            {
+                pub Char: CHAR_INFO_Char,
+                pub Attributes: WORD,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct COORD
+            {
+                pub X: SHORT,
+                pub Y: SHORT,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct SMALL_RECT
+            {
+                pub Left: SHORT,
+                pub Top: SHORT,
+                pub Right: SHORT,
+                pub Bottom: SHORT,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct CONSOLE_SCREEN_BUFFER_INFO 
+            {
+                pub dwSize: COORD,
+                pub dwCursorPosition: COORD,
+                pub wAttributes: WORD,
+                pub srWindow: SMALL_RECT,
+                pub dwMaximumWindowSize: COORD,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct KEY_EVENT_RECORD_uChar( () );
+
+            impl KEY_EVENT_RECORD_uChar
+            {
+                pub unsafe fn UnicodeChar(&self) -> &WCHAR
+                {
+                    unsafe
+                    {
+                        mem::transmute( ptr::null::<&WCHAR>() )
+                    }
+                }
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct KEY_EVENT_RECORD
+            {
+                pub bKeyDown: BOOL,
+                pub wRepeatCount: WORD,
+                pub wVirtualKeyCode: WORD,
+                pub wVirtualScanCode: WORD,
+                pub uChar: KEY_EVENT_RECORD_uChar,
+                pub dwControlKeyState: DWORD,
+            }
+
+            impl KEY_EVENT_RECORD
+            {
+                pub unsafe fn UnicodeChar(&self) -> &WCHAR
+                {
+                    unsafe
+                    {
+                        mem::transmute( ptr::null::<&WCHAR>() )
+                    }
+                }
+            }
+            /// A Unicode code point: from U+0000 to U+10FFFF.
+            #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy)]
+            pub struct CodePoint
+            {
+                value: u32,
+            }
+
+            impl ::hash::Hash for CodePoint
+            {
+                #[inline] fn hash<H: ::hash::Hasher>(&self, state: &mut H) { self.value.hash(state) }
+            }
+            /// Iterator for the code points of a WTF-8 string.
+            #[derive(Clone)]
+            pub struct Wtf8CodePoints<'a>
+            {
+                pub bytes: slice::Iter<'a, u8>,
+            }
+
+            impl Iterator for Wtf8CodePoints<'_> 
+            {
+                type Item = CodePoint;
+
+                #[inline] fn next(&mut self) -> Option<CodePoint>
+                {
+                    unsafe { str::next_code_point(&mut self.bytes).map(|c| CodePoint { value: c }) }
+                }
+
+                #[inline] fn size_hint(&self) -> (usize, Option<usize>)
+                {
+                    let len = self.bytes.len();
+                    (len.saturating_add(3) / 4, Some(len))
+                }
+            }
+            /// Generates a wide character sequence for potentially ill-formed UTF-16.
+            #[derive(Clone)]
+            pub struct EncodeWide<'a>
+            {
+                pub code_points: Wtf8CodePoints<'a>,
+                pub extra: u16,
+            }
+
+            impl Iterator for EncodeWide<'_>
+            {
+                type Item = u16;
+
+                #[inline] fn next(&mut self) -> Option<u16> 
+                {
+                    if self.extra != 0 {
+                        let tmp = self.extra;
+                        self.extra = 0;
+                        return Some(tmp);
+                    }
+
+                    let mut buf = [0; 2];
+                    self.code_points.next().map(|code_point|
+                    {
+                        self.extra = buf[1];
+                        buf[0]
+                    })
+                }
+
+                #[inline] fn size_hint(&self) -> (usize, Option<usize>) 
+                {
+                    let (low, high) = self.code_points.size_hint();
+                    let ext = (self.extra != 0) as usize;
+                    (low + ext, high.and_then(|n| n.checked_mul(2)).and_then(|n| n.checked_add(ext)))
+                }
+            }
+            
+            impl ::iter::FusedIterator for EncodeWide<'_> {}
+            /// An owned, growable string of well-formed WTF-8 data.
+            #[derive(Eq, PartialEq, Ord, PartialOrd, Clone)]
+            pub struct Wtf8Buf
+            {
+                bytes: Vec<u8>,
+                is_known_utf8: bool,
+            }
+            
+            impl Hash for Wtf8Buf 
+            {
+                #[inline] fn hash<H:Hasher>( &self, state:&mut H )
+                {
+                    state.write(&self.bytes);
+                    0xfeu8.hash(state)
+                }
+            }
+            /// A borrowed slice of well-formed WTF-8 data.
+            #[repr( transparent )] #[derive( Eq, Ord, PartialEq, PartialOrd )]
+            pub struct Wtf8
+            {
+                pub bytes: [u8],
+            }
+
+            impl AsInner<[u8]> for Wtf8
+            {
+                #[inline] fn as_inner(&self) -> &[u8] { &self.bytes }
+            }
+            /// Formats the string in double quotes, with characters escaped according to [`char::escape_debug`]
+            /// and unpaired surrogates represented as `\u{xxxx}`, where each `x` is a hexadecimal digit.
+            impl fmt::Debug for Wtf8
+            {
+                fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    fn write_str_escaped(f: &mut fmt::Formatter<'_>, s: &str) -> fmt::Result {
+                        use crate::fmt::Write;
+                        for c in s.chars().flat_map(|c| c.escape_debug()) {
+                            f.write_char(c)?
+                        }
+                        Ok(())
+                    }
+
+                    formatter.write_str("\"")?;
+                    let mut pos = 0;
+                    while let Some((surrogate_pos, surrogate)) = self.next_surrogate(pos) {
+                        write_str_escaped(formatter, unsafe {
+                            str::from_utf8_unchecked(&self.bytes[pos..surrogate_pos])
+                        })?;
+                        write!(formatter, "\\u{{{:x}}}", surrogate)?;
+                        pos = surrogate_pos + 3;
+                    }
+                    write_str_escaped(formatter, unsafe { str::from_utf8_unchecked(&self.bytes[pos..]) })?;
+                    formatter.write_str("\"")
+                }
+            }
+            /// Formats the string with unpaired surrogates substituted with the replacement character, U+FFFD.
+            impl fmt::Display for Wtf8
+            {
+                fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    let wtf8_bytes = &self.bytes;
+                    let mut pos = 0;
+                    loop {
+                        match self.next_surrogate(pos) {
+                            Some((surrogate_pos, _)) => {
+                                formatter.write_str(unsafe {
+                                    str::from_utf8_unchecked(&wtf8_bytes[pos..surrogate_pos])
+                                })?;
+                                formatter.write_str(UTF8_REPLACEMENT_CHARACTER)?;
+                                pos = surrogate_pos + 3;
+                            }
+                            None => {
+                                let s = unsafe { str::from_utf8_unchecked(&wtf8_bytes[pos..]) };
+                                if pos == 0 { return s.fmt(formatter) } else { return formatter.write_str(s) }
+                            }
+                        }
+                    }
+                }
+            }
+
+            impl Wtf8
+            {
+                /// Creates a WTF-8 slice from a UTF-8 `&str` slice.
+                #[inline] pub fn from_str(value: &str) -> &Wtf8 
+                {
+                    unsafe { Wtf8::from_bytes_unchecked(value.as_bytes()) }
+                }
+                /// Creates a WTF-8 slice from a WTF-8 byte slice.
+                #[inline] pub unsafe fn from_bytes_unchecked(value: &[u8]) -> &Wtf8 
+                {
+                    // SAFETY: start with &[u8], end with fancy &[u8]
+                    unsafe { &*(value as *const [u8] as *const Wtf8) }
+                }
+                /// Creates a mutable WTF-8 slice from a mutable WTF-8 byte slice.
+                #[inline] unsafe fn from_mut_bytes_unchecked(value: &mut [u8]) -> &mut Wtf8 
+                {
+                    // SAFETY: start with &mut [u8], end with fancy &mut [u8]
+                    unsafe { &mut *(value as *mut [u8] as *mut Wtf8) }
+                }
+                /// Returns the length, in WTF-8 bytes.
+                #[inline] pub fn len(&self) -> usize 
+                {
+                    self.bytes.len()
+                }
+
+                #[inline] pub fn is_empty(&self) -> bool 
+                {
+                    self.bytes.is_empty()
+                }
+                /// Returns the code point at `position` if it is in the ASCII range, or `b'\xFF'` otherwise.
+                #[inline] pub fn ascii_byte_at(&self, position: usize) -> u8 
+                {
+                    match self.bytes[position] {
+                        ascii_byte @ 0x00..=0x7F => ascii_byte,
+                        _ => 0xFF,
+                    }
+                }
+                /// Returns an iterator for the string’s code points.
+                #[inline] pub fn code_points(&self) -> Wtf8CodePoints<'_> 
+                {
+                    Wtf8CodePoints { bytes: self.bytes.iter() }
+                }
+                /// Access raw bytes of WTF-8 data
+                #[inline] pub fn as_bytes(&self) -> &[u8]
+                {
+                    &self.bytes
+                }
+                /// Tries to convert the string to UTF-8 and return a `&str` slice.
+                #[inline] pub fn as_str(&self) -> Result<&str, str::Utf8Error> 
+                {
+                    str::from_utf8(&self.bytes)
+                }
+                /// Creates an owned `Wtf8Buf` from a borrowed `Wtf8`.
+                pub fn to_owned(&self) -> Wtf8Buf
+                {
+                    Wtf8Buf { bytes: self.bytes.to_vec(), is_known_utf8: false }
+                }
+                /// Lossily converts the string to UTF-8.
+                pub fn to_string_lossy(&self) -> Cow<'_, str> 
+                {
+                    let Some((surrogate_pos, _)) = self.next_surrogate(0) else {
+                        return Cow::Borrowed(unsafe { str::from_utf8_unchecked(&self.bytes) });
+                    };
+                    let wtf8_bytes = &self.bytes;
+                    let mut utf8_bytes = Vec::with_capacity(self.len());
+                    utf8_bytes.extend_from_slice(&wtf8_bytes[..surrogate_pos]);
+                    utf8_bytes.extend_from_slice(UTF8_REPLACEMENT_CHARACTER.as_bytes());
+                    let mut pos = surrogate_pos + 3;
+                    loop {
+                        match self.next_surrogate(pos) {
+                            Some((surrogate_pos, _)) => {
+                                utf8_bytes.extend_from_slice(&wtf8_bytes[pos..surrogate_pos]);
+                                utf8_bytes.extend_from_slice(UTF8_REPLACEMENT_CHARACTER.as_bytes());
+                                pos = surrogate_pos + 3;
+                            }
+                            None => {
+                                utf8_bytes.extend_from_slice(&wtf8_bytes[pos..]);
+                                return Cow::Owned(unsafe { String::from_utf8_unchecked(utf8_bytes) });
+                            }
+                        }
+                    }
+                }
+                /// Converts the WTF-8 string to potentially ill-formed UTF-16
+                /// and return an iterator of 16-bit code units.
+                #[inline] pub fn encode_wide(&self) -> EncodeWide<'_> 
+                {
+                    EncodeWide { code_points: self.code_points(), extra: 0 }
+                }
+
+                #[inline] fn next_surrogate(&self, mut pos: usize) -> Option<(usize, u16)> 
+                {
+                    let mut iter = self.bytes[pos..].iter();
+                    loop 
+                    {
+                        let b = *iter.next()?;
+
+                        if b < 0x80 
+                        {
+                            pos += 1;
+                        }
+                        
+                        else if b < 0xE0 
+                        {
+                            iter.next();
+                            pos += 2;
+                        } 
+
+                        else if b == 0xED 
+                        {
+                            match (iter.next(), iter.next()) {
+                                (Some(&b2), Some(&b3)) if b2 >= 0xA0 => {
+                                    return Some((pos, decode_surrogate(b2, b3)));
+                                }
+                                _ => pos += 3,
+                            }
+                        }
+
+                        else if b < 0xF0 
+                        {
+                            iter.next();
+                            iter.next();
+                            pos += 3;
+                        } 
+
+                        else 
+                        {
+                            iter.next();
+                            iter.next();
+                            iter.next();
+                            pos += 4;
+                        }
+                    }
+                }
+
+                #[inline] fn final_lead_surrogate(&self) -> Option<u16> 
+                {
+                    match self.bytes 
+                    {
+                        [.., 0xED, b2 @ 0xA0..=0xAF, b3] => Some(decode_surrogate(b2, b3)),
+                        _ => None,
+                    }
+                }
+
+                #[inline] fn initial_trail_surrogate(&self) -> Option<u16> 
+                {
+                    match self.bytes 
+                    {
+                        [0xED, b2 @ 0xB0..=0xBF, b3, ..] => Some(decode_surrogate(b2, b3)),
+                        _ => None,
+                    }
+                }
+
+                pub fn clone_into(&self, buf: &mut Wtf8Buf) 
+                {
+                    buf.is_known_utf8 = false;
+                    self.bytes.clone_into(&mut buf.bytes);
+                }
+                /// Boxes this `Wtf8`.
+                #[inline] pub fn into_box(&self) -> Box<Wtf8> 
+                {
+                    let boxed: Box<[u8]> = self.bytes.into();
+                    unsafe { mem::transmute(boxed) }
+                }
+                /// Creates a boxed, empty `Wtf8`.
+                pub fn empty_box() -> Box<Wtf8> 
+                {
+                    let boxed: Box<[u8]> = Default::default();
+                    unsafe { mem::transmute(boxed) }
+                }
+
+                #[inline] pub fn into_arc(&self) -> Arc<Wtf8> 
+                {
+                    let arc: Arc<[u8]> = Arc::from(&self.bytes);
+                    unsafe { Arc::from_raw(Arc::into_raw(arc) as *const Wtf8) }
+                }
+
+                #[inline] pub fn into_rc(&self) -> Rc<Wtf8> 
+                {
+                    let rc: Rc<[u8]> = Rc::from(&self.bytes);
+                    unsafe { Rc::from_raw(Rc::into_raw(rc) as *const Wtf8) }
+                }
+
+                #[inline] pub fn make_ascii_lowercase(&mut self) { self.bytes.make_ascii_lowercase() }
+
+                #[inline] pub fn make_ascii_uppercase(&mut self) { self.bytes.make_ascii_uppercase() }
+
+                #[inline] pub fn to_ascii_lowercase(&self) -> Wtf8Buf 
+                { Wtf8Buf { bytes: self.bytes.to_ascii_lowercase(), is_known_utf8: false } }
+
+                #[inline] pub fn to_ascii_uppercase(&self) -> Wtf8Buf 
+                { Wtf8Buf { bytes: self.bytes.to_ascii_uppercase(), is_known_utf8: false } }
+
+                #[inline] pub fn is_ascii(&self) -> bool { self.bytes.is_ascii() }
+
+                #[inline] pub fn eq_ignore_ascii_case(&self, other: &Self) -> bool 
+                { self.bytes.eq_ignore_ascii_case(&other.bytes) }
+            }
+            /// Returns a slice of the given string for the byte range \[`begin`..`end`).
+            impl ops::Index<ops::Range<usize>> for Wtf8
+            {
+                type Output = Wtf8;
+
+                #[inline] fn index(&self, range: ops::Range<usize>) -> &Wtf8
+                {
+                    if range.start <= range.end
+                    && is_code_point_boundary(self, range.start)
+                    && is_code_point_boundary(self, range.end)
+                    { unsafe { slice_unchecked(self, range.start, range.end) } }
+                    else { slice_error_fail(self, range.start, range.end) }
+                }
+            }
+            /// Returns a slice of the given string from byte `begin` to its end.
+            impl ops::Index<ops::RangeFrom<usize>> for Wtf8
+            {
+                type Output = Wtf8;
+
+                #[inline] fn index(&self, range: ops::RangeFrom<usize>) -> &Wtf8
+                {
+                    if is_code_point_boundary(self, range.start) {
+                        unsafe { slice_unchecked(self, range.start, self.len()) }
+                    } else {
+                        slice_error_fail(self, range.start, self.len())
+                    }
+                }
+            }
+            /// Returns a slice of the given string from its beginning to byte `end`.
+            impl ops::Index<ops::RangeTo<usize>> for Wtf8
+            {
+                type Output = Wtf8;
+
+                #[inline] fn index(&self, range: ops::RangeTo<usize>) -> &Wtf8
+                {
+                    if is_code_point_boundary(self, range.end) {
+                        unsafe { slice_unchecked(self, 0, range.end) }
+                    } else {
+                        slice_error_fail(self, 0, range.end)
+                    }
+                }
+            }
+
+            impl ops::Index<ops::RangeFull> for Wtf8
+            {
+                type Output = Wtf8;
+                #[inline] fn index(&self, _range: ops::RangeFull) -> &Wtf8 { self }
+            }
+
+            impl Hash for Wtf8 
+            {
+                #[inline] fn hash<H: Hasher>(&self, state: &mut H) {
+                    state.write(&self.bytes);
+                    0xfeu8.hash(state)
+                }
+            }
+            #[repr(transparent)]
+            pub struct Slice
+            {
+                pub inner: Wtf8,
+            }
+
+            impl fmt::Debug for Slice 
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    fmt::Debug::fmt(&self.inner, f)
+                }
+            }
+
+            impl fmt::Display for Slice
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    fmt::Display::fmt(&self.inner, f)
+                }
+            }
+
+        } pub use self::structs::{ * };
+
+        pub mod traits
+        {
+            use super::{ * };
+
+            use ::system::common::AsInner;
+            
+            pub trait OsStrExt
+            {
+                /// Re-encodes an `OsStr` as a wide character sequence. ❤
+                fn encodes_wide( &self ) -> EncodeWide<'_>;
+            }
+            
+            impl OsStrExt for OsStr
+            {
+                #[inline] fn encodes_wide(&self) -> EncodeWide<'_> { self.as_inner().inner.encode_wide() }
+            }
+            
+            impl AsInner<Slice> for OsStr 
+            {
+                #[inline] fn as_inner(&self) -> &Slice { unsafe { ::mem::transmute( self ) } }
+            }
+        } pub use self::traits::{ * };
+        
+        pub mod types
+        {
+            use super::{ * };
+            
+            pub type c_char = i8;
+            pub type c_schar = i8;
+            pub type c_uchar = u8;
+            pub type c_short = i16;
+            pub type c_ushort = u16;
+            pub type c_int = i32;
+            pub type c_uint = u32;
+            pub type c_long = i32;
+            pub type c_ulong = u32;
+            pub type c_longlong = i64;
+            pub type c_ulonglong = u64;
+            pub type c_float = f32;
+            pub type c_double = f64;
+            pub type __int8 = i8;
+            pub type __uint8 = u8;
+            pub type __int16 = i16;
+            pub type __uint16 = u16;
+            pub type __int32 = i32;
+            pub type __uint32 = u32;
+            pub type __int64 = i64;
+            pub type __uint64 = u64;
+            pub type wchar_t = u16;
+            pub type ULONG = c_ulong;
+            pub type PULONG = *mut ULONG;
+            pub type USHORT = c_ushort;
+            pub type PUSHORT = *mut USHORT;
+            pub type UCHAR = c_uchar;
+            pub type PUCHAR = *mut UCHAR;
+            pub type PSZ = *mut c_char;
+            pub type DWORD = c_ulong;
+            pub type BOOL = c_int;
+            pub type BYTE = c_uchar;
+            pub type WORD = c_ushort;
+            pub type FLOAT = c_float;
+            pub type PFLOAT = *mut FLOAT;
+            pub type PBOOL = *mut BOOL;
+            pub type LPBOOL = *mut BOOL;
+            pub type PBYTE = *mut BYTE;
+            pub type LPBYTE = *mut BYTE;
+            pub type PINT = *mut c_int;
+            pub type LPINT = *mut c_int;
+            pub type PWORD = *mut WORD;
+            pub type LPWORD = *mut WORD;
+            pub type LPLONG = *mut c_long;
+            pub type PDWORD = *mut DWORD;
+            pub type LPDWORD = *mut DWORD;
+            pub type LPVOID = *mut c_void;
+            pub type LPCVOID = *const c_void;
+            pub type INT = c_int;
+            pub type UINT = c_uint;
+            pub type PUINT = *mut c_uint;
+            pub type POINTER_64_INT = usize;
+            pub type INT8 = c_schar;
+            pub type PINT8 = *mut c_schar;
+            pub type INT16 = c_short;
+            pub type PINT16 = *mut c_short;
+            pub type INT32 = c_int;
+            pub type PINT32 = *mut c_int;
+            pub type INT64 = __int64;
+            pub type PINT64 = *mut __int64;
+            pub type UINT8 = c_uchar;
+            pub type PUINT8 = *mut c_uchar;
+            pub type UINT16 = c_ushort;
+            pub type PUINT16 = *mut c_ushort;
+            pub type UINT32 = c_uint;
+            pub type PUINT32 = *mut c_uint;
+            pub type UINT64 = __uint64;
+            pub type PUINT64 = *mut __uint64;
+            pub type LONG32 = c_int;
+            pub type PLONG32 = *mut c_int;
+            pub type ULONG32 = c_uint;
+            pub type PULONG32 = *mut c_uint;
+            pub type DWORD32 = c_uint;
+            pub type PDWORD32 = *mut c_uint;
+            pub type INT_PTR = isize;
+            pub type PINT_PTR = *mut isize;
+            pub type UINT_PTR = usize;
+            pub type PUINT_PTR = *mut usize;
+            pub type LONG_PTR = isize;
+            pub type PLONG_PTR = *mut isize;
+            pub type ULONG_PTR = usize;
+            pub type PULONG_PTR = *mut usize;
+            pub type SHANDLE_PTR = isize;
+            pub type HANDLE_PTR = usize;
+            pub type WPARAM = UINT_PTR;
+            pub type LPARAM = LONG_PTR;
+            pub type LRESULT = LONG_PTR;
+            #[cfg(target_pointer_width = "32")]
+            pub type PHALF_PTR = *mut c_short;
+            #[cfg(target_pointer_width = "64")]
+            pub type PHALF_PTR = *mut c_int;
+            pub type SIZE_T = ULONG_PTR;
+            pub type PSIZE_T = *mut ULONG_PTR;
+            pub type SSIZE_T = LONG_PTR;
+            pub type PSSIZE_T = *mut LONG_PTR;
+            pub type DWORD_PTR = ULONG_PTR;
+            pub type PDWORD_PTR = *mut ULONG_PTR;
+            pub type LONG64 = __int64;
+            pub type PLONG64 = *mut __int64;
+            pub type ULONG64 = __uint64;
+            pub type PULONG64 = *mut __uint64;
+            pub type DWORD64 = __uint64;
+            pub type PDWORD64 = *mut __uint64;
+            pub type KAFFINITY = ULONG_PTR;
+            pub type PKAFFINITY = *mut KAFFINITY;
+            pub type PKEY_EVENT_RECORD = *mut KEY_EVENT_RECORD;
+            pub type PGROUP_AFFINITY = *mut GROUP_AFFINITY;
+            pub type PLONGLONG = *mut LONGLONG;
+            pub type PULONGLONG = *mut ULONGLONG;
+            pub type USN = LONGLONG;
+            pub type HANDLE = *mut c_void;
+            pub type PHANDLE = *mut HANDLE;
+            pub type FCHAR = UCHAR;
+            pub type FSHORT = USHORT;
+            pub type FLONG = ULONG;
+            pub type HRESULT = c_long;        
+            pub type CCHAR = c_char;
+            pub type CSHORT = c_short;
+            pub type CLONG = ULONG;
+            pub type PCCHAR = *mut CCHAR;
+            pub type PCSHORT = *mut CSHORT;
+            pub type PCLONG = *mut CLONG;
+            pub type LCID = ULONG;
+            pub type PLCID = PULONG;
+            pub type LANGID = USHORT;        
+            pub type PVOID = *mut c_void;
+            pub type PVOID64 = u64;
+            pub type VOID = c_void;
+            pub type CHAR = c_char;
+            pub type SHORT = c_short;
+            pub type LONG = c_long;
+            pub type WCHAR = wchar_t;
+            pub type PWCHAR = *mut WCHAR;
+            pub type LPWCH = *mut WCHAR;
+            pub type PWCH = *mut WCHAR;
+            pub type LPCWCH = *const WCHAR;
+            pub type PCWCH = *const WCHAR;
+            pub type NWPSTR = *mut WCHAR;
+            pub type LPWSTR = *mut WCHAR;
+            pub type LPTSTR = LPSTR;
+            pub type PWSTR = *mut WCHAR;
+            pub type PZPWSTR = *mut PWSTR;
+            pub type PCZPWSTR = *const PWSTR;
+            pub type LPUWSTR = *mut WCHAR;
+            pub type PUWSTR = *mut WCHAR;
+            pub type LPCWSTR = *const WCHAR;
+            pub type PCWSTR = *const WCHAR;
+            pub type PZPCWSTR = *mut PCWSTR;
+            pub type PCZPCWSTR = *const PCWSTR;
+            pub type LPCUWSTR = *const WCHAR;
+            pub type PCUWSTR = *const WCHAR;
+            pub type PZZWSTR = *mut WCHAR;
+            pub type PCZZWSTR = *const WCHAR;
+            pub type PUZZWSTR = *mut WCHAR;
+            pub type PCUZZWSTR = *const WCHAR;
+            pub type PNZWCH = *mut WCHAR;
+            pub type PCNZWCH = *const WCHAR;
+            pub type PUNZWCH = *mut WCHAR;
+            pub type PCUNZWCH = *const WCHAR;
+            pub type LPCWCHAR = *const WCHAR;
+            pub type PCWCHAR = *const WCHAR;
+            pub type LPCUWCHAR = *const WCHAR;
+            pub type PCUWCHAR = *const WCHAR;
+            pub type UCSCHAR = c_ulong;
+            pub type PUCSCHAR = *mut UCSCHAR;
+            pub type PCUCSCHAR = *const UCSCHAR;
+            pub type PUCSSTR = *mut UCSCHAR;
+            pub type PUUCSSTR = *mut UCSCHAR;
+            pub type PCUCSSTR = *const UCSCHAR;
+            pub type PCUUCSSTR = *const UCSCHAR;
+            pub type PUUCSCHAR = *mut UCSCHAR;
+            pub type PCUUCSCHAR = *const UCSCHAR;
+            pub type PCHAR = *mut CHAR;
+            pub type LPCH = *mut CHAR;
+            pub type PCH = *mut CHAR;
+            pub type LPCCH = *const CHAR;
+            pub type PCCH = *const CHAR;
+            pub type NPSTR = *mut CHAR;
+            pub type LPSTR = *mut CHAR;
+            pub type PSTR = *mut CHAR;
+            pub type PZPSTR = *mut PSTR;
+            pub type PCZPSTR = *const PSTR;
+            pub type LPCSTR = *const CHAR;
+            pub type PCSTR = *const CHAR;
+            pub type PZPCSTR = *mut PCSTR;
+            pub type PCZPCSTR = *const PCSTR;
+            pub type PZZSTR = *mut CHAR;
+            pub type PCZZSTR = *const CHAR;
+            pub type PNZCH = *mut CHAR;
+            pub type PCNZCH = *const CHAR;
+            pub type DOUBLE = c_double;
+            pub type PCONSOLE_READCONSOLE_CONTROL = *mut CONSOLE_READCONSOLE_CONTROL;
+            pub type PEXCEPTION_POINTERS = *mut EXCEPTION_POINTERS;
+            pub type PACCESS_TOKEN = PVOID;
+            pub type PSECURITY_DESCRIPTOR = PVOID;
+            pub type PSID = PVOID;
+            pub type PCLAIMS_BLOB = PVOID;
+            pub type ACCESS_MASK = DWORD;
+            pub type PACCESS_MASK = *mut ACCESS_MASK;
+            pub type PMOUSE_EVENT_RECORD = *mut MOUSE_EVENT_RECORD;
+            pub type PCONTEXT = *mut CONTEXT;
+            pub type PEXCEPTION_RECORD = *mut EXCEPTION_RECORD;
+            pub type KNOWNFOLDERID = GUID;
+            pub type REFKNOWNFOLDERID = *const KNOWNFOLDERID;
+            pub type PHANDLER_ROUTINE = Option<unsafe extern "system" fn(CtrlType: DWORD) -> BOOL>;
+            pub type NTSTATUS = LONG;
+            pub type PCONSOLE_FONT_INFO = *mut CONSOLE_FONT_INFO;
+            pub type PCONSOLE_FONT_INFOEX = *mut CONSOLE_FONT_INFOEX;
+            pub type PCONSOLE_CURSOR_INFO = *mut CONSOLE_CURSOR_INFO;
+            pub type PCONSOLE_SELECTION_INFO = *mut CONSOLE_SELECTION_INFO;
+            pub type PCONSOLE_HISTORY_INFO = *mut CONSOLE_HISTORY_INFO;
+            pub type PCONSOLE_SCREEN_BUFFER_INFO = *mut CONSOLE_SCREEN_BUFFER_INFO;
+            pub type PCONSOLE_SCREEN_BUFFER_INFOEX = *mut CONSOLE_SCREEN_BUFFER_INFOEX;
+            pub type COLORREF = DWORD;
+            pub type PINPUT_RECORD = *mut INPUT_RECORD;
+            pub type PFLOAT128 = *mut FLOAT128;
+            pub type LONGLONG = __int64;
+            pub type ULONGLONG = __uint64;
+
+        } pub use self::types::{ * };
+        
         extern "system"
         {
             pub fn GetEnvironmentStrings() -> LPCH;
@@ -7030,496 +7970,63 @@ pub mod libc
                 lpReserved: LPVOID,
             ) -> BOOL;
         }
+        
+        #[inline] pub fn decode_surrogate(second_byte: u8, third_byte: u8) -> u16
+        { 0xD800 | (second_byte as u16 & 0x3F) << 6 | third_byte as u16 & 0x3F }
 
-        #[repr(C)] #[derive( Clone, Copy )]
-        pub struct GUID
+        #[inline] pub fn decode_surrogate_pair(lead: u16, trail: u16) -> char
         {
-            pub Data1: c_ulong,
-            pub Data2: c_ushort,
-            pub Data3: c_ushort,
-            pub Data4: [c_uchar; 8],
-        }
-
-        impl GUID
-        {
-            pub const fn create( Data1:c_ulong, Data2:c_ushort, Data3:c_ushort, Data4:[c_uchar; 8] ) -> Self
-            {
-                Self
-                {
-                    Data1,
-                    Data2,
-                    Data3,
-                    Data4,
-                }
-            }
-
-            pub fn folder_id_profile() -> *const Self
-            {
-                unsafe
-                {
-                    ::mem::transmute( &FOLDERID_Profile )
-                }
-            }
-
-            pub fn folder_id_roaming_app_data() -> *const Self
-            {
-                unsafe
-                {
-                    ::mem::transmute( &FOLDERID_RoamingAppData )
-                }
-            }
-
-            pub fn folder_id_local_app_data() -> *const Self
-            {
-                unsafe
-                {
-                    ::mem::transmute( &FOLDERID_LocalAppData )
-                }
-            }
-            
-            pub fn folder_id_music() -> *const Self
-            {
-                unsafe
-                {
-                    ::mem::transmute( &FOLDERID_Music )
-                }
-            }
-            
-            pub fn folder_id_desktop() -> *const Self
-            {
-                unsafe
-                {
-                    ::mem::transmute( &FOLDERID_Desktop )
-                }
-            }
-            
-            pub fn folder_id_documents() -> *const Self
-            {
-                unsafe
-                {
-                    ::mem::transmute( &FOLDERID_Documents )
-                }
-            }
-            
-            pub fn folder_id_downloads() -> *const Self
-            {
-                unsafe
-                {
-                    ::mem::transmute( &FOLDERID_Downloads )
-                }
-            }
-            
-            pub fn folder_id_pictures() -> *const Self
-            {
-                unsafe
-                {
-                    ::mem::transmute( &FOLDERID_Pictures )
-                }
-            }
-            
-            pub fn folder_id_public() -> *const Self
-            {
-                unsafe
-                {
-                    ::mem::transmute( &FOLDERID_Public )
-                }
-            }
-            
-            pub fn folder_id_templates() -> *const Self
-            {
-                unsafe
-                {
-                    ::mem::transmute( &FOLDERID_Templates )
-                }
-            }
-            
-            pub fn folder_id_videos() -> *const Self
-            {
-                unsafe
-                {
-                    ::mem::transmute( &FOLDERID_Videos )
-                }
-            }
-        }
-
-        #[repr( C )] #[derive( Clone, Copy )]
-        pub struct FLOAT128
-        {
-            pub LowPart: __int64,
-            pub HighPart: __int64,
+            let code_point = 0x10000 + ((((lead - 0xD800) as u32) << 10) | (trail - 0xDC00) as u32);
+            unsafe { char::from_u32_unchecked(code_point) }
         }
         
-        #[repr( C )] #[derive( Clone, Copy )]
-        pub struct CONTEXT_u( () );
-
-        #[repr( C )] #[derive( Clone, Copy )]
-        pub struct M128A 
+        #[inline] pub fn is_code_point_boundary(slice: &Wtf8, index: usize) -> bool
         {
-            pub Low: ULONGLONG,
-            pub High: LONGLONG,
-        }
+            if index == 0 { return true; }
 
-        #[repr( C )] #[derive( Clone, Copy )]
-        pub struct CONTEXT 
-        {
-            pub P1Home: DWORD64,
-            pub P2Home: DWORD64,
-            pub P3Home: DWORD64,
-            pub P4Home: DWORD64,
-            pub P5Home: DWORD64,
-            pub P6Home: DWORD64,
-            pub ContextFlags: DWORD,
-            pub MxCsr: DWORD,
-            pub SegCs: WORD,
-            pub SegDs: WORD,
-            pub SegEs: WORD,
-            pub SegFs: WORD,
-            pub SegGs: WORD,
-            pub SegSs: WORD,
-            pub EFlags: DWORD,
-            pub Dr0: DWORD64,
-            pub Dr1: DWORD64,
-            pub Dr2: DWORD64,
-            pub Dr3: DWORD64,
-            pub Dr6: DWORD64,
-            pub Dr7: DWORD64,
-            pub Rax: DWORD64,
-            pub Rcx: DWORD64,
-            pub Rdx: DWORD64,
-            pub Rbx: DWORD64,
-            pub Rsp: DWORD64,
-            pub Rbp: DWORD64,
-            pub Rsi: DWORD64,
-            pub Rdi: DWORD64,
-            pub R8: DWORD64,
-            pub R9: DWORD64,
-            pub R10: DWORD64,
-            pub R11: DWORD64,
-            pub R12: DWORD64,
-            pub R13: DWORD64,
-            pub R14: DWORD64,
-            pub R15: DWORD64,
-            pub Rip: DWORD64,
-            pub u: CONTEXT_u,
-            pub VectorRegister: [M128A; 26],
-            pub VectorControl: DWORD64,
-            pub DebugControl: DWORD64,
-            pub LastBranchToRip: DWORD64,
-            pub LastBranchFromRip: DWORD64,
-            pub LastExceptionToRip: DWORD64,
-            pub LastExceptionFromRip: DWORD64,
-        }
-        
-
-        #[repr( C )] #[derive( Clone, Copy )]
-        pub struct EXCEPTION_RECORD {
-            pub ExceptionCode: DWORD,
-            pub ExceptionFlags: DWORD,
-            pub ExceptionRecord: *mut EXCEPTION_RECORD,
-            pub ExceptionAddress: PVOID,
-            pub NumberParameters: DWORD,
-            pub ExceptionInformation: [ULONG_PTR; 15],
-        }
-
-        #[repr( C )] #[derive( Clone, Copy )]
-        pub struct EXCEPTION_POINTERS {
-            pub ExceptionRecord: PEXCEPTION_RECORD,
-            pub ContextRecord: PCONTEXT,
-        }
-
-        #[repr( C )] #[derive( Clone, Copy )]
-        pub struct CONSOLE_READCONSOLE_CONTROL
-        {
-            pub nLength: ULONG,
-            pub nInitialChars: ULONG,
-            pub dwCtrlWakeupMask: ULONG,
-            pub dwControlKeyState: ULONG,
-        }
-
-        #[repr(C)] #[derive( Clone, Copy )]
-        pub struct WINDOW_BUFFER_SIZE_RECORD
-        {
-            pub dwSize: COORD,
-        }
-
-        #[repr(C)] #[derive( Clone, Copy )]
-        pub struct SECURITY_ATTRIBUTES
-        {
-            pub nLength: DWORD,
-            pub lpSecurityDescriptor: LPVOID,
-            pub bInheritHandle: BOOL,
-        }
-
-        #[repr(C)] #[derive( Clone, Copy )]
-        pub struct CHAR_INFO_Char(()); 
-
-        impl CHAR_INFO_Char
-        {
-            pub unsafe fn UnicodeChar_mut(&mut self) -> &mut WCHAR
+            match slice.bytes.get(index)
             {
-                unsafe
-                {
-                    mem::transmute( ptr::null_mut::<&mut WCHAR>() )
-                }
+                None => index == slice.len(),
+                Some(&b) => (b as i8) >= -0x40,
             }
         }
-
-        #[repr(C)] #[derive( Clone, Copy )]
-        pub struct CONSOLE_FONT_INFO
+        /// Verify that `index` is at the edge of either a valid UTF-8 codepoint or of the whole string.
+        #[inline] #[track_caller] pub fn check_utf8_boundary(slice: &Wtf8, index: usize)
         {
-            pub nFont: DWORD,
-            pub dwFontSize: COORD,
-        }
+            if index == 0 { return; }
 
-        #[repr(C)] #[derive( Clone, Copy )]
-        pub struct CONSOLE_FONT_INFOEX
-        {
-            pub cbSize: ULONG,
-            pub nFont: DWORD,
-            pub dwFontSize: COORD,
-            pub FontFamily: UINT,
-            pub FontWeight: UINT,
-            pub FaceName: [WCHAR; 32],
-        }
-
-        #[repr(C)] #[derive( Clone, Copy )]
-        pub struct CONSOLE_SCREEN_BUFFER_INFOEX
-        {
-            pub cbSize: ULONG,
-            pub dwSize: COORD,
-            pub dwCursorPosition: COORD,
-            pub wAttributes: WORD,
-            pub srWindow: SMALL_RECT,
-            pub dwMaximumWindowSize: COORD,
-            pub wPopupAttributes: WORD,
-            pub bFullscreenSupported: BOOL,
-            pub ColorTable: [COLORREF; 16],
-        }
-
-        #[repr(C)] #[derive( Clone, Copy )]
-        pub struct MOUSE_EVENT_RECORD
-        {
-            pub dwMousePosition: COORD,
-            pub dwButtonState: DWORD,
-            pub dwControlKeyState: DWORD,
-            pub dwEventFlags: DWORD,
-        }
-
-        #[repr(C)] #[derive( Clone, Copy )]
-        pub struct CONSOLE_HISTORY_INFO 
-        {
-            pub cbSize: UINT,
-            pub HistoryBufferSize: UINT,
-            pub NumberOfHistoryBuffers: UINT,
-            pub dwFlags: DWORD,
-        }
-
-        #[repr(C)] #[derive( Clone, Copy )]
-        pub struct CONSOLE_SELECTION_INFO
-        {
-            pub dwFlags: DWORD,
-            pub dwSelectionAnchor: COORD,
-            pub srSelection: SMALL_RECT,
-        }
-
-        #[repr(C)] #[derive( Clone, Copy )]
-        pub struct CONSOLE_CURSOR_INFO
-        {
-            pub dwSize: DWORD,
-            pub bVisible: BOOL,
-        }
-
-        #[repr(C)] #[derive( Clone, Copy )]
-        pub struct INPUT_RECORD_Event( () );
-
-        impl INPUT_RECORD_Event
-        {
-            pub unsafe fn WindowBufferSizeEvent(&self) -> &WINDOW_BUFFER_SIZE_RECORD
+            match slice.bytes.get(index)
             {
-                unsafe
-                {
-                    mem::transmute( ptr::null::<&WINDOW_BUFFER_SIZE_RECORD>() )
-                }
-            }
-            
-            pub unsafe fn KeyEvent(&self) -> &KEY_EVENT_RECORD
-            {
-                unsafe
-                {
-                    mem::transmute( ptr::null::<&KEY_EVENT_RECORD>() )
-                }
-            }
-            
-            pub unsafe fn MouseEvent(&self) -> &MOUSE_EVENT_RECORD
-            {
-                unsafe
-                {
-                    mem::transmute( ptr::null::<&MOUSE_EVENT_RECORD>() )
-                }
-            }
-        }
-
-        #[repr(C)] #[derive( Clone, Copy )]
-        pub struct INPUT_RECORD 
-        {
-            pub EventType: WORD,
-            pub Event: INPUT_RECORD_Event,
-        }
-
-        #[repr(C)] #[derive( Clone, Copy )]
-        pub struct CHAR_INFO 
-        {
-            pub Char: CHAR_INFO_Char,
-            pub Attributes: WORD,
-        }
-
-        #[repr(C)] #[derive( Clone, Copy )]
-        pub struct COORD
-        {
-            pub X: SHORT,
-            pub Y: SHORT,
-        }
-
-        #[repr(C)] #[derive( Clone, Copy )]
-        pub struct SMALL_RECT
-        {
-            pub Left: SHORT,
-            pub Top: SHORT,
-            pub Right: SHORT,
-            pub Bottom: SHORT,
-        }
-
-        #[repr(C)] #[derive( Clone, Copy )]
-        pub struct CONSOLE_SCREEN_BUFFER_INFO 
-        {
-            pub dwSize: COORD,
-            pub dwCursorPosition: COORD,
-            pub wAttributes: WORD,
-            pub srWindow: SMALL_RECT,
-            pub dwMaximumWindowSize: COORD,
-        }
-
-        #[repr(C)] #[derive( Clone, Copy )]
-        pub struct KEY_EVENT_RECORD_uChar( () );
-
-        impl KEY_EVENT_RECORD_uChar
-        {
-            pub unsafe fn UnicodeChar(&self) -> &WCHAR
-            {
-                unsafe
-                {
-                    mem::transmute( ptr::null::<&WCHAR>() )
-                }
-            }
-        }
-
-        #[repr(C)] #[derive( Clone, Copy )]
-        pub struct KEY_EVENT_RECORD
-        {
-            pub bKeyDown: BOOL,
-            pub wRepeatCount: WORD,
-            pub wVirtualKeyCode: WORD,
-            pub wVirtualScanCode: WORD,
-            pub uChar: KEY_EVENT_RECORD_uChar,
-            pub dwControlKeyState: DWORD,
-        }
-
-        impl KEY_EVENT_RECORD
-        {
-            pub unsafe fn UnicodeChar(&self) -> &WCHAR
-            {
-                unsafe
-                {
-                    mem::transmute( ptr::null::<&WCHAR>() )
-                }
-            }
-        }
-
-
-        /// A Unicode code point: from U+0000 to U+10FFFF.
-        #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy)]
-        pub struct CodePoint {
-            value: u32,
-        }
-        /// Iterator for the code points of a WTF-8 string.
-        #[derive(Clone)]
-        pub struct Wtf8CodePoints<'a>
-        {
-            pub bytes: slice::Iter<'a, u8>,
-        }
-
-        impl Iterator for Wtf8CodePoints<'_> 
-        {
-            type Item = CodePoint;
-
-            #[inline] fn next(&mut self) -> Option<CodePoint>
-            {
-                unsafe { str::next_code_point(&mut self.bytes).map(|c| CodePoint { value: c }) }
+                Some(0xED) => (),
+                Some(&b) if (b as i8) >= -0x40 => return,
+                Some(_) => panic!("byte index {index} is not a codepoint boundary"),
+                None if index == slice.len() => return,
+                None => panic!("byte index {index} is out of bounds"),
             }
 
-            #[inline] fn size_hint(&self) -> (usize, Option<usize>)
+            if slice.bytes[index + 1] >= 0xA0
             {
-                let len = self.bytes.len();
-                (len.saturating_add(3) / 4, Some(len))
-            }
-        }
-        /// Generates a wide character sequence for potentially ill-formed UTF-16.
-        #[derive(Clone)]
-        pub struct EncodeWide<'a>
-        {
-            pub code_points: Wtf8CodePoints<'a>,
-            pub extra: u16,
-        }
-
-        impl Iterator for EncodeWide<'_>
-        {
-            type Item = u16;
-
-            #[inline] fn next(&mut self) -> Option<u16> 
-            {
-                if self.extra != 0 {
-                    let tmp = self.extra;
-                    self.extra = 0;
-                    return Some(tmp);
-                }
-
-                let mut buf = [0; 2];
-                self.code_points.next().map(|code_point| {
-                    let n = char::encodes_utf16_raw(code_point.value, &mut buf).len();
-                    if n == 2 {
-                        self.extra = buf[1];
-                    }
-                    buf[0]
-                })
-            }
-
-            #[inline] fn size_hint(&self) -> (usize, Option<usize>) 
-            {
-                let (low, high) = self.code_points.size_hint();
-                let ext = (self.extra != 0) as usize;
-                (low + ext, high.and_then(|n| n.checked_mul(2)).and_then(|n| n.checked_add(ext)))
+                if index >= 3 && slice.bytes[index - 3] == 0xED && slice.bytes[index - 2] >= 0xA0
+                { panic!("byte index {index} lies between surrogate codepoints"); }
             }
         }
         
-        impl ::iter::FusedIterator for EncodeWide<'_> {}
-
-        impl ::hash::Hash for CodePoint
+        #[inline] pub unsafe fn slice_unchecked(s: &Wtf8, begin: usize, end: usize) -> &Wtf8 
         {
-            #[inline] fn hash<H: ::hash::Hasher>(&self, state: &mut H) { self.value.hash(state) }
+            unsafe 
+            {
+                let len = end - begin;
+                let start = s.as_bytes().as_ptr().add(begin);
+                Wtf8::from_bytes_unchecked(slice::from_raw_parts(start, len))
+            }
         }
         
-        pub trait OsStrExt
+        #[inline(never)] pub fn slice_error_fail(s: &Wtf8, begin: usize, end: usize) -> ! 
         {
-            /// Re-encodes an `OsStr` as a wide character sequence, i.e., potentially ill-formed UTF-16.
-            fn encodes_wide( &self ) -> EncodeWide<'_>;
-        }
-        
-        impl OsStrExt for OsStr
-        {
-            #[inline] fn encodes_wide(&self) -> EncodeWide<'_> { self.as_inner().inner.encode_wide() }
+            assert!(begin <= end);
+            panic!("index {begin} and/or {end} in `{s:?}` do not lie on character boundary");
         }
     } #[cfg(windows)] pub use self::windows::*;
-
 }
 
 pub mod marker
@@ -8009,6 +8516,606 @@ pub mod mem
         }
 
         fn flush(&mut self) -> io::Result<()> { Ok(()) }
+    }
+}
+
+pub mod mode
+{
+    //! Standard Terminal Modes.
+    use ::
+    {
+        borrow::{ Cow },
+        database::
+        {
+            error::{ self, * },
+            values::{ Value },
+        },
+        io::{ Write },
+        parsers::
+        {
+            nom::
+            {
+                branch::alt,
+                bytes::complete,
+                bytes::streaming::{tag, take, take_while},
+                character::streaming::one_of,
+                combinator::{map, opt, value},
+                error::{make_error, ErrorKind},
+                number::{ numeric },
+                Err, IResult,
+            },
+        },
+        *,
+    };
+    /*
+    use crate::error;
+    use crate::expand::{Context, Expand, Parameter};*/
+    macro_rules! from_type_to_parameter
+    {
+        (number $ty:ty) => 
+        {
+            impl From<$ty> for Parameter 
+            {
+                fn from(value: $ty) -> Self { Parameter::Number(value as i32) }
+            }
+        };
+
+        (string ref $ty:ty) => 
+        {
+            impl<'a> From<&'a $ty> for Parameter 
+            {
+                fn from(value: &'a $ty) -> Self { Parameter::String(value.into()) }
+            }
+        };
+
+        (string $ty:ty) =>
+        {
+            impl From<$ty> for Parameter
+            {
+                fn from(value: $ty) -> Self { Parameter::String(value.into()) }
+            }
+        };
+    }
+    /*
+    Terminal mode definition macro */
+    macro_rules! mode
+    {
+        (boolean $ident:ident => $mode:expr) => 
+        (
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub struct $ident(pub bool);
+
+            impl<'a> Mode<'a> for $ident 
+            {
+                #[inline] fn name() -> &'static str { $mode }
+
+                #[inline] fn from(value: Option<&Value>) -> Option<Self>
+                {
+                    if let Some(&Value::True) = value { Some($ident(true)) }
+                    else { Some($ident(false)) }
+                }
+
+                #[inline] fn to(self) -> Option<Value>
+                {
+                    if self.0 { Some(Value::True) }
+                    else { None }
+                }
+            }
+
+            impl From<$ident> for bool
+            {
+                fn from(cap: $ident) -> Self { cap.0 }
+            }
+        );
+
+        (number $ident:ident => $mode:expr) => 
+        (
+            #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+            pub struct $ident(pub i32);
+
+            impl<'a> Mode<'a> for $ident
+            {
+                #[inline] fn name() -> &'static str { $mode }
+
+                #[inline] fn from(value: Option<&Value>) -> Option<Self>
+                {
+                    if let Some(&Value::Number(value)) = value { Some($ident(value)) }                    
+                    else { None }
+                }
+
+                #[inline] fn into(self) -> Option<Value> { Some(Value::Number(self.0)) }
+            }
+
+            impl From<$ident> for i32
+            {
+                fn from(cap: $ident) -> Self { cap.0 }
+            }
+        );
+
+        (string define $ident:ident => $mode:expr) => 
+        (
+            #[derive(Eq, PartialEq, Clone, Debug)]
+            pub struct $ident<'a>(Cow<'a, [u8]>);
+
+            impl<'a> Mode<'a> for $ident<'a>
+            {
+                #[inline] fn name() -> &'static str { $mode }
+
+                #[inline] fn from(value: Option<&'a Value>) -> Option<$ident<'a>>
+                {
+                    if let Some(&Value::String(ref value)) = value { Some($ident(Cow::Borrowed(value))) }
+                    
+                    else { None }
+                }
+
+                #[inline] fn into(self) -> Option<Value> 
+                {
+                    Some(Value::String(match self.0 
+                    {
+                        Cow::Borrowed(value) => value.into(),
+                        Cow::Owned(value) => value
+                    }))
+                }
+            }
+
+            impl<'a, T: AsRef<&'a [u8]>> From<T> for $ident<'a> 
+            {
+                #[inline] fn from(value: T) -> Self { $ident(Cow::Borrowed(value.as_ref())) }
+            }
+
+            impl<'a> AsRef<[u8]> for $ident<'a> 
+            {
+                #[inline] fn as_ref(&self) -> &[u8] { &self.0 }
+            }
+
+            impl<'a> $ident<'a> 
+            {
+                /// Begin expanding the capability.
+                #[inline] pub fn expand(&self) -> Expansion<$ident> 
+                {
+                    Expansion 
+                    {
+                        string:  self,
+                        params:  Default::default(),
+                        context: None,
+                    }
+                }
+            }
+        );
+
+        (string $ident:ident => $mode:expr) => 
+        (
+            mode!(string define $ident => $mode);
+        );
+
+        (string $ident:ident => $mode:expr; $($rest:tt)+) => 
+        (
+            mode!(string define $ident => $mode);
+            mode!(string parameters $ident; $($rest)+);
+            mode!(string builder $ident; 0, $($rest)+, );
+        );
+
+        (string parameters $ident:ident; $($name:ident : $ty:ty),+) => 
+        (
+            impl<'a> Expansion<'a, $ident<'a>> 
+            {
+                /// Pass all expansion parameters at once.
+                #[inline] pub fn parameters(mut self, $($name: $ty),*) -> Self 
+                {
+                    let mut index = 0;
+                    $({
+                        self.params[index]  = $name.into();
+                        index              += 1;
+                    })*;
+                    self
+                }
+            }
+        );
+
+        (string builder $ident:ident; $index:expr, ) => ();
+
+        (string builder $ident:ident; $index:expr, $name:ident : u8, $($rest:tt)*) => 
+        (
+            mode!(string builder direct $ident; $index, $name : u8);
+            mode!(string builder $ident; $index + 1, $($rest)*);
+        );
+
+        (string builder $ident:ident; $index:expr, $name:ident : i8, $($rest:tt)*) => 
+        (
+            mode!(string builder direct $ident; $index, $name : i8);
+            mode!(string builder $ident; $index + 1, $($rest)*);
+        );
+
+        (string builder $ident:ident; $index:expr, $name:ident : u16, $($rest:tt)*) => 
+        (
+            mode!(string builder direct $ident; $index, $name : u16);
+            mode!(string builder $ident; $index + 1, $($rest)*);
+        );
+
+        (string builder $ident:ident; $index:expr, $name:ident : i16 $($rest:tt)*) => 
+        (
+            mode!(string builder direct $ident; $index, $name : i16);
+            mode!(string builder $ident; $index + 1, $($rest)*);
+        );
+
+        (string builder $ident:ident; $index:expr, $name:ident : u32, $($rest:tt)*) => 
+        (
+            mode!(string builder direct $ident; $index, $name : u32);
+            mode!(string builder $ident; $index + 1, $($rest)*);
+        );
+
+        (string builder $ident:ident; $index:expr, $name:ident : i32, $($rest:tt)*) => 
+        (
+            mode!(string builder direct $ident; $index, $name : i32);
+            mode!(string builder $ident; $index + 1, $($rest)*);
+        );
+
+        (string builder $ident:ident; $index:expr, $name:ident : $ty:ty, $($rest:tt)*) => 
+        (
+            mode!(string builder into $ident; $index, $name : $ty);
+            mode!(string builder $ident; $index + 1, $($rest)*);
+        );
+
+        (string builder direct $ident:ident; $index:expr, $name:ident : $ty:ty) => 
+        (
+            impl<'a> Expansion<'a, $ident<'a>> 
+            {
+                /// Set the given parameter.
+                #[inline] pub fn $name(mut self, value: $ty) -> Self 
+                {
+                    self.params[$index] = value.into();
+                    self
+                }
+            }
+        );
+
+        (string builder into $ident:ident; $index:expr, $name:ident : $ty:ty) => 
+        (
+            impl<'a> Expansion<'a, $ident<'a>> 
+            {
+                /// Set the given parameter.
+                #[inline] pub fn $name<T: Into<$ty>>(mut self, value: T) -> Self 
+                {
+                    self.params[$index] = value.into().into();
+                    self
+                }
+            }
+        );
+    }
+    /// Trait for items that can be expanded.
+    pub trait Expands
+    {
+        fn expand<W: Write>
+        (
+            &self,
+            output: W,
+            parameters: &[Parameter],
+            context: &mut Context,
+        ) -> OverResult<()>;
+    }
+    /// A trait for any object that will represent a terminal mode.
+    pub trait Mode<'a>: Sized
+    {
+        /// Returns the name of the mode in its long form.
+        fn name() -> &'static str;
+        /// Parse the mode from its raw value.
+        fn from(value: Option<&'a Value>) -> Option<Self>;
+        /// Convert the mode into its raw value.
+        fn to(self) -> Option<Value>;
+    }
+    /// An expansion parameter.
+    #[derive(Eq, PartialEq, Clone, Debug)]
+    pub enum Parameter
+    {
+        /// A number.
+        Number(i32),
+        /// An ASCII string.
+        String(Vec<u8>),
+    }
+    
+    impl Default for Parameter
+    {
+        fn default() -> Self { Parameter::Number(0) }
+    }
+
+    from_type_to_parameter!(number bool);
+    from_type_to_parameter!(number u8);
+    from_type_to_parameter!(number i8);
+    from_type_to_parameter!(number u16);
+    from_type_to_parameter!(number i16);
+    from_type_to_parameter!(number u32);
+    from_type_to_parameter!(number i32);
+    from_type_to_parameter!(string String);
+    from_type_to_parameter!(string ref str);
+    from_type_to_parameter!(string Vec<u8>);
+    from_type_to_parameter!(string ref [u8]);
+    /// The same context should be passed around through every expansion for the same `Database`.
+    #[derive( Eq, PartialEq, Default, Debug )]
+    pub struct Context
+    {
+        pub fixed: [Parameter; 26],
+        pub dynamic: [Parameter; 26],
+    }
+    /// Expansion helper struct.
+    #[derive(Debug)]
+    pub struct Expansion<'a, T: 'a + AsRef<[u8]>> 
+    {
+        string: &'a T,
+        params: [Parameter; 9],
+        context: Option<&'a mut Context>,
+    }
+
+    impl<'a, T: AsRef<[u8]>> Expansion<'a, T> 
+    {
+        /// Expand using the given context.
+        pub fn with<'c: 'a>(mut self, context: &'c mut Context) -> Self 
+        {
+            self.context = Some(context);
+            self
+        }
+        /// Expand to the given output.
+        pub fn into<W: Write>(self, output: W) -> error::Result<()> 
+        {
+            self.string.as_ref().expand
+            (
+                output,
+                &self.params,
+                self.context.unwrap_or(&mut Default::default()),
+            )
+        }
+        /// Expand into a vector.
+        pub fn to_vec(self) -> error::Result<Vec<u8>> 
+        {
+            let mut result = Vec::with_capacity(self.string.as_ref().len());
+            self.to(&mut result)?;
+            Ok(result)
+        }
+    }
+    
+    #[derive(Eq, PartialEq, Copy, Clone, Debug)]
+    pub enum Constant 
+    {
+        Character(u8),
+        Integer(i32),
+    }
+
+    #[derive( Eq, PartialEq, Copy, Clone, Debug )]
+    pub enum Variable 
+    {
+        Length,
+        Push(u8),
+        Set(bool, u8),
+        Get(bool, u8),
+    }
+
+    #[derive( Eq, PartialEq, Copy, Clone, Debug )]
+    pub enum Conditional
+    {
+        If,
+        Then,
+        Else,
+        End,
+    }
+
+    #[derive( Eq, PartialEq, Copy, Clone, Debug )]
+    pub enum Unary 
+    {
+        Not,
+        NOT,
+    }
+
+    #[derive( Eq, PartialEq, Copy, Clone, Debug )]
+    pub enum Binary 
+    {
+        Add,
+        Subtract,
+        Multiply,
+        Divide,
+        Remainder,
+
+        AND,
+        OR,
+        XOR,
+
+        And,
+        Or,
+
+        Equal,
+        Greater,
+        Lesser,
+    }
+    
+    #[derive( Eq, PartialEq, Copy, Clone, Debug )]
+    pub enum Operation
+    {
+        Increment,
+        Unary(Unary),
+        Binary(Binary),
+    }
+
+    #[derive( Eq, PartialEq, Copy, Clone, Debug )]
+    pub enum Format
+    {
+        Chr,
+        Uni,
+        Str,
+        Dec,
+        Oct,
+        Hex,
+        HEX,
+    }
+
+    #[derive( Eq, PartialEq, Copy, Clone, Default, Debug )]
+    pub struct Flags
+    {
+        pub width: usize,
+        pub precision: usize,
+        pub alternate: bool,
+        pub left: bool,
+        pub sign: bool,
+        pub space: bool,
+    }
+
+    #[derive( Eq, PartialEq, Copy, Clone, Debug )]
+    pub struct Print
+    {
+        pub flags: Flags,
+        pub format: Format,
+    }
+
+    #[derive( Eq, PartialEq, Copy, Clone, Debug )]
+    pub enum Item<'a>
+    {
+        String(&'a [u8]),
+        Constant(Constant),
+        Variable(Variable),
+        Operation(Operation),
+        Conditional(Conditional),
+        Print(Print),
+    }
+
+    mode!( boolean AutoLeftMargin => "auto_left_margin" );
+
+    pub fn parse(input: &[u8]) -> IResult<&[u8], Item> { alt((expansion, string))(input) }
+
+    pub fn string(input: &[u8]) -> IResult<&[u8], Item> { map(complete::take_till(|b| b == b'%'), Item::String)(input) }
+
+    pub fn expansion(input: &[u8]) -> IResult<&[u8], Item>
+    {
+        let (input, _) = tag("%")(input)?;
+        let (input, item) = alt((percent, constant, variable, operation, conditional, print))(input)?;
+        Ok((input, item))
+    }
+
+    pub fn percent(input: &[u8]) -> IResult<&[u8], Item> { value(Item::String(b"%"), tag("%"))(input) }
+
+    pub fn constant(input: &[u8]) -> IResult<&[u8], Item> { alt((constant_char, constant_integer))(input) }
+
+    pub fn constant_char(input: &[u8]) -> IResult<&[u8], Item>
+    {
+        let (input, _) = tag("'")(input)?;
+        let (input, ch) = take(1_usize)(input)?;
+        let (input, _) = tag("'")(input)?;
+        Ok((input, Item::Constant(Constant::Character(ch[0]))))
+    }
+
+    pub fn constant_integer(input: &[u8]) -> IResult<&[u8], Item>
+    {
+        let (input, _) = tag("{")(input)?;
+        let (input, digit) = take_while(is::digit)(input)?;
+        let (input, _) = tag("}")(input)?;
+        Ok((input, Item::Constant(Constant::Integer(numeric(digit)))))
+    }
+
+    pub fn variable(input: &[u8]) -> IResult<&[u8], Item>
+    {
+        let (input, c) = take(1_usize)(input)?;
+        match c
+        {
+            b"l" => Ok((input, Item::Variable(Variable::Length))),
+
+            b"p" => map(one_of("123456789"), |n| Item::Variable(Variable::Push(n as u8 - b'1')))(input),
+
+            b"P" => alt
+            ((
+                map(one_of("abcdefghijklmnopqrstuvwxyz"), |n|
+                { Item::Variable(Variable::Set(true, n as u8 - b'a')) }),
+                
+                map(one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ"), |n| 
+                { Item::Variable(Variable::Set(false, n as u8 - b'A')) }),
+            ))(input),
+
+            b"g" => alt
+            ((
+                map(one_of("abcdefghijklmnopqrstuvwxyz"), |n|
+                { Item::Variable(Variable::Get(true, n as u8 - b'a')) }),
+                
+                map(one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ"), |n|
+                { Item::Variable(Variable::Get(false, n as u8 - b'A')) }),
+            ))(input),
+
+            _ => Err(Err::Error(make_error(input, ErrorKind::Switch))),
+        }
+    }
+
+    pub fn operation(input: &[u8]) -> IResult<&[u8], Item> 
+    {
+        let (input, c) = take(1_usize)(input)?;
+        match c 
+        {
+            b"+" => Ok((input, Item::Operation(Operation::Binary(Binary::Add)))),
+            b"-" => Ok((input, Item::Operation(Operation::Binary(Binary::Subtract)))),
+            b"*" => Ok((input, Item::Operation(Operation::Binary(Binary::Multiply)))),
+            b"/" => Ok((input, Item::Operation(Operation::Binary(Binary::Divide)))),
+            b"m" => Ok((input, Item::Operation(Operation::Binary(Binary::Remainder)))),
+            b"i" => Ok((input, Item::Operation(Operation::Increment))),
+            b"&" => Ok((input, Item::Operation(Operation::Binary(Binary::AND)))),
+            b"|" => Ok((input, Item::Operation(Operation::Binary(Binary::OR)))),
+            b"^" => Ok((input, Item::Operation(Operation::Binary(Binary::XOR)))),
+            b"~" => Ok((input, Item::Operation(Operation::Unary(Unary::NOT)))),
+            b"A" => Ok((input, Item::Operation(Operation::Binary(Binary::And)))),
+            b"O" => Ok((input, Item::Operation(Operation::Binary(Binary::Or)))),
+            b"!" => Ok((input, Item::Operation(Operation::Unary(Unary::Not)))),
+            b"=" => Ok((input, Item::Operation(Operation::Binary(Binary::Equal)))),
+            b">" => Ok((input, Item::Operation(Operation::Binary(Binary::Greater)))),
+            b"<" => Ok((input, Item::Operation(Operation::Binary(Binary::Lesser)))),
+            _ => Err( Err::Error( make_error( input, ErrorKind::Switch ) ) ),
+        }
+    }
+
+    pub fn conditional(input: &[u8]) -> IResult<&[u8], Item> 
+    {
+        let (input, c) = take(1_usize)(input)?;
+        match c 
+        {
+            b"?" => Ok((input, Item::Conditional(Conditional::If))),
+            b"t" => Ok((input, Item::Conditional(Conditional::Then))),
+            b"e" => Ok((input, Item::Conditional(Conditional::Else))),
+            b";" => Ok((input, Item::Conditional(Conditional::End))),
+            _ => Err( Err::Error( make_error( input, ErrorKind::Switch ) ) ),
+        }
+    }
+
+    pub fn print(input: &[u8]) -> IResult<&[u8], Item> 
+    {
+        let (input, _) = opt(tag(":"))(input)?;
+        let (input, flags) = take_while(is::flag)(input)?;
+        let (input, width) = opt(take_while(is::digit))(input)?;
+        let (input, precision) = opt(| input | 
+        {
+            let (input, _) = tag(".")(input)?;
+            let (input, amount) = take_while(is::digit)(input)?;
+            Ok((input, amount))
+        })(input)?;
+        let (input, format) = one_of("doxXsc")(input)?;
+        Ok
+        ((
+            input,
+            Item::Print(Print 
+            {
+                flags: Flags 
+                {
+                    width: numeric(width.unwrap_or(b"0")) as usize,
+                    precision: numeric(precision.unwrap_or(b"0")) as usize,
+                    alternate: flags.contains(&b'#'),
+                    left: flags.contains(&b'-'),
+                    sign: flags.contains(&b'+'),
+                    space: flags.contains(&b' '),
+                },
+
+                format: match format 
+                {
+                    'd' => Format::Dec,
+                    'o' => Format::Oct,
+                    'x' => Format::Hex,
+                    'X' => Format::HEX,
+                    's' => Format::Str,
+                    'c' => Format::Chr,
+                    'u' => Format::Uni,
+                    _ => unreachable!(),
+                },
+            }),
+        ))
     }
 }
 
@@ -10436,21 +11543,10 @@ pub mod num
                             data.set_bit(bit, true);
                         }
                     } else {
-                        // If the Uint number is
-                        //   ... 0  x 1 0 ... 0
-                        // then the two's complement is
-                        //   ... 1 !x 1 0 ... 0
-                        //            |-- bit at position 'trailing_zeros'
-                        // where !x is obtained from x by flipping each bit
                         let trailing_zeros = data.trailing_zeros().unwrap();
                         if bit > trailing_zeros {
                             data.set_bit(bit, !value);
                         } else if bit == trailing_zeros && !value {
-                            // Clearing the bit at position `trailing_zeros` is dealt with by doing
-                            // similarly to what `bitand_neg_pos` does, except we start at digit
-                            // `bit_index`. All digits below `bit_index` are guaranteed to be zero,
-                            // so initially we have `carry_in` = `carry_out` = 1. Furthermore, we
-                            // stop traversing the digits when there are no more carries.
                             let bit_index = (bit / bits_per_digit).to_usize().unwrap();
                             let bit_mask = (1 as BigDigit) << (bit % bits_per_digit);
                             let mut digit_iter = data.digits_mut().iter_mut().skip(bit_index);
@@ -10464,7 +11560,6 @@ pub mod num
 
                             for digit in digit_iter {
                                 if carry_in == 0 && carry_out == 0 {
-                                    // Exit the loop since no more digits can change
                                     break;
                                 }
                                 let twos = negate_carry(*digit, &mut carry_in);
@@ -10472,17 +11567,10 @@ pub mod num
                             }
 
                             if carry_out != 0 {
-                                // All digits have been traversed and there is a carry
                                 debug_assert_eq!(carry_in, 0);
                                 data.digits_mut().push(1);
                             }
                         } else if bit < trailing_zeros && value {
-                            // Flip each bit from position 'bit' to 'trailing_zeros', both inclusive
-                            //       ... 1 !x 1 0 ... 0 ... 0
-                            //                        |-- bit at position 'bit'
-                            //                |-- bit at position 'trailing_zeros'
-                            // bit_mask:      1 1 ... 1 0 .. 0
-                            // This is done by xor'ing with the bit_mask
                             let index_lo = (bit / bits_per_digit).to_usize().unwrap();
                             let index_hi = (trailing_zeros / bits_per_digit).to_usize().unwrap();
                             let bit_mask_lo = big_digit::MAX << (bit % bits_per_digit);
@@ -10500,9 +11588,6 @@ pub mod num
                                 digits[index_hi] ^= bit_mask_hi;
                             }
                         } else {
-                            // We end up here in two cases:
-                            //   bit == trailing_zeros && value: Bit is already set
-                            //   bit < trailing_zeros && !value: Bit is already cleared
                         }
                     }
                 }
@@ -11569,8 +12654,6 @@ pub mod num
                     }
                 }
                 /// Calculates the Greatest Common Divisor (GCD) of the number and `other`.
-                ///
-                /// The result is always positive.
                 #[inline] fn gcd(&self, other: &BigInt) -> BigInt {
                     BigInt::from(self.data.gcd(&other.data))
                 }
@@ -11692,8 +12775,6 @@ pub mod num
                     data: BigUint::ZERO,
                 };
                 /// Creates and initializes a [`BigInt`].
-                ///
-                /// The base 2<sup>32</sup> digits are ordered least significant digit first.
                 #[inline] pub fn new(sign: Sign, digits: Vec<u32>) -> BigInt {
                     BigInt::from_biguint(sign, BigUint::new(digits))
                 }
@@ -11725,13 +12806,10 @@ pub mod num
                     BigInt::from_biguint(sign, BigUint::from_bytes_be(bytes))
                 }
                 /// Creates and initializes a [`BigInt`].
-                ///
-                /// The bytes are in little-endian byte order.
                 #[inline] pub fn from_bytes_le(sign: Sign, bytes: &[u8]) -> BigInt {
                     BigInt::from_biguint(sign, BigUint::from_bytes_le(bytes))
                 }
-                /// Creates and initializes a [`BigInt`] from an array of bytes in
-                /// two's complement binary representation.
+                /// Creates and initializes a `BigInt` from an array of bytes in 2's complement binary representation.
                 #[inline] pub fn from_signed_bytes_be(digits: &[u8]) -> BigInt {
                     convert::from_signed_bytes_be(digits)
                 }
@@ -11891,15 +12969,9 @@ pub mod num
                 pub fn trailing_zeros(&self) -> Option<u64> {
                     self.data.trailing_zeros()
                 }
-                /// Returns whether the bit in position `bit` is set,
-                /// using the two's complement for negative numbers
+                /// Returns if the bit in position `bit` is set, using the two's complement for negative numbers
                 pub fn bit(&self, bit: u64) -> bool {
                     if self.is_negative() {
-                        // Let the binary representation of a number be
-                        //   ... 0  x 1 0 ... 0
-                        // Then the two's complement is
-                        //   ... 1 !x 1 0 ... 0
-                        // where !x is obtained from x by flipping each bit
                         if bit >= u64::from( big_digit::BITS ) * self.len() as u64 {
                             true
                         } else {
@@ -11914,8 +12986,7 @@ pub mod num
                         self.data.bit(bit)
                     }
                 }
-                /// Sets or clears the bit in the given position,
-                /// using the two's complement for negative numbers
+                /// Sets or clears the bit in the given position, using the two's complement for negative numbers
                 pub fn set_bit(&mut self, bit: u64, value: bool) {
                     match self.sign {
                         Sign::Plus => self.data.set_bit(bit, value),
@@ -12265,11 +13336,6 @@ pub mod num
                 
 
                 /// Two argument addition of raw slices, `a += b`, returning the carry.
-                ///
-                /// This is used when the data `Vec` might need to resize to push a non-zero carry, so we perform
-                /// the addition first hoping that it will fit.
-                ///
-                /// The caller _must_ ensure that `a` is at least as long as `b`.
                 #[inline] pub fn __add2(a: &mut [BigDigit], b: &[BigDigit]) -> BigDigit {
                     debug_assert!(a.len() >= b.len());
 
@@ -12291,11 +13357,7 @@ pub mod num
 
                     carry as BigDigit
                 }
-                /// Two argument addition of raw slices:
-                /// a += b
-                ///
-                /// The caller _must_ ensure that a is big enough to store the result - typically this means
-                /// resizing a to max(a.len(), b.len()) + 1, to fit a possible carry.
+                /// Two argument addition of raw slices | a += b
                 pub fn add2(a: &mut [BigDigit], b: &[BigDigit]) {
                     let carry = __add2(a, b);
 
@@ -12573,20 +13635,13 @@ pub mod num
                     rem
                 }
                 /// Subtract a multiple.
-                /// a -= b * c
-                /// Returns a borrow (if a < b then borrow > 0).
                 fn sub_mul_digit_same_len(a: &mut [BigDigit], b: &[BigDigit], c: BigDigit) -> BigDigit {
                     debug_assert!(a.len() == b.len());
-
-                    // carry is between -big_digit::MAX and 0, so to avoid overflow we store
-                    // offset_carry = carry + big_digit::MAX
+                    
                     let mut offset_carry = big_digit::MAX;
 
                     for (x, y) in a.iter_mut().zip(b) {
                         // We want to calculate sum = x - y * c + carry.
-                        // sum >= -(big_digit::MAX * big_digit::MAX) - big_digit::MAX
-                        // sum <= big_digit::MAX
-                        // Offsetting sum by (big_digit::MAX << big_digit::BITS) puts it in DoubleBigDigit range.
                         let offset_sum = big_digit::to_doublebigdigit(big_digit::MAX, *x)
                             - big_digit::MAX as DoubleBigDigit
                             + offset_carry as DoubleBigDigit
@@ -12596,8 +13651,7 @@ pub mod num
                         offset_carry = new_offset_carry;
                         *x = new_x;
                     }
-
-                    // Return the borrow.
+                    
                     big_digit::MAX - offset_carry
                 }
 
@@ -12729,27 +13783,16 @@ pub mod num
 
                         let a1 = *a.data.last().unwrap();
                         let a2 = a.data[a.data.len() - 2];
-
-                        // The first q0 estimate is [a1,a0] / b0. It will never be too small, it may be too large
-                        // by at most 2.
+                        
                         let (mut q0, mut r) = if a0 < b0 {
                             let (q0, r) = div_wide(a0, a1, b0);
                             (q0, r as DoubleBigDigit)
                         } else {
                             debug_assert!(a0 == b0);
-                            // Avoid overflowing q0, we know the quotient fits in BigDigit.
-                            // [a1,a0] = b0 * (1<<BITS - 1) + (a0 + a1)
+                            
                             (big_digit::MAX, a0 as DoubleBigDigit + a1 as DoubleBigDigit)
                         };
-
-                        // r = [a1,a0] - q0 * b0
-                        //
-                        // Now we want to compute a more precise estimate [a2,a1,a0] / [b1,b0] which can only be
-                        // less or equal to the current q0.
-                        //
-                        // q0 is too large if:
-                        // [a2,a1,a0] < q0 * [b1,b0]
-                        // (r << BITS) + a2 < q0 * b1
+                        
                         while r <= big_digit::MAX as DoubleBigDigit
                             && big_digit::to_doublebigdigit(r as BigDigit, a2)
                                 < q0 as DoubleBigDigit * b1 as DoubleBigDigit
@@ -12758,21 +13801,16 @@ pub mod num
                             r += b0 as DoubleBigDigit;
                         }
 
-                        // q0 is now either the correct quotient digit, or in rare cases 1 too large.
-                        // Subtract (q0 << j) from a. This may overflow, in which case we will have to correct.
-
                         let mut borrow = sub_mul_digit_same_len(&mut a.data[j..], b, q0);
                         if borrow > a0 {
-                            // q0 is too large. We need to add back one multiple of b.
                             q0 -= 1;
                             borrow -= __add2(&mut a.data[j..], b);
                         }
-                        // The top digit of a, stored in a0, has now been zeroed.
+                        
                         debug_assert!(borrow == a0);
 
                         q.data[j] = q0;
-
-                        // Pop off the next top digit of a.
+                        
                         a0 = a.data.pop().unwrap();
                     }
 
@@ -13218,46 +14256,31 @@ pub mod num
                         }
                     } else if x.len() * 2 <= y.len() 
                     {
-                        // Karatsuba Multiplication for factors with significant length disparity.
                         let m2 = y.len() / 2;
                         let (low2, high2) = y.split_at(m2);
-
-                        // (x * high2) * NBASE ^ m2 + z0
+                        
                         mac3(acc, x, low2);
                         mac3(&mut acc[m2..], x, high2);
                     } else if x.len() <= 256 {
-                        // Karatsuba multiplication:
                         let b = x.len() / 2;
                         let (x0, x1) = x.split_at(b);
                         let (y0, y1) = y.split_at(b);
-
-                        // We reuse the same BigUint for all the intermediate multiplies and have to size p
-                        // appropriately here: x1.len() >= x0.len and y1.len() >= y0.len():
+                        
                         let len = x1.len() + y1.len() + 1;
                         let mut p = BigUint { data: vec![0; len] };
-
-                        // p2 = x1 * y1
                         mac3(&mut p.data, x1, y1);
-
-                        // Not required, but the adds go faster if we drop any unneeded 0s from the end:
                         p.normalize();
 
                         add2(&mut acc[b..], &p.data);
                         add2(&mut acc[b * 2..], &p.data);
-
-                        // Zero out p before the next multiply:
                         p.data.truncate(0);
                         p.data.resize(len, 0);
-
-                        // p0 = x0 * y0
                         mac3(&mut p.data, x0, y0);
                         p.normalize();
 
                         add2(acc, &p.data);
                         add2(&mut acc[b..], &p.data);
-
-                        // p1 = (x1 - x0) * (y1 - y0)
-                        // We do this one last, since it may be negative and acc can't ever be negative:
+                        
                         let (j0_sign, j0) = sub_sign(x1, x0);
                         let (j1_sign, j1) = sub_sign(y1, y0);
 
@@ -13277,7 +14300,6 @@ pub mod num
                             NoSign => (),
                         }
                     } else {
-                        // Toom-3 multiplication:
                         let i = y.len() / 3 + 1;
 
                         let x0_len = Ord::min(x.len(), i);
@@ -13289,47 +14311,27 @@ pub mod num
                         let x0 = bigint_from_slice(&x[..x0_len]);
                         let x1 = bigint_from_slice(&x[x0_len..x0_len + x1_len]);
                         let x2 = bigint_from_slice(&x[x0_len + x1_len..]);
-
-                        // y(t) = y2*t^2 + y1*t + y0
                         let y0 = bigint_from_slice(&y[..y0_len]);
                         let y1 = bigint_from_slice(&y[y0_len..y0_len + y1_len]);
                         let y2 = bigint_from_slice(&y[y0_len + y1_len..]);
                         
                         let p = &x0 + &x2;
-
-                        // y0 + y2, avoiding temporaries
                         let q = &y0 + &y2;
-
-                        // x2 - x1 + x0, avoiding temporaries
                         let p2 = &p - &x1;
-
-                        // y2 - y1 + y0, avoiding temporaries
                         let q2 = &q - &y1;
-
-                        // w(0)
                         let r0 = &x0 * &y0;
-
-                        // w(inf)
                         let r4 = &x2 * &y2;
-
-                        // w(1)
                         let r1 = (p + x1) * (q + y1);
-
-                        // w(-1)
                         let r2 = &p2 * &q2;
-
-                        // w(-2)
                         let r3 = ((p2 + x2) * 2 - x0) * ((q2 + y2) * 2 - y0);
-
-                        // Evaluating these points gives us the following system of linear equations.
+                        
                         let mut comp3: BigInt = (r3 - &r1) / 3u32;
                         let mut comp1: BigInt = (r1 - &r2) >> 1;
                         let mut comp2: BigInt = r2 - &r0;
                         comp3 = ((&comp2 - comp3) >> 1) + (&r4 << 1);
                         comp2 += &comp1 - &r4;
                         comp1 -= &comp3;
-
-                        // Recomposition. The coefficients of the polynomial are now known.
+                        
                         for (j, result) in [&r0, &comp1, &comp2, &comp3, &r4].iter().enumerate().rev() {
                             match result.sign() {
                                 Plus => add2(&mut acc[i * j..], result.digits()),
@@ -14589,8 +15591,8 @@ pub mod num
                     res
                 }
 
-                // Extract little-endian radix digits
-                #[inline(always)] // forced inline to get const-prop for radix=10
+                /// Extract little-endian radix digits
+                #[inline(always)]
                 pub fn to_radix_digits_le(u: &BigUint, radix: u32) -> Vec<u8> 
                 {
                     debug_assert!(!u.is_zero() && !radix.is_power_of_two());
@@ -14670,7 +15672,6 @@ pub mod num
                     if u.is_zero() {
                         vec![0]
                     } else if radix.is_power_of_two() {
-                        // Powers of two can use bitwise masks and shifting instead of division
                         let bits = ilog2(radix);
                         if big_digit::BITS % bits == 0 {
                             to_bitwise_digits_le(u, bits)
@@ -14678,8 +15679,6 @@ pub mod num
                             to_inexact_bitwise_digits_le(u, bits)
                         }
                     } else if radix == 10 {
-                        // 10 is so common that it's worth separating out for const-propagation.
-                        // Optimizers can often turn constant division into a faster multiplication.
                         to_radix_digits_le(u, 10)
                     } else {
                         to_radix_digits_le(u, radix)
@@ -15139,21 +16138,11 @@ pub mod num
                             j += n;
                         }
                     }
-
-                    // convert to regular number
+                    
                     zz = montgomery(&z, &one, m, mr.n0inv, num_words);
 
                     zz.normalize();
-                    // One last reduction, just in case.
-                    // See golang.org/issue/13907.
                     if zz >= *m {
-                        // Common case is m has high bit set; in that case,
-                        // since zz is the same length as m, there can be just
-                        // one multiple of m to remove. Just subtract.
-                        // We think that the subtract should be sufficient in general,
-                        // so do that unconditionally, but double-check,
-                        // in case our beliefs are wrong.
-                        // The div is not expected to be reached.
                         zz -= m;
                         if zz >= *m {
                             zz %= m;
@@ -15743,8 +16732,6 @@ pub mod num
                     }
                 }
                 /// Calculates the Greatest Common Divisor (GCD) of the number and `other`.
-                ///
-                /// The result is always positive.
                 #[inline] fn gcd(&self, other: &Self) -> Self {
                     #[inline] fn twos(x: &BigUint) -> u64 {
                         x.trailing_zeros().unwrap_or(0)
@@ -16065,8 +17052,6 @@ pub mod num
                     }
                 }
                 /// Creates and initializes a [`BigUint`].
-                ///
-                /// The bytes are in little-endian byte order.
                 #[inline] pub fn from_bytes_le(bytes: &[u8]) -> BigUint {
                     if bytes.is_empty() {
                         Self::ZERO
@@ -17231,11 +18216,8 @@ pub mod num
             {
                 if self.im.is_zero() {
                     if self.re.is_sign_positive() {
-                        // simple positive real √r, and copy `im` for its sign
                         Self::new(self.re.sqrt(), self.im)
                     } else {
-                        // √(r e^(iπ)) = √r e^(iπ/2) = i√r
-                        // √(r e^(-iπ)) = √r e^(-iπ/2) = -i√r
                         let re = T::zero();
                         let im = (-self.re).sqrt();
                         if self.im.is_sign_positive() {
@@ -17268,11 +18250,8 @@ pub mod num
             {
                 if self.im.is_zero() {
                     if self.re.is_sign_positive() {
-                        // simple positive real ∛r, and copy `im` for its sign
                         Self::new(self.re.cbrt(), self.im)
                     } else {
-                        // ∛(r e^(iπ)) = ∛r e^(iπ/3) = ∛r/2 + i∛r√3/2
-                        // ∛(r e^(-iπ)) = ∛r e^(-iπ/3) = ∛r/2 - i∛r√3/2
                         let one = T::one();
                         let two = one + one;
                         let three = two + one;
@@ -18909,8 +19888,6 @@ pub mod num
                 impl Integer for $T {
                     /// Floored integer division
                     #[inline] fn div_floor(&self, other: &Self) -> Self {
-                        // Algorithm from [Daan Leijen. _Division and Modulus for Computer Scientists_,
-                        // December 2001](http://research.microsoft.com/pubs/151917/divmodnote-letter.pdf)
                         let (d, r) = self.div_rem(other);
                         if (r > 0 && *other < 0) || (r < 0 && *other > 0) {
                             d - 1
@@ -18921,8 +19898,6 @@ pub mod num
 
                     /// Floored integer modulo
                     #[inline] fn mod_floor(&self, other: &Self) -> Self {
-                        // Algorithm from [Daan Leijen. _Division and Modulus for Computer Scientists_,
-                        // December 2001](http://research.microsoft.com/pubs/151917/divmodnote-letter.pdf)
                         let r = *self % *other;
                         if (r > 0 && *other < 0) || (r < 0 && *other > 0) {
                             r + *other
@@ -18933,8 +19908,6 @@ pub mod num
 
                     /// Calculates `div_floor` and `mod_floor` simultaneously
                     #[inline] fn div_mod_floor(&self, other: &Self) -> (Self, Self) {
-                        // Algorithm from [Daan Leijen. _Division and Modulus for Computer Scientists_,
-                        // December 2001](http://research.microsoft.com/pubs/151917/divmodnote-letter.pdf)
                         let (d, r) = self.div_rem(other);
                         if (r > 0 && *other < 0) || (r < 0 && *other > 0) {
                             (d - 1, r + *other)
@@ -18955,7 +19928,6 @@ pub mod num
                     /// Calculates the Greatest Common Divisor (GCD) of the number and
                     /// `other`. The result is always non-negative.
                     #[inline] fn gcd(&self, other: &Self) -> Self {
-                        // Use Stein's algorithm
                         let mut m = *self;
                         let mut n = *other;
                         if m == 0 || n == 0 {
@@ -20202,8 +21174,6 @@ pub mod num
                     let numer = numer / g.clone();
                     let denom = denom / g;
                     let raw = if denom < T::zero() {
-                        // We need to keep denom positive, but 2's-complement MIN may
-                        // overflow negation -- instead we can check multiplying -1.
                         let n1 = T::zero() - T::one();
                         Ratio::new_raw(numer.checked_mul(&n1)?, denom.checked_mul(&n1)?)
                     } else {
@@ -21134,76 +22104,55 @@ pub mod num
             };
             /// A generic trait for converting a value to a number.
             pub trait ToPrimitive {
-                /// Converts the value of `self` to an `isize`. If the value cannot be
-                /// represented by an `isize`, then `None` is returned.
+                /// Converts the value of `self` to an `isize`.
                 #[inline] fn to_isize(&self) -> Option<isize> {
                     self.to_i64().as_ref().and_then(ToPrimitive::to_isize)
                 }
-                /// Converts the value of `self` to an `i8`. If the value cannot be
-                /// represented by an `i8`, then `None` is returned.
+                /// Converts the value of `self` to an `i8`.
                 #[inline] fn to_i8(&self) -> Option<i8> {
                     self.to_i64().as_ref().and_then(ToPrimitive::to_i8)
                 }
-                /// Converts the value of `self` to an `i16`. If the value cannot be
-                /// represented by an `i16`, then `None` is returned.
+                /// Converts the value of `self` to an `i16`.
                 #[inline] fn to_i16(&self) -> Option<i16> {
                     self.to_i64().as_ref().and_then(ToPrimitive::to_i16)
                 }
-                /// Converts the value of `self` to an `i32`. If the value cannot be
-                /// represented by an `i32`, then `None` is returned.
+                /// Converts the value of `self` to an `i32`.
                 #[inline] fn to_i32(&self) -> Option<i32> {
                     self.to_i64().as_ref().and_then(ToPrimitive::to_i32)
                 }
-                /// Converts the value of `self` to an `i64`. If the value cannot be
-                /// represented by an `i64`, then `None` is returned.
+                /// Converts the value of `self` to an `i64`.
                 fn to_i64(&self) -> Option<i64>;
-                /// Converts the value of `self` to an `i128`. If the value cannot be
-                /// represented by an `i128` (`i64` under the default implementation), then
-                /// `None` is returned.
-                ///
-                /// The default implementation converts through `to_i64()`. Types implementing
-                /// this trait should override this method if they can represent a greater range.
+                /// Converts the value of `self` to an `i128`.
                 #[inline] fn to_i128(&self) -> Option<i128> {
                     self.to_i64().map(From::from)
                 }
-                /// Converts the value of `self` to a `usize`. If the value cannot be
-                /// represented by a `usize`, then `None` is returned.
+                /// Converts the value of `self` to a `usize`.
                 #[inline] fn to_usize(&self) -> Option<usize> {
                     self.to_u64().as_ref().and_then(ToPrimitive::to_usize)
                 }
-                /// Converts the value of `self` to a `u8`. If the value cannot be
-                /// represented by a `u8`, then `None` is returned.
+                /// Converts the value of `self` to a `u8`.
                 #[inline] fn to_u8(&self) -> Option<u8> {
                     self.to_u64().as_ref().and_then(ToPrimitive::to_u8)
                 }
-                /// Converts the value of `self` to a `u16`. If the value cannot be
-                /// represented by a `u16`, then `None` is returned.
+                /// Converts the value of `self` to a `u16`.
                 #[inline] fn to_u16(&self) -> Option<u16> {
                     self.to_u64().as_ref().and_then(ToPrimitive::to_u16)
                 }
-                /// Converts the value of `self` to a `u32`. If the value cannot be
-                /// represented by a `u32`, then `None` is returned.
+                /// Converts the value of `self` to a `u32`.
                 #[inline] fn to_u32(&self) -> Option<u32> {
                     self.to_u64().as_ref().and_then(ToPrimitive::to_u32)
                 }
-                /// Converts the value of `self` to a `u64`. If the value cannot be
-                /// represented by a `u64`, then `None` is returned.
+                /// Converts the value of `self` to a `u64`.
                 fn to_u64(&self) -> Option<u64>;
-                /// Converts the value of `self` to a `u128`. If the value cannot be
-                /// represented by a `u128` (`u64` under the default implementation), then
-                /// `None` is returned.
+                /// Converts the value of `self` to a `u128`.
                 #[inline] fn to_u128(&self) -> Option<u128> {
                     self.to_u64().map(From::from)
                 }
-                /// Converts the value of `self` to an `f32`. Overflows may map to positive
-                /// or negative inifinity, otherwise `None` is returned if the value cannot
-                /// be represented by an `f32`.
+                /// Converts the value of `self` to an `f32`.
                 #[inline] fn to_f32(&self) -> Option<f32> {
                     self.to_f64().as_ref().and_then(ToPrimitive::to_f32)
                 }
-                /// Converts the value of `self` to an `f64`. Overflows may map to positive
-                /// or negative inifinity, otherwise `None` is returned if the value cannot
-                /// be represented by an `f64`.
+                /// Converts the value of `self` to an `f64`.
                 #[inline] fn to_f64(&self) -> Option<f64> {
                     match self.to_i64() {
                         Some(i) => i.to_f64(),
@@ -21352,8 +22301,6 @@ pub mod num
             macro_rules! impl_to_primitive_float_to_float {
                 ($SrcT:ident : $( fn $method:ident -> $DstT:ident ; )*) => {$(
                     #[inline] fn $method(&self) -> Option<$DstT> {
-                        // We can safely cast all values, whether NaN, +-inf, or finite.
-                        // Finite values that are reducing size may saturate to +-inf.
                         Some(*self as $DstT)
                     }
                 )*}
@@ -21372,21 +22319,14 @@ pub mod num
                     #[inline]
                     $(#[$cfg])*
                     fn $method(&self) -> Option<$i> {
-                        // Float as int truncates toward zero, so we want to allow values
-                        // in the exclusive range `(MIN-1, MAX+1)`.
                         if size_of::<$f>() > size_of::<$i>() {
-                            // With a larger size, we can represent the range exactly.
                             const MIN_M1: $f = $i::MIN as $f - 1.0;
                             const MAX_P1: $f = $i::MAX as $f + 1.0;
                             if *self > MIN_M1 && *self < MAX_P1 {
                                 return Some(float_to_int_unchecked!(*self => $i));
                             }
                         } else {
-                            // We can't represent `MIN-1` exactly, but there's no fractional part
-                            // at this magnitude, so we can just use a `MIN` inclusive boundary.
                             const MIN: $f = $i::MIN as $f;
-                            // We can't represent `MAX` exactly, but it will round up to exactly
-                            // `MAX+1` (a power of two) when we cast it.
                             const MAX_P1: $f = $i::MAX as $f;
                             if *self >= MIN && *self < MAX_P1 {
                                 return Some(float_to_int_unchecked!(*self => $i));
@@ -21402,18 +22342,12 @@ pub mod num
                     #[inline]
                     $(#[$cfg])*
                     fn $method(&self) -> Option<$u> {
-                        // Float as int truncates toward zero, so we want to allow values
-                        // in the exclusive range `(-1, MAX+1)`.
                         if size_of::<$f>() > size_of::<$u>() {
-                            // With a larger size, we can represent the range exactly.
                             const MAX_P1: $f = $u::MAX as $f + 1.0;
                             if *self > -1.0 && *self < MAX_P1 {
                                 return Some(float_to_int_unchecked!(*self => $u));
                             }
                         } else {
-                            // We can't represent `MAX` exactly, but it will round up to exactly
-                            // `MAX+1` (a power of two) when we cast it.
-                            // (`u128::MAX as f32` is infinity, but this is still ok.)
                             const MAX_P1: $f = $u::MAX as $f;
                             if *self > -1.0 && *self < MAX_P1 {
                                 return Some(float_to_int_unchecked!(*self => $u));
@@ -21476,8 +22410,6 @@ pub mod num
                 /// Converts an `i64` to return an optional value of this type.
                 fn from_i64(n: i64) -> Option<Self>;
                 /// Converts an `i128` to return an optional value of this type.
-                ///
-                /// The default implementation converts through `from_i64()`.
                 #[inline] fn from_i128(n: i128) -> Option<Self> {
                     n.to_i64().and_then(FromPrimitive::from_i64)
                 }
@@ -21500,8 +22432,6 @@ pub mod num
                 /// Converts an `u64` to return an optional value of this type.
                 fn from_u64(n: u64) -> Option<Self>;
                 /// Converts an `u128` to return an optional value of this type.
-                ///
-                /// The default implementation converts through `from_u64()`.
                 #[inline] fn from_u128(n: u128) -> Option<Self> {
                     n.to_u64().and_then(FromPrimitive::from_u64)
                 }
@@ -24189,29 +25119,10 @@ pub mod num
             pub trait Signed: Sized + Num + Neg<Output = Self> 
             {
                 /// Computes the absolute value.
-                ///
-                /// For `f32` and `f64`, `NaN` will be returned if the number is `NaN`.
-                ///
-                /// For signed integers, `::MIN` will be returned if the number is `::MIN`.
                 fn abs(&self) -> Self;
                 /// The positive difference of two numbers.
-                ///
-                /// Returns `zero` if the number is less than or equal to `other`, otherwise the difference
-                /// between `self` and `other` is returned.
                 fn abs_sub(&self, other: &Self) -> Self;
                 /// Returns the sign of the number.
-                ///
-                /// For `f32` and `f64`:
-                ///
-                /// * `1.0` if the number is positive, `+0.0` or `INFINITY`
-                /// * `-1.0` if the number is negative, `-0.0` or `NEG_INFINITY`
-                /// * `NaN` if the number is `NaN`
-                ///
-                /// For signed integers:
-                ///
-                /// * `0` if the number is zero
-                /// * `1` if the number is positive
-                /// * `-1` if the number is negative
                 fn signum(&self) -> Self;
                 /// Returns true if the number is positive and false if the number is zero or negative.
                 fn is_positive(&self) -> bool;
@@ -27469,12 +28380,8 @@ pub mod parsers
                 /// makes a char from self
                 fn as_char(self) -> char;
                 /// Tests that self is an alphabetic character
-                ///
-                /// Warning: for `&str` it recognizes alphabetic
-                /// characters outside of the 52 ASCII letters
                 fn is_alpha(self) -> bool;
-                /// Tests that self is an alphabetic character
-                /// or a decimal digit
+                /// Tests that self is an alphabetic character or a decimal digit
                 fn is_alphanum(self) -> bool;
                 /// Tests that self is a decimal digit
                 fn is_dec_digit(self) -> bool;
@@ -27607,12 +28514,8 @@ pub mod parsers
             pub trait InputIter 
             {
                 /// The current input type is a sequence of that `Item` type.
-                ///
-                /// Example: `u8` for `&[u8]` or `char` for `&str`
                 type Item;
-                /// An iterator over the input type, producing the item and its position
-                /// for use with [Slice]. If we're iterating over `&str`, the position
-                /// corresponds to the byte index of the character
+                /// An iterator over the input type, producing the item and its position for use with [Slice].
                 type Iter: Iterator<Item = (usize, Self::Item)>;
                 /// An iterator over the input type, producing the item
                 type IterElem: Iterator<Item = Self::Item>;
@@ -27884,7 +28787,6 @@ pub mod parsers
                     P: Fn(Self::Item) -> bool,
                 {
                     match self.find(predicate) {
-                    // find() returns a byte index that is already in the slice at a char boundary
                     Some(i) => unsafe { Ok((self.get_unchecked(i..), self.get_unchecked(..i))) },
                     None => Err(Err::Incomplete(Needed::new(1))),
                     }
@@ -27899,7 +28801,6 @@ pub mod parsers
                 {
                     match self.find(predicate) {
                     Some(0) => Err(Err::Error(E::from_error_kind(self, e))),
-                    // find() returns a byte index that is already in the slice at a char boundary
                     Some(i) => unsafe { Ok((self.get_unchecked(i..), self.get_unchecked(..i))) },
                     None => Err(Err::Incomplete(Needed::new(1))),
                     }
@@ -27912,9 +28813,7 @@ pub mod parsers
                     P: Fn(Self::Item) -> bool,
                 {
                     match self.find(predicate) {
-                    // find() returns a byte index that is already in the slice at a char boundary
                     Some(i) => unsafe { Ok((self.get_unchecked(i..), self.get_unchecked(..i))) },
-                    // the end of slice is a char boundary
                     None => unsafe {
                         Ok((
                         self.get_unchecked(self.len()..),
@@ -27933,13 +28832,11 @@ pub mod parsers
                 {
                     match self.find(predicate) {
                     Some(0) => Err(Err::Error(E::from_error_kind(self, e))),
-                    // find() returns a byte index that is already in the slice at a char boundary
                     Some(i) => unsafe { Ok((self.get_unchecked(i..), self.get_unchecked(..i))) },
                     None => {
                         if self.is_empty() {
                         Err(Err::Error(E::from_error_kind(self, e)))
                         } else {
-                        // the end of slice is a char boundary
                         unsafe {
                             Ok((
                             self.get_unchecked(self.len()..),
@@ -29496,7 +30393,6 @@ pub mod parsers
                             }
                             }
                             Err(Err::Error(_)) => {
-                            // unwrap() should be safe here since index < $i.input_len()
                             if remainder.iter_elements().next().unwrap().as_char() == control_char {
                                 let next = index + control_char.len_utf8();
                                 let input_len = input.input_len();
@@ -30480,7 +31376,6 @@ pub mod parsers
                 #[inline] pub fn be_i24<I, E: ParseError<I>>( input:I ) -> IResult<I, i32, E> where
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
-                    // Same as the unsigned version but we need to sign-extend manually here
                     be_u24
                         .map(|x| {
                         if x & 0x80_00_00 != 0 {
@@ -30947,13 +31842,11 @@ pub mod parsers
                 T: AsBytes,
                 {
                     let (i, sign) = sign(input.clone())?;
-
-                    //let (i, zeroes) = take_while(|c: <T as InputTakeAtPosition>::Item| c.as_char() == '0')(i)?;
                     let (i, zeroes) = match i.as_bytes().iter().position(|c| *c != b'0') {
                         Some(index) => i.take_split(index),
                         None => i.take_split(i.input_len()),
                     };
-                    //let (i, mut integer) = digit0(i)?;
+                    
                     let (i, mut integer) = match i
                         .as_bytes()
                         .iter()
@@ -30964,7 +31857,6 @@ pub mod parsers
                     };
 
                     if integer.input_len() == 0 && zeroes.input_len() > 0 {
-                        // keep the last zero if integer is empty
                         integer = zeroes.slice(zeroes.input_len() - 1..);
                     }
 
@@ -30974,7 +31866,6 @@ pub mod parsers
                         let i2 = i.clone();
                         (i2, i.slice(..0))
                     } else {
-                        // match number, trim right zeroes
                         let mut zero_count = 0usize;
                         let mut position = None;
                         for (pos, c) in i.as_bytes().iter().enumerate() {
@@ -31681,7 +32572,6 @@ pub mod parsers
                     };
 
                     if integer.input_len() == 0 && zeroes.input_len() > 0 {
-                        // keep the last zero if integer is empty
                         integer = zeroes.slice(zeroes.input_len() - 1..);
                     }
 
@@ -31691,7 +32581,6 @@ pub mod parsers
                         let i2 = i.clone();
                         (i2, i.slice(..0))
                     } else {
-                        // match number, trim right zeroes
                         let mut zero_count = 0usize;
                         let mut position = None;
                         for (pos, c) in i.as_bytes().iter().enumerate() {
@@ -31795,6 +32684,20 @@ pub mod parsers
                 Little,
                 /// Will match the host's endianness
                 Native,
+            }
+
+            #[inline] pub fn numeric(i: &[u8]) -> i32
+            {
+                let mut n: i32 = 0;
+
+                for &ch in i
+                {
+                    let d = (ch as i32).wrapping_sub(b'0' as i32);
+
+                    if d <= 9 { n = n.saturating_mul(10).saturating_add(d); }
+                }
+
+                n
             }
         }
     }
@@ -32875,12 +33778,9 @@ pub mod str
     /// Reads a file and returns its contents in a string.
     pub fn read_file(fname: &str) -> io::Result<String>
     {
-        // Open a file in read-only mode
         let mut file = File::open(fname)?;
-
         let mut contents = String::new();
         let _ = file.read_to_string(&mut contents)?;
-
         Ok(contents)
     }
     /// Iterator over string prefixes.
@@ -33064,11 +33964,7 @@ pub mod system
             }
 
             pub fn resize(&mut self, new_size: Size) {
-                // Try our best to maintain the contents of the buffer;
-                // though it's really best if users redraw when Resize event is read.
                 resize_buffer(&mut self.buffer, self.size, new_size);
-                // Totally invalidate the back buffer.
-                // Screen implementations will clear the screen and redraw.
                 new_buffer(&mut self.back_buffer, new_size);
                 self.size = new_size;
             }
@@ -33375,7 +34271,6 @@ pub mod system
 
         fn new_buffer(buf: &mut Vec<Cell>, new_size: Size) 
         {
-            // Invalidate the buffer; all cells will be redrawn
             *buf = vec![Cell::invalid(); new_size.area()];
         }
     } pub use self::buffer::{ * };
@@ -33767,9 +34662,7 @@ pub mod system
             if let Ok(list) = read_dir(lookup_dir) {
                 for ent in list {
                     if let Ok(ent) = ent {
-                        let ent_name = ent.file_name();
-
-                        // TODO: Deal with non-UTF8 paths in some way
+                        let ent_name = ent.file_name();                        
                         if let Ok(path) = ent_name.into_string() {
                             if path.starts_with(fname) {
                                 let (name, display) = if let Some(dir) = base_dir {
@@ -33953,8 +34846,6 @@ pub mod system
             system::{ Command },
             *,
         };
-        /*
-        */
         /// Parsed configuration directive
         #[derive(Clone, Debug)]
         pub enum Directive
@@ -34387,10 +35278,7 @@ pub mod system
                     let mut n = 0;
 
                     for _ in 0..2 {
-                        // Peek the next character
                         let digit = chars.clone().next()?.to_digit(16)? as u8;
-
-                        // Consume if valid
                         chars.next();
 
                         n <<= 4;
@@ -34403,10 +35291,9 @@ pub mod system
                     let mut n = ch as u8 - b'0';
 
                     for _ in 0..2 {
-                        // Peek the next character
                         let digit = chars.clone().next()?.to_digit(8)? as u8;
 
-                        // Consume if valid
+                        
                         chars.next();
 
                         n <<= 3;
@@ -34425,8 +35312,6 @@ pub mod system
         {
             let mut chars = s.chars();
             let mut res = String::new();
-
-            // Skip open quote
             chars.next();
 
             while let Some(ch) = chars.next() {
@@ -35781,8 +36666,6 @@ pub mod system
 
                 if self.read.page_completions &&
                         n_completions >= self.read.completion_query_items {
-                    // TODO: Replace borrowed data in `Table` with owned data.
-                    // Then, store table here to avoid regenerating column widths
                     self.start_page_completions(n_completions)
                 } else {
                     self.show_list_completions(table)?;
@@ -37035,26 +37918,22 @@ pub mod system
         {
             type Item = (&'a str, &'a Command);
 
-            #[inline]
-            fn next(&mut self) -> Option<Self::Item> {
+            #[inline] fn next(&mut self) -> Option<Self::Item> {
                 self.0.next().map(|&(ref s, ref cmd)| (&s[..], cmd))
             }
 
-            #[inline]
-            fn nth(&mut self, n: usize) -> Option<Self::Item> {
+            #[inline] fn nth(&mut self, n: usize) -> Option<Self::Item> {
                 self.0.nth(n).map(|&(ref s, ref cmd)| (&s[..], cmd))
             }
 
-            #[inline]
-            fn size_hint(&self) -> (usize, Option<usize>) {
+            #[inline] fn size_hint(&self) -> (usize, Option<usize>) {
                 self.0.size_hint()
             }
         }
 
         impl<'a> DoubleEndedIterator for BindingIter<'a> 
         {
-            #[inline]
-            fn next_back(&mut self) -> Option<Self::Item> {
+            #[inline] fn next_back(&mut self) -> Option<Self::Item> {
                 self.0.next_back().map(|&(ref s, ref cmd)| (&s[..], cmd))
             }
         }
@@ -37642,7 +38521,8 @@ pub mod system
         }
         /// Represents the result of a `SequenceMap::find` operation.
         #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-        pub enum FindResult<V> {
+        pub enum FindResult<V>
+        {
             /// No contained sequences begin with the provided input sequence.
             NotFound,
             /// One or more sequences begin with the provided input sequence,
@@ -37656,7 +38536,6 @@ pub mod system
             Found(V),
         }
         
-
         impl<'a, V: Clone> FindResult<&'a V> 
         {
             /// Maps `FindResult<&V>` to `FindResult<V>` by cloning the contents of the result value.
@@ -37671,25 +38550,29 @@ pub mod system
             }
         }
         /// A view into a single entry of a `SequenceMap`, which may be either occupied or vacant.
-        pub enum Entry<'a, K: 'a, V: 'a> {
+        pub enum Entry<'a, K: 'a, V: 'a> 
+        {
             /// An occupied entry
             Occupied(OccupiedEntry<'a, K, V>),
             /// A vacant entry
             Vacant(VacantEntry<'a, K, V>),
         }
         /// A view into an occupied entry in a `SequenceMap`.
-        pub struct OccupiedEntry<'a, K: 'a, V: 'a> {
+        pub struct OccupiedEntry<'a, K: 'a, V: 'a> 
+        {
             map: &'a mut SequenceMap<K, V>,
             index: usize,
         }
         /// A view into a vacant entry in a `SequenceMap`.
-        pub struct VacantEntry<'a, K: 'a, V: 'a> {
+        pub struct VacantEntry<'a, K: 'a, V: 'a> 
+        {
             map: &'a mut SequenceMap<K, V>,
             key: K,
             index: usize,
         }
 
-        impl<'a, K, V> Entry<'a, K, V> {
+        impl<'a, K, V> Entry<'a, K, V> 
+        {
             /// Provides in-place mutable access to an occupied entry before any
             /// potential inserts into the map.
             pub fn and_modify<F: FnOnce(&mut V)>(self, f: F) -> Self {
@@ -37726,71 +38609,60 @@ pub mod system
             }
         }
 
-        impl<'a, K, V> OccupiedEntry<'a, K, V> {
+        impl<'a, K, V> OccupiedEntry<'a, K, V> 
+        {
             /// Returns a borrowed reference to the entry key.
-            pub fn key(&self) -> &K {
-                &self.map.sequences[self.index].0
-            }
+            pub fn key(&self) -> &K { &self.map.map[ self.index ].0 }
             /// Returns a borrowed reference to the entry value.
-            pub fn get(&self) -> &V {
-                &self.map.sequences[self.index].1
-            }
+            pub fn get(&self) -> &V { &self.map.map[ self.index ].1 }
             /// Returns a mutable reference to the entry value.
-            pub fn get_mut(&mut self) -> &mut V {
-                &mut self.map.sequences[self.index].1
-            }
-            /// Converts the `OccupiedEntry` into a mutable reference whose lifetime
-            /// is bound to the `SequenceMap`.
-            pub fn into_mut(self) -> &'a mut V {
-                &mut self.map.sequences[self.index].1
-            }
+            pub fn get_mut(&mut self) -> &mut V { &mut self.map.map[ self.index ].1 }
+            /// Converts the `OccupiedEntry` into a mutable reference whose lifetime is bound to the `SequenceMap`.
+            pub fn into_mut(self) -> &'a mut V { &mut self.map.map[ self.index ].1 }
             /// Replaces the entry value with the given value, returning the previous value.
-            pub fn insert(&mut self, value: V) -> V {
-                replace(self.get_mut(), value)
-            }
+            pub fn insert(&mut self, value: V) -> V { replace( self.get_mut(), value ) }
             /// Removes the entry and returns the value.
-            pub fn remove(self) -> V {
-                self.map.sequences.remove(self.index).1
-            }
+            pub fn remove(self) -> V { self.map.map.remove( self.index ).1 }
             /// Removes the entry and returns the key-value pair.
-            pub fn remove_entry(self) -> (K, V) {
-                self.map.sequences.remove(self.index)
-            }
+            pub fn remove_entry(self) -> (K, V) { self.map.map.remove( self.index ) }
         }
 
-        impl<'a, K, V> VacantEntry<'a, K, V> {
+        impl<'a, K, V> VacantEntry<'a, K, V> 
+        {
             /// Returns a borrowed reference to the entry key.
-            pub fn key(&self) -> &K {
-                &self.key
-            }
+            pub fn key(&self) -> &K { &self.key }
             /// Consumes the `VacantEntry` and returns ownership of the key.
-            pub fn into_key(self) -> K {
-                self.key
-            }
-            /// Consumes the `VacantEntry` and inserts a value, returning a mutable
-            /// reference to its place in the `SequenceMap`.
-            pub fn insert(self, value: V) -> &'a mut V {
-                self.map.sequences.insert(self.index, (self.key, value));
-                &mut self.map.sequences[self.index].1
+            pub fn into_key(self) -> K { self.key }
+            /// Consumes the `VacantEntry` and inserts a value, 
+            /// returning a mutable reference to its place in the `SequenceMap`.
+            pub fn insert(self, value: V) -> &'a mut V 
+            {
+                self.map.map.insert(self.index, (self.key, value));
+                &mut self.map.map[self.index].1
             }
         }
 
-        impl<'a, K: fmt::Debug, V: fmt::Debug> fmt::Debug for Entry<'a, K, V> {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                match *self {
+        impl<'a, K: fmt::Debug, V: fmt::Debug> fmt::Debug for Entry<'a, K, V> 
+        {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result 
+            {
+                match *self 
+                {
                     Entry::Occupied(ref ent) =>
-                        f.debug_tuple("Entry")
-                            .field(ent)
-                            .finish(),
+                    f.debug_tuple("Entry")
+                    .field(ent)
+                    .finish(),
+
                     Entry::Vacant(ref ent) =>
-                        f.debug_tuple("Entry")
-                            .field(ent)
-                            .finish()
+                    f.debug_tuple("Entry")
+                    .field(ent)
+                    .finish()
                 }
             }
         }
 
-        impl<'a, K: fmt::Debug, V: fmt::Debug> fmt::Debug for OccupiedEntry<'a, K, V> {
+        impl<'a, K: fmt::Debug, V: fmt::Debug> fmt::Debug for OccupiedEntry<'a, K, V> 
+        {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 f.debug_struct("OccupiedEntry")
                     .field("key", self.key())
@@ -37799,7 +38671,8 @@ pub mod system
             }
         }
 
-        impl<'a, K: fmt::Debug, V> fmt::Debug for VacantEntry<'a, K, V> {
+        impl<'a, K: fmt::Debug, V> fmt::Debug for VacantEntry<'a, K, V> 
+        {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 f.debug_tuple("VacantEntry")
                     .field(self.key())
@@ -38159,7 +39032,6 @@ pub mod system
             let max_cols = min(n_strs, screen_width / min_len);
 
             if min_cols <= 1 {
-                // No point in checking whether text can fit within one column
                 min_cols = 2;
             }
 
@@ -38228,6 +39100,7 @@ pub mod system
         {
             char::{ unctrl_lower },
             sync::{LockResult, map_lock_result, map_try_lock_result, TryLockResult},
+            system::{ * },
             time::{ Duration },
             *,
         };
@@ -38236,8 +39109,7 @@ pub mod system
         use mortal::{self, PrepareConfig, PrepareState, TerminalReadGuard, TerminalWriteGuard};
         use mortal::signal::{Signal, SignalSet};
         use mortal::sys;
-        pub use mortal::{CursorMode, Signal, SignalSet, Size};
-        */
+        pub use mortal::{CursorMode, Signal, SignalSet, Size}; */
         /// Defines a low-level interface to the terminal
         pub trait Terminals: Sized + Send + Sync 
         {
@@ -38260,11 +39132,11 @@ pub mod system
         pub enum RawRead
         {
             /// `n` bytes were read from the device
-            Bytes(usize),
+            Bytes( usize ),
             /// The terminal window was resized
-            Resize(Size),
+            Resize( Size ),
             /// A signal was received while waiting for input
-            Signal(Signal),
+            Signal( Signal ),
         }
         /// Holds a lock on `Terminal` read operations
         pub trait TerminalReader<Term: Terminals> 
@@ -38319,16 +39191,19 @@ pub mod system
         impl DefaultTerminal 
         {
             /// Opens access to the terminal device associated with standard output.
-            pub fn new() -> io::Result<DefaultTerminal> {
+            pub fn new() -> io::Result<DefaultTerminal>
+            {
                 mortal::Terminal::new().map(DefaultTerminal)
             }
             /// Opens access to the terminal device associated with standard error.
-            pub fn stderr() -> io::Result<DefaultTerminal> {
+            pub fn stderr() -> io::Result<DefaultTerminal>
+            {
                 mortal::Terminal::stderr().map(DefaultTerminal)
             }
 
-            unsafe fn cast_writer<'a>(writer: &'a mut dyn TerminalWriter<Self>)
-                    -> &'a mut TerminalWriteGuard<'a> {
+            unsafe fn cast_writer<'a>(writer: &'a mut dyn TerminalWriter<Self>) ->
+            &'a mut TerminalWriteGuard<'a>
+            {
                 &mut *(writer as *mut _ as *mut TerminalWriteGuard)
             }
         }
@@ -38796,11 +39671,9 @@ pub mod system
             }
         }
         /// Provides concurrent read and write access to a terminal device
-        pub struct Terminal(pub sys::Terminal);
+        pub struct Terminal( pub sys::Terminal );
         /// Holds an exclusive lock for read operations on a `Terminal`
-        pub struct TerminalReadGuard<'a>(sys::TerminalReadGuard<'a>);
-        /// Holds an exclusive lock for write operations on a `Terminal`
-        pub struct TerminalWriteGuard<'a>(sys::TerminalWriteGuard<'a>);
+        pub struct TerminalReadGuard<'a>( pub sys::TerminalReadGuard<'a> );
 
         impl Terminal 
         {
@@ -39009,126 +39882,149 @@ pub mod system
                 self.0.read_event(timeout)
             }
         }
+        /// Holds an exclusive lock for write operations on a `Terminal`
+        pub struct TerminalWriteGuard<'a>( sys::TerminalWriteGuard<'a> );
 
         impl<'a> TerminalWriteGuard<'a> 
         {
             /// Flush all output to the terminal device.
-            pub fn flush(&mut self) -> io::Result<()> {
+            pub fn flush(&mut self) -> io::Result<()> 
+            {
                 self.0.flush()
             }
             /// Returns the size of the terminal.
-            #[inline] pub fn size(&self) -> io::Result<Size> {
+            #[inline] pub fn size(&self) -> io::Result<Size> 
+            {
                 self.0.size()
             }
             /// Clears the terminal screen, placing the cursor at the first line and column.
-            pub fn clear_screen(&mut self) -> io::Result<()> {
+            pub fn clear_screen(&mut self) -> io::Result<()> 
+            {
                 self.0.clear_screen()
             }
             /// Clears the current line, starting at cursor position.
-            pub fn clear_to_line_end(&mut self) -> io::Result<()> {
+            pub fn clear_to_line_end(&mut self) -> io::Result<()> 
+            {
                 self.0.clear_to_line_end()
             }
             /// Clears the screen, starting at cursor position.
-            pub fn clear_to_screen_end(&mut self) -> io::Result<()> {
+            pub fn clear_to_screen_end(&mut self) -> io::Result<()> 
+            {
                 self.0.clear_to_screen_end()
             }
             /// Moves the cursor up `n` lines.
-            pub fn move_up(&mut self, n: usize) -> io::Result<()> {
+            pub fn move_up(&mut self, n: usize) -> io::Result<()> 
+            {
                 self.0.move_up(n)
             }
             /// Moves the cursor down `n` lines.
-            pub fn move_down(&mut self, n: usize) -> io::Result<()> {
+            pub fn move_down(&mut self, n: usize) -> io::Result<()> 
+            {
                 self.0.move_down(n)
             }
             /// Moves the cursor left `n` columns.
-            pub fn move_left(&mut self, n: usize) -> io::Result<()> {
+            pub fn move_left(&mut self, n: usize) -> io::Result<()> 
+            {
                 self.0.move_left(n)
             }
             /// Moves the cursor right `n` columns.
-            pub fn move_right(&mut self, n: usize) -> io::Result<()> {
+            pub fn move_right(&mut self, n: usize) -> io::Result<()> 
+            {
                 self.0.move_right(n)
             }
             /// Moves the cursor to the first column of the current line
-            pub fn move_to_first_column(&mut self) -> io::Result<()> {
+            pub fn move_to_first_column(&mut self) -> io::Result<()> 
+            {
                 self.0.move_to_first_column()
             }
             /// Set the current cursor mode.
-            pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> {
+            pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> 
+            {
                 self.0.set_cursor_mode(mode)
             }
             /// Adds a set of `Style` flags to the current style setting.
-            pub fn add_style(&mut self, style: Style) -> io::Result<()> {
+            pub fn add_style(&mut self, style: Style) -> io::Result<()> 
+            {
                 self.0.add_style(style)
             }
             /// Removes a set of `Style` flags from the current style setting.
-            pub fn remove_style(&mut self, style: Style) -> io::Result<()> {
+            pub fn remove_style(&mut self, style: Style) -> io::Result<()> 
+            {
                 self.0.remove_style(style)
             }
             /// Sets the current style to the given set of flags.
-            pub fn set_style<S>(&mut self, style: S) -> io::Result<()>
-                    where S: Into<Option<Style>> {
+            pub fn set_style<S>(&mut self, style: S) -> io::Result<()> where 
+            S: Into<Option<Style>>
+            {
                 self.0.set_style(style.into().unwrap_or_default())
             }
             /// Sets all attributes for the terminal.
-            pub fn set_theme(&mut self, theme: Theme) -> io::Result<()> {
+            pub fn set_theme(&mut self, theme: Theme) -> io::Result<()> 
+            {
                 self.0.set_theme(theme)
             }
             /// Sets the background text color.
-            pub fn set_fg<C: Into<Option<Color>>>(&mut self, fg: C) -> io::Result<()> {
+            pub fn set_fg<C: Into<Option<Color>>>(&mut self, fg: C) -> io::Result<()> 
+            {
                 self.0.set_fg(fg.into())
             }
             /// Removes color and style attributes.
-            pub fn set_bg<C: Into<Option<Color>>>(&mut self, bg: C) -> io::Result<()> {
+            pub fn set_bg<C: Into<Option<Color>>>(&mut self, bg: C) -> io::Result<()> 
+            {
                 self.0.set_bg(bg.into())
             }
             /// Adds bold to the current style setting.
-            pub fn clear_attributes(&mut self) -> io::Result<()> {
+            pub fn clear_attributes(&mut self) -> io::Result<()> 
+            {
                 self.0.clear_attributes()
             }
             /// Adds bold to the current style setting.
-            pub fn bold(&mut self) -> io::Result<()> {
+            pub fn bold(&mut self) -> io::Result<()> 
+            {
                 self.add_style(Style::BOLD)
             }
             /// Adds italic to the current style setting.
-            pub fn italic(&mut self) -> io::Result<()> {
+            pub fn italic(&mut self) -> io::Result<()> 
+            {
                 self.add_style(Style::ITALIC)
             }
             /// Adds underline to the current style setting.
-            pub fn underline(&mut self) -> io::Result<()> {
+            pub fn underline(&mut self) -> io::Result<()> 
+            {
                 self.add_style(Style::UNDERLINE)
             }
             /// Adds reverse to the current style setting.
-            pub fn reverse(&mut self) -> io::Result<()> {
+            pub fn reverse(&mut self) -> io::Result<()> 
+            {
                 self.add_style(Style::REVERSE)
             }
             /// Writes output to the terminal with the given color and style added.
-            pub fn write_styled<F, B, S>(&mut self, fg: F, bg: B, style: S, s: &str)
-                    -> io::Result<()> where
-                    F: Into<Option<Color>>,
-                    B: Into<Option<Color>>,
-                    S: Into<Option<Style>>,
-                    {
+            pub fn write_styled<F, B, S>(&mut self, fg: F, bg: B, style: S, s: &str) -> io::Result<()> where
+            F: Into<Option<Color>>,
+            B: Into<Option<Color>>,
+            S: Into<Option<Style>>,
+            {
                 self.0.write_styled(fg.into(), bg.into(), style.into().unwrap_or_default(), s)
             }
-            /// Writes a single character to the terminal
-            /// using the current style and color settings.
-            pub fn write_char(&mut self, ch: char) -> io::Result<()> {
+            /// Writes a single character to the terminal using the current style and color settings.
+            pub fn write_char(&mut self, ch: char) -> io::Result<()> 
+            {
                 self.0.write_char(ch)
             }
-            /// Writes a string to the terminal
-            /// using the current style and color settings.
-            pub fn write_str(&mut self, s: &str) -> io::Result<()> {
+            /// Writes a string to the terminal  using the current style and color settings.
+            pub fn write_str(&mut self, s: &str) -> io::Result<()> 
+            {
                 self.0.write_str(s)
             }
-            /// Writes formatted text to the terminal
-            /// using the current style and color settings.
-            pub fn write_fmt(&mut self, args: fmt::Arguments) -> io::Result<()> {
+            /// Writes formatted text to the terminal using the current style and color settings.
+            pub fn write_fmt(&mut self, args: fmt::Arguments) -> io::Result<()> 
+            {
                 let s = args.to_string();
                 self.write_str(&s)
             }
-
-            #[doc(hidden)]
-            pub fn borrow_term_write_guard(&mut self) -> &mut Self {
+            
+            pub fn borrow_term_write_guard(&mut self) -> &mut Self 
+            {
                 self
             }
         }
@@ -39145,51 +40041,6 @@ pub mod system
         fn read_raw_event_unix( ... ) -> io::Result<Option<Event>>
         fn read_raw_event_windows( ... ) -> io::Result<Option<Event>>
         */
-        #[cfg(unix)] use std::path::Path;
-
-        #[cfg(unix)] impl super::unix::OpenTerminalExt for Terminal 
-        {
-            fn from_path<P: AsRef<Path>>(path: P) -> io::Result<Self> {
-                sys::Terminal::open(path).map(Terminal)
-            }
-        }
-
-        #[cfg(unix)] impl super::unix::TerminalExt for Terminal 
-        {
-            fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                self.0.read_raw(buf, timeout)
-            }
-        }
-
-        #[cfg(unix)] impl<'a> super::unix::TerminalExt for TerminalReadGuard<'a> 
-        {
-            fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                self.0.read_raw(buf, timeout)
-            }
-        }
-
-        #[cfg(windows)] impl super::windows::TerminalExt for Terminal
-        {
-            fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                self.0.read_raw(buf, timeout)
-            }
-
-            fn read_raw_event(&mut self, events: &mut [::winapi::um::wincon::INPUT_RECORD],
-                    timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                self.0.read_raw_event(events, timeout)
-            }
-        }
-
-        #[cfg(windows)] impl<'a> super::windows::TerminalExt for TerminalReadGuard<'a> 
-        {
-            fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                self.0.read_raw(buf, timeout)
-            }
-
-            fn read_raw_event(&mut self, events: &mut [INPUT_RECORD], timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                self.0.read_raw_event(events, timeout)
-            }
-        }
     } pub use self::terminal::{ * };
 
     pub mod variables
@@ -39442,7 +40293,7 @@ pub mod system
         };
         */
         /// Duration to wait for input when "blinking"
-        pub const BLINK_DURATION: Duration = Duration::from_millis(500);
+        pub const BLINK_DURATION: Duration = Duration::milliseconds(500);
         const COMPLETE_MORE: &'static str = "--More--";
         /// Default maximum history size
         const MAX_HISTORY: usize = !0;
@@ -39615,7 +40466,6 @@ pub mod system
 
             pub fn draw_prompt_prefix(&mut self) -> io::Result<()> {
                 match self.prompt_type {
-                    // Prefix is not drawn when completions are shown
                     PromptType::CompleteMore => Ok(()),
                     _ => {
                         let pfx = self.prompt_prefix.clone();
@@ -39710,7 +40560,6 @@ pub mod system
                     } else if handle_invisible && ch == END_INVISIBLE {
                         hidden = false;
                     } else if hidden {
-                        // Render the character, but assume it has 0 width.
                         out.push(ch);
                     } else {
                         for ch in display(ch, disp) {
@@ -39758,8 +40607,6 @@ pub mod system
                                 col += 1;
 
                                 if col == width {
-                                    // Space pushes the cursor to the next line,
-                                    // CR brings back to the start of the line.
                                     out.push_str(" \r");
                                     col = 0;
                                 }
@@ -39906,7 +40753,6 @@ pub mod system
             }
 
             pub fn search_history_update(&mut self) -> io::Result<()> {
-                // Search for the next match, perhaps including the current position
                 let next_match = if self.reverse_search {
                     self.search_history_backward(&self.search_buffer, true)
                 } else {
@@ -39920,8 +40766,7 @@ pub mod system
                 if self.search_buffer.is_empty() {
                     return self.redraw_prompt(PromptType::Search);
                 }
-
-                // Search for the next match
+                
                 let next_match = if self.reverse_search {
                     self.search_history_backward(&self.search_buffer, false)
                 } else {
@@ -40151,8 +40996,7 @@ pub mod system
 
                 Ok(())
             }
-            /// Deletes a range from the buffer; the cursor is moved to the end
-            /// of the given range.
+            /// Deletes a range from the buffer; the cursor is moved to the end of the given range.
             pub fn delete_range<R: RangeArgument<usize>>(&mut self, range: R) -> io::Result<()> {
                 let start = range.start().cloned().unwrap_or(0);
                 let end = range.end().cloned().unwrap_or_else(|| self.buffer.len());
@@ -40170,10 +41014,8 @@ pub mod system
             }
 
             pub fn insert_str(&mut self, s: &str) -> io::Result<()> {
-                // If the string insertion moves a combining character,
-                // we must redraw starting from the character before the cursor.
                 let moves_combining = match self.buffer[self.cursor..].chars().next() {
-                    Some(ch) if is_combining_mark(ch) => true,
+                    Some(ch) if is::combining_mark(ch) => true,
                     _ => false
                 };
 
@@ -40182,7 +41024,6 @@ pub mod system
 
                 if moves_combining && cursor != 0 {
                     let pos = backward_char(1, &self.buffer, self.cursor);
-                    // Move without updating the cursor
                     let (lines, cols) = self.move_delta(cursor, pos, &self.buffer);
                     self.move_rel(lines, cols)?;
                     self.draw_buffer(pos)?;
@@ -40198,10 +41039,8 @@ pub mod system
 
             pub fn transpose_range(&mut self, src: Range<usize>, dest: Range<usize>)
                     -> io::Result<()> {
-                // Ranges must not overlap
                 assert!(src.end <= dest.start || src.start >= dest.end);
-
-                // Final cursor position
+                
                 let final_cur = if src.start < dest.start {
                     dest.end
                 } else {
@@ -40435,7 +41274,6 @@ pub mod system
         {
             fn drop(&mut self) {
                 if self.write.is_prompt_drawn {
-                    // There's not really anything useful to be done with this error.
                     let _ = self.write.draw_prompt();
                 }
             }
@@ -40571,7 +41409,6 @@ pub mod system
                         ch if is_combining_mark(ch) => 0,
                         ch if is_wide(ch) => {
                             if col % width == width - 1 {
-                                // Can't render a fullwidth character into last column
                                 3
                             } else {
                                 2
@@ -40684,26 +41521,22 @@ pub mod system
         {
             type Item = &'a str;
 
-            #[inline]
-            fn next(&mut self) -> Option<&'a str> {
+            #[inline] fn next(&mut self) -> Option<&'a str> {
                 self.0.next().map(|s| &s[..])
             }
 
-            #[inline]
-            fn nth(&mut self, n: usize) -> Option<&'a str> {
+            #[inline] fn nth(&mut self, n: usize) -> Option<&'a str> {
                 self.0.nth(n).map(|s| &s[..])
             }
 
-            #[inline]
-            fn size_hint(&self) -> (usize, Option<usize>) {
+            #[inline] fn size_hint(&self) -> (usize, Option<usize>) {
                 self.0.size_hint()
             }
         }
 
         impl<'a> DoubleEndedIterator for HistoryIter<'a> 
         {
-            #[inline]
-            fn next_back(&mut self) -> Option<&'a str> {
+            #[inline] fn next_back(&mut self) -> Option<&'a str> {
                 self.0.next_back().map(|s| &s[..])
             }
         }
@@ -40799,11 +41632,14 @@ pub mod system
         }
     } pub use self::writer::{ * };
 
-    pub mod unix
+    #[cfg( unix )] pub mod unix
     {
         //! Unix platform support
         use ::
         {
+            path::{ Path },
+            system::{ Event },
+            time::{ Duration },
             *,
         };
         /*
@@ -40821,6 +41657,7 @@ pub mod system
             use ::
             {
                 path::{ * },
+                system::{ Event },
                 time::{ Duration },
                 *,
             };
@@ -40835,7 +41672,6 @@ pub mod system
             }
             /// Implements Unix-only extensions for terminal interfaces.
             pub trait TerminalExt
-            
             {
                 /// Reads raw data from the terminal.
                 fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>>;
@@ -40871,30 +41707,15 @@ pub mod system
             use mortal::sys::{Terminal, TerminalReadGuard, TerminalWriteGuard, PrepareState};
             use mortal::terminal::{Color, Cursor, CursorMode, Event, Size, Style, PrepareConfig};
             */
-            pub struct Screen {
-                term: Terminal,
-
-                state: Option<PrepareState>,
+            pub struct Screen 
+            {
+                term: super::Terminal,
+                state: Option<super::PrepareState>,
                 writer: Mutex<Writer>,
             }
 
-            pub struct ScreenReadGuard<'a> {
-                screen: &'a Screen,
-                reader: TerminalReadGuard<'a>,
-            }
-
-            pub struct ScreenWriteGuard<'a> {
-                writer: TerminalWriteGuard<'a>,
-                data: MutexGuard<'a, Writer>,
-            }
-
-            struct Writer {
-                buffer: ScreenBuffer,
-                clear_screen: bool,
-                real_cursor: Cursor,
-            }
-
-            impl Screen {
+            impl Screen 
+            {
                 pub fn new(term: Terminal, config: PrepareConfig) -> io::Result<Screen> {
                     let size = term.size()?;
                     let state = term.prepare(config)?;
@@ -40982,7 +41803,8 @@ pub mod system
                 }
             }
 
-            impl Drop for Screen {
+            impl Drop for Screen 
+            {
                 fn drop(&mut self) {
                     let res = if let Some(state) = self.state.take() {
                         self.term.restore(state)
@@ -40994,6 +41816,24 @@ pub mod system
                         eprintln!("failed to restore terminal: {}", e);
                     }
                 }
+            }
+
+            pub struct ScreenReadGuard<'a> 
+            {
+                screen: &'a Screen,
+                reader: TerminalReadGuard<'a>,
+            }
+
+            pub struct ScreenWriteGuard<'a> 
+            {
+                writer: TerminalWriteGuard<'a>,
+                data: MutexGuard<'a, Writer>,
+            }
+
+            struct Writer {
+                buffer: ScreenBuffer,
+                clear_screen: bool,
+                real_cursor: Cursor,
             }
 
             impl<'a> ScreenReadGuard<'a> {
@@ -41109,11 +41949,12 @@ pub mod system
         {
             use ::
             {
-                convert::{ TryFrom },
-                database::{ Database },
+                convert::{ TryFrom, TryInto },
+                database::{ Database, OverError },
                 fs::{ File },
                 libc::{ unix::{ * }, * },
                 mem::{ replace, zeroed },
+                mode::{ Context },
                 nix::
                 {
                     errno::{ Errno },
@@ -41159,6 +42000,45 @@ pub mod system
 
             type SeqMap = SequenceMap<SmallString<[u8; 8]>, SeqData>;
 
+            macro_rules! expand_opt 
+            {
+                ( $slf:expr , $cap:path ) => 
+                {{
+                    if let Some(cap) = $slf.term.info.get::<$cap>()
+                    {
+                        $slf.expand(cap.expand())
+                    }
+                    else { Ok(()) }
+                }};
+
+                ( $slf:expr , $cap:path , |$ex:ident| $expansion:expr ) => 
+                {{
+                    if let Some(cap) = $slf.term.info.get::<$cap>()
+                    {
+                        let $ex = cap.expand();
+                        $slf.expand($expansion)
+                    }
+                    else { Ok(()) }
+                }};
+            }
+
+            macro_rules! expand_req 
+            {
+                ( $slf:expr , $cap:path , $name:expr ) => { {
+                    $slf.term.info.get::<$cap>()
+                        .ok_or_else(|| not_supported($name))
+                        .and_then(|cap| $slf.expand(cap.expand()))
+                } };
+                ( $slf:expr , $cap:path , $name:expr , |$ex:ident| $expansion:expr ) => { {
+                    $slf.term.info.get::<$cap>()
+                        .ok_or_else(|| not_supported($name))
+                        .and_then(|cap| {
+                            let $ex = cap.expand();
+                            $slf.expand($expansion)
+                        })
+                } }
+            }
+
             #[derive(Copy, Clone)]
             enum SeqData 
             {
@@ -41168,19 +42048,168 @@ pub mod system
 
             pub struct Terminal 
             {
-                info: Database,
-                out_fd: RawFd,
-                in_fd: RawFd,
-                owned_fd: bool,
-                sequences: SeqMap,
-                reader: Mutex<Reader>,
-                writer: Mutex<Writer>,
+                pub info: Database,
+                pub out_fd: RawFd,
+                pub in_fd: RawFd,
+                pub owned_fd: bool,
+                pub sequences: SeqMap,
+                pub reader: Mutex<Reader>,
+                pub writer: Mutex<Writer>,
+            }
+
+            impl Terminal 
+            {
+                fn new(in_fd: RawFd, out_fd: RawFd, owned_fd: bool) -> io::Result<Terminal> 
+                {
+                    let info = Database::from_env().map_err(ti_to_io)?;
+                    let sequences = sequences(&info);
+
+                    Ok(Terminal
+                    {
+                        info,
+                        in_fd,
+                        out_fd,
+                        owned_fd,
+                        sequences,
+                        reader: Mutex::new(Reader
+                        {
+                            in_buffer: Vec::new(),
+                            resume: None,
+                            report_signals: SignalSet::new(),
+                        }),
+                        writer: Mutex::new(Writer::new()),
+                    })
+                }
+
+                pub fn open<P: AsRef<Path>>(path: P) -> io::Result<Terminal>
+                {
+                    let fd = open_rw(path)?;
+                    let r = Terminal::new(fd, fd, true);
+
+                    if r.is_err() { unsafe { close_fd(fd); } }
+
+                    r
+                }
+
+                pub fn stdout() -> io::Result<Terminal> { Terminal::new(STDIN_FILENO, STDOUT_FILENO, false) }
+
+                pub fn stderr() -> io::Result<Terminal> { Terminal::new(STDIN_FILENO, STDERR_FILENO, false) }
+
+                // pub fn name(&self) -> &str { self.info.name() }
+
+                fn is_xterm(&self) -> bool { is_xterm(self.name()) }
+
+                pub fn size(&self) -> io::Result<Size> { self.lock_writer().size() }
+
+                pub fn wait_event(&self, timeout: Option<Duration>) -> io::Result<bool> { self.lock_reader().wait_event(timeout) }
+
+                pub fn read_event(&self, timeout: Option<Duration>) -> io::Result<Option<Event>> { self.lock_reader().read_event(timeout) }
+
+                pub fn read_raw(&self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> { self.lock_reader().read_raw(buf, timeout) }
+
+                pub fn enter_screen(&self) -> io::Result<()> { self.lock_writer().enter_screen() }
+
+                pub fn exit_screen(&self) -> io::Result<()> { self.lock_writer().exit_screen() }
+
+                pub fn prepare(&self, config: PrepareConfig) -> io::Result<PrepareState> { self.lock_reader().prepare(config) }
+
+                pub fn restore(&self, state: PrepareState) -> io::Result<()> { self.lock_reader().restore(state) }
+
+                pub fn clear_screen(&self) -> io::Result<()> { self.lock_writer().clear_screen() }
+
+                pub fn clear_to_line_end(&self) -> io::Result<()> { self.lock_writer().clear_to_line_end() }
+
+                pub fn clear_to_screen_end(&self) -> io::Result<()> { self.lock_writer().clear_to_screen_end() }
+
+                pub fn move_up(&self, n: usize) -> io::Result<()>
+                {
+                    if n != 0 { self.lock_writer().move_up(n)?; }
+
+                    Ok(())
+                }
+
+                pub fn move_down(&self, n: usize) -> io::Result<()>
+                {
+                    if n != 0 { self.lock_writer().move_down(n)?; }
+                    
+                    Ok(())
+                }
+
+                pub fn move_left(&self, n: usize) -> io::Result<()>
+                {
+                    if n != 0 { self.lock_writer().move_left(n)?; }
+
+                    Ok(())
+                }
+
+                pub fn move_right(&self, n: usize) -> io::Result<()>
+                {
+                    if n != 0 { self.lock_writer().move_right(n)?; }
+
+                    Ok(())
+                }
+
+                pub fn move_to_first_column(&self) -> io::Result<()> { self.lock_writer().move_to_first_column() }
+
+                pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()>
+                { self.lock_writer().set_cursor_mode(mode) }
+
+                pub fn write_char(&self, ch: char) -> io::Result<()> { self.write_str(ch.encode_utf8(&mut [0; 4])) }
+
+                pub fn write_str(&self, s: &str) -> io::Result<()> { self.lock_writer().write_str(s) }
+
+                pub fn write_styled
+                (
+                    &self,
+                    fg: Option<Color>,
+                    bg: Option<Color>,
+                    style: Style, text: &str
+                ) -> io::Result<()>
+                { self.lock_writer().write_styled(fg, bg, style, text) }
+
+                pub fn clear_attributes(&self) -> io::Result<()> { self.lock_writer().clear_attributes() }
+
+                pub fn set_fg(&self, fg: Option<Color>) -> io::Result<()> { self.lock_writer().set_fg(fg) }
+
+                pub fn set_bg(&self, bg: Option<Color>) -> io::Result<()> { self.lock_writer().set_bg(bg) }
+
+                pub fn add_style(&self, style: Style) -> io::Result<()> { self.lock_writer().add_style(style) }
+
+                pub fn remove_style(&self, style: Style) -> io::Result<()> { self.lock_writer().remove_style(style) }
+
+                pub fn set_style(&self, style: Style) -> io::Result<()> { self.lock_writer().set_style(style) }
+
+                pub fn set_theme(&self, theme: Theme) -> io::Result<()> { self.lock_writer().set_theme(theme) }
+
+                pub fn lock_read(&self) -> LockResult<TerminalReadGuard> 
+                {
+                    map_lock_result(self.reader.lock(), |r| TerminalReadGuard::new(self, r))
+                }
+
+                pub fn lock_write(&self) -> LockResult<TerminalWriteGuard> 
+                {
+                    map_lock_result(self.writer.lock(), |w| TerminalWriteGuard::new(self, w))
+                }
+
+                pub fn try_lock_read(&self) -> TryLockResult<TerminalReadGuard> 
+                {
+                    map_try_lock_result(self.reader.try_lock(), |r| TerminalReadGuard::new(self, r))
+                }
+
+                pub fn try_lock_write(&self) -> TryLockResult<TerminalWriteGuard> 
+                {
+                    map_try_lock_result(self.writer.try_lock(), |w| TerminalWriteGuard::new(self, w))
+                }
+
+                fn lock_reader(&self) -> TerminalReadGuard { self.lock_read().expect("Terminal::lock_reader") }
+
+                fn lock_writer(&self) -> TerminalWriteGuard { self.lock_write().expect("Terminal::lock_writer") }
             }
 
             pub struct TerminalReadGuard<'a> 
             {
-                term: &'a Terminal,
-                reader: MutexGuard<'a, Reader>,
+                pub term: &'a Terminal,
+                pub reader: MutexGuard<'a, Reader>,
             }
 
             pub struct TerminalWriteGuard<'a> 
@@ -41203,206 +42232,6 @@ pub mod system
                 fg: Option<Color>,
                 bg: Option<Color>,
                 cur_style: Style,
-            }
-
-            impl Terminal 
-            {
-                fn new(in_fd: RawFd, out_fd: RawFd, owned_fd: bool) -> io::Result<Terminal> {
-                    let info = Database::from_env().map_err(ti_to_io)?;
-                    let sequences = sequences(&info);
-
-                    Ok(Terminal{
-                        info,
-                        in_fd,
-                        out_fd,
-                        owned_fd,
-                        sequences,
-                        reader: Mutex::new(Reader{
-                            in_buffer: Vec::new(),
-                            resume: None,
-                            report_signals: SignalSet::new(),
-                        }),
-                        writer: Mutex::new(Writer::new()),
-                    })
-                }
-
-                pub fn open<P: AsRef<Path>>(path: P) -> io::Result<Terminal> {
-                    let fd = open_rw(path)?;
-
-                    let r = Terminal::new(fd, fd, true);
-
-                    if r.is_err() {
-                        unsafe { close_fd(fd); }
-                    }
-
-                    r
-                }
-
-                pub fn stdout() -> io::Result<Terminal> {
-                    Terminal::new(STDIN_FILENO, STDOUT_FILENO, false)
-                }
-
-                pub fn stderr() -> io::Result<Terminal> {
-                    Terminal::new(STDIN_FILENO, STDERR_FILENO, false)
-                }
-
-                pub fn name(&self) -> &str {
-                    self.info.name()
-                }
-
-                fn is_xterm(&self) -> bool {
-                    is_xterm(self.name())
-                }
-
-                pub fn size(&self) -> io::Result<Size> {
-                    self.lock_writer().size()
-                }
-
-                pub fn wait_event(&self, timeout: Option<Duration>) -> io::Result<bool> {
-                    self.lock_reader().wait_event(timeout)
-                }
-
-                pub fn read_event(&self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    self.lock_reader().read_event(timeout)
-                }
-
-                pub fn read_raw(&self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    self.lock_reader().read_raw(buf, timeout)
-                }
-
-                pub fn enter_screen(&self) -> io::Result<()> {
-                    self.lock_writer().enter_screen()
-                }
-
-                pub fn exit_screen(&self) -> io::Result<()> {
-                    self.lock_writer().exit_screen()
-                }
-
-                pub fn prepare(&self, config: PrepareConfig) -> io::Result<PrepareState> {
-                    self.lock_reader().prepare(config)
-                }
-
-                pub fn restore(&self, state: PrepareState) -> io::Result<()> {
-                    self.lock_reader().restore(state)
-                }
-
-                pub fn clear_screen(&self) -> io::Result<()> {
-                    self.lock_writer().clear_screen()
-                }
-
-                pub fn clear_to_line_end(&self) -> io::Result<()> {
-                    self.lock_writer().clear_to_line_end()
-                }
-
-                pub fn clear_to_screen_end(&self) -> io::Result<()> {
-                    self.lock_writer().clear_to_screen_end()
-                }
-
-                pub fn move_up(&self, n: usize) -> io::Result<()> {
-                    if n != 0 {
-                        self.lock_writer().move_up(n)?;
-                    }
-                    Ok(())
-                }
-
-                pub fn move_down(&self, n: usize) -> io::Result<()> {
-                    if n != 0 {
-                        self.lock_writer().move_down(n)?;
-                    }
-                    Ok(())
-                }
-
-                pub fn move_left(&self, n: usize) -> io::Result<()> {
-                    if n != 0 {
-                        self.lock_writer().move_left(n)?;
-                    }
-                    Ok(())
-                }
-
-                pub fn move_right(&self, n: usize) -> io::Result<()> {
-                    if n != 0 {
-                        self.lock_writer().move_right(n)?;
-                    }
-                    Ok(())
-                }
-
-                pub fn move_to_first_column(&self) -> io::Result<()> {
-                    self.lock_writer().move_to_first_column()
-                }
-
-                pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> {
-                    self.lock_writer().set_cursor_mode(mode)
-                }
-
-                pub fn write_char(&self, ch: char) -> io::Result<()> {
-                    self.write_str(ch.encode_utf8(&mut [0; 4]))
-                }
-
-                pub fn write_str(&self, s: &str) -> io::Result<()> {
-                    self.lock_writer().write_str(s)
-                }
-
-                pub fn write_styled(&self,
-                        fg: Option<Color>, bg: Option<Color>, style: Style, text: &str)
-                        -> io::Result<()> {
-                    self.lock_writer().write_styled(fg, bg, style, text)
-                }
-
-                pub fn clear_attributes(&self) -> io::Result<()> {
-                    self.lock_writer().clear_attributes()
-                }
-
-                pub fn set_fg(&self, fg: Option<Color>) -> io::Result<()> {
-                    self.lock_writer().set_fg(fg)
-                }
-
-                pub fn set_bg(&self, bg: Option<Color>) -> io::Result<()> {
-                    self.lock_writer().set_bg(bg)
-                }
-
-                pub fn add_style(&self, style: Style) -> io::Result<()> {
-                    self.lock_writer().add_style(style)
-                }
-
-                pub fn remove_style(&self, style: Style) -> io::Result<()> {
-                    self.lock_writer().remove_style(style)
-                }
-
-                pub fn set_style(&self, style: Style) -> io::Result<()> {
-                    self.lock_writer().set_style(style)
-                }
-
-                pub fn set_theme(&self, theme: Theme) -> io::Result<()> {
-                    self.lock_writer().set_theme(theme)
-                }
-
-                pub fn lock_read(&self) -> LockResult<TerminalReadGuard> {
-                    map_lock_result(self.reader.lock(),
-                        |r| TerminalReadGuard::new(self, r))
-                }
-
-                pub fn lock_write(&self) -> LockResult<TerminalWriteGuard> {
-                    map_lock_result(self.writer.lock(),
-                        |w| TerminalWriteGuard::new(self, w))
-                }
-
-                pub fn try_lock_read(&self) -> TryLockResult<TerminalReadGuard> {
-                    map_try_lock_result(self.reader.try_lock(),
-                        |r| TerminalReadGuard::new(self, r))
-                }
-
-                pub fn try_lock_write(&self) -> TryLockResult<TerminalWriteGuard> {
-                    map_try_lock_result(self.writer.try_lock(),
-                        |w| TerminalWriteGuard::new(self, w))
-                }
-
-                fn lock_reader(&self) -> TerminalReadGuard {
-                    self.lock_read().expect("Terminal::lock_reader")
-                }
-
-                fn lock_writer(&self) -> TerminalWriteGuard {
-                    self.lock_write().expect("Terminal::lock_writer")
-                }
             }
 
             impl Drop for Terminal 
@@ -41449,15 +42278,11 @@ pub mod system
                     };
 
                     tio.input_flags.remove(
-                        // Disable carriage return/line feed conversion
                         InputFlags::INLCR | InputFlags::ICRNL
                     );
 
                     tio.local_flags.remove(
                         // Disable canonical mode;
-                        // this gives us input without waiting for newline or EOF
-                        // and disables line-editing, treating such inputs as characters.
-                        // Disable ECHO, preventing input from being written to output.
                         LocalFlags::ICANON | LocalFlags::ECHO
                     );
 
@@ -41754,42 +42579,6 @@ pub mod system
                 }
             }
 
-            macro_rules! expand_opt 
-            {
-                ( $slf:expr , $cap:path ) => { {
-                    if let Some(cap) = $slf.term.info.get::<$cap>() {
-                        $slf.expand(cap.expand())
-                    } else {
-                        Ok(())
-                    }
-                } };
-                ( $slf:expr , $cap:path , |$ex:ident| $expansion:expr ) => { {
-                    if let Some(cap) = $slf.term.info.get::<$cap>() {
-                        let $ex = cap.expand();
-                        $slf.expand($expansion)
-                    } else {
-                        Ok(())
-                    }
-                } }
-            }
-
-            macro_rules! expand_req 
-            {
-                ( $slf:expr , $cap:path , $name:expr ) => { {
-                    $slf.term.info.get::<$cap>()
-                        .ok_or_else(|| not_supported($name))
-                        .and_then(|cap| $slf.expand(cap.expand()))
-                } };
-                ( $slf:expr , $cap:path , $name:expr , |$ex:ident| $expansion:expr ) => { {
-                    $slf.term.info.get::<$cap>()
-                        .ok_or_else(|| not_supported($name))
-                        .and_then(|cap| {
-                            let $ex = cap.expand();
-                            $slf.expand($expansion)
-                        })
-                } }
-            }
-
             impl<'a> TerminalWriteGuard<'a> 
             {
                 fn new(term: &'a Terminal, writer: MutexGuard<'a, Writer>) -> TerminalWriteGuard<'a> {
@@ -41800,15 +42589,17 @@ pub mod system
                     get_winsize(self.term.out_fd)
                 }
 
-                fn disable_keypad(&mut self) -> io::Result<()> {
-                    if let Some(local) = self.term.info.get::<cap::KeypadLocal>() {
+                fn disable_keypad(&mut self) -> io::Result<()> 
+                {
+                    if let Some(local) = self.term.info.get::<mode::KeypadLocal>() {
                         self.expand(local.expand())?;
                     }
                     Ok(())
                 }
 
                 fn enable_keypad(&mut self) -> io::Result<bool> {
-                    if let Some(xmit) = self.term.info.get::<cap::KeypadXmit>() {
+                    if let Some(xmit) = self.term.info.get::<mode::KeypadXmit>() 
+                    {
                         self.expand(xmit.expand())?;
                         Ok(true)
                     } else {
@@ -41834,9 +42625,9 @@ pub mod system
                 }
 
                 fn enter_screen(&mut self) -> io::Result<()> {
-                    match (self.term.info.get::<cap::EnterCaMode>(),
-                            self.term.info.get::<cap::ChangeScrollRegion>(),
-                            self.term.info.get::<cap::CursorHome>()) {
+                    match (self.term.info.get::<mode::EnterCaMode>(),
+                            self.term.info.get::<mode::ChangeScrollRegion>(),
+                            self.term.info.get::<mode::CursorHome>()) {
                         (enter, Some(scroll), Some(home)) => {
                             let size = self.size()?;
 
@@ -41859,7 +42650,7 @@ pub mod system
                 }
 
                 fn exit_screen(&mut self) -> io::Result<()> {
-                    if let Some(exit) = self.term.info.get::<cap::ExitCaMode>() {
+                    if let Some(exit) = self.term.info.get::<mode::ExitCaMode>() {
                         self.expand(exit.expand())?;
                         self.flush()?;
                     }
@@ -41873,7 +42664,7 @@ pub mod system
                         self.writer.fg = None;
                         self.writer.bg = None;
                         self.writer.cur_style = Style::empty();
-                        expand_opt!(self, cap::ExitAttributeMode)?;
+                        expand_opt!(self, mode::ExitAttributeMode)?;
                     }
 
                     Ok(())
@@ -41913,16 +42704,16 @@ pub mod system
                     let add = style - self.writer.cur_style;
 
                     if add.contains(Style::BOLD) {
-                        expand_opt!(self, cap::EnterBoldMode)?;
+                        expand_opt!(self, mode::EnterBoldMode)?;
                     }
                     if add.contains(Style::ITALIC) {
-                        expand_opt!(self, cap::EnterItalicsMode)?;
+                        expand_opt!(self, mode::EnterItalicsMode)?;
                     }
                     if add.contains(Style::REVERSE) {
-                        expand_opt!(self, cap::EnterReverseMode)?;
+                        expand_opt!(self, mode::EnterReverseMode)?;
                     }
                     if add.contains(Style::UNDERLINE) {
-                        expand_opt!(self, cap::EnterUnderlineMode)?;
+                        expand_opt!(self, mode::EnterUnderlineMode)?;
                     }
 
                     self.writer.cur_style |= add;
@@ -41930,12 +42721,12 @@ pub mod system
                     Ok(())
                 }
 
-                pub fn remove_style(&mut self, style: Style) -> io::Result<()> {
+                pub fn remove_style(&mut self, style: Style) -> io::Result<()> 
+                {
                     let remove = style & self.writer.cur_style;
 
-                    if remove.intersects(Style::BOLD | Style::REVERSE) {
-                        // terminfo does not contain entries to remove bold or reverse.
-                        // Instead, we must reset all attributes.
+                    if remove.intersects(Style::BOLD | Style::REVERSE) 
+                    {
                         let new_style = self.writer.cur_style - remove;
                         let fg = self.writer.fg;
                         let bg = self.writer.bg;
@@ -41943,12 +42734,15 @@ pub mod system
                         self.add_style(new_style)?;
                         self.set_fg(fg)?;
                         self.set_bg(bg)?;
-                    } else {
+                    }
+
+                    else 
+                    {
                         if remove.contains(Style::ITALIC) {
-                            expand_opt!(self, cap::ExitItalicsMode)?;
+                            expand_opt!(self, mode::ExitItalicsMode)?;
                         }
                         if remove.contains(Style::UNDERLINE) {
-                            expand_opt!(self, cap::ExitUnderlineMode)?;
+                            expand_opt!(self, mode::ExitUnderlineMode)?;
                         }
 
                         self.writer.cur_style -= remove;
@@ -41962,8 +42756,6 @@ pub mod system
                     let remove = self.writer.cur_style - style;
 
                     if remove.intersects(Style::BOLD | Style::REVERSE) {
-                        // terminfo does not contain entries to remove bold or reverse.
-                        // Instead, we must reset all attributes.
                         let fg = self.writer.fg;
                         let bg = self.writer.bg;
                         self.clear_attributes()?;
@@ -42014,42 +42806,40 @@ pub mod system
                 }
 
                 fn set_fg_color(&mut self, fg: Color) -> io::Result<()> {
-                    expand_opt!(self, cap::SetAForeground,
+                    expand_opt!(self, mode::SetAForeground,
                         |ex| ex.parameters(color_code(fg)))
                 }
 
                 fn set_bg_color(&mut self, bg: Color) -> io::Result<()> {
-                    expand_opt!(self, cap::SetABackground,
+                    expand_opt!(self, mode::SetABackground,
                         |ex| ex.parameters(color_code(bg)))
                 }
 
                 pub fn clear_screen(&mut self) -> io::Result<()> {
-                    expand_req!(self, cap::ClearScreen, "clear_screen")
+                    expand_req!(self, mode::ClearScreen, "clear_screen")
                 }
 
                 pub fn clear_to_line_end(&mut self) -> io::Result<()> {
-                    expand_req!(self, cap::ClrEol, "clr_eol")
+                    expand_req!(self, mode::ClrEol, "clr_eol")
                 }
 
                 pub fn clear_to_screen_end(&mut self) -> io::Result<()> {
-                    expand_req!(self, cap::ClrEos, "clr_eos")
+                    expand_req!(self, mode::ClrEos, "clr_eos")
                 }
 
                 pub fn move_up(&mut self, n: usize) -> io::Result<()> {
                     if n == 1 {
-                        expand_req!(self, cap::CursorUp, "cursor_up")?;
+                        expand_req!(self, mode::CursorUp, "cursor_up")?;
                     } else if n != 0 {
-                        expand_req!(self, cap::ParmUpCursor, "parm_cursor_up",
+                        expand_req!(self, mode::ParmUpCursor, "parm_cursor_up",
                             |ex| ex.parameters(to_u32(n)))?;
                     }
                     Ok(())
                 }
 
                 pub fn move_down(&mut self, n: usize) -> io::Result<()> {
-                    // Always use ParmDownCursor because CursorDown does not behave
-                    // as expected outside EnterCaMode state.
                     if n != 0 {
-                        expand_req!(self, cap::ParmDownCursor, "parm_cursor_down",
+                        expand_req!(self, mode::ParmDownCursor, "parm_cursor_down",
                             |ex| ex.parameters(to_u32(n)))?;
                     }
                     Ok(())
@@ -42057,9 +42847,9 @@ pub mod system
 
                 pub fn move_left(&mut self, n: usize) -> io::Result<()> {
                     if n == 1 {
-                        expand_req!(self, cap::CursorLeft, "cursor_left")?;
+                        expand_req!(self, mode::CursorLeft, "cursor_left")?;
                     } else if n != 0 {
-                        expand_req!(self, cap::ParmLeftCursor, "parm_cursor_left",
+                        expand_req!(self, mode::ParmLeftCursor, "parm_cursor_left",
                             |ex| ex.parameters(to_u32(n)))?;
                     }
                     Ok(())
@@ -42067,9 +42857,9 @@ pub mod system
 
                 pub fn move_right(&mut self, n: usize) -> io::Result<()> {
                     if n == 1 {
-                        expand_req!(self, cap::CursorRight, "cursor_right")?;
+                        expand_req!(self, mode::CursorRight, "cursor_right")?;
                     } else if n != 0 {
-                        expand_req!(self, cap::ParmRightCursor, "parm_cursor_right",
+                        expand_req!(self, mode::ParmRightCursor, "parm_cursor_right",
                             |ex| ex.parameters(to_u32(n)))?;
                     }
                     Ok(())
@@ -42080,8 +42870,8 @@ pub mod system
                 }
 
                 pub fn move_cursor(&mut self, pos: Cursor) -> io::Result<()> {
-                    match (self.term.info.get::<cap::CursorAddress>(),
-                            self.term.info.get::<cap::CursorHome>()) {
+                    match (self.term.info.get::<mode::CursorAddress>(),
+                            self.term.info.get::<mode::CursorHome>()) {
                         (_, Some(ref home)) if pos == Cursor::default() => {
                             self.expand(home.expand())?;
                         }
@@ -42106,12 +42896,12 @@ pub mod system
                             // Overwrite is not supported by Unix terminals.
                             // We set to normal in this case as it will reverse
                             // a setting of Invisible
-                            expand_opt!(self, cap::CursorNormal)?;
+                            expand_opt!(self, mode::CursorNormal)?;
                         }
                         
                         CursorMode::Invisible =>
                         {
-                            expand_opt!(self, cap::CursorInvisible)?;
+                            expand_opt!(self, mode::CursorInvisible)?;
                         }
                     } */
 
@@ -42193,8 +42983,10 @@ pub mod system
 
             impl Writer 
             {
-                fn new() -> Writer {
-                    Writer{
+                fn new() -> Writer 
+                {
+                    Writer
+                    {
                         context: Context::default(),
                         out_buffer: Vec::with_capacity(OUT_BUFFER_SIZE),
                         fg: None,
@@ -42225,28 +43017,28 @@ pub mod system
                         } }
                     }
 
-                    add!(cap::KeyUp,        Key::Up);
-                    add!(cap::KeyDown,      Key::Down);
-                    add!(cap::KeyLeft,      Key::Left);
-                    add!(cap::KeyRight,     Key::Right);
-                    add!(cap::KeyHome,      Key::Home);
-                    add!(cap::KeyEnd,       Key::End);
-                    add!(cap::KeyNPage,     Key::PageDown);
-                    add!(cap::KeyPPage,     Key::PageUp);
-                    add!(cap::KeyDc,        Key::Delete);
-                    add!(cap::KeyIc,        Key::Insert);
-                    add!(cap::KeyF1,        Key::F(1));
-                    add!(cap::KeyF2,        Key::F(2));
-                    add!(cap::KeyF3,        Key::F(3));
-                    add!(cap::KeyF4,        Key::F(4));
-                    add!(cap::KeyF5,        Key::F(5));
-                    add!(cap::KeyF6,        Key::F(6));
-                    add!(cap::KeyF7,        Key::F(7));
-                    add!(cap::KeyF8,        Key::F(8));
-                    add!(cap::KeyF9,        Key::F(9));
-                    add!(cap::KeyF10,       Key::F(10));
-                    add!(cap::KeyF11,       Key::F(11));
-                    add!(cap::KeyF12,       Key::F(12));
+                    add!(mode::KeyUp,        Key::Up);
+                    add!(mode::KeyDown,      Key::Down);
+                    add!(mode::KeyLeft,      Key::Left);
+                    add!(mode::KeyRight,     Key::Right);
+                    add!(mode::KeyHome,      Key::Home);
+                    add!(mode::KeyEnd,       Key::End);
+                    add!(mode::KeyNPage,     Key::PageDown);
+                    add!(mode::KeyPPage,     Key::PageUp);
+                    add!(mode::KeyDc,        Key::Delete);
+                    add!(mode::KeyIc,        Key::Insert);
+                    add!(mode::KeyF1,        Key::F(1));
+                    add!(mode::KeyF2,        Key::F(2));
+                    add!(mode::KeyF3,        Key::F(3));
+                    add!(mode::KeyF4,        Key::F(4));
+                    add!(mode::KeyF5,        Key::F(5));
+                    add!(mode::KeyF6,        Key::F(6));
+                    add!(mode::KeyF7,        Key::F(7));
+                    add!(mode::KeyF8,        Key::F(8));
+                    add!(mode::KeyF9,        Key::F(9));
+                    add!(mode::KeyF10,       Key::F(10));
+                    add!(mode::KeyF11,       Key::F(11));
+                    add!(mode::KeyF12,       Key::F(12));
 
                     if is_xterm(info.name()) { sequences.insert(XTERM_MOUSE_INTRO.into(), SeqData::XTermMouse); }
                 */
@@ -42324,29 +43116,30 @@ pub mod system
                 io::Error::from_raw_os_error(e as i32)
             }
             /*
-            fn ti_to_io(e: terminfo::Error) -> io::Error 
+            
+            */
+            fn ti_to_io(e: OverError) -> io::Error 
             {
-                match e {
-                    terminfo::Error::Io(e) => e,
-                    terminfo::Error::NotFound => io::Error::new(
-                        io::ErrorKind::NotFound, "terminfo entry not found"),
-                    terminfo::Error::Parse => io::Error::new(
-                        io::ErrorKind::Other, "failed to parse terminfo entry"),
-                    terminfo::Error::Expand(_) => io::Error::new(
-                        io::ErrorKind::Other, "failed to expand terminfo entry"),
+                match e 
+                {
+                    OverError::Unfounded => io::Error::new( io::ErrorKind::NotFound, "terminfo entry not found"),
+                    OverError::IoError(e) => io::Error::new( io::ErrorKind::Other, "IO error."),                    
+                    OverError::ParseError( e ) => io::Error::new( io::ErrorKind::Other, "failed to parse terminfo entry"),
+                    OverError::ExpandError( e ) => io::Error::new( io::ErrorKind::Other, "failed to expand terminfo entry"),
                 }
-            } */
+            } 
 
             fn to_timeval(d: Duration) -> TimeVal 
             {
                 const MAX_SECS: i64 = i64::max_value() / 1_000;
 
-                let secs = match d.as_secs() {
-                    n if n > MAX_SECS as u64 => MAX_SECS,
+                let secs = match d.whole_seconds() 
+                {
+                    n if n > (MAX_SECS as u64).try_into().unwrap() => MAX_SECS,
                     n => n as i64,
                 };
 
-                let millis = d.subsec_millis() as i64;
+                let millis = d.subsec_milliseconds() as i64;
 
                 TimeVal::milliseconds(secs * 1_000 + millis)
             }
@@ -42590,13 +43383,34 @@ pub mod system
                 u as u32
             }
         } pub use self::terminal::{ * };
+        
+        impl OpenTerminalExt for system::Terminal 
+        {
+            fn from_path<P: AsRef<Path>>(path: P) -> io::Result<Self>
+            { Terminal::open( path ).map( system::Terminal ) }
+        }
+        
+        impl TerminalExt for system::Terminal 
+        {
+            fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> 
+            { self.0.read_raw(buf, timeout) }
+        }
+        
+        impl<'a> TerminalExt for system::TerminalReadGuard<'a> 
+        {
+            fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> 
+            { self.0.read_raw(buf, timeout) }
+        }
     } #[cfg( unix )] pub use self::unix as sys;
 
-    pub mod windows
+    #[cfg( windows )] pub mod windows
     {
         //! Windows platform support
         use ::
         {
+            libc::windows::{ * },
+            system::{ Event },
+            time::{ Duration },
             *,
         };
         /*
@@ -42790,7 +43604,8 @@ pub mod system
                 }
             }
 
-            impl Drop for Screen {
+            impl Drop for Screen 
+            {
                 fn drop(&mut self) {
                     let res = if let Some(state) = self.state.take() {
                         self.term.restore(state)
@@ -42808,7 +43623,8 @@ pub mod system
             unsafe impl Send for Screen {}
             unsafe impl Sync for Screen {}
 
-            impl<'a> ScreenReadGuard<'a> {
+            impl<'a> ScreenReadGuard<'a> 
+            {
                 fn new(screen: &'a Screen, reader: TerminalReadGuard<'a>) -> ScreenReadGuard<'a> {
                     ScreenReadGuard{screen, reader}
                 }
@@ -42854,42 +43670,38 @@ pub mod system
                 }
             }
 
-            impl<'a> ScreenWriteGuard<'a> {
-                fn new(writer: TerminalWriteGuard<'a>, data: MutexGuard<'a, Writer>)
-                        -> ScreenWriteGuard<'a> {
-                    ScreenWriteGuard{writer, data}
-                }
+            impl<'a> ScreenWriteGuard<'a> 
+            {
+                fn new(writer: TerminalWriteGuard<'a>, data: MutexGuard<'a, Writer>) -> ScreenWriteGuard<'a>
+                { ScreenWriteGuard{writer, data} }
 
                 forward_screen_buffer_mut_methods!{ |slf| slf.data.buffer }
 
-                pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> {
-                    self.writer.set_cursor_mode(mode)
-                }
+                pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()>
+                { self.writer.set_cursor_mode(mode) }
 
-                pub fn refresh(&mut self) -> io::Result<()> {
-                    if self.data.clear_screen {
+                pub fn refresh(&mut self) -> io::Result<()>
+                {
+                    if self.data.clear_screen
+                    {
                         self.writer.clear_screen()?;
                         self.data.clear_screen = false;
                     }
 
                     let mut real_attrs = (None, None, Style::empty());
-
                     self.writer.clear_attributes()?;
-
                     let mut indices = self.data.buffer.indices();
 
-                    while let Some((pos, cell)) = self.data.buffer.next_cell(&mut indices) {
+                    while let Some((pos, cell)) = self.data.buffer.next_cell(&mut indices)
+                    {
                         self.move_cursor(pos)?;
-
                         self.apply_attrs(real_attrs, cell.attrs())?;
                         self.writer.write_str(cell.text())?;
                         self.data.real_cursor.column += 1;
-
                         real_attrs = cell.attrs();
                     }
 
                     self.writer.clear_attributes()?;
-
                     let size = self.data.buffer.size();
                     let pos = self.data.buffer.cursor();
 
@@ -42902,25 +43714,32 @@ pub mod system
                     Ok(())
                 }
 
-                fn apply_attrs(&mut self,
-                        src: (Option<Color>, Option<Color>, Style),
-                        dest: (Option<Color>, Option<Color>, Style)) -> io::Result<()> {
-                    if src != dest {
-                        self.writer.set_attributes(dest.0, dest.1, dest.2)?;
-                    }
+                fn apply_attrs
+                (
+                    &mut self,
+                    src: (Option<Color>, Option<Color>, Style),
+                    dest: (Option<Color>, Option<Color>, Style)
+                ) -> io::Result<()>
+                {
+                    if src != dest { self.writer.set_attributes(dest.0, dest.1, dest.2)?; }
+
                     Ok(())
                 }
 
-                fn move_cursor(&mut self, pos: Cursor) -> io::Result<()> {
-                    if self.data.real_cursor != pos {
+                fn move_cursor(&mut self, pos: Cursor) -> io::Result<()> 
+                {
+                    if self.data.real_cursor != pos 
+                    {
                         self.writer.move_cursor(pos)?;
                         self.data.real_cursor = pos;
                     }
+
                     Ok(())
                 }
             }
 
-            impl<'a> Drop for ScreenWriteGuard<'a> {
+            impl<'a> Drop for ScreenWriteGuard<'a> 
+            {
                 fn drop(&mut self) {
                     if let Err(e) = self.refresh() {
                         eprintln!("failed to refresh screen: {}", e);
@@ -42928,7 +43747,8 @@ pub mod system
                 }
             }
 
-            impl Writer {
+            impl Writer
+            {
                 fn update_size(&mut self, new_size: Size) {
                     if self.real_cursor.is_out_of_bounds(new_size) {
                         // Force cursor move on next refresh
@@ -44411,6 +45231,26 @@ pub mod system
                 conv_signal(LAST_SIGNAL.swap(!0, Ordering::Relaxed) as DWORD)
             }
         } pub use self::terminal::{ * };
+        
+        impl TerminalExt for system::Terminal
+        {
+            fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>> 
+            { self.0.read_raw(buf, timeout) }
+
+            fn read_raw_event(&mut self, events: &mut [INPUT_RECORD], timeout: Option<Duration>) -> 
+            io::Result<Option<Event>> 
+            { self.0.read_raw_event(events, timeout) }
+        }
+        
+        impl<'a> TerminalExt for system::TerminalReadGuard<'a> 
+        {
+            fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>>
+            { self.0.read_raw(buf, timeout) }
+
+            fn read_raw_event(&mut self, events: &mut [INPUT_RECORD], timeout: Option<Duration>) -> 
+            io::Result<Option<Event>> 
+            { self.0.read_raw_event(events, timeout) }
+        }
 
     } #[cfg( windows )] pub use self::windows as sys;
 
@@ -44850,4 +45690,4 @@ fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 44853
+// 45693
