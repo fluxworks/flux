@@ -446,7 +446,7 @@ extern crate unicode_width;
         {
             __bitflags_match!($operation, { $pattern => { $($body)* } $($t)+ })
         };
-        // Expand a block match arm `A => { .. }`
+        
         ($operation:expr, { $pattern:expr => { $($body:tt)* } $($t:tt)+ }) =>
         {{
                 if $operation == $pattern
@@ -456,13 +456,13 @@ extern crate unicode_width;
 
                 __bitflags_match!($operation, { $($t)+ })
         }};
-        // Expand an expression match arm `A => x,`
+        
         ($operation:expr, { $pattern:expr => $body:expr , $($t:tt)+ }) =>
         { {
             if $operation == $pattern { return $body; }
             __bitflags_match!($operation, { $($t)+ })
         }};
-        // Expand the default case
+        
         ($operation:expr, { _ => $default:expr $(,)? }) => { $default }
     }
     /// A macro that processed the input to `bitflags!`
@@ -520,7 +520,6 @@ extern crate unicode_width;
             expr: { $e:expr },
                 attrs: {
                 unprocessed: [
-                    // $other matched here
                     #[$other:ident $($args:tt)*]
                     $($attrs_rest:tt)*
                 ],
@@ -2406,7 +2405,6 @@ pub mod database
         {
             fn eq(&self, other: &Self) -> bool 
             {
-                // Quickly return false if the types don't match.
                 if self.inner.inner_t != other.inner.inner_t {
                     return false;
                 }
@@ -2900,8 +2898,7 @@ pub mod database
             {
                 let inner = &self.inner;
                 let other_inner = &other.inner;
-
-                // Check parent equality.
+                
                 if inner.parent.is_some() && other_inner.parent.is_some() {
                     let parent = self.get_parent().unwrap();
                     let other_parent = other.get_parent().unwrap();
@@ -2911,8 +2908,7 @@ pub mod database
                 } else if !(inner.parent.is_none() && other_inner.parent.is_none()) {
                     return false;
                 }
-
-                // Check HashMap equality.
+                
                 inner.map == other_inner.map
             }
         }
@@ -3037,7 +3033,6 @@ pub mod database
         
         {
             fn eq(&self, other: &Self) -> bool {
-                // Quickly return false if the types don't match.
                 if self.inner.inner_tvec != other.inner.inner_tvec {
                     return false;
                 }
@@ -3259,8 +3254,7 @@ pub mod database
             fn eq(&self, other: &Self) -> bool
             {
                 use self::Type::*;
-
-                // If either is Any, always return `true`.
+                
                 if let Any = *other
                 {
                     return true;
@@ -3329,7 +3323,7 @@ pub mod database
 
     pub mod values
     {
-        //! Module for values.5459
+        //! Module for values
         use ::
         {
             database::
@@ -3378,8 +3372,10 @@ pub mod database
 
         macro_rules! impl_eq 
         {
-            ($valtype:ident, $type:ty) => {
-                impl PartialEq<$type> for Value {
+            ($valtype:ident, $type:ty) => 
+            {
+                impl PartialEq<$type> for Value 
+                {
                     fn eq(&self, other: &$type) -> bool {
                         match *self {
                             Value::$valtype(ref value) => value == other,
@@ -3388,7 +3384,8 @@ pub mod database
                     }
                 }
 
-                impl PartialEq<Value> for $type {
+                impl PartialEq<Value> for $type
+                {
                     fn eq(&self, other: &Value) -> bool {
                         match *other {
                             Value::$valtype(ref value) => value == self,
@@ -3442,7 +3439,8 @@ pub mod database
 
             (string ref $ty:ty) => 
             {
-                impl<'a> From<&'a $ty> for Value {
+                impl<'a> From<&'a $ty> for Value 
+                {
                     fn from(value: &'a $ty) -> Self {
                         Value::String(value.into())
                     }
@@ -3605,14 +3603,6 @@ pub mod database
         {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "{}", self.format(true, INDENT_STEP)) }
         }
-        
-        impl_eq!(Bool, bool);
-        impl_eq!(Int, BigInt);
-        impl_eq!(Frac, BigRational);
-        impl_eq!(Char, char);
-        impl_eq!(Arr, arrays::Arr);
-        impl_eq!(Tup, tuples::Tup);
-        impl_eq!(Obj, objects::Obj);
 
         impl<'a> PartialEq<&'a str> for Value 
         {
@@ -3653,33 +3643,6 @@ pub mod database
                 &self.as_str() == other
             }
         }
-        
-        impl_eq_int!(usize, to_usize);
-        impl_eq_int!(u8, to_u8);
-        impl_eq_int!(u16, to_u16);
-        impl_eq_int!(u32, to_u32);
-        impl_eq_int!(u64, to_u64);
-        impl_eq_int!(i8, to_i8);
-        impl_eq_int!(i16, to_i16);
-        impl_eq_int!(i32, to_i32);
-        impl_eq_int!(i64, to_i64);
-
-        impl_from!(bool, Bool);
-
-        impl_from!(usize, Int);
-        impl_from!(u8, Int);
-        impl_from!(u16, Int);
-        impl_from!(u32, Int);
-        impl_from!(u64, Int);
-        impl_from!(i8, Int);
-        impl_from!(i16, Int);
-        impl_from!(i32, Int);
-        impl_from!(i64, Int);
-        impl_from!(BigInt, Int);
-    
-        impl_from!(BigRational, Frac);
-        impl_from!(char, Char);
-        impl_from!(String, Str);
 
         impl<'a> From<&'a str> for Value
         {
@@ -3693,22 +3656,53 @@ pub mod database
         {
             fn from(_: ()) -> Self { Value::True }
         }
-
+        
+        impl_eq!(Bool, bool);
+        impl_eq!(Int, BigInt);
+        impl_eq!(Frac, BigRational);
+        impl_eq!(Char, char);
+        impl_eq!(Arr, arrays::Arr);
+        impl_eq!(Tup, tuples::Tup);
+        impl_eq!(Obj, objects::Obj);
+        
+        impl_eq_int!(usize, to_usize);
+        impl_eq_int!(u8, to_u8);
+        impl_eq_int!(u16, to_u16);
+        impl_eq_int!(u32, to_u32);
+        impl_eq_int!(u64, to_u64);
+        impl_eq_int!(i8, to_i8);
+        impl_eq_int!(i16, to_i16);
+        impl_eq_int!(i32, to_i32);
+        impl_eq_int!(i64, to_i64);
+        
+        impl_from!(bool, Bool);
+        impl_from!(usize, Int);
+        impl_from!(u8, Int);
+        impl_from!(u16, Int);
+        impl_from!(u32, Int);
+        impl_from!(u64, Int);
+        impl_from!(i8, Int);
+        impl_from!(i16, Int);
+        impl_from!(i32, Int);
+        impl_from!(i64, Int);
+        impl_from!(BigInt, Int);    
+        impl_from!(BigRational, Frac);
+        impl_from!(char, Char);
+        impl_from!(String, Str);
         impl_from!(arrays::Arr, Arr);
         impl_from!(tuples::Tup, Tup);
         impl_from!(objects::Obj, Obj);
-
+        /*
         from_type_marker_to_value!(number u8);
         from_type_marker_to_value!(number i8);
         from_type_marker_to_value!(number u16);
         from_type_marker_to_value!(number i16);
         from_type_marker_to_value!(number u32);
         from_type_marker_to_value!(number i32);
-
         from_type_marker_to_value!(string String);
         from_type_marker_to_value!(string ref str);
         from_type_marker_to_value!(string Vec<u8>);
-        from_type_marker_to_value!(string ref [u8]);
+        from_type_marker_to_value!(string ref [u8]); */
     } pub use self::values::{ * };
 
     pub mod parses
@@ -4320,8 +4314,7 @@ pub mod database
             #[inline] fn parse_obj_stream(mut stream: CharStream, mut included: &mut IncludedMap) -> ParseResult<Obj> 
             {
                 let mut obj: ObjMap = HashMap::new();
-
-                // Go to the first non-whitespace character, or return if there is none.
+                
                 if !find_char(stream.clone()) 
                 {
                     return Ok(Obj::from_map_unchecked(obj));
@@ -4329,8 +4322,7 @@ pub mod database
 
                 let mut globals: GlobalMap = HashMap::new();
                 let mut parent = None;
-
-                // Parse all field/value pairs for this Obj.
+                
                 while parse_field_value_pair
                 (
                     &mut stream,
@@ -4357,17 +4349,14 @@ pub mod database
                 depth: usize,
             ) -> ParseResult<Value> 
             {
-                // Check depth.
                 if depth > MAX_DEPTH 
                 {
                     return parse_err(stream.file(), MaxDepth(stream.line(), stream.col()));
                 }
-
-                // We must already be at a '{'.
+                
                 let ch = stream.next().unwrap();
                 assert_eq!(ch, '{');
-
-                // Go to the first non-whitespace character, or error if there is none.
+                
                 if !find_char(stream.clone()) 
                 {
                     return parse_err(stream.file(), UnexpectedEnd(stream.line()));
@@ -4375,8 +4364,7 @@ pub mod database
 
                 let mut obj: ObjMap = HashMap::new();
                 let mut parent = None;
-
-                // Parse field/value pairs.
+                
                 while parse_field_value_pair
                 (
                     &mut stream,
@@ -4407,7 +4395,6 @@ pub mod database
                 cur_brace: Option<char>,
             ) -> ParseResult<bool>
             {
-                // Check if we're at an end delimiter instead of a field.
                 let peek = stream.peek().unwrap();
                 if peek == '}' && cur_brace.is_some() 
                 {
@@ -4421,31 +4408,28 @@ pub mod database
                         InvalidClosingBracket(cur_brace, peek, stream.line(), stream.col()),
                     );
                 }
-
-                // Get the field line/col.
+                
                 let (field_line, field_col) = (stream.line(), stream.col());
-
-                // Parse field.
                 let (field, is_global, is_parent) = parse_field(stream.clone(), field_line, field_col)?;
 
                 if !is_global && !is_parent && obj.contains_key(&field) 
                 {
                     return parse_err(stream.file(), DuplicateField(field, field_line, field_col));
-                } else if is_parent && parent.is_some() 
+                } 
+                
+                else if is_parent && parent.is_some() 
                 {
                     return parse_err(
                         stream.file(),
                         DuplicateField("^".into(), field_line, field_col),
                     );
                 }
-
-                // Deal with extra whitespace between field and value.
+                
                 if !find_char(stream.clone()) 
                 {
                     return parse_err(stream.file(), UnexpectedEnd(stream.line()));
                 }
-
-                // At a non-whitespace character, parse value.
+                
                 let (value_line, value_col) = (stream.line(), stream.col());
                 let value = parse_value
                 (
@@ -4459,8 +4443,7 @@ pub mod database
                     cur_brace,
                     true,
                 )?;
-
-                // Add value either to the globals map or to the current Obj.
+                
                 if is_global 
                 {
                     if globals.contains_key(&field) 
@@ -4478,8 +4461,7 @@ pub mod database
                 {
                     obj.insert(field, value);
                 }
-
-                // Go to the next non-whitespace character.
+                
                 if !find_char(stream.clone()) 
                 {
                     match cur_brace 
@@ -4505,13 +4487,11 @@ pub mod database
 
                 loop 
                 {
-                    // Go to the first non-whitespace character, or error if there is none.
                     if !find_char(stream.clone()) 
                     {
                         break;
                     }
-
-                    // At a non-whitespace character, parse value.
+                    
                     let (value_line, value_col) = (stream.line(), stream.col());
                     let value = parse_value
                     (
@@ -4572,12 +4552,10 @@ pub mod database
                 depth: usize,
             ) -> ParseResult<Value>
             {
-                // Check depth.
                 if depth > MAX_DEPTH {
                     return parse_err(stream.file(), MaxDepth(stream.line(), stream.col()));
                 }
-
-                // We must already be at a '['.
+                
                 let ch = stream.next().unwrap();
                 assert_eq!(ch, '[');
 
@@ -4586,7 +4564,6 @@ pub mod database
                 let mut has_any = true;
 
                 loop {
-                    // Go to the first non-whitespace character, or error if there is none.
                     if !find_char(stream.clone()) {
                         return parse_err(stream.file(), UnexpectedEnd(stream.line()));
                     }
@@ -4601,8 +4578,7 @@ pub mod database
                             InvalidClosingBracket(Some(']'), peek, stream.line(), stream.col()),
                         );
                     }
-
-                    // At a non-whitespace character, parse value.
+                    
                     let (value_line, value_col) = (stream.line(), stream.col());
                     let value = parse_value(
                         &mut stream,
@@ -4655,12 +4631,10 @@ pub mod database
                 let mut globals: GlobalMap = HashMap::new();
 
                 loop {
-                    // Go to the first non-whitespace character, or error if there is none.
                     if !find_char(stream.clone()) {
                         break;
                     }
 
-                    // At a non-whitespace character, parse value.
                     let (value_line, value_col) = (stream.line(), stream.col());
                     let value = parse_value(
                         &mut stream,
@@ -4770,8 +4744,7 @@ pub mod database
 
                     first = false;
                 }
-
-                // Check for invalid field names.
+                
                 match field.as_str() {
                     _field_str if is::reserved(_field_str) => {
                         parse_err(stream.file(), InvalidFieldName(field.clone(), line, col))
@@ -4797,7 +4770,6 @@ pub mod database
                 is_first: bool,
             ) -> ParseResult<Value>
             {
-                // Peek to determine what kind of value we'll be parsing.
                 let res = match stream.peek().unwrap() {
                     '"' => parse_str(&mut stream)?,
                     '\'' => parse_char(&mut stream)?,
@@ -4833,8 +4805,7 @@ pub mod database
                         return parse_err(stream.file(), InvalidValueChar(ch, line, col));
                     }
                 };
-
-                // Process operations if this is the first value.
+                
                 if is_first {
                     let mut val_deque: VecDeque<(Value, usize, usize)> = VecDeque::new();
                     let mut op_deque: VecDeque<char> = VecDeque::new();
@@ -4849,8 +4820,6 @@ pub mod database
                                 }
 
                                 let (line2, col2) = (stream.line(), stream.col());
-
-                                // Parse another value.
                                 let val2 = parse_value(
                                     &mut stream,
                                     obj,
@@ -4875,8 +4844,7 @@ pub mod database
                             _ => break,
                         }
                     }
-
-                    // Check for valid characters after the value.
+                    
                     check_value_end(stream, cur_brace)?;
 
                     let (mut val1, _, _) = val_deque.pop_front().unwrap();
@@ -4983,7 +4951,6 @@ pub mod database
                 }
 
                 if dec {
-                    // Parse a Frac from a number with a decimal.
                     if s1.is_empty() && s2.is_empty() {
                         return parse_err(stream.file(), InvalidNumeric(line, col));
                     }
@@ -4993,8 +4960,7 @@ pub mod database
                     } else {
                         s1.parse()?
                     };
-
-                    // Remove trailing zeros.
+                    
                     let s2 = s2.trim_end_matches('0');
 
                     let (decimal, dec_len): (BigInt, usize) = if s2.is_empty() {
@@ -5006,7 +4972,6 @@ pub mod database
                     let f = frac_from_whole_and_dec(whole, decimal, dec_len);
                     Ok(f.into())
                 } else {
-                    // Parse an Int.
                     if s1.is_empty() {
                         return parse_err(stream.file(), InvalidNumeric(line, col));
                     }
@@ -5085,7 +5050,6 @@ pub mod database
 
                     var @ "@" => return parse_err(stream.file(), InvalidValue(var.into(), line, col)),
                     var if is_global => {
-                        // Global variable, get value from globals map.
                         match globals.get(var) {
                             Some(value) => value.clone(),
                             None => {
@@ -5095,7 +5059,6 @@ pub mod database
                         }
                     }
                     var => {
-                        // Regular variable, get value from the current Obj.
                         match obj.get(var) {
                             Some(value) => value.clone(),
                             None => {
@@ -5276,8 +5239,7 @@ pub mod database
                         None => return parse_err(stream.file(), UnexpectedEnd(stream.line())),
                     }
                 }
-
-                // Replace \r\n line endings with \n for consistency in internal handling.
+                
                 let s = s.replace("\r\n", "\n");
 
                 Ok(s.into())
@@ -5298,16 +5260,14 @@ pub mod database
                     Arr,
                     Tup,
                 }
-
-                // Check depth.
+                
                 if depth > MAX_DEPTH {
                     return parse_err(stream.file(), MaxDepth(stream.line(), stream.col()));
                 }
 
                 let ch = stream.next().unwrap();
                 assert_eq!(ch, '<');
-
-                // Go to the next non-whitespace character, or error if there is none.
+                
                 if !find_char(stream.clone()) {
                     return parse_err(stream.file(), UnexpectedEnd(stream.line()));
                 }
@@ -5325,8 +5285,9 @@ pub mod database
                     true,
                 )?;
 
-                let mut include_type = IncludeType::Obj; // Default include type if no token is present.
-                let mut parse_again = true; // True if an include token was found.
+                let mut include_type = IncludeType::Obj;
+                let mut parse_again = true;
+
                 match value {
                     Value::Obj(ref obj) if obj.ptr_eq(&OBJ_SENTINEL) => include_type = IncludeType::Obj,
                     Value::Obj(ref obj) if obj.ptr_eq(&STR_SENTINEL) => include_type = IncludeType::Str,
@@ -5342,7 +5303,6 @@ pub mod database
                 }
 
                 if parse_again {
-                    // Go to the next non-whitespace character, or error if there is none.
                     if !find_char(stream.clone()) {
                         return parse_err(stream.file(), UnexpectedEnd(stream.line()));
                     }
@@ -5361,8 +5321,7 @@ pub mod database
                         true,
                     )?;
                 }
-
-                // Go to the next non-whitespace character, or error if there is none.
+                
                 if !find_char(stream.clone()) {
                     return parse_err(stream.file(), UnexpectedEnd(stream.line()));
                 }
@@ -5376,8 +5335,7 @@ pub mod database
                         );
                     }
                 }
-
-                // Get the full path of the include file.
+                
                 let include_file = match value {
                     Value::Str(s) => s,
                     _ => {
@@ -5398,15 +5356,11 @@ pub mod database
                 let path = pathbuf.as_path();
                 if !path.is_file() {
                     return parse_err(stream.file(), InvalidIncludePath(include_file, line, col));
-                }
-
-                // Get the include file as a path relative to the current working directory.
+                } 
                 let path_str = match path.to_str() {
                     Some(path) => path,
                     None => return parse_err(stream.file(), InvalidIncludePath(include_file, line, col)),
-                };
-
-                // Get the include file as an absolute path.
+                }; 
                 let path = match path.canonicalize() {
                     Ok(path) => path,
                     Err(_) => return parse_err(stream.file(), InvalidIncludePath(include_file, line, col)),
@@ -5415,8 +5369,7 @@ pub mod database
                     Some(path) => path,
                     None => return parse_err(stream.file(), InvalidIncludePath(include_file, line, col)),
                 };
-
-                // Prevent cyclic includes by temporarily storing the current file path.
+                
                 let storing = if let Some(file) = stream.file() {
                     let full_file = String::from(Path::new(&file).canonicalize().unwrap().to_str().unwrap());
                     included.1.insert(full_file.clone());
@@ -5427,8 +5380,7 @@ pub mod database
                 if included.1.contains(full_path_str) {
                     return parse_err(stream.file(), CyclicInclude(include_file, line, col));
                 }
-
-                // Get either the tracked value or parse it if it's our first time seeing the include.
+                
                 let value = if included.0.contains_key(full_path_str) {
                     let value = &included.0[full_path_str];
                     value.clone()
@@ -5439,12 +5391,11 @@ pub mod database
                         IncludeType::Arr => parse_arr_file(path_str, included)?.into(),
                         IncludeType::Tup => parse_tup_file(path_str, included)?.into(),
                     };
-                    // Use full path as included key.
+                    
                     included.0.insert(full_path_str.into(), value.clone());
                     value
                 };
-
-                // Remove the stored file path.
+                
                 if let Some(file) = storing {
                     included.1.remove(&file);
                 }
@@ -5670,7 +5621,6 @@ pub mod database
                     {
                         '#' => 
                         {
-                            // Comment found; eat the rest of the line.
                             loop {
                                 let ch = stream.next();
                                 if ch.is_none() 
@@ -7227,13 +7177,11 @@ pub mod libc
                 /// Creates a WTF-8 slice from a WTF-8 byte slice.
                 #[inline] pub unsafe fn from_bytes_unchecked(value: &[u8]) -> &Wtf8 
                 {
-                    // SAFETY: start with &[u8], end with fancy &[u8]
                     unsafe { &*(value as *const [u8] as *const Wtf8) }
                 }
                 /// Creates a mutable WTF-8 slice from a mutable WTF-8 byte slice.
                 #[inline] unsafe fn from_mut_bytes_unchecked(value: &mut [u8]) -> &mut Wtf8 
                 {
-                    // SAFETY: start with &mut [u8], end with fancy &mut [u8]
                     unsafe { &mut *(value as *mut [u8] as *mut Wtf8) }
                 }
                 /// Returns the length, in WTF-8 bytes.
@@ -8430,7 +8378,6 @@ pub mod mem
 
     impl Terminals for MemoryTerminal 
     {
-        // No preparation needed for in-memory terminal
         type PrepareState = ();
         //type Reader = MemoryReadGuard;
         //type Writer = MemoryWriteGuard;
@@ -8574,32 +8521,6 @@ pub mod mode
     /*
     use crate::error;
     use crate::expand::{Context, Expand, Parameter};*/
-    macro_rules! from_type_to_parameter
-    {
-        (number $ty:ty) => 
-        {
-            impl From<$ty> for Parameter 
-            {
-                fn from(value: $ty) -> Self { Parameter::Number(value as i32) }
-            }
-        };
-
-        (string ref $ty:ty) => 
-        {
-            impl<'a> From<&'a $ty> for Parameter 
-            {
-                fn from(value: &'a $ty) -> Self { Parameter::String(value.into()) }
-            }
-        };
-
-        (string $ty:ty) =>
-        {
-            impl From<$ty> for Parameter
-            {
-                fn from(value: $ty) -> Self { Parameter::String(value.into()) }
-            }
-        };
-    }
     /*
     Terminal mode definition macro */
     macro_rules! mode
@@ -8647,7 +8568,7 @@ pub mod mode
                     else { None }
                 }
 
-                #[inline] fn into(self) -> Option<Value> { Some(Value::Number(self.0)) }
+                #[inline] fn to(self) -> Option<Value> { Some(Value::Number(self.0)) }
             }
 
             impl From<$ident> for i32
@@ -8672,7 +8593,7 @@ pub mod mode
                     else { None }
                 }
 
-                #[inline] fn into(self) -> Option<Value> 
+                #[inline] fn to(self) -> Option<Value> 
                 {
                     Some(Value::String(match self.0 
                     {
@@ -8842,17 +8763,60 @@ pub mod mode
         fn default() -> Self { Parameter::Number(0) }
     }
 
-    from_type_to_parameter!(number bool);
-    from_type_to_parameter!(number u8);
-    from_type_to_parameter!(number i8);
-    from_type_to_parameter!(number u16);
-    from_type_to_parameter!(number i16);
-    from_type_to_parameter!(number u32);
-    from_type_to_parameter!(number i32);
-    from_type_to_parameter!(string String);
-    from_type_to_parameter!(string ref str);
-    from_type_to_parameter!(string Vec<u8>);
-    from_type_to_parameter!(string ref [u8]);
+    impl From<bool> for Parameter 
+    {
+        fn from( value:bool ) -> Self { Parameter::Number( value as i32 ) }
+    }
+    
+    impl From<u8> for Parameter 
+    {
+        fn from( value:u8 ) -> Self { Parameter::Number( value as i32 ) }
+    }
+    
+    impl From<i8> for Parameter 
+    {
+        fn from( value:i8 ) -> Self { Parameter::Number( value as i32 ) }
+    }
+    
+    impl From<u16> for Parameter 
+    {
+        fn from( value:u16 ) -> Self { Parameter::Number( value as i32 ) }
+    }
+    
+    impl From<i16> for Parameter 
+    {
+        fn from( value:i16 ) -> Self { Parameter::Number( value as i32 ) }
+    }
+    
+    impl From<u32> for Parameter 
+    {
+        fn from( value:u32 ) -> Self { Parameter::Number( value as i32 ) }
+    }
+    
+    impl From<i32> for Parameter 
+    {
+        fn from( value:i32 ) -> Self { Parameter::Number( value as i32 ) }
+    }
+    
+    impl<'a> From<&'a str> for Parameter 
+    {
+        fn from( value:&'a str ) -> Self { Parameter::String( value.into() ) }
+    }
+    
+    impl<'a> From<&'a [u8]> for Parameter 
+    {
+        fn from( value:&'a [u8] ) -> Self { Parameter::String( value.into() ) }
+    }
+    
+    impl From<String> for Parameter
+    {
+        fn from( value:String ) -> Self { Parameter::String(value.into()) }
+    }
+    
+    impl From<Vec<u8>> for Parameter
+    {
+        fn from( value:Vec<u8> ) -> Self { Parameter::String(value.into()) }
+    }
     /// The same context should be passed around through every expansion for the same `Database`.
     #[derive( Eq, PartialEq, Default, Debug )]
     pub struct Context
@@ -8880,12 +8844,15 @@ pub mod mode
         /// Expand to the given output.
         pub fn from<W: Write>(self, output: W) -> error::OverResult<()> 
         {
+            /*
+            TODO
             self.string.as_ref().expand
             (
                 output,
                 &self.params,
                 self.context.unwrap_or(&mut Default::default()),
-            )
+            )*/
+            Ok(())
         }
         /// Expand into a vector.
         pub fn to_vec(self) -> error::OverResult<Vec<u8>> 
@@ -9810,7 +9777,6 @@ pub mod num
 
                         #[inline] fn $method(self, other: $res) -> $res 
                         {
-                            // forward to val-ref
                             $imp::$method(self, &other)
                         }
                     }
@@ -9826,7 +9792,7 @@ pub mod num
 
                         #[inline] fn $method(self, other: $res) -> $res 
                         {
-                            // forward to val-ref, with the larger capacity as val
+                           
                             if self.capacity() >= other.capacity() 
                             {
                                 $imp::$method(self, &other)
@@ -9849,7 +9815,7 @@ pub mod num
 
                         #[inline] fn $method(self, other: $res) -> $res 
                         {
-                            // forward to ref-ref
+                           
                             $imp::$method(self, &other)
                         }
                     }
@@ -9865,7 +9831,6 @@ pub mod num
 
                         #[inline] fn $method(self, other: $res) -> $res 
                         {
-                            // reverse, forward to val-ref
                             $imp::$method(other, self)
                         }
                     }
@@ -9882,7 +9847,7 @@ pub mod num
 
                         #[inline] fn $method(self, other: &$res) -> $res 
                         {
-                            // forward to ref-ref
+                           
                             $imp::$method(&self, other)
                         }
                     }
@@ -9899,7 +9864,7 @@ pub mod num
 
                         #[inline] fn $method(self, other: &$res) -> $res 
                         {
-                            // forward to val-ref
+                           
                             $imp::$method(self.clone(), other)
                         }
                     }
@@ -9915,7 +9880,7 @@ pub mod num
 
                         #[inline] fn $method(self, other: &$res) -> $res 
                         {
-                            // forward to val-ref, choosing the larger to clone
+                           
                             if self.len() >= other.len() 
                             {
                                 $imp::$method(self.clone(), other)
@@ -9971,8 +9936,7 @@ pub mod num
                     }
                 };
             }
-
-            // Forward scalar to ref-val, when reusing storage is not helpful
+            
             macro_rules! forward_scalar_val_val_binop_to_ref_val 
             {
                 (impl $imp:ident<$scalar:ty> for $res:ty, $method:ident) => 
@@ -10214,8 +10178,7 @@ pub mod num
                     promote_scalars_assign!(impl $imp<IsizePromotion> for $res, $method, isize);
                 }
             }
-
-            // Forward everything to ref-ref, when reusing storage is not helpful
+            
             macro_rules! forward_all_binop_to_ref_ref 
             {
                 (impl $imp:ident for $res:ty, $method:ident) => 
@@ -10225,8 +10188,7 @@ pub mod num
                     forward_ref_val_binop!(impl $imp for $res, $method);
                 };
             }
-
-            // Forward everything to val-ref, so LHS storage can be reused
+            
             macro_rules! forward_all_binop_to_val_ref 
             {
                 (impl $imp:ident for $res:ty, $method:ident) => 
@@ -10236,8 +10198,7 @@ pub mod num
                     forward_ref_ref_binop!(impl $imp for $res, $method);
                 };
             }
-
-            // Forward everything to val-ref, commutatively, so either LHS or RHS storage can be reused
+            
             macro_rules! forward_all_binop_to_val_ref_commutative 
             {
                 (impl $imp:ident for $res:ty, $method:ident) => 
@@ -10380,9 +10341,7 @@ pub mod num
                         match ($a.sign, $b.sign) {
                             (_, NoSign) => $a_owned,
                             (NoSign, _) => $b_owned,
-                            // same sign => keep the sign with the sum of magnitudes
                             (Plus, Plus) | (Minus, Minus) => BigInt::from_biguint($a.sign, $a_data + $b_data),
-                            // opposite signs => keep the sign of the larger with the difference of magnitudes
                             (Plus, Minus) | (Minus, Plus) => match $a.data.cmp(&$b.data) {
                                 Less => BigInt::from_biguint($b.sign, $b_data - $a_data),
                                 Greater => BigInt::from_biguint($a.sign, $a_data - $b_data),
@@ -11180,7 +11139,6 @@ pub mod num
 
                             #[inline]
                             fn mul(self, other: $Other) -> BigInt {
-                                // automatically match value/ref
                                 let BigInt { data: x, .. } = self;
                                 let BigInt { data: y, .. } = other;
                                 BigInt::from_biguint(self.sign * other.sign, x * y)
@@ -11202,7 +11160,6 @@ pub mod num
                         impl MulAssign<$Other> for BigInt {
                             #[inline]
                             fn mul_assign(&mut self, other: $Other) {
-                                // automatically match value/ref
                                 let BigInt { data: y, .. } = other;
                                 self.data *= y;
                                 if self.data.is_zero() {
@@ -11404,9 +11361,7 @@ pub mod num
                         match ($a.sign, $b.sign) {
                             (_, NoSign) => $a_owned,
                             (NoSign, _) => -$b_owned,
-                            // opposite signs => keep the sign of the left with the sum of magnitudes
                             (Plus, Minus) | (Minus, Plus) => BigInt::from_biguint($a.sign, $a_data + $b_data),
-                            // same sign => keep or toggle the sign of the left with the difference of magnitudes
                             (Plus, Plus) | (Minus, Minus) => match $a.data.cmp(&$b.data) {
                                 Less => BigInt::from_biguint(-$a.sign, $b_data - $a_data),
                                 Greater => BigInt::from_biguint($a.sign, $a_data - $b_data),
@@ -11718,19 +11673,17 @@ pub mod num
                     vec::{ Vec },
                     *,
                 };
-                // Negation in two's complement.
-                // acc must be initialized as 1 for least-significant digit.
-                #[inline] fn negate_carry(a: BigDigit, acc: &mut DoubleBigDigit) -> BigDigit {
+
+                #[inline] fn negate_carry(a: BigDigit, acc: &mut DoubleBigDigit) -> BigDigit 
+                {
                     *acc += DoubleBigDigit::from(!a);
                     let lo = *acc as BigDigit;
                     *acc >>= big_digit::BITS;
                     lo
                 }
-
-                // + 1 & -ff = ...0 01 & ...f 01 = ...0 01 = + 1
-                // +ff & - 1 = ...0 ff & ...f ff = ...0 ff = +ff
-                // answer is pos, has length of a
-                fn bitand_pos_neg(a: &mut [BigDigit], b: &[BigDigit]) {
+                
+                fn bitand_pos_neg(a: &mut [BigDigit], b: &[BigDigit]) 
+                {
                     let mut carry_b = 1;
                     for (ai, &bi) in a.iter_mut().zip(b.iter()) 
                     {
@@ -11739,11 +11692,9 @@ pub mod num
                     }
                     debug_assert!(b.len() > a.len() || carry_b == 0);
                 }
-
-                // - 1 & +ff = ...f ff & ...0 ff = ...0 ff = +ff
-                // -ff & + 1 = ...f 01 & ...0 01 = ...0 01 = + 1
-                // answer is pos, has length of b
-                fn bitand_neg_pos(a: &mut Vec<BigDigit>, b: &[BigDigit]) {
+                
+                fn bitand_neg_pos(a: &mut Vec<BigDigit>, b: &[BigDigit]) 
+                {
                     let mut carry_a = 1;
                     for (ai, &bi) in a.iter_mut().zip(b.iter()) 
                     {
@@ -11760,12 +11711,9 @@ pub mod num
                         }
                     }
                 }
-
-                // - 1 & -ff = ...f ff & ...f 01 = ...f 01 = - ff
-                // -ff & - 1 = ...f 01 & ...f ff = ...f 01 = - ff
-                // -ff & -fe = ...f 01 & ...f 02 = ...f 00 = -100
-                // answer is neg, has length of longest with a possible carry
-                fn bitand_neg_neg(a: &mut Vec<BigDigit>, b: &[BigDigit]) {
+                
+                fn bitand_neg_neg(a: &mut Vec<BigDigit>, b: &[BigDigit]) 
+                {
                     let mut carry_a = 1;
                     let mut carry_b = 1;
                     let mut carry_and = 1;
@@ -11788,7 +11736,8 @@ pub mod num
                         Equal => {}
                         Less => {
                             let extra = &b[a.len()..];
-                            a.extend(extra.iter().map(|&bi| {
+                            a.extend(extra.iter().map(|&bi| 
+                    {
                                 let twos_b = negate_carry(bi, &mut carry_b);
                                 negate_carry(twos_b, &mut carry_and)
                             }));
@@ -11802,10 +11751,9 @@ pub mod num
 
                 forward_val_val_binop!(impl BitAnd for BigInt, bitand);
                 forward_ref_val_binop!(impl BitAnd for BigInt, bitand);
-
-                // do not use forward_ref_ref_binop_commutative! for bitand so that we can
-                // clone as needed, avoiding over-allocation
-                impl BitAnd<&BigInt> for &BigInt {
+                
+                impl BitAnd<&BigInt> for &BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn bitand(self, other: &BigInt) -> BigInt {
@@ -11815,7 +11763,7 @@ pub mod num
                             (Plus, Minus) => self.clone() & other,
                             (Minus, Plus) => other.clone() & self,
                             (Minus, Minus) => {
-                                // forward to val-ref, choosing the larger to clone
+                               
                                 if self.len() >= other.len() {
                                     self.clone() & other
                                 } else {
@@ -11826,7 +11774,8 @@ pub mod num
                     }
                 }
 
-                impl BitAnd<&BigInt> for BigInt {
+                impl BitAnd<&BigInt> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn bitand(mut self, other: &BigInt) -> BigInt {
@@ -11837,7 +11786,8 @@ pub mod num
 
                 forward_val_assign!(impl BitAndAssign for BigInt, bitand_assign);
 
-                impl BitAndAssign<&BigInt> for BigInt {
+                impl BitAndAssign<&BigInt> for BigInt 
+                {
                     fn bitand_assign(&mut self, other: &BigInt) {
                         match (self.sign, other.sign) {
                             (NoSign, _) => {}
@@ -11864,11 +11814,9 @@ pub mod num
                         }
                     }
                 }
-
-                // + 1 | -ff = ...0 01 | ...f 01 = ...f 01 = -ff
-                // +ff | - 1 = ...0 ff | ...f ff = ...f ff = - 1
-                // answer is neg, has length of b
-                fn bitor_pos_neg(a: &mut Vec<BigDigit>, b: &[BigDigit]) {
+                
+                fn bitor_pos_neg(a: &mut Vec<BigDigit>, b: &[BigDigit]) 
+                {
                     let mut carry_b = 1;
                     let mut carry_or = 1;
                     for (ai, &bi) in a.iter_mut().zip(b.iter()) 
@@ -11884,21 +11832,20 @@ pub mod num
                         Equal => {}
                         Less => {
                             let extra = &b[a.len()..];
-                            a.extend(extra.iter().map(|&bi| {
+                            a.extend(extra.iter().map(|&bi| 
+                    {
                                 let twos_b = negate_carry(bi, &mut carry_b);
                                 negate_carry(twos_b, &mut carry_or)
                             }));
                             debug_assert!(carry_b == 0);
                         }
                     }
-                    // for carry_or to be non-zero, we would need twos_b == 0
+
                     debug_assert!(carry_or == 0);
                 }
-
-                // - 1 | +ff = ...f ff | ...0 ff = ...f ff = - 1
-                // -ff | + 1 = ...f 01 | ...0 01 = ...f 01 = -ff
-                // answer is neg, has length of a
-                fn bitor_neg_pos(a: &mut [BigDigit], b: &[BigDigit]) {
+                
+                fn bitor_neg_pos(a: &mut [BigDigit], b: &[BigDigit]) 
+                {
                     let mut carry_a = 1;
                     let mut carry_or = 1;
                     for (ai, &bi) in a.iter_mut().zip(b.iter()) 
@@ -11914,14 +11861,12 @@ pub mod num
                         }
                         debug_assert!(carry_a == 0);
                     }
-                    // for carry_or to be non-zero, we would need twos_a == 0
+                    
                     debug_assert!(carry_or == 0);
                 }
-
-                // - 1 | -ff = ...f ff | ...f 01 = ...f ff = -1
-                // -ff | - 1 = ...f 01 | ...f ff = ...f ff = -1
-                // answer is neg, has length of shortest
-                fn bitor_neg_neg(a: &mut Vec<BigDigit>, b: &[BigDigit]) {
+                
+                fn bitor_neg_neg(a: &mut Vec<BigDigit>, b: &[BigDigit]) 
+                {
                     let mut carry_a = 1;
                     let mut carry_b = 1;
                     let mut carry_or = 1;
@@ -11936,16 +11881,15 @@ pub mod num
                     if a.len() > b.len() {
                         a.truncate(b.len());
                     }
-                    // for carry_or to be non-zero, we would need twos_a == 0 or twos_b == 0
+                    
                     debug_assert!(carry_or == 0);
                 }
 
                 forward_val_val_binop!(impl BitOr for BigInt, bitor);
                 forward_ref_val_binop!(impl BitOr for BigInt, bitor);
-
-                // do not use forward_ref_ref_binop_commutative! for bitor so that we can
-                // clone as needed, avoiding over-allocation
-                impl BitOr<&BigInt> for &BigInt {
+                
+                impl BitOr<&BigInt> for &BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn bitor(self, other: &BigInt) -> BigInt {
@@ -11956,7 +11900,7 @@ pub mod num
                             (Plus, Minus) => other.clone() | self,
                             (Minus, Plus) => self.clone() | other,
                             (Minus, Minus) => {
-                                // forward to val-ref, choosing the smaller to clone
+                               
                                 if self.len() <= other.len() {
                                     self.clone() | other
                                 } else {
@@ -11967,7 +11911,8 @@ pub mod num
                     }
                 }
 
-                impl BitOr<&BigInt> for BigInt {
+                impl BitOr<&BigInt> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn bitor(mut self, other: &BigInt) -> BigInt {
@@ -11978,7 +11923,8 @@ pub mod num
 
                 forward_val_assign!(impl BitOrAssign for BigInt, bitor_assign);
 
-                impl BitOrAssign<&BigInt> for BigInt {
+                impl BitOrAssign<&BigInt> for BigInt 
+                {
                     fn bitor_assign(&mut self, other: &BigInt) {
                         match (self.sign, other.sign) {
                             (_, NoSign) => {}
@@ -12000,11 +11946,9 @@ pub mod num
                         }
                     }
                 }
-
-                // + 1 ^ -ff = ...0 01 ^ ...f 01 = ...f 00 = -100
-                // +ff ^ - 1 = ...0 ff ^ ...f ff = ...f 00 = -100
-                // answer is neg, has length of longest with a possible carry
-                fn bitxor_pos_neg(a: &mut Vec<BigDigit>, b: &[BigDigit]) {
+                
+                fn bitxor_pos_neg(a: &mut Vec<BigDigit>, b: &[BigDigit]) 
+                {
                     let mut carry_b = 1;
                     let mut carry_xor = 1;
                     for (ai, &bi) in a.iter_mut().zip(b.iter()) 
@@ -12023,7 +11967,8 @@ pub mod num
                         Equal => {}
                         Less => {
                             let extra = &b[a.len()..];
-                            a.extend(extra.iter().map(|&bi| {
+                            a.extend(extra.iter().map(|&bi| 
+                    {
                                 let twos_b = negate_carry(bi, &mut carry_b);
                                 negate_carry(twos_b, &mut carry_xor)
                             }));
@@ -12034,11 +11979,9 @@ pub mod num
                         a.push(1);
                     }
                 }
-
-                // - 1 ^ +ff = ...f ff ^ ...0 ff = ...f 00 = -100
-                // -ff ^ + 1 = ...f 01 ^ ...0 01 = ...f 00 = -100
-                // answer is neg, has length of longest with a possible carry
-                fn bitxor_neg_pos(a: &mut Vec<BigDigit>, b: &[BigDigit]) {
+                
+                fn bitxor_neg_pos(a: &mut Vec<BigDigit>, b: &[BigDigit]) 
+                {
                     let mut carry_a = 1;
                     let mut carry_xor = 1;
                     for (ai, &bi) in a.iter_mut().zip(b.iter()) 
@@ -12058,7 +12001,8 @@ pub mod num
                         Equal => {}
                         Less => {
                             let extra = &b[a.len()..];
-                            a.extend(extra.iter().map(|&bi| {
+                            a.extend(extra.iter().map(|&bi| 
+                    {
                                 let twos_a = !0;
                                 negate_carry(twos_a ^ bi, &mut carry_xor)
                             }));
@@ -12068,11 +12012,9 @@ pub mod num
                         a.push(1);
                     }
                 }
-
-                // - 1 ^ -ff = ...f ff ^ ...f 01 = ...0 fe = +fe
-                // -ff & - 1 = ...f 01 ^ ...f ff = ...0 fe = +fe
-                // answer is pos, has length of longest
-                fn bitxor_neg_neg(a: &mut Vec<BigDigit>, b: &[BigDigit]) {
+                
+                fn bitxor_neg_neg(a: &mut Vec<BigDigit>, b: &[BigDigit]) 
+                {
                     let mut carry_a = 1;
                     let mut carry_b = 1;
                     for (ai, &bi) in a.iter_mut().zip(b.iter()) 
@@ -12095,7 +12037,8 @@ pub mod num
                         Equal => {}
                         Less => {
                             let extra = &b[a.len()..];
-                            a.extend(extra.iter().map(|&bi| {
+                            a.extend(extra.iter().map(|&bi| 
+                    {
                                 let twos_a = !0;
                                 let twos_b = negate_carry(bi, &mut carry_b);
                                 twos_a ^ twos_b
@@ -12107,7 +12050,8 @@ pub mod num
 
                 forward_all_binop_to_val_ref_commutative!(impl BitXor for BigInt, bitxor);
 
-                impl BitXor<&BigInt> for BigInt {
+                impl BitXor<&BigInt> for BigInt 
+                {
                     type Output = BigInt;
 
                     #[inline] fn bitxor(mut self, other: &BigInt) -> BigInt {
@@ -12118,7 +12062,8 @@ pub mod num
 
                 forward_val_assign!(impl BitXorAssign for BigInt, bitxor_assign);
 
-                impl BitXorAssign<&BigInt> for BigInt {
+                impl BitXorAssign<&BigInt> for BigInt 
+                {
                     fn bitxor_assign(&mut self, other: &BigInt) {
                         match (self.sign, other.sign) {
                             (_, NoSign) => {}
@@ -12147,7 +12092,8 @@ pub mod num
                     }
                 }
 
-                pub fn set_negative_bit(x: &mut BigInt, bit: u64, value: bool) {
+                pub fn set_negative_bit(x: &mut BigInt, bit: u64, value: bool) 
+                {
                     debug_assert_eq!(x.sign, Minus);
                     let data = &mut x.data;
 
@@ -12205,7 +12151,6 @@ pub mod num
                         }
                     }
                 }
-
             } pub use self::bits::{ * };
 
             pub mod convert
@@ -12577,7 +12522,6 @@ pub mod num
                     };
 
                     if sign == Sign::Minus {
-                        // two's-complement the content to retrieve the magnitude
                         let mut digits = Vec::from(digits);
                         twos_complement_be(&mut digits);
                         BigInt::from_biguint(sign, BigUint::from_bytes_be(&digits))
@@ -12594,7 +12538,6 @@ pub mod num
                     };
 
                     if sign == Sign::Minus {
-                        // two's-complement the content to retrieve the magnitude
                         let mut digits = Vec::from(digits);
                         twos_complement_le(&mut digits);
                         BigInt::from_biguint(sign, BigUint::from_bytes_le(&digits))
@@ -12603,13 +12546,13 @@ pub mod num
                     }
                 }
 
-                #[inline] pub fn to_signed_bytes_be(x: &BigInt) -> Vec<u8> {
+                #[inline] pub fn to_signed_bytes_be(x: &BigInt) -> Vec<u8>
+                {
                     let mut bytes = x.data.to_bytes_be();
                     let first_byte = bytes.first().cloned().unwrap_or(0);
                     if first_byte > 0x7f
                         && !(first_byte == 0x80 && bytes.iter().skip(1).all(Zero::is_zero) && x.sign == Sign::Minus)
                     {
-                        // msb used by magnitude, extend by 1 byte
                         bytes.insert(0, 0);
                     }
                     if x.sign == Sign::Minus {
@@ -12618,7 +12561,8 @@ pub mod num
                     bytes
                 }
 
-                #[inline] pub fn to_signed_bytes_le(x: &BigInt) -> Vec<u8> {
+                #[inline] pub fn to_signed_bytes_le(x: &BigInt) -> Vec<u8>
+                {
                     let mut bytes = x.data.to_bytes_le();
                     let last_byte = bytes.last().cloned().unwrap_or(0);
                     if last_byte > 0x7f
@@ -12626,7 +12570,6 @@ pub mod num
                             && bytes.iter().rev().skip(1).all(Zero::is_zero)
                             && x.sign == Sign::Minus)
                     {
-                        // msb used by magnitude, extend by 1 byte
                         bytes.push(0);
                     }
                     if x.sign == Sign::Minus {
@@ -12750,8 +12693,7 @@ pub mod num
                     if result.is_zero() {
                         return BigInt::ZERO;
                     }
-
-                    // The sign of the result follows the modulus, like `mod_floor`.
+                    
                     let (sign, mag) = match (x.is_negative() && exponent.is_odd(), modulus.is_negative()) {
                         (false, false) => (Plus, result),
                         (true, false) => (Plus, &modulus.data - result),
@@ -12867,10 +12809,9 @@ pub mod num
 
                 impl_shift! { u8, u16, u32, u64, u128, usize }
                 impl_shift! { i8, i16, i32, i64, i128, isize }
-
-                // Negative values need a rounding adjustment if there are any ones in the
-                // bits that are getting shifted out.
-                fn shr_round_down<T: PrimInt>(i: &BigInt, shift: T) -> bool {
+                
+                fn shr_round_down<T: PrimInt>(i: &BigInt, shift: T) -> bool 
+                {
                     if i.is_negative() 
                     {
                         let zeros = i.trailing_zeros().expect("negative values are non-zero");
@@ -12907,9 +12848,7 @@ pub mod num
                 sign: Sign,
                 data: BigUint,
             }
-
-            // Note: derived `Clone` doesn't specialize `clone_from`,
-            // but we want to keep the allocation in `data`.
+            
             impl Clone for BigInt 
             {
                 #[inline] fn clone(&self) -> Self {
@@ -13073,7 +13012,7 @@ pub mod num
 
             impl ConstZero for BigInt 
             {
-                // forward to the inherent const
+               
                 const ZERO: Self = Self::ZERO;
             }
 
@@ -13190,7 +13129,6 @@ pub mod num
             impl Integer for BigInt 
             {
                 #[inline] fn div_rem(&self, other: &BigInt) -> (BigInt, BigInt) {
-                    // r.sign == self.sign
                     let (d_ui, r_ui) = self.data.div_rem(&other.data);
                     let d = BigInt::from_biguint(self.sign, d_ui);
                     let r = BigInt::from_biguint(self.sign, r_ui);
@@ -13218,7 +13156,6 @@ pub mod num
                 }
 
                 #[inline] fn mod_floor(&self, other: &BigInt) -> BigInt {
-                    // m.sign == other.sign
                     let m_ui = self.data.mod_floor(&other.data);
                     let m = BigInt::from_biguint(other.sign, m_ui);
                     match (self.sign, other.sign) {
@@ -13235,7 +13172,6 @@ pub mod num
                 }
 
                 fn div_mod_floor(&self, other: &BigInt) -> (BigInt, BigInt) {
-                    // m.sign == other.sign
                     let (d_ui, m_ui) = self.data.div_mod_floor(&other.data);
                     let d = BigInt::from(d_ui);
                     let m = BigInt::from_biguint(other.sign, m_ui);
@@ -13432,17 +13368,20 @@ pub mod num
                     convert::from_signed_bytes_le(digits)
                 }
                 /// Creates and initializes a [`BigInt`].
-                #[inline] pub fn parse_bytes(buf: &[u8], radix: u32) -> Option<BigInt> {
+                #[inline] pub fn parse_bytes(buf: &[u8], radix: u32) -> Option<BigInt>
+                {
                     let s = str::from_utf8(buf).ok()?;
                     BigInt::from_str_radix(s, radix).ok()
                 }
                 /// Creates and initializes a [`BigInt`].
-                pub fn from_radix_be(sign: Sign, buf: &[u8], radix: u32) -> Option<BigInt> {
+                pub fn from_radix_be(sign: Sign, buf: &[u8], radix: u32) -> Option<BigInt>
+                {
                     let u = BigUint::from_radix_be(buf, radix)?;
                     Some(BigInt::from_biguint(sign, u))
                 }
                 /// Creates and initializes a [`BigInt`].
-                pub fn from_radix_le(sign: Sign, buf: &[u8], radix: u32) -> Option<BigInt> {
+                pub fn from_radix_le(sign: Sign, buf: &[u8], radix: u32) -> Option<BigInt>
+                {
                     let u = BigUint::from_radix_le(buf, radix)?;
                     Some(BigInt::from_biguint(sign, u))
                 }
@@ -13555,9 +13494,9 @@ pub mod num
                     power::modpow(self, exponent, modulus)
                 }
                 /// Returns the modular multiplicative inverse if it exists, otherwise `None`.
-                pub fn modinv(&self, modulus: &Self) -> Option<Self> {
+                pub fn modinv(&self, modulus: &Self) -> Option<Self>
+                {
                     let result = self.data.modinv(&modulus.data)?;
-                    // The sign of the result follows the modulus, like `mod_floor`.
                     let (sign, mag) = match (self.is_negative(), modulus.is_negative()) {
                         (false, false) => (Plus, result),
                         (true, false) => (Plus, &modulus.data - result),
@@ -13610,11 +13549,10 @@ pub mod num
                                 self.data.set_bit(bit, true);
                                 self.sign = Sign::Plus;
                             } else {
-                                // Clearing a bit for zero is a no-op
                             }
                         }
                     }
-                    // The top bit may have been cleared, so normalize
+                    
                     self.normalize();
                 }
             }
@@ -13687,7 +13625,6 @@ pub mod num
             }
 
             fn gen_bits<R: Rng + ?Sized>(rng: &mut R, data: &mut [u32], rem: u64) {
-                // `fill` is faster than many `gen::<u32>` calls
                 rng.fill(data);
                 if rem > 0 {
                     let last = data.len() - 1;
@@ -13708,7 +13645,7 @@ pub mod num
                     let native_len = native_digits.to_usize().expect("capacity overflow");
                     let mut data = vec![0u64; native_len];
                     unsafe {
-                        // Generate bits in a `&mut [u32]` slice for value stability
+                       
                         let ptr = data.as_mut_ptr() as *mut u32;
                         debug_assert!(native_len * 2 >= len);
                         let data = slice::from_raw_parts_mut(ptr, len);
@@ -13716,7 +13653,6 @@ pub mod num
                     }
                     #[cfg(target_endian = "big")]
                     for digit in &mut data {
-                        // swap u32 digits into u64 endianness
                         *digit = (*digit << 32) | (*digit >> 32);
                     }
                     biguint_from_vec(data)
@@ -13724,14 +13660,9 @@ pub mod num
 
                 fn gen_bigint(&mut self, bit_size: u64) -> BigInt {
                     loop {
-                        // Generate a random BigUint...
+                       
                         let biguint = self.gen_biguint(bit_size);
-                        // ...and then randomly assign it a Sign...
                         let sign = if biguint.is_zero() {
-                            // ...except that if the BigUint is zero, we need to try
-                            // again with probability 0.5. This is because otherwise,
-                            // the probability of generating a zero BigInt would be
-                            // double that of any other number.
                             if self.gen() {
                                 continue;
                             } else {
@@ -13941,7 +13872,6 @@ pub mod num
                     *,
                 };
                 
-                // Add with carry:
                 #[inline] fn adc(carry: u8, a: u64, b: u64, out: &mut u64) -> u8 {
                     // Safety: There are absolutely no safety concerns with calling `_addcarry_u64`.
                     // It's just unsafe for API consistency with other intrinsics.
@@ -14162,16 +14092,9 @@ pub mod num
 
                 pub(super) const FAST_DIV_WIDE: bool = true;
                 /// Divide a two digit numerator by a one digit divisor, returns quotient and remainder.
-                #[inline] fn div_wide(hi: BigDigit, lo: BigDigit, divisor: BigDigit) -> (BigDigit, BigDigit) {
-                    // This debug assertion covers the potential #DE for divisor==0 or a quotient too large for one
-                    // register, otherwise in release mode it will become a target-specific fault like SIGFPE.
-                    // This should never occur with the inputs from our few `div_wide` callers.
+                #[inline] fn div_wide(hi: BigDigit, lo: BigDigit, divisor: BigDigit) -> (BigDigit, BigDigit) 
+                {
                     debug_assert!(hi < divisor);
-
-                    // SAFETY: The `div` instruction only affects registers, reading the explicit operand as the
-                    // divisor, and implicitly reading RDX:RAX or EDX:EAX as the dividend. The result is implicitly
-                    // written back to RAX or EAX for the quotient and RDX or EDX for the remainder. No memory is
-                    // used, and flags are not preserved.
                     unsafe
                     {
                         let (div, rem);
@@ -14255,7 +14178,6 @@ pub mod num
                     let mut offset_carry = big_digit::MAX;
 
                     for (x, y) in a.iter_mut().zip(b) {
-                        // We want to calculate sum = x - y * c + carry.
                         let offset_sum = big_digit::to_doublebigdigit(big_digit::MAX, *x)
                             - big_digit::MAX as DoubleBigDigit
                             + offset_carry as DoubleBigDigit
@@ -14282,36 +14204,26 @@ pub mod num
                             return (u, BigUint::ZERO);
                         }
                         let (div, rem) = div_rem_digit(u, d.data[0]);
-                        // reuse d
                         d.data.clear();
                         d += rem;
                         return (div, d);
                     }
-
-                    // Required or the q_len calculation below can underflow:
+                    
                     match u.cmp(&d) {
                         Less => return (BigUint::ZERO, u),
                         Equal => {
                             u.set_one();
                             return (u, BigUint::ZERO);
                         }
-                        Greater => {} // Do nothing
+                        Greater => {}
                     }
-
-                    // This algorithm is from Knuth, TAOCP vol 2 section 4.3, algorithm D:
-                    //
-                    // First, normalize the arguments so the highest bit in the highest digit of the divisor is
-                    // set: the main loop uses the highest digit of the divisor for generating guesses, so we
-                    // want it to be the largest number we can efficiently divide by.
-                    //
+                    
                     let shift = d.data.last().unwrap().leading_zeros() as usize;
 
                     if shift == 0 {
-                        // no need to clone d
                         div_rem_core(u, &d.data)
                     } else {
                         let (q, r) = div_rem_core(u << shift, &(d << shift).data);
-                        // renormalize the remainder
                         (q, r >> shift)
                     }
                 }
@@ -14332,58 +14244,28 @@ pub mod num
                         let (div, rem) = div_rem_digit(u.clone(), d.data[0]);
                         return (div, rem.into());
                     }
-
-                    // Required or the q_len calculation below can underflow:
+                    
                     match u.cmp(d) {
                         Less => return (BigUint::ZERO, u.clone()),
                         Equal => return (One::one(), BigUint::ZERO),
-                        Greater => {} // Do nothing
+                        Greater => {}
                     }
-
-                    // This algorithm is from Knuth, TAOCP vol 2 section 4.3, algorithm D:
-                    //
-                    // First, normalize the arguments so the highest bit in the highest digit of the divisor is
-                    // set: the main loop uses the highest digit of the divisor for generating guesses, so we
-                    // want it to be the largest number we can efficiently divide by.
-                    //
+                    
                     let shift = d.data.last().unwrap().leading_zeros() as usize;
 
                     if shift == 0 {
-                        // no need to clone d
                         div_rem_core(u.clone(), &d.data)
                     } else {
                         let (q, r) = div_rem_core(u << shift, &(d << shift).data);
-                        // renormalize the remainder
                         (q, r >> shift)
                     }
                 }
                 /// An implementation of the base division algorithm.
-                /// Knuth, TAOCP vol 2 section 4.3.1, algorithm D, with an improvement from exercises 19-21.
                 fn div_rem_core(mut a: BigUint, b: &[BigDigit]) -> (BigUint, BigUint) {
                     debug_assert!(a.data.len() >= b.len() && b.len() > 1);
                     debug_assert!(b.last().unwrap().leading_zeros() == 0);
-
-                    // The algorithm works by incrementally calculating "guesses", q0, for the next digit of the
-                    // quotient. Once we have any number q0 such that (q0 << j) * b <= a, we can set
-                    //
-                    //     q += q0 << j
-                    //     a -= (q0 << j) * b
-                    //
-                    // and then iterate until a < b. Then, (q, a) will be our desired quotient and remainder.
-                    //
-                    // q0, our guess, is calculated by dividing the last three digits of a by the last two digits of
-                    // b - this will give us a guess that is close to the actual quotient, but is possibly greater.
-                    // It can only be greater by 1 and only in rare cases, with probability at most
-                    // 2^-(big_digit::BITS-1) for random a, see TAOCP 4.3.1 exercise 21.
-                    //
-                    // If the quotient turns out to be too large, we adjust it by 1:
-                    // q -= 1 << j
-                    // a += b << j
-
-                    // a0 stores an additional extra most significant digit of the dividend, not stored in a.
+                    
                     let mut a0 = 0;
-
-                    // [b1, b0] are the two most significant digits of the divisor. They never change.
                     let b0 = b[b.len() - 1];
                     let b1 = b[b.len() - 2];
 
@@ -14505,7 +14387,6 @@ pub mod num
                 }
                 impl DivAssign<u64> for BigUint {
                     #[inline] fn div_assign(&mut self, other: u64) {
-                        // a vec of size 0 does not allocate, so this is fairly cheap
                         let temp = mem::replace(self, Self::ZERO);
                         *self = temp / other;
                     }
@@ -14658,8 +14539,7 @@ pub mod num
                         }
                     }
                 }
-
-                // we can scalar %= BigUint for any scalar, including signed types
+                
                 impl_rem_assign_scalar!(u128, to_u128);
                 impl_rem_assign_scalar!(usize, to_usize);
                 impl_rem_assign_scalar!(u64, to_u64);
@@ -14751,17 +14631,14 @@ pub mod num
 
                 impl Euclid for BigUint {
                     #[inline] fn div_euclid(&self, v: &BigUint) -> BigUint {
-                        // trivially same as regular division
                         self / v
                     }
 
                     #[inline] fn rem_euclid(&self, v: &BigUint) -> BigUint {
-                        // trivially same as regular remainder
                         self % v
                     }
 
                     fn div_rem_euclid(&self, v: &Self) -> (Self, Self) {
-                        // trivially same as regular division and remainder
                         self.div_rem(v)
                     }
                 }
@@ -14811,9 +14688,9 @@ pub mod num
                     *acc >>= big_digit::BITS;
                     lo
                 }
-                /// Three argument multiply accumulate:
-                /// acc += b * c
-                fn mac_digit(acc: &mut [BigDigit], b: &[BigDigit], c: BigDigit) {
+                /// Three argument multiply accumulate: acc += b * c
+                fn mac_digit(acc: &mut [BigDigit], b: &[BigDigit], c: BigDigit) 
+                {
                     if c == 0 {
                         return;
                     }
@@ -14835,14 +14712,13 @@ pub mod num
                     assert_eq!(final_carry, 0, "carry overflow during multiplication!");
                 }
 
-                fn bigint_from_slice(slice: &[BigDigit]) -> BigInt {
+                fn bigint_from_slice(slice: &[BigDigit]) -> BigInt 
+                {
                     BigInt::from(biguint_from_vec(slice.to_vec()))
                 }
-                /// Three argument multiply accumulate:
-                /// acc += b * c
-                #[allow(clippy::many_single_char_names)]
-                fn mac3(mut acc: &mut [BigDigit], mut b: &[BigDigit], mut c: &[BigDigit]) {
-                    // Least-significant zeros have no effect on the output.
+                /// Three argument multiply accumulate: acc += b * c
+                fn mac3(mut acc: &mut [BigDigit], mut b: &[BigDigit], mut c: &[BigDigit]) 
+                {
                     if let Some(&0) = b.first() {
                         if let Some(nz) = b.iter().position(|&d| d != 0) {
                             b = &b[nz..];
@@ -14864,7 +14740,6 @@ pub mod num
                     let (x, y) = if b.len() < c.len() { (b, c) } else { (c, b) };
                     
                     if x.len() <= 32 {
-                        // Long multiplication:
                         for (i, xi) in x.iter().enumerate() {
                             mac_digit(&mut acc[i..], y, *xi);
                         }
@@ -14984,8 +14859,8 @@ pub mod num
                     }
                 }
 
-                fn sub_sign(mut a: &[BigDigit], mut b: &[BigDigit]) -> (Sign, BigUint) {
-                    // Normalize:
+                fn sub_sign(mut a: &[BigDigit], mut b: &[BigDigit]) -> (Sign, BigUint) 
+                {
                     if let Some(&0) = a.last() {
                         a = &a[..a.iter().rposition(|&x| x != 0).map_or(0, |i| i + 1)];
                     }
@@ -15016,12 +14891,9 @@ pub mod num
                             #[inline]
                             fn mul(self, other: $Other) -> BigUint {
                                 match (&*self.data, &*other.data) {
-                                    // multiply by zero
                                     (&[], _) | (_, &[]) => BigUint::ZERO,
-                                    // multiply by a scalar
                                     (_, &[digit]) => self * digit,
                                     (&[digit], _) => other * digit,
-                                    // full multiplication
                                     (x, y) => mul3(x, y),
                                 }
                             }
@@ -15041,13 +14913,10 @@ pub mod num
                             #[inline]
                             fn mul_assign(&mut self, other: $Other) {
                                 match (&*self.data, &*other.data) {
-                                    // multiply by zero
                                     (&[], _) => {},
                                     (_, &[]) => self.set_zero(),
-                                    // multiply by a scalar
                                     (_, &[digit]) => *self *= digit,
                                     (&[digit], _) => *self = other * digit,
-                                    // full multiplication
                                     (x, y) => *self = mul3(x, y),
                                 }
                             }
@@ -15168,8 +15037,6 @@ pub mod num
                 
                 
                 #[inline] fn sbb(borrow: u8, a: u64, b: u64, out: &mut u64) -> u8 {
-                    // Safety: There are absolutely no safety concerns with calling `_subborrow_u64`.
-                    // It's just unsafe for API consistency with other intrinsics.
                     unsafe { ::arch::_subborrow_u64(borrow, a, b, out) }
                 }
                 
@@ -15192,15 +15059,13 @@ pub mod num
                             }
                         }
                     }
-
-                    // note: we're _required_ to fail on underflow
+                    
                     assert!(
                         borrow == 0 && b_hi.iter().all(|x| *x == 0),
                         "Cannot subtract b from a because b is larger than a."
                     );
                 }
-
-                // Only for the Sub impl. `a` and `b` must have same length.
+                
                 #[inline] fn __sub2rev(a: &[BigDigit], b: &mut [BigDigit]) -> u8 {
                     debug_assert!(b.len() == a.len());
 
@@ -15223,8 +15088,7 @@ pub mod num
                     let borrow = __sub2rev(a_lo, b_lo);
 
                     assert!(a_hi.is_empty());
-
-                    // note: we're _required_ to fail on underflow
+                    
                     assert!(
                         borrow == 0 && b_hi.iter().all(|x| *x == 0),
                         "Cannot subtract b from a because b is larger than a."
@@ -15443,14 +15307,12 @@ pub mod num
 
                 forward_val_val_binop!(impl BitAnd for BigUint, bitand);
                 forward_ref_val_binop!(impl BitAnd for BigUint, bitand);
-
-                // do not use forward_ref_ref_binop_commutative! for bitand so that we can
-                // clone the smaller value rather than the larger, avoiding over-allocation
-                impl BitAnd<&BigUint> for &BigUint {
+                
+                impl BitAnd<&BigUint> for &BigUint 
+                {
                     type Output = BigUint;
 
                     #[inline] fn bitand(self, other: &BigUint) -> BigUint {
-                        // forward to val-ref, choosing the smaller to clone
                         if self.data.len() <= other.data.len() {
                             self.clone() & other
                         } else {
@@ -15461,7 +15323,8 @@ pub mod num
 
                 forward_val_assign!(impl BitAndAssign for BigUint, bitand_assign);
 
-                impl BitAnd<&BigUint> for BigUint {
+                impl BitAnd<&BigUint> for BigUint 
+                {
                     type Output = BigUint;
 
                     #[inline] fn bitand(mut self, other: &BigUint) -> BigUint {
@@ -15469,7 +15332,9 @@ pub mod num
                         self
                     }
                 }
-                impl BitAndAssign<&BigUint> for BigUint {
+
+                impl BitAndAssign<&BigUint> for BigUint 
+                {
                     #[inline] fn bitand_assign(&mut self, other: &BigUint) {
                         for (ai, &bi) in self.data.iter_mut().zip(other.data.iter()) {
                             *ai &= bi;
@@ -15482,7 +15347,8 @@ pub mod num
                 forward_all_binop_to_val_ref_commutative!(impl BitOr for BigUint, bitor);
                 forward_val_assign!(impl BitOrAssign for BigUint, bitor_assign);
 
-                impl BitOr<&BigUint> for BigUint {
+                impl BitOr<&BigUint> for BigUint 
+                {
                     type Output = BigUint;
 
                     fn bitor(mut self, other: &BigUint) -> BigUint {
@@ -15490,7 +15356,8 @@ pub mod num
                         self
                     }
                 }
-                impl BitOrAssign<&BigUint> for BigUint {
+                impl BitOrAssign<&BigUint> for BigUint 
+                {
                     #[inline] fn bitor_assign(&mut self, other: &BigUint) {
                         for (ai, &bi) in self.data.iter_mut().zip(other.data.iter()) {
                             *ai |= bi;
@@ -15505,7 +15372,8 @@ pub mod num
                 forward_all_binop_to_val_ref_commutative!(impl BitXor for BigUint, bitxor);
                 forward_val_assign!(impl BitXorAssign for BigUint, bitxor_assign);
 
-                impl BitXor<&BigUint> for BigUint {
+                impl BitXor<&BigUint> for BigUint 
+                {
                     type Output = BigUint;
 
                     fn bitxor(mut self, other: &BigUint) -> BigUint {
@@ -15513,7 +15381,8 @@ pub mod num
                         self
                     }
                 }
-                impl BitXorAssign<&BigUint> for BigUint {
+                impl BitXorAssign<&BigUint> for BigUint 
+                {
                     #[inline] fn bitxor_assign(&mut self, other: &BigUint) {
                         for (ai, &bi) in self.data.iter_mut().zip(other.data.iter()) {
                             *ai ^= bi;
@@ -15576,9 +15445,7 @@ pub mod num
                         BigUint::from_str_radix(s, 10)
                     }
                 }
-
-                // Convert from a power of two radix (bits == ilog2(radix)) where bits evenly divides
-                // BigDigit::BITS
+                /// Convert from a power of two radix where bits evenly divides BigDigit::BITS
                 pub fn from_bitwise_digits_le(v: &[u8], bits: u8) -> BigUint 
                 {
                     debug_assert!(!v.is_empty() && bits <= 8 && big_digit::BITS % bits == 0);
@@ -15588,7 +15455,8 @@ pub mod num
 
                     let data = v
                         .chunks(digits_per_big_digit.into())
-                        .map(|chunk| {
+                        .map(|chunk| 
+                    {
                             chunk
                                 .iter()
                                 .rev()
@@ -15611,10 +15479,8 @@ pub mod num
                     let mut data = Vec::with_capacity(big_digits);
 
                     let mut d = 0;
-                    let mut dbits = 0; // number of bits we currently have in d
-
-                    // walk v accumululating bits in d; whenever we accumulate big_digit::BITS in d, spit out a
-                    // big_digit:
+                    let mut dbits = 0;
+                    
                     for &c in v {
                         d |= BigDigit::from(c) << dbits;
                         dbits += bits;
@@ -15622,8 +15488,6 @@ pub mod num
                         if dbits >= big_digit::BITS {
                             data.push(d);
                             dbits -= big_digit::BITS;
-                            // if dbits was > big_digit::BITS, we dropped some of the bits in c (they couldn't fit
-                            // in d) - grab the bits we lost here:
                             d = BigDigit::from(c) >> (bits - dbits);
                         }
                     }
@@ -15635,14 +15499,12 @@ pub mod num
 
                     biguint_from_vec(data)
                 }
-
-                // Read little-endian radix digits
+                
                 fn from_radix_digits_be(v: &[u8], radix: u32) -> BigUint 
                 {
                     debug_assert!(!v.is_empty() && !radix.is_power_of_two());
                     debug_assert!(v.iter().all(|&c| u32::from(c) < radix));
-
-                    // Estimate how big the result will be, so we can pre-allocate it.
+                    
                     let big_digits = {
                         let radix_log2 = f64::from(radix).log2();
                         let bits = radix_log2 * v.len() as f64;
@@ -15700,7 +15562,6 @@ pub mod num
                     }
 
                     let res = if radix.is_power_of_two() {
-                        // Powers of two can use bitwise masks and shifting instead of multiplication
                         let bits = ilog2(radix);
                         let mut v = Vec::from(buf);
                         v.reverse();
@@ -15732,7 +15593,6 @@ pub mod num
                     }
 
                     let res = if radix.is_power_of_two() {
-                        // Powers of two can use bitwise masks and shifting instead of multiplication
                         let bits = ilog2(radix);
                         if big_digit::BITS % bits == 0 {
                             from_bitwise_digits_le(buf, bits)
@@ -15767,11 +15627,9 @@ pub mod num
                         }
 
                         if s.starts_with('_') {
-                            // Must lead with a real digit!
                             return Err(ParseBigIntError::invalid());
                         }
-
-                        // First normalize all characters to plain digit values
+                        
                         let mut v = Vec::with_capacity(s.len());
                         for b in s.bytes() {
                             let d = match b {
@@ -15789,7 +15647,6 @@ pub mod num
                         }
 
                         let res = if radix.is_power_of_two() {
-                            // Powers of two can use bitwise masks and shifting instead of multiplication
                             let bits = ilog2(radix);
                             v.reverse();
                             if big_digit::BITS % bits == 0 {
@@ -15809,8 +15666,6 @@ pub mod num
                     match v.data.len() {
                         0 => 0,
                         1 => {
-                            // XXX Conversion is useless if already 64-bit.
-                            #[allow(clippy::useless_conversion)]
                             let v0 = u64::from(v.data[0]);
                             v0
                         }
@@ -15827,21 +15682,11 @@ pub mod num
                                     if bits_want != 64 {
                                         ret <<= bits_want;
                                     }
-                                    // XXX Conversion is useless if already 64-bit.
-                                    #[allow(clippy::useless_conversion)]
                                     let d0 = u64::from(*d) >> (digit_bits - bits_want);
                                     ret |= d0;
                                 }
-
-                                // Implement round-to-odd: If any lower bits are 1, set LSB to 1
-                                // so that rounding again to floating point value using
-                                // nearest-ties-to-even is correct.
-                                //
-                                // See: https://en.wikipedia.org/wiki/Rounding#Rounding_to_prepare_for_shorter_precision
-
+                                
                                 if digit_bits - bits_want != 0 {
-                                    // XXX Conversion is useless if already 64-bit.
-                                    #[allow(clippy::useless_conversion)]
                                     let masked = u64::from(*d) << (64 - (digit_bits - bits_want) as u32);
                                     ret |= (masked != 0) as u64;
                                 }
@@ -15874,8 +15719,7 @@ pub mod num
                             if bits >= 64 {
                                 return None;
                             }
-
-                            // XXX Conversion is useless if already 64-bit.
+                            
                             ret += u64::from(*i) << bits;
                             bits += big_digit::BITS;
                         }
@@ -15991,15 +15835,12 @@ pub mod num
 
                     #[inline] fn from_f64(mut n: f64) -> Option<BigUint> 
                     {
-                        // handle NAN, INFINITY, NEG_INFINITY
                         if !n.is_finite() {
                             return None;
                         }
-
-                        // match the rounding of casting from float to int
+                        
                         n = n.trunc();
-
-                        // handle 0.x, -0.x
+                        
                         if n.is_zero() {
                             return Some(Self::ZERO);
                         }
@@ -16027,7 +15868,6 @@ pub mod num
 
                         while n != 0 {
                             ret.data.push(n as BigDigit);
-                            // don't overflow if BITS is 64:
                             n = (n >> 1) >> (big_digit::BITS - 1);
                         }
 
@@ -16133,8 +15973,7 @@ pub mod num
                         }
                     }
                 }
-
-                // Extract bitwise digits that evenly divide BigDigit
+                /// Extract bitwise digits that evenly divide BigDigit
                 pub fn to_bitwise_digits_le(u: &BigUint, bits: u8) -> Vec<u8> 
                 {
                     debug_assert!(!u.is_zero() && bits <= 8 && big_digit::BITS % bits == 0);
@@ -16162,9 +16001,8 @@ pub mod num
 
                     res
                 }
-
-                // Extract bitwise digits that don't evenly divide BigDigit
-                fn to_inexact_bitwise_digits_le(u: &BigUint, bits: u8) -> Vec<u8> 
+                /// Extract bitwise digits that don't evenly divide BigDigit
+                pub fn to_inexact_bitwise_digits_le(u: &BigUint, bits: u8) -> Vec<u8> 
                 {
                     debug_assert!(!u.is_zero() && bits <= 8 && big_digit::BITS % bits != 0);
 
@@ -16184,8 +16022,7 @@ pub mod num
                         while rbits >= bits {
                             res.push((r & mask) as u8);
                             r >>= bits;
-
-                            // r had more bits than it could fit - grab the bits we lost
+                            
                             if rbits > big_digit::BITS {
                                 r = *c >> (big_digit::BITS - (rbits - bits));
                             }
@@ -16204,7 +16041,6 @@ pub mod num
 
                     res
                 }
-
                 /// Extract little-endian radix digits
                 #[inline(always)]
                 pub fn to_radix_digits_le(u: &BigUint, radix: u32) -> Vec<u8> 
@@ -16215,43 +16051,32 @@ pub mod num
                         let radix_log2 = f64::from(radix).log2();
                         ((u.bits() as f64) / radix_log2).ceil()
                     };
-
-                    // Estimate how big the result will be, so we can pre-allocate it.
+                    
                     let mut res = Vec::with_capacity(radix_digits.to_usize().unwrap_or(0));
 
                     let mut digits = u.clone();
-
-                    // X86 DIV can quickly divide by a full digit, otherwise we choose a divisor
-                    // that's suitable for `div_half` to avoid slow `DoubleBigDigit` division.
+                    
                     let (base, power) = if FAST_DIV_WIDE {
                         get_radix_base(radix)
                     } else {
                         get_half_radix_base(radix)
                     };
                     let radix = radix as BigDigit;
-
-                    // For very large numbers, the O(n²) loop of repeated `div_rem_digit` dominates the
-                    // performance. We can mitigate this by dividing into chunks of a larger base first.
-                    // The threshold for this was chosen by anecdotal performance measurements to
-                    // approximate where this starts to make a noticeable difference.
+                    
                     if digits.data.len() >= 64 {
                         let mut big_base = BigUint::from(base);
                         let mut big_power = 1usize;
-
-                        // Choose a target base length near √n.
                         let target_len = digits.data.len().sqrt();
                         while big_base.data.len() < target_len {
                             big_base = &big_base * &big_base;
                             big_power *= 2;
                         }
-
-                        // This outer loop will run approximately √n times.
-                        while digits > big_base {
-                            // This is still the dominating factor, with n digits divided by √n digits.
+                        
+                        while digits > big_base 
+                        {
                             let (q, mut big_r) = digits.div_rem(&big_base);
                             digits = q;
-
-                            // This inner loop now has O(√n²)=O(n) behavior altogether.
+                            
                             for _ in 0..big_power {
                                 let (q, mut r) = div_rem_digit(big_r, base);
                                 big_r = q;
@@ -16308,8 +16133,7 @@ pub mod num
                     }
 
                     let mut res = to_radix_le(u, radix);
-
-                    // Now convert everything to ASCII digits.
+                    
                     for r in &mut res {
                         debug_assert!(u32::from(*r) < radix);
                         if *r < 10 {
@@ -16393,7 +16217,8 @@ pub mod num
                     pub fn new(data: &'a [u64]) -> Self {
                         let last_hi_is_zero = data
                             .last()
-                            .map(|&last| {
+                            .map(|&last| 
+                    {
                                 let last_hi = (last >> 32) as u32;
                                 last_hi == 0
                             })
@@ -16436,7 +16261,8 @@ pub mod num
                     }
 
                     #[inline] fn last(self) -> Option<u32> {
-                        self.data.last().map(|&last| {
+                        self.data.last().map(|&last| 
+                    {
                             if self.last_hi_is_zero {
                                 last as u32
                             } else {
@@ -16567,8 +16393,7 @@ pub mod num
                 {
                     n0inv: BigDigit,
                 }
-
-                // k0 = -m**-1 mod 2**BITS.
+                
                 fn inv_mod_alt(b: BigDigit) -> BigDigit 
                 {
                     assert_ne!(b & 1, 0);
@@ -16596,10 +16421,6 @@ pub mod num
                 /// Computes z mod m = x * y * 2 ** (-n*_W) mod m, assuming k = -1/m mod 2**_W
                 fn montgomery(x: &BigUint, y: &BigUint, m: &BigUint, k: BigDigit, n: usize) -> BigUint 
                 {
-                    // This code assumes x, y, m are all the same length, n.
-                    // (required by addMulVVW and the for loop).
-                    // It also assumes that x, y are already reduced mod m,
-                    // or else the result will not be properly reduced.
                     assert!(
                         x.data.len() == n && y.data.len() == n && m.data.len() == n,
                         "{:?} {:?} {:?} {}",
@@ -16661,7 +16482,6 @@ pub mod num
                     {
                         let zi = xi.wrapping_sub(*yi).wrapping_sub(c);
                         z[i] = zi;
-                        // see "Hacker's Delight", section 2-12 (overflow detection)
                         c = ((yi & !xi) | ((yi | !xi) & zi)) >> (big_digit::BITS - 1)
                     }
 
@@ -16691,29 +16511,24 @@ pub mod num
                     let num_words = m.data.len();
 
                     let mut x = x.clone();
-
-                    // We want the lengths of x and m to be equal.
-                    // It is OK if x >= m as long as len(x) == len(m).
+                    
                     if x.data.len() > num_words {
                         x %= m;
-                        // Note: now len(x) <= numWords, not guaranteed ==.
                     }
                     if x.data.len() < num_words {
                         x.data.resize(num_words, 0);
                     }
-
-                    // rr = 2**(2*_W*len(m)) mod m
+                    
                     let mut rr = BigUint::one();
                     rr = (rr.shl(2 * num_words as u64 * u64::from(big_digit::BITS))) % m;
                     if rr.data.len() < num_words {
                         rr.data.resize(num_words, 0);
                     }
-                    // one = 1, with equal length to that of m
+                    
                     let mut one = BigUint::one();
                     one.data.resize(num_words, 0);
 
                     let n = 4;
-                    // powers[i] contains x^i
                     let mut powers = Vec::with_capacity(1 << n);
                     powers.push(montgomery(&one, &rr, m, mr.n0inv, num_words));
                     powers.push(montgomery(&x, &rr, m, mr.n0inv, num_words));
@@ -16721,14 +16536,12 @@ pub mod num
                         let r = montgomery(&powers[i - 1], &powers[1], m, mr.n0inv, num_words);
                         powers.push(r);
                     }
-
-                    // initialize z = 1 (Montgomery 1)
+                    
                     let mut z = powers[0].clone();
                     z.data.resize(num_words, 0);
                     let mut zz = BigUint::ZERO;
                     zz.data.resize(num_words, 0);
-
-                    // same windowed exponent, but with Montgomery multiplications
+                    
                     for i in (0..y.data.len()).rev() 
                     {
                         let mut yi = y.data[i];
@@ -16802,8 +16615,6 @@ pub mod num
                         } else if let Some(exp) = exp.to_u128() {
                             self.pow(exp)
                         } else {
-                            // At this point, `self >= 2` and `exp >= 2¹²⁸`. The smallest possible result given
-                            // `2.pow(2¹²⁸)` would require far more memory than 64-bit targets can address!
                             panic!("memory overflow")
                         }
                     }
@@ -16917,10 +16728,8 @@ pub mod num
                     );
 
                     if modulus.is_odd() {
-                        // For an odd modulus, we can use Montgomery multiplication in base 2^32.
                         monty_modpow(x, exponent, modulus)
                     } else {
-                        // Otherwise do basically the same as `num::pow`, but with a modulus.
                         plain_modpow(x, &exponent.data, modulus)
                     }
                 }
@@ -16961,7 +16770,8 @@ pub mod num
                     b += 1;
 
                     {
-                        let mut unit = |exp_is_odd| {
+                        let mut unit = |exp_is_odd| 
+                    {
                             base = &base * &base % modulus;
                             if exp_is_odd {
                                 acc *= &base;
@@ -16970,13 +16780,11 @@ pub mod num
                         };
 
                         if let Some(&last) = exp_iter.next_back() {
-                            // consume exp_data[i]
                             for _ in b..big_digit::BITS {
                                 unit(r.is_odd());
                                 r >>= 1;
                             }
-
-                            // consume all other digits before the last
+                            
                             for &r in exp_iter {
                                 let mut r = r;
                                 for _ in 0..big_digit::BITS {
@@ -17297,8 +17105,7 @@ pub mod num
             }
 
             impl ConstZero for BigUint {
-                // forward to the inherent const
-                const ZERO: Self = Self::ZERO; // BigUint { data: Vec::new() };
+                const ZERO: Self = Self::ZERO;
             }
 
             impl One for BigUint {
@@ -17350,8 +17157,7 @@ pub mod num
                     #[inline] fn twos(x: &BigUint) -> u64 {
                         x.trailing_zeros().unwrap_or(0)
                     }
-
-                    // Stein's algorithm
+                    
                     if self.is_zero() {
                         return other.clone();
                     }
@@ -17360,12 +17166,8 @@ pub mod num
                     }
                     let mut m = self.clone();
                     let mut n = other.clone();
-
-                    // find common factors of 2
                     let shift = cmp::min(twos(&n), twos(&m));
-
-                    // divide m and n by 2 until odd
-                    // m inside loop
+                    
                     n >>= twos(&n);
 
                     while !m.is_zero() {
@@ -17410,7 +17212,6 @@ pub mod num
                 }
                 /// Returns `true` if the number is divisible by `2`.
                 #[inline] fn is_even(&self) -> bool {
-                    // Considering only the last digit.
                     match self.data.first() {
                         Some(x) => x.is_even(),
                         None => true,
@@ -17449,12 +17250,7 @@ pub mod num
             {
                 let mut xn = f(&x);
 
-                // If the value increased, then the initial guess must have been low.
-                // Repeat until we reverse course.
                 while x < xn {
-                    // Sometimes an increase will go way too far, especially with large
-                    // powers, and then take a long time to walk back.  We know an upper
-                    // bound based on bit size, so saturate on that.
                     x = if xn.bits() > max_bits {
                         BigUint::one() << max_bits
                     } else {
@@ -17462,8 +17258,7 @@ pub mod num
                     };
                     xn = f(&x);
                 }
-
-                // Now keep repeating while the estimate is decreasing.
+                
                 while x > xn {
                     x = xn;
                     xn = f(&x);
@@ -17471,13 +17266,10 @@ pub mod num
                 x
             }
 
-            impl Roots for BigUint {
-                // nth_root, sqrt and cbrt use Newton's method to compute
-                // principal root of a given degree for a given integer.
-
-                // Reference:
-                // Brent & Zimmermann, Modern Computer Arithmetic, v0.5.9, Algorithm 1.14
-                fn nth_root(&self, n: u32) -> Self {
+            impl Roots for BigUint 
+            {
+                fn nth_root(&self, n: u32) -> Self 
+                {
                     assert!(n > 0, "root degree n must be at least 1");
 
                     if self.is_zero() || self.is_one() {
@@ -17485,21 +17277,18 @@ pub mod num
                     }
 
                     match n {
-                        // Optimize for small n
                         1 => return self.clone(),
                         2 => return self.sqrt(),
                         3 => return self.cbrt(),
                         _ => (),
                     }
-
-                    // The root of non-zero values less than 2ⁿ can only be 1.
+                    
                     let bits = self.bits();
                     let n64 = u64::from(n);
                     if bits <= n64 {
                         return BigUint::one();
                     }
-
-                    // If we fit in `u64`, compute the root that way.
+                    
                     if let Some(x) = self.to_u64() {
                         return x.nth_root(n).into();
                     }
@@ -17509,13 +17298,10 @@ pub mod num
                     let guess = match self.to_f64() {
                         Some(f) if f.is_finite() => {
                             use ::num::traits::FromPrimitive;
-
-                            // We fit in `f64` (lossy), so get a better initial guess from that.
+                            
                             BigUint::from_f64((f.ln() / f64::from(n)).exp()).unwrap()
                         }
                         _ => {
-                            // Try to guess by scaling down such that it does fit in `f64`.
-                            // With some (x * 2ⁿᵏ), its nth root ≈ (ⁿ√x * 2ᵏ)
                             let extra_bits = bits - (f64::MAX_EXP as u64 - 1);
                             let root_scale = Integer::div_ceil(&extra_bits, &n64);
                             let scale = root_scale * n64;
@@ -17528,21 +17314,20 @@ pub mod num
                     };
 
                     let n_min_1 = n - 1;
-                    fixpoint(guess, max_bits, move |s| {
+                    fixpoint(guess, max_bits, move |s| 
+                    {
                         let q = self / s.pow(n_min_1);
                         let t = n_min_1 * s + q;
                         t / n
                     })
                 }
-
-                // Reference:
-                // Brent & Zimmermann, Modern Computer Arithmetic, v0.5.9, Algorithm 1.13
-                fn sqrt(&self) -> Self {
+                
+                fn sqrt(&self) -> Self 
+                {
                     if self.is_zero() || self.is_one() {
                         return self.clone();
                     }
-
-                    // If we fit in `u64`, compute the root that way.
+                    
                     if let Some(x) = self.to_u64() {
                         return x.sqrt().into();
                     }
@@ -17552,13 +17337,9 @@ pub mod num
                     let guess = match self.to_f64() {
                         Some(f) if f.is_finite() => {
                             use ::num::traits::FromPrimitive;
-
-                            // We fit in `f64` (lossy), so get a better initial guess from that.
                             BigUint::from_f64(f.sqrt()).unwrap()
                         }
                         _ => {
-                            // Try to guess by scaling down such that it does fit in `f64`.
-                            // With some (x * 2²ᵏ), its sqrt ≈ (√x * 2ᵏ)
                             let extra_bits = bits - (f64::MAX_EXP as u64 - 1);
                             let root_scale = (extra_bits + 1) / 2;
                             let scale = root_scale * 2;
@@ -17566,19 +17347,20 @@ pub mod num
                         }
                     };
 
-                    fixpoint(guess, max_bits, move |s| {
+                    fixpoint(guess, max_bits, move |s| 
+                    {
                         let q = self / s;
                         let t = s + q;
                         t >> 1
                     })
                 }
 
-                fn cbrt(&self) -> Self {
+                fn cbrt(&self) -> Self 
+                {
                     if self.is_zero() || self.is_one() {
                         return self.clone();
                     }
-
-                    // If we fit in `u64`, compute the root that way.
+                    
                     if let Some(x) = self.to_u64() {
                         return x.cbrt().into();
                     }
@@ -17589,13 +17371,10 @@ pub mod num
                     let guess = match self.to_f64() {
                         Some(f) if f.is_finite() => {
                             use ::num::traits::FromPrimitive;
-
-                            // We fit in `f64` (lossy), so get a better initial guess from that.
+                            
                             BigUint::from_f64(f.cbrt()).unwrap()
                         }
                         _ => {
-                            // Try to guess by scaling down such that it does fit in `f64`.
-                            // With some (x * 2³ᵏ), its cbrt ≈ (∛x * 2ᵏ)
                             let extra_bits = bits - (f64::MAX_EXP as u64 - 1);
                             let root_scale = (extra_bits + 2) / 3;
                             let scale = root_scale * 3;
@@ -17603,7 +17382,8 @@ pub mod num
                         }
                     };
                     
-                    fixpoint(guess, max_bits, move |s| {
+                    fixpoint(guess, max_bits, move |s| 
+                    {
                         let q = self / (s * s);
                         let t = (s << 1) + q;
                         t / 3u32
@@ -17674,7 +17454,8 @@ pub mod num
                     }
                 }
                 /// Creates and initializes a [`BigUint`]
-                #[inline] pub fn parse_bytes(buf: &[u8], radix: u32) -> Option<BigUint> {
+                #[inline] pub fn parse_bytes(buf: &[u8], radix: u32) -> Option<BigUint>
+                {
                     let s = str::from_utf8(buf).ok()?;
                     BigUint::from_str_radix(s, radix).ok()
                 }
@@ -17687,7 +17468,8 @@ pub mod num
                     convert::from_radix_le(buf, radix)
                 }
                 /// Returns the byte representation of the [`BigUint`] in big-endian byte order.
-                #[inline] pub fn to_bytes_be(&self) -> Vec<u8> {
+                #[inline] pub fn to_bytes_be(&self) -> Vec<u8>
+                {
                     let mut v = self.to_bytes_le();
                     v.reverse();
                     v
@@ -17728,7 +17510,8 @@ pub mod num
                     unsafe { String::from_utf8_unchecked(v) }
                 }
                 /// Returns the integer in the requested base in big-endian digit order.
-                #[inline] pub fn to_radix_be(&self, radix: u32) -> Vec<u8> {
+                #[inline] pub fn to_radix_be(&self, radix: u32) -> Vec<u8>
+                {
                     let mut v = convert::to_radix_le(self, radix);
                     v.reverse();
                     v
@@ -17771,9 +17554,6 @@ pub mod num
                 }
                 /// Returns the modular multiplicative inverse if it exists, otherwise `None`.
                 pub fn modinv(&self, modulus: &Self) -> Option<Self> {
-                    // Based on the inverse pseudocode listed here:
-                    // https://en.wikipedia.org/wiki/Extended_Euclidean_algorithm#Modular_integers
-                    // TODO: consider Binary or Lehmer's GCD algorithms for optimization.
 
                     assert!(
                         !modulus.is_zero(),
@@ -17783,12 +17563,11 @@ pub mod num
                         return Some(Self::zero());
                     }
 
-                    let mut r0; // = modulus.clone();
+                    let mut r0;
                     let mut r1 = self % modulus;
-                    let mut t0; // = Self::zero();
-                    let mut t1; // = Self::one();
-
-                    // Lift and simplify the first iteration to avoid some initial allocations.
+                    let mut t0;
+                    let mut t1;
+                    
                     if r1.is_zero() {
                         return None;
                     } else if r1.is_one() {
@@ -17809,8 +17588,7 @@ pub mod num
                         let (q, r2) = r0.div_rem(&r1);
                         r0 = r1;
                         r1 = r2;
-
-                        // let t2 = (t0 - q * t1) % modulus;
+                        
                         let qt1 = q * &t1 % modulus;
                         let t2 = if t0 < qt1 {
                             t0 + (modulus - qt1)
@@ -17841,7 +17619,8 @@ pub mod num
                 }
                 /// Returns the number of least-significant bits that are zero,
                 /// or `None` if the entire number is zero.
-                pub fn trailing_zeros(&self) -> Option<u64> {
+                pub fn trailing_zeros(&self) -> Option<u64>
+                {
                     let i = self.data.iter().position(|&digit| digit != 0)?;
                     let zeros: u64 = self.data[i].trailing_zeros().into();
                     Some(i as u64 * u64::from(big_digit::BITS) + zeros)
@@ -17937,7 +17716,6 @@ pub mod num
             }
             /// Convert a `u32` chunk (len is either 1 or 2) to a single `u64` digit
             #[inline] fn u32_chunk_to_u64(chunk: &[u32]) -> u64 {
-                // raw could have odd length
                 let mut digit = chunk[0] as u64;
                 if let Some(&hi) = chunk.get(1) {
                     digit |= (hi as u64) << 32;
@@ -18125,9 +17903,8 @@ pub mod num
                         }
                     }
                 };
-            } // impl_to_primitive
-
-            // Returns None if Complex part is non-zero
+            }
+            
             impl<T: ToPrimitive + Num> ToPrimitive for Complex<T> {
                 impl_to_primitive!(usize, to_usize);
                 impl_to_primitive!(isize, to_isize);
@@ -18154,7 +17931,7 @@ pub mod num
                         })
                     }
                 };
-            } // impl_from_primitive
+            }
 
             impl<T: FromPrimitive + Num> FromPrimitive for Complex<T> {
                 impl_from_primitive!(usize, from_usize);
@@ -18551,47 +18328,53 @@ pub mod num
             {
                 type Real = T;
 
-                fn re(self) -> Self::Real {
+                fn re(self) -> Self::Real 
+                {
                     self.re
                 }
 
-                fn im(self) -> Self::Real {
+                fn im(self) -> Self::Real 
+                {
                     self.im
                 }
 
-                fn abs(self) -> Self::Real {
+                fn abs(self) -> Self::Real 
+                {
                     self.norm()
                 }
 
-                fn recip(self) -> Self {
+                fn recip(self) -> Self 
+                {
                     self.finv()
                 }
-
-                // `Complex::l1_norm` uses `Signed::abs` to let it work
-                // for integers too, but we can just use `Float::abs`.
-                fn l1_norm(&self) -> Self::Real {
+                
+                fn l1_norm(&self) -> Self::Real 
+                {
                     self.re.abs() + self.im.abs()
                 }
-
-                // `Complex::is_*` methods use `T: FloatCore`, but we
-                // have `T: Float` that can do them as well.
-                fn is_nan(self) -> bool {
+                
+                fn is_nan(self) -> bool 
+                {
                     self.re.is_nan() || self.im.is_nan()
                 }
 
-                fn is_infinite(self) -> bool {
+                fn is_infinite(self) -> bool 
+                {
                     !self.is_nan() && (self.re.is_infinite() || self.im.is_infinite())
                 }
 
-                fn is_finite(self) -> bool {
+                fn is_finite(self) -> bool 
+                {
                     self.re.is_finite() && self.im.is_finite()
                 }
 
-                fn is_normal(self) -> bool {
+                fn is_normal(self) -> bool 
+                {
                     self.re.is_normal() && self.im.is_normal()
                 }
 
-                forward! {
+                forward! 
+                {
                     Complex::arg(self) -> Self::Real;
                     Complex::powc(self, exp: Complex<Self::Real>) -> Complex<Self::Real>;
                     Complex::exp2(self) -> Self;
@@ -18618,7 +18401,8 @@ pub mod num
                     Complex::atanh(self) -> Self;
                 }
 
-                forward_ref! {
+                forward_ref! 
+                {
                     Self::powi(&self, n: i32) -> Self;
                     Self::conj(&self) -> Self;
                 }
@@ -18797,10 +18581,7 @@ pub mod num
             /// Computes `e^(self)`, where `e` is the base of the natural logarithm.
             #[inline] pub fn exp(self) -> Self 
             {
-                // formula: e^(a + bi) = e^a (cos(b) + i*sin(b)) = from_polar(e^a, b)
-
                 let Complex { re, mut im } = self;
-                // Treat the corner cases +∞, -∞, and NaN
                 if re.is_infinite() {
                     if re < T::zero() {
                         if !im.is_finite() {
@@ -18821,7 +18602,6 @@ pub mod num
             /// Computes the principal value of natural logarithm of `self`.
             #[inline] pub fn ln(self) -> Self 
             {
-                // formula: ln(z) = ln|z| + i*arg(z)
                 let (r, theta) = self.to_polar();
                 Self::new(r.ln(), theta)
             }
@@ -18841,8 +18621,6 @@ pub mod num
                         }
                     }
                 } else if self.re.is_zero() {
-                    // √(r e^(iπ/2)) = √r e^(iπ/4) = √(r/2) + i√(r/2)
-                    // √(r e^(-iπ/2)) = √r e^(-iπ/4) = √(r/2) - i√(r/2)
                     let one = T::one();
                     let two = one + one;
                     let x = (self.im.abs() / two).sqrt();
@@ -18852,7 +18630,6 @@ pub mod num
                         Self::new(x, -x)
                     }
                 } else {
-                    // formula: sqrt(r e^(it)) = sqrt(r) e^(it/2)
                     let one = T::one();
                     let two = one + one;
                     let (r, theta) = self.to_polar();
@@ -18878,8 +18655,6 @@ pub mod num
                         }
                     }
                 } else if self.re.is_zero() {
-                    // ∛(r e^(iπ/2)) = ∛r e^(iπ/6) = ∛r√3/2 + i∛r/2
-                    // ∛(r e^(-iπ/2)) = ∛r e^(-iπ/6) = ∛r√3/2 - i∛r/2
                     let one = T::one();
                     let two = one + one;
                     let three = two + one;
@@ -18891,7 +18666,6 @@ pub mod num
                         Self::new(re, -im)
                     }
                 } else {
-                    // formula: cbrt(r e^(it)) = cbrt(r) e^(it/3)
                     let one = T::one();
                     let three = one + one + one;
                     let (r, theta) = self.to_polar();
@@ -18904,17 +18678,13 @@ pub mod num
                 if exp.is_zero() {
                     return Self::one();
                 }
-                // formula: x^y = (ρ e^(i θ))^y = ρ^y e^(i θ y)
-                // = from_polar(ρ^y, θ y)
+                
                 let (r, theta) = self.to_polar();
                 Self::from_polar(r.powf(exp), theta * exp)
             }
             /// Returns the logarithm of `self` with respect to an arbitrary base.
             #[inline] pub fn log(self, base: T) -> Self 
             {
-                // formula: log_y(x) = log_y(ρ e^(i θ))
-                // = log_y(ρ) + log_y(e^(i θ)) = log_y(ρ) + ln(e^(i θ)) / ln(y)
-                // = log_y(ρ) + i θ / ln(y)
                 let (r, theta) = self.to_polar();
                 Self::new(r.log(base), theta / base.ln())
             }
@@ -18924,20 +18694,17 @@ pub mod num
                 if exp.is_zero() {
                     return Self::one();
                 }
-                // formula: x^y = exp(y * ln(x))
+                
                 (exp * self.ln()).exp()
             }
             /// Raises a floating point number to the complex power `self`.
             #[inline] pub fn expf(self, base: T) -> Self 
             {
-                // formula: x^(a+bi) = x^a x^bi = x^a e^(b ln(x) i)
-                // = from_polar(x^a, b ln(x))
                 Self::from_polar(base.powf(self.re), self.im * base.ln())
             }
             /// Computes the sine of `self`.
             #[inline] pub fn sin(self) -> Self 
             {
-                // formula: sin(a + bi) = sin(a)cosh(b) + i*cos(a)sinh(b)
                 Self::new(
                     self.re.sin() * self.im.cosh(),
                     self.re.cos() * self.im.sinh(),
@@ -18946,7 +18713,6 @@ pub mod num
             /// Computes the cosine of `self`.
             #[inline] pub fn cos(self) -> Self 
             {
-                // formula: cos(a + bi) = cos(a)cosh(b) - i*sin(a)sinh(b)
                 Self::new(
                     self.re.cos() * self.im.cosh(),
                     -self.re.sin() * self.im.sinh(),
@@ -18955,28 +18721,25 @@ pub mod num
             /// Computes the tangent of `self`.
             #[inline] pub fn tan(self) -> Self 
             {
-                // formula: tan(a + bi) = (sin(2a) + i*sinh(2b))/(cos(2a) + cosh(2b))
                 let (two_re, two_im) = (self.re + self.re, self.im + self.im);
                 Self::new(two_re.sin(), two_im.sinh()).unscale(two_re.cos() + two_im.cosh())
             }
             /// Computes the principal value of the inverse sine of `self`.
             #[inline] pub fn asin(self) -> Self 
             {
-                // formula: arcsin(z) = -i ln(sqrt(1-z^2) + iz)
                 let i = Self::i();
                 -i * ((Self::one() - self * self).sqrt() + i * self).ln()
             }
             /// Computes the principal value of the inverse cosine of `self`.
             #[inline] pub fn acos(self) -> Self 
             {
-                // formula: arccos(z) = -i ln(i sqrt(1-z^2) + z)
                 let i = Self::i();
                 -i * (i * (Self::one() - self * self).sqrt() + self).ln()
             }
             /// Computes the principal value of the inverse tangent of `self`.
             #[inline] pub fn atan(self) -> Self 
             {
-                // formula: arctan(z) = (ln(1+iz) - ln(1-iz))/(2i)
+               
                 let i = Self::i();
                 let one = Self::one();
                 let two = one + one;
@@ -18990,7 +18753,7 @@ pub mod num
             /// Computes the hyperbolic sine of `self`.
             #[inline] pub fn sinh(self) -> Self 
             {
-                // formula: sinh(a + bi) = sinh(a)cos(b) + i*cosh(a)sin(b)
+               
                 Self::new(
                     self.re.sinh() * self.im.cos(),
                     self.re.cosh() * self.im.sin(),
@@ -18999,7 +18762,7 @@ pub mod num
             /// Computes the hyperbolic cosine of `self`.
             #[inline] pub fn cosh(self) -> Self 
             {
-                // formula: cosh(a + bi) = cosh(a)cos(b) + i*sinh(a)sin(b)
+               
                 Self::new(
                     self.re.cosh() * self.im.cos(),
                     self.re.sinh() * self.im.sin(),
@@ -19008,21 +18771,21 @@ pub mod num
             /// Computes the hyperbolic tangent of `self`.
             #[inline] pub fn tanh(self) -> Self 
             {
-                // formula: tanh(a + bi) = (sinh(2a) + i*sin(2b))/(cosh(2a) + cos(2b))
+               
                 let (two_re, two_im) = (self.re + self.re, self.im + self.im);
                 Self::new(two_re.sinh(), two_im.sin()).unscale(two_re.cosh() + two_im.cos())
             }
             /// Computes the principal value of inverse hyperbolic sine of `self`.
             #[inline] pub fn asinh(self) -> Self 
             {
-                // formula: arcsinh(z) = ln(z + sqrt(1+z^2))
+               
                 let one = Self::one();
                 (self + (one + self * self).sqrt()).ln()
             }
             /// Computes the principal value of inverse hyperbolic cosine of `self`.
             #[inline] pub fn acosh(self) -> Self 
             {
-                // formula: arccosh(z) = 2 ln(sqrt((z+1)/2) + sqrt((z-1)/2))
+               
                 let one = Self::one();
                 let two = one + one;
                 two * (((self + one) / two).sqrt() + ((self - one) / two).sqrt()).ln()
@@ -19030,7 +18793,7 @@ pub mod num
             /// Computes the principal value of inverse hyperbolic tangent of `self`.
             #[inline] pub fn atanh(self) -> Self 
             {
-                // formula: arctanh(z) = (ln(1+z) - ln(1-z))/2
+               
                 let one = Self::one();
                 let two = one + one;
                 if self == one {
@@ -19056,17 +18819,18 @@ pub mod num
         impl<T: Float + FloatConst> Complex<T> 
         {
             /// Computes `2^(self)`.
-            #[inline] pub fn exp2(self) -> Self {
-                // formula: 2^(a + bi) = 2^a (cos(b*log2) + i*sin(b*log2))
-                // = from_polar(2^a, b*log2)
+            #[inline] pub fn exp2(self) -> Self 
+            {
                 Self::from_polar(self.re.exp2(), self.im * T::LN_2())
             }
             /// Computes the principal value of log base 2 of `self`.
-            #[inline] pub fn log2(self) -> Self {
+            #[inline] pub fn log2(self) -> Self 
+            {
                 Self::ln(self) / T::LN_2()
             }
             /// Computes the principal value of log base 10 of `self`.
-            #[inline] pub fn log10(self) -> Self {
+            #[inline] pub fn log10(self) -> Self 
+            {
                 Self::ln(self) / T::LN_10()
             }
         }
@@ -19195,7 +18959,7 @@ pub mod num
             #[inline] fn mul_add(self, other: Complex<T>, add: Complex<T>) -> Complex<T>
             {
                 let re = self.re.clone().mul_add(other.re.clone(), add.re)
-                    - (self.im.clone() * other.im.clone()); // FIXME: use mulsub when available in rust
+                    - (self.im.clone() * other.im.clone());
                 let im = self.re.mul_add(other.im, self.im.mul_add(other.re, add.im));
                 Complex::new(re, im)
             }
@@ -19271,7 +19035,7 @@ pub mod num
                 }
             }
 
-            // (a + i b) * (c + i d) == (a*c - b*d) + i (a*d + b*c)
+           
             impl<T: Clone + NumAssign> MulAssign for Complex<T> 
             {
                 fn mul_assign(&mut self, other: Self) {
@@ -19285,18 +19049,18 @@ pub mod num
                 }
             }
 
-            // (a + i b) * (c + i d) + (e + i f) == ((a*c + e) - b*d) + i (b*c + (a*d + f))
+           
             impl<T: Clone + NumAssign + MulAddAssign> MulAddAssign for Complex<T> 
             {
                 fn mul_add_assign(&mut self, other: Complex<T>, add: Complex<T>) {
                     let a = self.re.clone();
 
-                    self.re.mul_add_assign(other.re.clone(), add.re); // (a*c + e)
-                    self.re -= self.im.clone() * other.im.clone(); // ((a*c + e) - b*d)
+                    self.re.mul_add_assign(other.re.clone(), add.re);
+                    self.re -= self.im.clone() * other.im.clone();
 
                     let mut adf = a;
-                    adf.mul_add_assign(other.im, add.im); // (a*d + f)
-                    self.im.mul_add_assign(other.re, adf); // (b*c + (a*d + f))
+                    adf.mul_add_assign(other.im, add.im);
+                    self.im.mul_add_assign(other.re, adf);
                 }
             }
 
@@ -19307,9 +19071,7 @@ pub mod num
                     self.mul_add_assign(other.clone(), add.clone());
                 }
             }
-
-            // (a + i b) / (c + i d) == [(a + i b) * (c - i d)] / (c*c + d*d)
-            //   == [(a*c + b*d) / (c*c + d*d)] + i [(b*c - a*d) / (c*c + d*d)]
+            
             impl<T: Clone + NumAssign> DivAssign for Complex<T> 
             {
                 fn div_assign(&mut self, other: Self) {
@@ -19515,7 +19277,6 @@ pub mod num
                         type Output = Complex<$real>;
 
                         #[inline] fn div(self, other: Complex<$real>) -> Self::Output {
-                            // a / (c + i d) == [a * (c - i d)] / (c*c + d*d)
                             let norm_sqr = other.norm_sqr();
                             Self::Output::new(self * other.re / norm_sqr.clone(),
                                             $real::zero() - self * other.im / norm_sqr)
@@ -19709,7 +19470,6 @@ pub mod num
                     }
                 }
                 
-                // Currently, we can only apply width using an intermediate `String` (and thus `std`)
                 fn fmt_complex(f: &mut fmt::Formatter<'_>, complex: fmt::Arguments<'_>) -> fmt::Result {
                     use std::string::ToString;
                     if let Some(width) = f.width() {
@@ -19800,10 +19560,8 @@ pub mod num
             for (i, w) in s.as_bytes().windows(2).enumerate() {
                 let p = w[0];
                 let c = w[1];
-
-                // ignore '+'/'-' if part of an exponent
+                
                 if (c == b'+' || c == b'-') && !(p == b'e' || p == b'E') {
-                    // trim whitespace around the separator
                     a = s[..=i].trim_end_matches(char::is_whitespace);
                     b = s[i + 2..].trim_start_matches(char::is_whitespace);
                     neg_b = c == b'-';
@@ -19814,10 +19572,8 @@ pub mod num
                     break;
                 }
             }
-
-            // split off real and imaginary parts
+            
             if b.is_empty() {
-                // input was either pure real or pure imaginary
                 b = if a.ends_with(imag) { "0" } else { "0i" };
             }
 
@@ -19838,21 +19594,17 @@ pub mod num
             } else {
                 return Err(ParseComplexError::expr_error());
             }
-
-            // parse re
+            
             let re = from(re).map_err(ParseComplexError::from_error)?;
             let re = if neg_re { T::zero() - re } else { re };
-
-            // pop imaginary unit off
+            
             let mut im = &im[..im.len() - 1];
-            // handle im == "i" or im == "-i"
             if im.is_empty() || im == "+" {
                 im = "1";
             } else if im == "-" {
                 im = "-1";
             }
-
-            // parse im
+            
             let im = from(im).map_err(ParseComplexError::from_error)?;
             let im = if neg_im { T::zero() - im } else { im };
 
@@ -19879,8 +19631,7 @@ pub mod num
                     radix <= 36,
                     "from_str_radix: radix is too high (maximum 36)"
                 );
-
-                // larger radix would include 'i' and 'j' as digits, which cannot be supported
+                
                 if radix > 18 {
                     return Err(ParseComplexError::unsupported_radix());
                 }
@@ -20131,7 +19882,6 @@ pub mod num
                     impl Roots for $T {
                         #[inline] fn nth_root(&self, n: u32) -> Self {
                             fn go(a: $T, n: u32) -> $T {
-                                // Specialize small roots
                                 match n {
                                     0 => panic!("can't find a root of degree 0!"),
                                     1 => return a,
@@ -20139,21 +19889,18 @@ pub mod num
                                     3 => return a.cbrt(),
                                     _ => (),
                                 }
-
-                                // The root of values less than 2ⁿ can only be 0 or 1.
+                                
                                 if bits::<$T>() <= n || a < (1 << n) {
                                     return (a > 0) as $T;
                                 }
 
                                 if bits::<$T>() > 64 {
-                                    // 128-bit division is slow, so do a bitwise `nth_root` until it's small enough.
                                     return if a <= std::u64::MAX as $T {
                                         (a as u64).nth_root(n) as $T
                                     } else {
                                         let lo = (a >> n).nth_root(n) << 1;
                                         let hi = lo + 1;
-                                        // 128-bit `checked_mul` also involves division, but we can't always
-                                        // compute `hiⁿ` without risking overflow.  Try to avoid it though...
+                                        
                                         if hi.next_power_of_two().trailing_zeros() * n >= bits::<$T>() {
                                             match checked_pow(hi, n as usize) {
                                                 Some(x) if x <= a => hi,
@@ -20169,19 +19916,17 @@ pub mod num
                                     };
                                 }
                                 
-                                #[inline]
-                                fn guess(x: $T, n: u32) -> $T {
-                                    // for smaller inputs, `f64` doesn't justify its cost.
+                                #[inline] fn guess(x: $T, n: u32) -> $T {
                                     if bits::<$T>() <= 32 || x <= std::u32::MAX as $T {
                                         1 << ((log2(x) + n - 1) / n)
                                     } else {
                                         ((x as f64).ln() / f64::from(n)).exp() as $T
                                     }
                                 }
-
-                                // https://en.wikipedia.org/wiki/Nth_root_algorithm
+                                
                                 let n1 = n - 1;
-                                let next = |x: $T| {
+                                let next = |x: $T| 
+                    {
                                     let y = match checked_pow(x, n1 as usize) {
                                         Some(ax) => a / ax,
                                         None => 0,
@@ -20196,7 +19941,6 @@ pub mod num
                         #[inline] fn sqrt(&self) -> Self {
                             fn go(a: $T) -> $T {
                                 if bits::<$T>() > 64 {
-                                    // 128-bit division is slow, so do a bitwise `sqrt` until it's small enough.
                                     return if a <= std::u64::MAX as $T {
                                         (a as u64).sqrt() as $T
                                     } else {
@@ -20214,12 +19958,10 @@ pub mod num
                                     return (a > 0) as $T;
                                 }
 
-                                #[inline]
-                                fn guess(x: $T) -> $T {
+                                #[inline] fn guess(x: $T) -> $T {
                                     (x as f64).sqrt() as $T
                                 }
-
-                                // https://en.wikipedia.org/wiki/Methods_of_computing_square_roots#Babylonian_method
+                                
                                 let next = |x: $T| (a / x + x) >> 1;
                                 fixpoint(guess(a), next)
                             }
@@ -20229,7 +19971,6 @@ pub mod num
                         #[inline] fn cbrt(&self) -> Self {
                             fn go(a: $T) -> $T {
                                 if bits::<$T>() > 64 {
-                                    // 128-bit division is slow, so do a bitwise `cbrt` until it's small enough.
                                     return if a <= std::u64::MAX as $T {
                                         (a as u64).cbrt() as $T
                                     } else {
@@ -20244,7 +19985,6 @@ pub mod num
                                 }
 
                                 if bits::<$T>() <= 32 {
-                                    // Implementation based on Hacker's Delight `icbrt2`
                                     let mut x = a;
                                     let mut y2 = 0;
                                     let mut y = 0;
@@ -20270,12 +20010,10 @@ pub mod num
                                     return (a as u32).cbrt() as $T;
                                 }
 
-                                #[inline]
-                                fn guess(x: $T) -> $T {
+                                #[inline] fn guess(x: $T) -> $T {
                                     (x as f64).cbrt() as $T
                                 }
                                 
-                                // https://en.wikipedia.org/wiki/Cube_root#Numerical_methods
                                 let next = |x: $T| (a / (x * x) + x * 2) / 3;
                                 fixpoint(guess(a), next)
                             }
@@ -20317,15 +20055,14 @@ pub mod num
                 for<'a, 'b> &'a I:
                     BitAnd<&'b I, Output = I> + BitOr<&'b I, Output = I> + BitXor<&'b I, Output = I>,
             {
-                // The Henry Gordon Dietz implementation as shown in the Hacker's Delight,
-                // see http://aggregate.org/MAGIC/#Average%20of%20Integers
-
                 /// Returns the floor value of the average of `self` and `other`.
-                #[inline] fn average_floor(&self, other: &I) -> I {
+                #[inline] fn average_floor(&self, other: &I) -> I 
+                {
                     (self & other) + ((self ^ other) >> 1)
                 }
                 /// Returns the ceil value of the average of `self` and `other`.
-                #[inline] fn average_ceil(&self, other: &I) -> I {
+                #[inline] fn average_ceil(&self, other: &I) -> I 
+                {
                     (self | other) - ((self ^ other) >> 1)
                 }
             }
@@ -20377,7 +20114,8 @@ pub mod num
 
                 while !r.0.is_zero() {
                     let q = r.1.clone() / r.0.clone();
-                    let f = |mut r: (Self, Self)| {
+                    let f = |mut r: (Self, Self)| 
+                    {
                         mem::swap(&mut r.0, &mut r.1);
                         r.0 = r.0 - q.clone() * r.1.clone();
                         r
@@ -20538,7 +20276,6 @@ pub mod num
                             d
                         }
                     }
-
                     /// Calculates the Greatest Common Divisor (GCD) of the number and
                     /// `other`. The result is always non-negative.
                     #[inline] fn gcd(&self, other: &Self) -> Self {
@@ -20553,12 +20290,10 @@ pub mod num
                         if m == Self::min_value() || n == Self::min_value() {
                             return (1 << shift).abs();
                         }
-
-                        // guaranteed to be positive now, rest like unsigned algorithm
+                        
                         m = m.abs();
                         n = n.abs();
-
-                        // divide n and m by 2 until odd
+                        
                         m >>= m.trailing_zeros();
                         n >>= n.trailing_zeros();
 
@@ -20577,7 +20312,6 @@ pub mod num
                     #[inline] fn extended_gcd_lcm(&self, other: &Self) -> (ExtendedGcd<Self>, Self) 
                     {
                         let egcd = self.extended_gcd(other);
-                        // should not have to recalculate abs
                         let lcm = if egcd.gcd.is_zero() {
                             Self::zero()
                         } else {
@@ -20599,7 +20333,6 @@ pub mod num
                             return (Self::zero(), Self::zero());
                         }
                         let gcd = self.gcd(other);
-                        // should not have to recalculate abs
                         let lcm = (*self * (*other / gcd)).abs();
                         (gcd, lcm)
                     }
@@ -20629,7 +20362,6 @@ pub mod num
 
                     /// Rounds up to nearest multiple of argument.
                     #[inline] fn next_multiple_of(&self, other: &Self) -> Self {
-                        // Avoid the overflow of `MIN % -1`
                         if *other == -1 {
                             return *self;
                         }
@@ -20640,7 +20372,6 @@ pub mod num
 
                     /// Rounds down to nearest multiple of argument.
                     #[inline] fn prev_multiple_of(&self, other: &Self) -> Self {
-                        // Avoid the overflow of `MIN % -1`
                         if *other == -1 {
                             return *self;
                         }
@@ -20677,17 +20408,13 @@ pub mod num
 
                     /// Calculates the Greatest Common Divisor (GCD) of the number and `other`
                     #[inline] fn gcd(&self, other: &Self) -> Self {
-                        // Use Stein's algorithm
                         let mut m = *self;
                         let mut n = *other;
                         if m == 0 || n == 0 {
                             return m | n;
                         }
-
-                        // find common factors of 2
+                        
                         let shift = (m | n).trailing_zeros();
-
-                        // divide n and m by 2 until odd
                         m >>= m.trailing_zeros();
                         n >>= n.trailing_zeros();
 
@@ -20706,7 +20433,6 @@ pub mod num
                     #[inline] fn extended_gcd_lcm(&self, other: &Self) -> (ExtendedGcd<Self>, Self) 
                     {
                         let egcd = self.extended_gcd(other);
-                        // should not have to recalculate abs
                         let lcm = if egcd.gcd.is_zero() {
                             Self::zero()
                         } else {
@@ -21124,14 +20850,11 @@ pub mod num
                     let y = ::mem::replace(x, T::zero());
                     *x = f(y);
                 }
-
-                // self.numer /= g;
+                
                 replace_with(&mut self.numer, |x| x / g.clone());
-
-                // self.denom /= g;
+                
                 replace_with(&mut self.denom, |x| x / g);
-
-                // keep denom positive!
+                
                 if self.denom < T::zero() {
                     replace_with(&mut self.numer, |x| T::zero() - x);
                     replace_with(&mut self.denom, |x| T::zero() - x);
@@ -21185,19 +20908,19 @@ pub mod num
                 let zero: Ratio<T> = Zero::zero();
                 let one: T = One::one();
                 let two: T = one.clone() + one.clone();
-
-                // Find unsigned fractional part of rational number
                 let mut fractional = self.fract();
-                if fractional < zero {
+                if fractional < zero 
+                {
                     fractional = zero - fractional
                 };
-
-                // The algorithm compares the unsigned fractional part with 1/2, that
-                // is, a/b >= 1/2, or a >= b/2. For odd denominators, we use
-                // a >= (b/2)+1. This avoids overflow issues.
-                let half_or_larger = if fractional.denom.is_even() {
+                
+                let half_or_larger = if fractional.denom.is_even() 
+                {
                     fractional.numer >= fractional.denom / two
-                } else {
+                } 
+                
+                else 
+                {
                     fractional.numer >= (fractional.denom / two) + one
                 };
 
@@ -21261,8 +20984,7 @@ pub mod num
                 Ratio::zero()
             }
         }
-
-        // From integer
+        
         impl<T> From<T> for Ratio<T> where
             T: Clone + Integer,
         
@@ -21271,8 +20993,7 @@ pub mod num
                 Ratio::from_integer(x)
             }
         }
-
-        // From pair (through the `new` constructor)
+        
         impl<T> From<(T, T)> for Ratio<T> where
             T: Clone + Integer,
         
@@ -21284,9 +21005,10 @@ pub mod num
         
         impl<T: Clone + Integer> Ord for Ratio<T> 
         {
-            #[inline] fn cmp(&self, other: &Self) -> cmp::Ordering {
-                // With equal denominators, the numerators can be directly compared
-                if self.denom == other.denom {
+            #[inline] fn cmp(&self, other: &Self) -> cmp::Ordering 
+            {
+                if self.denom == other.denom 
+                {
                     let ord = self.numer.cmp(&other.numer);
                     return if self.denom < T::zero() {
                         ord.reverse()
@@ -21294,9 +21016,9 @@ pub mod num
                         ord
                     };
                 }
-
-                // With equal numerators, the denominators can be inversely compared
-                if self.numer == other.numer {
+                
+                if self.numer == other.numer 
+                {
                     if self.numer.is_zero() {
                         return cmp::Ordering::Equal;
                     }
@@ -21307,15 +21029,12 @@ pub mod num
                         ord.reverse()
                     };
                 }
-
-                // Unfortunately, we don't have CheckedMul to try.  That could sometimes avoid all the
-                // division below, or even always avoid it for BigInt and BigUint.
-                // FIXME- future breaking change to add Checked* to Integer?
-
-                // Compare as floored integers and remainders
+                
                 let (self_int, self_rem) = self.numer.div_mod_floor(&self.denom);
                 let (other_int, other_rem) = other.numer.div_mod_floor(&other.denom);
-                match self_int.cmp(&other_int) {
+
+                match self_int.cmp(&other_int) 
+                {
                     cmp::Ordering::Greater => cmp::Ordering::Greater,
                     cmp::Ordering::Less => cmp::Ordering::Less,
                     cmp::Ordering::Equal => {
@@ -21324,7 +21043,6 @@ pub mod num
                             (true, false) => cmp::Ordering::Less,
                             (false, true) => cmp::Ordering::Greater,
                             (false, false) => {
-                                // Compare the reciprocals of the remaining fractions in reverse
                                 let self_recip = Ratio::new_raw(self.denom.clone(), self_rem);
                                 let other_recip = Ratio::new_raw(other.denom.clone(), other_rem);
                                 self_recip.cmp(&other_recip).reverse()
@@ -21448,7 +21166,7 @@ pub mod num
                 }
             }
 
-            // (a/b) / (c/d) = (a/gcd_ac)*(d/gcd_bd) / ((c/gcd_ac)*(b/gcd_bd))
+           
             impl<T: Clone + Integer + NumAssign> DivAssign for Ratio<T> {
                 fn div_assign(&mut self, other: Ratio<T>) {
                     let gcd_ac = self.numer.gcd(&other.numer);
@@ -21457,11 +21175,10 @@ pub mod num
                     self.numer *= other.denom / gcd_bd.clone();
                     self.denom /= gcd_bd;
                     self.denom *= other.numer / gcd_ac;
-                    self.reduce(); // TODO: remove this line. see #8.
+                    self.reduce();
                 }
             }
 
-            // a/b * c/d = (a/gcd_ad)*(c/gcd_bc) / ((d/gcd_ad)*(b/gcd_bc))
             impl<T: Clone + Integer + NumAssign> MulAssign for Ratio<T> {
                 fn mul_assign(&mut self, other: Ratio<T>) {
                     let gcd_ad = self.numer.gcd(&other.denom);
@@ -21470,11 +21187,12 @@ pub mod num
                     self.numer *= other.numer / gcd_bc.clone();
                     self.denom /= gcd_bc;
                     self.denom *= other.denom / gcd_ad;
-                    self.reduce(); // TODO: remove this line. see #8.
+                    self.reduce();
                 }
             }
 
-            impl<T: Clone + Integer + NumAssign> RemAssign for Ratio<T> {
+            impl<T: Clone + Integer + NumAssign> RemAssign for Ratio<T> 
+            {
                 fn rem_assign(&mut self, other: Ratio<T>) {
                     if self.denom == other.denom {
                         self.numer %= other.numer
@@ -21489,7 +21207,8 @@ pub mod num
                 }
             }
 
-            impl<T: Clone + Integer + NumAssign> SubAssign for Ratio<T> {
+            impl<T: Clone + Integer + NumAssign> SubAssign for Ratio<T> 
+            {
                 fn sub_assign(&mut self, other: Ratio<T>) {
                     if self.denom == other.denom {
                         self.numer -= other.numer
@@ -21503,50 +21222,55 @@ pub mod num
                     self.reduce();
                 }
             }
-
-            // a/b + c/1 = (a*1 + b*c) / (b*1) = (a + b*c) / b
-            impl<T: Clone + Integer + NumAssign> AddAssign<T> for Ratio<T> {
+           
+            impl<T: Clone + Integer + NumAssign> AddAssign<T> for Ratio<T> 
+            {
                 fn add_assign(&mut self, other: T) {
                     self.numer += self.denom.clone() * other;
                     self.reduce();
                 }
             }
 
-            impl<T: Clone + Integer + NumAssign> DivAssign<T> for Ratio<T> {
+            impl<T: Clone + Integer + NumAssign> DivAssign<T> for Ratio<T> 
+            {
                 fn div_assign(&mut self, other: T) {
                     let gcd = self.numer.gcd(&other);
                     self.numer /= gcd.clone();
                     self.denom *= other / gcd;
-                    self.reduce(); // TODO: remove this line. see #8.
+                    self.reduce();
                 }
             }
 
-            impl<T: Clone + Integer + NumAssign> MulAssign<T> for Ratio<T> {
+            impl<T: Clone + Integer + NumAssign> MulAssign<T> for Ratio<T> 
+            {
                 fn mul_assign(&mut self, other: T) {
                     let gcd = self.denom.gcd(&other);
                     self.denom /= gcd.clone();
                     self.numer *= other / gcd;
-                    self.reduce(); // TODO: remove this line. see #8.
+                    self.reduce();
                 }
             }
 
-            // a/b % c/1 = (a*1 % b*c) / (b*1) = (a % b*c) / b
-            impl<T: Clone + Integer + NumAssign> RemAssign<T> for Ratio<T> {
+           
+            impl<T: Clone + Integer + NumAssign> RemAssign<T> for Ratio<T> 
+            {
                 fn rem_assign(&mut self, other: T) {
                     self.numer %= self.denom.clone() * other;
                     self.reduce();
                 }
             }
 
-            // a/b - c/1 = (a*1 - b*c) / (b*1) = (a - b*c) / b
-            impl<T: Clone + Integer + NumAssign> SubAssign<T> for Ratio<T> {
+           
+            impl<T: Clone + Integer + NumAssign> SubAssign<T> for Ratio<T> 
+            {
                 fn sub_assign(&mut self, other: T) {
                     self.numer -= self.denom.clone() * other;
                     self.reduce();
                 }
             }
 
-            macro_rules! forward_op_assign {
+            macro_rules! forward_op_assign 
+            {
                 (impl $imp:ident, $method:ident) => {
                     impl<'a, T: Clone + Integer + NumAssign> $imp<&'a Ratio<T>> for Ratio<T> {
                         #[inline] fn $method(&mut self, other: &Ratio<T>) {
@@ -21648,10 +21372,9 @@ pub mod num
                 forward_val_ref_binop!(impl $imp, $method);
             };
         }
-
-        // Arithmetic
+        
         forward_all_binop!(impl Mul, mul);
-        // a/b * c/d = (a/gcd_ad)*(c/gcd_bc) / ((d/gcd_ad)*(b/gcd_bc))
+       
         impl<T> Mul<Ratio<T>> for Ratio<T> where
             T: Clone + Integer,
         {
@@ -21666,7 +21389,7 @@ pub mod num
                 )
             }
         }
-        // a/b * c/1 = (a*c) / (b*1) = (a*c) / b
+       
         impl<T> Mul<T> for Ratio<T> where
             T: Clone + Integer,
         {
@@ -21679,7 +21402,7 @@ pub mod num
         }
 
         forward_all_binop!(impl Div, div);
-        // (a/b) / (c/d) = (a/gcd_ac)*(d/gcd_bd) / ((c/gcd_ac)*(b/gcd_bd))
+       
         impl<T> Div<Ratio<T>> for Ratio<T> where
             T: Clone + Integer,
         {
@@ -21695,7 +21418,7 @@ pub mod num
                 )
             }
         }
-        // (a/b) / (c/1) = (a*1) / (b*c) = a / (b*c)
+       
         impl<T> Div<T> for Ratio<T> where
             T: Clone + Integer,
         {
@@ -21712,7 +21435,7 @@ pub mod num
         {
             (impl $imp:ident, $method:ident) => {
                 forward_all_binop!(impl $imp, $method);
-                // Abstracts a/b `op` c/d = (a*lcm/b `op` c*lcm/d)/lcm where lcm = lcm(b,d)
+               
                 impl<T: Clone + Integer> $imp<Ratio<T>> for Ratio<T> {
                     type Output = Ratio<T>;
                     #[inline] fn $method(self, rhs: Ratio<T>) -> Ratio<T> {
@@ -21725,7 +21448,7 @@ pub mod num
                         Ratio::new(lhs_numer.$method(rhs_numer), lcm)
                     }
                 }
-                // Abstracts the a/b `op` c/1 = (a*1 `op` b*c) / (b*1) = (a `op` b*c) / b pattern
+               
                 impl<T: Clone + Integer> $imp<T> for Ratio<T> {
                     type Output = Ratio<T>;
                     #[inline] fn $method(self, rhs: T) -> Ratio<T> {
@@ -21739,7 +21462,7 @@ pub mod num
         arith_impl!(impl Sub, sub);
         arith_impl!(impl Rem, rem);
 
-        // a/b * c/d = (a*c)/(b*d)
+       
         impl<T> CheckedMul for Ratio<T> where
             T: Clone + Integer + CheckedMul,
         {
@@ -21755,7 +21478,7 @@ pub mod num
             }
         }
 
-        // (a/b) / (c/d) = (a*d)/(b*c)
+       
         impl<T> CheckedDiv for Ratio<T> where
             T: Clone + Integer + CheckedMul,
         {
@@ -21776,7 +21499,7 @@ pub mod num
                         (self.denom.clone() / gcd_bd).checked_mul(&(rhs.numer.clone() / gcd_ac))?,
                     )
                 };
-                // Manual `reduce()`, avoiding sharp edges
+                
                 if denom.is_zero() {
                     None
                 } else if numer.is_zero() {
@@ -21797,8 +21520,7 @@ pub mod num
                 }
             }
         }
-
-        // As arith_impl! but for Checked{Add,Sub} traits
+        
         macro_rules! checked_arith_impl {
             (impl $imp:ident, $method:ident) => {
                 impl<T: Clone + Integer + CheckedMul + $imp> $imp for Ratio<T> {
@@ -21813,10 +21535,10 @@ pub mod num
             };
         }
 
-        // a/b + c/d = (lcm/b*a + lcm/d*c)/lcm, where lcm = lcm(b,d)
+       
         checked_arith_impl!(impl CheckedAdd, checked_add);
 
-        // a/b - c/d = (lcm/b*a - lcm/d*c)/lcm, where lcm = lcm(b,d)
+       
         checked_arith_impl!(impl CheckedSub, checked_sub);
 
         impl<T> Neg for Ratio<T> where
@@ -21860,8 +21582,7 @@ pub mod num
                 self.recip()
             }
         }
-
-        // Constants
+        
         impl<T: ConstZero + ConstOne> Ratio<T> 
         {
             /// A constant `Ratio` 0/1.
@@ -21922,7 +21643,8 @@ pub mod num
             /// Parses `numer/denom` where the numbers are in base `radix`.
             fn from_str_radix(s: &str, radix: u32) -> Result<Ratio<T>, ParseRatioError> {
                 if s.splitn(2, '/').count() == 2 {
-                    let mut parts = s.splitn(2, '/').map(|ss| {
+                    let mut parts = s.splitn(2, '/').map(|ss| 
+                    {
                         T::from_str_radix(ss, radix).map_err(|_| ParseRatioError {
                             kind: RatioErrorKind::ParseError,
                         })
@@ -21982,8 +21704,7 @@ pub mod num
                     || (self.numer.is_positive() && self.denom.is_negative())
             }
         }
-
-        // String conversions
+        
         macro_rules! impl_formatting 
         {
             ($fmt_trait:ident, $prefix:expr, $fmt_str:expr, $fmt_alt:expr) => {
@@ -22047,15 +21768,13 @@ pub mod num
             }
         }
 
-        impl<T> From<Ratio<T>> for (T, T) 
-        
+        impl<T> From<Ratio<T>> for (T, T)
         {
             fn from(val: Ratio<T>) -> Self {
                 (val.numer, val.denom)
             }
-        } 
-
-        // FIXME: Bubble up specific errors
+        }
+        
         #[derive(Copy, Clone, Debug, PartialEq)]
         pub struct ParseRatioError 
         {
@@ -22172,10 +21891,8 @@ pub mod num
 
         impl<T: Integer + Signed + Bounded + NumCast + Clone> Ratio<T> 
         {
-            pub fn approximate_float<F: FloatCore + NumCast>(f: F) -> Option<Ratio<T>> {
-                // 1/10e-20 < 1/2**32 which seems like a good default, and 30 seems
-                // to work well. Might want to choose something based on the types in the future, e.g.
-                // T::max().recip() and T::bits() or something similar.
+            pub fn approximate_float<F: FloatCore + NumCast>(f: F) -> Option<Ratio<T>> 
+            {
                 let epsilon = <F as NumCast>::from(10e-20).expect("Can't convert 10e-20");
                 approximate_float(f, epsilon, 30)
             }
@@ -22184,9 +21901,6 @@ pub mod num
         impl<T: Integer + Unsigned + Bounded + NumCast + Clone> Ratio<T> 
         {
             pub fn approximate_float_unsigned<F: FloatCore + NumCast>(f: F) -> Option<Ratio<T>> {
-                // 1/10e-20 < 1/2**32 which seems like a good default, and 30 seems
-                // to work well. Might want to choose something based on the types in the future, e.g.
-                // T::max().recip() and T::bits() or something similar.
                 let epsilon = <F as NumCast>::from(10e-20).expect("Can't convert 10e-20");
                 approximate_float_unsigned(f, epsilon, 30)
             }
@@ -22200,20 +21914,14 @@ pub mod num
             let abs_val = val.abs();
 
             let r = approximate_float_unsigned(abs_val, max_error, max_iterations)?;
-
-            // Make negative again if needed
+            
             Some(if negative { r.neg() } else { r })
         }
-
-        // No Unsigned constraint because this also works on positive integers and is called
-        // like that, see above
+        
         fn approximate_float_unsigned<T, F>(val: F, max_error: F, max_iterations: usize) -> Option<Ratio<T>> where
             T: Integer + Bounded + NumCast + Clone,
             F: FloatCore + NumCast,
         {
-            // Continued fractions algorithm
-            // https://web.archive.org/web/20200629111319/http://mathforum.org:80/dr.math/faq/faq.fractions.html#decfrac
-
             if val < F::zero() || val.is_nan() {
                 return None;
             }
@@ -22226,28 +21934,28 @@ pub mod num
 
             let t_max = T::max_value();
             let t_max_f = <F as NumCast>::from(t_max.clone())?;
-
-            // 1/epsilon > T::MAX
+            
             let epsilon = t_max_f.recip();
-
-            // Overflow
+            
             if q > t_max_f {
                 return None;
             }
 
-            for _ in 0..max_iterations {
-                let a = match <T as NumCast>::from(q) {
+            for _ in 0..max_iterations 
+            {
+                let a = match <T as NumCast>::from(q) 
+                {
                     None => break,
                     Some(a) => a,
                 };
 
-                let a_f = match <F as NumCast>::from(a.clone()) {
+                let a_f = match <F as NumCast>::from(a.clone()) 
+                {
                     None => break,
                     Some(a_f) => a_f,
                 };
                 let f = q - a_f;
-
-                // Prevent overflow
+                
                 if !a.is_zero()
                     && (n1 > t_max.clone() / a.clone()
                         || d1 > t_max.clone() / a.clone()
@@ -22259,37 +21967,33 @@ pub mod num
 
                 let n = a.clone() * n1.clone() + n0.clone();
                 let d = a.clone() * d1.clone() + d0.clone();
-
                 n0 = n1;
                 d0 = d1;
                 n1 = n.clone();
-                d1 = d.clone();
-
-                // Simplify fraction. Doing so here instead of at the end
-                // allows us to get closer to the target value without overflows
+                d1 = d.clone();                
                 let g = Integer::gcd(&n1, &d1);
+                
                 if !g.is_zero() {
                     n1 = n1 / g.clone();
                     d1 = d1 / g.clone();
                 }
-
-                // Close enough?
+                
                 let (n_f, d_f) = match (<F as NumCast>::from(n), <F as NumCast>::from(d)) {
                     (Some(n_f), Some(d_f)) => (n_f, d_f),
                     _ => break,
                 };
+
                 if (n_f / d_f - val).abs() < max_error {
                     break;
                 }
-
-                // Prevent division by ~0
+                
                 if f < epsilon {
                     break;
                 }
+
                 q = f.recip();
             }
-
-            // Overflow
+            
             if d1.is_zero() {
                 return None;
             }
@@ -22372,8 +22076,7 @@ pub mod num
                 RADIX, 2,
                 "only floating point implementations with radix 2 are supported"
             );
-
-            // Inclusive upper and lower bounds to the range of exactly-representable ints in an f64.
+            
             const MAX_EXACT_INT: i64 = 1i64 << MANTISSA_DIGITS;
             const MIN_EXACT_INT: i64 = -MAX_EXACT_INT;
 
@@ -22381,30 +22084,21 @@ pub mod num
             if !flo_sign.is_normal() {
                 return flo_sign;
             }
-
-            // Fast track: both sides can losslessly be converted to f64s. In this case, letting the
-            // FPU do the job is faster and easier. In any other case, converting to f64s may lead
-            // to an inexact result: https://stackoverflow.com/questions/56641441/.
+            
             if let (Some(n), Some(d)) = (numer.to_i64(), denom.to_i64()) {
                 let exact = MIN_EXACT_INT..=MAX_EXACT_INT;
                 if exact.contains(&n) && exact.contains(&d) {
                     return n.to_f64().unwrap() / d.to_f64().unwrap();
                 }
             }
-
-            // Otherwise, the goal is to obtain a quotient with at least 55 bits. 53 of these bits will
-            // be used as the mantissa of the resulting float, and the remaining two are for rounding.
-            // There's an error of up to 1 on the number of resulting bits, so we may get either 55 or
-            // 56 bits.
+            
             let mut numer = numer.abs();
             let mut denom = denom.abs();
             let (is_diff_positive, absolute_diff) = match numer.bits().checked_sub(denom.bits()) {
                 Some(diff) => (true, diff),
                 None => (false, denom.bits() - numer.bits()),
             };
-
-            // Filter out overflows and underflows. After this step, the signed difference fits in an
-            // isize.
+            
             if is_diff_positive && absolute_diff > MAX_EXP as u64 {
                 return INFINITY * flo_sign;
             }
@@ -22416,9 +22110,7 @@ pub mod num
             } else {
                 -absolute_diff.to_isize().unwrap()
             };
-
-            // Shift is chosen so that the quotient will have 55 or 56 bits. The exception is if the
-            // quotient is going to be subnormal, in which case it may have fewer bits.
+            
             let shift: isize = diff.max(MIN_EXP as isize) - MANTISSA_DIGITS as isize - 2;
             if shift >= 0 {
                 denom <<= shift as usize
@@ -22427,8 +22119,7 @@ pub mod num
             };
 
             let (quotient, remainder) = numer.div_rem(&denom);
-
-            // This is guaranteed to fit since we've set up quotient to be at most 56 bits.
+            
             let mut quotient = quotient.to_u64().unwrap();
             let n_rounding_bits = {
                 let quotient_bits = 64 - quotient.leading_zeros() as isize;
@@ -22437,9 +22128,7 @@ pub mod num
             } as usize;
             debug_assert!(n_rounding_bits == 2 || n_rounding_bits == 3);
             let rounding_bit_mask = (1u64 << n_rounding_bits) - 1;
-
-            // Round to 53 bits with round-to-even. For rounding, we need to take into account both
-            // our rounding bits and the division's remainder.
+            
             let ls_bit = quotient & (1u64 << n_rounding_bits) != 0;
             let ms_rounding_bit = quotient & (1u64 << (n_rounding_bits - 1)) != 0;
             let ls_rounding_bits = quotient & (rounding_bit_mask >> 1) != 0;
@@ -22447,9 +22136,7 @@ pub mod num
                 quotient += 1u64 << n_rounding_bits;
             }
             quotient &= !rounding_bit_mask;
-
-            // The quotient is guaranteed to be exactly representable as it's now 53 bits + 2 or 3
-            // trailing zeros, so there is no risk of a rounding error here.
+            
             let q_float = quotient as f64 * flo_sign;
             ldexp(q_float, shift as i32)
         }
@@ -22470,21 +22157,17 @@ pub mod num
             if x.is_zero() || x.is_infinite() || x.is_nan() {
                 return x;
             }
-
-            // Filter out obvious over / underflows to make sure the resulting exponent fits in an isize.
+            
             if exp > 3 * MAX_EXP {
                 return INFINITY * x.signum();
             } else if exp < -3 * MAX_EXP {
                 return 0.0 * x.signum();
             }
-
-            // curr_exp is the x's *biased* exponent, and is in the [-54, MAX_UNSIGNED_EXPONENT] range.
-            let (bits, curr_exp) = if !x.is_normal() {
-                // If x is subnormal, we make it normal by multiplying by 2^53. This causes no loss of
-                // precision or rounding.
+            
+            let (bits, curr_exp) = if !x.is_normal() 
+            {
                 let normal_x = x * 2f64.powi(MIN_SUBNORMAL_POWER);
                 let bits = normal_x.to_bits();
-                // This cast is safe because the exponent is at most 0x7fe, which fits in an i32.
                 (
                     bits,
                     ((bits & EXPONENT_MASK) >> 52) as i32 - MIN_SUBNORMAL_POWER,
@@ -22492,31 +22175,22 @@ pub mod num
             } else {
                 let bits = x.to_bits();
                 let curr_exp = (bits & EXPONENT_MASK) >> 52;
-                // This cast is safe because the exponent is at most 0x7fe, which fits in an i32.
                 (bits, curr_exp as i32)
             };
-
-            // The addition can't overflow because exponent is between 0 and 0x7fe, and exp is between
-            // -2*MAX_EXP and 2*MAX_EXP.
+            
             let new_exp = curr_exp + exp;
 
             if new_exp > MAX_UNSIGNED_EXPONENT {
                 INFINITY * x.signum()
             } else if new_exp > 0 {
-                // Normal case: exponent is not too large nor subnormal.
                 let new_bits = (bits & !EXPONENT_MASK) | ((new_exp as u64) << 52);
                 f64::from_bits(new_bits)
             } else if new_exp >= -(MANTISSA_DIGITS as i32) {
-                // Result is subnormal but may not be zero.
-                // In this case, we increase the exponent by 54 to make it normal, then multiply the end
-                // result by 2^-53. This results in a single multiplication with no prior rounding error,
-                // so there is no risk of double rounding.
                 let new_exp = new_exp + MIN_SUBNORMAL_POWER;
                 debug_assert!(new_exp >= 0);
                 let new_bits = (bits & !EXPONENT_MASK) | ((new_exp as u64) << 52);
                 f64::from_bits(new_bits) * 2f64.powi(-MIN_SUBNORMAL_POWER)
             } else {
-                // Result is zero.
                 return 0.0 * x.signum();
             }
         }
@@ -22536,8 +22210,7 @@ pub mod num
             ops::{ Add, AddAssign, Div, DivAssign, Mul, MulAssign, Rem, RemAssign, Sub, SubAssign },
             *,
         };
-        /*   
-        // pub use real::{FloatCore, Real}; // NOTE: Don't do this, it breaks `use num_traits::*;`. */
+        
         #[macro_use] pub mod macros
         {
             use ::
@@ -22921,8 +22594,6 @@ pub mod num
             }
 
             macro_rules! float_to_int_unchecked {
-                // SAFETY: Must not be NaN or infinite; must be representable as the integer after truncating.
-                // We already checked that the float is in the exclusive range `(MIN-1, MAX+1)`.
                 ($float:expr => $int:ty) => {
                     unsafe { $float.to_int_unchecked::<$int>() }
                 };
@@ -23207,8 +22878,6 @@ pub mod num
                         #[inline]
                         #[allow(deprecated)]
                         fn from<N: ToPrimitive>(n: N) -> Option<$T> {
-                            // `$conv` could be generated using `concat_idents!`, but that
-                            // macro seems to be broken at the moment
                             n.$conv()
                         }
                     }
@@ -23813,7 +23482,7 @@ pub mod num
                 } else {
                     (bits & 0x7fffff) | 0x800000
                 };
-                // Exponent bias + mantissa shift
+                
                 exponent -= 127 + 23;
                 (mantissa as u64, exponent, sign)
             }
@@ -23827,7 +23496,7 @@ pub mod num
                 } else {
                     (bits & 0xfffffffffffff) | 0x10000000000000
                 };
-                // Exponent bias + mantissa shift
+                
                 exponent -= 1023 + 52;
                 (mantissa, exponent, sign)
             }
@@ -23919,13 +23588,11 @@ pub mod num
                         #[inline]
                         #[cfg(has_total_cmp)]
                         fn total_cmp(&self, other: &Self) -> Ordering {
-                            // Forward to the core implementation
                             Self::total_cmp(&self, other)
                         }
                         #[inline]
                         #[cfg(not(has_total_cmp))]
                         fn total_cmp(&self, other: &Self) -> Ordering {
-                            // Backport the core implementation (since 1.62)
                             let mut left = self.to_bits() as $I;
                             let mut right = other.to_bits() as $I;
 
@@ -24099,9 +23766,6 @@ pub mod num
             {
                 const ONE: Self = Wrapping(T::ONE);
             }
-
-            // Some helper functions provided for backwards compatibility.
-
             /// Returns the additive identity, `0`.
             #[inline( always )] pub fn zero<T: Zero>() -> T
                 {    Zero::zero()
@@ -24227,9 +23891,6 @@ pub mod num
                 let rep_0f = (rep_03 << 2) | rep_03;
                 let rep_33 = (rep_03 << 4) | rep_03;
                 let rep_55 = (rep_05 << 4) | rep_05;
-
-                // code above only used to determine rep_0f, rep_33, rep_55;
-                // optimizer should be able to do it in compile time
                 let mut ret = i.swap_bytes();
                 ret = ((ret & rep_0f) << 4) | ((ret >> 4) & rep_0f);
                 ret = ((ret & rep_33) << 2) | ((ret >> 2) & rep_33);
@@ -25280,8 +24941,7 @@ pub mod num
                 wrapping_shift_impl!(WrappingShr, wrapping_shr, i64);
                 wrapping_shift_impl!(WrappingShr, wrapping_shr, isize);
                 wrapping_shift_impl!(WrappingShr, wrapping_shr, i128);
-
-                // Well this is a bit funny, but all the more appropriate.
+                
                 impl<T: WrappingAdd> WrappingAdd for Wrapping<T>
                 where
                     Wrapping<T>: Add<Output = Wrapping<T>>,
@@ -25956,8 +25616,7 @@ pub mod num
             pub kind: FloatErrorKind,
         }
 
-        impl fmt::Display for ParseFloatError 
-        
+        impl fmt::Display for ParseFloatError
         {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 let description = match self.kind {
@@ -25972,7 +25631,8 @@ pub mod num
         fn str_to_ascii_lower_eq_str(a: &str, b: &str) -> bool 
         {
             a.len() == b.len()
-                && a.bytes().zip(b.bytes()).all(|(a, b)| {
+                && a.bytes().zip(b.bytes()).all(|(a, b)| 
+                    {
                     let a_to_ascii_lower = a | (((b'A' <= a && a <= b'Z') as u8) << 5);
                     a_to_ascii_lower == b
                 })
@@ -25989,15 +25649,13 @@ pub mod num
                     {
                         use self::FloatErrorKind::*;
                         use self::ParseFloatError as PFE;
-
-                        // Special case radix 10 to use more accurate standard library implementation
+                        
                         if radix == 10 {
                             return src.parse().map_err(|_| PFE {
                                 kind: if src.is_empty() { Empty } else { Invalid },
                             });
                         }
-
-                        // Special values
+                        
                         if str_to_ascii_lower_eq_str(src, "inf")
                             || str_to_ascii_lower_eq_str(src, "infinity")
                         {
@@ -26023,38 +25681,28 @@ pub mod num
                             Some(('-', src)) => (false, src),
                             Some((_, _))     => (true,  src),
                         };
-
-                        // The significand to accumulate
+                        
                         let mut sig = if is_positive { 0.0 } else { -0.0 };
-                        // Necessary to detect overflow
                         let mut prev_sig = sig;
                         let mut cs = src.chars().enumerate();
-                        // Exponent prefix and exponent index offset
                         let mut exp_info = None::<(char, usize)>;
-
-                        // Parse the integer part of the significand
+                        
                         for (i, c) in cs.by_ref() {
                             match c.to_digit(radix) {
                                 Some(digit) => {
-                                    // shift significand one digit left
                                     sig *= radix as $t;
-
-                                    // add/subtract current digit depending on sign
                                     if is_positive {
                                         sig += (digit as isize) as $t;
                                     } else {
                                         sig -= (digit as isize) as $t;
                                     }
-
-                                    // Detect overflow by comparing to last value, except
-                                    // if we've not seen any non-zero digits.
                                     if prev_sig != 0.0 {
                                         if is_positive && sig <= prev_sig
                                             { return Ok(std::$t::INFINITY); }
                                         if !is_positive && sig >= prev_sig
                                             { return Ok(std::$t::NEG_INFINITY); }
 
-                                        // Detect overflow by reversing the shift-and-add process
+                                       
                                         if is_positive && (prev_sig != (sig - digit as $t) / radix as $t)
                                             { return Ok(std::$t::INFINITY); }
                                         if !is_positive && (prev_sig != (sig + digit as $t) / radix as $t)
@@ -26065,10 +25713,10 @@ pub mod num
                                 None => match c {
                                     'e' | 'E' | 'p' | 'P' => {
                                         exp_info = Some((c, i + 1));
-                                        break;  // start of exponent
+                                        break;
                                     },
                                     '.' => {
-                                        break;  // start of fractional part
+                                        break;
                                     },
                                     _ => {
                                         return Err(PFE { kind: Invalid });
@@ -26082,15 +25730,13 @@ pub mod num
                             for (i, c) in cs.by_ref() {
                                 match c.to_digit(radix) {
                                     Some(digit) => {
-                                        // Decrease power one order of magnitude
                                         power /= radix as $t;
-                                        // add/subtract current digit depending on sign
                                         sig = if is_positive {
                                             sig + (digit as $t) * power
                                         } else {
                                             sig - (digit as $t) * power
                                         };
-                                        // Detect overflow by comparing to last value
+                                       
                                         if is_positive && sig < prev_sig
                                             { return Ok(std::$t::INFINITY); }
                                         if !is_positive && sig > prev_sig
@@ -26100,7 +25746,7 @@ pub mod num
                                     None => match c {
                                         'e' | 'E' | 'p' | 'P' => {
                                             exp_info = Some((c, i + 1));
-                                            break; // start of exponent
+                                            break;
                                         },
                                         _ => {
                                             return Err(PFE { kind: Invalid });
@@ -26109,8 +25755,7 @@ pub mod num
                                 }
                             }
                         }
-
-                        // Parse and calculate the exponent
+                        
                         let exp = match exp_info {
                             Some((c, offset)) => {
                                 let base = match c {
@@ -26118,8 +25763,7 @@ pub mod num
                                     'P' | 'p' if radix == 16 => 2.0,
                                     _ => return Err(PFE { kind: Invalid }),
                                 };
-
-                                // Parse the exponent as decimal integer
+                                
                                 let src = &src[offset..];
                                 let (is_positive, exp) = match slice_shift_char(src) {
                                     Some(('-', src)) => (false, src.parse::<usize>()),
@@ -26131,7 +25775,6 @@ pub mod num
                                 fn pow(base: $t, exp: usize) -> $t {
                                     Float::powi(base, exp as i32)
                                 }
-                                // otherwise uses the generic `pow` from the root
 
                                 match (is_positive, exp) {
                                     (true,  Ok(exp)) => pow(base, exp),
@@ -26139,7 +25782,7 @@ pub mod num
                                     (_, Err(_))      => return Err(PFE { kind: Invalid }),
                                 }
                             },
-                            None => 1.0, // no exponent
+                            None => 1.0,
                         };
 
                         Ok(sig * exp)
@@ -27204,7 +26847,8 @@ pub mod parsers
             F: Parser<I, O1, E>,
             G: FnMut(O1) -> O2,
             {
-                move |input: I| {
+                move |input: I| 
+                    {
                     let (input, o1) = parser.parse(input)?;
                     Ok((input, f(o1)))
                 }
@@ -27217,7 +26861,8 @@ pub mod parsers
             F: Parser<I, O1, E>,
             G: FnMut(O1) -> Result<O2, E2>,
             {
-                move |input: I| {
+                move |input: I| 
+                    {
                     let i = input.clone();
                     let (input, o1) = parser.parse(input)?;
                     match f(o1) {
@@ -27234,7 +26879,8 @@ pub mod parsers
             F: Parser<I, O1, E>,
             G: FnMut(O1) -> Option<O2>,
             {
-                move |input: I| {
+                move |input: I| 
+                    {
                     let i = input.clone();
                     let (input, o1) = parser.parse(input)?;
                     match f(o1) {
@@ -27251,7 +26897,8 @@ pub mod parsers
             F: Parser<I, O1, E>,
             G: Parser<O1, O2, E>,
             {
-                move |input: I| {
+                move |input: I| 
+                    {
                     let (input, o1) = parser.parse(input)?;
                     let (_, o2) = applied_parser.parse(o1)?;
                     Ok((input, o2))
@@ -27267,7 +26914,8 @@ pub mod parsers
             G: FnMut(O1) -> H,
             H: Parser<I, O2, E>,
             {
-                move |input: I| {
+                move |input: I| 
+                    {
                     let (input, o1) = parser.parse(input)?;
                     applied_parser(o1).parse(input)
                 }
@@ -27276,7 +26924,8 @@ pub mod parsers
             pub fn opt<I: Clone, O, E: ParseError<I>, F>(mut f: F) -> impl FnMut(I) -> IResult<I, Option<O>, E> where
             F: Parser<I, O, E>,
             {
-                move |input: I| {
+                move |input: I| 
+                    {
                     let i = input.clone();
                     match f.parse(input) {
                     Ok((i, o)) => Ok((i, Some(o))),
@@ -27292,7 +26941,8 @@ pub mod parsers
             ) -> impl FnMut(I) -> IResult<I, Option<O>, E> where
             F: Parser<I, O, E>,
             {
-                move |input: I| {
+                move |input: I| 
+                    {
                     if b {
                     match f.parse(input) {
                         Ok((i, o)) => Ok((i, Some(o))),
@@ -27307,7 +26957,8 @@ pub mod parsers
             pub fn peek<I: Clone, O, E: ParseError<I>, F>(mut f: F) -> impl FnMut(I) -> IResult<I, O, E> where
             F: Parser<I, O, E>,
             {
-                move |input: I| {
+                move |input: I| 
+                    {
                     let i = input.clone();
                     match f.parse(input) {
                     Ok((_, o)) => Ok((i, o)),
@@ -27329,7 +26980,8 @@ pub mod parsers
             pub fn complete<I: Clone, O, E: ParseError<I>, F>(mut f: F) -> impl FnMut(I) -> IResult<I, O, E> where
             F: Parser<I, O, E>,
             {
-                move |input: I| {
+                move |input: I| 
+                    {
                     let i = input.clone();
                     match f.parse(input) {
                     Err(Err::Incomplete(_)) => Err(Err::Error(E::from_error_kind(i, ErrorKind::Complete))),
@@ -27342,7 +26994,8 @@ pub mod parsers
             I: InputLength,
             F: Parser<I, O, E>,
             {
-                move |input: I| {
+                move |input: I| 
+                    {
                     let (input, res) = f.parse(input)?;
                     if input.input_len() == 0 {
                     Ok((input, res))
@@ -27361,7 +27014,8 @@ pub mod parsers
             O1: Borrow<O2>,
             O2: ?Sized,
             {
-                move |input: I| {
+                move |input: I| 
+                    {
                     let i = input.clone();
                     let (input, o) = first.parse(input)?;
 
@@ -27385,7 +27039,8 @@ pub mod parsers
             pub fn not<I: Clone, O, E: ParseError<I>, F>(mut parser: F) -> impl FnMut(I) -> IResult<I, (), E> where
             F: Parser<I, O, E>,
             {
-                move |input: I| {
+                move |input: I| 
+                    {
                     let i = input.clone();
                     match parser.parse(input) {
                     Ok(_) => Err(Err::Error(E::from_error_kind(i, ErrorKind::Not))),
@@ -27400,7 +27055,8 @@ pub mod parsers
             ) -> impl FnMut(I) -> IResult<I, I, E> where
             F: Parser<I, O, E>,
             {
-                move |input: I| {
+                move |input: I| 
+                    {
                     let i = input.clone();
                     match parser.parse(i) {
                     Ok((i, _)) => {
@@ -27417,7 +27073,8 @@ pub mod parsers
             E: ParseError<I>,
             F: Parser<I, O, E>,
             {
-                move |input: I| {
+                move |input: I| 
+                    {
                     let i = input.clone();
                     match parser.parse(i) {
                     Ok((remaining, result)) => {
@@ -27740,7 +27397,7 @@ pub mod parsers
             E: fmt::Debug,
             {
                 fn source(&self) -> Option<&(dyn Error + 'static)> {
-                    None // no underlying error
+                    None
                 }
             }
             /// All nom parsers implement this trait
@@ -27854,7 +27511,8 @@ pub mod parsers
             impl<'a, I, O1, O2, E, F: Parser<I, O1, E>, G: Fn(O1) -> H, H: Parser<I, O2, E>> Parser<I, O2, E>
             for FlatMap<F, G, O1>
             {
-                fn parse(&mut self, i: I) -> IResult<I, O2, E> {
+                fn parse(&mut self, i: I) -> IResult<I, O2, E>
+                {
                     let (i, o1) = self.f.parse(i)?;
                     (self.g)(o1).parse(i)
                 }
@@ -27870,7 +27528,8 @@ pub mod parsers
             impl<'a, I, O1, O2, E, F: Parser<I, O1, E>, G: Parser<O1, O2, E>> Parser<I, O2, E>
             for AndThen<F, G, O1>
             {
-                fn parse(&mut self, i: I) -> IResult<I, O2, E> {
+                fn parse(&mut self, i: I) -> IResult<I, O2, E>
+                {
                     let (i, o1) = self.f.parse(i)?;
                     let (_, o2) = self.g.parse(o1)?;
                     Ok((i, o2))
@@ -27886,7 +27545,8 @@ pub mod parsers
             impl<'a, I, O1, O2, E, F: Parser<I, O1, E>, G: Parser<I, O2, E>> Parser<I, (O1, O2), E>
             for And<F, G>
             {
-                fn parse(&mut self, i: I) -> IResult<I, (O1, O2), E> {
+                fn parse(&mut self, i: I) -> IResult<I, (O1, O2), E>
+                {
                     let (i, o1) = self.f.parse(i)?;
                     let (i, o2) = self.g.parse(i)?;
                     Ok((i, (o1, o2)))
@@ -27968,7 +27628,8 @@ pub mod parsers
             F: Parser<I, O, E>,
             E: ParseError<I>,
             {
-                move |mut i: I| {
+                move |mut i: I| 
+                    {
                     let mut acc = Vec::with_capacity(4);
                     loop {
                     let len = i.input_len();
@@ -27976,7 +27637,6 @@ pub mod parsers
                         Err(Err::Error(_)) => return Ok((i, acc)),
                         Err(e) => return Err(e),
                         Ok((i1, o)) => {
-                        // infinite loop check: the parser must always consume
                         if i1.input_len() == len {
                             return Err(Err::Error(E::from_error_kind(i, ErrorKind::Many0)));
                         }
@@ -27997,7 +27657,8 @@ pub mod parsers
                 move |mut i: I| match f.parse(i.clone()) {
                     Err(Err::Error(err)) => Err(Err::Error(E::append(i, ErrorKind::Many1, err))),
                     Err(e) => Err(e),
-                    Ok((i1, o)) => {
+                    Ok((i1, o)) =>
+                {
                     let mut acc = Vec::with_capacity(4);
                     acc.push(o);
                     i = i1;
@@ -28008,7 +27669,6 @@ pub mod parsers
                         Err(Err::Error(_)) => return Ok((i, acc)),
                         Err(e) => return Err(e),
                         Ok((i1, o)) => {
-                            // infinite loop check: the parser must always consume
                             if i1.input_len() == len {
                             return Err(Err::Error(E::from_error_kind(i, ErrorKind::Many1)));
                             }
@@ -28031,7 +27691,8 @@ pub mod parsers
             G: Parser<I, P, E>,
             E: ParseError<I>,
             {
-                move |mut i: I| {
+                move |mut i: I| 
+                    {
                     let mut res = Vec::new();
                     loop {
                     let len = i.input_len();
@@ -28042,7 +27703,6 @@ pub mod parsers
                             Err(Err::Error(err)) => return Err(Err::Error(E::append(i, ErrorKind::ManyTill, err))),
                             Err(e) => return Err(e),
                             Ok((i1, o)) => {
-                            // infinite loop check: the parser must always consume
                             if i1.input_len() == len {
                                 return Err(Err::Error(E::from_error_kind(i1, ErrorKind::ManyTill)));
                             }
@@ -28067,7 +27727,8 @@ pub mod parsers
             G: Parser<I, O2, E>,
             E: ParseError<I>,
             {
-                move |mut i: I| {
+                move |mut i: I| 
+                    {
                     let mut res = Vec::new();
 
                     match f.parse(i.clone()) {
@@ -28085,7 +27746,7 @@ pub mod parsers
                         Err(Err::Error(_)) => return Ok((i, res)),
                         Err(e) => return Err(e),
                         Ok((i1, _)) => {
-                        // infinite loop check: the parser must always consume
+                       
                         if i1.input_len() == len {
                             return Err(Err::Error(E::from_error_kind(i1, ErrorKind::SeparatedList)));
                         }
@@ -28113,10 +27774,10 @@ pub mod parsers
             G: Parser<I, O2, E>,
             E: ParseError<I>,
             {
-                move |mut i: I| {
+                move |mut i: I| 
+                    {
                     let mut res = Vec::new();
-
-                    // Parse the first element
+                    
                     match f.parse(i.clone()) {
                     Err(e) => return Err(e),
                     Ok((i1, o)) => {
@@ -28131,7 +27792,7 @@ pub mod parsers
                         Err(Err::Error(_)) => return Ok((i, res)),
                         Err(e) => return Err(e),
                         Ok((i1, _)) => {
-                        // infinite loop check: the parser must always consume
+                       
                         if i1.input_len() == len {
                             return Err(Err::Error(E::from_error_kind(i1, ErrorKind::SeparatedList)));
                         }
@@ -28159,7 +27820,8 @@ pub mod parsers
             F: Parser<I, O, E>,
             E: ParseError<I>,
             {
-                move |mut input: I| {
+                move |mut input: I| 
+                    {
                     if min > max {
                     return Err(Err::Failure(E::from_error_kind(input, ErrorKind::ManyMN)));
                     }
@@ -28170,7 +27832,7 @@ pub mod parsers
                     let len = input.input_len();
                     match parse.parse(input.clone()) {
                         Ok((tail, value)) => {
-                        // infinite loop check: the parser must always consume
+                       
                         if tail.input_len() == len {
                             return Err(Err::Error(E::from_error_kind(input, ErrorKind::ManyMN)));
                         }
@@ -28200,7 +27862,8 @@ pub mod parsers
             F: Parser<I, O, E>,
             E: ParseError<I>,
             {
-                move |i: I| {
+                move |i: I| 
+                    {
                     let mut input = i;
                     let mut count = 0;
 
@@ -28209,7 +27872,7 @@ pub mod parsers
                     let len = input.input_len();
                     match f.parse(input_) {
                         Ok((i, _)) => {
-                        // infinite loop check: the parser must always consume
+                       
                         if i.input_len() == len {
                             return Err(Err::Error(E::from_error_kind(input, ErrorKind::Many0Count)));
                         }
@@ -28231,7 +27894,8 @@ pub mod parsers
             F: Parser<I, O, E>,
             E: ParseError<I>,
             {
-                move |i: I| {
+                move |i: I| 
+                    {
                     let i_ = i.clone();
                     match f.parse(i_) {
                     Err(Err::Error(_)) => Err(Err::Error(E::from_error_kind(i, ErrorKind::Many1Count))),
@@ -28247,7 +27911,7 @@ pub mod parsers
                             Err(Err::Error(_)) => return Ok((input, count)),
                             Err(e) => return Err(e),
                             Ok((i, _)) => {
-                            // infinite loop check: the parser must always consume
+                           
                             if i.input_len() == len {
                                 return Err(Err::Error(E::from_error_kind(i, ErrorKind::Many1Count)));
                             }
@@ -28267,7 +27931,8 @@ pub mod parsers
             F: Parser<I, O, E>,
             E: ParseError<I>,
             {
-                move |i: I| {
+                move |i: I| 
+                    {
                     let mut input = i.clone();
                     let max_initial_capacity = MAX_INITIAL_CAPACITY_BYTES / size_of::<O>().max(1);
                     let mut res = Vec::with_capacity(count.min(max_initial_capacity));
@@ -28297,7 +27962,8 @@ pub mod parsers
             F: Fn(I) -> IResult<I, O, E> + 'a,
             E: ParseError<I>,
             {
-                move |i: I| {
+                move |i: I| 
+                    {
                     let mut input = i.clone();
 
                     for elem in buf.iter_mut() {
@@ -28331,7 +27997,8 @@ pub mod parsers
             H: FnMut() -> R,
             E: ParseError<I>,
             {
-                move |i: I| {
+                move |i: I| 
+                    {
                     let mut res = init();
                     let mut input = i;
 
@@ -28340,7 +28007,7 @@ pub mod parsers
                     let len = input.input_len();
                     match f.parse(i_) {
                         Ok((i, o)) => {
-                        // infinite loop check: the parser must always consume
+                       
                         if i.input_len() == len {
                             return Err(Err::Error(E::from_error_kind(input, ErrorKind::Many0)));
                         }
@@ -28370,7 +28037,8 @@ pub mod parsers
             H: FnMut() -> R,
             E: ParseError<I>,
             {
-                move |i: I| {
+                move |i: I| 
+                    {
                     let _i = i.clone();
                     let init = init();
                     match f.parse(_i) {
@@ -28389,7 +28057,7 @@ pub mod parsers
                             }
                             Err(e) => return Err(e),
                             Ok((i, o)) => {
-                            // infinite loop check: the parser must always consume
+                           
                             if i.input_len() == len {
                                 return Err(Err::Failure(E::from_error_kind(i, ErrorKind::Many1)));
                             }
@@ -28419,7 +28087,8 @@ pub mod parsers
             H: FnMut() -> R,
             E: ParseError<I>,
             {
-                move |mut input: I| {
+                move |mut input: I| 
+                    {
                     if min > max {
                     return Err(Err::Failure(E::from_error_kind(input, ErrorKind::ManyMN)));
                     }
@@ -28457,7 +28126,8 @@ pub mod parsers
             F: Parser<I, N, E>,
             E: ParseError<I>,
             {
-                move |i: I| {
+                move |i: I| 
+                    {
                     let (i, length) = f.parse(i)?;
 
                     let length: usize = length.to_usize();
@@ -28481,7 +28151,8 @@ pub mod parsers
             G: Parser<I, O, E>,
             E: ParseError<I>,
             {
-                move |i: I| {
+                move |i: I| 
+                    {
                     let (i, length) = f.parse(i)?;
 
                     let length: usize = length.to_usize();
@@ -28509,7 +28180,8 @@ pub mod parsers
             G: Parser<I, O, E>,
             E: ParseError<I>,
             {
-                move |i: I| {
+                move |i: I| 
+                    {
                     let (i, count) = f.parse(i)?;
                     let mut input = i.clone();
                     let mut res = Vec::new();
@@ -28598,14 +28270,16 @@ pub mod parsers
                 });
             );
             /// Gets an object from the first parser, then gets another object from the second parser.
-            pub fn pair<I, O1, O2, E: ParseError<I>, F, G>(
-            mut first: F,
-            mut second: G,
+            pub fn pair<I, O1, O2, E: ParseError<I>, F, G>
+            (
+                mut first: F,
+                mut second: G,
             ) -> impl FnMut(I) -> IResult<I, (O1, O2), E> where
             F: Parser<I, O1, E>,
             G: Parser<I, O2, E>,
             {
-                move |input: I| {
+                move |input: I| 
+                    {
                     let (input, o1) = first.parse(input)?;
                     second.parse(input).map(|(i, o2)| (i, (o1, o2)))
                 }
@@ -28619,7 +28293,8 @@ pub mod parsers
             F: Parser<I, O1, E>,
             G: Parser<I, O2, E>,
             {
-                move |input: I| {
+                move |input: I| 
+                    {
                     let (input, _) = first.parse(input)?;
                     second.parse(input)
                 }
@@ -28633,7 +28308,8 @@ pub mod parsers
             F: Parser<I, O1, E>,
             G: Parser<I, O2, E>,
             {
-                move |input: I| {
+                move |input: I| 
+                    {
                     let (input, o1) = first.parse(input)?;
                     second.parse(input).map(|(i, _)| (i, o1))
                 }
@@ -28650,7 +28326,8 @@ pub mod parsers
             G: Parser<I, O2, E>,
             H: Parser<I, O3, E>,
             {
-                move |input: I| {
+                move |input: I| 
+                    {
                     let (input, o1) = first.parse(input)?;
                     let (input, _) = sep.parse(input)?;
                     second.parse(input).map(|(i, o2)| (i, (o1, o2)))
@@ -28668,7 +28345,8 @@ pub mod parsers
             G: Parser<I, O2, E>,
             H: Parser<I, O3, E>,
             {
-                move |input: I| {
+                move |input: I| 
+                    {
                     let (input, _) = first.parse(input)?;
                     let (input, o2) = second.parse(input)?;
                     third.parse(input).map(|(i, _)| (i, o2))
@@ -29210,7 +28888,8 @@ pub mod parsers
                     }
                     None
                 }
-                #[inline] fn slice_index(&self, count: usize) -> Result<usize, Needed> {
+                #[inline] fn slice_index(&self, count: usize) -> Result<usize, Needed>
+                {
                     let mut cnt = 0;
                     for (index, _) in self.char_indices() {
                     if cnt == count {
@@ -30051,7 +29730,8 @@ pub mod parsers
                 O: From<u8> + AddAssign + Shl<usize, Output = O> + Shr<usize, Output = O>,
                 {
                     let count = count.to_usize();
-                    move |(input, bit_offset): (I, usize)| {
+                    move |(input, bit_offset): (I, usize)| 
+                    {
                         if count == 0 {
                         Ok(((input, bit_offset), 0u8.into()))
                         } else {
@@ -30102,10 +29782,12 @@ pub mod parsers
                 O: From<u8> + AddAssign + Shl<usize, Output = O> + Shr<usize, Output = O> + PartialEq,
                 {
                     let count = count.to_usize();
-                    move |input: (I, usize)| {
+                    move |input: (I, usize)| 
+                    {
                         let inp = input.clone();
 
-                        take(count)(input).and_then(|(i, o)| {
+                        take(count)(input).and_then(|(i, o)| 
+                    {
                         if pattern == o {
                             Ok((i, o))
                         } else {
@@ -30145,7 +29827,8 @@ pub mod parsers
                 O: From<u8> + AddAssign + Shl<usize, Output = O> + Shr<usize, Output = O>,
                 {
                     let count = count.to_usize();
-                    move |(input, bit_offset): (I, usize)| {
+                    move |(input, bit_offset): (I, usize)| 
+                    {
                         if count == 0 {
                         Ok(((input, bit_offset), 0u8.into()))
                         } else {
@@ -30193,10 +29876,12 @@ pub mod parsers
                 O: From<u8> + AddAssign + Shl<usize, Output = O> + Shr<usize, Output = O> + PartialEq,
                 {
                     let count = count.to_usize();
-                    move |input: (I, usize)| {
+                    move |input: (I, usize)| 
+                    {
                         let inp = input.clone();
 
-                        take(count)(input).and_then(|(i, o)| {
+                        take(count)(input).and_then(|(i, o)| 
+                    {
                         if pattern == o {
                             Ok((i, o))
                         } else {
@@ -30221,7 +29906,8 @@ pub mod parsers
             P: Parser<(I, usize), O, E1>,
             {
                 move |input: I| match parser.parse((input, 0)) {
-                    Ok(((rest, offset), result)) => {
+                    Ok(((rest, offset), result)) =>
+                {
                     let remaining_bytes_index = offset / 8 + if offset % 8 == 0 { 0 } else { 1 };
                     Ok((rest.slice(remaining_bytes_index..), result))
                     }
@@ -30238,7 +29924,8 @@ pub mod parsers
             I: Slice<RangeFrom<usize>> + Clone,
             P: Parser<I, O, E1>,
             {
-                move |(input, offset): (I, usize)| {
+                move |(input, offset): (I, usize)| 
+                    {
                     let inner = if offset % 8 != 0 {
                     input.slice((1 + offset / 8)..)
                     } else {
@@ -30292,7 +29979,8 @@ pub mod parsers
                 Input: InputTake + Compare<T>,
                 T: InputLength + Clone,
                 {
-                    move |i: Input| {
+                    move |i: Input| 
+                    {
                         let tag_len = tag.input_len();
                         let t = tag.clone();
                         let res: IResult<_, _, Error> = match i.compare(t) {
@@ -30312,7 +30000,8 @@ pub mod parsers
                 Input: InputTake + Compare<T>,
                 T: InputLength + Clone,
                 {
-                    move |i: Input| {
+                    move |i: Input| 
+                    {
                         let tag_len = tag.input_len();
                         let t = tag.clone();
 
@@ -30333,7 +30022,8 @@ pub mod parsers
                 Input: InputTakeAtPosition,
                 T: FindToken<<Input as InputTakeAtPosition>::Item>,
                 {
-                    move |i: Input| {
+                    move |i: Input| 
+                    {
                         let e: ErrorKind = ErrorKind::IsNot;
                         i.split_at_position1_complete(|c| arr.find_token(c), e)
                     }
@@ -30345,7 +30035,8 @@ pub mod parsers
                 Input: InputTakeAtPosition,
                 T: FindToken<<Input as InputTakeAtPosition>::Item>,
                 {
-                    move |i: Input| {
+                    move |i: Input| 
+                    {
                         let e: ErrorKind = ErrorKind::IsA;
                         i.split_at_position1_complete(|c| !arr.find_token(c), e)
                     }
@@ -30366,7 +30057,8 @@ pub mod parsers
                 Input: InputTakeAtPosition,
                 F: Fn(<Input as InputTakeAtPosition>::Item) -> bool,
                 {
-                    move |i: Input| {
+                    move |i: Input| 
+                    {
                         let e: ErrorKind = ErrorKind::TakeWhile1;
                         i.split_at_position1_complete(|c| !cond(c), e)
                     }
@@ -30380,7 +30072,8 @@ pub mod parsers
                 Input: InputTake + InputIter + InputLength + Slice<RangeFrom<usize>>,
                 F: Fn(<Input as InputIter>::Item) -> bool,
                 {
-                    move |i: Input| {
+                    move |i: Input| 
+                    {
                         let input = i;
 
                         match input.position(|c| !cond(c)) {
@@ -30449,7 +30142,8 @@ pub mod parsers
                 Input: InputTakeAtPosition,
                 F: Fn(<Input as InputTakeAtPosition>::Item) -> bool,
                 {
-                    move |i: Input| {
+                    move |i: Input| 
+                    {
                         let e: ErrorKind = ErrorKind::TakeTill1;
                         i.split_at_position1_complete(|c| cond(c), e)
                     }
@@ -30474,7 +30168,8 @@ pub mod parsers
                 Input: InputTake + FindSubstring<T>,
                 T: InputLength + Clone,
                 {
-                    move |i: Input| {
+                    move |i: Input| 
+                    {
                         let t = tag.clone();
                         let res: IResult<_, _, Error> = match i.find_substring(t) {
                         None => Err(Err::Error(Error::from_error_kind(i, ErrorKind::TakeUntil))),
@@ -30490,7 +30185,8 @@ pub mod parsers
                 Input: InputTake + FindSubstring<T>,
                 T: InputLength + Clone,
                 {
-                    move |i: Input| {
+                    move |i: Input| 
+                    {
                         let t = tag.clone();
                         let res: IResult<_, _, Error> = match i.find_substring(t) {
                         None => Err(Err::Error(Error::from_error_kind(i, ErrorKind::TakeUntil))),
@@ -30685,7 +30381,8 @@ pub mod parsers
                 Input: InputTake + InputLength + Compare<T>,
                 T: InputLength + Clone,
                 {
-                    move |i: Input| {
+                    move |i: Input| 
+                    {
                         let tag_len = tag.input_len();
                         let t = tag.clone();
 
@@ -30707,7 +30404,8 @@ pub mod parsers
                 Input: InputTake + InputLength + Compare<T>,
                 T: InputLength + Clone,
                 {
-                    move |i: Input| {
+                    move |i: Input| 
+                    {
                         let tag_len = tag.input_len();
                         let t = tag.clone();
 
@@ -30729,7 +30427,8 @@ pub mod parsers
                 Input: InputTakeAtPosition,
                 T: FindToken<<Input as InputTakeAtPosition>::Item>,
                 {
-                    move |i: Input| {
+                    move |i: Input| 
+                    {
                         let e: ErrorKind = ErrorKind::IsNot;
                         i.split_at_position1(|c| arr.find_token(c), e)
                     }
@@ -30763,7 +30462,8 @@ pub mod parsers
                 Input: InputTakeAtPosition,
                 F: Fn(<Input as InputTakeAtPosition>::Item) -> bool,
                 {
-                    move |i: Input| {
+                    move |i: Input| 
+                    {
                         let e: ErrorKind = ErrorKind::TakeWhile1;
                         i.split_at_position1(|c| !cond(c), e)
                     }
@@ -30777,7 +30477,8 @@ pub mod parsers
                 Input: InputTake + InputIter + InputLength,
                 F: Fn(<Input as InputIter>::Item) -> bool,
                 {
-                    move |i: Input| {
+                    move |i: Input| 
+                    {
                         let input = i;
 
                         match input.position(|c| !cond(c)) {
@@ -30843,7 +30544,8 @@ pub mod parsers
                 Input: InputTakeAtPosition,
                 F: Fn(<Input as InputTakeAtPosition>::Item) -> bool,
                 {
-                    move |i: Input| {
+                    move |i: Input| 
+                    {
                         let e: ErrorKind = ErrorKind::TakeTill1;
                         i.split_at_position1(|c| cond(c), e)
                     }
@@ -30868,7 +30570,8 @@ pub mod parsers
                 Input: InputTake + InputLength + FindSubstring<T>,
                 T: Clone,
                 {
-                    move |i: Input| {
+                    move |i: Input| 
+                    {
                         let t = tag.clone();
 
                         let res: IResult<_, _, Error> = match i.find_substring(t) {
@@ -30885,7 +30588,8 @@ pub mod parsers
                 Input: InputTake + InputLength + FindSubstring<T>,
                 T: Clone,
                 {
-                    move |i: Input| {
+                    move |i: Input| 
+                    {
                         let t = tag.clone();
 
                         let res: IResult<_, _, Error> = match i.find_substring(t) {
@@ -31171,7 +30875,8 @@ pub mod parsers
                 I: Slice<RangeFrom<usize>> + InputIter,
                 <I as InputIter>::Item: AsChar,
                 {
-                    move |i: I| match (i).iter_elements().next().map(|t| {
+                    move |i: I| match (i).iter_elements().next().map(|t| 
+                    {
                         let b = t.as_char() == c;
                         (&c, b)
                     }) {
@@ -31185,7 +30890,8 @@ pub mod parsers
                 <I as InputIter>::Item: AsChar,
                 F: Fn(char) -> bool,
                 {
-                    move |i: I| match (i).iter_elements().next().map(|t| {
+                    move |i: I| match (i).iter_elements().next().map(|t| 
+                    {
                         let c = t.as_char();
                         let b = cond(c);
                         (c, b)
@@ -31239,7 +30945,8 @@ pub mod parsers
                 <T as InputIter>::Item: AsChar,
                 <T as InputIter>::Item: AsChar,
                 {
-                    match input.position(|item| {
+                    match input.position(|item| 
+                    {
                         let c = item.as_char();
                         c == '\r' || c == '\n'
                     }) {
@@ -31386,7 +31093,8 @@ pub mod parsers
                 T: InputTakeAtPosition,
                 <T as InputTakeAtPosition>::Item: AsChar + Clone,
                 {
-                    input.split_at_position_complete(|item| {
+                    input.split_at_position_complete(|item| 
+                    {
                         let c = item.as_char();
                         !(c == ' ' || c == '\t')
                     })
@@ -31397,7 +31105,8 @@ pub mod parsers
                 <T as InputTakeAtPosition>::Item: AsChar + Clone,
                 {
                     input.split_at_position1_complete(
-                        |item| {
+                        |item| 
+                    {
                         let c = item.as_char();
                         !(c == ' ' || c == '\t')
                         },
@@ -31409,7 +31118,8 @@ pub mod parsers
                 T: InputTakeAtPosition,
                 <T as InputTakeAtPosition>::Item: AsChar + Clone,
                 {
-                    input.split_at_position_complete(|item| {
+                    input.split_at_position_complete(|item| 
+                    {
                         let c = item.as_char();
                         !(c == ' ' || c == '\t' || c == '\r' || c == '\n')
                     })
@@ -31420,7 +31130,8 @@ pub mod parsers
                 <T as InputTakeAtPosition>::Item: AsChar + Clone,
                 {
                     input.split_at_position1_complete(
-                        |item| {
+                        |item| 
+                    {
                         let c = item.as_char();
                         !(c == ' ' || c == '\t' || c == '\r' || c == '\n')
                         },
@@ -31569,7 +31280,8 @@ pub mod parsers
                 I: Slice<RangeFrom<usize>> + InputIter + InputLength,
                 <I as InputIter>::Item: AsChar,
                 {
-                    move |i: I| match (i).iter_elements().next().map(|t| {
+                    move |i: I| match (i).iter_elements().next().map(|t| 
+                    {
                         let b = t.as_char() == c;
                         (&c, b)
                     }) {
@@ -31584,7 +31296,8 @@ pub mod parsers
                 <I as InputIter>::Item: AsChar,
                 F: Fn(char) -> bool,
                 {
-                    move |i: I| match (i).iter_elements().next().map(|t| {
+                    move |i: I| match (i).iter_elements().next().map(|t| 
+                    {
                         let c = t.as_char();
                         let b = cond(c);
                         (c, b)
@@ -31641,7 +31354,8 @@ pub mod parsers
                 <T as InputIter>::Item: AsChar,
                 <T as InputIter>::Item: AsChar,
                 {
-                    match input.position(|item| {
+                    match input.position(|item| 
+                    {
                         let c = item.as_char();
                         c == '\r' || c == '\n'
                     }) {
@@ -31790,7 +31504,8 @@ pub mod parsers
                 T: InputTakeAtPosition,
                 <T as InputTakeAtPosition>::Item: AsChar + Clone,
                 {
-                    input.split_at_position(|item| {
+                    input.split_at_position(|item| 
+                    {
                         let c = item.as_char();
                         !(c == ' ' || c == '\t')
                     })
@@ -31801,7 +31516,8 @@ pub mod parsers
                 <T as InputTakeAtPosition>::Item: AsChar + Clone,
                 {
                     input.split_at_position1(
-                        |item| {
+                        |item| 
+                    {
                         let c = item.as_char();
                         !(c == ' ' || c == '\t')
                         },
@@ -31813,7 +31529,8 @@ pub mod parsers
                 T: InputTakeAtPosition,
                 <T as InputTakeAtPosition>::Item: AsChar + Clone,
                 {
-                    input.split_at_position(|item| {
+                    input.split_at_position(|item| 
+                    {
                         let c = item.as_char();
                         !(c == ' ' || c == '\t' || c == '\r' || c == '\n')
                     })
@@ -31824,7 +31541,8 @@ pub mod parsers
                 <T as InputTakeAtPosition>::Item: AsChar + Clone,
                 {
                     input.split_at_position1(
-                        |item| {
+                        |item| 
+                    {
                         let c = item.as_char();
                         !(c == ' ' || c == '\t' || c == '\r' || c == '\n')
                         },
@@ -31991,7 +31709,8 @@ pub mod parsers
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     be_u24
-                        .map(|x| {
+                        .map(|x| 
+                    {
                         if x & 0x80_00_00 != 0 {
                             (x | 0xff_00_00_00) as i32
                         } else {
@@ -32128,7 +31847,8 @@ pub mod parsers
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     le_u24
-                    .map(|x| {
+                    .map(|x| 
+                    {
                     if x & 0x80_00_00 != 0 {
                         (x | 0xff_00_00_00) as i32
                     } else {
@@ -32381,7 +32101,8 @@ pub mod parsers
                         .iter()
                         .rev()
                         .enumerate()
-                        .map(|(k, &v)| {
+                        .map(|(k, &v)| 
+                    {
                         let digit = v as char;
                         digit.to_digit(16).unwrap_or(0) << (k * 4)
                         })
@@ -32423,22 +32144,26 @@ pub mod parsers
                 <T as InputTakeAtPosition>::Item: AsChar,
                 {
                     alt((
-                        |i: T| {
+                        |i: T| 
+                    {
                         recognize_float::<_, E>(i.clone()).map_err(|e| match e {
                             ::parsers::nom::Err::Error(_) => ::parsers::nom::Err::Error(E::from_error_kind(i, ErrorKind::Float)),
                             ::parsers::nom::Err::Failure(_) => ::parsers::nom::Err::Failure(E::from_error_kind(i, ErrorKind::Float)),
                             ::parsers::nom::Err::Incomplete(needed) => ::parsers::nom::Err::Incomplete(needed),
                         })
                         },
-                        |i: T| {
+                        |i: T| 
+                    {
                         tag_no_case::<_, _, E>("nan")(i.clone())
                             .map_err(|_| ::parsers::nom::Err::Error(E::from_error_kind(i, ErrorKind::Float)))
                         },
-                        |i: T| {
+                        |i: T| 
+                    {
                         tag_no_case::<_, _, E>("inf")(i.clone())
                             .map_err(|_| ::parsers::nom::Err::Error(E::from_error_kind(i, ErrorKind::Float)))
                         },
-                        |i: T| {
+                        |i: T| 
+                    {
                         tag_no_case::<_, _, E>("infinity")(i.clone())
                             .map_err(|_| ::parsers::nom::Err::Error(E::from_error_kind(i, ErrorKind::Float)))
                         },
@@ -32703,7 +32428,8 @@ pub mod parsers
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     be_u24
-                        .map(|x| {
+                        .map(|x| 
+                    {
                         if x & 0x80_00_00 != 0 {
                             (x | 0xff_00_00_00) as i32
                         } else {
@@ -32840,7 +32566,8 @@ pub mod parsers
                 I: Slice<RangeFrom<usize>> + InputIter<Item = u8> + InputLength,
                 {
                     le_u24
-                        .map(|x| {
+                        .map(|x| 
+                    {
                         if x & 0x80_00_00 != 0 {
                             (x | 0xff_00_00_00) as i32
                         } else {
@@ -33093,7 +32820,8 @@ pub mod parsers
                         .iter()
                         .rev()
                         .enumerate()
-                        .map(|(k, &v)| {
+                        .map(|(k, &v)| 
+                    {
                         let digit = v as char;
                         digit.to_digit(16).unwrap_or(0) << (k * 4)
                         })
@@ -33135,22 +32863,26 @@ pub mod parsers
                 <T as InputTakeAtPosition>::Item: AsChar,
                 {
                     alt((
-                        |i: T| {
+                        |i: T| 
+                    {
                         recognize_float::<_, E>(i.clone()).map_err(|e| match e {
                             ::parsers::nom::Err::Error(_) => ::parsers::nom::Err::Error(E::from_error_kind(i, ErrorKind::Float)),
                             ::parsers::nom::Err::Failure(_) => ::parsers::nom::Err::Failure(E::from_error_kind(i, ErrorKind::Float)),
                             ::parsers::nom::Err::Incomplete(needed) => ::parsers::nom::Err::Incomplete(needed),
                         })
                         },
-                        |i: T| {
+                        |i: T| 
+                    {
                         tag_no_case::<_, _, E>("nan")(i.clone())
                             .map_err(|_| ::parsers::nom::Err::Error(E::from_error_kind(i, ErrorKind::Float)))
                         },
-                        |i: T| {
+                        |i: T| 
+                    {
                         tag_no_case::<_, _, E>("inf")(i.clone())
                             .map_err(|_| ::parsers::nom::Err::Error(E::from_error_kind(i, ErrorKind::Float)))
                         },
-                        |i: T| {
+                        |i: T| 
+                    {
                         tag_no_case::<_, _, E>("infinity")(i.clone())
                             .map_err(|_| ::parsers::nom::Err::Error(E::from_error_kind(i, ErrorKind::Float)))
                         },
@@ -35549,7 +35281,8 @@ pub mod system
 
             fn next_line(&mut self) -> Option<&'a str> 
             {
-                self.lines.next().map(|line| {
+                self.lines.next().map(|line| 
+                    {
                     self.line_num += 1;
                     line.trim()
                 })
@@ -35888,7 +35621,8 @@ pub mod system
                     from_u32(n)?
                 }
                 'v'  => '\x0b',
-                'x'  => {
+                'x'  =>
+                {
                     let mut n = 0;
 
                     for _ in 0..2 {
@@ -35901,7 +35635,8 @@ pub mod system
 
                     n as char
                 }
-                '0' ..= '3' => {
+                '0' ..= '3' =>
+                {
                     let mut n = ch as u8 - b'0';
 
                     for _ in 0..2 {
@@ -36188,7 +35923,8 @@ pub mod system
 
             fn rewrite_history<P: AsRef<Path>>(&self, path: P, w: &WriteLock<Term>)
                     -> io::Result<()> {
-                fn nth_line(s: &str, n: usize) -> Option<usize> {
+                fn nth_line(s: &str, n: usize) -> Option<usize>
+                {
                     let start = s.as_ptr() as usize;
 
                     s.lines().nth(n)
@@ -39818,9 +39554,9 @@ pub mod system
             }
 
             unsafe fn cast_writer<'a>(writer: &'a mut dyn TerminalWriter<Self>) ->
-            &'a mut TerminalWriteGuard<'a>
+            &'a mut TerminalWriteGuardian<'a>
             {
-                &mut *(writer as *mut _ as *mut TerminalWriteGuard)
+                &mut *( writer as *mut _ as *mut TerminalWriteGuardian )
             }
         }
 
@@ -39830,7 +39566,10 @@ pub mod system
 
             fn name(&self) -> &str 
             {
-                self.0.name()
+                /*
+                TODO
+                self.0.name()*/
+                ""
             }
 
             fn lock_read<'a>(&'a self) -> Box<dyn TerminalReader<Self> + 'a> 
@@ -39844,7 +39583,7 @@ pub mod system
             }
         }
 
-        impl<'a> TerminalReader<DefaultTerminal> for TerminalReadGuard<'a> 
+        impl<'a> TerminalReader<DefaultTerminal> for TerminalReadGuardian<'a> 
         {
             fn prepare(&mut self, block_signals: bool, report_signals: SignalSet) -> io::Result<PrepareState>
             {
@@ -39901,46 +39640,60 @@ pub mod system
 
         }
 
-        impl<'a> TerminalWriter<DefaultTerminal> for TerminalWriteGuard<'a> 
+        impl<'a> TerminalWriter<DefaultTerminal> for TerminalWriteGuardian<'a> 
         {
-            fn size(&self) -> io::Result<Size> {
+            fn size(&self) -> io::Result<Size> 
+            {
                 self.size()
             }
 
-            fn clear_screen(&mut self) -> io::Result<()> {
+            fn clear_screen(&mut self) -> io::Result<()> 
+            {
                 self.clear_screen()
             }
 
-            fn clear_to_screen_end(&mut self) -> io::Result<()> {
+            fn clear_to_screen_end(&mut self) -> io::Result<()> 
+            {
                 self.clear_to_screen_end()
             }
 
-            fn move_up(&mut self, n: usize) -> io::Result<()> {
+            fn move_up(&mut self, n: usize) -> io::Result<()> 
+            {
                 self.move_up(n)
             }
-            fn move_down(&mut self, n: usize) -> io::Result<()> {
+
+            fn move_down(&mut self, n: usize) -> io::Result<()> 
+            {
                 self.move_down(n)
             }
-            fn move_left(&mut self, n: usize) -> io::Result<()> {
+
+            fn move_left(&mut self, n: usize) -> io::Result<()> 
+            {
                 self.move_left(n)
             }
-            fn move_right(&mut self, n: usize) -> io::Result<()> {
+
+            fn move_right(&mut self, n: usize) -> io::Result<()> 
+            {
                 self.move_right(n)
             }
 
-            fn move_to_first_column(&mut self) -> io::Result<()> {
+            fn move_to_first_column(&mut self) -> io::Result<()> 
+            {
                 self.move_to_first_column()
             }
 
-            fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> {
+            fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> 
+            {
                 self.set_cursor_mode(mode)
             }
 
-            fn write(&mut self, s: &str) -> io::Result<()> {
+            fn write(&mut self, s: &str) -> io::Result<()> 
+            {
                 self.write_str(s)
             }
 
-            fn flush(&mut self) -> io::Result<()> {
+            fn flush(&mut self) -> io::Result<()> 
+            {
                 self.flush()
             }
         }
@@ -40299,8 +40052,6 @@ pub mod system
         }
         /// Provides concurrent read and write access to a terminal device
         pub struct Terminal( pub sys::Terminal );
-        /// Holds an exclusive lock for read operations on a `Terminal`
-        pub struct TerminalReadGuard<'a>( pub sys::TerminalReadGuard<'a> );
 
         impl Terminal 
         {
@@ -40319,24 +40070,24 @@ pub mod system
                 self.0.name()
             } */
             /// Attempts to acquire an exclusive lock on terminal read operations.
-            #[inline] pub fn lock_read(&self) -> LockResult<TerminalReadGuard> 
+            #[inline] pub fn lock_read(&self) -> LockResult<TerminalReadGuardian> 
             {
-                map_lock_result(self.0.lock_read(), TerminalReadGuard)
+                map_lock_result(self.0.lock_read(), TerminalReadGuardian)
             }
             /// Attempts to acquire an exclusive lock on terminal write operations.
-            #[inline] pub fn lock_write(&self) -> LockResult<TerminalWriteGuard> 
+            #[inline] pub fn lock_write(&self) -> LockResult<TerminalWriteGuardian> 
             {
-                map_lock_result(self.0.lock_write(), TerminalWriteGuard)
+                map_lock_result(self.0.lock_write(), TerminalWriteGuardian )
             }
             /// Attempts to acquire an exclusive lock on terminal read operations.
-            #[inline] pub fn try_lock_read(&self) -> TryLockResult<TerminalReadGuard> 
+            #[inline] pub fn try_lock_read(&self) -> TryLockResult<TerminalReadGuardian> 
             {
-                map_try_lock_result(self.0.try_lock_read(), TerminalReadGuard)
+                map_try_lock_result(self.0.try_lock_read(), TerminalReadGuardian)
             }
             /// Attempts to acquire an exclusive lock on terminal write operations.
-            #[inline] pub fn try_lock_write(&self) -> TryLockResult<TerminalWriteGuard> 
+            #[inline] pub fn try_lock_write(&self) -> TryLockResult<TerminalWriteGuardian> 
             {
-                map_try_lock_result(self.0.try_lock_write(), TerminalWriteGuard)
+                map_try_lock_result( self.0.try_lock_write(), TerminalWriteGuardian )
             }
         }
         /// # Locking
@@ -40370,51 +40121,63 @@ pub mod system
         impl Terminal 
         {
             /// Returns the size of the terminal.
-            #[inline] pub fn size(&self) -> io::Result<Size> {
+            #[inline] pub fn size(&self) -> io::Result<Size> 
+            {
                 self.0.size()
             }
             /// Clears the terminal screen, placing the cursor at the first line and column.
-            pub fn clear_screen(&self) -> io::Result<()> {
+            pub fn clear_screen(&self) -> io::Result<()> 
+            {
                 self.0.clear_screen()
             }
             /// Clears the current line, starting at cursor position.
-            pub fn clear_to_line_end(&self) -> io::Result<()> {
+            pub fn clear_to_line_end(&self) -> io::Result<()> 
+            {
                 self.0.clear_to_line_end()
             }
             /// Clears the screen, starting at cursor position.
-            pub fn clear_to_screen_end(&self) -> io::Result<()> {
+            pub fn clear_to_screen_end(&self) -> io::Result<()> 
+            {
                 self.0.clear_to_screen_end()
             }
             /// Moves the cursor up `n` lines.
-            pub fn move_up(&self, n: usize) -> io::Result<()> {
+            pub fn move_up(&self, n: usize) -> io::Result<()> 
+            {
                 self.0.move_up(n)
             }
             /// Moves the cursor down `n` lines.
-            pub fn move_down(&self, n: usize) -> io::Result<()> {
+            pub fn move_down(&self, n: usize) -> io::Result<()> 
+            {
                 self.0.move_down(n)
             }
             /// Moves the cursor left `n` columns.
-            pub fn move_left(&self, n: usize) -> io::Result<()> {
+            pub fn move_left(&self, n: usize) -> io::Result<()> 
+            {
                 self.0.move_left(n)
             }
             /// Moves the cursor right `n` columns.
-            pub fn move_right(&self, n: usize) -> io::Result<()> {
+            pub fn move_right(&self, n: usize) -> io::Result<()> 
+            {
                 self.0.move_right(n)
             }
             /// Moves the cursor to the first column of the current line
-            pub fn move_to_first_column(&self) -> io::Result<()> {
+            pub fn move_to_first_column(&self) -> io::Result<()> 
+            {
                 self.0.move_to_first_column()
             }
             /// Set the current cursor mode.
-            pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> {
+            pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> 
+            {
                 self.0.set_cursor_mode(mode)
             }
             /// Adds a set of `Style` flags to the current style setting.
-            pub fn add_style(&self, style: Style) -> io::Result<()> {
+            pub fn add_style(&self, style: Style) -> io::Result<()> 
+            {
                 self.0.add_style(style)
             }
             /// Removes a set of `Style` flags from the current style setting.
-            pub fn remove_style(&self, style: Style) -> io::Result<()> {
+            pub fn remove_style(&self, style: Style) -> io::Result<()> 
+            {
                 self.0.remove_style(style)
             }
             /// Sets the current style to the given set of flags.
@@ -40423,77 +40186,86 @@ pub mod system
                 self.0.set_style(style.into().unwrap_or_default())
             }
             /// Sets all attributes for the terminal.
-            pub fn set_theme(&self, theme: Theme) -> io::Result<()> {
+            pub fn set_theme(&self, theme: Theme) -> io::Result<()> 
+            {
                 self.0.set_theme(theme)
             }
             /// Sets the foreground text color.
-            pub fn set_fg<C: Into<Option<Color>>>(&self, fg: C) -> io::Result<()> {
+            pub fn set_fg<C: Into<Option<Color>>>(&self, fg: C) -> io::Result<()> 
+            {
                 self.0.set_fg(fg.into())
             }
             /// Sets the background text color.
-            pub fn set_bg<C: Into<Option<Color>>>(&self, bg: C) -> io::Result<()> {
+            pub fn set_bg<C: Into<Option<Color>>>(&self, bg: C) -> io::Result<()> 
+            {
                 self.0.set_bg(bg.into())
             }
             /// Removes color and style attributes.
-            pub fn clear_attributes(&self) -> io::Result<()> {
+            pub fn clear_attributes(&self) -> io::Result<()> 
+            {
                 self.0.clear_attributes()
             }
             /// Adds bold to the current style setting.
-            pub fn bold(&self) -> io::Result<()> {
+            pub fn bold(&self) -> io::Result<()> 
+            {
                 self.add_style(Style::BOLD)
             }
             /// Adds italic to the current style setting.
-            pub fn italic(&self) -> io::Result<()> {
+            pub fn italic(&self) -> io::Result<()> 
+            {
                 self.add_style(Style::ITALIC)
             }
             /// Adds underline to the current style setting.
-            pub fn underline(&self) -> io::Result<()> {
+            pub fn underline(&self) -> io::Result<()> 
+            {
                 self.add_style(Style::UNDERLINE)
             }
             /// Adds reverse to the current style setting.
-            pub fn reverse(&self) -> io::Result<()> {
+            pub fn reverse(&self) -> io::Result<()> 
+            {
                 self.add_style(Style::REVERSE)
             }
             /// Writes output to the terminal with the given color and style.
             pub fn write_styled<F, B, S>(&self, fg: F, bg: B, style: S, s: &str)
-                    -> io::Result<()> where
-                    F: Into<Option<Color>>,
-                    B: Into<Option<Color>>,
-                    S: Into<Option<Style>>,
-                    {
+            -> io::Result<()> where
+            F: Into<Option<Color>>,
+            B: Into<Option<Color>>,
+            S: Into<Option<Style>>,
+            {
                 self.0.write_styled(fg.into(), bg.into(), style.into().unwrap_or_default(), s)
             }
-            /// Writes a single character to the terminal
-            /// using the current style and color settings.
-            pub fn write_char(&self, ch: char) -> io::Result<()> {
+            /// Writes a single character to the terminal using the current style and color settings.
+            pub fn write_char(&self, ch: char) -> io::Result<()>
+            {
                 self.0.write_char(ch)
             }
-            /// Writes a string to the terminal
-            /// using the current style and color settings.
-            pub fn write_str(&self, s: &str) -> io::Result<()> {
+            /// Writes a string to the terminal using the current style and color settings.
+            pub fn write_str(&self, s: &str) -> io::Result<()> 
+            {
                 self.0.write_str(s)
             }
-            /// Writes formatted text to the terminal
-            /// using the current style and color settings.
+            /// Writes formatted text to the terminal using the current style and color settings.
             pub fn write_fmt(&self, args: fmt::Arguments) -> io::Result<()> {
                 let s = args.to_string();
                 self.write_str(&s)
             }
 
             #[doc(hidden)]
-            pub fn borrow_term_write_guard(&self) -> TerminalWriteGuard {
+            pub fn borrow_term_write_guard(&self) -> TerminalWriteGuardian {
                 self.lock_write().unwrap()
             }
         }
+        /// Holds an exclusive lock for read operations on a `Terminal`
+        pub struct TerminalReadGuardian<'a>( pub sys::TerminalReadGuard<'a> );
 
-        impl<'a> TerminalReadGuard<'a> 
+        impl<'a> TerminalReadGuardian<'a> 
         {
             /// Prepares the terminal to read input.
             pub fn prepare(&mut self, config: PrepareConfig) -> io::Result<PrepareState> {
                 self.0.prepare(config).map(PrepareState)
             }
             /// Performs terminal preparation using both [`Terminal`] locks.
-            pub fn prepare_with_lock(&mut self, writer: &mut TerminalWriteGuard,
+            pub fn prepare_with_lock(&mut self, writer: &mut TerminalWriteGuardian,
                     config: PrepareConfig) -> io::Result<PrepareState> {
                 self.0.prepare_with_lock(&mut writer.0, config).map(PrepareState)
             }
@@ -40502,7 +40274,7 @@ pub mod system
                 self.0.restore(state.0)
             }
             /// Performs terminal state restoration using both [`Terminal`] locks.
-            pub fn restore_with_lock(&mut self, writer: &mut TerminalWriteGuard,
+            pub fn restore_with_lock(&mut self, writer: &mut TerminalWriteGuardian,
                     state: PrepareState) -> io::Result<()> {
                 self.0.restore_with_lock(&mut writer.0, state.0)
             }
@@ -40516,9 +40288,9 @@ pub mod system
             }
         }
         /// Holds an exclusive lock for write operations on a `Terminal`
-        pub struct TerminalWriteGuard<'a>( sys::TerminalWriteGuard<'a> );
+        pub struct TerminalWriteGuardian<'a>( sys::TerminalWriteGuard<'a> );
 
-        impl<'a> TerminalWriteGuard<'a> 
+        impl<'a> TerminalWriteGuardian<'a> 
         {
             /// Flush all output to the terminal device.
             pub fn flush(&mut self) -> io::Result<()> 
@@ -40662,17 +40434,17 @@ pub mod system
             }
         }
         /*
-        TODO
-        fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>>
-        fn read_raw_event(&mut self, events: &mut [INPUT_RECORD], timeout: Option<Duration>) -> io::Result<Option<Event>>
+            TODO
+            fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>>
+            fn read_raw_event(&mut self, events: &mut [INPUT_RECORD], timeout: Option<Duration>) -> io::Result<Option<Event>>
 
-        ...
+            ...
 
-        Add 
-        fn read_raw_unix( ... ) -> io::Result<Option<Event>>
-        fn read_raw_windows( ... ) -> io::Result<Option<Event>>
-        fn read_raw_event_unix( ... ) -> io::Result<Option<Event>>
-        fn read_raw_event_windows( ... ) -> io::Result<Option<Event>>
+            Add 
+            fn read_raw_unix( ... ) -> io::Result<Option<Event>>
+            fn read_raw_windows( ... ) -> io::Result<Option<Event>>
+            fn read_raw_event_unix( ... ) -> io::Result<Option<Event>>
+            fn read_raw_event_windows( ... ) -> io::Result<Option<Event>>
         */
     } pub use self::terminal::{ * };
 
@@ -40681,6 +40453,7 @@ pub mod system
         use ::
         {
             borrow::Cow,
+            convert::TryInto,
             mem::replace,
             time::Duration,
             *,
@@ -40859,7 +40632,8 @@ pub mod system
                     completion_query_items: 100,
                     disable_completion: false,
                     echo_control_characters: true,
-                    keyseq_timeout: Some(Duration::milliseconds(KEYSEQ_TIMEOUT_MS)),
+                    //keyseq_timeout: Some(Duration::milliseconds(KEYSEQ_TIMEOUT_MS)),
+                    keyseq_timeout: Some(Duration::milliseconds(KEYSEQ_TIMEOUT_MS.try_into().unwrap())),
                     page_completions: true,
                     print_completions_horizontally: false,
                 }
@@ -40901,7 +40675,8 @@ pub mod system
             match s.parse::<i32>() 
             {
                 Ok(n) if n <= 0 => Some(None),
-                Ok(n) => Some(Some(Duration::milliseconds(n as u64))),
+                //Ok(n) => Some(Some(Duration::milliseconds(n as u64))),
+                Ok(n) => Some(Some(Duration::milliseconds((n as u64).try_into().unwrap()))),
                 Err(_) => Some(None)
             }
         }
@@ -42554,7 +42329,8 @@ pub mod system
                     self.reader.wait_event(timeout)
                 }
 
-                pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>>
+                {
                     let r = self.reader.read_event(timeout)?;
 
                     if let Some(Event::Resize(size)) = r {
@@ -42564,7 +42340,8 @@ pub mod system
                     Ok(r)
                 }
 
-                pub fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                pub fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>>
+                {
                     let r = self.reader.read_raw(buf, timeout)?;
 
                     if let Some(Event::Resize(size)) = r {
@@ -42744,7 +42521,8 @@ pub mod system
                 ( $slf:expr , $cap:path , $name:expr , |$ex:ident| $expansion:expr ) => { {
                     $slf.term.info.read::<$cap>()
                         .ok_or_else(|| not_supported($name))
-                        .and_then(|cap| {
+                        .and_then(|cap| 
+                    {
                             let $ex = cap.expand();
                             $slf.expand($expansion)
                         })
@@ -42809,7 +42587,7 @@ pub mod system
 
                 // pub fn name(&self) -> &str { self.info.name() }
 
-                fn is_xterm(&self) -> bool { is_xterm(self.name()) }
+                // fn is_xterm(&self) -> bool { is_xterm(self.name()) }
 
                 pub fn size(&self) -> io::Result<Size> { self.lock_writer().size() }
 
@@ -42965,20 +42743,23 @@ pub mod system
                     TerminalReadGuard{term, reader}
                 }
 
-                pub fn prepare(&mut self, config: PrepareConfig) -> io::Result<PrepareState> {
+                pub fn prepare(&mut self, config: PrepareConfig) -> io::Result<PrepareState>
+                {
                     let mut writer = self.term.lock_writer();
                     self.prepare_with_lock(&mut writer, config)
                 }
 
-                pub fn prepare_with_lock(&mut self, writer: &mut TerminalWriteGuard,
-                        config: PrepareConfig) -> io::Result<PrepareState> {
-                    use nix::sys::termios::SpecialCharacterIndices::*;
+                pub fn prepare_with_lock
+                (
+                    &mut self,
+                    writer: &mut TerminalWriteGuard,
+                    config: PrepareConfig
+                ) -> io::Result<PrepareState>
+                {
 
-                    let old_tio = tcgetattr(self.term.in_fd).map_err(nix_to_io)?;
-                    let mut tio = old_tio.clone();
-
-                    let mut state = PrepareState{
-                        old_tio: old_tio.into(),
+                    let mut state = PrepareState
+                    {
+                        old_tio: None,//old_tio.into(),
                         old_sigcont: None,
                         old_sigint: None,
                         old_sigtstp: None,
@@ -42988,34 +42769,33 @@ pub mod system
                         restore_mouse: false,
                         prev_resume: self.reader.resume,
                     };
+                    /*
+                    TODO:
+                    use nix::sys::termios::SpecialCharacterIndices::*;
+
+                    let old_tio = tcgetattr(self.term.in_fd).map_err(nix_to_io)?;
+                    let mut tio = old_tio.clone();
 
                     tio.input_flags.remove(
                         InputFlags::INLCR | InputFlags::ICRNL
                     );
 
                     tio.local_flags.remove(
-                        // Disable canonical mode;
                         LocalFlags::ICANON | LocalFlags::ECHO
                     );
-
-                    // ISIG, when enabled, causes the process to receive signals when
-                    // Ctrl-C, Ctrl-\, etc. are input
+                    
                     if config.block_signals {
                         tio.local_flags.remove(LocalFlags::ISIG);
                     } else {
                         tio.local_flags.insert(LocalFlags::ISIG);
-                    }
-
-                    // IXON, when enabled, allows Ctrl-S/Ctrl-Q to suspend and restart inputs
+                        
                     if config.enable_control_flow {
                         tio.input_flags.insert(InputFlags::IXON);
                     } else {
                         tio.input_flags.remove(InputFlags::IXON);
                     }
-
-                    // Allow a read to return with 0 characters ready
+                    
                     tio.control_chars[VMIN as usize] = 0;
-                    // Allow a read to return after 0 deciseconds
                     tio.control_chars[VTIME as usize] = 0;
 
                     tcsetattr(self.term.in_fd, SetArg::TCSANOW, &tio).map_err(nix_to_io)?;
@@ -43036,9 +42816,7 @@ pub mod system
 
                     let action = SigAction::new(SigHandler::Handler(handle_signal),
                         SaFlags::empty(), SigSet::all());
-
-                    // Continue and Resize are always handled by the internals,
-                    // but only reported if requested.
+                        
                     state.old_sigcont = Some(unsafe { sigaction(NixSignal::SIGCONT, &action).map_err(nix_to_io)? });
                     state.old_sigwinch = Some(unsafe { sigaction(NixSignal::SIGWINCH, &action).map_err(nix_to_io)? });
 
@@ -43053,18 +42831,27 @@ pub mod system
                     }
 
                     self.reader.report_signals = config.report_signals;
-                    self.reader.resume = Some(Resume{config});
+                    self.reader.resume = Some(Resume{config}); */
 
-                    Ok(state)
+                    Ok(state) 
                 }
 
-                pub fn restore(&mut self, state: PrepareState) -> io::Result<()> {
+                pub fn restore(&mut self, state: PrepareState) -> io::Result<()>
+                {
                     let mut writer = self.term.lock_writer();
                     self.restore_with_lock(&mut writer, state)
                 }
 
-                pub fn restore_with_lock(&mut self, writer: &mut TerminalWriteGuard,
-                        state: PrepareState) -> io::Result<()> {
+                pub fn restore_with_lock
+                (
+                    &mut self,
+                    writer: &mut TerminalWriteGuard,
+                    state: PrepareState
+                ) -> io::Result<()>
+                {
+                    /*
+                    TODO:
+
                     self.reader.resume = state.prev_resume;
 
                     if state.restore_mouse {
@@ -43095,12 +42882,15 @@ pub mod system
                         if let Some(ref old) = state.old_sigwinch {
                             sigaction(NixSignal::SIGWINCH, old).map_err(nix_to_io)?;
                         }
-                    }
+                    } */
 
                     Ok(())
                 }
 
-                pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool> {
+                pub fn wait_event(&mut self, timeout: Option<Duration>) -> io::Result<bool> 
+                {
+                    /*
+                    TODO:
                     if get_signal().is_some() {
                         return Ok(true);
                     }
@@ -43116,8 +42906,7 @@ pub mod system
 
                         let mut r_fds = FdSet::new();
                         r_fds.insert(in_fd);
-
-                        // FIXME: FdSet does not implement Copy or Clone
+                        
                         let mut e_fds = FdSet::new();
                         e_fds.insert(in_fd);
 
@@ -43133,7 +42922,8 @@ pub mod system
                         }
                     };
 
-                    Ok(n != 0)
+                    Ok(n != 0) */
+                    Ok(true)
                 }
 
                 pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
@@ -43176,8 +42966,8 @@ pub mod system
                     }
                 }
 
-                fn read_into_buffer(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    // Temporarily replace the buffer to prevent borrow errors
+                fn read_into_buffer(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>>
+                {
                     let mut buf = replace(&mut self.reader.in_buffer, Vec::new());
 
                     buf.reserve(128);
@@ -43196,15 +42986,14 @@ pub mod system
                             _ => buf.set_len(len)
                         }
                     }
-
-                    // Restore the buffer before returning
+                    
                     self.reader.in_buffer = buf;
 
                     r
                 }
 
-                fn read_input(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    // Check for a signal that may have already arrived.
+                fn read_input(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> 
+                {
                     if let Some(sig) = take_signal() {
                         return Ok(Some(Event::Signal(sig)));
                     }
@@ -43212,8 +43001,7 @@ pub mod system
                     if !self.wait_event(timeout)? {
                         return Ok(None);
                     }
-
-                    // Check for a signal again after waiting
+                    
                     if let Some(sig) = take_signal() {
                         return Ok(Some(Event::Signal(sig)));
                     }
@@ -43231,7 +43019,8 @@ pub mod system
                     }
                 }
 
-                fn try_read(&mut self) -> io::Result<Option<Event>> {
+                fn try_read(&mut self) -> io::Result<Option<Event>>
+                {
                     let in_buffer = &mut self.reader.in_buffer;
 
                     if in_buffer.is_empty() {
@@ -43275,16 +43064,19 @@ pub mod system
                 }
             }
 
-            pub fn terminal_read(term: &mut TerminalReadGuard, buf: &mut Vec<u8>) -> io::Result<RawRead>
+            pub fn terminal_read(term: &mut TerminalReadGuardian, buf: &mut Vec<u8>) -> io::Result<RawRead>
             {
                 let mut buffer = [0; 1024];
 
-                match term.read_raw(&mut buffer, Some(Duration::new(0, 0)))? {
+                match term.read_raw(&mut buffer, Some(Duration::new(0, 0)))? 
+                {
                     None => Ok(RawRead::Bytes(0)),
-                    Some(Event::Raw(n)) => {
+                    Some(Event::Raw(n)) => 
+                    {
                         buf.extend(&buffer[..n]);
                         Ok(RawRead::Bytes(n))
                     }
+
                     Some(Event::Resize(size)) => Ok(RawRead::Resize(size)),
                     Some(Event::Signal(sig)) => Ok(RawRead::Signal(sig)),
                     _ => unreachable!()
@@ -43320,14 +43112,18 @@ pub mod system
                     }
                 }
 
-                fn disable_mouse(&mut self) -> io::Result<()> {
+                fn disable_mouse(&mut self) -> io::Result<()> 
+                {
                     self.write_bytes(XTERM_DISABLE_MOUSE.as_bytes())?;
                     self.write_bytes(XTERM_DISABLE_MOUSE_MOTION.as_bytes())
                 }
 
                 fn enable_mouse(&mut self, track_motion: bool) -> io::Result<bool> 
                 {
-                    if self.term.is_xterm() {
+                    /*
+                    TODO:
+                    if self.term.is_xterm()
+                    {
                         self.write_bytes(XTERM_ENABLE_MOUSE.as_bytes())?;
                         if track_motion {
                             self.write_bytes(XTERM_ENABLE_MOUSE_MOTION.as_bytes())?;
@@ -43335,7 +43131,8 @@ pub mod system
                         Ok(true)
                     } else {
                         Ok(false)
-                    }
+                    } */
+                    Ok(true)
                 }
 
                 fn enter_screen(&mut self) -> io::Result<()> 
@@ -43416,7 +43213,8 @@ pub mod system
                     }
                 }
 
-                pub fn add_style(&mut self, style: Style) -> io::Result<()> {
+                pub fn add_style(&mut self, style: Style) -> io::Result<()>
+                {
                     let add = style - self.writer.cur_style;
 
                     if add.contains(Style::BOLD) {
@@ -43617,9 +43415,6 @@ pub mod system
                     {
                         CursorMode::Normal | CursorMode::Overwrite =>
                         {
-                            // Overwrite is not supported by Unix terminals.
-                            // We set to normal in this case as it will reverse
-                            // a setting of Invisible
                             expand_opt!(self, mode::CursorNormal)?;
                         }
                         
@@ -43671,6 +43466,10 @@ pub mod system
 
                 fn write_data(&self, buf: &[u8]) -> (usize, io::Result<()>) 
                 {
+                    /*
+                    TODO:
+                    the trait bound `i32: AsFd` is not satisfied
+
                     let mut offset = 0;
 
                     let r = loop 
@@ -43686,7 +43485,8 @@ pub mod system
                         }
                     };
 
-                    (offset, r)
+                    (offset, r) */
+                    (0, Ok(()))
                 }
 
                 fn expand<T: AsRef<[u8]>>(&mut self, exp: Expansion<T>) -> io::Result<()>
@@ -43726,7 +43526,6 @@ pub mod system
 
             fn is_xterm(name: &str) -> bool 
             {
-                // Includes such terminal names as "xterm-256color"
                 name == "xterm" || name.starts_with("xterm-")
             }
 
@@ -43776,7 +43575,7 @@ pub mod system
 
             pub struct PrepareState 
             {
-                old_tio: termios,
+                old_tio: Option<termios>,
                 old_sigcont: Option<SigAction>,
                 old_sigint: Option<SigAction>,
                 old_sigtstp: Option<SigAction>,
@@ -43821,22 +43620,24 @@ pub mod system
 
             fn get_winsize(fd: c_int) -> io::Result<Size> 
             {
-                let mut winsz: Winsize = unsafe { zeroed() };
+                unsafe
+                {
+                    let mut winsz: Winsize = zeroed();
+                    let res = ioctl(fd, TIOCGWINSZ.into(), &mut winsz);
 
-                // `TIOCGWINSZ.into()` is a workaround to a bug in the libc crate:
-                //  https://github.com/rust-lang/libc/pull/704
-                let res = unsafe { ioctl(fd, TIOCGWINSZ.into(), &mut winsz) };
-
-                if res == -1 {
-                    Err(io::Error::last_os_error())
-                } else {
-                    let size = Size{
-                        lines: winsz.ws_row as usize,
-                        columns: winsz.ws_col as usize,
-                    };
-
-                    Ok(size)
-                }
+                    if res == -1 { Err(io::Error::last_os_error()) }
+                    else
+                    {
+                        Ok
+                        (
+                            Size
+                            {
+                                lines: winsz.ws_row as usize,
+                                columns: winsz.ws_col as usize,
+                            }    
+                        )
+                    }
+                } 
             }
 
             fn nix_to_io(e: nix::Error) -> io::Error 
@@ -43896,14 +43697,14 @@ pub mod system
                         }
                     }
 
-                    let res = last_match.and_then(|(seq, value)| {
+                    let res = last_match.and_then(|(seq, value)| 
+                    {
                         match value {
                             SeqData::Key(key) => Some((Event::Key(key), seq.len())),
                             SeqData::XTermMouse => {
                                 if let Some((data, len)) = parse_mouse_data(&buf[seq.len()..]) {
                                     Some((Event::Mouse(data), seq.len() + len))
                                 } else {
-                                    // Input sequence was incomplete
                                     None
                                 }
                             }
@@ -43967,7 +43768,6 @@ pub mod system
                 };
 
                 let position = Cursor{
-                    // Parsed line and column begin at 1; we begin at 0
                     line: (line - 1) as usize,
                     column: (column - 1) as usize,
                 };
@@ -44123,7 +43923,7 @@ pub mod system
             { self.0.read_raw(buf, timeout) }
         }
         
-        impl<'a> TerminalExt for system::TerminalReadGuard<'a> 
+        impl<'a> TerminalExt for system::TerminalReadGuardian<'a> 
         {
             fn read_raw(&mut self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> 
             { self.0.read_raw(buf, timeout) }
@@ -44360,7 +44160,8 @@ pub mod system
                     self.reader.wait_event(timeout)
                 }
 
-                pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>>
+                {
                     let r = self.reader.read_event(timeout)?;
 
                     if let Some(Event::Resize(size)) = r {
@@ -44370,7 +44171,8 @@ pub mod system
                     Ok(r)
                 }
 
-                pub fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                pub fn read_raw(&mut self, buf: &mut [u16], timeout: Option<Duration>) -> io::Result<Option<Event>>
+                {
                     let r = self.reader.read_raw(buf, timeout)?;
 
                     if let Some(Event::Resize(size)) = r {
@@ -44381,7 +44183,8 @@ pub mod system
                 }
 
                 pub fn read_raw_event(&mut self, events: &mut [INPUT_RECORD],
-                        timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                        timeout: Option<Duration>) -> io::Result<Option<Event>>
+                {
                     let r = self.reader.read_raw_event(events, timeout)?;
 
                     if let Some(Event::Raw(n)) = r {
@@ -44478,7 +44281,6 @@ pub mod system
             {
                 fn update_size(&mut self, new_size: Size) {
                     if self.real_cursor.is_out_of_bounds(new_size) {
-                        // Force cursor move on next refresh
                         self.real_cursor = (!0, !0).into();
                     }
                     self.buffer.resize(new_size);
@@ -44691,9 +44493,7 @@ pub mod system
                             buf.push(b'\r');
                         }
                         VK_ESCAPE  => buf.push(b'\x1b'),
-                        // Page up
                         VK_PRIOR   => buf.extend(PAGE_UP_SEQ.as_bytes()),
-                        // Page down
                         VK_NEXT    => buf.extend(PAGE_DOWN_SEQ.as_bytes()),
                         VK_END     => buf.extend(END_SEQ.as_bytes()),
                         VK_HOME    => buf.extend(HOME_SEQ.as_bytes()),
@@ -44793,7 +44593,8 @@ pub mod system
 
             impl Terminal 
             {
-                fn new(out: DWORD) -> io::Result<Terminal> {
+                fn new(out: DWORD) -> io::Result<Terminal>
+                {
                     let in_handle = result_handle(
                         unsafe { GetStdHandle(STD_INPUT_HANDLE) })?;
                     let out_handle = result_handle(
@@ -44944,7 +44745,8 @@ pub mod system
             {
                 fn drop(&mut self) {
                     let r = self.set_cursor_mode(CursorMode::Normal);
-                    let r2 = r.and_then(|_| {
+                    let r2 = r.and_then(|_| 
+                    {
                         let lock = self.lock_writer();
                         unsafe { set_console_mode(lock.writer.out_handle, self.old_out_mode)?; }
                         Ok(())
@@ -44962,13 +44764,15 @@ pub mod system
                     TerminalReadGuard{term, reader}
                 }
 
-                pub fn prepare(&mut self, config: PrepareConfig) -> io::Result<PrepareState> {
+                pub fn prepare(&mut self, config: PrepareConfig) -> io::Result<PrepareState>
+                {
                     let mut writer = self.term.lock_writer();
                     self.prepare_with_lock(&mut writer, config)
                 }
 
                 pub fn prepare_with_lock(&mut self, _writer: &mut TerminalWriteGuard,
-                        config: PrepareConfig) -> io::Result<PrepareState> {
+                        config: PrepareConfig) -> io::Result<PrepareState>
+                {
                     let old_in_mode = unsafe { console_mode(self.term.in_handle)? };
 
                     let mut state = PrepareState{
@@ -44977,37 +44781,24 @@ pub mod system
                     };
 
                     let mut in_mode = old_in_mode;
-
-                    // Necessary to modify certain flags
                     in_mode |= ENABLE_EXTENDED_FLAGS;
-
-                    // Disable echoing input to console
                     in_mode &= !ENABLE_ECHO_INPUT;
-                    // Disable waiting for newline before input can be read
                     in_mode &= !ENABLE_LINE_INPUT;
-
-                    // Enable or disable processing Ctrl-C as interrupt
                     if config.block_signals {
                         in_mode &= !ENABLE_PROCESSED_INPUT;
                     } else {
                         in_mode |= ENABLE_PROCESSED_INPUT;
                     }
-
-                    // Enable or disable mouse events
+                    
                     if config.enable_mouse {
                         self.reader.always_track_motion = config.always_track_motion;
                         in_mode |= ENABLE_MOUSE_INPUT;
                     } else {
                         in_mode &= !ENABLE_MOUSE_INPUT;
                     }
-
-                    // Disable text editing using mouse
+                    
                     in_mode &= !ENABLE_QUICK_EDIT_MODE;
-
-                    // Enable window size events
                     in_mode |= ENABLE_WINDOW_INPUT;
-
-                    // Disable escape sequences in input
                     in_mode &= !ENABLE_VIRTUAL_TERMINAL_INPUT;
 
                     unsafe {
@@ -45023,7 +44814,8 @@ pub mod system
                     Ok(state)
                 }
 
-                pub fn restore(&mut self, state: PrepareState) -> io::Result<()> {
+                pub fn restore(&mut self, state: PrepareState) -> io::Result<()>
+                {
                     let mut writer = self.term.lock_writer();
                     self.restore_with_lock(&mut writer, state)
                 }
@@ -45057,7 +44849,8 @@ pub mod system
                     }
                 }
 
-                pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
+                pub fn read_event(&mut self, timeout: Option<Duration>) -> io::Result<Option<Event>>
+                {
                     let mut event: [INPUT_RECORD; 1] = unsafe { zeroed() };
 
                     let n = match self.read_raw_event(&mut event, timeout)? {
@@ -45196,7 +44989,8 @@ pub mod system
                     TerminalWriteGuard{term, writer: writer}
                 }
 
-                fn enter_screen(&mut self) -> io::Result<HANDLE> {
+                fn enter_screen(&mut self) -> io::Result<HANDLE>
+                {
                     let size = self.size()?;
 
                     let handle = result_handle(unsafe { CreateConsoleScreenBuffer(
@@ -45238,7 +45032,8 @@ pub mod system
                     Ok(())
                 }
 
-                pub fn clear_screen(&mut self) -> io::Result<()> {
+                pub fn clear_screen(&mut self) -> io::Result<()>
+                {
                     let mut info = self.get_info()?;
 
                     let win_height = (info.srWindow.Bottom - info.srWindow.Top) + 1;
@@ -45300,7 +45095,8 @@ pub mod system
                     })
                 }
 
-                pub fn clear_to_line_end(&mut self) -> io::Result<()> {
+                pub fn clear_to_line_end(&mut self) -> io::Result<()>
+                {
                     let info = self.get_info()?;
 
                     let start = info.dwCursorPosition;
@@ -45309,7 +45105,8 @@ pub mod system
                     self.clear_area(start, (size.X - start.X) as DWORD)
                 }
 
-                pub fn clear_to_screen_end(&mut self) -> io::Result<()> {
+                pub fn clear_to_screen_end(&mut self) -> io::Result<()>
+                {
                     let info = self.get_info()?;
 
                     let start = info.dwCursorPosition;
@@ -45327,7 +45124,8 @@ pub mod system
                     self.move_abs(cursor_to_coord(pos))
                 }
 
-                pub fn move_to_first_column(&mut self) -> io::Result<()> {
+                pub fn move_to_first_column(&mut self) -> io::Result<()>
+                {
                     let info = self.get_info()?;
                     self.move_abs(COORD{X: 0, Y: info.dwCursorPosition.Y})
                 }
@@ -45348,7 +45146,8 @@ pub mod system
                     self.move_rel(COORD{X: to_short(n), Y: 0})
                 }
 
-                pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> {
+                pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()>
+                {
                     let (size, vis) = match mode {
                         CursorMode::Normal => (25, TRUE),
                         CursorMode::Invisible => (1, FALSE),
@@ -45367,7 +45166,8 @@ pub mod system
                     self.set_attributes(None, None, Style::empty())
                 }
 
-                pub fn add_style(&mut self, style: Style) -> io::Result<()> {
+                pub fn add_style(&mut self, style: Style) -> io::Result<()>
+                {
                     let add = style - self.writer.style;
 
                     if !add.is_empty() {
@@ -45378,7 +45178,8 @@ pub mod system
                     Ok(())
                 }
 
-                pub fn remove_style(&mut self, style: Style) -> io::Result<()> {
+                pub fn remove_style(&mut self, style: Style) -> io::Result<()>
+                {
                     let remove = style & self.writer.style;
 
                     if !remove.is_empty() {
@@ -45429,7 +45230,8 @@ pub mod system
                     Ok(())
                 }
 
-                fn update_attrs(&mut self) -> io::Result<()> {
+                fn update_attrs(&mut self) -> io::Result<()>
+                {
                     let mut attrs = self.term.default_attrs;
 
                     if let Some(fg) = self.writer.fg {
@@ -45451,12 +45253,14 @@ pub mod system
                     self.set_attrs(attrs)
                 }
 
-                pub fn write_char(&mut self, ch: char) -> io::Result<()> {
+                pub fn write_char(&mut self, ch: char) -> io::Result<()>
+                {
                     let mut buf = [0; 4];
                     self.write_str(ch.encode_utf8(&mut buf))
                 }
 
-                pub fn write_str(&mut self, s: &str) -> io::Result<()> {
+                pub fn write_str(&mut self, s: &str) -> io::Result<()>
+                {
                     let buf = OsStr::new(s).encodes_wide().collect::<Vec<_>>();
                     let mut n = 0;
 
@@ -45488,7 +45292,8 @@ pub mod system
                     self.clear_attributes()
                 }
 
-                fn clear_area(&mut self, start: COORD, n: DWORD) -> io::Result<()> {
+                fn clear_area(&mut self, start: COORD, n: DWORD) -> io::Result<()>
+                {
                     let mut n_chars = 0;
 
                     result_bool(unsafe { FillConsoleOutputAttribute(
@@ -45513,7 +45318,8 @@ pub mod system
                         self.writer.out_handle, pos) })
                 }
 
-                fn move_rel(&mut self, off: COORD) -> io::Result<()> {
+                fn move_rel(&mut self, off: COORD) -> io::Result<()>
+                {
                     let info = self.get_info()?;
 
                     let size = info.dwSize;
@@ -45589,7 +45395,6 @@ pub mod system
                 let mut code = 0;
 
                 if style.contains(Style::BOLD) {
-                    // Closest available approximation for bold text
                     code |= FOREGROUND_INTENSITY as WORD;
                 }
 
@@ -45924,8 +45729,6 @@ pub mod system
                             };
 
                             let mut n = 0;
-
-                            // Ignore any errors from this
                             let _ = WriteConsoleInputW(
                                 handle,
                                 &input,
@@ -46417,4 +46220,4 @@ fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 46420
+// 46223
