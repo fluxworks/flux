@@ -2486,6 +2486,7 @@ pub mod database
                     }
 
                     ParseError(ref error) | IoError(ref error) | ExpandError(ref error) => write!(f, "{}", error),
+                    _ => write!(f, "Unknown Database Error" ),
                     
                 }
             }
@@ -2509,6 +2510,7 @@ pub mod database
                     TupleMismatch(_, _, _) => "Tup inner types do not match",
                     TypeMismatch(_, _) => "Type mismatch",
                     ParseError(ref error) | IoError(ref error) | ExpandError(ref error) => error,
+                    _ => "Unknown Error Description"
                 }
             }
         }
@@ -3428,15 +3430,18 @@ pub mod database
 
         macro_rules! from_type_marker_to_value 
         {
-            (number $ty:ty) => {
-                impl From<$ty> for Value {
+            (number $ty:ty) => 
+            {
+                impl From<$ty> for Value 
+                {
                     fn from(value: $ty) -> Self {
                         Value::Number(value as i32)
                     }
                 }
             };
 
-            (string ref $ty:ty) => {
+            (string ref $ty:ty) => 
+            {
                 impl<'a> From<&'a $ty> for Value {
                     fn from(value: &'a $ty) -> Self {
                         Value::String(value.into())
@@ -3444,8 +3449,10 @@ pub mod database
                 }
             };
 
-            (string $ty:ty) => {
-                impl From<$ty> for Value {
+            (string $ty:ty) => 
+            {
+                impl From<$ty> for Value 
+                {
                     fn from(value: $ty) -> Self {
                         Value::String(value.into())
                     }
@@ -5819,6 +5826,20 @@ pub mod database
                 }
             }
         }
+        /// Read a terminal mode.
+        ///
+        /// ## Example
+        ///
+        /// ```
+        /// let info        = Database::from_env().unwrap();
+        /// let colors: i32 = info.read::<mode::MaxColors>().unwrap().into();
+        /// ```
+        pub fn read<'a, M: ::mode::Mode<'a>>(&'a self) -> Option<M>
+        { 
+            /*
+            M::from( self.object.get( M::name()) ) */
+            None
+        }
         /// Returns the ID of this `Obj`.
         pub fn identify( &self ) -> usize
         {
@@ -6311,6 +6332,9 @@ pub mod is
     /*
     fn is_flag(...) -> bool */
     pub fn flag(i: u8) -> bool { i == b' ' || i == b'-' || i == b'+' || i == b'#' }
+    /*
+    fn is_wide(...) -> bool */
+    pub fn wide( ch:char ) -> bool { ::char::width(ch) == Some(2) }
 }
 /*
 libc */
@@ -8854,7 +8878,7 @@ pub mod mode
             self
         }
         /// Expand to the given output.
-        pub fn into<W: Write>(self, output: W) -> error::Result<()> 
+        pub fn from<W: Write>(self, output: W) -> error::OverResult<()> 
         {
             self.string.as_ref().expand
             (
@@ -8864,10 +8888,10 @@ pub mod mode
             )
         }
         /// Expand into a vector.
-        pub fn to_vec(self) -> error::Result<Vec<u8>> 
+        pub fn to_vec(self) -> error::OverResult<Vec<u8>> 
         {
             let mut result = Vec::with_capacity(self.string.as_ref().len());
-            self.to(&mut result)?;
+            self.from(&mut result)?;
             Ok(result)
         }
     }
@@ -8975,6 +8999,596 @@ pub mod mode
     }
 
     mode!( boolean AutoLeftMargin => "auto_left_margin" );
+    mode!(boolean AutoRightMargin => "auto_right_margin");
+    mode!(boolean NoEscCtlc => "no_esc_ctlc");
+    mode!(boolean CeolStandoutGlitch => "ceol_standout_glitch");
+    mode!(boolean EatNewlineGlitch => "eat_newline_glitch");
+    mode!(boolean EraseOverstrike => "erase_overstrike");
+    mode!(boolean GenericType => "generic_type");
+    mode!(boolean HardCopy => "hard_copy");
+    mode!(boolean HasMetaKey => "has_meta_key");
+    mode!(boolean HasStatusLine => "has_status_line");
+    mode!(boolean InsertNullGlitch => "insert_null_glitch");
+    mode!(boolean MemoryAbove => "memory_above");
+    mode!(boolean MemoryBelow => "memory_below");
+    mode!(boolean MoveInsertMode => "move_insert_mode");
+    mode!(boolean MoveStandoutMode => "move_standout_mode");
+    mode!(boolean OverStrike => "over_strike");
+    mode!(boolean StatusLineEscOk => "status_line_esc_ok");
+    mode!(boolean DestTabsMagicSmso => "dest_tabs_magic_smso");
+    mode!(boolean TildeGlitch => "tilde_glitch");
+    mode!(boolean TransparentUnderline => "transparent_underline");
+    mode!(boolean XonXoff => "xon_xoff");
+    mode!(boolean NeedsXonXoff => "needs_xon_xoff");
+    mode!(boolean PrtrSilent => "prtr_silent");
+    mode!(boolean HardCursor => "hard_cursor");
+    mode!(boolean NonRevRmcup => "non_rev_rmcup");
+    mode!(boolean NoPadChar => "no_pad_char");
+    mode!(boolean NonDestScrollRegion => "non_dest_scroll_region");
+    mode!(boolean CanChange => "can_change");
+    mode!(boolean BackColorErase => "back_color_erase");
+    mode!(boolean HueLightnessSaturation => "hue_lightness_saturation");
+    mode!(boolean ColAddrGlitch => "col_addr_glitch");
+    mode!(boolean CrCancelsMicroMode => "cr_cancels_micro_mode");
+    mode!(boolean HasPrintWheel => "has_print_wheel");
+    mode!(boolean RowAddrGlitch => "row_addr_glitch");
+    mode!(boolean SemiAutoRightMargin => "semi_auto_right_margin");
+    mode!(boolean CpiChangesRes => "cpi_changes_res");
+    mode!(boolean LpiChangesRes => "lpi_changes_res");
+    mode!(boolean BackspacesWithBs => "backspaces_with_bs");
+    mode!(boolean CrtNoScrolling => "crt_no_scrolling");
+    mode!(boolean NoCorrectlyWorkingCr => "no_correctly_working_cr");
+    mode!(boolean GnuHasMetaKey => "gnu_has_meta_key");
+    mode!(boolean LinefeedIsNewline => "linefeed_is_newline");
+    mode!(boolean HasHardwareTabs => "has_hardware_tabs");
+    mode!(boolean ReturnDoesClrEol => "return_does_clr_eol");
+
+    mode!(number Columns => "columns");
+    mode!(number InitTabs => "init_tabs");
+    mode!(number Lines => "lines");
+    mode!(number LinesOfMemory => "lines_of_memory");
+    mode!(number MagicCookieGlitch => "magic_cookie_glitch");
+    mode!(number PaddingBaudRate => "padding_baud_rate");
+    mode!(number VirtualTerminal => "virtual_terminal");
+    mode!(number WidthStatusLine => "width_status_line");
+    mode!(number NumLabels => "num_labels");
+    mode!(number LabelHeight => "label_height");
+    mode!(number LabelWidth => "label_width");
+    mode!(number MaxAttributes => "max_attributes");
+    mode!(number MaximumWindows => "maximum_windows");
+    mode!(number MaxColors => "max_colors");
+    mode!(number MaxPairs => "max_pairs");
+    mode!(number NoColorVideo => "no_color_video");
+    mode!(number BufferCapacity => "buffer_capacity");
+    mode!(number DotVertSpacing => "dot_vert_spacing");
+    mode!(number DotHorzSpacing => "dot_horz_spacing");
+    mode!(number MaxMicroAddress => "max_micro_address");
+    mode!(number MaxMicroJump => "max_micro_jump");
+    mode!(number MicroColSize => "micro_col_size");
+    mode!(number MicroLineSize => "micro_line_size");
+    mode!(number NumberOfPins => "number_of_pins");
+    mode!(number OutputResChar => "output_res_char");
+    mode!(number OutputResLine => "output_res_line");
+    mode!(number OutputResHorzInch => "output_res_horz_inch");
+    mode!(number OutputResVertInch => "output_res_vert_inch");
+    mode!(number PrintRate => "print_rate");
+    mode!(number WideCharSize => "wide_char_size");
+    mode!(number Buttons => "buttons");
+    mode!(number BitImageEntwining => "bit_image_entwining");
+    mode!(number BitImageType => "bit_image_type");
+    mode!(number MagicCookieGlitchUl => "magic_cookie_glitch_ul");
+    mode!(number CarriageReturnDelay => "carriage_return_delay");
+    mode!(number NewLineDelay => "new_line_delay");
+    mode!(number BackspaceDelay => "backspace_delay");
+    mode!(number HorizontalTabDelay => "horizontal_tab_delay");
+    mode!(number NumberOfFunctionKeys => "number_of_function_keys");
+
+    mode!(string BackTab => "back_tab");
+    mode!(string Bell => "bell");
+    mode!(string CarriageReturn => "carriage_return");
+    mode!(string ClearAllTabs => "clear_all_tabs");
+    mode!(string ClearScreen => "clear_screen");
+    mode!(string ClrEol => "clr_eol");
+    mode!(string ClrEos => "clr_eos");
+    mode!(string CommandCharacter => "command_character");
+    mode!(string CursorDown => "cursor_down");
+    mode!(string CursorHome => "cursor_home");
+    mode!(string CursorInvisible => "cursor_invisible");
+    mode!(string CursorLeft => "cursor_left");
+    mode!(string CursorMemAddress => "cursor_mem_address");
+    mode!(string CursorNormal => "cursor_normal");
+    mode!(string CursorRight => "cursor_right");
+    mode!(string CursorToLl => "cursor_to_ll");
+    mode!(string CursorUp => "cursor_up");
+    mode!(string CursorVisible => "cursor_visible");
+    mode!(string DeleteCharacter => "delete_character");
+    mode!(string DeleteLine => "delete_line");
+    mode!(string DisStatusLine => "dis_status_line");
+    mode!(string DownHalfLine => "down_half_line");
+    mode!(string EnterAltCharsetMode => "enter_alt_charset_mode");
+    mode!(string EnterBlinkMode => "enter_blink_mode");
+    mode!(string EnterBoldMode => "enter_bold_mode");
+    mode!(string EnterCaMode => "enter_ca_mode");
+    mode!(string EnterDeleteMode => "enter_delete_mode");
+    mode!(string EnterDimMode => "enter_dim_mode");
+    mode!(string EnterInsertMode => "enter_insert_mode");
+    mode!(string EnterSecureMode => "enter_secure_mode");
+    mode!(string EnterProtectedMode => "enter_protected_mode");
+    mode!(string EnterReverseMode => "enter_reverse_mode");
+    mode!(string EnterStandoutMode => "enter_standout_mode");
+    mode!(string EnterUnderlineMode => "enter_underline_mode");
+    mode!(string ExitAltCharsetMode => "exit_alt_charset_mode");
+    mode!(string ExitAttributeMode => "exit_attribute_mode");
+    mode!(string ExitCaMode => "exit_ca_mode");
+    mode!(string ExitDeleteMode => "exit_delete_mode");
+    mode!(string ExitInsertMode => "exit_insert_mode");
+    mode!(string ExitStandoutMode => "exit_standout_mode");
+    mode!(string ExitUnderlineMode => "exit_underline_mode");
+    mode!(string FlashScreen => "flash_screen");
+    mode!(string FormFeed => "form_feed");
+    mode!(string FromStatusLine => "from_status_line");
+    mode!(string Init1String => "init_1string");
+    mode!(string Init2String => "init_2string");
+    mode!(string Init3String => "init_3string");
+    mode!(string InitFile => "init_file");
+    mode!(string InsertCharacter => "insert_character");
+    mode!(string InsertLine => "insert_line");
+    mode!(string InsertPadding => "insert_padding");
+    mode!(string KeyBackspace => "key_backspace");
+    mode!(string KeyCATab => "key_catab");
+    mode!(string KeyClear => "key_clear");
+    mode!(string KeyCTab => "key_ctab");
+    mode!(string KeyDc => "key_dc");
+    mode!(string KeyDl => "key_dl");
+    mode!(string KeyDown => "key_down");
+    mode!(string KeyEic => "key_eic");
+    mode!(string KeyEol => "key_eol");
+    mode!(string KeyEos => "key_eos");
+    mode!(string KeyF0 => "key_f0");
+    mode!(string KeyF1 => "key_f1");
+    mode!(string KeyF10 => "key_f10");
+    mode!(string KeyF2 => "key_f2");
+    mode!(string KeyF3 => "key_f3");
+    mode!(string KeyF4 => "key_f4");
+    mode!(string KeyF5 => "key_f5");
+    mode!(string KeyF6 => "key_f6");
+    mode!(string KeyF7 => "key_f7");
+    mode!(string KeyF8 => "key_f8");
+    mode!(string KeyF9 => "key_f9");
+    mode!(string KeyHome => "key_home");
+    mode!(string KeyIc => "key_ic");
+    mode!(string KeyIl => "key_il");
+    mode!(string KeyLeft => "key_left");
+    mode!(string KeyLl => "key_ll");
+    mode!(string KeyNPage => "key_npage");
+    mode!(string KeyPPage => "key_ppage");
+    mode!(string KeyRight => "key_right");
+    mode!(string KeySf => "key_sf");
+    mode!(string KeySr => "key_sr");
+    mode!(string KeySTab => "key_stab");
+    mode!(string KeyUp => "key_up");
+    mode!(string KeypadLocal => "keypad_local");
+    mode!(string KeypadXmit => "keypad_xmit");
+    mode!(string LabF0 => "lab_f0");
+    mode!(string LabF1 => "lab_f1");
+    mode!(string LabF10 => "lab_f10");
+    mode!(string LabF2 => "lab_f2");
+    mode!(string LabF3 => "lab_f3");
+    mode!(string LabF4 => "lab_f4");
+    mode!(string LabF5 => "lab_f5");
+    mode!(string LabF6 => "lab_f6");
+    mode!(string LabF7 => "lab_f7");
+    mode!(string LabF8 => "lab_f8");
+    mode!(string LabF9 => "lab_f9");
+    mode!(string MetaOff => "meta_off");
+    mode!(string MetaOn => "meta_on");
+    mode!(string Newline => "newline");
+    mode!(string PadChar => "pad_char");
+    mode!(string PKeyKey => "pkey_key");
+    mode!(string PKeyLocal => "pkey_local");
+    mode!(string PKeyXmit => "pkey_xmit");
+    mode!(string PrintScreen => "print_screen");
+    mode!(string PrtrOff => "prtr_off");
+    mode!(string PrtrOn => "prtr_on");
+    mode!(string RepeatChar => "repeat_char");
+    mode!(string Reset1String => "reset_1string");
+    mode!(string Reset2String => "reset_2string");
+    mode!(string Reset3String => "reset_3string");
+    mode!(string ResetFile => "reset_file");
+    mode!(string RestoreCursor => "restore_cursor");
+    mode!(string SaveCursor => "save_cursor");
+    mode!(string ScrollForward => "scroll_forward");
+    mode!(string ScrollReverse => "scroll_reverse");
+    mode!(string SetTab => "set_tab");
+    mode!(string SetWindow => "set_window");
+    mode!(string Tab => "tab");
+    mode!(string ToStatusLine => "to_status_line");
+    mode!(string UnderlineChar => "underline_char");
+    mode!(string UpHalfLine => "up_half_line");
+    mode!(string InitProg => "init_prog");
+    mode!(string KeyA1 => "key_a1");
+    mode!(string KeyA3 => "key_a3");
+    mode!(string KeyB2 => "key_b2");
+    mode!(string KeyC1 => "key_c1");
+    mode!(string KeyC3 => "key_c3");
+    mode!(string PrtrNon => "prtr_non");
+    mode!(string CharPadding => "char_padding");
+    mode!(string AcsChars => "acs_chars");
+    mode!(string PlabNorm => "plab_norm");
+    mode!(string KeyBTab => "key_btab");
+    mode!(string EnterXonMode => "enter_xon_mode");
+    mode!(string ExitXonMode => "exit_xon_mode");
+    mode!(string EnterAmMode => "enter_am_mode");
+    mode!(string ExitAmMode => "exit_am_mode");
+    mode!(string XonCharacter => "xon_character");
+    mode!(string XoffCharacter => "xoff_character");
+    mode!(string EnaAcs => "ena_acs");
+    mode!(string LabelOn => "label_on");
+    mode!(string LabelOff => "label_off");
+    mode!(string KeyBeg => "key_beg");
+    mode!(string KeyCancel => "key_cancel");
+    mode!(string KeyClose => "key_close");
+    mode!(string KeyCommand => "key_command");
+    mode!(string KeyCopy => "key_copy");
+    mode!(string KeyCreate => "key_create");
+    mode!(string KeyEnd => "key_end");
+    mode!(string KeyEnter => "key_enter");
+    mode!(string KeyExit => "key_exit");
+    mode!(string KeyFind => "key_find");
+    mode!(string KeyHelp => "key_help");
+    mode!(string KeyMark => "key_mark");
+    mode!(string KeyMessage => "key_message");
+    mode!(string KeyMove => "key_move");
+    mode!(string KeyNext => "key_next");
+    mode!(string KeyOpen => "key_open");
+    mode!(string KeyOptions => "key_options");
+    mode!(string KeyPrevious => "key_previous");
+    mode!(string KeyPrint => "key_print");
+    mode!(string KeyRedo => "key_redo");
+    mode!(string KeyReference => "key_reference");
+    mode!(string KeyRefresh => "key_refresh");
+    mode!(string KeyReplace => "key_replace");
+    mode!(string KeyRestart => "key_restart");
+    mode!(string KeyResume => "key_resume");
+    mode!(string KeySave => "key_save");
+    mode!(string KeySuspend => "key_suspend");
+    mode!(string KeyUndo => "key_undo");
+    mode!(string KeySBeg => "key_sbeg");
+    mode!(string KeySCancel => "key_scancel");
+    mode!(string KeySCommand => "key_scommand");
+    mode!(string KeySCopy => "key_scopy");
+    mode!(string KeySCreate => "key_screate");
+    mode!(string KeySDc => "key_sdc");
+    mode!(string KeySDl => "key_sdl");
+    mode!(string KeySelect => "key_select");
+    mode!(string KeySEnd => "key_send");
+    mode!(string KeySEol => "key_seol");
+    mode!(string KeySExit => "key_sexit");
+    mode!(string KeySFind => "key_sfind");
+    mode!(string KeySHelp => "key_shelp");
+    mode!(string KeySHome => "key_shome");
+    mode!(string KeySIc => "key_sic");
+    mode!(string KeySLeft => "key_sleft");
+    mode!(string KeySMessage => "key_smessage");
+    mode!(string KeySMove => "key_smove");
+    mode!(string KeySNext => "key_snext");
+    mode!(string KeySOptions => "key_soptions");
+    mode!(string KeySPrevious => "key_sprevious");
+    mode!(string KeySPrint => "key_sprint");
+    mode!(string KeySRedo => "key_sredo");
+    mode!(string KeySReplace => "key_sreplace");
+    mode!(string KeySRight => "key_sright");
+    mode!(string KeySRsume => "key_srsume");
+    mode!(string KeySSave => "key_ssave");
+    mode!(string KeySSuspend => "key_ssuspend");
+    mode!(string KeySUndo => "key_sundo");
+    mode!(string ReqForInput => "req_for_input");
+    mode!(string KeyF11 => "key_f11");
+    mode!(string KeyF12 => "key_f12");
+    mode!(string KeyF13 => "key_f13");
+    mode!(string KeyF14 => "key_f14");
+    mode!(string KeyF15 => "key_f15");
+    mode!(string KeyF16 => "key_f16");
+    mode!(string KeyF17 => "key_f17");
+    mode!(string KeyF18 => "key_f18");
+    mode!(string KeyF19 => "key_f19");
+    mode!(string KeyF20 => "key_f20");
+    mode!(string KeyF21 => "key_f21");
+    mode!(string KeyF22 => "key_f22");
+    mode!(string KeyF23 => "key_f23");
+    mode!(string KeyF24 => "key_f24");
+    mode!(string KeyF25 => "key_f25");
+    mode!(string KeyF26 => "key_f26");
+    mode!(string KeyF27 => "key_f27");
+    mode!(string KeyF28 => "key_f28");
+    mode!(string KeyF29 => "key_f29");
+    mode!(string KeyF30 => "key_f30");
+    mode!(string KeyF31 => "key_f31");
+    mode!(string KeyF32 => "key_f32");
+    mode!(string KeyF33 => "key_f33");
+    mode!(string KeyF34 => "key_f34");
+    mode!(string KeyF35 => "key_f35");
+    mode!(string KeyF36 => "key_f36");
+    mode!(string KeyF37 => "key_f37");
+    mode!(string KeyF38 => "key_f38");
+    mode!(string KeyF39 => "key_f39");
+    mode!(string KeyF40 => "key_f40");
+    mode!(string KeyF41 => "key_f41");
+    mode!(string KeyF42 => "key_f42");
+    mode!(string KeyF43 => "key_f43");
+    mode!(string KeyF44 => "key_f44");
+    mode!(string KeyF45 => "key_f45");
+    mode!(string KeyF46 => "key_f46");
+    mode!(string KeyF47 => "key_f47");
+    mode!(string KeyF48 => "key_f48");
+    mode!(string KeyF49 => "key_f49");
+    mode!(string KeyF50 => "key_f50");
+    mode!(string KeyF51 => "key_f51");
+    mode!(string KeyF52 => "key_f52");
+    mode!(string KeyF53 => "key_f53");
+    mode!(string KeyF54 => "key_f54");
+    mode!(string KeyF55 => "key_f55");
+    mode!(string KeyF56 => "key_f56");
+    mode!(string KeyF57 => "key_f57");
+    mode!(string KeyF58 => "key_f58");
+    mode!(string KeyF59 => "key_f59");
+    mode!(string KeyF60 => "key_f60");
+    mode!(string KeyF61 => "key_f61");
+    mode!(string KeyF62 => "key_f62");
+    mode!(string KeyF63 => "key_f63");
+    mode!(string ClrBol => "clr_bol");
+    mode!(string ClearMargins => "clear_margins");
+    mode!(string SetLeftMargin => "set_left_margin");
+    mode!(string SetRightMargin => "set_right_margin");
+    mode!(string LabelFormat => "label_format");
+    mode!(string SetClock => "set_clock");
+    mode!(string DisplayClock => "display_clock");
+    mode!(string RemoveClock => "remove_clock");
+    mode!(string CreateWindow => "create_window");
+    mode!(string GotoWindow => "goto_window");
+    mode!(string Hangup => "hangup");
+    mode!(string DialPhone => "dial_phone");
+    mode!(string QuickDial => "quick_dial");
+    mode!(string Tone => "tone");
+    mode!(string Pulse => "pulse");
+    mode!(string FlashHook => "flash_hook");
+    mode!(string FixedPause => "fixed_pause");
+    mode!(string WaitTone => "wait_tone");
+    mode!(string User0 => "user0");
+    mode!(string User1 => "user1");
+    mode!(string User2 => "user2");
+    mode!(string User3 => "user3");
+    mode!(string User4 => "user4");
+    mode!(string User5 => "user5");
+    mode!(string User6 => "user6");
+    mode!(string User7 => "user7");
+    mode!(string User8 => "user8");
+    mode!(string User9 => "user9");
+    mode!(string OrigPair => "orig_pair");
+    mode!(string OrigColors => "orig_colors");
+    mode!(string InitializeColor => "initialize_color");
+    mode!(string InitializePair => "initialize_pair");
+    mode!(string SetColorPair => "set_color_pair");
+    mode!(string ChangeCharPitch => "change_char_pitch");
+    mode!(string ChangeLinePitch => "change_line_pitch");
+    mode!(string ChangeResHorz => "change_res_horz");
+    mode!(string ChangeResVert => "change_res_vert");
+    mode!(string DefineChar => "define_char");
+    mode!(string EnterDoublewideMode => "enter_doublewide_mode");
+    mode!(string EnterDraftQuality => "enter_draft_quality");
+    mode!(string EnterItalicsMode => "enter_italics_mode");
+    mode!(string EnterLeftwardMode => "enter_leftward_mode");
+    mode!(string EnterMicroMode => "enter_micro_mode");
+    mode!(string EnterNearLetterQuality => "enter_near_letter_quality");
+    mode!(string EnterNormalQuality => "enter_normal_quality");
+    mode!(string EnterShadowMode => "enter_shadow_mode");
+    mode!(string EnterSubscriptMode => "enter_subscript_mode");
+    mode!(string EnterSuperscriptMode => "enter_superscript_mode");
+    mode!(string EnterUpwardMode => "enter_upward_mode");
+    mode!(string ExitDoublewideMode => "exit_doublewide_mode");
+    mode!(string ExitItalicsMode => "exit_italics_mode");
+    mode!(string ExitLeftwardMode => "exit_leftward_mode");
+    mode!(string ExitMicroMode => "exit_micro_mode");
+    mode!(string ExitShadowMode => "exit_shadow_mode");
+    mode!(string ExitSubscriptMode => "exit_subscript_mode");
+    mode!(string ExitSuperscriptMode => "exit_superscript_mode");
+    mode!(string ExitUpwardMode => "exit_upward_mode");
+    mode!(string MicroColumnAddress => "micro_column_address");
+    mode!(string MicroDown => "micro_down");
+    mode!(string MicroLeft => "micro_left");
+    mode!(string MicroRight => "micro_right");
+    mode!(string MicroRowAddress => "micro_row_address");
+    mode!(string MicroUp => "micro_up");
+    mode!(string OrderOfPins => "order_of_pins");
+    mode!(string SelectCharSet => "select_char_set");
+    mode!(string SetBottomMargin => "set_bottom_margin");
+    mode!(string SetBottomMarginParm => "set_bottom_margin_parm");
+    mode!(string SetLeftMarginParm => "set_left_margin_parm");
+    mode!(string SetRightMarginParm => "set_right_margin_parm");
+    mode!(string SetTopMargin => "set_top_margin");
+    mode!(string SetTopMarginParm => "set_top_margin_parm");
+    mode!(string StartBitImage => "start_bit_image");
+    mode!(string StartCharSetDef => "start_char_set_def");
+    mode!(string StopBitImage => "stop_bit_image");
+    mode!(string StopCharSetDef => "stop_char_set_def");
+    mode!(string SubscriptCharacters => "subscript_characters");
+    mode!(string SuperscriptCharacters => "superscript_characters");
+    mode!(string TheseCauseCr => "these_cause_cr");
+    mode!(string ZeroMotion => "zero_motion");
+    mode!(string CharSetNames => "char_set_names");
+    mode!(string KeyMouse => "key_mouse");
+    mode!(string MouseInfo => "mouse_info");
+    mode!(string ReqMousePos => "req_mouse_pos");
+    mode!(string GetMouse => "get_mouse");
+    mode!(string PkeyPlab => "pkey_plab");
+    mode!(string DeviceType => "device_type");
+    mode!(string CodeSetInit => "code_set_init");
+    mode!(string Set0DesSeq => "set0_des_seq");
+    mode!(string Set1DesSeq => "set1_des_seq");
+    mode!(string Set2DesSeq => "set2_des_seq");
+    mode!(string Set3DesSeq => "set3_des_seq");
+    mode!(string SetLrMargin => "set_lr_margin");
+    mode!(string SetTbMargin => "set_tb_margin");
+    mode!(string BitImageRepeat => "bit_image_repeat");
+    mode!(string BitImageNewline => "bit_image_newline");
+    mode!(string BitImageCarriageReturn => "bit_image_carriage_return");
+    mode!(string ColorNames => "color_names");
+    mode!(string DefineBitImageRegion => "define_bit_image_region");
+    mode!(string EndBitImageRegion => "end_bit_image_region");
+    mode!(string SetColorBand => "set_color_band");
+    mode!(string SetPageLength => "set_page_length");
+    mode!(string DisplayPcChar => "display_pc_char");
+    mode!(string EnterPcCharsetMode => "enter_pc_charset_mode");
+    mode!(string ExitPcCharsetMode => "exit_pc_charset_mode");
+    mode!(string EnterScancodeMode => "enter_scancode_mode");
+    mode!(string ExitScancodeMode => "exit_scancode_mode");
+    mode!(string PcTermOptions => "pc_term_options");
+    mode!(string ScancodeEscape => "scancode_escape");
+    mode!(string AltScancodeEsc => "alt_scancode_esc");
+    mode!(string EnterHorizontalHlMode => "enter_horizontal_hl_mode");
+    mode!(string EnterLeftHlMode => "enter_left_hl_mode");
+    mode!(string EnterLowHlMode => "enter_low_hl_mode");
+    mode!(string EnterRightHlMode => "enter_right_hl_mode");
+    mode!(string EnterTopHlMode => "enter_top_hl_mode");
+    mode!(string EnterVerticalHlMode => "enter_vertical_hl_mode");
+    mode!(string SetAAttributes => "set_a_attributes");
+    mode!(string SetPglenInch => "set_pglen_inch");
+    mode!(string TermcapInit2 => "termcap_init2");
+    mode!(string TermcapReset => "termcap_reset");
+    mode!(string LinefeedIfNotLf => "linefeed_if_not_lf");
+    mode!(string BackspaceIfNotBs => "backspace_if_not_bs");
+    mode!(string OtherNonFunctionKeys => "other_non_function_keys");
+    mode!(string ArrowKeyMap => "arrow_key_map");
+    mode!(string AcsULcorner => "acs_ulcorner");
+    mode!(string AcsLLcorner => "acs_llcorner");
+    mode!(string AcsURcorner => "acs_urcorner");
+    mode!(string AcsLRcorner => "acs_lrcorner");
+    mode!(string AcsLTee => "acs_ltee");
+    mode!(string AcsRTee => "acs_rtee");
+    mode!(string AcsBTee => "acs_btee");
+    mode!(string AcsTTee => "acs_ttee");
+    mode!(string AcsHLine => "acs_hline");
+    mode!(string AcsVLine => "acs_vline");
+    mode!(string AcsPlus => "acs_plus");
+    mode!(string MemoryLock => "memory_lock");
+    mode!(string MemoryUnlock => "memory_unlock");
+    mode!(string BoxChars1 => "box_chars_1");
+
+    mode!(string ChangeScrollRegion => "change_scroll_region";
+        top:    u32,
+        bottom: u32);
+
+    mode!(string ColumnAddress => "column_address";
+        x: u32);
+
+    mode!(string CursorAddress => "cursor_address";
+        y: u32,
+        x: u32);
+
+    mode!(string EraseChars => "erase_chars";
+        count: u32);
+
+    mode!(string ParmDch => "parm_dch";
+        count: u32);
+
+    mode!(string ParmDeleteLine => "parm_delete_line";
+        count: u32);
+
+    mode!(string ParmDownCursor => "parm_down_cursor";
+        count: u32);
+
+    mode!(string ParmIch => "parm_ich";
+        count: u32);
+
+    mode!(string ParmIndex => "parm_index";
+        count: u32);
+
+    mode!(string ParmInsertLine => "parm_insert_line";
+        count: u32);
+
+    mode!(string ParmLeftCursor => "parm_left_cursor";
+        count: u32);
+
+    mode!(string ParmRightCursor => "parm_right_cursor";
+        count: u32);
+
+    mode!(string ParmRindex => "parm_rindex";
+        count: u32);
+
+    mode!(string ParmUpCursor => "parm_up_cursor";
+        count: u32);
+
+    mode!(string ParmDownMicro => "parm_down_micro";
+        count: u32);
+
+    mode!(string ParmLeftMicro => "parm_left_micro";
+        count: u32);
+
+    mode!(string ParmRightMicro => "parm_right_micro";
+        count: u32);
+
+    mode!(string ParmUpMicro => "parm_up_micro";
+        count: u32);
+
+    mode!(string RowAddress => "row_address";
+        y: u32);
+
+    mode!(string SetAttributes => "set_attributes";
+        standout:    bool,
+        underline:   bool,
+        reverse:     bool,
+        blink:       bool,
+        dim:         bool,
+        bold:        bool,
+        invisible:   bool,
+        protected:   bool,
+        alt_charset: bool);
+
+    mode!(string SetAForeground => "set_a_foreground";
+        color: u8);
+
+    mode!(string SetABackground => "set_a_background";
+        color: u8);
+
+    mode!(string SetForeground => "set_foreground";
+        color: u8);
+
+    mode!(string SetBackground => "set_background";
+        color: u8);
+
+    // Extended capabilities from screen.
+    mode!(boolean XTermTitle => "XT");
+    mode!(boolean BrightAttribute => "AX");
+    mode!(boolean XTermMouse => "XM");
+
+    // Extended capabilities from tmux.
+    mode!(boolean TrueColor => "Tc");
+
+    mode!(string SetClipboard => "Ms";
+        selection: String,
+        content:   Vec<u8>);
+
+    mode!(string SetCursorStyle => "Ss";
+        kind: u8);
+
+    mode!(string ResetCursorStyle => "Se");
+
+    // True color extended capabilities from vim.
+    mode!(string SetTrueColorForeground => "8f";
+        r: u8,
+        g: u8,
+        b: u8);
+
+    mode!(string SetTrueColorBackground => "8b";
+        r: u8,
+        g: u8,
+        b: u8);
+
+    mode!(string ResetCursorColor => "Cr");
+
+    mode!(string SetCursorColor => "Cs";
+        color: String);
+
 
     pub fn parse(input: &[u8]) -> IResult<&[u8], Item> { alt((expansion, string))(input) }
 
@@ -38059,11 +38673,13 @@ pub mod system
                 sys::Screen::new(term.0, config).map(Screen)
             }
             /// Returns the name of the terminal.
-            #[inline] pub fn name(&self) -> &str {
+            /*#[inline] pub fn name(&self) -> &str
+            {
                 self.0.name()
-            }
+            } */
             /// Attempts to acquire an exclusive lock on terminal read operations.
-            #[inline] pub fn lock_read(&self) -> LockResult<ScreenReadGuard> {
+            #[inline] pub fn lock_read(&self) -> LockResult<ScreenReadGuard> 
+            {
                 map_lock_result(self.0.lock_read(), ScreenReadGuard)
             }
             /// Attempts to acquire an exclusive lock on terminal write operations.
@@ -39186,19 +39802,19 @@ pub mod system
             fn flush(&mut self) -> io::Result<()>;
         }
         /// Default `Terminal` interface
-        pub struct DefaultTerminal( Terminal );
+        pub struct DefaultTerminal( pub Terminal );
 
         impl DefaultTerminal 
         {
             /// Opens access to the terminal device associated with standard output.
             pub fn new() -> io::Result<DefaultTerminal>
             {
-                mortal::Terminal::new().map(DefaultTerminal)
+                system::Terminal::new().map(DefaultTerminal)
             }
             /// Opens access to the terminal device associated with standard error.
             pub fn stderr() -> io::Result<DefaultTerminal>
             {
-                mortal::Terminal::stderr().map(DefaultTerminal)
+                system::Terminal::stderr().map(DefaultTerminal)
             }
 
             unsafe fn cast_writer<'a>(writer: &'a mut dyn TerminalWriter<Self>) ->
@@ -39212,24 +39828,28 @@ pub mod system
         {
             type PrepareState = PrepareState;
 
-            fn name(&self) -> &str {
+            fn name(&self) -> &str 
+            {
                 self.0.name()
             }
 
-            fn lock_read<'a>(&'a self) -> Box<dyn TerminalReader<Self> + 'a> {
+            fn lock_read<'a>(&'a self) -> Box<dyn TerminalReader<Self> + 'a> 
+            {
                 Box::new(self.0.lock_read().unwrap())
             }
 
-            fn lock_write<'a>(&'a self) -> Box<dyn TerminalWriter<Self> + 'a> {
+            fn lock_write<'a>(&'a self) -> Box<dyn TerminalWriter<Self> + 'a>
+            {
                 Box::new(self.0.lock_write().unwrap())
             }
         }
 
         impl<'a> TerminalReader<DefaultTerminal> for TerminalReadGuard<'a> 
         {
-            fn prepare(&mut self, block_signals: bool, report_signals: SignalSet)
-                    -> io::Result<PrepareState> {
-                self.prepare(PrepareConfig{
+            fn prepare(&mut self, block_signals: bool, report_signals: SignalSet) -> io::Result<PrepareState>
+            {
+                self.prepare(PrepareConfig
+                {
                     block_signals,
                     enable_control_flow: !block_signals,
                     enable_keypad: false,
@@ -39238,13 +39858,16 @@ pub mod system
                 })
             }
 
-            unsafe fn prepare_with_lock(&mut self,
-                    lock: &mut dyn TerminalWriter<DefaultTerminal>,
-                    block_signals: bool, report_signals: SignalSet)
-                    -> io::Result<PrepareState> {
+            unsafe fn prepare_with_lock
+            (
+                &mut self,
+                lock: &mut dyn TerminalWriter<DefaultTerminal>,
+                block_signals: bool, report_signals: SignalSet
+            ) -> io::Result<PrepareState>
+            {
                 let lock = DefaultTerminal::cast_writer(lock);
-
-                self.prepare_with_lock(lock, PrepareConfig{
+                self.prepare_with_lock(lock, PrepareConfig
+                {
                     block_signals,
                     enable_control_flow: !block_signals,
                     enable_keypad: false,
@@ -39253,22 +39876,26 @@ pub mod system
                 })
             }
 
-            fn restore(&mut self, state: PrepareState) -> io::Result<()> {
-                self.restore(state)
-            }
+            fn restore(&mut self, state: PrepareState) -> io::Result<()> { self.restore(state) }
 
-            unsafe fn restore_with_lock(&mut self,
-                    lock: &mut dyn TerminalWriter<DefaultTerminal>, state: PrepareState)
-                    -> io::Result<()> {
+            unsafe fn restore_with_lock
+            (
+                &mut self,
+                lock: &mut dyn TerminalWriter<DefaultTerminal>,
+                state: PrepareState
+            ) -> io::Result<()>
+            {
                 let lock = DefaultTerminal::cast_writer(lock);
                 self.restore_with_lock(lock, state)
             }
 
-            fn read(&mut self, buf: &mut Vec<u8>) -> io::Result<RawRead> {
+            fn read(&mut self, buf: &mut Vec<u8>) -> io::Result<RawRead> 
+            {
                 sys::terminal_read(self, buf)
             }
 
-            fn wait_for_input(&mut self, timeout: Option<Duration>) -> io::Result<bool> {
+            fn wait_for_input(&mut self, timeout: Option<Duration>) -> io::Result<bool> 
+            {
                 self.wait_event(timeout)
             }
 
@@ -39678,31 +40305,37 @@ pub mod system
         impl Terminal 
         {
             /// Opens a new interface to the terminal on `stdout`.
-            pub fn new() -> io::Result<Terminal> {
+            pub fn new() -> io::Result<Terminal> 
+            {
                 Ok(Terminal(sys::Terminal::stdout()?))
             }
             /// Opens a new interface to the terminal on `stderr`.
-            pub fn stderr() -> io::Result<Terminal> {
+            pub fn stderr() -> io::Result<Terminal> 
+            {
                 Ok(Terminal(sys::Terminal::stderr()?))
             }
-            /// Returns the name of the terminal.
+            /*/// Returns the name of the terminal.
             #[inline] pub fn name(&self) -> &str {
                 self.0.name()
-            }
+            } */
             /// Attempts to acquire an exclusive lock on terminal read operations.
-            #[inline] pub fn lock_read(&self) -> LockResult<TerminalReadGuard> {
+            #[inline] pub fn lock_read(&self) -> LockResult<TerminalReadGuard> 
+            {
                 map_lock_result(self.0.lock_read(), TerminalReadGuard)
             }
             /// Attempts to acquire an exclusive lock on terminal write operations.
-            #[inline] pub fn lock_write(&self) -> LockResult<TerminalWriteGuard> {
+            #[inline] pub fn lock_write(&self) -> LockResult<TerminalWriteGuard> 
+            {
                 map_lock_result(self.0.lock_write(), TerminalWriteGuard)
             }
             /// Attempts to acquire an exclusive lock on terminal read operations.
-            #[inline] pub fn try_lock_read(&self) -> TryLockResult<TerminalReadGuard> {
+            #[inline] pub fn try_lock_read(&self) -> TryLockResult<TerminalReadGuard> 
+            {
                 map_try_lock_result(self.0.try_lock_read(), TerminalReadGuard)
             }
             /// Attempts to acquire an exclusive lock on terminal write operations.
-            #[inline] pub fn try_lock_write(&self) -> TryLockResult<TerminalWriteGuard> {
+            #[inline] pub fn try_lock_write(&self) -> TryLockResult<TerminalWriteGuard> 
+            {
                 map_try_lock_result(self.0.try_lock_write(), TerminalWriteGuard)
             }
         }
@@ -40054,68 +40687,14 @@ pub mod system
         };
         
         /// Default `keyseq_timeout`, in milliseconds
-        const KEYSEQ_TIMEOUT_MS: u64 = 500;
+        pub const KEYSEQ_TIMEOUT_MS: u64 = 500;
 
-        /// Iterator over `Reader` variable values
-        #[derive(Clone)]
-        pub struct VariableIter<'a> {
-            vars: &'a Variables,
-            n: usize,
-        }
-        /// Represents a `Reader` variable of a given type
-        #[derive(Clone, Debug)]
-        pub enum Variable {
-            /// Boolean variable
-            Boolean(bool),
-            /// Integer variable
-            Integer(i32),
-            /// String variable
-            String(Cow<'static, str>),
-        }
-
-        impl From<bool> for Variable {
-            fn from(b: bool) -> Variable {
-                Variable::Boolean(b)
-            }
-        }
-
-        impl From<i32> for Variable {
-            fn from(i: i32) -> Variable {
-                Variable::Integer(i)
-            }
-        }
-
-        impl From<&'static str> for Variable {
-            fn from(s: &'static str) -> Variable {
-                Variable::String(s.into())
-            }
-        }
-
-        impl From<Cow<'static, str>> for Variable {
-            fn from(s: Cow<'static, str>) -> Variable {
-                Variable::String(s)
-            }
-        }
-
-        impl From<String> for Variable {
-            fn from(s: String) -> Variable {
-                Variable::String(s.into())
-            }
-        }
-
-        impl fmt::Display for Variable {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                match *self {
-                    Variable::Boolean(b) => f.write_str(if b { "on" } else { "off" }),
-                    Variable::Integer(n) => fmt::Display::fmt(&n, f),
-                    Variable::String(ref s) => fmt::Display::fmt(&s[..], f),
-                }
-            }
-        }
-
-        macro_rules! define_variables {
-            ( $( $field:ident : $ty:ty => ( $name:expr , $conv:ident ,
-                    |$gr:ident| $getter:expr , |$sr:ident, $v:ident| $setter:expr ) , )+ ) => {
+        macro_rules! define_variables 
+        {
+            ($( $field:ident : $ty:ty => 
+                ( $name:expr , $conv:ident , |$gr:ident| $getter:expr , |$sr:ident, $v:ident| $setter:expr ) , 
+            )+) => 
+            {
                 static VARIABLE_NAMES: &[&str] = &[ $( $name ),+ ];
 
                 pub struct Variables {
@@ -40172,7 +40751,73 @@ pub mod system
             }
         }
 
-        define_variables!{
+        /// Iterator over `Reader` variable values
+        #[derive(Clone)]
+        pub struct VariableIter<'a> 
+        {
+            vars: &'a Variables,
+            n: usize,
+        }
+        /// Represents a `Reader` variable of a given type
+        #[derive(Clone, Debug)]
+        pub enum Variable 
+        {
+            /// Boolean variable
+            Boolean(bool),
+            /// Integer variable
+            Integer(i32),
+            /// String variable
+            String(Cow<'static, str>),
+        }
+
+        impl From<bool> for Variable 
+        {
+            fn from(b: bool) -> Variable {
+                Variable::Boolean(b)
+            }
+        }
+
+        impl From<i32> for Variable 
+        {
+            fn from(i: i32) -> Variable {
+                Variable::Integer(i)
+            }
+        }
+
+        impl From<&'static str> for Variable 
+        {
+            fn from(s: &'static str) -> Variable {
+                Variable::String(s.into())
+            }
+        }
+
+        impl From<Cow<'static, str>> for Variable 
+        {
+            fn from(s: Cow<'static, str>) -> Variable {
+                Variable::String(s)
+            }
+        }
+
+        impl From<String> for Variable 
+        {
+            fn from(s: String) -> Variable {
+                Variable::String(s.into())
+            }
+        }
+
+        impl fmt::Display for Variable 
+        {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                match *self {
+                    Variable::Boolean(b) => f.write_str(if b { "on" } else { "off" }),
+                    Variable::Integer(n) => fmt::Display::fmt(&n, f),
+                    Variable::String(ref s) => fmt::Display::fmt(&s[..], f),
+                }
+            }
+        }
+
+        define_variables!
+        {
             blink_matching_paren: bool => ("blink-matching-paren", parse_bool,
                 |r| r.blink_matching_paren,
                 |r, v| replace(&mut r.blink_matching_paren, v)),
@@ -40202,23 +40847,27 @@ pub mod system
                 |r, v| replace(&mut r.print_completions_horizontally, v)),
         }
 
-        impl Default for Variables {
-            fn default() -> Variables {
-                Variables{
+        impl Default for Variables 
+        {
+            fn default() -> Variables 
+            {
+                Variables
+                {
                     blink_matching_paren: false,
                     comment_begin: "#".into(),
                     completion_display_width: usize::max_value(),
                     completion_query_items: 100,
                     disable_completion: false,
                     echo_control_characters: true,
-                    keyseq_timeout: Some(Duration::from_millis(KEYSEQ_TIMEOUT_MS)),
+                    keyseq_timeout: Some(Duration::milliseconds(KEYSEQ_TIMEOUT_MS)),
                     page_completions: true,
                     print_completions_horizontally: false,
                 }
             }
         }
 
-        fn parse_bool(s: &str) -> Option<bool> {
+        fn parse_bool(s: &str) -> Option<bool> 
+        {
             match s {
                 "0" => Some(false),
                 "1" => Some(true),
@@ -40228,38 +40877,46 @@ pub mod system
             }
         }
 
-        fn parse_string(s: &str) -> Option<String> {
+        fn parse_string(s: &str) -> Option<String> 
+        {
             Some(s.to_owned())
         }
 
-        fn as_millis(timeout: Option<Duration>) -> i32 {
-            match timeout {
-                Some(t) => {
-                    let s = (t.as_secs() * 1_000) as i32;
-                    let ms = (t.subsec_nanos() / 1_000_000) as i32;
-
+        fn as_millis(timeout: Option<Duration>) -> i32 
+        {
+            match timeout 
+            {
+                Some(t) => 
+                {
+                    let s = (t.whole_seconds() * 1_000) as i32;
+                    let ms = (t.subsec_nanoseconds() / 1_000_000) as i32;
                     s + ms
                 }
                 None => -1
             }
         }
 
-        fn parse_duration(s: &str) -> Option<Option<Duration>> {
-            match s.parse::<i32>() {
+        fn parse_duration(s: &str) -> Option<Option<Duration>> 
+        {
+            match s.parse::<i32>() 
+            {
                 Ok(n) if n <= 0 => Some(None),
-                Ok(n) => Some(Some(Duration::from_millis(n as u64))),
+                Ok(n) => Some(Some(Duration::milliseconds(n as u64))),
                 Err(_) => Some(None)
             }
         }
 
-        fn usize_as_i32(u: usize) -> i32 {
-            match u {
+        fn usize_as_i32(u: usize) -> i32 
+        {
+            match u 
+            {
                 u if u > i32::max_value() as usize => -1,
                 u => u as i32
             }
         }
 
-        fn parse_usize(s: &str) -> Option<usize> {
+        fn parse_usize(s: &str) -> Option<usize> 
+        {
             match s.parse::<i32>() {
                 Ok(n) if n < 0 => Some(usize::max_value()),
                 Ok(n) => Some(n as usize),
@@ -40387,26 +41044,30 @@ pub mod system
 
         impl<'a, Term: Terminals> WriteLock<'a, Term> 
         {
-            pub fn new(term: Box<dyn TerminalWriter<Term> + 'a>, data: MutexGuard<'a, Write>)
-                    -> WriteLock<'a, Term> {
+            pub fn new(term: Box<dyn TerminalWriter<Term> + 'a>, data: MutexGuard<'a, Write>) -> WriteLock<'a, Term> 
+            {
                 WriteLock{term, data}
             }
 
-            pub fn size(&self) -> io::Result<Size> {
+            pub fn size(&self) -> io::Result<Size> 
+            {
                 self.term.size()
             }
 
-            pub fn flush(&mut self) -> io::Result<()> {
+            pub fn flush(&mut self) -> io::Result<()> 
+            {
                 self.term.flush()
             }
 
-            pub fn update_size(&mut self) -> io::Result<()> {
+            pub fn update_size(&mut self) -> io::Result<()> 
+            {
                 let size = self.size()?;
                 self.screen_size = size;
                 Ok(())
             }
 
-            pub fn blink(&mut self, pos: usize) -> io::Result<()> {
+            pub fn blink(&mut self, pos: usize) -> io::Result<()> 
+            {
                 self.expire_blink()?;
 
                 let orig = self.cursor;
@@ -40423,7 +41084,8 @@ pub mod system
                 Ok(())
             }
 
-            pub fn check_expire_blink(&mut self, now: Instant) -> io::Result<bool> {
+            pub fn check_expire_blink(&mut self, now: Instant) -> io::Result<bool> 
+            {
                 if let Some(blink) = self.data.blink {
                     if now >= blink.expiry {
                         self.expire_blink()?;
@@ -40433,7 +41095,8 @@ pub mod system
                 Ok(self.blink.is_none())
             }
 
-            pub fn expire_blink(&mut self) -> io::Result<()> {
+            pub fn expire_blink(&mut self) -> io::Result<()> 
+            {
                 if let Some(blink) = self.data.blink.take() {
                     self.move_from(blink.pos)?;
                 }
@@ -40441,7 +41104,8 @@ pub mod system
                 Ok(())
             }
 
-            pub fn set_prompt(&mut self, prompt: &str) -> io::Result<()> {
+            pub fn set_prompt(&mut self, prompt: &str) -> io::Result<()> 
+            {
                 self.expire_blink()?;
 
                 let redraw = self.is_prompt_drawn && self.prompt_type.is_normal();
@@ -40459,12 +41123,14 @@ pub mod system
                 Ok(())
             }
             /// Draws the prompt and current input, assuming the cursor is at column 0
-            pub fn draw_prompt(&mut self) -> io::Result<()> {
+            pub fn draw_prompt(&mut self) -> io::Result<()> 
+            {
                 self.draw_prompt_prefix()?;
                 self.draw_prompt_suffix()
             }
 
-            pub fn draw_prompt_prefix(&mut self) -> io::Result<()> {
+            pub fn draw_prompt_prefix(&mut self) -> io::Result<()> 
+            {
                 match self.prompt_type {
                     PromptType::CompleteMore => Ok(()),
                     _ => {
@@ -40474,7 +41140,8 @@ pub mod system
                 }
             }
 
-            pub fn draw_prompt_suffix(&mut self) -> io::Result<()> {
+            pub fn draw_prompt_suffix(&mut self) -> io::Result<()> 
+            {
                 match self.prompt_type {
                     PromptType::Normal => {
                         let sfx = self.prompt_suffix.clone();
@@ -40515,13 +41182,15 @@ pub mod system
                 self.move_from(len)
             }
 
-            pub fn redraw_prompt(&mut self, new_prompt: PromptType) -> io::Result<()> {
+            pub fn redraw_prompt(&mut self, new_prompt: PromptType) -> io::Result<()> 
+            {
                 self.clear_prompt()?;
                 self.prompt_type = new_prompt;
                 self.draw_prompt_suffix()
             }
             /// Draws a portion of the buffer, starting from the given cursor position
-            pub fn draw_buffer(&mut self, pos: usize) -> io::Result<()> {
+            pub fn draw_buffer(&mut self, pos: usize) -> io::Result<()> 
+            {
                 let (_, col) = self.line_col(pos);
 
                 let buf = self.buffer[pos..].to_owned();
@@ -40529,7 +41198,8 @@ pub mod system
                 Ok(())
             }
             /// Draw some text with the cursor beginning at the given column.
-            fn draw_text(&mut self, start_col: usize, text: &str) -> io::Result<()> {
+            fn draw_text(&mut self, start_col: usize, text: &str) -> io::Result<()> 
+            {
                 self.draw_text_impl(start_col, text, Display{
                     allow_tab: true,
                     allow_newline: true,
@@ -40537,7 +41207,8 @@ pub mod system
                 }, false)
             }
 
-            fn draw_raw_prompt(&mut self, text: &str) -> io::Result<()> {
+            fn draw_raw_prompt(&mut self, text: &str) -> io::Result<()> 
+            {
                 self.draw_text_impl(0, text, Display{
                     allow_tab: true,
                     allow_newline: true,
@@ -40545,8 +41216,9 @@ pub mod system
                 }, true)
             }
 
-            fn draw_text_impl(&mut self, start_col: usize, text: &str, disp: Display,
-                    handle_invisible: bool) -> io::Result<()> {
+            fn draw_text_impl(&mut self, start_col: usize, text: &str, disp: Display, handle_invisible: bool) 
+            -> io::Result<()>
+            {
                 let width = self.screen_size.columns;
                 let mut col = start_col;
                 let mut out = String::with_capacity(text.len());
@@ -40591,9 +41263,9 @@ pub mod system
 
                                 out.push('\n');
                                 col = 0;
-                            } else if is_combining_mark(ch) {
+                            } else if is::combining_mark(ch) {
                                 out.push(ch);
-                            } else if is_wide(ch) {
+                            } else if is::wide(ch) {
                                 if col == width - 1 {
                                     out.push_str("  \r");
                                     out.push(ch);
@@ -40622,7 +41294,8 @@ pub mod system
                 self.term.write(&out)
             }
 
-            pub fn set_buffer(&mut self, buf: &str) -> io::Result<()> {
+            pub fn set_buffer(&mut self, buf: &str) -> io::Result<()> 
+            {
                 self.expire_blink()?;
 
                 self.move_to(0)?;
@@ -40631,7 +41304,8 @@ pub mod system
                 self.new_buffer()
             }
 
-            pub fn set_cursor(&mut self, pos: usize) -> io::Result<()> {
+            pub fn set_cursor(&mut self, pos: usize) -> io::Result<()> 
+            {
                 self.expire_blink()?;
 
                 if !self.buffer.is_char_boundary(pos) {
@@ -40642,34 +41316,41 @@ pub mod system
                 self.move_to(pos)
             }
 
-            pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> {
+            pub fn set_cursor_mode(&mut self, mode: CursorMode) -> io::Result<()> 
+            {
                 self.term.set_cursor_mode(mode)
             }
 
-            pub fn history_len(&self) -> usize {
+            pub fn history_len(&self) -> usize 
+            {
                 self.history.len()
             }
 
-            pub fn history_size(&self) -> usize {
+            pub fn history_size(&self) -> usize 
+            {
                 self.history_size
             }
 
-            pub fn set_history_size(&mut self, n: usize) {
+            pub fn set_history_size(&mut self, n: usize) 
+            {
                 self.history_size = n;
                 self.truncate_history(n);
             }
 
-            pub fn write_str(&mut self, s: &str) -> io::Result<()> {
+            pub fn write_str(&mut self, s: &str) -> io::Result<()> 
+            {
                 self.term.write(s)
             }
 
-            pub fn start_history_search(&mut self, reverse: bool) -> io::Result<()> {
+            pub fn start_history_search(&mut self, reverse: bool) -> io::Result<()> 
+            {
                 self.search_buffer = self.buffer[..self.cursor].to_owned();
 
                 self.continue_history_search(reverse)
             }
 
-            pub fn continue_history_search(&mut self, reverse: bool) -> io::Result<()> {
+            pub fn continue_history_search(&mut self, reverse: bool) -> io::Result<()> 
+            {
                 if let Some(idx) = self.find_history_search(reverse) {
                     self.set_history_entry(Some(idx));
 
@@ -40684,7 +41365,8 @@ pub mod system
                 Ok(())
             }
 
-            fn find_history_search(&self, reverse: bool) -> Option<usize> {
+            fn find_history_search(&self, reverse: bool) -> Option<usize> 
+            {
                 let len = self.history.len();
                 let idx = self.history_index.unwrap_or(len);
 
@@ -40699,7 +41381,8 @@ pub mod system
                 }
             }
 
-            pub fn start_search_history(&mut self, reverse: bool) -> io::Result<()> {
+            pub fn start_search_history(&mut self, reverse: bool) -> io::Result<()> 
+            {
                 self.reverse_search = reverse;
                 self.search_failed = false;
                 self.search_buffer.clear();
@@ -40709,7 +41392,8 @@ pub mod system
                 self.redraw_prompt(PromptType::Search)
             }
 
-            pub fn continue_search_history(&mut self, reverse: bool) -> io::Result<()> {
+            pub fn continue_search_history(&mut self, reverse: bool) -> io::Result<()> 
+            {
                 self.reverse_search = reverse;
                 self.search_failed = false;
 
@@ -40721,11 +41405,13 @@ pub mod system
                 self.search_history_step()
             }
 
-            pub fn end_search_history(&mut self) -> io::Result<()> {
+            pub fn end_search_history(&mut self) -> io::Result<()> 
+            {
                 self.redraw_prompt(PromptType::Normal)
             }
 
-            pub fn abort_search_history(&mut self) -> io::Result<()> {
+            pub fn abort_search_history(&mut self) -> io::Result<()> 
+            {
                 self.clear_prompt()?;
 
                 let ent = self.prev_history;
@@ -40736,8 +41422,8 @@ pub mod system
                 self.draw_prompt_suffix()
             }
 
-            fn show_search_match(&mut self, next_match: Option<(Option<usize>, usize)>)
-                    -> io::Result<()> {
+            fn show_search_match(&mut self, next_match: Option<(Option<usize>, usize)>) -> io::Result<()>
+            {
                 self.clear_prompt()?;
 
                 if let Some((idx, pos)) = next_match {
@@ -40752,7 +41438,8 @@ pub mod system
                 self.draw_prompt_suffix()
             }
 
-            pub fn search_history_update(&mut self) -> io::Result<()> {
+            pub fn search_history_update(&mut self) -> io::Result<()> 
+            {
                 let next_match = if self.reverse_search {
                     self.search_history_backward(&self.search_buffer, true)
                 } else {
@@ -40762,7 +41449,8 @@ pub mod system
                 self.show_search_match(next_match)
             }
 
-            fn search_history_step(&mut self) -> io::Result<()> {
+            fn search_history_step(&mut self) -> io::Result<()> 
+            {
                 if self.search_buffer.is_empty() {
                     return self.redraw_prompt(PromptType::Search);
                 }
@@ -40776,8 +41464,8 @@ pub mod system
                 self.show_search_match(next_match)
             }
 
-            fn search_history_backward(&self, s: &str, include_cur: bool)
-                    -> Option<(Option<usize>, usize)> {
+            fn search_history_backward(&self, s: &str, include_cur: bool) -> Option<(Option<usize>, usize)>
+            {
                 let mut idx = self.history_index;
                 let mut pos = Some(self.cursor);
 
@@ -40820,8 +41508,8 @@ pub mod system
                 pos.map(|pos| (idx, pos))
             }
 
-            fn search_history_forward(&self, s: &str, include_cur: bool)
-                    -> Option<(Option<usize>, usize)> {
+            fn search_history_forward(&self, s: &str, include_cur: bool) -> Option<(Option<usize>, usize)>
+            {
                 let mut idx = self.history_index;
                 let mut pos = Some(self.cursor);
 
@@ -40857,7 +41545,8 @@ pub mod system
                 pos.map(|pos| (idx, pos))
             }
 
-            pub fn add_history(&mut self, line: String) {
+            pub fn add_history(&mut self, line: String) 
+            {
                 if self.history.len() == self.history_size {
                     self.history.pop_front();
                 }
@@ -40867,7 +41556,8 @@ pub mod system
                     .min(self.history_new_entries + 1);
             }
 
-            pub fn add_history_unique(&mut self, line: String) {
+            pub fn add_history_unique(&mut self, line: String) 
+            {
                 let is_duplicate = self.history.back().map_or(false, |ent| *ent == line);
 
                 if !is_duplicate {
@@ -40875,12 +41565,14 @@ pub mod system
                 }
             }
 
-            pub fn clear_history(&mut self) {
+            pub fn clear_history(&mut self) 
+            {
                 self.truncate_history(0);
                 self.history_new_entries = 0;
             }
 
-            pub fn remove_history(&mut self, n: usize) {
+            pub fn remove_history(&mut self, n: usize) 
+            {
                 if n < self.history.len() {
                     let first_new = self.history.len() - self.history_new_entries;
 
@@ -40892,7 +41584,8 @@ pub mod system
                 }
             }
 
-            pub fn truncate_history(&mut self, n: usize) {
+            pub fn truncate_history(&mut self, n: usize) 
+            {
                 let len = self.history.len();
 
                 if n < len {
@@ -40901,7 +41594,8 @@ pub mod system
                 }
             }
 
-            pub fn next_history(&mut self, n: usize) -> io::Result<()> {
+            pub fn next_history(&mut self, n: usize) -> io::Result<()> 
+            {
                 if let Some(old) = self.history_index {
                     let new = old.saturating_add(n);
 
@@ -40915,7 +41609,8 @@ pub mod system
                 Ok(())
             }
 
-            pub fn prev_history(&mut self, n: usize) -> io::Result<()> {
+            pub fn prev_history(&mut self, n: usize) -> io::Result<()> 
+            {
                 if !self.history.is_empty() && self.history_index != Some(0) {
                     let new = if let Some(old) = self.history_index {
                         old.saturating_sub(n)
@@ -40929,7 +41624,8 @@ pub mod system
                 Ok(())
             }
 
-            pub fn select_history_entry(&mut self, new: Option<usize>) -> io::Result<()> {
+            pub fn select_history_entry(&mut self, new: Option<usize>) -> io::Result<()> 
+            {
                 if new != self.history_index {
                     self.move_to(0)?;
                     self.set_history_entry(new);
@@ -40939,7 +41635,8 @@ pub mod system
                 Ok(())
             }
 
-            pub fn set_history_entry(&mut self, new: Option<usize>) {
+            pub fn set_history_entry(&mut self, new: Option<usize>) 
+            {
                 let old = self.history_index;
 
                 if old != new {
@@ -40961,7 +41658,8 @@ pub mod system
                 }
             }
 
-            fn get_history(&self, n: Option<usize>) -> &str {
+            fn get_history(&self, n: Option<usize>) -> &str 
+            {
                 if self.history_index == n {
                     &self.buffer
                 } else if let Some(n) = n {
@@ -40971,17 +41669,20 @@ pub mod system
                 }
             }
 
-            pub fn backward_char(&mut self, n: usize) -> io::Result<()> {
+            pub fn backward_char(&mut self, n: usize) -> io::Result<()> 
+            {
                 let pos = backward_char(n, &self.buffer, self.cursor);
                 self.move_to(pos)
             }
 
-            pub fn forward_char(&mut self, n: usize) -> io::Result<()> {
+            pub fn forward_char(&mut self, n: usize) -> io::Result<()> 
+            {
                 let pos = forward_char(n, &self.buffer, self.cursor);
                 self.move_to(pos)
             }
 
-            pub fn backward_search_char(&mut self, n: usize, ch: char) -> io::Result<()> {
+            pub fn backward_search_char(&mut self, n: usize, ch: char) -> io::Result<()> 
+            {
                 if let Some(pos) = backward_search_char(n, &self.buffer, self.cursor, ch) {
                     self.move_to(pos)?;
                 }
@@ -40989,7 +41690,8 @@ pub mod system
                 Ok(())
             }
 
-            pub fn forward_search_char(&mut self, n: usize, ch: char) -> io::Result<()> {
+            pub fn forward_search_char(&mut self, n: usize, ch: char) -> io::Result<()> 
+            {
                 if let Some(pos) = forward_search_char(n, &self.buffer, self.cursor, ch) {
                     self.move_to(pos)?;
                 }
@@ -40997,7 +41699,8 @@ pub mod system
                 Ok(())
             }
             /// Deletes a range from the buffer; the cursor is moved to the end of the given range.
-            pub fn delete_range<R: RangeArgument<usize>>(&mut self, range: R) -> io::Result<()> {
+            pub fn delete_range<R: RangeArgument<usize>>(&mut self, range: R) -> io::Result<()> 
+            {
                 let start = range.start().cloned().unwrap_or(0);
                 let end = range.end().cloned().unwrap_or_else(|| self.buffer.len());
 
@@ -41013,7 +41716,8 @@ pub mod system
                 Ok(())
             }
 
-            pub fn insert_str(&mut self, s: &str) -> io::Result<()> {
+            pub fn insert_str(&mut self, s: &str) -> io::Result<()> 
+            {
                 let moves_combining = match self.buffer[self.cursor..].chars().next() {
                     Some(ch) if is::combining_mark(ch) => true,
                     _ => false
@@ -41037,43 +41741,33 @@ pub mod system
                 self.move_from(len)
             }
 
-            pub fn transpose_range(&mut self, src: Range<usize>, dest: Range<usize>)
-                    -> io::Result<()> {
+            pub fn transpose_range(&mut self, src: Range<usize>, dest: Range<usize>) -> io::Result<()>
+            {
                 assert!(src.end <= dest.start || src.start >= dest.end);
-                
-                let final_cur = if src.start < dest.start {
-                    dest.end
-                } else {
-                    dest.start + (src.end - src.start)
-                };
 
-                let (left, right) = if src.start < dest.start {
-                    (src, dest)
-                } else {
-                    (dest, src)
-                };
+                let final_cur = if src.start < dest.start { dest.end }
+                else { dest.start + (src.end - src.start) };
+
+                let (left, right) = if src.start < dest.start { (src, dest) }
+                else { (dest, src) };
 
                 self.move_to(left.start)?;
-
                 let a = self.buffer[left.clone()].to_owned();
                 let b = self.buffer[right.clone()].to_owned();
-
                 let _ = self.buffer.drain(right.clone());
                 self.buffer.insert_str(right.start, &a);
-
                 let _ = self.buffer.drain(left.clone());
                 self.buffer.insert_str(left.start, &b);
-
                 let cursor = self.cursor;
                 self.draw_buffer(cursor)?;
                 self.term.clear_to_screen_end()?;
-
                 self.cursor = final_cur;
                 let len = self.buffer.len();
                 self.move_from(len)
             }
 
-            fn prompt_suffix_length(&self) -> usize {
+            fn prompt_suffix_length(&self) -> usize 
+            {
                 match self.prompt_type {
                     PromptType::Normal => self.prompt_suffix_len,
                     PromptType::Number => {
@@ -41098,7 +41792,8 @@ pub mod system
                 }
             }
 
-            fn line_col(&self, pos: usize) -> (usize, usize) {
+            fn line_col(&self, pos: usize) -> (usize, usize) 
+            {
                 let prompt_len = self.prompt_suffix_length();
 
                 match self.prompt_type {
@@ -41111,7 +41806,8 @@ pub mod system
                 }
             }
 
-            fn line_col_with(&self, pos: usize, buf: &str, start_col: usize) -> (usize, usize) {
+            fn line_col_with(&self, pos: usize, buf: &str, start_col: usize) -> (usize, usize) 
+            {
                 let width = self.screen_size.columns;
                 if width == 0 {
                     return (0, 0);
@@ -41122,18 +41818,21 @@ pub mod system
                 (n / width, n % width)
             }
 
-            pub fn clear_screen(&mut self) -> io::Result<()> {
+            pub fn clear_screen(&mut self) -> io::Result<()> 
+            {
                 self.term.clear_screen()?;
                 self.draw_prompt()?;
 
                 Ok(())
             }
 
-            pub fn clear_to_screen_end(&mut self) -> io::Result<()> {
+            pub fn clear_to_screen_end(&mut self) -> io::Result<()> 
+            {
                 self.term.clear_to_screen_end()
             }
-            /// Draws a new buffer on the screen. Cursor position is assumed to be `0`.
-            pub fn new_buffer(&mut self) -> io::Result<()> {
+            /// Draws a new buffer on the screen.
+            pub fn new_buffer(&mut self) -> io::Result<()> 
+            {
                 self.draw_buffer(0)?;
                 self.cursor = self.buffer.len();
 
@@ -41142,7 +41841,8 @@ pub mod system
                 Ok(())
             }
 
-            pub fn clear_full_prompt(&mut self) -> io::Result<()> {
+            pub fn clear_full_prompt(&mut self) -> io::Result<()> 
+            {
                 let prefix_lines = self.prompt_prefix_len / self.screen_size.columns;
                 let (line, _) = self.line_col(self.cursor);
                 self.term.move_up(prefix_lines + line)?;
@@ -41158,12 +41858,14 @@ pub mod system
                 self.term.clear_to_screen_end()
             }
             /// Move back to true cursor position from some other position
-            pub fn move_from(&mut self, pos: usize) -> io::Result<()> {
+            pub fn move_from(&mut self, pos: usize) -> io::Result<()> 
+            {
                 let (lines, cols) = self.move_delta(pos, self.cursor, &self.buffer);
                 self.move_rel(lines, cols)
             }
 
-            pub fn move_to(&mut self, pos: usize) -> io::Result<()> {
+            pub fn move_to(&mut self, pos: usize) -> io::Result<()> 
+            {
                 if pos != self.cursor {
                     let (lines, cols) = self.move_delta(self.cursor, pos, &self.buffer);
                     self.move_rel(lines, cols)?;
@@ -41173,17 +41875,19 @@ pub mod system
                 Ok(())
             }
 
-            pub fn move_to_end(&mut self) -> io::Result<()> {
+            pub fn move_to_end(&mut self) -> io::Result<()> 
+            {
                 let pos = self.buffer.len();
                 self.move_to(pos)
             }
 
-            pub fn move_right(&mut self, n: usize) -> io::Result<()> {
+            pub fn move_right(&mut self, n: usize) -> io::Result<()> 
+            {
                 self.term.move_right(n)
             }
-            /// Moves from `old` to `new` cursor position, using the given buffer
-            /// as current input.
-            fn move_delta(&self, old: usize, new: usize, buf: &str) -> (isize, isize) {
+            /// Moves from `old` to `new` cursor position, using the given buffer as current input.
+            fn move_delta(&self, old: usize, new: usize, buf: &str) -> (isize, isize) 
+            {
                 let prompt_len = self.prompt_suffix_length();
                 let (old_line, old_col) = self.line_col_with(old, buf, prompt_len);
                 let (new_line, new_col) = self.line_col_with(new, buf, prompt_len);
@@ -41192,7 +41896,8 @@ pub mod system
                 new_col as isize - old_col as isize)
             }
 
-            fn move_rel(&mut self, lines: isize, cols: isize) -> io::Result<()> {
+            fn move_rel(&mut self, lines: isize, cols: isize) -> io::Result<()> 
+            {
                 if lines > 0 {
                     self.term.move_down(lines as usize)?;
                 } else if lines < 0 {
@@ -41208,11 +41913,13 @@ pub mod system
                 Ok(())
             }
 
-            pub fn reset_data(&mut self) {
+            pub fn reset_data(&mut self) 
+            {
                 self.data.reset_data();
             }
 
-            pub fn set_digit_from_char(&mut self, ch: char) {
+            pub fn set_digit_from_char(&mut self, ch: char) 
+            {
                 let digit = match ch {
                     '-' => Digit::NegNone,
                     '0' ..= '9' => Digit::from(ch),
@@ -41297,7 +42004,8 @@ pub mod system
 
         impl Write 
         {
-            pub fn new(screen_size: Size) -> Write {
+            pub fn new(screen_size: Size) -> Write 
+            {
                 Write{
                     buffer: String::new(),
                     backup_buffer: String::new(),
@@ -41332,20 +42040,24 @@ pub mod system
                 }
             }
 
-            pub fn history(&self) -> HistoryIter {
+            pub fn history(&self) -> HistoryIter 
+            {
                 HistoryIter(self.history.iter())
             }
 
-            pub fn new_history(&self) -> Skip<HistoryIter> {
+            pub fn new_history(&self) -> Skip<HistoryIter> 
+            {
                 let first_new = self.history.len() - self.history_new_entries;
                 self.history().skip(first_new)
             }
 
-            pub fn new_history_entries(&self) -> usize {
+            pub fn new_history_entries(&self) -> usize 
+            {
                 self.history_new_entries
             }
 
-            pub fn reset_data(&mut self) {
+            pub fn reset_data(&mut self) 
+            {
                 self.buffer.clear();
                 self.backup_buffer.clear();
                 self.cursor = 0;
@@ -41357,17 +42069,20 @@ pub mod system
                 self.explicit_arg = false;
             }
 
-            pub fn reset_new_history(&mut self) {
+            pub fn reset_new_history(&mut self) 
+            {
                 self.history_new_entries = 0;
             }
 
-            pub fn set_buffer(&mut self, buf: &str) {
+            pub fn set_buffer(&mut self, buf: &str) 
+            {
                 self.buffer.clear();
                 self.buffer.push_str(buf);
                 self.cursor = buf.len();
             }
 
-            pub fn set_cursor(&mut self, pos: usize) {
+            pub fn set_cursor(&mut self, pos: usize) 
+            {
                 if !self.buffer.is_char_boundary(pos) {
                     panic!("invalid cursor position {} in buffer {:?}",
                         pos, self.buffer);
@@ -41376,7 +42091,8 @@ pub mod system
                 self.cursor = pos;
             }
 
-            pub fn set_prompt(&mut self, prompt: &str) {
+            pub fn set_prompt(&mut self, prompt: &str) 
+            {
                 let (pre, suf) = match prompt.rfind('\n') {
                     Some(pos) => (&prompt[..pos + 1], &prompt[pos + 1..]),
                     None => (&prompt[..0], prompt)
@@ -41392,27 +42108,28 @@ pub mod system
                 self.prompt_suffix_len = self.display_size(&suf_virt, 0);
             }
 
-            pub fn display_size(&self, s: &str, start_col: usize) -> usize {
+            pub fn display_size(&self, s: &str, start_col: usize) -> usize 
+            {
                 let width = self.screen_size.columns;
                 let mut col = start_col;
-
-                let disp = Display{
+                let disp = Display
+                {
                     allow_tab: true,
                     allow_newline: true,
                     .. Display::default()
                 };
 
-                for ch in s.chars().flat_map(|ch| display(ch, disp)) {
-                    let n = match ch {
+                for ch in s.chars().flat_map(|ch| display(ch, disp))
+                {
+                    let n = match ch
+                    {
                         '\n' => width - (col % width),
                         '\t' => TAB_STOP - (col % TAB_STOP),
-                        ch if is_combining_mark(ch) => 0,
-                        ch if is_wide(ch) => {
-                            if col % width == width - 1 {
-                                3
-                            } else {
-                                2
-                            }
+                        ch if is::combining_mark(ch) => 0,
+                        ch if is::wide(ch) =>
+                        {
+                            if col % width == width - 1 { 3 }
+                            else { 2 }
                         }
                         _ => 1
                     };
@@ -41424,7 +42141,7 @@ pub mod system
             }
         }
         /// Maximum value of digit input
-        const NUMBER_MAX: i32 = 1_000_000;
+        pub const NUMBER_MAX: i32 = 1_000_000;
 
         #[derive(Copy, Clone, Debug)]
         pub enum Digit 
@@ -41698,15 +42415,17 @@ pub mod system
         {
             use ::
             {
+                system::
+                {
+                    buffer::{ ScreenBuffer },
+                    terminal::{ Color, Cursor, CursorMode, Event, Size, Style, PrepareConfig },
+                    unix::{ * },
+                },
                 sync::{ LockResult, map_lock_result, map_try_lock_result, map2_lock_result, map2_try_lock_result, Mutex, MutexGuard, TryLockResult },
                 time::{ Duration },
                 *,
             };
-            /*
-            use mortal::buffer::ScreenBuffer;
-            use mortal::sys::{Terminal, TerminalReadGuard, TerminalWriteGuard, PrepareState};
-            use mortal::terminal::{Color, Cursor, CursorMode, Event, Size, Style, PrepareConfig};
-            */
+            
             pub struct Screen 
             {
                 term: super::Terminal,
@@ -41716,15 +42435,18 @@ pub mod system
 
             impl Screen 
             {
-                pub fn new(term: Terminal, config: PrepareConfig) -> io::Result<Screen> {
+                pub fn new(term: Terminal, config: PrepareConfig) -> io::Result<Screen> 
+                {
                     let size = term.size()?;
                     let state = term.prepare(config)?;
 
-                    let screen = Screen{
+                    let screen = Screen
+                    {
                         term: term,
                         state: Some(state),
 
-                        writer: Mutex::new(Writer{
+                        writer: Mutex::new(Writer
+                        {
                             buffer: ScreenBuffer::new(size),
                             clear_screen: false,
                             real_cursor: Cursor::default(),
@@ -41732,7 +42454,6 @@ pub mod system
                     };
 
                     screen.term.enter_screen()?;
-
                     Ok(screen)
                 }
 
@@ -41766,41 +42487,27 @@ pub mod system
                         |a, b| ScreenWriteGuard::new(a, b))
                 }
 
-                fn lock_reader(&self) -> ScreenReadGuard {
-                    self.lock_read().expect("Screen::lock_reader")
-                }
+                fn lock_reader(&self) -> ScreenReadGuard { self.lock_read().expect("Screen::lock_reader") }
 
-                fn lock_writer(&self) -> ScreenWriteGuard {
-                    self.lock_write().expect("Screen::lock_writer")
-                }
+                fn lock_writer(&self) -> ScreenWriteGuard { self.lock_write().expect("Screen::lock_writer") }
 
-                fn lock_write_data(&self) -> MutexGuard<Writer> {
-                    self.writer.lock().expect("Screen::lock_write_data")
-                }
+                fn lock_write_data(&self) -> MutexGuard<Writer>
+                { self.writer.lock().expect("Screen::lock_write_data") }
+                /*
+                pub fn name(&self) -> &str { self.term.name() } */
+                pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> 
+                { self.term.set_cursor_mode(mode) }
 
-                pub fn name(&self) -> &str {
-                    self.term.name()
-                }
+                pub fn wait_event(&self, timeout: Option<Duration>) -> io::Result<bool> 
+                { self.lock_reader().wait_event(timeout) }
 
-                pub fn set_cursor_mode(&self, mode: CursorMode) -> io::Result<()> {
-                    self.term.set_cursor_mode(mode)
-                }
+                pub fn read_event(&self, timeout: Option<Duration>) -> io::Result<Option<Event>> 
+                { self.lock_reader().read_event(timeout) }
 
-                pub fn wait_event(&self, timeout: Option<Duration>) -> io::Result<bool> {
-                    self.lock_reader().wait_event(timeout)
-                }
+                pub fn read_raw(&self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> 
+                { self.lock_reader().read_raw(buf, timeout) }
 
-                pub fn read_event(&self, timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    self.lock_reader().read_event(timeout)
-                }
-
-                pub fn read_raw(&self, buf: &mut [u8], timeout: Option<Duration>) -> io::Result<Option<Event>> {
-                    self.lock_reader().read_raw(buf, timeout)
-                }
-
-                pub fn refresh(&self) -> io::Result<()> {
-                    self.lock_writer().refresh()
-                }
+                pub fn refresh(&self) -> io::Result<()> { self.lock_writer().refresh() }
             }
 
             impl Drop for Screen 
@@ -41830,13 +42537,15 @@ pub mod system
                 data: MutexGuard<'a, Writer>,
             }
 
-            struct Writer {
+            struct Writer 
+            {
                 buffer: ScreenBuffer,
                 clear_screen: bool,
                 real_cursor: Cursor,
             }
 
-            impl<'a> ScreenReadGuard<'a> {
+            impl<'a> ScreenReadGuard<'a> 
+            {
                 fn new(screen: &'a Screen, reader: TerminalReadGuard<'a>) -> ScreenReadGuard<'a> {
                     ScreenReadGuard{screen, reader}
                 }
@@ -41866,7 +42575,8 @@ pub mod system
                 }
             }
 
-            impl<'a> ScreenWriteGuard<'a> {
+            impl<'a> ScreenWriteGuard<'a> 
+            {
                 fn new(writer: TerminalWriteGuard<'a>, data: MutexGuard<'a, Writer>)
                         -> ScreenWriteGuard<'a> {
                     ScreenWriteGuard{writer, data}
@@ -41926,7 +42636,8 @@ pub mod system
                 }
             }
 
-            impl<'a> Drop for ScreenWriteGuard<'a> {
+            impl<'a> Drop for ScreenWriteGuard<'a> 
+            {
                 fn drop(&mut self) {
                     if let Err(e) = self.refresh() {
                         eprintln!("failed to refresh screen: {}", e);
@@ -41934,7 +42645,8 @@ pub mod system
                 }
             }
 
-            impl Writer {
+            impl Writer 
+            {
                 fn update_size(&mut self, new_size: Size) {
                     if self.real_cursor.is_out_of_bounds(new_size) {
                         self.real_cursor = (!0, !0).into();
@@ -41954,7 +42666,7 @@ pub mod system
                 fs::{ File },
                 libc::{ unix::{ * }, * },
                 mem::{ replace, zeroed },
-                mode::{ Context },
+                mode::{ Context, Expansion },
                 nix::
                 {
                     errno::{ Errno },
@@ -42004,7 +42716,7 @@ pub mod system
             {
                 ( $slf:expr , $cap:path ) => 
                 {{
-                    if let Some(cap) = $slf.term.info.get::<$cap>()
+                    if let Some(cap) = $slf.term.info.read::<$cap>()
                     {
                         $slf.expand(cap.expand())
                     }
@@ -42013,7 +42725,7 @@ pub mod system
 
                 ( $slf:expr , $cap:path , |$ex:ident| $expansion:expr ) => 
                 {{
-                    if let Some(cap) = $slf.term.info.get::<$cap>()
+                    if let Some(cap) = $slf.term.info.read::<$cap>()
                     {
                         let $ex = cap.expand();
                         $slf.expand($expansion)
@@ -42025,12 +42737,12 @@ pub mod system
             macro_rules! expand_req 
             {
                 ( $slf:expr , $cap:path , $name:expr ) => { {
-                    $slf.term.info.get::<$cap>()
+                    $slf.term.info.read::<$cap>()
                         .ok_or_else(|| not_supported($name))
                         .and_then(|cap| $slf.expand(cap.expand()))
                 } };
                 ( $slf:expr , $cap:path , $name:expr , |$ex:ident| $expansion:expr ) => { {
-                    $slf.term.info.get::<$cap>()
+                    $slf.term.info.read::<$cap>()
                         .ok_or_else(|| not_supported($name))
                         .and_then(|cap| {
                             let $ex = cap.expand();
@@ -42591,14 +43303,15 @@ pub mod system
 
                 fn disable_keypad(&mut self) -> io::Result<()> 
                 {
-                    if let Some(local) = self.term.info.get::<mode::KeypadLocal>() {
+                    if let Some(local) = self.term.info.read::<mode::KeypadLocal>() {
                         self.expand(local.expand())?;
                     }
                     Ok(())
                 }
 
-                fn enable_keypad(&mut self) -> io::Result<bool> {
-                    if let Some(xmit) = self.term.info.get::<mode::KeypadXmit>() 
+                fn enable_keypad(&mut self) -> io::Result<bool> 
+                {
+                    if let Some(xmit) = self.term.info.read::<mode::KeypadXmit>() 
                     {
                         self.expand(xmit.expand())?;
                         Ok(true)
@@ -42612,7 +43325,8 @@ pub mod system
                     self.write_bytes(XTERM_DISABLE_MOUSE_MOTION.as_bytes())
                 }
 
-                fn enable_mouse(&mut self, track_motion: bool) -> io::Result<bool> {
+                fn enable_mouse(&mut self, track_motion: bool) -> io::Result<bool> 
+                {
                     if self.term.is_xterm() {
                         self.write_bytes(XTERM_ENABLE_MOUSE.as_bytes())?;
                         if track_motion {
@@ -42624,10 +43338,11 @@ pub mod system
                     }
                 }
 
-                fn enter_screen(&mut self) -> io::Result<()> {
-                    match (self.term.info.get::<mode::EnterCaMode>(),
-                            self.term.info.get::<mode::ChangeScrollRegion>(),
-                            self.term.info.get::<mode::CursorHome>()) {
+                fn enter_screen(&mut self) -> io::Result<()> 
+                {
+                    match (self.term.info.read::<mode::EnterCaMode>(),
+                            self.term.info.read::<mode::ChangeScrollRegion>(),
+                            self.term.info.read::<mode::CursorHome>()) {
                         (enter, Some(scroll), Some(home)) => {
                             let size = self.size()?;
 
@@ -42649,8 +43364,9 @@ pub mod system
                     Ok(())
                 }
 
-                fn exit_screen(&mut self) -> io::Result<()> {
-                    if let Some(exit) = self.term.info.get::<mode::ExitCaMode>() {
+                fn exit_screen(&mut self) -> io::Result<()> 
+                {
+                    if let Some(exit) = self.term.info.read::<mode::ExitCaMode>() {
                         self.expand(exit.expand())?;
                         self.flush()?;
                     }
@@ -42751,18 +43467,22 @@ pub mod system
                     Ok(())
                 }
 
-                pub fn set_style(&mut self, style: Style) -> io::Result<()> {
+                pub fn set_style(&mut self, style: Style) -> io::Result<()> 
+                {
                     let add = style - self.writer.cur_style;
                     let remove = self.writer.cur_style - style;
 
-                    if remove.intersects(Style::BOLD | Style::REVERSE) {
+                    if remove.intersects(Style::BOLD | Style::REVERSE) 
+                    {
                         let fg = self.writer.fg;
                         let bg = self.writer.bg;
                         self.clear_attributes()?;
                         self.set_fg(fg)?;
                         self.set_bg(bg)?;
                         self.add_style(style)?;
-                    } else {
+                    } 
+                    else 
+                    {
                         self.add_style(add)?;
                         self.remove_style(remove)?;
                     }
@@ -42770,33 +43490,31 @@ pub mod system
                     Ok(())
                 }
 
-                pub fn set_theme(&mut self, theme: Theme) -> io::Result<()> {
-                    self.set_attrs(theme.fg, theme.bg, theme.style)
-                }
+                pub fn set_theme(&mut self, theme: Theme) -> io::Result<()>
+                { self.set_attrs(theme.fg, theme.bg, theme.style) }
 
-                pub fn set_attrs(&mut self, fg: Option<Color>, bg: Option<Color>, style: Style) -> io::Result<()> {
-                    if (self.writer.fg.is_some() && fg.is_none()) ||
-                            (self.writer.bg.is_some() && bg.is_none()) {
-                        self.clear_attributes()?;
-                    }
+                pub fn set_attrs(&mut self, fg: Option<Color>, bg: Option<Color>, style: Style) -> io::Result<()>
+                {
+                    if (self.writer.fg.is_some() && fg.is_none()) || (self.writer.bg.is_some() && bg.is_none())
+                    { self.clear_attributes()?; }
 
                     self.set_style(style)?;
                     self.set_fg(fg)?;
                     self.set_bg(bg)?;
-
                     Ok(())
                 }
 
-                fn clear_fg(&mut self) -> io::Result<()> {
+                fn clear_fg(&mut self) -> io::Result<()> 
+                {
                     let bg = self.writer.bg;
                     let style = self.writer.cur_style;
-
                     self.clear_attributes()?;
                     self.set_bg(bg)?;
                     self.set_style(style)
                 }
 
-                fn clear_bg(&mut self) -> io::Result<()> {
+                fn clear_bg(&mut self) -> io::Result<()> 
+                {
                     let fg = self.writer.fg;
                     let style = self.writer.cur_style;
 
@@ -42805,29 +43523,35 @@ pub mod system
                     self.set_style(style)
                 }
 
-                fn set_fg_color(&mut self, fg: Color) -> io::Result<()> {
+                fn set_fg_color(&mut self, fg: Color) -> io::Result<()> 
+                {
                     expand_opt!(self, mode::SetAForeground,
                         |ex| ex.parameters(color_code(fg)))
                 }
 
-                fn set_bg_color(&mut self, bg: Color) -> io::Result<()> {
+                fn set_bg_color(&mut self, bg: Color) -> io::Result<()> 
+                {
                     expand_opt!(self, mode::SetABackground,
                         |ex| ex.parameters(color_code(bg)))
                 }
 
-                pub fn clear_screen(&mut self) -> io::Result<()> {
+                pub fn clear_screen(&mut self) -> io::Result<()> 
+                {
                     expand_req!(self, mode::ClearScreen, "clear_screen")
                 }
 
-                pub fn clear_to_line_end(&mut self) -> io::Result<()> {
+                pub fn clear_to_line_end(&mut self) -> io::Result<()> 
+                {
                     expand_req!(self, mode::ClrEol, "clr_eol")
                 }
 
-                pub fn clear_to_screen_end(&mut self) -> io::Result<()> {
+                pub fn clear_to_screen_end(&mut self) -> io::Result<()> 
+                {
                     expand_req!(self, mode::ClrEos, "clr_eos")
                 }
 
-                pub fn move_up(&mut self, n: usize) -> io::Result<()> {
+                pub fn move_up(&mut self, n: usize) -> io::Result<()> 
+                {
                     if n == 1 {
                         expand_req!(self, mode::CursorUp, "cursor_up")?;
                     } else if n != 0 {
@@ -42837,7 +43561,8 @@ pub mod system
                     Ok(())
                 }
 
-                pub fn move_down(&mut self, n: usize) -> io::Result<()> {
+                pub fn move_down(&mut self, n: usize) -> io::Result<()> 
+                {
                     if n != 0 {
                         expand_req!(self, mode::ParmDownCursor, "parm_cursor_down",
                             |ex| ex.parameters(to_u32(n)))?;
@@ -42845,7 +43570,8 @@ pub mod system
                     Ok(())
                 }
 
-                pub fn move_left(&mut self, n: usize) -> io::Result<()> {
+                pub fn move_left(&mut self, n: usize) -> io::Result<()> 
+                {
                     if n == 1 {
                         expand_req!(self, mode::CursorLeft, "cursor_left")?;
                     } else if n != 0 {
@@ -42855,7 +43581,8 @@ pub mod system
                     Ok(())
                 }
 
-                pub fn move_right(&mut self, n: usize) -> io::Result<()> {
+                pub fn move_right(&mut self, n: usize) -> io::Result<()> 
+                {
                     if n == 1 {
                         expand_req!(self, mode::CursorRight, "cursor_right")?;
                     } else if n != 0 {
@@ -42865,20 +43592,17 @@ pub mod system
                     Ok(())
                 }
 
-                pub fn move_to_first_column(&mut self) -> io::Result<()> {
-                    self.write_bytes(b"\r")
-                }
+                pub fn move_to_first_column(&mut self) -> io::Result<()> { self.write_bytes(b"\r") }
 
-                pub fn move_cursor(&mut self, pos: Cursor) -> io::Result<()> {
-                    match (self.term.info.get::<mode::CursorAddress>(),
-                            self.term.info.get::<mode::CursorHome>()) {
-                        (_, Some(ref home)) if pos == Cursor::default() => {
-                            self.expand(home.expand())?;
-                        }
-                        (Some(addr), _) => {
-                            self.expand(addr.expand()
-                                .parameters(to_u32(pos.line), to_u32(pos.column)))?;
-                        }
+                pub fn move_cursor(&mut self, pos: Cursor) -> io::Result<()> 
+                {
+                    match (self.term.info.read::<mode::CursorAddress>(), self.term.info.read::<mode::CursorHome>())
+                    {
+                        (_, Some(ref home)) if pos == Cursor::default() => { self.expand(home.expand())?; }
+
+                        (Some(addr), _) =>
+                        { self.expand(addr.expand().parameters(to_u32(pos.line), to_u32(pos.column)))?; }
+
                         (None, _) => return Err(not_supported("cursor_address"))
                     }
 
@@ -42938,21 +43662,23 @@ pub mod system
                     }
                 }
 
-                pub fn flush(&mut self) -> io::Result<()> {
+                pub fn flush(&mut self) -> io::Result<()>
+                {
                     let (n, res) = self.write_data(&self.writer.out_buffer);
                     self.writer.out_buffer.drain(..n);
                     res
                 }
 
-                fn write_data(&self, buf: &[u8]) -> (usize, io::Result<()>) {
+                fn write_data(&self, buf: &[u8]) -> (usize, io::Result<()>) 
+                {
                     let mut offset = 0;
 
-                    let r = loop {
-                        if offset == buf.len() {
-                            break Ok(());
-                        }
+                    let r = loop 
+                    {
+                        if offset == buf.len() { break Ok(()); }
 
-                        match write(self.term.out_fd, buf) {
+                        match write(self.term.out_fd, buf) 
+                        {
                             Ok(0) => break Err(io::Error::from(io::ErrorKind::WriteZero)),
                             Ok(n) => offset += n,
                             Err(Errno::EINTR) => continue,
@@ -42963,19 +43689,21 @@ pub mod system
                     (offset, r)
                 }
 
-                fn expand<T: AsRef<[u8]>>(&mut self, exp: Expansion<T>) -> io::Result<()> {
+                fn expand<T: AsRef<[u8]>>(&mut self, exp: Expansion<T>) -> io::Result<()>
+                {
                     let writer = &mut *self.writer;
-                    exp
-                        .with(&mut writer.context)
-                        .to(&mut writer.out_buffer)
-                        .map_err(ti_to_io)
+                    exp.with(&mut writer.context)
+                    .from(&mut writer.out_buffer)
+                    .map_err(ti_to_io)
                 }
             }
 
             impl<'a> Drop for TerminalWriteGuard<'a> 
             {
-                fn drop(&mut self) {
-                    if let Err(e) = self.flush() {
+                fn drop(&mut self) 
+                {
+                    if let Err(e) = self.flush() 
+                    {
                         eprintln!("failed to flush terminal: {}", e);
                     }
                 }
@@ -43115,9 +43843,7 @@ pub mod system
             {
                 io::Error::from_raw_os_error(e as i32)
             }
-            /*
             
-            */
             fn ti_to_io(e: OverError) -> io::Error 
             {
                 match e 
@@ -43126,6 +43852,7 @@ pub mod system
                     OverError::IoError(e) => io::Error::new( io::ErrorKind::Other, "IO error."),                    
                     OverError::ParseError( e ) => io::Error::new( io::ErrorKind::Other, "failed to parse terminfo entry"),
                     OverError::ExpandError( e ) => io::Error::new( io::ErrorKind::Other, "failed to expand terminfo entry"),
+                    _ => io::Error::new( io::ErrorKind::Other, "Unknown error."),   
                 }
             } 
 
@@ -45690,4 +46417,4 @@ fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 45693
+// 46420
