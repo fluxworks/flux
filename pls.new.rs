@@ -6100,8 +6100,383 @@ pub mod error
     {
         use ::
         {
+            error::{ Error },
             *,
         };
+
+        pub mod system
+        {
+            use ::
+            {
+                *,
+            }; use super::Errno;
+
+            pub const STRERROR_NAME: &str = "";
+        
+            pub mod unix
+            {
+                //! Implementation of `errno` functionality for Unix systems.
+                use ffi::c_int;
+                use ::
+                {
+                    error::no::{ Errno },
+                    libc::{ unix::{ * }, * }
+                    nix::libc::{ ERANGE, strerror_r, strlen },
+                    *,
+                };
+
+                extern "C" 
+                {
+                    #[cfg_attr
+                    (
+                        any
+                        (
+                            target_os = "openbsd",
+                            target_os = "netbsd",
+                        ),
+                        link_name = "__errno"
+                    )]
+
+                    #[cfg_attr
+                    (
+                        any( target_os = "linux", ),
+                        link_name = "__errno_location"
+                    )]
+                    fn errno_location() -> *mut c_int;
+                }
+
+                fn from_utf8_lossy(input: &[u8]) -> &str
+                {
+                    match str::from_utf8(input)
+                    {
+                        Ok(valid) => valid,
+                        Err(error) => unsafe { str::from_utf8_unchecked(&input[..error.valid_up_to()]) },
+                    }
+                }
+
+                pub fn with_description<F, T>(err: Errno, callback: F) -> T where
+                F: FnOnce(Result<&str, Errno>) -> T
+                {
+                    let mut buf = [0u8; 1024];
+                    let c_str = unsafe
+                    {
+                        let rc = strerror_r(err.0, buf.as_mut_ptr() as *mut _, buf.len() as size_t);
+                        if rc != 0
+                        {
+                            let fm_err = match rc < 0
+                            {
+                                true => errno(),
+                                false => Errno(rc),
+                            };
+
+                            if fm_err != Errno( ERANGE ) { return callback(Err(fm_err)); }
+                        }
+
+                        let c_str_len = strlen(buf.as_ptr() as *const _);
+                        &buf[..c_str_len]
+                    };
+                    callback(Ok(from_utf8_lossy(c_str)))
+                }
+
+                pub const STRERROR_NAME: &str = "strerror_r";
+
+                pub fn errno() -> Errno { unsafe { Errno(*errno_location()) } }
+
+                pub fn set_errno(Errno(errno): Errno) { unsafe { *errno_location() = errno; } }
+            } #[cfg( unix )] pub use self::unix::{ * };
+
+            pub mod windows
+            {
+                use ::
+                {
+                    char::{ self, REPLACEMENT_CHARACTER },
+                    error::{ Error, no::{ Errno } },
+                    libc::{ windows::{ * }, * },
+                    *,
+                };
+
+                fn from_utf16_lossy<'a>(input: &[u16], output: &'a mut [u8]) -> &'a str
+                {
+                    let mut output_len = 0;
+                    for c in char::decode_utf16
+                    (
+                        input.iter()
+                        .copied()
+                        .take_while(|&x| x != 0))
+                        .map(|x| x.unwrap_or(REPLACEMENT_CHARACTER))
+                    {
+                        let c_len = c.len_utf8();
+                        
+                        if c_len > output.len() - output_len { break; }
+
+                        c.encode_utf8(&mut output[output_len..]);
+                        output_len += c_len;
+                    }
+
+                    unsafe { str::from_utf8_unchecked(&output[..output_len]) }
+                }
+
+                pub fn with_description<F, T>(err: Errno, callback: F) -> T where
+                F: FnOnce(Result<&str, Errno>) -> T
+                {
+                    unsafe
+                    {
+                        let lang_id = 0x0800_u32;
+                        let mut buf = [0u16; 2048];
+                        let res = FormatMessageW
+                        (
+                            FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                            ptr::null_mut(),
+                            err.0 as u32,
+                            lang_id,
+                            buf.as_mut_ptr(),
+                            buf.len() as u32,
+                            ptr::null_mut(),
+                        );
+                        
+                        if res == 0
+                        {
+                            let fm_err = errno();
+                            return callback(Err(fm_err));
+                        }
+
+                        let mut msg = [0u8; 2048];
+                        let msg = from_utf16_lossy(&buf[..res as usize], &mut msg[..]);
+                        callback(Ok(msg.trim_end()))
+                    }
+                }
+
+                pub const STRERROR_NAME: &str = "FormatMessageW";
+
+                pub fn errno() -> Errno {
+                    unsafe { Errno(GetLastError() as i32) }
+                }
+
+                pub fn set_errno(Errno(errno): Errno) {
+                    unsafe { SetLastError(errno as WIN32_ERROR) }
+                }
+            } #[cfg( windows )] pub use self::windows::{ * };
+            /*
+            pub fn with_description<F, T>(_err: Errno, _callback: F) -> T where
+            F: FnOnce(Result<&str, Errno>) -> T
+            { unreachable!() }
+            
+            pub fn errno() -> Errno { unreachable!() }
+
+            pub fn set_errno(_: Errno) { unreachable!() } */
+        }
+        /// Wraps a platform-specific error code.
+        #[derive(Copy, Clone, Eq, Ord, PartialEq, PartialOrd, Hash)]
+        pub struct Errno(pub i32);
+
+        impl fmt::Debug for Errno 
+        {
+            fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result 
+            {
+                sys::with_description(*self, |desc| 
+                {
+                    fmt.debug_struct("Errno")
+                    .field("code", &self.0)
+                    .field("description", &desc.ok())
+                    .finish()
+                })
+            }
+        }
+
+        impl fmt::Display for Errno
+        {
+            fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result
+            {
+                sys::with_description(*self, |desc| match desc
+                {
+                    Ok(desc) => fmt.write_str(desc),
+                    Err(fm_err) => write!
+                    (
+                        fmt,
+                        "OS error {} ({} returned error {})",
+                        self.0,
+                        sys::STRERROR_NAME,
+                        fm_err.0
+                    ),
+                })
+            }
+        }
+
+        impl From<Errno> for i32 
+        {
+            fn from(e: Errno) -> Self { e.0 }
+        }
+        
+        impl Error for Errno
+        {
+            fn description(&self) -> &str { "system error" }
+        }
+        
+        impl From<Errno> for io::Error
+        {
+            fn from(errno: Errno) -> Self { io::Error::from_raw_os_error(errno.0) }
+        }
+        /// Returns the platform-specific value of `errno`.
+        pub fn errno() -> Errno { system::errno() }
+        /// Sets the platform-specific value of `errno`.
+        pub fn set_errno(err: Errno) { system::set_errno(err) }
+    }
+
+    pub mod uuid
+    {
+        use ::
+        {
+            *,
+        };
+
+        /// A general error that can occur when working with UUIDs.
+        #[derive(Clone, Debug, Eq, Hash, PartialEq)]
+        pub struct Error(pub(crate) ErrorKind);
+
+        #[derive(Clone, Debug, Eq, Hash, PartialEq)]
+        pub(crate) enum ErrorKind
+        {
+            /// Invalid character in the [`Uuid`] string.
+            Char { character: char, index: usize },
+            /// A simple [`Uuid`] didn't contain 32 characters.
+            SimpleLength { len: usize },
+            /// A byte array didn't contain 16 bytes
+            ByteLength { len: usize },
+            /// A hyphenated [`Uuid`] didn't contain 5 groups
+            GroupCount { count: usize },
+            /// A hyphenated [`Uuid`] had a group that wasn't the right length
+            GroupLength 
+            {
+                group: usize,
+                len: usize,
+                index: usize,
+            },
+            /// The input was not a valid UTF8 string
+            InvalidUTF8,
+            /// The UUID is nil.
+            Nil,
+            /// Some other error occurred.
+            Other,
+        }
+        /// A string that is guaranteed to fail to parse to a [`Uuid`].
+        #[derive(Clone, Debug, Eq, Hash, PartialEq)]
+        pub struct InvalidUuid<'a>(pub(crate) &'a [u8]);
+
+        impl<'a> InvalidUuid<'a> 
+        {
+            /// Converts the lightweight error type into detailed diagnostics.
+            pub fn into_err(self) -> Error 
+            {
+                let input_str = match ::str::from_utf8(self.0) 
+                {
+                    Ok(s) => s,
+                    Err(_) => return Error(ErrorKind::InvalidUTF8),
+                };
+
+                let (uuid_str, offset, simple) = match input_str.as_bytes() 
+                {
+                    [b'{', s @ .., b'}'] => (s, 1, false),
+                    [b'u', b'r', b'n', b':', b'u', b'u', b'i', b'd', b':', s @ ..] => {
+                        (s, "urn:uuid:".len(), false)
+                    }
+                    s => (s, 0, true),
+                };
+
+                let mut hyphen_count = 0;
+                let mut group_bounds = [0; 4];
+                
+                let uuid_str = unsafe { ::str::from_utf8_unchecked(uuid_str) };
+
+                for (index, character) in uuid_str.char_indices() 
+                {
+                    let byte = character as u8;
+                    if character as u32 - byte as u32 > 0 {
+                        return Error(ErrorKind::Char {
+                            character,
+                            index: index + offset + 1,
+                        });
+                    } else if byte == b'-' {
+                        if hyphen_count < 4 {
+                            group_bounds[hyphen_count] = index;
+                        }
+                        hyphen_count += 1;
+                    } else if !byte.is_ascii_hexdigit() {
+                        return Error(ErrorKind::Char {
+                            character: byte as char,
+                            index: index + offset + 1,
+                        });
+                    }
+                }
+
+                if hyphen_count == 0 && simple {
+                    Error(ErrorKind::SimpleLength {
+                        len: input_str.len(),
+                    })
+                } else if hyphen_count != 4 {
+                    Error(ErrorKind::GroupCount {
+                        count: hyphen_count + 1,
+                    })
+                } else {
+                    const BLOCK_STARTS: [usize; 5] = [0, 9, 14, 19, 24];
+                    for i in 0..4 {
+                        if group_bounds[i] != BLOCK_STARTS[i + 1] - 1 {
+                            return Error(ErrorKind::GroupLength {
+                                group: i,
+                                len: group_bounds[i] - BLOCK_STARTS[i],
+                                index: offset + BLOCK_STARTS[i] + 1,
+                            });
+                        }
+                    }
+                    Error(ErrorKind::GroupLength {
+                        group: 4,
+                        len: input_str.len() - BLOCK_STARTS[4],
+                        index: offset + BLOCK_STARTS[4] + 1,
+                    })
+                }
+            }
+        }
+        
+        impl fmt::Display for Error 
+        {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result 
+            {
+                match self.0 
+                {
+                    ErrorKind::Char {
+                        character, index, ..
+                    } => {
+                        write!(f, "invalid character: expected an optional prefix of `urn:uuid:` followed by [0-9a-fA-F-], found `{}` at {}", character, index)
+                    }
+                    ErrorKind::SimpleLength { len } => {
+                        write!(
+                            f,
+                            "invalid length: expected length 32 for simple format, found {}",
+                            len
+                        )
+                    }
+                    ErrorKind::ByteLength { len } => {
+                        write!(f, "invalid length: expected 16 bytes, found {}", len)
+                    }
+                    ErrorKind::GroupCount { count } => {
+                        write!(f, "invalid group count: expected 5, found {}", count)
+                    }
+                    ErrorKind::GroupLength { group, len, .. } => 
+                    {
+                        let expected = [8, 4, 4, 4, 12][group];
+                        write!(
+                            f,
+                            "invalid group length in group {}: expected {}, found {}",
+                            group, expected, len
+                        )
+                    }
+                    ErrorKind::InvalidUTF8 => write!(f, "non-UTF8 input"),
+                    ErrorKind::Nil => write!(f, "the UUID is nil"),
+                    ErrorKind::Other => write!(f, "failed to parse a UUID"),
+                }
+            }
+        }
+        
+        impl error::Error for Error {}
     }
 }
 
@@ -6141,6 +6516,7 @@ pub mod is
     {
         ffi::{ OsString },
         path::{ PathBuf },
+        regex::{ contains },
         *,
     };
     /*
@@ -6285,6 +6661,58 @@ pub mod is
     /*
     fn is_wide(...) -> bool */
     pub fn wide( ch:char ) -> bool { ::char::width(ch) == Some(2) }
+    /*
+    fn is_env(...) -> bool */
+    pub fn env(line: &str) -> bool { contains(line, r"^[a-zA-Z_][a-zA-Z0-9_]*=.*$") }
+    /*
+    fn is_arithmetic(...) -> bool */
+    pub fn arithmetic(line: &str) -> bool
+    {
+        match true
+        {
+            true if !contains(line, r"[0-9]+") => { return false; }
+            true if !contains(line, r"\+|\-|\*|/|\^") => { return false; }
+            _ =>{ return contains(line, r"^[ 0-9\.\(\)\+\-\*/\^]+[\.0-9 \)]$"); }
+        }
+    }
+    /*
+    fn is_builtin(...) -> bool */
+    pub fn builtin(s: &str) -> bool
+    {
+        let builtins =
+        [
+            "alias", "bg", "cd", "cinfo", "exec", "exit", "export", "fg", "history", "jobs", "read", "source", 
+            "ulimit", "unalias", "vox", "minfd", "set", "unset", "unpath",
+        ];
+
+        builtins.contains(&s)
+    }
+    /*
+    fn is_shell_altering_command(...) -> bool */
+    pub fn shell_altering_command(line: &str) -> bool
+    {
+        let line = line.trim();
+
+        if contains(line, r"^[A-Za-z_][A-Za-z0-9_]*=.*$") { return true; }
+
+        line.starts_with("alias ")
+        || line.starts_with("export ")
+        || line.starts_with("unalias ")
+        || line.starts_with("unset ")
+        || line.starts_with("source ")
+    }
+    /*
+    pub fn unquote(s: &str) -> String
+    {
+        let args = parsers::parser_line::line_to_plain_tokens(s);
+        if args.is_empty() {
+            return String::new();
+        }
+        args[0].clone()
+    }
+
+    
+    */
 }
 /*
 libc */
@@ -6596,6 +7024,13 @@ pub mod libc
             pub const FOLDERID_Videos:GUID = GUID::create( 0x18989B1D, 0x99B5, 0x455B, [ 0xA0, 0x79, 0xDF, 0x75, 0x9E, 0x05, 0x09, 0xF7 ] );
             pub const MAXLONGLONG: LONGLONG = 0x7fffffffffffffff;
             pub const UTF8_REPLACEMENT_CHARACTER: &str = "\u{FFFD}";
+            pub const FORMAT_MESSAGE_IGNORE_INSERTS: DWORD = 0x00000200;
+            pub const FORMAT_MESSAGE_FROM_STRING: DWORD = 0x00000400;
+            pub const FORMAT_MESSAGE_FROM_HMODULE: DWORD = 0x00000800;
+            pub const FORMAT_MESSAGE_FROM_SYSTEM: DWORD = 0x00001000;
+            pub const FORMAT_MESSAGE_ARGUMENT_ARRAY: DWORD = 0x00002000;
+            pub const FORMAT_MESSAGE_MAX_WIDTH_MASK: DWORD = 0x000000FF;
+            pub const FORMAT_MESSAGE_ALLOCATE_BUFFER: DWORD = 0x00000100;
             
         } pub use self::constants::{ * };
         
@@ -7687,6 +8122,8 @@ pub mod libc
             pub type PFLOAT128 = *mut FLOAT128;
             pub type LONGLONG = __int64;
             pub type ULONGLONG = __uint64;
+            pub type va_list = *mut c_char;
+            pub type WIN32_ERROR = u32;
 
         } pub use self::types::{ * };
         
@@ -7941,6 +8378,21 @@ pub mod libc
                 lpNumberOfCharsWritten: LPDWORD,
                 lpReserved: LPVOID,
             ) -> BOOL;
+
+            pub fn FormatMessageW
+            (
+                dwFlags: DWORD,
+                lpSource: LPCVOID,
+                dwMessageId: DWORD,
+                dwLanguageId: DWORD,
+                lpBuffer: LPWSTR,
+                nSize: DWORD,
+                Arguments: *mut va_list,
+            ) -> DWORD;
+            pub fn GetLastError() -> DWORD;
+            pub fn SetLastError( dwErrCode: DWORD, );
+            pub fn GetErrorMode() -> UINT;
+            pub fn SetErrorMode( uMode: UINT, ) -> UINT;
         }
         
         #[inline] pub fn decode_surrogate(second_byte: u8, third_byte: u8) -> u16
@@ -26031,6 +26483,376 @@ pub mod os
 
 pub mod parsers
 {
+    pub mod line
+    {
+        use ::
+        {
+            regex::{ contains },
+            types::{ * },
+            *,
+        };
+        // pub fn line_to_plain_tokens(line: &str) -> Vec<String>
+        pub fn to_plain_tokens(line: &str) -> Vec<String>
+        {
+            let mut result = Vec::new();
+            let linfo = parse(line);
+            
+            for (_, r) in linfo.tokens
+            {
+                result.push(r.clone());
+            }
+
+            result
+        }
+        /// parse command line to tokens
+        /// >>> parse_line("echo 'hi yoo' | grep \"hi\"");
+        /// LineInfo {
+        ///    tokens: vec![
+        ///        ("", "echo"),
+        ///        ("'", "hi yoo"),
+        ///        ("", "|"),
+        ///        ("", "grep"),
+        ///        ("\"", "hi"),
+        ///    ],
+        ///    is_complete: true
+        /// }
+        // #[allow(clippy::cyclomatic_complexity)]
+        // pub fn parse_line(line: &str) -> LineInfo
+        pub fn parse(line: &str) -> LineInfo
+        {
+            let mut result = Vec::new();
+
+            if is::arithmetic(line)
+            {
+                for x in line.split(' ')
+                {
+                    result.push((String::from(""), x.to_string()));
+                }
+
+                return LineInfo::new(result);
+            }
+
+            let mut sep = String::new();
+            let mut sep_second = String::new();
+            let mut token = String::new();
+            let mut has_backslash = false;
+            let mut met_parenthesis = false;
+            let mut new_round = true;
+            let mut skip_next = false;
+            let mut has_dollar = false;
+            let mut parens_left_ignored = false;
+            let mut sep_made = String::new();
+            let mut semi_ok = false;
+            let count_chars = line.chars().count();
+
+            for (i, c) in line.chars().enumerate()
+            {
+                if skip_next
+                {
+                    skip_next = false;
+                    continue;
+                }
+
+                if has_backslash && sep.is_empty() && (c == '>' || c == '<') 
+                {
+                    sep_made = String::from("'");
+                    token.push(c);
+                    has_backslash = false;
+                    continue;
+                }
+
+                if has_backslash && sep == "\"" && c != '\"' 
+                {
+                    token.push('\\');
+                    token.push(c);
+                    has_backslash = false;
+                    continue;
+                }
+
+                if has_backslash 
+                {
+                    if new_round && sep.is_empty() && (c == '|' || c == '$') && token.is_empty() 
+                    {
+                        sep = String::from("\\");
+                        token = format!("{}", c);
+                    }
+                    else { token.push(c); }
+
+                    new_round = false;
+                    has_backslash = false;
+                    continue;
+                }
+
+                if c == '$' { has_dollar = true; }
+                
+                if c == '(' && sep.is_empty() 
+                {
+                    if !has_dollar && token.is_empty() 
+                    {
+                        parens_left_ignored = true;
+                        continue;
+                    }
+
+                    met_parenthesis = true;
+                }
+
+                if c == ')' 
+                {
+                    if parens_left_ignored && !has_dollar
+                    {
+                        if i == count_chars - 1 || (i + 1 < count_chars && line.chars().nth(i + 1).unwrap() == ' ') 
+                        { continue; }
+                    }
+
+                    if sep.is_empty() { met_parenthesis = false; }
+                }
+
+                if c == '\\'
+                {
+                    if sep == "'" || !sep_second.is_empty() { token.push(c) }
+                    else { has_backslash = true; }
+
+                    continue;
+                }
+
+                if new_round
+                {
+                    if c == ' ' { continue; }
+                    else if c == '"' || c == '\'' || c == '`'
+                    {
+                        sep = c.to_string();
+                        new_round = false;
+                        continue;
+                    }
+
+                    sep = String::new();
+
+                    if c == '#' { break; }
+
+                    if c == '|'
+                    {
+                        if i + 1 < count_chars && line.chars().nth(i + 1).unwrap() == '|'
+                        {
+                            result.push((String::from(""), "||".to_string()));
+                            skip_next = true;
+                        }
+                        else { result.push((String::from(""), "|".to_string())); }
+
+                        new_round = true;
+                        continue;
+                    }
+
+                    token.push(c);
+                    new_round = false;
+                    continue;
+                }
+
+                if c == '|' && !has_backslash
+                {
+                    if semi_ok
+                    {
+                        if sep.is_empty() && !sep_made.is_empty()
+                        {
+                            result.push((sep_made.to_string(), token));
+                            sep_made = String::new();
+                        }
+                        else { result.push((sep.to_string(), token)); }
+
+                        result.push((String::from(""), "|".to_string()));
+                        sep = String::new();
+                        sep_second = String::new();
+                        token = String::new();
+                        new_round = true;
+                        semi_ok = false;
+                        continue;
+                    }
+                    
+                    else if !met_parenthesis && sep_second.is_empty() && sep.is_empty()
+                    {
+                        if sep.is_empty() && !sep_made.is_empty()
+                        {
+                            result.push((sep_made.to_string(), token));
+                            sep_made = String::new();
+                        }
+                        else { result.push((String::from(""), token)); }
+
+                        result.push((String::from(""), "|".to_string()));
+                        sep = String::new();
+                        sep_second = String::new();
+                        token = String::new();
+                        new_round = true;
+                        continue;
+                    }
+                }
+
+                if c == ' '
+                {
+                    if semi_ok
+                    {
+                        if sep.is_empty() && !sep_made.is_empty()
+                        {
+                            result.push((sep_made.to_string(), token));
+                            sep_made = String::new();
+                        }
+                        else { result.push((sep.to_string(), token)); }
+
+                        sep = String::new();
+                        sep_second = String::new();
+                        token = String::new();
+                        new_round = true;
+                        semi_ok = false;
+                        continue;
+                    }
+
+                    if has_backslash
+                    {
+                        has_backslash = false;
+                        token.push(c);
+                        continue;
+                    }
+
+                    if met_parenthesis
+                    {
+                        token.push(c);
+                        continue;
+                    }
+
+                    if sep == "\\"
+                    {
+                        result.push((String::from("\\"), token));
+                        token = String::new();
+                        new_round = true;
+                        continue;
+                    }
+
+                    if sep.is_empty()
+                    {
+                        if sep_second.is_empty()
+                        {
+                            if sep.is_empty() && !sep_made.is_empty()
+                            {
+                                result.push((sep_made.clone(), token));
+                                sep_made = String::new();
+                            }
+                            else { result.push((String::from(""), token)); }
+
+                            token = String::new();
+                            new_round = true;
+                            continue;
+                        }
+                        else
+                        {
+                            token.push(c);
+                            continue;
+                        }
+                    }
+
+                    else
+                    {
+                        token.push(c);
+                        continue;
+                    }
+                }
+
+                if c == '\'' || c == '"' || c == '`'
+                {
+                    if has_backslash
+                    {
+                        has_backslash = false;
+                        token.push(c);
+                        continue;
+                    }
+
+                    if sep != c.to_string() && semi_ok
+                    {
+                        if sep.is_empty() && !sep_made.is_empty()
+                        {
+                            result.push((sep_made.to_string(), token));
+                            sep_made = String::new();
+                        }
+                        else { result.push((sep.to_string(), token)); }
+
+                        sep = String::new();
+                        sep_second = String::new();
+                        token = String::new();
+                        new_round = true;
+                        semi_ok = false;
+                    }
+
+                    if sep != c.to_string() && met_parenthesis
+                    {
+                        token.push(c);
+                        continue;
+                    }
+
+                    if sep.is_empty() && !sep_second.is_empty() && sep_second != c.to_string()
+                    {
+                        token.push(c);
+                        continue;
+                    }
+
+                    if sep.is_empty()
+                    {
+                        let is_an_env = contains(&token, r"^[a-zA-Z0-9_]+=.*$");
+                        if !is_an_env && (c == '\'' || c == '"')
+                        {
+                            sep = c.to_string();
+                            continue;
+                        }
+
+                        token.push(c);
+                        if sep_second.is_empty() {
+                            sep_second = c.to_string();
+                        } else if sep_second == c.to_string() {
+                            sep_second = String::new();
+                        }
+                        continue;
+                    }
+                    
+                    else if sep == c.to_string()
+                    {
+                        semi_ok = true;
+                        continue;
+                    }
+                    
+                    else { token.push(c); }
+                }
+                
+                else
+                {
+                    if has_backslash
+                    {
+                        has_backslash = false;
+
+                        if sep == "\"" || sep == "'" { token.push('\\'); }
+                    }
+
+                    token.push(c);
+                }
+            }
+
+            if !token.is_empty() || semi_ok
+            {
+                if sep.is_empty() && !sep_made.is_empty() { result.push((sep_made.clone(), token)); }
+                else { result.push((sep.clone(), token)); }
+            }
+
+            let mut is_line_complete = true;
+            
+            if !result.is_empty()
+            {
+                let token_last = result[result.len() - 1].clone();
+
+                if token_last.0.is_empty() && token_last.1 == "|" { is_line_complete = false; }
+            }
+
+            if !sep.is_empty() { is_line_complete = semi_ok; }
+
+            if has_backslash { is_line_complete = false; }
+
+            LineInfo { tokens: result, is_complete: is_line_complete }
+        }
+    }
     /*
     nom 7.1.3*/
     pub mod nom
@@ -33436,11 +34258,1103 @@ pub mod regex
     {
         name == value || (name.starts_with(value) && name.as_bytes()[value.len()] == b'-')
     }
+
+    pub fn find_first_group(ptn: &str, text: &str) -> Option<String>
+    {
+        let re = match Regex::new(ptn)
+        {
+            Ok(x) => x,
+            Err(_) => return None,
+        };
+
+        match re.captures(text)
+        {
+            Some(caps) =>
+            {
+                if let Some(x) = caps.get(1) { return Some(x.as_str().to_owned()); }
+            }
+
+            None => { return None; }
+        }
+
+        None
+    }
+
+    pub fn contains(text: &str, ptn: &str) -> bool
+    {
+        let re = match Regex::new(ptn)
+        {
+            Ok(x) => x,
+            Err(e) =>
+            {
+                println!("Regex new error: {:?}", e);
+                return false;
+            }
+        };
+
+        re.is_match(text)
+    }
+
+    pub fn replace_all(text: &str, ptn: &str, ptn_to: &str) -> String
+    {
+        let re = Regex::new(ptn).unwrap();
+        let result = re.replace_all(text, ptn_to);
+        result.to_string()
+    }
+
+    pub fn unquote(text: &str) -> String
+    {
+        let mut new_str = String::from(text);
+        for &c in ['"', '\''].iter()
+        {
+            if text.starts_with(c) && text.ends_with(c)
+            {
+                new_str.remove(0);
+                new_str.pop();
+                break;
+            }
+        }
+
+        new_str
+    }
 }
 
 pub mod result
 {
     pub use std::result::{ * };
+}
+
+pub mod shell
+{
+    use ::
+    {
+        collections::{ HashMap, HashSet },
+        error::no::{ errno },
+        io::{ Write },
+        nix::libc::{ * },
+        regex::{ * },
+        types::{ * },
+        *,
+    };
+
+    #[derive(Debug, Clone)]
+    pub struct Shell 
+    {
+        pub jobs: HashMap<i32, types::Job>,
+        pub aliases: HashMap<String, String>,
+        pub envs: HashMap<String, String>,
+        pub funcs: HashMap<String, String>,
+        pub cmd: String,
+        pub current_dir: String,
+        pub previous_dir: String,
+        pub previous_cmd: String,
+        pub previous_status: i32,
+        pub is_login: bool,
+        pub exit_on_error: bool,
+        pub has_terminal: bool,
+        pub session_id: String,
+    }
+
+    impl Shell 
+    {
+        pub fn new() -> Shell 
+        {
+            let uuid = Uuid::new_v4().as_hyphenated().to_string();
+            let current_dir = tools::get_current_dir();
+            let has_terminal = proc_has_terminal();
+            let (session_id, _) = uuid.split_at(13);
+            Shell
+            {
+                jobs: HashMap::new(),
+                aliases: HashMap::new(),
+                envs: HashMap::new(),
+                funcs: HashMap::new(),
+                cmd: String::new(),
+                current_dir: current_dir.clone(),
+                previous_dir: String::new(),
+                previous_cmd: String::new(),
+                previous_status: 0,
+                is_login: false,
+                exit_on_error: false,
+                has_terminal,
+                session_id: session_id.to_string(),
+            }
+        }
+
+        pub fn insert_job(&mut self, gid: i32, pid: i32, cmd: &str, status: &str, bg: bool) 
+        {
+            let mut i = 1;
+            loop {
+                let mut indexed_job_missing = false;
+                if let Some(x) = self.jobs.get_mut(&i) {
+                    if x.gid == gid {
+                        x.pids.push(pid);
+                        x.cmd = format!("{} | {}", x.cmd, cmd);
+                        return;
+                    }
+                } else {
+                    indexed_job_missing = true;
+                }
+
+                if indexed_job_missing {
+                    self.jobs.insert(
+                        i,
+                        types::Job {
+                            cmd: cmd.to_string(),
+                            id: i,
+                            gid,
+                            pids: vec![pid],
+                            pids_stopped: HashSet::new(),
+                            status: status.to_string(),
+                            is_bg: bg,
+                        },
+                    );
+                    return;
+                }
+                i += 1;
+            }
+        }
+
+        pub fn get_job_by_id(&self, job_id: i32) -> Option<&types::Job> { self.jobs.get(&job_id) }
+
+        pub fn mark_job_member_continued(&mut self, pid: i32, gid: i32) -> Option<&types::Job>
+        {
+            if self.jobs.is_empty() {
+                return None;
+            }
+            let mut i = 1;
+            let mut idx_found = 0;
+            loop {
+                if let Some(job) = self.jobs.get_mut(&i) {
+                    if job.gid == gid {
+                        job.pids_stopped.remove(&pid);
+                        idx_found = i;
+                        break;
+                    }
+                }
+
+
+                i += 1;
+                if i >= 65535 {
+                    break;
+                }
+            }
+
+            self.jobs.get(&idx_found)
+        }
+
+        pub fn mark_job_member_stopped(&mut self, pid: i32, gid: i32) -> Option<&types::Job>
+        {
+            if self.jobs.is_empty() {
+                return None;
+            }
+            let mut i = 1;
+            let mut idx_found = 0;
+            loop {
+                if let Some(job) = self.jobs.get_mut(&i) {
+                    if job.gid == gid {
+                        job.pids_stopped.insert(pid);
+                        idx_found = i;
+                        break;
+                    }
+                }
+
+
+                i += 1;
+                if i >= 65535 {
+                    break;
+                }
+            }
+
+            self.jobs.get(&idx_found)
+        }
+
+        pub fn get_job_by_gid(&self, gid: i32) -> Option<&types::Job> 
+        {
+            if self.jobs.is_empty() {
+                return None;
+            }
+
+            let mut i = 1;
+            loop {
+                if let Some(x) = self.jobs.get(&i) {
+                    if x.gid == gid {
+                        return Some(x);
+                    }
+                }
+
+                i += 1;
+                if i >= 65535 {
+                    break;
+                }
+            }
+            None
+        }
+
+        pub fn mark_job_as_running(&mut self, gid: i32, bg: bool) 
+        {
+            if self.jobs.is_empty() {
+                return;
+            }
+
+            let mut i = 1;
+            loop {
+                if let Some(job) = self.jobs.get_mut(&i) {
+                    if job.gid == gid {
+                        job.status = "Running".to_string();
+                        job.pids_stopped.clear();
+                        job.is_bg = bg;
+                        return;
+                    }
+                }
+
+                i += 1;
+                if i >= 65535 {
+                    break;
+                }
+            }
+        }
+
+        pub fn mark_job_as_stopped(&mut self, gid: i32) 
+        {
+            if self.jobs.is_empty() {
+                return;
+            }
+
+            let mut i = 1;
+            loop {
+                if let Some(x) = self.jobs.get_mut(&i) {
+                    if x.gid == gid {
+                        x.status = "Stopped".to_string();
+                        x.is_bg = true;
+                        return;
+                    }
+                }
+
+                i += 1;
+                if i >= 65535 {
+                    break;
+                }
+            }
+        }
+
+        pub fn remove_pid_from_job(&mut self, gid: i32, pid: i32) -> Option<types::Job> 
+        {
+            if self.jobs.is_empty() {
+                return None;
+            }
+
+            let mut empty_pids = false;
+            let mut i = 1;
+            loop {
+                if let Some(x) = self.jobs.get_mut(&i) {
+                    if x.gid == gid {
+                        if let Ok(i_pid) = x.pids.binary_search(&pid) {
+                            x.pids.remove(i_pid);
+                        }
+                        empty_pids = x.pids.is_empty();
+                        break;
+                    }
+                }
+
+                i += 1;
+                if i >= 65535 {
+                    break;
+                }
+            }
+
+            if empty_pids {
+                return self.jobs.remove(&i);
+            }
+            None
+        }
+        /// Update existing *ENV Variable* if such name exists in ENVs,
+        /// otherwise, we define a local *Shell Variable*, which would not be exported into child processes.
+        pub fn set_env(&mut self, name: &str, value: &str) 
+        {
+            if env::var(name).is_ok() {
+                env::set_var(name, value);
+            } else {
+                self.envs.insert(name.to_string(), value.to_string());
+            }
+        }
+        /// get *Shell Variable*, or *ENV Variable*.
+        pub fn get_env(&self, name: &str) -> Option<String> 
+        {
+            match self.envs.get(name) 
+            {
+                Some(x) => Some(x.to_string()),
+                None => {
+                    match env::var(name) {
+                        Ok(x) => Some(x),
+                        Err(_) => None,
+                    }
+                }
+            }
+        }
+        /// Remove environment variable, function from the environment of the currently running process
+        pub fn remove_env(&mut self, name: &str) -> bool
+        {
+            let ptn_env = Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_-]*$").unwrap();
+            if !ptn_env.is_match(name) {
+                return false;
+            }
+
+            env::remove_var(name);
+            self.envs.remove(name);
+            self.remove_func(name);
+            true
+        }
+
+        pub fn remove_path(&mut self, path: &str)
+        {
+            if let Ok(paths) = env::var("PATH")
+            {
+                let mut paths_new: Vec<&str> = paths.split(":").collect();
+                paths_new.retain(|&x| x != path);
+                env::set_var("PATH", paths_new.join(":").as_str());
+            }
+        }
+
+        fn remove_func(&mut self, name: &str)
+        { self.funcs.remove(name); }
+
+        pub fn set_func(&mut self, name: &str, value: &str)
+        { self.funcs.insert(name.to_string(), value.to_string()); }
+
+        pub fn get_func(&self, name: &str) -> Option<String> { self.funcs.get(name).map(|x| x.to_string()) }
+
+        pub fn get_alias_list(&self) -> Vec<(String, String)>
+        {
+            let mut result = Vec::new();
+            for (name, value) in &self.aliases 
+            {
+                result.push((name.clone(), value.clone()));
+            }
+            result
+        }
+
+        pub fn add_alias(&mut self, name: &str, value: &str)
+        { self.aliases.insert(name.to_string(), value.to_string()); }
+
+        pub fn is_alias(&self, name: &str) -> bool { self.aliases.contains_key(name) }
+
+        pub fn remove_alias(&mut self, name: &str) -> bool 
+        {
+            let opt = self.aliases.remove(name);
+            opt.is_some()
+        }
+
+        pub fn get_alias_content(&self, name: &str) -> Option<String> 
+        {
+            let result = match self.aliases.get(name) {
+                Some(x) => x.to_string(),
+                None => String::new(),
+            };
+            if result.is_empty() {
+                None
+            } else {
+                Some(result)
+            }
+        }
+    }
+
+    pub unsafe fn give_terminal_to(gid: i32) -> bool 
+    {
+        let mut mask: sigset_t = mem::zeroed();
+        let mut old_mask: igset_t = mem::zeroed();
+
+        sigemptyset(&mut mask);
+        sigaddset(&mut mask, SIGTSTP);
+        sigaddset(&mut mask, SIGTTIN);
+        sigaddset(&mut mask, SIGTTOU);
+        sigaddset(&mut mask, SIGCHLD);
+
+        let rcode = pthread_sigmask(libc::SIG_BLOCK, &mask, &mut old_mask);
+        if rcode != 0 {
+            log!("failed to call pthread_sigmask");
+        }
+        let rcode = tcsetpgrp(1, gid);
+        let given;
+        if rcode == -1 {
+            given = false;
+            let e = errno();
+            let code = e.0;
+            log!("error in give_terminal_to() {}: {}", code, e);
+        } else {
+            given = true;
+        }
+        let rcode = pthread_sigmask( SIG_SETMASK, &old_mask, &mut mask);
+        if rcode != 0 {
+            log!("failed to call pthread_sigmask");
+        }
+        given
+    }
+
+    fn needs_globbing(line: &str) -> bool 
+    {
+        let re = Regex::new(r"\*+").expect("Invalid regex ptn");
+        re.is_match(line)
+    }
+
+    pub fn expand_glob(tokens: &mut Tokens) 
+    {
+        let mut idx: usize = 0;
+        let mut buff = Vec::new();
+        for (sep, text) in tokens.iter() {
+            if !sep.is_empty() || !needs_globbing(text) {
+                idx += 1;
+                continue;
+            }
+
+            let mut result: Vec<String> = Vec::new();
+            let item = text.as_str();
+
+            if !item.contains('*') || item.trim().starts_with('\'') || item.trim().starts_with('"') {
+                result.push(item.to_string());
+            } else {
+                let _basename = libs::path::basename(item);
+                let show_hidden = _basename.starts_with(".*");
+
+                match glob::glob(item) {
+                    Ok(paths) => {
+                        let mut is_empty = true;
+                        for entry in paths {
+                            match entry {
+                                Ok(path) => {
+                                    let file_path = path.to_string_lossy();
+                                    let _basename = libs::path::basename(&file_path);
+                                    if _basename == ".." || _basename == "." {
+                                        continue;
+                                    }
+                                    if _basename.starts_with('.') && !show_hidden {
+                                        continue;
+                                    }
+                                    result.push(file_path.to_string());
+                                    is_empty = false;
+                                }
+                                Err(e) => {
+                                    log!("glob error: {:?}", e);
+                                }
+                            }
+                        }
+                        if is_empty {
+                            result.push(item.to_string());
+                        }
+                    }
+                    Err(e) => {
+                        println!("glob error: {:?}", e);
+                        result.push(item.to_string());
+                        return;
+                    }
+                }
+            }
+
+            buff.push((idx, result));
+            idx += 1;
+        }
+
+        for (i, result) in buff.iter().rev() {
+            tokens.remove(*i);
+            for (j, token) in result.iter().enumerate() {
+                let sep = if token.contains(' ') { "\"" } else { "" };
+                tokens.insert(*i + j, (sep.to_string(), token.clone()));
+            }
+        }
+    }
+
+    fn expand_one_env(sh: &Shell, token: &str) -> String 
+    {
+        let re1 = Regex::new(r"^(.*?)\$([A-Za-z0-9_]+|\$|\?)(.*)$").unwrap();
+        let re2 = Regex::new(r"(.*?)\$\{([A-Za-z0-9_]+|\$|\?)\}(.*)$").unwrap();
+        if !re1.is_match(token) && !re2.is_match(token) {
+            return token.to_string();
+        }
+
+        let mut result = String::new();
+        let match_re1 = re1.is_match(token);
+        let match_re2 = re2.is_match(token);
+        if !match_re1 && !match_re2 {
+            return token.to_string();
+        }
+
+        let cap_results = if match_re1 {
+            re1.captures_iter(token)
+        } else {
+            re2.captures_iter(token)
+        };
+
+        for cap in cap_results {
+            let head = cap[1].to_string();
+            let tail = cap[3].to_string();
+            let key = cap[2].to_string();
+            if key == "?" {
+                result.push_str(format!("{}{}", head, sh.previous_status).as_str());
+            } else if key == "$" {
+                unsafe {
+                    let val = libc::getpid();
+                    result.push_str(format!("{}{}", head, val).as_str());
+                }
+            } else if let Ok(val) = env::var(&key) {
+                result.push_str(format!("{}{}", head, val).as_str());
+            } else if let Some(val) = sh.get_env(&key) {
+                result.push_str(format!("{}{}", head, val).as_str());
+            } else {
+                result.push_str(&head);
+            }
+            result.push_str(&tail);
+        }
+
+        result
+    }
+
+    fn need_expand_brace(line: &str) -> bool { contains(line, r#"\{[^ "']*,[^ "']*,?[^ "']*\}"#) }
+
+    fn brace_getitem(s: &str, depth: i32) -> (Vec<String>, String)
+    {
+        let mut out: Vec<String> = vec![String::new()];
+        let mut ss = s.to_string();
+        let mut tmp;
+        while !ss.is_empty() {
+            let c = match ss.chars().next() {
+                Some(x) => x,
+                None => {
+                    return (out, ss);
+                }
+            };
+            if depth > 0 && (c == ',' || c == '}') {
+                return (out, ss);
+            }
+            if c == '{' {
+                let mut sss = ss.clone();
+                sss.remove(0);
+                let result_groups = brace_getgroup(&sss, depth + 1);
+                if let Some((out_group, s_group)) = result_groups {
+                    let mut tmp_out = Vec::new();
+                    for x in out.iter() {
+                        for y in out_group.iter() {
+                            let item = format!("{}{}", x, y);
+                            tmp_out.push(item);
+                        }
+                    }
+                    out = tmp_out;
+                    ss = s_group.clone();
+                    continue;
+                }
+            }
+            
+            if c == '\\' && ss.len() > 1 {
+                ss.remove(0);
+                let c;
+                match ss.chars().next() {
+                    Some(x) => c = x,
+                    None => {
+                        return (out, ss)
+                    }
+                }
+
+                tmp = format!("\\{}", c);
+            } else {
+                tmp = c.to_string();
+            }
+            let mut result = Vec::new();
+            for x in out.iter() {
+                let item = format!("{}{}", x, tmp);
+                result.push(item);
+            }
+            out = result;
+            ss.remove(0);
+        }
+        (out, ss)
+    }
+
+    fn brace_getgroup(s: &str, depth: i32) -> Option<(Vec<String>, String)> 
+    {
+        let mut out: Vec<String> = Vec::new();
+        let mut comma = false;
+        let mut ss = s.to_string();
+        while !ss.is_empty() {
+            let (g, sss) = brace_getitem(ss.as_str(), depth);
+            ss = sss.clone();
+            if ss.is_empty() {
+                break;
+            }
+            for x in g.iter() {
+                out.push(x.clone());
+            }
+
+            let c = match ss.chars().next() {
+                Some(x) => x,
+                None => {
+                    break;
+                }
+            };
+            if c == '}' {
+                let mut sss = ss.clone();
+                sss.remove(0);
+                if comma {
+                    return Some((out, sss));
+                }
+                let mut result = Vec::new();
+                for x in out.iter() {
+                    let item = format!("{{{}}}", x);
+                    result.push(item);
+                }
+                return Some((result, ss));
+            }
+            if c == ',' {
+                comma = true;
+                ss.remove(0);
+            }
+        }
+
+        None
+    }
+
+    fn expand_brace(tokens: &mut Tokens) 
+    {
+        let mut idx: usize = 0;
+        let mut buff = Vec::new();
+        for (sep, token) in tokens.iter() {
+            if !sep.is_empty() || !need_expand_brace(token) {
+                idx += 1;
+                continue;
+            }
+
+            let mut result: Vec<String> = Vec::new();
+            let items = brace_getitem(token, 0);
+            for x in items.0 {
+                result.push(x.clone());
+            }
+            buff.push((idx, result));
+            idx += 1;
+        }
+
+        for (i, items) in buff.iter().rev() {
+            tokens.remove(*i);
+            for (j, token) in items.iter().enumerate() {
+                let sep = if token.contains(' ') { "\"" } else { "" };
+                tokens.insert(*i + j, (sep.to_string(), token.clone()));
+            }
+        }
+    }
+
+    fn expand_brace_range(tokens: &mut Tokens)
+    {
+        let re;
+        if let Ok(x) = Regex::new(r#"\{(-?[0-9]+)\.\.(-?[0-9]+)(\.\.)?([0-9]+)?\}"#) {
+            re = x;
+        } else {
+            println_stderr!("cicada: re new error");
+            return;
+        }
+
+        let mut idx: usize = 0;
+        let mut buff: Vec<(usize, Vec<String>)> = Vec::new();
+        for (sep, token) in tokens.iter() {
+            if !sep.is_empty() || !re.is_match(token) {
+                idx += 1;
+                continue;
+            }
+            
+            let caps = re.captures(token).unwrap();
+
+            let start = match caps[1].to_string().parse::<i32>() {
+                Ok(x) => x,
+                Err(e) => {
+                    println_stderr!("cicada: {}", e);
+                    return;
+                }
+            };
+
+            let end = match caps[2].to_string().parse::<i32>() {
+                Ok(x) => x,
+                Err(e) => {
+                    println_stderr!("cicada: {}", e);
+                    return;
+                }
+            };
+            
+            let mut incr = if caps.get(4).is_none() {
+                1
+            } else {
+                match caps[4].to_string().parse::<i32>() {
+                    Ok(x) => x,
+                    Err(e) => {
+                        println_stderr!("cicada: {}", e);
+                        return;
+                    }
+                }
+            };
+            if incr <= 1 {
+                incr = 1;
+            }
+
+            let mut result: Vec<String> = Vec::new();
+            let mut n = start;
+            if start > end {
+                while n >= end {
+                    result.push(format!("{}", n));
+                    n -= incr;
+                }
+            } else {
+                while n <= end {
+                    result.push(format!("{}", n));
+                    n += incr;
+                }
+            }
+
+            buff.push((idx, result));
+            idx += 1;
+        }
+
+        for (i, items) in buff.iter().rev() {
+            tokens.remove(*i);
+            for (j, token) in items.iter().enumerate() {
+                let sep = if token.contains(' ') { "\"" } else { "" };
+                tokens.insert(*i + j, (sep.to_string(), token.clone()));
+            }
+        }
+    }
+
+    fn expand_alias(sh: &Shell, tokens: &mut Tokens) 
+    {
+        let mut idx: usize = 0;
+        let mut buff = Vec::new();
+        let mut is_head = true;
+        for (sep, text) in tokens.iter() {
+            if sep.is_empty() && text == "|" {
+                is_head = true;
+                idx += 1;
+                continue;
+            }
+            if is_head && text == "xargs" {
+                idx += 1;
+                continue;
+            }
+
+            if !is_head || !sh.is_alias(text) {
+                idx += 1;
+                is_head = false;
+                continue;
+            }
+
+            if let Some(value) = sh.get_alias_content(text) {
+                buff.push((idx, value.clone()));
+            }
+
+            idx += 1;
+            is_head = false;
+        }
+
+        for (i, text) in buff.iter().rev() {
+            let linfo = parsers::line::parse(text);
+            let tokens_ = linfo.tokens;
+            tokens.remove(*i);
+            for item in tokens_.iter().rev() {
+                tokens.insert(*i, item.clone());
+            }
+        }
+    }
+
+    fn expand_home(tokens: &mut Tokens) 
+    {
+        let mut idx: usize = 0;
+        let mut buff = Vec::new();
+        for (sep, text) in tokens.iter() {
+            if !sep.is_empty() || !text.starts_with("~") {
+                idx += 1;
+                continue;
+            }
+
+            let mut s: String = text.clone();
+            let ptn = r"^~(?P<tail>.*)";
+            let re = Regex::new(ptn).expect("invalid re ptn");
+            let home = tools::get_user_home();
+            let ss = s.clone();
+            let to = format!("{}$tail", home);
+            let result = re.replace_all(ss.as_str(), to.as_str());
+            s = result.to_string();
+
+            buff.push((idx, s.clone()));
+            idx += 1;
+        }
+
+        for (i, text) in buff.iter().rev() {
+            tokens[*i].1 = text.to_string();
+        }
+    }
+
+    fn env_in_token(token: &str) -> bool 
+    {
+        if contains(token, r"\$\{?[\$\?]\}?") {
+            return true;
+        }
+
+        let ptn_env_name = r"[a-zA-Z_][a-zA-Z0-9_]*";
+        let ptn_env = format!(r"\$\{{?{}\}}?", ptn_env_name);
+        if !contains(token, &ptn_env) {
+            return false;
+        }
+        
+        let ptn_cmd_sub1 = format!(r"^{}=`.*`$", ptn_env_name);
+        let ptn_cmd_sub2 = format!(r"^{}=\$\(.*\)$", ptn_env_name);
+        if contains(token, &ptn_cmd_sub1)
+            || contains(token, &ptn_cmd_sub2)
+            || contains(token, r"^\$\(.+\)$")
+        {
+            return false;
+        }
+        
+        let ptn_env = format!(r"='.*\$\{{?{}\}}?.*'$", ptn_env_name);
+        !contains(token, &ptn_env)
+    }
+
+    pub fn expand_env(sh: &Shell, tokens: &mut Tokens) 
+    {
+        let mut idx: usize = 0;
+        let mut buff = Vec::new();
+
+        for (sep, token) in tokens.iter() {
+            if sep == "`" || sep == "'" {
+                idx += 1;
+                continue;
+            }
+
+            if !env_in_token(token) {
+                idx += 1;
+                continue;
+            }
+
+            let mut _token = token.clone();
+            while env_in_token(&_token) {
+                _token = expand_one_env(sh, &_token);
+            }
+            buff.push((idx, _token));
+            idx += 1;
+        }
+
+        for (i, text) in buff.iter().rev() {
+            tokens[*i].1 = text.to_string();
+        }
+    }
+
+    fn should_do_dollar_command_extension(line: &str) -> bool 
+    {
+        contains(line, r"\$\([^\)]+\)") &&
+        !contains(line, r"='.*\$\([^\)]+\).*'$")
+    }
+
+    fn do_command_substitution_for_dollar(sh: &mut Shell, tokens: &mut Tokens) 
+    {
+        let mut idx: usize = 0;
+        let mut buff: HashMap<usize, String> = HashMap::new();
+
+        for (sep, token) in tokens.iter() 
+        {
+            if sep == "'" || sep == "\\" || !should_do_dollar_command_extension(token) {
+                idx += 1;
+                continue;
+            }
+
+            let mut line = token.to_string();
+            loop {
+                if !should_do_dollar_command_extension(&line) {
+                    break;
+                }
+
+                let ptn_cmd = r"\$\((.+)\)";
+                let cmd = match find_first_group(ptn_cmd, &line) {
+                    Some(x) => x,
+                    None => {
+                        println_stderr!("cicada: calculator: no first group");
+                        return;
+                    }
+                };
+
+                let cmd_result = match CommandLine::from_line(&cmd, sh) {
+                    Ok(c) => {
+                        log!("run subcmd dollar: {:?}", &cmd);
+                        let (term_given, cr) = core::run_pipeline(sh, &c, true, true, false);
+                        if term_given {
+                            unsafe {
+                                let gid = libc::getpgid(0);
+                                give_terminal_to(gid);
+                            }
+                        }
+
+                        cr
+                    }
+                    Err(e) => {
+                        println_stderr!("cicada: {}", e);
+                        continue;
+                    }
+                };
+
+                let output_txt = cmd_result.stdout.trim();
+
+                let ptn = r"(?P<head>[^\$]*)\$\(.+\)(?P<tail>.*)";
+                let re;
+                if let Ok(x) = Regex::new(ptn) {
+                    re = x;
+                } else {
+                    return;
+                }
+
+                let to = format!("${{head}}{}${{tail}}", output_txt);
+                let line_ = line.clone();
+                let result = re.replace(&line_, to.as_str());
+                line = result.to_string();
+            }
+
+            buff.insert(idx, line.clone());
+            idx += 1;
+        }
+
+        for (i, text) in buff.iter() {
+            tokens[*i].1 = text.to_string();
+        }
+    }
+
+    fn do_command_substitution_for_dot(sh: &mut Shell, tokens: &mut Tokens) 
+    {
+        let mut idx: usize = 0;
+        let mut buff: HashMap<usize, String> = HashMap::new();
+        for (sep, token) in tokens.iter() {
+            let new_token: String;
+            if sep == "`" {
+                log!("run subcmd dot1: {:?}", token);
+                let cr = match CommandLine::from_line(token, sh) {
+                    Ok(c) => {
+                        let (term_given, _cr) = core::run_pipeline(sh, &c, true, true, false);
+                        if term_given {
+                            unsafe {
+                                let gid = libc::getpgid(0);
+                                give_terminal_to(gid);
+                            }
+                        }
+
+                        _cr
+                    }
+                    Err(e) => {
+                        println_stderr!("cicada: {}", e);
+                        continue;
+                    }
+                };
+
+                new_token = cr.stdout.trim().to_string();
+            } else if sep == "\"" || sep.is_empty() {
+                let re;
+                if let Ok(x) = Regex::new(r"^([^`]*)`([^`]+)`(.*)$") {
+                    re = x;
+                } else {
+                    println_stderr!("cicada: re new error");
+                    return;
+                }
+                if !re.is_match(token) {
+                    idx += 1;
+                    continue;
+                }
+                let mut _token = token.clone();
+                let mut _item = String::new();
+                let mut _head = String::new();
+                let mut _output = String::new();
+                let mut _tail = String::new();
+                loop {
+                    if !re.is_match(&_token) {
+                        if !_token.is_empty() {
+                            _item = format!("{}{}", _item, _token);
+                        }
+                        break;
+                    }
+                    for cap in re.captures_iter(&_token) {
+                        _head = cap[1].to_string();
+                        _tail = cap[3].to_string();
+                        log!("run subcmd dot2: {:?}", &cap[2]);
+
+                        let cr = match CommandLine::from_line(&cap[2], sh) {
+                            Ok(c) => {
+                                let (term_given, _cr) = core::run_pipeline(sh, &c, true, true, false);
+                                if term_given {
+                                    unsafe {
+                                        let gid = libc::getpgid(0);
+                                        give_terminal_to(gid);
+                                    }
+                                }
+
+                                _cr
+                            }
+                            Err(e) => {
+                                println_stderr!("cicada: {}", e);
+                                continue;
+                            }
+                        };
+
+                        _output = cr.stdout.trim().to_string();
+                    }
+                    _item = format!("{}{}{}", _item, _head, _output);
+                    if _tail.is_empty() {
+                        break;
+                    }
+                    _token = _tail.clone();
+                }
+                new_token = _item;
+            } else {
+                idx += 1;
+                continue;
+            }
+
+            buff.insert(idx, new_token.clone());
+            idx += 1;
+        }
+
+        for (i, text) in buff.iter() {
+            tokens[*i].1 = text.to_string();
+        }
+    }
+
+    fn do_command_substitution(sh: &mut Shell, tokens: &mut Tokens) 
+    {
+        do_command_substitution_for_dot(sh, tokens);
+        do_command_substitution_for_dollar(sh, tokens);
+    }
+
+    pub fn do_expansion(sh: &mut Shell, tokens: &mut Tokens)
+    {
+        // let line = parsers::line::tokens_to_line(tokens);
+        let line = parsers::line::from_tokens( tokens );
+        if is::arithmetic(&line)
+        {
+            return;
+        }
+
+        if tokens.len() >= 2 && tokens[0].1 == "export" && tokens[1].1.starts_with("PROMPT=") { return; }
+
+        expand_alias(sh, tokens);
+        expand_home(tokens);
+        expand_env(sh, tokens);
+        expand_brace(tokens);
+        expand_glob(tokens);
+        do_command_substitution(sh, tokens);
+        expand_brace_range(tokens);
+    }
+
+    pub fn trim_multiline_prompts(line: &str) -> String
+    {
+        let line_new = replace_all(line, r"\\\n>> ", "");
+        let line_new = replace_all(&line_new, r"\| *\n>> ", "| ");
+        replace_all(&line_new, r"(?P<NEWLINE>\n)>> ", "$NEWLINE")
+    }
+
+    fn proc_has_terminal() -> bool 
+    {
+        unsafe 
+        {
+            let tgid = tcgetpgrp(0);
+            let pgid = getpgid(0);
+            tgid == pgid
+        }
+    }
 }
 
 pub mod slice
@@ -33466,6 +35380,25 @@ pub mod str
     };
     /* smallstr v0.3.0 */
     use std::ffi::{OsStr, OsString};
+
+    pub trait Tokenizes
+    {
+        fn tokenize( &self ) -> String;
+    }
+
+    impl Tokenizes for &str
+    {
+        fn tokenize( &self ) -> String
+        {
+            // let args = parsers::line::line_to_plain_tokens(s);
+            let args = parsers::line::to_plain_tokens( self.clone() );
+
+            if args.is_empty() { return String::new(); }
+
+            args[0].clone()
+        }
+    }
+
     /// A `String`-like container that can store a small number of bytes inline.
     #[derive(Clone, Default)]
     pub struct SmallString<A: Array<Item = u8>>
@@ -46151,6 +48084,746 @@ pub mod time
     }
 }
 
+pub mod types
+{
+    use ::
+    {
+        collections::{ HashMap, HashSet },
+        hash::{ Hash, Hasher },
+        regex::{ Regex, contains, unquote },
+        *,
+    };
+
+    pub type Token = (String, String);
+    pub type Tokens = Vec<Token>;
+    pub type Redirection = (String, String, String);
+
+    #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+    pub struct WaitStatus(i32, i32, i32);
+
+    impl WaitStatus 
+    {
+        pub fn from_exited(pid: i32, status: i32) -> Self { WaitStatus(pid, 0, status) }
+
+        pub fn from_signaled(pid: i32, sig: i32) -> Self { WaitStatus(pid, 1, sig) }
+
+        pub fn from_stopped(pid: i32, sig: i32) -> Self { WaitStatus(pid, 2, sig) }
+
+        pub fn from_continuted(pid: i32) -> Self { WaitStatus(pid, 3, 0) }
+
+        pub fn from_others() -> Self { WaitStatus(0, 9, 9) }
+
+        pub fn from_error(errno: i32) -> Self { WaitStatus(0, 255, errno) }
+
+        pub fn empty() -> Self { WaitStatus(0, 0, 0) }
+
+        pub fn is_error(&self) -> bool { self.1 == 255 }
+
+        pub fn is_others(&self) -> bool { self.1 == 9 }
+
+        pub fn is_signaled(&self) -> bool { self.1 == 1 }
+
+        pub fn get_errno(&self) -> nix::Error { nix::Error::from_raw(self.2) }
+
+        pub fn is_exited(&self) -> bool { self.0 != 0 && self.1 == 0 }
+
+        pub fn is_stopped(&self) -> bool { self.1 == 2 }
+
+        pub fn is_continued(&self) -> bool { self.1 == 3 }
+
+        pub fn get_pid(&self) -> i32 { self.0 }
+
+        fn _get_signaled_status(&self) -> i32 { self.2 + 128 }
+
+        pub fn get_signal(&self) -> i32 { self.2 }
+
+        pub fn get_name(&self) -> String
+        {
+            match true
+            {
+                true if self.is_exited() => "Exited".to_string(),
+                true if self.is_stopped() => "Stopped".to_string(),
+                true if self.is_continued() => "Continued".to_string(),
+                true if self.is_signaled() => "Signaled".to_string(),
+                true if self.is_others() => "Others".to_string(),
+                true if self.is_error() => "Error".to_string(),
+                _=> { format!("unknown: {}", self.2) }
+            }
+        }
+
+        pub fn get_status(&self) -> i32
+        {
+            if self.is_exited() { self.2 }
+            else { self._get_signaled_status() }
+        }
+    }
+
+    impl fmt::Debug for WaitStatus 
+    {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+        {
+            let mut formatter = f.debug_struct("WaitStatus");
+            formatter.field("pid", &self.0);
+            let name = self.get_name();
+            formatter.field("name", &name);
+            formatter.field("ext", &self.2);
+            formatter.finish()
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct LineInfo
+    {
+        pub tokens: Tokens,
+        pub is_complete: bool,
+    }
+
+    impl LineInfo
+    {
+        pub fn new(tokens: Tokens) -> Self { LineInfo { tokens, is_complete: true } }
+    }
+    /// command line: `ls 'foo bar' 2>&1 > /dev/null < one-file` would be:
+    /// Command {
+    ///     tokens: [("", "ls"), ("", "-G"), ("\'", "foo bar")],
+    ///     redirects_to: [
+    ///         ("2", ">", "&1"),
+    ///         ("1", ">", "/dev/null"),
+    ///     ],
+    ///     redirect_from: Some(("<", "one-file")),
+    /// }
+    #[derive(Debug)]
+    pub struct Command
+    {
+        pub tokens: Tokens,
+        pub redirects_to: Vec<Redirection>,
+        pub redirect_from: Option<Token>,
+    }
+
+    #[derive(Debug)]
+    pub struct CommandLine
+    {
+        pub line: String,
+        pub commands: Vec<Command>,
+        pub envs: HashMap<String, String>,
+        pub background: bool,
+    }
+
+    impl Command
+    {
+        pub fn from_tokens(tokens: Tokens) -> Result<Command, String>
+        {
+            let mut tokens_new = tokens.clone();
+            let mut redirects_from_type = String::new();
+            let mut redirects_from_value = String::new();
+            let mut has_redirect_from = tokens_new.iter().any(|x| x.1 == "<" || x.1 == "<<<");
+            let mut len = tokens_new.len();
+
+            while has_redirect_from
+            {
+                if let Some(idx) = tokens_new.iter().position(|x| x.1 == "<")
+                {
+                    redirects_from_type = "<".to_string();
+                    tokens_new.remove(idx);
+                    len -= 1;
+                    if len > idx
+                    {
+                        redirects_from_value = tokens_new.remove(idx).1;
+                        len -= 1;
+                    }
+                }
+
+                if let Some(idx) = tokens_new.iter().position(|x| x.1 == "<<<")
+                {
+                    redirects_from_type = "<<<".to_string();
+                    tokens_new.remove(idx);
+                    len -= 1;
+
+                    if len > idx
+                    {
+                        redirects_from_value = tokens_new.remove(idx).1;
+                        len -= 1;
+                    }
+                }
+
+                has_redirect_from = tokens_new.iter().any(|x| x.1 == "<" || x.1 == "<<<");
+            }
+
+            let tokens_final;
+            let redirects_to;
+
+            match tokens_to_redirections(&tokens_new) 
+            {
+                Ok((_tokens, _redirects_to)) =>
+                {
+                    tokens_final = _tokens;
+                    redirects_to = _redirects_to;
+                }
+
+                Err(e) => { return Err(e); }
+            }
+
+            let redirect_from = if redirects_from_type.is_empty() { None }
+            else { Some((redirects_from_type, redirects_from_value)) };
+
+            Ok(Command
+            {
+                tokens: tokens_final,
+                redirects_to,
+                redirect_from,
+            })
+        }
+
+        pub fn has_redirect_from(&self) -> bool
+        {
+            self.redirect_from.is_some() &&
+            self.redirect_from.clone().unwrap().0 == "<"
+        }
+
+        pub fn has_here_string(&self) -> bool
+        {
+            self.redirect_from.is_some() &&
+            self.redirect_from.clone().unwrap().0 == "<<<"
+        }
+
+        pub fn is_builtin(&self) -> bool { is::builtin(&self.tokens[0].1) }
+    }
+
+    #[derive(Debug, Clone, Default)]
+    pub struct Job
+    {
+        pub cmd: String,
+        pub id: i32,
+        pub gid: i32,
+        pub pids: Vec<i32>,
+        pub pids_stopped: HashSet<i32>,
+        pub status: String,
+        pub is_bg: bool,
+    }
+
+    impl Job
+    {
+        pub fn all_members_stopped(&self) -> bool
+        {
+            for pid in &self.pids
+            {
+                if !self.pids_stopped.contains(pid) { return false; }
+            }
+            true
+        }
+
+        pub fn all_members_running(&self) -> bool { self.pids_stopped.is_empty() }
+    }
+    
+    #[derive(Clone, Debug, Default)]
+    pub struct CommandResult
+    {
+        pub gid: i32,
+        pub status: i32,
+        pub stdout: String,
+        pub stderr: String,
+    }
+
+    impl CommandResult
+    {
+        pub const fn new() -> CommandResult
+        {
+            CommandResult
+            {
+                gid: 0,
+                status: 0,
+                stdout: String::new(),
+                stderr: String::new(),
+            }
+        }
+
+        pub fn from_status(gid: i32, status: i32) -> CommandResult
+        {
+            CommandResult
+            {
+                gid,
+                status,
+                stdout: String::new(),
+                stderr: String::new(),
+            }
+        }
+
+        pub fn error() -> CommandResult
+        {
+            CommandResult
+            {
+                gid: 0,
+                status: 1,
+                stdout: String::new(),
+                stderr: String::new(),
+            }
+        }
+    }
+    
+    #[derive(Clone, Debug, Default)]
+    pub struct CommandOptions
+    {
+        pub background: bool,
+        pub isatty: bool,
+        pub capture_output: bool,
+        pub envs: HashMap<String, String>,
+    }
+
+    fn split_tokens_by_pipes(tokens: &[Token]) -> Vec<Tokens>
+    {
+        let mut cmd = Vec::new();
+        let mut cmds = Vec::new();
+        for token in tokens
+        {
+            let sep = &token.0;
+            let value = &token.1;
+            if sep.is_empty() && value == "|" {
+                if cmd.is_empty() {
+                    return Vec::new();
+                }
+                cmds.push(cmd.clone());
+                cmd = Vec::new();
+            } else {
+                cmd.push(token.clone());
+            }
+        }
+
+        if cmd.is_empty() { return Vec::new(); }
+
+        cmds.push(cmd.clone());
+        cmds
+    }
+
+    fn drain_env_tokens(tokens: &mut Tokens) -> HashMap<String, String> 
+    {
+        let mut envs: HashMap<String, String> = HashMap::new();
+        let mut n = 0;
+        let re = Regex::new(r"^([a-zA-Z0-9_]+)=(.*)$").unwrap();
+        for (sep, text) in tokens.iter() 
+        {
+            if !sep.is_empty() || !contains(text, r"^([a-zA-Z0-9_]+)=(.*)$") { break; }
+
+            for cap in re.captures_iter(text) 
+            {
+                let name = cap[1].to_string();
+                let value = unquote(&cap[2]);
+                envs.insert(name, value);
+            }
+
+            n += 1;
+        }
+        if n > 0 {
+            tokens.drain(0..n);
+        }
+        envs
+    }
+
+    impl CommandLine 
+    {
+        pub fn from_line(line: &str, sh: &mut shell::Shell) -> Result<CommandLine, String> 
+        {
+            let linfo = parsers::line::parse(line);
+            let mut tokens = linfo.tokens;
+            shell::do_expansion(sh, &mut tokens);
+            let envs = drain_env_tokens(&mut tokens);
+            let mut background = false;
+            let len = tokens.len();
+            
+            if len > 1 && tokens[len - 1].1 == "&"
+            {
+                background = true;
+                tokens.pop();
+            }
+
+            let mut commands = Vec::new();
+            
+            for sub_tokens in split_tokens_by_pipes(&tokens)
+            {
+                match Command::from_tokens(sub_tokens)
+                {
+                    Ok(c) => {
+                        commands.push(c);
+                    }
+                    Err(e) => {
+                        return Err(e);
+                    }
+                }
+            }
+
+            Ok(CommandLine
+            {
+                line: line.to_string(),
+                commands,
+                envs,
+                background,
+            })
+        }
+
+        pub fn is_empty(&self) -> bool { self.commands.is_empty() }
+
+        pub fn with_pipeline(&self) -> bool { self.commands.len() > 1 }
+
+        pub fn is_single_and_builtin(&self) -> bool { self.commands.len() == 1 && self.commands[0].is_builtin() }
+    }
+
+    pub fn tokens_to_redirections(tokens: &Tokens) -> Result<(Tokens, Vec<Redirection>), String>
+    {
+        let mut tokens_new = Vec::new();
+        let mut redirects = Vec::new();
+        let mut to_be_continued = false;
+        let mut to_be_continued_s1 = String::new();
+        let mut to_be_continued_s2 = String::new();
+
+        for token in tokens 
+        {
+            let sep = &token.0;
+            
+            if !sep.is_empty() && !to_be_continued
+            {
+                tokens_new.push(token.clone());
+                continue;
+            }
+            
+            let word = &token.1;
+
+            if to_be_continued
+            {
+                if sep.is_empty() && word.starts_with('&')
+                { return Err(String::from("bad redirection syntax near &")); }
+
+                let s3 = word.to_string();
+                if contains(&to_be_continued_s1, r"^\d+$")
+                {
+                    if to_be_continued_s1 != "1" && to_be_continued_s1 != "2"
+                    { return Err(String::from("Bad file descriptor #3")); }
+
+                    let s1 = to_be_continued_s1.clone();
+                    let s2 = to_be_continued_s2.clone();
+                    redirects.push((s1, s2, s3));
+                }
+                
+                else
+                {
+                    if !to_be_continued_s1.is_empty()
+                    { tokens_new.push((sep.clone(), to_be_continued_s1.to_string())); }
+
+                    redirects.push(("1".to_string(), to_be_continued_s2.clone(), s3));
+                }
+
+                to_be_continued = false;
+                continue;
+            }
+
+            let ptn1 = r"^([^>]*)(>>?)([^>]+)$";
+            let ptn2 = r"^([^>]*)(>>?)$";
+
+            if !contains(word, r">") { tokens_new.push(token.clone()); }
+            
+            else if contains(word, ptn1)
+            {
+                let re;
+                
+                if let Ok(x) = Regex::new(ptn1) { re = x; }
+                else { return Err(String::from("Failed to build Regex")); }
+
+                if let Some(caps) = re.captures(word)
+                {
+                    let s1 = caps.get(1).unwrap().as_str();
+                    let s2 = caps.get(2).unwrap().as_str();
+                    let s3 = caps.get(3).unwrap().as_str();
+
+                    if s3.starts_with('&') && s3 != "&1" && s3 != "&2" { return Err(String::from("Bad file descriptor #1")); }
+
+                    if contains(s1, r"^\d+$")
+                    {
+                        if s1 != "1" && s1 != "2" { return Err(String::from("Bad file descriptor #2")); }
+
+                        redirects.push((s1.to_string(), s2.to_string(), s3.to_string()));
+                    }
+                    
+                    else
+                    {
+                        if !s1.is_empty() { tokens_new.push((sep.clone(), s1.to_string())); }
+
+                        redirects.push((String::from("1"), s2.to_string(), s3.to_string()));
+                    }
+                }
+            }
+
+            else if contains(word, ptn2)
+            {
+                let re;
+
+                if let Ok(x) = Regex::new(ptn2) { re = x; }
+                else { return Err(String::from("Failed to build Regex")); }
+
+                if let Some(caps) = re.captures(word)
+                {
+                    let s1 = caps.get(1).unwrap().as_str();
+                    let s2 = caps.get(2).unwrap().as_str();
+                    to_be_continued = true;
+                    to_be_continued_s1 = s1.to_string();
+                    to_be_continued_s2 = s2.to_string();
+                }
+            }
+        }
+
+        if to_be_continued { return Err(String::from("redirection syntax error")); }
+
+        Ok((tokens_new, redirects))
+    }
+    /*
+    uuid v1.17.0*/
+    /// A 128-bit (16 byte) buffer containing the UUID.
+    pub type Bytes = [u8; 16];
+
+    /// The version of the UUID, denoting the generating algorithm.
+    pub const VERSION:u8 = 4;
+    /// The reserved variants of UUIDs.
+    #[repr(u8)] #[non_exhaustive] #[derive(Clone, Copy, Debug, PartialEq)]
+    pub enum Variant 
+    {
+        /// Reserved by the NCS for backward compatibility.
+        NCS = 0u8,
+        /// As described in the RFC 9562 Specification (default).
+        RFC4122,
+        /// Reserved by Microsoft for backward compatibility.
+        Microsoft,
+        /// Reserved for future expansion.
+        Future,
+    }
+
+    /// A Universally Unique Identifier (UUID).
+    #[repr(transparent)] #[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
+    pub struct Uuid(Bytes);
+
+    impl Uuid 
+    {
+        /// UUID namespace for Domain Name System (DNS).
+        pub const NAMESPACE_DNS: Self = Uuid([
+            0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30,
+            0xc8,
+        ]);
+        /// UUID namespace for ISO Object Identifiers (OIDs).
+        pub const NAMESPACE_OID: Self = Uuid([
+            0x6b, 0xa7, 0xb8, 0x12, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30,
+            0xc8,
+        ]);
+        /// UUID namespace for Uniform Resource Locators (URLs).
+        pub const NAMESPACE_URL: Self = Uuid([
+            0x6b, 0xa7, 0xb8, 0x11, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30,
+            0xc8,
+        ]);
+        /// UUID namespace for X.500 Distinguished Names (DNs).
+        pub const NAMESPACE_X500: Self = Uuid([
+            0x6b, 0xa7, 0xb8, 0x14, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30,
+            0xc8,
+        ]);
+        /// Creates a UUID using the supplied bytes.
+        #[inline] pub const fn from_bytes(bytes: Bytes) -> Uuid { Uuid(bytes) }
+        /// Returns the variant of the UUID structure.
+        pub const fn get_variant(&self) -> Variant 
+        {
+            match self.as_bytes()[8] 
+            {
+                x if x & 0x80 == 0x00 => Variant::NCS,
+                x if x & 0xc0 == 0x80 => Variant::RFC4122,
+                x if x & 0xe0 == 0xc0 => Variant::Microsoft,
+                x if x & 0xe0 == 0xe0 => Variant::Future,
+                _ => Variant::Future,
+            }
+        }
+        /// Returns the version number of the UUID.
+        pub const fn get_version_num(&self) -> usize { 4 }
+        /// Returns the four field values of the UUID.
+        pub fn as_fields(&self) -> (u32, u16, u16, &[u8; 8]) 
+        {
+            let bytes = self.as_bytes();
+
+            let d1 = (bytes[0] as u32) << 24
+                | (bytes[1] as u32) << 16
+                | (bytes[2] as u32) << 8
+                | (bytes[3] as u32);
+
+            let d2 = (bytes[4] as u16) << 8 | (bytes[5] as u16);
+
+            let d3 = (bytes[6] as u16) << 8 | (bytes[7] as u16);
+
+            let d4: &[u8; 8] = ::convert::TryInto::try_into(&bytes[8..16]).unwrap();
+            (d1, d2, d3, d4)
+        }
+        /// Returns the four field values of the UUID in little-endian order.
+        pub fn to_fields_le(&self) -> (u32, u16, u16, &[u8; 8]) 
+        {
+            let d1 = (self.as_bytes()[0] as u32)
+                | (self.as_bytes()[1] as u32) << 8
+                | (self.as_bytes()[2] as u32) << 16
+                | (self.as_bytes()[3] as u32) << 24;
+
+            let d2 = (self.as_bytes()[4] as u16) | (self.as_bytes()[5] as u16) << 8;
+
+            let d3 = (self.as_bytes()[6] as u16) | (self.as_bytes()[7] as u16) << 8;
+
+            let d4: &[u8; 8] = convert::TryInto::try_into(&self.as_bytes()[8..16]).unwrap();
+            (d1, d2, d3, d4)
+        }
+        /// Returns a 128bit value containing the value.
+        pub const fn as_u128(&self) -> u128 { u128::from_be_bytes(*self.as_bytes()) }
+        /// Returns a 128bit little-endian value containing the value.
+        pub const fn to_u128_le(&self) -> u128 { u128::from_le_bytes(*self.as_bytes()) }
+        /// Returns two 64bit values containing the value.
+        pub const fn as_u64_pair(&self) -> (u64, u64)
+        {
+            let value = self.as_u128();
+            ((value >> 64) as u64, value as u64)
+        }
+        /// Returns a slice of 16 octets containing the value.
+        #[inline] pub const fn as_bytes(&self) -> &Bytes { &self.0 }
+        /// Consumes self and returns the underlying byte value of the UUID.
+        #[inline] pub const fn into_bytes(self) -> Bytes { self.0 }
+        /// Returns the bytes of the UUID in little-endian order.
+        pub const fn to_bytes_le(&self) -> Bytes 
+        {
+            [
+                self.0[3], self.0[2], self.0[1], self.0[0], self.0[5], self.0[4], self.0[7], self.0[6],
+                self.0[8], self.0[9], self.0[10], self.0[11], self.0[12], self.0[13], self.0[14],
+                self.0[15],
+            ]
+        }
+        /// Tests if the UUID is nil (all zeros).
+        pub const fn is_nil(&self) -> bool { self.as_u128() == u128::MIN }
+        /// Tests if the UUID is max (all ones).
+        pub const fn is_max(&self) -> bool { self.as_u128() == u128::MAX }
+        /// A buffer that can be used for `encode_...` calls, 
+        /// that is guaranteed to be long enough for any of the format adapters.
+        pub const URN_LENGTH: usize = 45;
+        pub const fn encode_buffer() -> [u8; 45] { [0; 45] }
+        /// Creates a UUID from a 128bit value.
+        pub const fn from_u128(v: u128) -> Self { Uuid::from_bytes(v.to_be_bytes()) }
+        /// Creates a random UUID.
+        pub fn new_v4() -> Uuid 
+        {
+            use ::rand::prelude::*;
+            Uuid::from_u128( random::<u128>() & 0xFFFFFFFFFFFF4FFFBFFFFFFFFFFFFFFF | 0x40008000000000000000, )
+        }
+        /// The 'nil UUID' (all zeros).
+        pub const fn nil() -> Self { Uuid::from_bytes([0; 16]) }
+        /// Creates a UUID using the supplied bytes.
+        pub fn from_slice(b: &[u8]) -> Result<Uuid, error::uuid::Error>
+        {
+            if b.len() != 16 { return Err( error::uuid::Error( error::uuid::ErrorKind::ByteLength { len: b.len() })); }
+
+            let mut bytes: Bytes = [0; 16];
+            bytes.copy_from_slice(b);
+            Ok(Uuid::from_bytes(bytes))
+        }
+        /// Get a borrowed [`Hyphenated`] formatter.
+        #[inline] pub fn as_hyphenated(&self) -> &Hyphenated 
+        { unsafe { &*(self as *const Uuid as *const Hyphenated) } }
+    }
+
+    impl Hash for Uuid
+    {
+        fn hash<H: Hasher>(&self, state: &mut H) { state.write(&self.0); }
+    }
+
+    impl Default for Uuid
+    {
+        #[inline] fn default() -> Self { Uuid::nil() }
+    }
+
+    impl AsRef<Uuid> for Uuid
+    {
+        #[inline] fn as_ref(&self) -> &Uuid { self }
+    }
+
+    impl AsRef<[u8]> for Uuid
+    {
+        #[inline] fn as_ref(&self) -> &[u8] { &self.0 }
+    }
+    
+    impl From<Uuid> for vec::Vec<u8>
+    {
+        fn from(value: Uuid) -> Self { value.0.to_vec() }
+    }
+    
+    impl ::convert::TryFrom<std::vec::Vec<u8>> for Uuid
+    {
+        type Error = error::uuid::Error;
+
+        fn try_from(value: std::vec::Vec<u8>) -> Result<Self, Self::Error> { Uuid::from_slice(&value) }
+    }
+
+    impl ::fmt::Debug for Uuid
+    {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter<'_>) -> ::fmt::Result { ::fmt::LowerHex::fmt(self, f) }
+    }
+    
+    impl ::fmt::LowerHex for Uuid
+    {
+        fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result
+        {
+            ::fmt::LowerHex::fmt(self.as_hyphenated(), f)
+        }
+    }
+    /// Format a [`Uuid`] as a hyphenated string | 67e55044-10b1-426f-9247-bb680e5fe0c8
+    #[repr(transparent)] #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]    
+    pub struct Hyphenated( Uuid );
+
+    impl Hyphenated
+    {
+        /// Writes the [`Uuid`] as a lower-case hyphenated string to `buffer`,
+        /// and returns the subslice of the buffer that contains the encoded UUID.
+        #[inline] pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str
+        { encode_hyphenated(self.0.as_bytes(), buffer, false) }
+
+        #[inline] pub fn encode_hyphenated<'b>(src: &[u8; 16], buffer: &'b mut [u8], upper: bool) -> &'b mut str
+        {   
+            unsafe
+            {
+                let buf = &mut buffer[..Hyphenated::LENGTH];
+                let dst = buf.as_mut_ptr();
+                ptr::write(dst.cast(), format_hyphenated(src, upper));
+                str::from_utf8_unchecked_mut(buf)
+            }
+        }
+    }
+    
+    impl fmt::LowerHex for Hyphenated 
+    {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result 
+        {
+            f.write_str(self.encode_lower(&mut [0; Self::LENGTH]))
+        }
+    }
+
+    #[inline] pub const fn format_hyphenated(src: &[u8; 16], upper: bool) -> [u8; 36]
+    {
+        let lut = if upper { &UPPER } else { &LOWER };
+        let groups = [(0, 8), (9, 13), (14, 18), (19, 23), (24, 36)];
+        let mut dst = [0; 36];
+
+        let mut group_idx = 0;
+        let mut i = 0;
+        while group_idx < 5 {
+            let (start, end) = groups[group_idx];
+            let mut j = start;
+            while j < end {
+                let x = src[i];
+                i += 1;
+
+                dst[j] = lut[(x >> 4) as usize];
+                dst[j + 1] = lut[(x & 0x0f) as usize];
+                j += 2;
+            }
+            if group_idx < 4 {
+                dst[end] = b'-';
+            }
+            group_idx += 1;
+        }
+        dst
+    }
+}
+
 pub mod vec
 {
     pub use std::vec::{ * };
@@ -46220,4 +48893,4 @@ fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 46223
+// 48896
