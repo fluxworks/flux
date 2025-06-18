@@ -2329,6 +2329,7 @@ pub mod database
             hash_map::{Iter, Keys, Values},
             HashMap,
         },
+        path::{ Path },
         *,
     };
     /// Indent step in .over files.
@@ -6640,6 +6641,11 @@ pub mod history
 {
     use ::
     {
+        collections::{ HashMap },
+        path::{ Path },
+        shell::{ Shell },
+        system::{ DefaultTerminal, Interface },
+        time::c::{ DateTime },
         *,
     };
     // pub fn init(rl: &mut Interface<DefaultTerminal>)
@@ -7138,14 +7144,12 @@ pub mod is
     /*
     pub fn unquote(s: &str) -> String
     {
-        let args = parsers::parser_line::line_to_plain_tokens(s);
+        let args = parsers::line::line_to_plain_tokens(s);
         if args.is_empty() {
             return String::new();
         }
         args[0].clone()
     }
-
-    
     */
 }
 /*
@@ -10589,6 +10593,175 @@ pub mod mode
 pub mod net
 {
     pub use std::net::{ * };
+}
+
+pub mod now
+{
+    use ::
+    {
+        collections::{ HashMap },
+        io::{ self, Read, Write },
+        regex::{ Regex },
+        shell::{ self, Shell },
+        types::{ * },
+        *,
+    };
+    /// Entry point for non-ttys (e.g. Cmd-N on MacVim)
+    pub fn run_procs_for_non_tty(sh: &mut Shell)
+    {
+        let mut buffer = String::new();
+        let stdin = io::stdin();
+        let mut handle = stdin.lock();
+
+        match handle.read_to_string(&mut buffer)
+        {
+            Ok(_) =>
+            {
+                log!("run non tty command: {}", &buffer);
+                run_command_line(sh, &buffer, false, false);
+            }
+            
+            Err(e) => { println!("cicada: stdin.read_to_string() failed: {:?}", e); }
+        }
+    }
+
+    pub fn run_command_line(sh: &mut Shell, line: &str, tty: bool, capture: bool) -> Vec<CommandResult>
+    {
+        let mut cr_list = Vec::new();
+        let mut status = 0;
+        let mut sep = String::new();
+
+        for token in parsers::line::line_to_cmds(line)
+        {
+            if token == ";" || token == "&&" || token == "||"
+            {
+                sep = token.clone();
+                continue;
+            }
+
+            if sep == "&&" && status != 0 { break; }
+
+            if sep == "||" && status == 0 { break; }
+
+            let cmd = token.clone();
+            let cr = run_proc(sh, &cmd, tty, capture);
+            status = cr.status;
+            sh.previous_status = status;
+            cr_list.push(cr);
+        }
+        cr_list
+    }
+
+    fn drain_env_tokens(tokens: &mut Tokens) -> HashMap<String, String> 
+    {
+        let mut envs: HashMap<String, String> = HashMap::new();
+        let mut n = 0;
+        let ptn_env_exp = r"^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$";
+        let re = Regex::new(ptn_env_exp).unwrap();
+        
+        for (sep, text) in tokens.iter() 
+        {
+            if !sep.is_empty() || !regex::contains(text, ptn_env_exp) 
+            {
+                break;
+            }
+
+            for cap in re.captures_iter(text) 
+            {
+                let name = cap[1].to_string();
+                let value = parsers::line::unquote(&cap[2]);
+                envs.insert(name, value);
+            }
+
+            n += 1;
+        }
+        
+        if n > 0 { tokens.drain(0..n); }
+
+        envs
+    }
+
+    fn line_to_tokens(sh: &mut Shell, line: &str) -> (Tokens, HashMap<String, String>)
+    {
+        let linfo = parsers::line::parse_line(line);
+        let mut tokens = linfo.tokens;
+        shell::do_expansion(sh, &mut tokens);
+        let envs = drain_env_tokens(&mut tokens);
+        (tokens, envs)
+    }
+
+    fn set_shell_vars(sh: &mut Shell, envs: &HashMap<String, String>)
+    {
+        for (name, value) in envs.iter()
+        {
+            sh.set_env(name, value);
+        }
+    }
+    /// Run simple command or pipeline without using `&&`, `||`, `;`.
+    pub fn run_proc(sh: &mut Shell, line: &str, tty: bool, capture: bool) -> CommandResult
+    {
+        let log_cmd = !sh.cmd.starts_with(' ');
+        
+        match CommandLine::from_line(line, sh) {
+            Ok(cl) =>
+            {
+                if cl.is_empty()
+                {
+                    if !cl.envs.is_empty() { set_shell_vars(sh, &cl.envs); }
+
+                    return CommandResult::new();
+                }
+
+                let (term_given, cr) = run::pipeline(sh, &cl, tty, capture, log_cmd);
+                
+                if term_given
+                {
+                    unsafe {
+                        let gid = libc::getpgid(0);
+                        shell::give_terminal_to(gid);
+                    }
+                }
+
+                cr
+            }
+            Err(e) => {
+                println_stderr!("cicada: {}", e);
+                CommandResult::from_status(0, 1)
+            }
+        }
+    }
+
+    fn run_with_shell(sh: &mut Shell, line: &str) -> CommandResult {
+        let (tokens, envs) = line_to_tokens(sh, line);
+        if tokens.is_empty() {
+            set_shell_vars(sh, &envs);
+            return CommandResult::new();
+        }
+
+        match CommandLine::from_line(line, sh) {
+            Ok(c) => {
+                let (term_given, cr) = run::pipeline(sh, &c, false, true, false);
+                if term_given {
+                    unsafe {
+                        let gid = libc::getpgid(0);
+                        shell::give_terminal_to(gid);
+                    }
+                }
+
+                cr
+            }
+            Err(e) => {
+                println_stderr!("cicada: {}", e);
+                CommandResult::from_status(0, 1)
+            }
+        }
+    }
+
+    pub fn run(line: &str) -> CommandResult {
+        let mut sh = Shell::new();
+        run_with_shell(&mut sh, line)
+    }
+
 }
 
 pub mod num
@@ -26911,6 +27084,80 @@ pub mod os
         #[cfg( windows )] pub use std::os::windows::{ * };
 
     } #[cfg( windows )] pub use self::windows::{ * };
+    // pub fn get_os_name() -> String 
+    pub fn get_name() -> String 
+    {
+        let uname = get_uname();
+
+        if uname.to_lowercase() == "darwin" { get_macos_name() } else { get_other_os_name() }
+    }
+    // fn get_other_os_name() -> String
+    pub fn get_other_name() -> String
+    {
+        let mut name = get_release_value("PRETTY_NAME");
+
+        if !name.is_empty() { return name; }
+        
+        name = get_release_value("DISTRIB_DESCRIPTION");
+
+        if !name.is_empty() { return name; }
+
+        name = get_release_value("IMAGE_DESCRIPTION");
+        
+        if !name.is_empty() { return name; }
+
+        get_uname_mo()
+    }
+
+    pub fn get_release_value(ptn: &str) -> String
+    {
+        let line = format!
+        (
+            "grep -i '{}' /etc/*release* 2>&1 | grep -o '=.*' | tr '\"=' ' '",
+            ptn
+        );
+
+        let cr = now::run(&line);
+        return cr.stdout.trim().to_string();
+    }
+
+    pub fn get_uname() -> String
+    {
+        let cr = now::run("uname");
+        return cr.stdout.trim().to_string();
+    }
+
+    pub fn get_uname_mo() -> String
+    {
+        let cr = now::run("uname -m -o");
+        return cr.stdout.trim().to_string();
+    }
+
+    pub fn get_macos_name() -> String
+    {
+        let mut os_name = get_osx_codename();
+        let ver = get_osx_version();
+        
+        if !ver.is_empty()
+        {
+            os_name.push(' ');
+            os_name.push_str(&ver);
+        }
+
+        os_name
+    }
+
+    pub fn get_osx_codename() -> String
+    {
+        let cr = now::run("grep -o 'SOFTWARE LICENSE AGREEMENT FOR .*[a-zA-Z]' '/System/Library/CoreServices/Setup Assistant.app/Contents/Resources/en.lproj/OSXSoftwareLicense.rtf' | sed 's/SOFTWARE LICENSE AGREEMENT FOR *//'");
+        return cr.stdout.trim().to_string();
+    }
+
+    pub fn get_osx_version() -> String
+    {
+        let cr = now::run("sw_vers -productVersion");
+        return cr.stdout.trim().to_string();
+    }
 
     pub use std::os::{ * };
 }
@@ -34724,14 +34971,28 @@ pub mod path
 pub mod process
 {
     pub use std::process::{ * };
-
     use ::
     {
+        nix::{ Error, Result, libc::c_int, unistd::{ fork as nix_fork, ForkResult } },
+        os::fd::{ RawFd },
         shell::{ Shell },
         types::{ * },
     };
     /**/
     pub fn getpid() -> i32 { unsafe { getpid() } }
+
+    pub fn fork() -> Result<ForkResult> { unsafe{ nix_fork() } }
+
+    pub fn pipe() -> ::result::Result<(RawFd, RawFd), Error>
+    {
+        unsafe
+        {
+            let mut fds = ::mem::MaybeUninit::<[c_int; 2]>::uninit();
+            let res = nix::libc::pipe(fds.as_mut_ptr() as *mut c_int);
+            Error::result(res)?;
+            Ok((fds.assume_init()[0], fds.assume_init()[1]))
+        }
+    }
 }
 
 pub mod ptr
@@ -34822,6 +35083,10 @@ pub mod run
 {
     use ::
     {
+        nix::libc::SIGCONT,
+        path::{ Path },
+        regex::{ Regex },
+        shell::{ Shell },
         types::{ * },
         *,
     };
@@ -34976,7 +35241,7 @@ pub mod run
     {
         let tokens = cmd.tokens.clone();
         let mut cr = CommandResult::new();
-        let args = parsers::parser_line::tokens_to_args(&tokens);
+        let args = parsers::line::tokens_to_args(&tokens);
 
         if args.len() > 2 {
             let info = "cicada: cd: too many argument";
@@ -34984,7 +35249,7 @@ pub mod run
             return cr;
         }
 
-        let str_current_dir = tools::get_current_dir();
+        let str_current_dir = get_current_dir();
 
         let mut dir_to = if args.len() == 1 {
             let home = tools::get_user_home();
@@ -35042,7 +35307,12 @@ pub mod run
     pub fn cinfo(_sh: &mut Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
     {
         let mut info = vec![];
-        const VERSION: &str = env!("CARGO_PKG_VERSION");
+        //const VERSION: &str = env!("CARGO_PKG_VERSION");
+        const VERSION: &str = match option_env!("VERSION")
+        {
+            Some( variable ) => variable,
+            None => "1.89",
+        };
         info.push(("version", VERSION));
 
         let os_name = libs::os_type::get_os_name();
@@ -35054,11 +35324,18 @@ pub mod run
         let rcf = rcfile::get_rc_file();
         info.push(("rc-file", &rcf));
 
-        let git_hash = env!("GIT_HASH");
+        /*let git_hash = env!("GIT_HASH");
         if !git_hash.is_empty() {
             info.push(("git-commit", env!("GIT_HASH")));
-        }
-
+        }*/
+        let git_hash = match option_env!("GIT_HASH")
+        {
+            Some( variable ) => variable,
+            None => "0123456789abcdefABCDEF0123456789abcdefAB",
+        };
+        
+        info.push(("git-commit", &git_hash));
+        /*
         let git_branch = env!("GIT_BRANCH");
         let mut branch = String::new();
         if !git_branch.is_empty() {
@@ -35068,16 +35345,36 @@ pub mod run
                 branch.push_str(" (dirty)");
             }
             info.push(("git-branch", &branch));
-        }
-
+        } */
+        let git_branch = match option_env!("GIT_BRANCH")
+        {
+            Some( variable ) => variable,
+            None => "main",
+        };
+        info.push(("git-branch", &git_branch));
+        /*
         info.push(("built-with", env!("BUILD_RUSTC_VERSION")));
-        info.push(("built-at", env!("BUILD_DATE")));
+        info.push(("built-at", env!("BUILD_DATE")));*/
+        let built_with = match option_env!("BUILD_RUSTC_VERSION")
+        {
+            Some( variable ) => variable,
+            None => "1.87",
+        };
+        info.push(("built-with", &built_with));
+        
+        let built_at = match option_env!("BUILD_DATE")
+        {
+            Some( variable ) => variable,
+            None => "1.87",
+        };
+        info.push(("built-at", &built_at));
 
-        let mut lines = Vec::new();
-        for (k, v) in &info {
-            // longest key above is 12-char length
+        let mut lines = Vec::new();        
+        for (k, v) in &info
+        {
             lines.push(format!("{: >12}: {}", k, v));
         }
+
         let buffer = lines.join("\n");
         let mut cr = CommandResult::new();
         print_stdout_with_capture(&buffer, &mut cr, cl, cmd, capture);
@@ -35088,7 +35385,7 @@ pub mod run
     {
         let mut cr = CommandResult::new();
         let tokens = cmd.tokens.clone();
-        let args = parsers::parser_line::tokens_to_args(&tokens);
+        let args = parsers::line::tokens_to_args(&tokens);
         let len = args.len();
         if len == 1 {
             print_stderr_with_capture("invalid usage", &mut cr, cl, cmd, capture);
@@ -35169,7 +35466,7 @@ pub mod run
 
             for cap in re_name_ptn.captures_iter(text) {
                 let name = cap[1].to_string();
-                let token = parsers::parser_line::unquote(&cap[2]);
+                let token = parsers::line::unquote(&cap[2]);
                 let value = libs::path::expand_home(&token);
                 env::set_var(name, &value);
             }
@@ -35284,7 +35581,7 @@ pub mod run
         };
 
         let tokens = cmd.tokens.clone();
-        let args = parsers::parser_line::tokens_to_args(&tokens);
+        let args = parsers::line::tokens_to_args(&tokens);
 
         let show_usage = args.len() > 1 && (args[1] == "-h" || args[1] == "--help");
         let opt = OptMain::from_iter_safe(args);
@@ -35458,7 +35755,7 @@ pub mod run
     {
         let mut cr = CommandResult::new();
         let tokens = &cmd.tokens;
-        let args = parsers::parser_line::tokens_to_args(tokens);
+        let args = parsers::line::tokens_to_args(tokens);
         let show_usage = args.len() > 1 && (args[1] == "-h" || args[1] == "--help");
 
         let opt = OptMain::from_iter_safe(args);
@@ -35491,7 +35788,7 @@ pub mod run
     {
         let mut cr = CommandResult::new();
         let tokens = &cmd.tokens;
-        let args = parsers::parser_line::tokens_to_args(tokens);
+        let args = parsers::line::tokens_to_args(tokens);
 
         if args.len() < 2 {
             let info = "cicada: source: no file specified";
@@ -35508,7 +35805,7 @@ pub mod run
     {
         let mut cr = CommandResult::new();
         let tokens = &cmd.tokens;
-        let args = parsers::parser_line::tokens_to_args(tokens);
+        let args = parsers::line::tokens_to_args(tokens);
 
         if args.contains(&"--help".to_string()) || args.contains(&"-h".to_string()) {
             App::command().print_help().unwrap();
@@ -35807,7 +36104,7 @@ pub mod run
     {
         let mut cr = CommandResult::new();
         let tokens = cmd.tokens.clone();
-        let args = parsers::parser_line::tokens_to_args(&tokens);
+        let args = parsers::line::tokens_to_args(&tokens);
         let len = args.len();
         let subcmd = if len > 1 { &args[1] } else { "" };
 
@@ -35914,7 +36211,7 @@ pub mod run
         (fd_out, fd_err)
     }
 
-    pubfn _get_dupped_stdout_fd(cmd: &Command, cl: &CommandLine) -> RawFd
+    pub fn _get_dupped_stdout_fd(cmd: &Command, cl: &CommandLine) -> RawFd
     {
         if cl.with_pipeline() { return 1; }
 
@@ -36045,6 +36342,156 @@ pub mod run
         else { print_stdout(info, cmd, cl); }
     }
 
+    /// Run a pipeline (e.g. `echo hi | wc -l`)
+    // pub fn run_pipeline
+    pub fn pipeline
+    (
+        sh: &mut shell::Shell,
+        cl: &CommandLine,
+        tty: bool,
+        capture: bool,
+        log_cmd: bool,
+    ) -> (bool, CommandResult)
+    {
+        let mut term_given = false;
+
+        if cl.background && capture
+        {
+            println_stderr!("cicada: cannot capture output of background cmd");
+            return (term_given, CommandResult::error());
+        }
+
+        if let Some(cr) = try_run_calculator(&cl.line, capture) { return (term_given, cr); }
+        
+        if let Some(cr) = try_run_func(sh, cl, capture, log_cmd) { return (term_given, cr); }
+
+        if log_cmd { log!("run: {}", cl.line); }
+
+        let length = cl.commands.len();
+        if length == 0
+        {
+            println!("cicada: invalid command: cmds with empty length");
+            return (false, CommandResult::error());
+        }
+
+        let mut pipes = Vec::new();
+        let mut errored_pipes = false;
+        
+        for _ in 0..length - 1
+        {
+            match pipe()
+            {
+                Ok(fds) => pipes.push(fds),
+                Err(e) =>
+                {
+                    errored_pipes = true;
+                    println_stderr!("cicada: pipeline1: {}", e);
+                    break;
+                }
+            }
+        }
+
+        if errored_pipes
+        {
+            for fds in pipes
+            {
+                libs::close(fds.0);
+                libs::close(fds.1);
+            }
+
+            return (false, CommandResult::error());
+        }
+
+        if pipes.len() + 1 != length
+        {
+            println!("cicada: invalid command: unmatched pipes count");
+            return (false, CommandResult::error());
+        }
+
+        let mut pgid: i32 = 0;
+        let mut fg_pids: Vec<i32> = Vec::new();
+        let isatty = if tty { unsafe { libc::isatty(1) == 1 } } else { false };
+
+        let options = CommandOptions
+        {
+            isatty,
+            capture_output: capture,
+            background: cl.background,
+            envs: cl.envs.clone(),
+        };
+
+        let mut fds_capture_stdout = None;
+        let mut fds_capture_stderr = None;
+        
+        if capture
+        {
+            match pipe()
+            {
+                Ok(fds) => fds_capture_stdout = Some(fds),
+                Err(e) =>
+                {
+                    println_stderr!("cicada: pipeline2: {}", e);
+                    return (false, CommandResult::error());
+                }
+            }
+
+            match pipe()
+            {
+                Ok(fds) => fds_capture_stderr = Some(fds),
+                Err(e) =>
+                {
+                    if let Some(fds) = fds_capture_stdout
+                    {
+                        libs::close(fds.0);
+                        libs::close(fds.1);
+                    }
+
+                    println_stderr!("cicada: pipeline3: {}", e);
+                    return (false, CommandResult::error());
+                }
+            }
+        }
+
+        let mut cmd_result = CommandResult::new();
+
+        for i in 0..length
+        {
+            let child_id: i32 = run_single_program
+            (
+                sh,
+                cl,
+                i,
+                &options,
+                &mut pgid,
+                &mut term_given,
+                &mut cmd_result,
+                &pipes,
+                &fds_capture_stdout,
+                &fds_capture_stderr,
+            );
+
+            if child_id > 0 && !cl.background { fg_pids.push(child_id); }
+        }
+
+        if cl.is_single_and_builtin() { return (false, cmd_result); }
+
+        if cl.background
+        {
+            if let Some(job) = sh.get_job_by_gid(pgid) { println_stderr!("[{}] {}", job.id, job.gid); }
+        }
+
+        if !fg_pids.is_empty()
+        {
+            let _cr = jobc::wait_fg_job(sh, pgid, &fg_pids);
+            
+            if !capture
+            {
+                cmd_result = _cr;
+            }
+        }
+
+        (term_given, cmd_result)
+    }
 }
 
 pub mod shell
@@ -36055,6 +36502,7 @@ pub mod shell
         error::no::{ errno },
         io::{ Write },
         nix::libc::{ * },
+        os::fd::{ RawFd },
         regex::{ * },
         types::{ * },
         *,
@@ -36909,7 +37357,7 @@ pub mod shell
                 let cmd_result = match CommandLine::from_line(&cmd, sh) {
                     Ok(c) => {
                         log!("run subcmd dollar: {:?}", &cmd);
-                        let (term_given, cr) = core::run_pipeline(sh, &c, true, true, false);
+                        let (term_given, cr) = run::pipeline(sh, &c, true, true, false);
                         if term_given {
                             unsafe {
                                 let gid = libc::getpgid(0);
@@ -36960,7 +37408,7 @@ pub mod shell
                 log!("run subcmd dot1: {:?}", token);
                 let cr = match CommandLine::from_line(token, sh) {
                     Ok(c) => {
-                        let (term_given, _cr) = core::run_pipeline(sh, &c, true, true, false);
+                        let (term_given, _cr) = run::pipeline(sh, &c, true, true, false);
                         if term_given {
                             unsafe {
                                 let gid = libc::getpgid(0);
@@ -37008,7 +37456,7 @@ pub mod shell
 
                         let cr = match CommandLine::from_line(&cap[2], sh) {
                             Ok(c) => {
-                                let (term_given, _cr) = core::run_pipeline(sh, &c, true, true, false);
+                                let (term_given, _cr) = run::pipeline(sh, &c, true, true, false);
                                 if term_given {
                                     unsafe {
                                         let gid = libc::getpgid(0);
@@ -37396,333 +37844,342 @@ pub mod shell
         fds_capture_stderr: &Option<(RawFd, RawFd)>,
     ) -> i32
     {
-        let capture = options.capture_output;
-        if cl.is_single_and_builtin() {
-            if let Some(cr) = try_run_builtin(sh, cl, idx_cmd, capture) {
-                *cmd_result = cr;
-                return unsafe { libc::getpid() };
+        unsafe
+        {
+            let capture = options.capture_output;
+
+            if cl.is_single_and_builtin()
+            {
+                if let Some(cr) = try_run_builtin(sh, cl, idx_cmd, capture)
+                {
+                    *cmd_result = cr;
+                    return getpid();
+                }
+
+                println_stderr!("cicada: error when run singler builtin");
+                log!("error when run singler builtin: {:?}", cl);
+                return 1;
             }
 
-            println_stderr!("cicada: error when run singler builtin");
-            log!("error when run singler builtin: {:?}", cl);
-            return 1;
-        }
+            let pipes_count = pipes.len();
+            let mut fds_stdin = None;
+            let cmd = cl.commands.get(idx_cmd).unwrap();
 
-        let pipes_count = pipes.len();
-        let mut fds_stdin = None;
-        let cmd = cl.commands.get(idx_cmd).unwrap();
-
-        if cmd.has_here_string() {
-            match pipe() {
-                Ok(fds) => fds_stdin = Some(fds),
-                Err(e) => {
-                    println_stderr!("cicada: pipeline4: {}", e);
-                    return 1;
+            if cmd.has_here_string() {
+                match pipe() {
+                    Ok(fds) => fds_stdin = Some(fds),
+                    Err(e) => {
+                        println_stderr!("cicada: pipeline4: {}", e);
+                        return 1;
+                    }
                 }
             }
-        }
 
-        match libs::fork::fork() {
-            Ok(ForkResult::Child) => {
-                unsafe {
-                    libc::signal(libc::SIGTSTP, libc::SIG_DFL);
-                    libc::signal(libc::SIGQUIT, libc::SIG_DFL);
-                }
-                
-                if idx_cmd > 0 {
-                    for i in 0..idx_cmd - 1 {
+            match ::process::fork()
+            {
+                Ok(ForkResult::Child) =>
+                {
+                    unsafe
+                    {
+                        libc::signal(libc::SIGTSTP, libc::SIG_DFL);
+                        libc::signal(libc::SIGQUIT, libc::SIG_DFL);
+                    }
+                    
+                    if idx_cmd > 0 {
+                        for i in 0..idx_cmd - 1 {
+                            let fds = pipes[i];
+                            libs::close(fds.0);
+                            libs::close(fds.1);
+                        }
+                    }
+                    
+                    for i in idx_cmd + 1..pipes_count {
                         let fds = pipes[i];
                         libs::close(fds.0);
                         libs::close(fds.1);
                     }
-                }
-                
-                for i in idx_cmd + 1..pipes_count {
-                    let fds = pipes[i];
-                    libs::close(fds.0);
-                    libs::close(fds.1);
-                }
-                
-                if idx_cmd < pipes_count {
-                    if let Some(fds) = fds_capture_stdout {
-                        libs::close(fds.0);
-                        libs::close(fds.1);
-                    }
-                    if let Some(fds) = fds_capture_stderr {
-                        libs::close(fds.0);
-                        libs::close(fds.1);
-                    }
-                }
-
-                if idx_cmd == 0 {
-                    unsafe {
-                        let pid = libc::getpid();
-                        libc::setpgid(0, pid);
-                    }
-                } else {
-                    unsafe {
-                        libc::setpgid(0, *pgid);
-                    }
-                }
-                
-                if idx_cmd > 0 {
-                    let fds_prev = pipes[idx_cmd - 1];
-                    libs::dup2(fds_prev.0, 0);
-                    libs::close(fds_prev.0);
-                    libs::close(fds_prev.1);
-                }
-                if idx_cmd < pipes_count {
-                    let fds = pipes[idx_cmd];
-                    libs::dup2(fds.1, 1);
-                    libs::close(fds.1);
-                    libs::close(fds.0);
-                }
-
-                if cmd.has_redirect_from() {
-                    if let Some(redirect_from) = &cmd.redirect_from {
-                        let fd = tools::get_fd_from_file(&redirect_from.clone().1);
-                        if fd == -1 {
-                            process::exit(1);
+                    
+                    if idx_cmd < pipes_count {
+                        if let Some(fds) = fds_capture_stdout {
+                            libs::close(fds.0);
+                            libs::close(fds.1);
                         }
-
-                        libs::dup2(fd, 0);
-                        libs::close(fd);
-                    }
-                }
-
-                if cmd.has_here_string() {
-                    if let Some(fds) = fds_stdin {
-                        libs::close(fds.1);
-                        libs::dup2(fds.0, 0);
-                        libs::close(fds.0);
-                    }
-                }
-
-                let mut stdout_redirected = false;
-                let mut stderr_redirected = false;
-                for item in &cmd.redirects_to {
-                    let from_ = &item.0;
-                    let op_ = &item.1;
-                    let to_ = &item.2;
-                    if to_ == "&1" && from_ == "2" {
-                        if idx_cmd < pipes_count {
-                            libs::dup2(1, 2);
-                        } else if !options.capture_output {
-                            let fd = libs::dup(1);
-                            if fd == -1 {
-                                println_stderr!("cicada: dup error");
-                                process::exit(1);
-                            }
-                            libs::dup2(fd, 2);
-                        } else {
-                            
+                        if let Some(fds) = fds_capture_stderr {
+                            libs::close(fds.0);
+                            libs::close(fds.1);
                         }
-                    } else if to_ == "&2" && from_ == "1" {
-                        if idx_cmd < pipes_count || !options.capture_output {
-                            let fd = libs::dup(2);
-                            if fd == -1 {
-                                println_stderr!("cicada: dup error");
-                                process::exit(1);
-                            }
-                            libs::dup2(fd, 1);
-                        } else {
-                            
+                    }
+
+                    if idx_cmd == 0 {
+                        unsafe {
+                            let pid = libc::getpid();
+                            libc::setpgid(0, pid);
                         }
                     } else {
-                        let append = op_ == ">>";
-                        match tools::create_raw_fd_from_file(to_, append) {
-                            Ok(fd) => {
-                                if fd == -1 {
-                                    println_stderr!("cicada: fork: fd error");
-                                    process::exit(1);
-                                }
+                        unsafe {
+                            libc::setpgid(0, *pgid);
+                        }
+                    }
+                    
+                    if idx_cmd > 0 {
+                        let fds_prev = pipes[idx_cmd - 1];
+                        libs::dup2(fds_prev.0, 0);
+                        libs::close(fds_prev.0);
+                        libs::close(fds_prev.1);
+                    }
+                    if idx_cmd < pipes_count {
+                        let fds = pipes[idx_cmd];
+                        libs::dup2(fds.1, 1);
+                        libs::close(fds.1);
+                        libs::close(fds.0);
+                    }
 
-                                if from_ == "1" {
-                                    libs::dup2(fd, 1);
-                                    stdout_redirected = true;
-                                } else {
-                                    libs::dup2(fd, 2);
-                                    stderr_redirected = true;
-                                }
-                            }
-                            Err(e) => {
-                                println_stderr!("cicada: fork: {}", e);
+                    if cmd.has_redirect_from() {
+                        if let Some(redirect_from) = &cmd.redirect_from {
+                            let fd = tools::get_fd_from_file(&redirect_from.clone().1);
+                            if fd == -1 {
                                 process::exit(1);
                             }
+
+                            libs::dup2(fd, 0);
+                            libs::close(fd);
                         }
                     }
-                }
-                
-                if idx_cmd == pipes_count && options.capture_output {
-                    if !stdout_redirected {
-                        if let Some(fds) = fds_capture_stdout {
-                            libs::close(fds.0);
-                            libs::dup2(fds.1, 1);
-                            libs::close(fds.1);
-                        }
-                    }
-                    if !stderr_redirected {
-                        if let Some(fds) = fds_capture_stderr {
-                            libs::close(fds.0);
-                            libs::dup2(fds.1, 2);
-                            libs::close(fds.1);
-                        }
-                    }
-                }
 
-                if cmd.is_builtin() {
-                    if let Some(status) = try_run_builtin_in_subprocess(sh, cl, idx_cmd, capture) {
-                        process::exit(status);
-                    }
-                }
-                
-                let mut c_envs: Vec<_> = env::vars()
-                    .map(|(k, v)| {
-                        CString::new(format!("{}={}", k, v).as_str()).expect("CString error")
-                    })
-                    .collect();
-                for (key, value) in cl.envs.iter() {
-                    c_envs.push(
-                        CString::new(format!("{}={}", key, value).as_str()).expect("CString error"),
-                    );
-                }
-
-                let program = &cmd.tokens[0].1;
-                let path = if program.contains('/') {
-                    program.clone()
-                } else {
-                    libs::path::find_file_in_path(program, true)
-                };
-                if path.is_empty() {
-                    println_stderr!("cicada: {}: command not found", program);
-                    process::exit(127);
-                }
-
-                let c_program = CString::new(path.as_str()).expect("CString::new failed");
-                let c_args: Vec<_> = cmd
-                    .tokens
-                    .iter()
-                    .map(|x| CString::new(x.1.as_str()).expect("CString error"))
-                    .collect();
-
-                let c_args: Vec<&CStr> = c_args.iter().map(|x| x.as_c_str()).collect();
-                let c_envs: Vec<&CStr> = c_envs.iter().map(|x| x.as_c_str()).collect();
-                match execve(&c_program, &c_args, &c_envs) {
-                    Ok(_) => {}
-                    Err(e) => match e {
-                        nix::Error::ENOEXEC => {
-                            println_stderr!("cicada: {}: exec format error (ENOEXEC)", program);
-                        }
-                        nix::Error::ENOENT => {
-                            println_stderr!("cicada: {}: file does not exist", program);
-                        }
-                        nix::Error::EACCES => {
-                            println_stderr!("cicada: {}: Permission denied", program);
-                        }
-                        _ => {
-                            println_stderr!("cicada: {}: {:?}", program, e);
-                        }
-                    },
-                }
-
-                process::exit(1);
-            }
-            Ok(ForkResult::Parent { child, .. }) => {
-                let pid: i32 = child.into();
-                if idx_cmd == 0 {
-                    *pgid = pid;
-                    unsafe {
-                        if cfg!(target_os = "macos") {
-                            loop {
-                                let _pgid = libc::getpgid(pid);
-                                if _pgid == pid {
-                                    break;
-                                }
-                            }
-                        }
-
-                        if sh.has_terminal
-                            && options.isatty
-                            && !cl.background
-                        {
-                            *term_given = shell::give_terminal_to(pid);
-                        }
-                    }
-                }
-
-                if options.isatty && !options.capture_output {
-                    let _cmd = parsers::parser_line::tokens_to_line(&cmd.tokens);
-                    sh.insert_job(*pgid, pid, &_cmd, "Running", cl.background);
-                }
-
-                if let Some(redirect_from) = &cmd.redirect_from {
-                    if redirect_from.0 == "<<<" {
+                    if cmd.has_here_string() {
                         if let Some(fds) = fds_stdin {
-                            unsafe {
+                            libs::close(fds.1);
+                            libs::dup2(fds.0, 0);
+                            libs::close(fds.0);
+                        }
+                    }
+
+                    let mut stdout_redirected = false;
+                    let mut stderr_redirected = false;
+                    for item in &cmd.redirects_to {
+                        let from_ = &item.0;
+                        let op_ = &item.1;
+                        let to_ = &item.2;
+                        if to_ == "&1" && from_ == "2" {
+                            if idx_cmd < pipes_count {
+                                libs::dup2(1, 2);
+                            } else if !options.capture_output {
+                                let fd = libs::dup(1);
+                                if fd == -1 {
+                                    println_stderr!("cicada: dup error");
+                                    process::exit(1);
+                                }
+                                libs::dup2(fd, 2);
+                            } else {
+                                
+                            }
+                        } else if to_ == "&2" && from_ == "1" {
+                            if idx_cmd < pipes_count || !options.capture_output {
+                                let fd = libs::dup(2);
+                                if fd == -1 {
+                                    println_stderr!("cicada: dup error");
+                                    process::exit(1);
+                                }
+                                libs::dup2(fd, 1);
+                            } else {
+                                
+                            }
+                        } else {
+                            let append = op_ == ">>";
+                            match tools::create_raw_fd_from_file(to_, append) {
+                                Ok(fd) => {
+                                    if fd == -1 {
+                                        println_stderr!("cicada: fork: fd error");
+                                        process::exit(1);
+                                    }
+
+                                    if from_ == "1" {
+                                        libs::dup2(fd, 1);
+                                        stdout_redirected = true;
+                                    } else {
+                                        libs::dup2(fd, 2);
+                                        stderr_redirected = true;
+                                    }
+                                }
+                                Err(e) => {
+                                    println_stderr!("cicada: fork: {}", e);
+                                    process::exit(1);
+                                }
+                            }
+                        }
+                    }
+                    
+                    if idx_cmd == pipes_count && options.capture_output {
+                        if !stdout_redirected {
+                            if let Some(fds) = fds_capture_stdout {
                                 libs::close(fds.0);
-
-                                let mut f = File::from_raw_fd(fds.1);
-                                match f.write_all(redirect_from.1.clone().as_bytes()) {
-                                    Ok(_) => {}
-                                    Err(e) => println_stderr!("cicada: write_all: {}", e),
-                                }
-                                match f.write_all(b"\n") {
-                                    Ok(_) => {}
-                                    Err(e) => println_stderr!("cicada: write_all: {}", e),
-                                }
+                                libs::dup2(fds.1, 1);
+                                libs::close(fds.1);
                             }
                         }
-                    }
-                }
-                
-                if idx_cmd < pipes_count {
-                    let fds = pipes[idx_cmd];
-                    libs::close(fds.1);
-                }
-                if idx_cmd > 0 {
-                    let fds = pipes[idx_cmd - 1];
-                    libs::close(fds.0);
-                }
-
-                if idx_cmd == pipes_count && options.capture_output {
-                    let mut s_out = String::new();
-                    let mut s_err = String::new();
-
-                    unsafe {
-                        if let Some(fds) = fds_capture_stdout {
-                            libs::close(fds.1);
-
-                            let mut f = File::from_raw_fd(fds.0);
-                            match f.read_to_string(&mut s_out) {
-                                Ok(_) => {}
-                                Err(e) => println_stderr!("cicada: readstr: {}", e),
-                            }
-                        }
-                        if let Some(fds) = fds_capture_stderr {
-                            libs::close(fds.1);
-                            let mut f_err = File::from_raw_fd(fds.0);
-                            match f_err.read_to_string(&mut s_err) {
-                                Ok(_) => {}
-                                Err(e) => println_stderr!("cicada: readstr: {}", e),
+                        if !stderr_redirected {
+                            if let Some(fds) = fds_capture_stderr {
+                                libs::close(fds.0);
+                                libs::dup2(fds.1, 2);
+                                libs::close(fds.1);
                             }
                         }
                     }
 
-                    *cmd_result = CommandResult {
-                        gid: *pgid,
-                        status: 0,
-                        stdout: s_out.clone(),
-                        stderr: s_err.clone(),
+                    if cmd.is_builtin() {
+                        if let Some(status) = try_run_builtin_in_subprocess(sh, cl, idx_cmd, capture) {
+                            process::exit(status);
+                        }
+                    }
+                    
+                    let mut c_envs: Vec<_> = env::vars()
+                        .map(|(k, v)| {
+                            CString::new(format!("{}={}", k, v).as_str()).expect("CString error")
+                        })
+                        .collect();
+                    for (key, value) in cl.envs.iter() {
+                        c_envs.push(
+                            CString::new(format!("{}={}", key, value).as_str()).expect("CString error"),
+                        );
+                    }
+
+                    let program = &cmd.tokens[0].1;
+                    let path = if program.contains('/') {
+                        program.clone()
+                    } else {
+                        libs::path::find_file_in_path(program, true)
                     };
+                    if path.is_empty() {
+                        println_stderr!("cicada: {}: command not found", program);
+                        process::exit(127);
+                    }
+
+                    let c_program = CString::new(path.as_str()).expect("CString::new failed");
+                    let c_args: Vec<_> = cmd
+                        .tokens
+                        .iter()
+                        .map(|x| CString::new(x.1.as_str()).expect("CString error"))
+                        .collect();
+
+                    let c_args: Vec<&CStr> = c_args.iter().map(|x| x.as_c_str()).collect();
+                    let c_envs: Vec<&CStr> = c_envs.iter().map(|x| x.as_c_str()).collect();
+                    match execve(&c_program, &c_args, &c_envs) {
+                        Ok(_) => {}
+                        Err(e) => match e {
+                            nix::Error::ENOEXEC => {
+                                println_stderr!("cicada: {}: exec format error (ENOEXEC)", program);
+                            }
+                            nix::Error::ENOENT => {
+                                println_stderr!("cicada: {}: file does not exist", program);
+                            }
+                            nix::Error::EACCES => {
+                                println_stderr!("cicada: {}: Permission denied", program);
+                            }
+                            _ => {
+                                println_stderr!("cicada: {}: {:?}", program, e);
+                            }
+                        },
+                    }
+
+                    process::exit(1);
+                }
+                Ok(ForkResult::Parent { child, .. }) => {
+                    let pid: i32 = child.into();
+                    if idx_cmd == 0 {
+                        *pgid = pid;
+                        unsafe {
+                            if cfg!(target_os = "macos") {
+                                loop {
+                                    let _pgid = libc::getpgid(pid);
+                                    if _pgid == pid {
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if sh.has_terminal
+                                && options.isatty
+                                && !cl.background
+                            {
+                                *term_given = shell::give_terminal_to(pid);
+                            }
+                        }
+                    }
+
+                    if options.isatty && !options.capture_output {
+                        let _cmd = parsers::line::tokens_to_line(&cmd.tokens);
+                        sh.insert_job(*pgid, pid, &_cmd, "Running", cl.background);
+                    }
+
+                    if let Some(redirect_from) = &cmd.redirect_from {
+                        if redirect_from.0 == "<<<" {
+                            if let Some(fds) = fds_stdin {
+                                unsafe {
+                                    libs::close(fds.0);
+
+                                    let mut f = File::from_raw_fd(fds.1);
+                                    match f.write_all(redirect_from.1.clone().as_bytes()) {
+                                        Ok(_) => {}
+                                        Err(e) => println_stderr!("cicada: write_all: {}", e),
+                                    }
+                                    match f.write_all(b"\n") {
+                                        Ok(_) => {}
+                                        Err(e) => println_stderr!("cicada: write_all: {}", e),
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    if idx_cmd < pipes_count {
+                        let fds = pipes[idx_cmd];
+                        libs::close(fds.1);
+                    }
+                    if idx_cmd > 0 {
+                        let fds = pipes[idx_cmd - 1];
+                        libs::close(fds.0);
+                    }
+
+                    if idx_cmd == pipes_count && options.capture_output {
+                        let mut s_out = String::new();
+                        let mut s_err = String::new();
+
+                        unsafe {
+                            if let Some(fds) = fds_capture_stdout {
+                                libs::close(fds.1);
+
+                                let mut f = File::from_raw_fd(fds.0);
+                                match f.read_to_string(&mut s_out) {
+                                    Ok(_) => {}
+                                    Err(e) => println_stderr!("cicada: readstr: {}", e),
+                                }
+                            }
+                            if let Some(fds) = fds_capture_stderr {
+                                libs::close(fds.1);
+                                let mut f_err = File::from_raw_fd(fds.0);
+                                match f_err.read_to_string(&mut s_err) {
+                                    Ok(_) => {}
+                                    Err(e) => println_stderr!("cicada: readstr: {}", e),
+                                }
+                            }
+                        }
+
+                        *cmd_result = CommandResult {
+                            gid: *pgid,
+                            status: 0,
+                            stdout: s_out.clone(),
+                            stderr: s_err.clone(),
+                        };
+                    }
+
+                    pid
                 }
 
-                pid
-            }
-
-            Err(_) => {
-                println_stderr!("Fork failed");
-                *cmd_result = CommandResult::error();
-                0
+                Err(_) => {
+                    println_stderr!("Fork failed");
+                    *cmd_result = CommandResult::error();
+                    0
+                }
             }
         }
     }
@@ -37735,65 +38192,74 @@ pub mod shell
         log_cmd: bool,
     ) -> Option<CommandResult> 
     {
-        if cl.is_empty() {
-            return None;
-        }
+        if cl.is_empty() { return None; }
 
         let command = &cl.commands[0];
-        if let Some(func_body) = sh.get_func(&command.tokens[0].1) {
+        
+        if let Some(func_body) = sh.get_func(&command.tokens[0].1)
+        {
             let mut args = vec!["cicada".to_string()];
-            for token in &command.tokens {
+
+            for token in &command.tokens
+            {
                 args.push(token.1.to_string());
             }
-            if log_cmd {
-                log!("run func: {:?}", &args);
-            }
+            
+            if log_cmd { log!("run func: {:?}", &args); }
+
             let cr_list = scripting::run_lines(sh, &func_body, &args, capture);
             let mut stdout = String::new();
             let mut stderr = String::new();
-            for cr in cr_list {
+
+            for cr in cr_list
+            {
                 stdout.push_str(cr.stdout.trim());
                 stdout.push(' ');
                 stderr.push_str(cr.stderr.trim());
                 stderr.push(' ');
             }
+
             let mut cr = CommandResult::new();
             cr.stdout = stdout;
             cr.stderr = stderr;
             return Some(cr);
         }
+
         None
     }
 
     pub fn try_run_calculator(line: &str, capture: bool) -> Option<CommandResult> 
     {
-        if tools::is_arithmetic(line) {
-            match run_calculator(line) {
-                Ok(result) => {
+        if is::arithmetic(line)
+        {
+            match calculator(line) 
+            {
+                Ok(result) =>
+                {
                     let mut cr = CommandResult::new();
-                    if capture {
-                        cr.stdout = result.clone();
-                    } else {
-                        println!("{}", result);
-                    }
+
+                    if capture { cr.stdout = result.clone(); } else { println!("{}", result); }
+
                     return Some(cr);
                 }
-                Err(e) => {
+
+                Err(e) =>
+                {
                     let mut cr = CommandResult::from_status(0, 1);
-                    if capture {
-                        cr.stderr = e.to_string();
-                    } else {
-                        println_stderr!("cicada: calculator: {}", e);
-                    }
+
+                    if capture { cr.stderr = e.to_string(); } else { println_stderr!("cicada: calculator: {}", e); }
+
                     return Some(cr);
                 }
             }
         }
+
         None
     }
 
     pub fn calculator(line: &str) -> Result<String, &str>
     {
+        /*
         let parse_result = calculator::calculate(line);
         match parse_result {
             Ok(mut calc) => {
@@ -37808,7 +38274,8 @@ pub mod shell
             Err(_) => {
                 Err("syntax error")
             }
-        }
+        } */
+        Ok( String::new() )
     }
 }
 
@@ -51414,4 +51881,4 @@ fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 51417
+// 51884
