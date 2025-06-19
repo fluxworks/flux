@@ -6630,6 +6630,21 @@ pub mod fmt
 pub mod fs
 {
     pub use std::fs::{ * };
+
+    pub fn close(fd: i32)
+    {
+        unsafe { nix::libc::close(fd); }
+    }
+
+    pub fn dup(fd: i32) -> i32
+    {
+        unsafe { nix::libc::dup(fd) }
+    }
+
+    pub fn dup2(src: i32, dst: i32)
+    {
+        unsafe { nix::libc::dup2(src, dst); }
+    }
 }
 
 pub mod hash
@@ -6652,16 +6667,18 @@ pub mod history
     pub fn initialize(rl: &mut Interface<DefaultTerminal>)
     {
         let mut hist_size: usize = 99999;
+        
         if let Ok(x) = env::var("HISTORY_SIZE")
         {
             if let Ok(y) = x.parse::<usize>() {
                 hist_size = y;
             }
         }
+
         rl.set_history_size(hist_size);
 
-        let history_table = get_history_table();
-        let hfile = get_history_file();
+        let history_table = table();
+        let hfile = file();
 
         if !Path::new(&hfile).exists() {
             init_db(&hfile, &history_table);
@@ -6711,8 +6728,8 @@ pub mod history
             rl.add_history(inp.trim().to_string());
         }
     }
-
-    pub fn get_history_file() -> String 
+    // pub fn get_history_file() -> String 
+    pub fn file() -> String 
     {
         if let Ok(hfile) = env::var("HISTORY_FILE") {
             hfile
@@ -6723,8 +6740,8 @@ pub mod history
             format!("{}/{}", home, ".local/share/cicada/history.sqlite")
         }
     }
-
-    pub fn get_history_table() -> String 
+    // pub fn get_history_table() -> String 
+    pub fn table() -> String 
     {
         if let Ok(hfile) = env::var("HISTORY_TABLE") {
             hfile
@@ -6732,27 +6749,38 @@ pub mod history
             String::from("cicada_history")
         }
     }
-
-    pub fn delete_duplicated_histories() 
+    // pub fn delete_duplicated_histories() 
+    pub fn dedupe() 
     {
-        let hfile = get_history_file();
-        let history_table = get_history_table();
-        let conn = match Conn::open(&hfile) {
+        let hfile = file();
+        let history_table = table();
+        let conn = match Conn::open(&hfile)
+        {
             Ok(x) => x,
             Err(e) => {
                 println_stderr!("cicada: history: conn error: {}", e);
                 return;
             }
         };
-        let sql = format!(
-            "DELETE FROM {} WHERE rowid NOT IN (
-            SELECT MAX(rowid) FROM {} GROUP BY inp)",
+        
+        let sql = format!
+        (
+            r#"
+            DELETE FROM {} WHERE rowid NOT IN
+            (
+            SELECT MAX(rowid) FROM {} GROUP BY inp
+            )"#,
             history_table, history_table
         );
-        match conn.execute(&sql, []) {
+        
+        match conn.execute(&sql, [])
+        {
             Ok(_) => {}
-            Err(e) => match e {
-                SqliteFailure(ee, msg) => {
+            
+            Err(e) => match e
+            {
+                SqliteFailure(ee, msg) =>
+                {
                     if ee.extended_code == 5 {
                         log!(
                             "failed to delete dup histories: {}",
@@ -6766,29 +6794,36 @@ pub mod history
                         &msg
                     );
                 }
-                _ => {
+
+                _ =>
+                {
                     println_stderr!("cicada: history: delete dup error: {}", e);
                 }
             },
         }
     }
-
-    pub fn add_raw(sh: &shell::Shell, line: &str, status: i32, tsb: f64, tse: f64)
+    // pub fn add_raw(sh: &shell::Shell, line: &str, status: i32, tsb: f64, tse: f64)
+    pub fn insert(sh: &shell::Shell, line: &str, status: i32, tsb: f64, tse: f64)
     {
-        let hfile = get_history_file();
-        let history_table = get_history_table();
-        if !Path::new(&hfile).exists() {
+        let hfile = file();
+        let history_table = table();
+        
+        if !Path::new(&hfile).exists()
+        {
             init_db(&hfile, &history_table);
         }
 
-        let conn = match Conn::open(&hfile) {
+        let conn = match Conn::open(&hfile)
+        {
             Ok(x) => x,
             Err(e) => {
                 println_stderr!("cicada: history: conn error: {}", e);
                 return;
             }
         };
-        let sql = format!(
+
+        let sql = format!
+        (
             "INSERT INTO \
             {} (inp, rtn, tsb, tse, sessionid, info) \
             VALUES('{}', {}, {}, {}, '{}', 'dir:{}|');",
@@ -6800,7 +6835,9 @@ pub mod history
             sh.session_id,
             sh.current_dir,
         );
-        match conn.execute(&sql, []) {
+
+        match conn.execute(&sql, [])
+        {
             Ok(_) => {}
             Err(e) => println_stderr!("cicada: history: save error: {}", e),
         }
@@ -6811,14 +6848,14 @@ pub mod history
         add_raw(sh, line, status, tsb, tse);
         rl.add_history(line.to_string());
     }
-
-    pub fn add_history(sh: &Shell, ts: f64, input: &str) 
+    // pub fn add_history(sh: &Shell, ts: f64, input: &str)
+    pub fn enter(sh: &Shell, ts: f64, input: &str)
     {
         let (tsb, tse) = (ts, ts + 1.0);
         add_raw(sh, input, 0, tsb, tse);
     }
-
-    pub fn list_current_history(sh: &Shell, conn: &Conn, opt: &OptMain) -> (String, String)
+    // pub fn list_current_history(sh: &Shell, conn: &Conn, opt: &OptMain) -> (String, String)
+    pub fn list(sh: &Shell, conn: &Conn, opt: &OptMain) -> (String, String)
     {
         let mut result_stderr = String::new();
         let result_stdout = String::new();
@@ -6861,6 +6898,7 @@ pub mod history
         };
 
         let mut lines = Vec::new();
+
         loop 
         {
             match rows.next() 
@@ -6898,7 +6936,7 @@ pub mod history
                                     return (result_stdout, result_stderr);
                                 }
                             };
-                            let dt = time::DateTime::from_timestamp(tsb);
+                            let dt = DateTime::from_timestamp(tsb);
                             lines.push(format!("{}: {}: {}", row_id, dt, inp));
                         } else {
                             lines.push(format!("{}: {}", row_id, inp));
@@ -6923,8 +6961,8 @@ pub mod history
 
         (buffer, result_stderr)
     }
-
-    pub fn delete_history_item(conn: &Conn, rowid: usize) -> bool
+    // pub fn delete_history_item(conn: &Conn, rowid: usize) -> bool
+    pub fn delete(conn: &Conn, rowid: usize) -> bool
     {
         let history_table = history::get_history_table();
         let sql = format!("DELETE from {} where rowid = {}", history_table, rowid);
@@ -7156,1739 +7194,7 @@ pub mod is
 libc */
 pub mod libc
 {
-    //! libc - Raw FFI bindings to platforms' system libraries
-    pub mod primitives
-    {
-        //! This module contains type aliases for C's platform-specific types and fixed-width integer types.
-        use ::
-        {
-            *,
-        };
-
-        pub type c_schar = i8;
-        pub type c_uchar = u8;
-        pub type c_short = i16;
-        pub type c_ushort = u16;
-
-        pub type c_longlong = i64;
-        pub type c_ulonglong = u64;
-
-        pub type c_float = f32;
-        pub type c_double = f64;
-        
-        pub type c_char = i8;
-        
-        pub type c_int = i32;
-        pub type c_uint = u32;
-
-        pub type c_long = i32;
-        pub type c_ulong = u32;
-
-    }  pub use self::primitives::{ * };
-    
-    pub mod unix
-    {
-        use ::
-        {
-            ffi::{ * },
-            *,
-        };
-        
-        pub type intmax_t = i64;
-        pub type uintmax_t = u64;
-
-        pub type size_t = usize;
-        pub type ptrdiff_t = isize;
-        pub type intptr_t = isize;
-        pub type uintptr_t = usize;
-        pub type ssize_t = isize;
-
-        pub type pid_t = i32;
-        pub type in_addr_t = u32;
-        pub type in_port_t = u16;
-        pub type sighandler_t = size_t;
-        pub type cc_t = c_uchar;
-        pub type tcflag_t = c_uint;
-        
-        pub type uid_t = u32;
-        pub type gid_t = u32;
-
-        pub const NCCS: usize = 32;
-
-        
-        pub const STDIN_FILENO: c_int = 0;
-        pub const STDOUT_FILENO: c_int = 1;
-        pub const STDERR_FILENO: c_int = 2;
-        
-        pub const TIOCGWINSZ: c_int = 0x5401;
-        pub const TIOCSWINSZ: c_int = 0x5402;
-        pub const TIOCLINUX: c_int = 0x5403;
-        pub const TIOCGPGRP: c_int = 0x540f;
-        pub const TIOCSPGRP: c_int = 0x5410;
-
-        pub const _SC_GETPW_R_SIZE_MAX: c_int = 51;
-        
-        #[repr(C)]
-        pub struct passwd
-        {
-            pub pw_name: *mut c_char,
-            pub pw_passwd: *mut c_char,
-            pub pw_uid: uid_t,
-            pub pw_gid: gid_t,
-            pub pw_gecos: *mut c_char,
-            pub pw_dir: *mut c_char,
-            pub pw_shell: *mut c_char,
-        }
-
-        extern "C"
-        {
-            pub fn ioctl( fd:c_int, request:c_int, ... ) -> c_int;
-            pub fn sysconf( name:c_int ) -> c_long;
-            pub fn getopt(argc: c_int, argv: *const *mut c_char, optstr: *const c_char) -> c_int;
-            pub fn getpgid(pid: pid_t) -> pid_t;
-            pub fn getpgrp() -> pid_t;
-            pub fn getpid() -> pid_t;
-            pub fn getppid() -> pid_t;
-            pub fn getuid() -> uid_t;
-            pub fn isatty(fd: c_int) -> c_int;
-            pub fn getpwuid_r
-            (
-                uid: uid_t,
-                pwd: *mut passwd,
-                buf: *mut c_char,
-                buflen: size_t,
-                result: *mut *mut passwd,
-            ) -> c_int;
-        }
-
-        pub struct termios
-        {
-            pub c_iflag: tcflag_t,
-            pub c_oflag: tcflag_t,
-            pub c_cflag: tcflag_t,
-            pub c_lflag: tcflag_t,
-            pub c_line: cc_t,
-            pub c_cc: [cc_t; NCCS],
-        }
-
-    } #[cfg(unix)] pub use self::unix::*;
-
-    pub mod windows
-    {
-        use ::
-        {
-            ffi::{ OsStr },
-            os::
-            {
-                raw::{ c_void },
-            },
-            *,
-        };
-
-        pub mod constants
-        {
-            use super::{ * };
-
-            pub const S_OK: HRESULT = 0;
-            pub const S_FALSE: HRESULT = 1;
-            pub const MAX_PATH: usize = 260;
-            pub const FALSE: BOOL = 0;
-            pub const TRUE: BOOL = 1;
-            pub const INFINITE: DWORD = 0xFFFFFFFF;            
-            pub const RIGHT_ALT_PRESSED: DWORD = 0x0001;
-            pub const LEFT_ALT_PRESSED: DWORD = 0x0002;
-            pub const RIGHT_CTRL_PRESSED: DWORD = 0x0004;
-            pub const LEFT_CTRL_PRESSED: DWORD = 0x0008;
-            pub const SHIFT_PRESSED: DWORD = 0x0010;
-            pub const NUMLOCK_ON: DWORD = 0x0020;
-            pub const SCROLLLOCK_ON: DWORD = 0x0040;
-            pub const CAPSLOCK_ON: DWORD = 0x0080;
-            pub const ENHANCED_KEY: DWORD = 0x0100;
-            pub const NLS_DBCSCHAR: DWORD = 0x00010000;
-            pub const NLS_ALPHANUMERIC: DWORD = 0x00000000;
-            pub const NLS_KATAKANA: DWORD = 0x00020000;
-            pub const NLS_HIRAGANA: DWORD = 0x00040000;
-            pub const NLS_ROMAN: DWORD = 0x00400000;
-            pub const NLS_IME_CONVERSION: DWORD = 0x00800000;
-            pub const NLS_IME_DISABLE: DWORD = 0x20000000;
-            pub const CTRL_C_EVENT: DWORD = 0;
-            pub const CTRL_BREAK_EVENT: DWORD = 1;
-            pub const CTRL_CLOSE_EVENT: DWORD = 2;
-            pub const CTRL_LOGOFF_EVENT: DWORD = 5;
-            pub const CTRL_SHUTDOWN_EVENT: DWORD = 6;
-            pub const ENABLE_PROCESSED_INPUT: DWORD = 0x0001;
-            pub const ENABLE_LINE_INPUT: DWORD = 0x0002;
-            pub const ENABLE_ECHO_INPUT: DWORD = 0x0004;
-            pub const ENABLE_WINDOW_INPUT: DWORD = 0x0008;
-            pub const ENABLE_MOUSE_INPUT: DWORD = 0x0010;
-            pub const ENABLE_INSERT_MODE: DWORD = 0x0020;
-            pub const ENABLE_QUICK_EDIT_MODE: DWORD = 0x0040;
-            pub const ENABLE_EXTENDED_FLAGS: DWORD = 0x0080;
-            pub const ENABLE_AUTO_POSITION: DWORD = 0x0100;
-            pub const ENABLE_VIRTUAL_TERMINAL_INPUT: DWORD = 0x0200;
-            pub const ENABLE_PROCESSED_OUTPUT: DWORD = 0x0001;
-            pub const ENABLE_WRAP_AT_EOL_OUTPUT: DWORD = 0x0002;
-            pub const ENABLE_VIRTUAL_TERMINAL_PROCESSING: DWORD = 0x0004;
-            pub const DISABLE_NEWLINE_AUTO_RETURN: DWORD = 0x0008;
-            pub const ENABLE_LVB_GRID_WORLDWIDE: DWORD = 0x0010;
-            pub const MAXIMUM_PROC_PER_GROUP: UCHAR = 64;
-            pub const MAXIMUM_PROCESSORS: UCHAR = MAXIMUM_PROC_PER_GROUP;
-            pub const OBJ_HANDLE_TAGBITS: usize = 0x00000003;
-            pub const SYSTEM_CACHE_ALIGNMENT_SIZE: usize = 128;
-            pub const UCSCHAR_INVALID_CHARACTER: UCSCHAR = 0xffffffff;
-            pub const MIN_UCSCHAR: UCSCHAR = 0;
-            pub const MAX_UCSCHAR: UCSCHAR = 0x0010FFFF;
-            pub const WAIT_TIMEOUT: DWORD = 258;
-            pub const FILE_SHARE_READ: DWORD = 0x00000001;
-            pub const FILE_SHARE_WRITE: DWORD = 0x00000002;
-            pub const FILE_SHARE_DELETE: DWORD = 0x00000004;
-            pub const CONSOLE_TEXTMODE_BUFFER: DWORD = 1;
-            pub const DELETE: DWORD = 0x00010000;
-            pub const READ_CONTROL: DWORD = 0x00020000;
-            pub const WRITE_DAC: DWORD = 0x00040000;
-            pub const WRITE_OWNER: DWORD = 0x00080000;
-            pub const SYNCHRONIZE: DWORD = 0x00100000;
-            pub const STANDARD_RIGHTS_REQUIRED: DWORD = 0x000F0000;
-            pub const STANDARD_RIGHTS_READ: DWORD = READ_CONTROL;
-            pub const STANDARD_RIGHTS_WRITE: DWORD = READ_CONTROL;
-            pub const STANDARD_RIGHTS_EXECUTE: DWORD = READ_CONTROL;
-            pub const STANDARD_RIGHTS_ALL: DWORD = 0x001F0000;
-            pub const SPECIFIC_RIGHTS_ALL: DWORD = 0x0000FFFF;
-            pub const ACCESS_SYSTEM_SECURITY: DWORD = 0x01000000;
-            pub const MAXIMUM_ALLOWED: DWORD = 0x02000000;
-            pub const GENERIC_READ: DWORD = 0x80000000;
-            pub const GENERIC_WRITE: DWORD = 0x40000000;
-            pub const GENERIC_EXECUTE: DWORD = 0x20000000;
-            pub const GENERIC_ALL: DWORD = 0x10000000;
-            pub const STD_INPUT_HANDLE: DWORD = -10i32 as u32;
-            pub const STD_OUTPUT_HANDLE: DWORD = -11i32 as u32;
-            pub const STD_ERROR_HANDLE: DWORD = -12i32 as u32;
-            pub const FROM_LEFT_1ST_BUTTON_PRESSED: DWORD = 0x0001;
-            pub const RIGHTMOST_BUTTON_PRESSED: DWORD = 0x0002;
-            pub const FROM_LEFT_2ND_BUTTON_PRESSED: DWORD = 0x0004;
-            pub const FROM_LEFT_3RD_BUTTON_PRESSED: DWORD = 0x0008;
-            pub const FROM_LEFT_4TH_BUTTON_PRESSED: DWORD = 0x0010;
-            pub const MOUSE_MOVED: DWORD = 0x0001;
-            pub const DOUBLE_CLICK: DWORD = 0x0002;
-            pub const MOUSE_WHEELED: DWORD = 0x0004;
-            pub const MOUSE_HWHEELED: DWORD = 0x0008;
-            pub const VK_LBUTTON: c_int = 0x01;
-            pub const VK_RBUTTON: c_int = 0x02;
-            pub const VK_CANCEL: c_int = 0x03;
-            pub const VK_MBUTTON: c_int = 0x04;
-            pub const VK_XBUTTON1: c_int = 0x05;
-            pub const VK_XBUTTON2: c_int = 0x06;
-            pub const VK_BACK: c_int = 0x08;
-            pub const VK_TAB: c_int = 0x09;
-            pub const VK_CLEAR: c_int = 0x0C;
-            pub const VK_RETURN: c_int = 0x0D;
-            pub const VK_SHIFT: c_int = 0x10;
-            pub const VK_CONTROL: c_int = 0x11;
-            pub const VK_MENU: c_int = 0x12;
-            pub const VK_PAUSE: c_int = 0x13;
-            pub const VK_CAPITAL: c_int = 0x14;
-            pub const VK_KANA: c_int = 0x15;
-            pub const VK_HANGEUL: c_int = 0x15;
-            pub const VK_HANGUL: c_int = 0x15;
-            pub const VK_JUNJA: c_int = 0x17;
-            pub const VK_FINAL: c_int = 0x18;
-            pub const VK_HANJA: c_int = 0x19;
-            pub const VK_KANJI: c_int = 0x19;
-            pub const VK_ESCAPE: c_int = 0x1B;
-            pub const VK_CONVERT: c_int = 0x1C;
-            pub const VK_NONCONVERT: c_int = 0x1D;
-            pub const VK_ACCEPT: c_int = 0x1E;
-            pub const VK_MODECHANGE: c_int = 0x1F;
-            pub const VK_SPACE: c_int = 0x20;
-            pub const VK_PRIOR: c_int = 0x21;
-            pub const VK_NEXT: c_int = 0x22;
-            pub const VK_END: c_int = 0x23;
-            pub const VK_HOME: c_int = 0x24;
-            pub const VK_LEFT: c_int = 0x25;
-            pub const VK_UP: c_int = 0x26;
-            pub const VK_RIGHT: c_int = 0x27;
-            pub const VK_DOWN: c_int = 0x28;
-            pub const VK_SELECT: c_int = 0x29;
-            pub const VK_PRINT: c_int = 0x2A;
-            pub const VK_EXECUTE: c_int = 0x2B;
-            pub const VK_SNAPSHOT: c_int = 0x2C;
-            pub const VK_INSERT: c_int = 0x2D;
-            pub const VK_DELETE: c_int = 0x2E;
-            pub const VK_HELP: c_int = 0x2F;
-            pub const VK_LWIN: c_int = 0x5B;
-            pub const VK_RWIN: c_int = 0x5C;
-            pub const VK_APPS: c_int = 0x5D;
-            pub const VK_SLEEP: c_int = 0x5F;
-            pub const FOREGROUND_BLUE: WORD = 0x0001;
-            pub const FOREGROUND_GREEN: WORD = 0x0002;
-            pub const FOREGROUND_RED: WORD = 0x0004;
-            pub const FOREGROUND_INTENSITY: WORD = 0x0008;
-            pub const BACKGROUND_BLUE: WORD = 0x0010;
-            pub const BACKGROUND_GREEN: WORD = 0x0020;
-            pub const BACKGROUND_RED: WORD = 0x0040;
-            pub const BACKGROUND_INTENSITY: WORD = 0x0080;
-            pub const COMMON_LVB_LEADING_BYTE: WORD = 0x0100;
-            pub const COMMON_LVB_TRAILING_BYTE: WORD = 0x0200;
-            pub const COMMON_LVB_GRID_HORIZONTAL: WORD = 0x0400;
-            pub const COMMON_LVB_GRID_LVERTICAL: WORD = 0x0800;
-            pub const COMMON_LVB_GRID_RVERTICAL: WORD = 0x1000;
-            pub const COMMON_LVB_REVERSE_VIDEO: WORD = 0x4000;
-            pub const COMMON_LVB_UNDERSCORE: WORD = 0x8000;
-            pub const COMMON_LVB_SBCSDBCS: WORD = 0x0300;
-            pub const KEY_EVENT: WORD = 0x0001;
-            pub const MOUSE_EVENT: WORD = 0x0002;
-            pub const WINDOW_BUFFER_SIZE_EVENT: WORD = 0x0004;
-            pub const MENU_EVENT: WORD = 0x0008;
-            pub const FOCUS_EVENT: WORD = 0x0010;
-            pub const ATTACH_PARENT_PROCESS: DWORD = 0xFFFFFFFF;
-            pub const STATUS_USER_APC: NTSTATUS = 0x000000C0;
-            pub const STATUS_WAIT_0: NTSTATUS = 0x00000000;
-            pub const STATUS_ABANDONED_WAIT_0: NTSTATUS = 0x00000080;
-            pub const WAIT_FAILED: DWORD = 0xFFFFFFFF;
-            pub const WAIT_OBJECT_0: DWORD = STATUS_WAIT_0 as u32;
-            pub const WAIT_ABANDONED: DWORD = STATUS_ABANDONED_WAIT_0 as u32;
-            pub const WAIT_ABANDONED_0: DWORD = STATUS_ABANDONED_WAIT_0 as u32;
-            pub const WAIT_IO_COMPLETION: DWORD = STATUS_USER_APC as u32;
-            pub const FOLDERID_Profile:GUID = GUID::create( 0x5E6C858F, 0x0E22, 0x4760, [ 0x9A, 0xFE, 0xEA, 0x33, 0x17, 0xB6, 0x71, 0x73 ] );
-            pub const FOLDERID_RoamingAppData:GUID = GUID::create( 0x3EB685DB, 0x65F9, 0x4CF6, [ 0xA0, 0x3A, 0xE3, 0xEF, 0x65, 0x72, 0x9F, 0x3D ] );
-            pub const FOLDERID_LocalAppData:GUID = GUID::create( 0xF1B32785, 0x6FBA, 0x4FCF, [ 0x9D, 0x55, 0x7B, 0x8E, 0x7F, 0x15, 0x70, 0x91 ] );
-            pub const FOLDERID_Music:GUID = GUID::create( 0x4BD8D571, 0x6D19, 0x48D3, [ 0xBE, 0x97, 0x42, 0x22, 0x20, 0x08, 0x0E, 0x43 ] );
-            pub const FOLDERID_Desktop:GUID = GUID::create( 0xB4BFCC3A, 0xDB2C, 0x424C, [ 0xB0, 0x29, 0x7F, 0xE9, 0x9A, 0x87, 0xC6, 0x41 ] );
-            pub const FOLDERID_Documents:GUID = GUID::create( 0xFDD39AD0, 0x238F, 0x46AF, [ 0xAD, 0xB4, 0x6C, 0x85, 0x48, 0x03, 0x69, 0xC7 ] );
-            pub const FOLDERID_Downloads:GUID = GUID::create( 0x374de290, 0x123f, 0x4565, [ 0x91, 0x64, 0x39, 0xc4, 0x92, 0x5e, 0x46, 0x7b ] );
-            pub const FOLDERID_Pictures:GUID = GUID::create( 0xa990ae9f, 0xa03b, 0x4e80, [ 0x94, 0xbc, 0x99, 0x12, 0xd7, 0x50, 0x41, 0x4 ] );
-            pub const FOLDERID_Public:GUID = GUID::create( 0xDFDF76A2, 0xC82A, 0x4D63, [ 0x90, 0x6A, 0x56, 0x44, 0xAC, 0x45, 0x73, 0x85 ] );
-            pub const FOLDERID_Templates:GUID = GUID::create( 0xA63293E8, 0x664E, 0x48DB, [ 0xA0, 0x79, 0xDF, 0x75, 0x9E, 0x05, 0x09, 0xF7 ] );
-            pub const FOLDERID_Videos:GUID = GUID::create( 0x18989B1D, 0x99B5, 0x455B, [ 0xA0, 0x79, 0xDF, 0x75, 0x9E, 0x05, 0x09, 0xF7 ] );
-            pub const MAXLONGLONG: LONGLONG = 0x7fffffffffffffff;
-            pub const UTF8_REPLACEMENT_CHARACTER: &str = "\u{FFFD}";
-            pub const FORMAT_MESSAGE_IGNORE_INSERTS: DWORD = 0x00000200;
-            pub const FORMAT_MESSAGE_FROM_STRING: DWORD = 0x00000400;
-            pub const FORMAT_MESSAGE_FROM_HMODULE: DWORD = 0x00000800;
-            pub const FORMAT_MESSAGE_FROM_SYSTEM: DWORD = 0x00001000;
-            pub const FORMAT_MESSAGE_ARGUMENT_ARRAY: DWORD = 0x00002000;
-            pub const FORMAT_MESSAGE_MAX_WIDTH_MASK: DWORD = 0x000000FF;
-            pub const FORMAT_MESSAGE_ALLOCATE_BUFFER: DWORD = 0x00000100;
-            
-        } pub use self::constants::{ * };
-        
-        pub mod structs
-        {
-            use borrow::Cow;
-            use sync::Arc;
-            use rc::Rc;
-            use ::hash::Hasher;
-            use ::hash::Hash;
-            use ::system::AsInner;
-            use super::{ * };
-
-            #[repr( C )]
-            pub struct GROUP_AFFINITY 
-            {
-                Mask: KAFFINITY,
-                Group: USHORT,
-                Reserved: [USHORT; 3],
-            }
-            
-            #[repr(C)] #[derive( Clone, Copy )]
-            pub struct GUID
-            {
-                pub Data1: c_ulong,
-                pub Data2: c_ushort,
-                pub Data3: c_ushort,
-                pub Data4: [c_uchar; 8],
-            }
-
-            impl GUID
-            {
-                pub const fn create( Data1:c_ulong, Data2:c_ushort, Data3:c_ushort, Data4:[c_uchar; 8] ) -> Self
-                {
-                    Self
-                    {
-                        Data1,
-                        Data2,
-                        Data3,
-                        Data4,
-                    }
-                }
-
-                pub fn folder_id_profile() -> *const Self
-                {
-                    unsafe
-                    {
-                        ::mem::transmute( &FOLDERID_Profile )
-                    }
-                }
-
-                pub fn folder_id_roaming_app_data() -> *const Self
-                {
-                    unsafe
-                    {
-                        ::mem::transmute( &FOLDERID_RoamingAppData )
-                    }
-                }
-
-                pub fn folder_id_local_app_data() -> *const Self
-                {
-                    unsafe
-                    {
-                        ::mem::transmute( &FOLDERID_LocalAppData )
-                    }
-                }
-                
-                pub fn folder_id_music() -> *const Self
-                {
-                    unsafe
-                    {
-                        ::mem::transmute( &FOLDERID_Music )
-                    }
-                }
-                
-                pub fn folder_id_desktop() -> *const Self
-                {
-                    unsafe
-                    {
-                        ::mem::transmute( &FOLDERID_Desktop )
-                    }
-                }
-                
-                pub fn folder_id_documents() -> *const Self
-                {
-                    unsafe
-                    {
-                        ::mem::transmute( &FOLDERID_Documents )
-                    }
-                }
-                
-                pub fn folder_id_downloads() -> *const Self
-                {
-                    unsafe
-                    {
-                        ::mem::transmute( &FOLDERID_Downloads )
-                    }
-                }
-                
-                pub fn folder_id_pictures() -> *const Self
-                {
-                    unsafe
-                    {
-                        ::mem::transmute( &FOLDERID_Pictures )
-                    }
-                }
-                
-                pub fn folder_id_public() -> *const Self
-                {
-                    unsafe
-                    {
-                        ::mem::transmute( &FOLDERID_Public )
-                    }
-                }
-                
-                pub fn folder_id_templates() -> *const Self
-                {
-                    unsafe
-                    {
-                        ::mem::transmute( &FOLDERID_Templates )
-                    }
-                }
-                
-                pub fn folder_id_videos() -> *const Self
-                {
-                    unsafe
-                    {
-                        ::mem::transmute( &FOLDERID_Videos )
-                    }
-                }
-            }
-
-            #[repr( C )] #[derive( Clone, Copy )]
-            pub struct FLOAT128
-            {
-                pub LowPart: __int64,
-                pub HighPart: __int64,
-            }
-            
-            #[repr( C )] #[derive( Clone, Copy )]
-            pub struct CONTEXT_u( () );
-
-            #[repr( C )] #[derive( Clone, Copy )]
-            pub struct M128A 
-            {
-                pub Low: ULONGLONG,
-                pub High: LONGLONG,
-            }
-
-            #[repr( C )] #[derive( Clone, Copy )]
-            pub struct CONTEXT 
-            {
-                pub P1Home: DWORD64,
-                pub P2Home: DWORD64,
-                pub P3Home: DWORD64,
-                pub P4Home: DWORD64,
-                pub P5Home: DWORD64,
-                pub P6Home: DWORD64,
-                pub ContextFlags: DWORD,
-                pub MxCsr: DWORD,
-                pub SegCs: WORD,
-                pub SegDs: WORD,
-                pub SegEs: WORD,
-                pub SegFs: WORD,
-                pub SegGs: WORD,
-                pub SegSs: WORD,
-                pub EFlags: DWORD,
-                pub Dr0: DWORD64,
-                pub Dr1: DWORD64,
-                pub Dr2: DWORD64,
-                pub Dr3: DWORD64,
-                pub Dr6: DWORD64,
-                pub Dr7: DWORD64,
-                pub Rax: DWORD64,
-                pub Rcx: DWORD64,
-                pub Rdx: DWORD64,
-                pub Rbx: DWORD64,
-                pub Rsp: DWORD64,
-                pub Rbp: DWORD64,
-                pub Rsi: DWORD64,
-                pub Rdi: DWORD64,
-                pub R8: DWORD64,
-                pub R9: DWORD64,
-                pub R10: DWORD64,
-                pub R11: DWORD64,
-                pub R12: DWORD64,
-                pub R13: DWORD64,
-                pub R14: DWORD64,
-                pub R15: DWORD64,
-                pub Rip: DWORD64,
-                pub u: CONTEXT_u,
-                pub VectorRegister: [M128A; 26],
-                pub VectorControl: DWORD64,
-                pub DebugControl: DWORD64,
-                pub LastBranchToRip: DWORD64,
-                pub LastBranchFromRip: DWORD64,
-                pub LastExceptionToRip: DWORD64,
-                pub LastExceptionFromRip: DWORD64,
-            }
-            
-            #[repr( C )] #[derive( Clone, Copy )]
-            pub struct EXCEPTION_RECORD {
-                pub ExceptionCode: DWORD,
-                pub ExceptionFlags: DWORD,
-                pub ExceptionRecord: *mut EXCEPTION_RECORD,
-                pub ExceptionAddress: PVOID,
-                pub NumberParameters: DWORD,
-                pub ExceptionInformation: [ULONG_PTR; 15],
-            }
-
-            #[repr( C )] #[derive( Clone, Copy )]
-            pub struct EXCEPTION_POINTERS {
-                pub ExceptionRecord: PEXCEPTION_RECORD,
-                pub ContextRecord: PCONTEXT,
-            }
-
-            #[repr( C )] #[derive( Clone, Copy )]
-            pub struct CONSOLE_READCONSOLE_CONTROL
-            {
-                pub nLength: ULONG,
-                pub nInitialChars: ULONG,
-                pub dwCtrlWakeupMask: ULONG,
-                pub dwControlKeyState: ULONG,
-            }
-
-            #[repr(C)] #[derive( Clone, Copy )]
-            pub struct WINDOW_BUFFER_SIZE_RECORD
-            {
-                pub dwSize: COORD,
-            }
-
-            #[repr(C)] #[derive( Clone, Copy )]
-            pub struct SECURITY_ATTRIBUTES
-            {
-                pub nLength: DWORD,
-                pub lpSecurityDescriptor: LPVOID,
-                pub bInheritHandle: BOOL,
-            }
-
-            #[repr(C)] #[derive( Clone, Copy )]
-            pub struct CHAR_INFO_Char(()); 
-
-            impl CHAR_INFO_Char
-            {
-                pub unsafe fn UnicodeChar_mut(&mut self) -> &mut WCHAR
-                {
-                    unsafe
-                    {
-                        mem::transmute( ptr::null_mut::<&mut WCHAR>() )
-                    }
-                }
-            }
-
-            #[repr(C)] #[derive( Clone, Copy )]
-            pub struct CONSOLE_FONT_INFO
-            {
-                pub nFont: DWORD,
-                pub dwFontSize: COORD,
-            }
-
-            #[repr(C)] #[derive( Clone, Copy )]
-            pub struct CONSOLE_FONT_INFOEX
-            {
-                pub cbSize: ULONG,
-                pub nFont: DWORD,
-                pub dwFontSize: COORD,
-                pub FontFamily: UINT,
-                pub FontWeight: UINT,
-                pub FaceName: [WCHAR; 32],
-            }
-
-            #[repr(C)] #[derive( Clone, Copy )]
-            pub struct CONSOLE_SCREEN_BUFFER_INFOEX
-            {
-                pub cbSize: ULONG,
-                pub dwSize: COORD,
-                pub dwCursorPosition: COORD,
-                pub wAttributes: WORD,
-                pub srWindow: SMALL_RECT,
-                pub dwMaximumWindowSize: COORD,
-                pub wPopupAttributes: WORD,
-                pub bFullscreenSupported: BOOL,
-                pub ColorTable: [COLORREF; 16],
-            }
-
-            #[repr(C)] #[derive( Clone, Copy )]
-            pub struct MOUSE_EVENT_RECORD
-            {
-                pub dwMousePosition: COORD,
-                pub dwButtonState: DWORD,
-                pub dwControlKeyState: DWORD,
-                pub dwEventFlags: DWORD,
-            }
-
-            #[repr(C)] #[derive( Clone, Copy )]
-            pub struct CONSOLE_HISTORY_INFO 
-            {
-                pub cbSize: UINT,
-                pub HistoryBufferSize: UINT,
-                pub NumberOfHistoryBuffers: UINT,
-                pub dwFlags: DWORD,
-            }
-
-            #[repr(C)] #[derive( Clone, Copy )]
-            pub struct CONSOLE_SELECTION_INFO
-            {
-                pub dwFlags: DWORD,
-                pub dwSelectionAnchor: COORD,
-                pub srSelection: SMALL_RECT,
-            }
-
-            #[repr(C)] #[derive( Clone, Copy )]
-            pub struct CONSOLE_CURSOR_INFO
-            {
-                pub dwSize: DWORD,
-                pub bVisible: BOOL,
-            }
-
-            #[repr(C)] #[derive( Clone, Copy )]
-            pub struct INPUT_RECORD_Event( () );
-
-            impl INPUT_RECORD_Event
-            {
-                pub unsafe fn WindowBufferSizeEvent(&self) -> &WINDOW_BUFFER_SIZE_RECORD
-                {
-                    unsafe
-                    {
-                        mem::transmute( ptr::null::<&WINDOW_BUFFER_SIZE_RECORD>() )
-                    }
-                }
-                
-                pub unsafe fn KeyEvent(&self) -> &KEY_EVENT_RECORD
-                {
-                    unsafe
-                    {
-                        mem::transmute( ptr::null::<&KEY_EVENT_RECORD>() )
-                    }
-                }
-                
-                pub unsafe fn MouseEvent(&self) -> &MOUSE_EVENT_RECORD
-                {
-                    unsafe
-                    {
-                        mem::transmute( ptr::null::<&MOUSE_EVENT_RECORD>() )
-                    }
-                }
-            }
-
-            #[repr(C)] #[derive( Clone, Copy )]
-            pub struct INPUT_RECORD 
-            {
-                pub EventType: WORD,
-                pub Event: INPUT_RECORD_Event,
-            }
-
-            #[repr(C)] #[derive( Clone, Copy )]
-            pub struct CHAR_INFO 
-            {
-                pub Char: CHAR_INFO_Char,
-                pub Attributes: WORD,
-            }
-
-            #[repr(C)] #[derive( Clone, Copy )]
-            pub struct COORD
-            {
-                pub X: SHORT,
-                pub Y: SHORT,
-            }
-
-            #[repr(C)] #[derive( Clone, Copy )]
-            pub struct SMALL_RECT
-            {
-                pub Left: SHORT,
-                pub Top: SHORT,
-                pub Right: SHORT,
-                pub Bottom: SHORT,
-            }
-
-            #[repr(C)] #[derive( Clone, Copy )]
-            pub struct CONSOLE_SCREEN_BUFFER_INFO 
-            {
-                pub dwSize: COORD,
-                pub dwCursorPosition: COORD,
-                pub wAttributes: WORD,
-                pub srWindow: SMALL_RECT,
-                pub dwMaximumWindowSize: COORD,
-            }
-
-            #[repr(C)] #[derive( Clone, Copy )]
-            pub struct KEY_EVENT_RECORD_uChar( () );
-
-            impl KEY_EVENT_RECORD_uChar
-            {
-                pub unsafe fn UnicodeChar(&self) -> &WCHAR
-                {
-                    unsafe
-                    {
-                        mem::transmute( ptr::null::<&WCHAR>() )
-                    }
-                }
-            }
-
-            #[repr(C)] #[derive( Clone, Copy )]
-            pub struct KEY_EVENT_RECORD
-            {
-                pub bKeyDown: BOOL,
-                pub wRepeatCount: WORD,
-                pub wVirtualKeyCode: WORD,
-                pub wVirtualScanCode: WORD,
-                pub uChar: KEY_EVENT_RECORD_uChar,
-                pub dwControlKeyState: DWORD,
-            }
-
-            impl KEY_EVENT_RECORD
-            {
-                pub unsafe fn UnicodeChar(&self) -> &WCHAR
-                {
-                    unsafe
-                    {
-                        mem::transmute( ptr::null::<&WCHAR>() )
-                    }
-                }
-            }
-            /// A Unicode code point: from U+0000 to U+10FFFF.
-            #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy)]
-            pub struct CodePoint
-            {
-                value: u32,
-            }
-
-            impl ::hash::Hash for CodePoint
-            {
-                #[inline] fn hash<H: ::hash::Hasher>(&self, state: &mut H) { self.value.hash(state) }
-            }
-            /// Iterator for the code points of a WTF-8 string.
-            #[derive(Clone)]
-            pub struct Wtf8CodePoints<'a>
-            {
-                pub bytes: slice::Iter<'a, u8>,
-            }
-
-            impl Iterator for Wtf8CodePoints<'_> 
-            {
-                type Item = CodePoint;
-
-                #[inline] fn next(&mut self) -> Option<CodePoint>
-                {
-                    unsafe { str::next_code_point(&mut self.bytes).map(|c| CodePoint { value: c }) }
-                }
-
-                #[inline] fn size_hint(&self) -> (usize, Option<usize>)
-                {
-                    let len = self.bytes.len();
-                    (len.saturating_add(3) / 4, Some(len))
-                }
-            }
-            /// Generates a wide character sequence for potentially ill-formed UTF-16.
-            #[derive(Clone)]
-            pub struct EncodeWide<'a>
-            {
-                pub code_points: Wtf8CodePoints<'a>,
-                pub extra: u16,
-            }
-
-            impl Iterator for EncodeWide<'_>
-            {
-                type Item = u16;
-
-                #[inline] fn next(&mut self) -> Option<u16> 
-                {
-                    if self.extra != 0 {
-                        let tmp = self.extra;
-                        self.extra = 0;
-                        return Some(tmp);
-                    }
-
-                    let mut buf = [0; 2];
-                    self.code_points.next().map(|code_point|
-                    {
-                        self.extra = buf[1];
-                        buf[0]
-                    })
-                }
-
-                #[inline] fn size_hint(&self) -> (usize, Option<usize>) 
-                {
-                    let (low, high) = self.code_points.size_hint();
-                    let ext = (self.extra != 0) as usize;
-                    (low + ext, high.and_then(|n| n.checked_mul(2)).and_then(|n| n.checked_add(ext)))
-                }
-            }
-            
-            impl ::iter::FusedIterator for EncodeWide<'_> {}
-            /// An owned, growable string of well-formed WTF-8 data.
-            #[derive(Eq, PartialEq, Ord, PartialOrd, Clone)]
-            pub struct Wtf8Buf
-            {
-                bytes: Vec<u8>,
-                is_known_utf8: bool,
-            }
-            
-            impl Hash for Wtf8Buf 
-            {
-                #[inline] fn hash<H:Hasher>( &self, state:&mut H )
-                {
-                    state.write(&self.bytes);
-                    0xfeu8.hash(state)
-                }
-            }
-            /// A borrowed slice of well-formed WTF-8 data.
-            #[repr( transparent )] #[derive( Eq, Ord, PartialEq, PartialOrd )]
-            pub struct Wtf8
-            {
-                pub bytes: [u8],
-            }
-
-            impl AsInner<[u8]> for Wtf8
-            {
-                #[inline] fn as_inner(&self) -> &[u8] { &self.bytes }
-            }
-            /// Formats the string in double quotes, with characters escaped according to [`char::escape_debug`]
-            /// and unpaired surrogates represented as `\u{xxxx}`, where each `x` is a hexadecimal digit.
-            impl fmt::Debug for Wtf8
-            {
-                fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result
-                {
-                    fn write_str_escaped(f: &mut fmt::Formatter<'_>, s: &str) -> fmt::Result {
-                        use crate::fmt::Write;
-                        for c in s.chars().flat_map(|c| c.escape_debug()) {
-                            f.write_char(c)?
-                        }
-                        Ok(())
-                    }
-
-                    formatter.write_str("\"")?;
-                    let mut pos = 0;
-                    while let Some((surrogate_pos, surrogate)) = self.next_surrogate(pos) {
-                        write_str_escaped(formatter, unsafe {
-                            str::from_utf8_unchecked(&self.bytes[pos..surrogate_pos])
-                        })?;
-                        write!(formatter, "\\u{{{:x}}}", surrogate)?;
-                        pos = surrogate_pos + 3;
-                    }
-                    write_str_escaped(formatter, unsafe { str::from_utf8_unchecked(&self.bytes[pos..]) })?;
-                    formatter.write_str("\"")
-                }
-            }
-            /// Formats the string with unpaired surrogates substituted with the replacement character, U+FFFD.
-            impl fmt::Display for Wtf8
-            {
-                fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-                    let wtf8_bytes = &self.bytes;
-                    let mut pos = 0;
-                    loop {
-                        match self.next_surrogate(pos) {
-                            Some((surrogate_pos, _)) => {
-                                formatter.write_str(unsafe {
-                                    str::from_utf8_unchecked(&wtf8_bytes[pos..surrogate_pos])
-                                })?;
-                                formatter.write_str(UTF8_REPLACEMENT_CHARACTER)?;
-                                pos = surrogate_pos + 3;
-                            }
-                            None => {
-                                let s = unsafe { str::from_utf8_unchecked(&wtf8_bytes[pos..]) };
-                                if pos == 0 { return s.fmt(formatter) } else { return formatter.write_str(s) }
-                            }
-                        }
-                    }
-                }
-            }
-
-            impl Wtf8
-            {
-                /// Creates a WTF-8 slice from a UTF-8 `&str` slice.
-                #[inline] pub fn from_str(value: &str) -> &Wtf8 
-                {
-                    unsafe { Wtf8::from_bytes_unchecked(value.as_bytes()) }
-                }
-                /// Creates a WTF-8 slice from a WTF-8 byte slice.
-                #[inline] pub unsafe fn from_bytes_unchecked(value: &[u8]) -> &Wtf8 
-                {
-                    unsafe { &*(value as *const [u8] as *const Wtf8) }
-                }
-                /// Creates a mutable WTF-8 slice from a mutable WTF-8 byte slice.
-                #[inline] unsafe fn from_mut_bytes_unchecked(value: &mut [u8]) -> &mut Wtf8 
-                {
-                    unsafe { &mut *(value as *mut [u8] as *mut Wtf8) }
-                }
-                /// Returns the length, in WTF-8 bytes.
-                #[inline] pub fn len(&self) -> usize 
-                {
-                    self.bytes.len()
-                }
-
-                #[inline] pub fn is_empty(&self) -> bool 
-                {
-                    self.bytes.is_empty()
-                }
-                /// Returns the code point at `position` if it is in the ASCII range, or `b'\xFF'` otherwise.
-                #[inline] pub fn ascii_byte_at(&self, position: usize) -> u8 
-                {
-                    match self.bytes[position] {
-                        ascii_byte @ 0x00..=0x7F => ascii_byte,
-                        _ => 0xFF,
-                    }
-                }
-                /// Returns an iterator for the string’s code points.
-                #[inline] pub fn code_points(&self) -> Wtf8CodePoints<'_> 
-                {
-                    Wtf8CodePoints { bytes: self.bytes.iter() }
-                }
-                /// Access raw bytes of WTF-8 data
-                #[inline] pub fn as_bytes(&self) -> &[u8]
-                {
-                    &self.bytes
-                }
-                /// Tries to convert the string to UTF-8 and return a `&str` slice.
-                #[inline] pub fn as_str(&self) -> Result<&str, str::Utf8Error> 
-                {
-                    str::from_utf8(&self.bytes)
-                }
-                /// Creates an owned `Wtf8Buf` from a borrowed `Wtf8`.
-                pub fn to_owned(&self) -> Wtf8Buf
-                {
-                    Wtf8Buf { bytes: self.bytes.to_vec(), is_known_utf8: false }
-                }
-                /// Lossily converts the string to UTF-8.
-                pub fn to_string_lossy(&self) -> Cow<'_, str> 
-                {
-                    let Some((surrogate_pos, _)) = self.next_surrogate(0) else {
-                        return Cow::Borrowed(unsafe { str::from_utf8_unchecked(&self.bytes) });
-                    };
-                    let wtf8_bytes = &self.bytes;
-                    let mut utf8_bytes = Vec::with_capacity(self.len());
-                    utf8_bytes.extend_from_slice(&wtf8_bytes[..surrogate_pos]);
-                    utf8_bytes.extend_from_slice(UTF8_REPLACEMENT_CHARACTER.as_bytes());
-                    let mut pos = surrogate_pos + 3;
-                    loop {
-                        match self.next_surrogate(pos) {
-                            Some((surrogate_pos, _)) => {
-                                utf8_bytes.extend_from_slice(&wtf8_bytes[pos..surrogate_pos]);
-                                utf8_bytes.extend_from_slice(UTF8_REPLACEMENT_CHARACTER.as_bytes());
-                                pos = surrogate_pos + 3;
-                            }
-                            None => {
-                                utf8_bytes.extend_from_slice(&wtf8_bytes[pos..]);
-                                return Cow::Owned(unsafe { String::from_utf8_unchecked(utf8_bytes) });
-                            }
-                        }
-                    }
-                }
-                /// Converts the WTF-8 string to potentially ill-formed UTF-16
-                /// and return an iterator of 16-bit code units.
-                #[inline] pub fn encode_wide(&self) -> EncodeWide<'_> 
-                {
-                    EncodeWide { code_points: self.code_points(), extra: 0 }
-                }
-
-                #[inline] fn next_surrogate(&self, mut pos: usize) -> Option<(usize, u16)> 
-                {
-                    let mut iter = self.bytes[pos..].iter();
-                    loop 
-                    {
-                        let b = *iter.next()?;
-
-                        if b < 0x80 
-                        {
-                            pos += 1;
-                        }
-                        
-                        else if b < 0xE0 
-                        {
-                            iter.next();
-                            pos += 2;
-                        } 
-
-                        else if b == 0xED 
-                        {
-                            match (iter.next(), iter.next()) {
-                                (Some(&b2), Some(&b3)) if b2 >= 0xA0 => {
-                                    return Some((pos, decode_surrogate(b2, b3)));
-                                }
-                                _ => pos += 3,
-                            }
-                        }
-
-                        else if b < 0xF0 
-                        {
-                            iter.next();
-                            iter.next();
-                            pos += 3;
-                        } 
-
-                        else 
-                        {
-                            iter.next();
-                            iter.next();
-                            iter.next();
-                            pos += 4;
-                        }
-                    }
-                }
-
-                #[inline] fn final_lead_surrogate(&self) -> Option<u16> 
-                {
-                    match self.bytes 
-                    {
-                        [.., 0xED, b2 @ 0xA0..=0xAF, b3] => Some(decode_surrogate(b2, b3)),
-                        _ => None,
-                    }
-                }
-
-                #[inline] fn initial_trail_surrogate(&self) -> Option<u16> 
-                {
-                    match self.bytes 
-                    {
-                        [0xED, b2 @ 0xB0..=0xBF, b3, ..] => Some(decode_surrogate(b2, b3)),
-                        _ => None,
-                    }
-                }
-
-                pub fn clone_into(&self, buf: &mut Wtf8Buf) 
-                {
-                    buf.is_known_utf8 = false;
-                    self.bytes.clone_into(&mut buf.bytes);
-                }
-                /// Boxes this `Wtf8`.
-                #[inline] pub fn into_box(&self) -> Box<Wtf8> 
-                {
-                    let boxed: Box<[u8]> = self.bytes.into();
-                    unsafe { mem::transmute(boxed) }
-                }
-                /// Creates a boxed, empty `Wtf8`.
-                pub fn empty_box() -> Box<Wtf8> 
-                {
-                    let boxed: Box<[u8]> = Default::default();
-                    unsafe { mem::transmute(boxed) }
-                }
-
-                #[inline] pub fn into_arc(&self) -> Arc<Wtf8> 
-                {
-                    let arc: Arc<[u8]> = Arc::from(&self.bytes);
-                    unsafe { Arc::from_raw(Arc::into_raw(arc) as *const Wtf8) }
-                }
-
-                #[inline] pub fn into_rc(&self) -> Rc<Wtf8> 
-                {
-                    let rc: Rc<[u8]> = Rc::from(&self.bytes);
-                    unsafe { Rc::from_raw(Rc::into_raw(rc) as *const Wtf8) }
-                }
-
-                #[inline] pub fn make_ascii_lowercase(&mut self) { self.bytes.make_ascii_lowercase() }
-
-                #[inline] pub fn make_ascii_uppercase(&mut self) { self.bytes.make_ascii_uppercase() }
-
-                #[inline] pub fn to_ascii_lowercase(&self) -> Wtf8Buf 
-                { Wtf8Buf { bytes: self.bytes.to_ascii_lowercase(), is_known_utf8: false } }
-
-                #[inline] pub fn to_ascii_uppercase(&self) -> Wtf8Buf 
-                { Wtf8Buf { bytes: self.bytes.to_ascii_uppercase(), is_known_utf8: false } }
-
-                #[inline] pub fn is_ascii(&self) -> bool { self.bytes.is_ascii() }
-
-                #[inline] pub fn eq_ignore_ascii_case(&self, other: &Self) -> bool 
-                { self.bytes.eq_ignore_ascii_case(&other.bytes) }
-            }
-            /// Returns a slice of the given string for the byte range \[`begin`..`end`).
-            impl ops::Index<ops::Range<usize>> for Wtf8
-            {
-                type Output = Wtf8;
-
-                #[inline] fn index(&self, range: ops::Range<usize>) -> &Wtf8
-                {
-                    if range.start <= range.end
-                    && is_code_point_boundary(self, range.start)
-                    && is_code_point_boundary(self, range.end)
-                    { unsafe { slice_unchecked(self, range.start, range.end) } }
-                    else { slice_error_fail(self, range.start, range.end) }
-                }
-            }
-            /// Returns a slice of the given string from byte `begin` to its end.
-            impl ops::Index<ops::RangeFrom<usize>> for Wtf8
-            {
-                type Output = Wtf8;
-
-                #[inline] fn index(&self, range: ops::RangeFrom<usize>) -> &Wtf8
-                {
-                    if is_code_point_boundary(self, range.start) {
-                        unsafe { slice_unchecked(self, range.start, self.len()) }
-                    } else {
-                        slice_error_fail(self, range.start, self.len())
-                    }
-                }
-            }
-            /// Returns a slice of the given string from its beginning to byte `end`.
-            impl ops::Index<ops::RangeTo<usize>> for Wtf8
-            {
-                type Output = Wtf8;
-
-                #[inline] fn index(&self, range: ops::RangeTo<usize>) -> &Wtf8
-                {
-                    if is_code_point_boundary(self, range.end) {
-                        unsafe { slice_unchecked(self, 0, range.end) }
-                    } else {
-                        slice_error_fail(self, 0, range.end)
-                    }
-                }
-            }
-
-            impl ops::Index<ops::RangeFull> for Wtf8
-            {
-                type Output = Wtf8;
-                #[inline] fn index(&self, _range: ops::RangeFull) -> &Wtf8 { self }
-            }
-
-            impl Hash for Wtf8 
-            {
-                #[inline] fn hash<H: Hasher>(&self, state: &mut H) {
-                    state.write(&self.bytes);
-                    0xfeu8.hash(state)
-                }
-            }
-            #[repr(transparent)]
-            pub struct Slice
-            {
-                pub inner: Wtf8,
-            }
-
-            impl fmt::Debug for Slice 
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-                {
-                    fmt::Debug::fmt(&self.inner, f)
-                }
-            }
-
-            impl fmt::Display for Slice
-            {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-                {
-                    fmt::Display::fmt(&self.inner, f)
-                }
-            }
-
-        } pub use self::structs::{ * };
-
-        pub mod traits
-        {
-            use super::{ * };
-
-            use ::system::common::AsInner;
-            
-            pub trait OsStrExt
-            {
-                /// Re-encodes an `OsStr` as a wide character sequence. ❤
-                fn encodes_wide( &self ) -> EncodeWide<'_>;
-            }
-            
-            impl OsStrExt for OsStr
-            {
-                #[inline] fn encodes_wide(&self) -> EncodeWide<'_> { self.as_inner().inner.encode_wide() }
-            }
-            
-            impl AsInner<Slice> for OsStr 
-            {
-                #[inline] fn as_inner(&self) -> &Slice { unsafe { ::mem::transmute( self ) } }
-            }
-        } pub use self::traits::{ * };
-        
-        pub mod types
-        {
-            use super::{ * };
-            
-            pub type c_char = i8;
-            pub type c_schar = i8;
-            pub type c_uchar = u8;
-            pub type c_short = i16;
-            pub type c_ushort = u16;
-            pub type c_int = i32;
-            pub type c_uint = u32;
-            pub type c_long = i32;
-            pub type c_ulong = u32;
-            pub type c_longlong = i64;
-            pub type c_ulonglong = u64;
-            pub type c_float = f32;
-            pub type c_double = f64;
-            pub type __int8 = i8;
-            pub type __uint8 = u8;
-            pub type __int16 = i16;
-            pub type __uint16 = u16;
-            pub type __int32 = i32;
-            pub type __uint32 = u32;
-            pub type __int64 = i64;
-            pub type __uint64 = u64;
-            pub type wchar_t = u16;
-            pub type ULONG = c_ulong;
-            pub type PULONG = *mut ULONG;
-            pub type USHORT = c_ushort;
-            pub type PUSHORT = *mut USHORT;
-            pub type UCHAR = c_uchar;
-            pub type PUCHAR = *mut UCHAR;
-            pub type PSZ = *mut c_char;
-            pub type DWORD = c_ulong;
-            pub type BOOL = c_int;
-            pub type BYTE = c_uchar;
-            pub type WORD = c_ushort;
-            pub type FLOAT = c_float;
-            pub type PFLOAT = *mut FLOAT;
-            pub type PBOOL = *mut BOOL;
-            pub type LPBOOL = *mut BOOL;
-            pub type PBYTE = *mut BYTE;
-            pub type LPBYTE = *mut BYTE;
-            pub type PINT = *mut c_int;
-            pub type LPINT = *mut c_int;
-            pub type PWORD = *mut WORD;
-            pub type LPWORD = *mut WORD;
-            pub type LPLONG = *mut c_long;
-            pub type PDWORD = *mut DWORD;
-            pub type LPDWORD = *mut DWORD;
-            pub type LPVOID = *mut c_void;
-            pub type LPCVOID = *const c_void;
-            pub type INT = c_int;
-            pub type UINT = c_uint;
-            pub type PUINT = *mut c_uint;
-            pub type POINTER_64_INT = usize;
-            pub type INT8 = c_schar;
-            pub type PINT8 = *mut c_schar;
-            pub type INT16 = c_short;
-            pub type PINT16 = *mut c_short;
-            pub type INT32 = c_int;
-            pub type PINT32 = *mut c_int;
-            pub type INT64 = __int64;
-            pub type PINT64 = *mut __int64;
-            pub type UINT8 = c_uchar;
-            pub type PUINT8 = *mut c_uchar;
-            pub type UINT16 = c_ushort;
-            pub type PUINT16 = *mut c_ushort;
-            pub type UINT32 = c_uint;
-            pub type PUINT32 = *mut c_uint;
-            pub type UINT64 = __uint64;
-            pub type PUINT64 = *mut __uint64;
-            pub type LONG32 = c_int;
-            pub type PLONG32 = *mut c_int;
-            pub type ULONG32 = c_uint;
-            pub type PULONG32 = *mut c_uint;
-            pub type DWORD32 = c_uint;
-            pub type PDWORD32 = *mut c_uint;
-            pub type INT_PTR = isize;
-            pub type PINT_PTR = *mut isize;
-            pub type UINT_PTR = usize;
-            pub type PUINT_PTR = *mut usize;
-            pub type LONG_PTR = isize;
-            pub type PLONG_PTR = *mut isize;
-            pub type ULONG_PTR = usize;
-            pub type PULONG_PTR = *mut usize;
-            pub type SHANDLE_PTR = isize;
-            pub type HANDLE_PTR = usize;
-            pub type WPARAM = UINT_PTR;
-            pub type LPARAM = LONG_PTR;
-            pub type LRESULT = LONG_PTR;
-            #[cfg(target_pointer_width = "32")]
-            pub type PHALF_PTR = *mut c_short;
-            #[cfg(target_pointer_width = "64")]
-            pub type PHALF_PTR = *mut c_int;
-            pub type SIZE_T = ULONG_PTR;
-            pub type PSIZE_T = *mut ULONG_PTR;
-            pub type SSIZE_T = LONG_PTR;
-            pub type PSSIZE_T = *mut LONG_PTR;
-            pub type DWORD_PTR = ULONG_PTR;
-            pub type PDWORD_PTR = *mut ULONG_PTR;
-            pub type LONG64 = __int64;
-            pub type PLONG64 = *mut __int64;
-            pub type ULONG64 = __uint64;
-            pub type PULONG64 = *mut __uint64;
-            pub type DWORD64 = __uint64;
-            pub type PDWORD64 = *mut __uint64;
-            pub type KAFFINITY = ULONG_PTR;
-            pub type PKAFFINITY = *mut KAFFINITY;
-            pub type PKEY_EVENT_RECORD = *mut KEY_EVENT_RECORD;
-            pub type PGROUP_AFFINITY = *mut GROUP_AFFINITY;
-            pub type PLONGLONG = *mut LONGLONG;
-            pub type PULONGLONG = *mut ULONGLONG;
-            pub type USN = LONGLONG;
-            pub type HANDLE = *mut c_void;
-            pub type PHANDLE = *mut HANDLE;
-            pub type FCHAR = UCHAR;
-            pub type FSHORT = USHORT;
-            pub type FLONG = ULONG;
-            pub type HRESULT = c_long;        
-            pub type CCHAR = c_char;
-            pub type CSHORT = c_short;
-            pub type CLONG = ULONG;
-            pub type PCCHAR = *mut CCHAR;
-            pub type PCSHORT = *mut CSHORT;
-            pub type PCLONG = *mut CLONG;
-            pub type LCID = ULONG;
-            pub type PLCID = PULONG;
-            pub type LANGID = USHORT;        
-            pub type PVOID = *mut c_void;
-            pub type PVOID64 = u64;
-            pub type VOID = c_void;
-            pub type CHAR = c_char;
-            pub type SHORT = c_short;
-            pub type LONG = c_long;
-            pub type WCHAR = wchar_t;
-            pub type PWCHAR = *mut WCHAR;
-            pub type LPWCH = *mut WCHAR;
-            pub type PWCH = *mut WCHAR;
-            pub type LPCWCH = *const WCHAR;
-            pub type PCWCH = *const WCHAR;
-            pub type NWPSTR = *mut WCHAR;
-            pub type LPWSTR = *mut WCHAR;
-            pub type LPTSTR = LPSTR;
-            pub type PWSTR = *mut WCHAR;
-            pub type PZPWSTR = *mut PWSTR;
-            pub type PCZPWSTR = *const PWSTR;
-            pub type LPUWSTR = *mut WCHAR;
-            pub type PUWSTR = *mut WCHAR;
-            pub type LPCWSTR = *const WCHAR;
-            pub type PCWSTR = *const WCHAR;
-            pub type PZPCWSTR = *mut PCWSTR;
-            pub type PCZPCWSTR = *const PCWSTR;
-            pub type LPCUWSTR = *const WCHAR;
-            pub type PCUWSTR = *const WCHAR;
-            pub type PZZWSTR = *mut WCHAR;
-            pub type PCZZWSTR = *const WCHAR;
-            pub type PUZZWSTR = *mut WCHAR;
-            pub type PCUZZWSTR = *const WCHAR;
-            pub type PNZWCH = *mut WCHAR;
-            pub type PCNZWCH = *const WCHAR;
-            pub type PUNZWCH = *mut WCHAR;
-            pub type PCUNZWCH = *const WCHAR;
-            pub type LPCWCHAR = *const WCHAR;
-            pub type PCWCHAR = *const WCHAR;
-            pub type LPCUWCHAR = *const WCHAR;
-            pub type PCUWCHAR = *const WCHAR;
-            pub type UCSCHAR = c_ulong;
-            pub type PUCSCHAR = *mut UCSCHAR;
-            pub type PCUCSCHAR = *const UCSCHAR;
-            pub type PUCSSTR = *mut UCSCHAR;
-            pub type PUUCSSTR = *mut UCSCHAR;
-            pub type PCUCSSTR = *const UCSCHAR;
-            pub type PCUUCSSTR = *const UCSCHAR;
-            pub type PUUCSCHAR = *mut UCSCHAR;
-            pub type PCUUCSCHAR = *const UCSCHAR;
-            pub type PCHAR = *mut CHAR;
-            pub type LPCH = *mut CHAR;
-            pub type PCH = *mut CHAR;
-            pub type LPCCH = *const CHAR;
-            pub type PCCH = *const CHAR;
-            pub type NPSTR = *mut CHAR;
-            pub type LPSTR = *mut CHAR;
-            pub type PSTR = *mut CHAR;
-            pub type PZPSTR = *mut PSTR;
-            pub type PCZPSTR = *const PSTR;
-            pub type LPCSTR = *const CHAR;
-            pub type PCSTR = *const CHAR;
-            pub type PZPCSTR = *mut PCSTR;
-            pub type PCZPCSTR = *const PCSTR;
-            pub type PZZSTR = *mut CHAR;
-            pub type PCZZSTR = *const CHAR;
-            pub type PNZCH = *mut CHAR;
-            pub type PCNZCH = *const CHAR;
-            pub type DOUBLE = c_double;
-            pub type PCONSOLE_READCONSOLE_CONTROL = *mut CONSOLE_READCONSOLE_CONTROL;
-            pub type PEXCEPTION_POINTERS = *mut EXCEPTION_POINTERS;
-            pub type PACCESS_TOKEN = PVOID;
-            pub type PSECURITY_DESCRIPTOR = PVOID;
-            pub type PSID = PVOID;
-            pub type PCLAIMS_BLOB = PVOID;
-            pub type ACCESS_MASK = DWORD;
-            pub type PACCESS_MASK = *mut ACCESS_MASK;
-            pub type PMOUSE_EVENT_RECORD = *mut MOUSE_EVENT_RECORD;
-            pub type PCONTEXT = *mut CONTEXT;
-            pub type PEXCEPTION_RECORD = *mut EXCEPTION_RECORD;
-            pub type KNOWNFOLDERID = GUID;
-            pub type REFKNOWNFOLDERID = *const KNOWNFOLDERID;
-            pub type PHANDLER_ROUTINE = Option<unsafe extern "system" fn(CtrlType: DWORD) -> BOOL>;
-            pub type NTSTATUS = LONG;
-            pub type PCONSOLE_FONT_INFO = *mut CONSOLE_FONT_INFO;
-            pub type PCONSOLE_FONT_INFOEX = *mut CONSOLE_FONT_INFOEX;
-            pub type PCONSOLE_CURSOR_INFO = *mut CONSOLE_CURSOR_INFO;
-            pub type PCONSOLE_SELECTION_INFO = *mut CONSOLE_SELECTION_INFO;
-            pub type PCONSOLE_HISTORY_INFO = *mut CONSOLE_HISTORY_INFO;
-            pub type PCONSOLE_SCREEN_BUFFER_INFO = *mut CONSOLE_SCREEN_BUFFER_INFO;
-            pub type PCONSOLE_SCREEN_BUFFER_INFOEX = *mut CONSOLE_SCREEN_BUFFER_INFOEX;
-            pub type COLORREF = DWORD;
-            pub type PINPUT_RECORD = *mut INPUT_RECORD;
-            pub type PFLOAT128 = *mut FLOAT128;
-            pub type LONGLONG = __int64;
-            pub type ULONGLONG = __uint64;
-            pub type va_list = *mut c_char;
-            pub type WIN32_ERROR = u32;
-
-        } pub use self::types::{ * };
-        
-        extern "system"
-        {
-            pub fn GetEnvironmentStrings() -> LPCH;
-            pub fn GetEnvironmentStringsW() -> LPWCH;
-            pub fn SetEnvironmentStringsW( NewEnvironment: LPWCH ) -> BOOL;
-            pub fn FreeEnvironmentStringsA( penv: LPCH ) -> BOOL;
-            pub fn FreeEnvironmentStringsW( penv: LPWCH ) -> BOOL;
-            pub fn GetStdHandle( nStdHandle: DWORD ) -> HANDLE;
-            pub fn SetStdHandle( nStdHandle: DWORD, hHandle: HANDLE ) -> BOOL;
-            pub fn SetStdHandleEx( nStdHandle: DWORD, hHandle: HANDLE, phPrevValue: PHANDLE ) -> BOOL;
-        
-            pub fn GetConsoleScreenBufferInfo(
-                hConsoleOutput: HANDLE,
-                lpConsoleScreenBufferInfo: PCONSOLE_SCREEN_BUFFER_INFO,
-            ) -> BOOL;
-            pub fn GetConsoleScreenBufferInfoEx(
-                hConsoleOutput: HANDLE,
-                lpConsoleScreenBufferInfoEx: PCONSOLE_SCREEN_BUFFER_INFOEX,
-            ) -> BOOL;
-            pub fn SetConsoleScreenBufferInfoEx(
-                hConsoleOutput: HANDLE,
-                lpConsoleScreenBufferInfoEx: PCONSOLE_SCREEN_BUFFER_INFOEX,
-            ) -> BOOL;
-            pub fn GetLargestConsoleWindowSize(
-                hConsoleOutput: HANDLE,
-            ) -> COORD;
-            pub fn GetConsoleCursorInfo(
-                hConsoleOutput: HANDLE,
-                lpConsoleCursorInfo: PCONSOLE_CURSOR_INFO,
-            ) -> BOOL;
-            pub fn GetCurrentConsoleFont(
-                hConsoleOutput: HANDLE,
-                bMaximumWindow: BOOL,
-                lpConsoleCurrentFont: PCONSOLE_FONT_INFO,
-            ) -> BOOL;
-            pub fn GetCurrentConsoleFontEx(
-                hConsoleOutput: HANDLE,
-                bMaximumWindow: BOOL,
-                lpConsoleCurrentFontEx: PCONSOLE_FONT_INFOEX,
-            ) -> BOOL;
-            pub fn SetCurrentConsoleFontEx(
-                hConsoleOutput: HANDLE,
-                bMaximumWindow: BOOL,
-                lpConsoleCurrentFontEx: PCONSOLE_FONT_INFOEX,
-            ) -> BOOL;
-            pub fn GetConsoleHistoryInfo(
-                lpConsoleHistoryInfo: PCONSOLE_HISTORY_INFO,
-            ) -> BOOL;
-            pub fn SetConsoleHistoryInfo(
-                lpConsoleHistoryInfo: PCONSOLE_HISTORY_INFO,
-            ) -> BOOL;
-            pub fn GetConsoleFontSize(
-                hConsoleOutput: HANDLE,
-                nFont: DWORD,
-            ) -> COORD;
-            pub fn GetConsoleSelectionInfo(
-                lpConsoleSelectionInfo: PCONSOLE_SELECTION_INFO,
-            ) -> BOOL;
-            pub fn GetNumberOfConsoleMouseButtons(
-                lpNumberOfMouseButtons: LPDWORD,
-            ) -> BOOL;
-            pub fn SetConsoleActiveScreenBuffer(
-                hConsoleOutput: HANDLE,
-            ) -> BOOL;
-            pub fn FlushConsoleInputBuffer(
-                hConsoleInput: HANDLE,
-            ) -> BOOL;
-            pub fn SetConsoleScreenBufferSize(
-                hConsoleOutput: HANDLE,
-                dwSize: COORD,
-            ) -> BOOL;
-            pub fn SetConsoleCursorPosition(
-                hConsoleOutput: HANDLE,
-                dwCursorPosition: COORD,
-            ) -> BOOL;
-            pub fn SetConsoleCursorInfo(
-                hConsoleOutput: HANDLE,
-                lpConsoleCursorInfo: *const CONSOLE_CURSOR_INFO,
-            ) -> BOOL;
-            pub fn ScrollConsoleScreenBufferA(
-                hConsoleOutput: HANDLE,
-                lpScrollRectangle: *const SMALL_RECT,
-                lpClipRectangle: *const SMALL_RECT,
-                dwDestinationOrigin: COORD,
-                lpFill: *const CHAR_INFO,
-            ) -> BOOL;
-            pub fn ScrollConsoleScreenBufferW(
-                hConsoleOutput: HANDLE,
-                lpScrollRectangle: *const SMALL_RECT,
-                lpClipRectangle: *const SMALL_RECT,
-                dwDestinationOrigin: COORD,
-                lpFill: *const CHAR_INFO,
-            ) -> BOOL;
-            pub fn SetConsoleWindowInfo(
-                hConsoleOutput: HANDLE,
-                bAbsolute: BOOL,
-                lpConsoleWindow: *const SMALL_RECT,
-            ) -> BOOL;
-            pub fn SetConsoleTextAttribute(
-                hConsoleOutput: HANDLE,
-                wAttributes: WORD,
-            ) -> BOOL;
-            pub fn GenerateConsoleCtrlEvent(
-                dwCtrlEvent: DWORD,
-                dwProcessGroupId: DWORD,
-            ) -> BOOL;
-            pub fn FreeConsole() -> BOOL;
-            pub fn AttachConsole(
-                dwProcessId: DWORD,
-            ) -> BOOL;
-            
-            pub fn GetConsoleTitleA(
-                lpConsoleTitle: LPSTR,
-                nSize: DWORD,
-            ) -> DWORD;
-            pub fn GetConsoleTitleW(
-                lpConsoleTitle: LPWSTR,
-                nSize: DWORD,
-            ) -> DWORD;
-            pub fn GetConsoleOriginalTitleA(
-                lpConsoleTitle: LPSTR,
-                nSize: DWORD,
-            ) -> DWORD;
-            pub fn GetConsoleOriginalTitleW(
-                lpConsoleTitle: LPWSTR,
-                nSize: DWORD,
-            ) -> DWORD;
-            pub fn SetConsoleTitleA(
-                lpConsoleTitle: LPCSTR,
-            ) -> BOOL;
-
-            pub fn WriteConsoleInputW
-            (
-                hConsoleInput: HANDLE,
-                lpBuffer: *const INPUT_RECORD,
-                nLength: DWORD,
-                lpNumberOfEventsWritten: LPDWORD,
-            ) -> BOOL;
-
-            pub fn CloseHandle(
-                hObject: HANDLE,
-            ) -> BOOL;
-
-            pub fn CreateConsoleScreenBuffer(
-                dwDesiredAccess: DWORD,
-                dwShareMode: DWORD,
-                lpSecurityAttributes: *const SECURITY_ATTRIBUTES,
-                dwFlags: DWORD,
-                lpScreenBufferData: LPVOID,
-            ) -> HANDLE;
-
-            pub fn SetConsoleMode
-            (
-                hConsoleHandle: HANDLE,
-                dwMode: DWORD,
-            ) -> BOOL;
-
-            pub fn AllocConsole() -> BOOL;
-            pub fn GetConsoleCP() -> UINT;
-            pub fn GetConsoleMode
-            (
-                hConsoleHandle: HANDLE,
-                lpMode: LPDWORD,
-            ) -> BOOL;
-
-            
-            pub fn FillConsoleOutputCharacterA
-            (
-                hConsoleOutput: HANDLE,
-                cCharacter: CHAR,
-                nLength: DWORD,
-                dwWriteCoord: COORD,
-                lpNumberOfCharsWritten: LPDWORD,
-            ) -> BOOL;
-
-            pub fn FillConsoleOutputCharacterW
-            (
-                hConsoleOutput: HANDLE,
-                cCharacter: WCHAR,
-                nLength: DWORD,
-                dwWriteCoord: COORD,
-                lpNumberOfCharsWritten: LPDWORD,
-            ) -> BOOL;
-
-            pub fn FillConsoleOutputAttribute
-            (
-                hConsoleOutput: HANDLE,
-                wAttribute: WORD,
-                nLength: DWORD,
-                dwWriteCoord: COORD,
-                lpNumberOfAttrsWritten: LPDWORD,
-            ) -> BOOL;
-
-            pub fn ReadConsoleInputW
-            (
-                hConsoleInput: HANDLE,
-                lpBuffer: PINPUT_RECORD,
-                nLength: DWORD,
-                lpNumberOfEventsRead: LPDWORD,
-            ) -> BOOL;
-
-            pub fn ReadConsoleW
-            (
-                hConsoleInput: HANDLE,
-                lpBuffer: LPVOID,
-                nNumberOfCharsToRead: DWORD,
-                lpNumberOfCharsRead: LPDWORD,
-                pInputControl: PCONSOLE_READCONSOLE_CONTROL,
-            ) -> BOOL;
-
-            pub fn WaitForSingleObject(
-                hHandle: HANDLE,
-                dwMilliseconds: DWORD,
-            ) -> DWORD;
-
-            pub fn SetConsoleCtrlHandler(
-                HandlerRoutine: PHANDLER_ROUTINE,
-                Add: BOOL,
-            ) -> BOOL;
-            
-            pub fn CoTaskMemFree(
-                pv: LPVOID,
-            );
-
-            pub fn SHGetKnownFolderPath
-            (
-                rfid: REFKNOWNFOLDERID,
-                dwFlags: DWORD,
-                hToken: HANDLE,
-                pszPath: *mut PWSTR,
-            ) -> HRESULT;
-
-            pub fn lstrlenW( lpString: LPCWSTR ) -> c_int;
-
-            pub fn WriteConsoleA
-            (
-                hConsoleOutput: HANDLE,
-                lpBuffer: *const VOID,
-                nNumberOfCharsToWrite: DWORD,
-                lpNumberOfCharsWritten: LPDWORD,
-                lpReserved: LPVOID,
-            ) -> BOOL;
-
-            pub fn WriteConsoleW
-            (
-                hConsoleOutput: HANDLE,
-                lpBuffer: *const VOID,
-                nNumberOfCharsToWrite: DWORD,
-                lpNumberOfCharsWritten: LPDWORD,
-                lpReserved: LPVOID,
-            ) -> BOOL;
-
-            pub fn FormatMessageW
-            (
-                dwFlags: DWORD,
-                lpSource: LPCVOID,
-                dwMessageId: DWORD,
-                dwLanguageId: DWORD,
-                lpBuffer: LPWSTR,
-                nSize: DWORD,
-                Arguments: *mut va_list,
-            ) -> DWORD;
-            pub fn GetLastError() -> DWORD;
-            pub fn SetLastError( dwErrCode: DWORD, );
-            pub fn GetErrorMode() -> UINT;
-            pub fn SetErrorMode( uMode: UINT, ) -> UINT;
-        }
-        
-        #[inline] pub fn decode_surrogate(second_byte: u8, third_byte: u8) -> u16
-        { 0xD800 | (second_byte as u16 & 0x3F) << 6 | third_byte as u16 & 0x3F }
-
-        #[inline] pub fn decode_surrogate_pair(lead: u16, trail: u16) -> char
-        {
-            let code_point = 0x10000 + ((((lead - 0xD800) as u32) << 10) | (trail - 0xDC00) as u32);
-            unsafe { char::from_u32_unchecked(code_point) }
-        }
-        
-        #[inline] pub fn is_code_point_boundary(slice: &Wtf8, index: usize) -> bool
-        {
-            if index == 0 { return true; }
-
-            match slice.bytes.get(index)
-            {
-                None => index == slice.len(),
-                Some(&b) => (b as i8) >= -0x40,
-            }
-        }
-        /// Verify that `index` is at the edge of either a valid UTF-8 codepoint or of the whole string.
-        #[inline] #[track_caller] pub fn check_utf8_boundary(slice: &Wtf8, index: usize)
-        {
-            if index == 0 { return; }
-
-            match slice.bytes.get(index)
-            {
-                Some(0xED) => (),
-                Some(&b) if (b as i8) >= -0x40 => return,
-                Some(_) => panic!("byte index {index} is not a codepoint boundary"),
-                None if index == slice.len() => return,
-                None => panic!("byte index {index} is out of bounds"),
-            }
-
-            if slice.bytes[index + 1] >= 0xA0
-            {
-                if index >= 3 && slice.bytes[index - 3] == 0xED && slice.bytes[index - 2] >= 0xA0
-                { panic!("byte index {index} lies between surrogate codepoints"); }
-            }
-        }
-        
-        #[inline] pub unsafe fn slice_unchecked(s: &Wtf8, begin: usize, end: usize) -> &Wtf8 
-        {
-            unsafe 
-            {
-                let len = end - begin;
-                let start = s.as_bytes().as_ptr().add(begin);
-                Wtf8::from_bytes_unchecked(slice::from_raw_parts(start, len))
-            }
-        }
-        
-        #[inline(never)] pub fn slice_error_fail(s: &Wtf8, begin: usize, end: usize) -> ! 
-        {
-            assert!(begin <= end);
-            panic!("index {begin} and/or {end} in `{s:?}` do not lie on character boundary");
-        }
-    } #[cfg(windows)] pub use self::windows::*;
+    pub use nix::libc::{ * };
 }
 
 pub mod marker
@@ -27064,6 +25370,33 @@ pub mod os
     {
         //! Owned and borrowed Unix-like file descriptors.
         pub use std::os::fd::{ * };
+        // pub fn create_raw_fd_from_file(file_name: &str, append: bool) -> Result<i32, String>
+        pub fn create_raw_from_file( file_name:&str, append:bool ) -> Result<i32, String>
+        {
+            let mut oos = ::fs::OpenOptions::new();
+            
+            if append
+            {
+                oos.append(true);
+            }
+            
+            else
+            {
+                oos.write(true);
+                oos.truncate(true);
+            }
+
+            match oos.create(true).open(file_name)
+            {
+                Ok(x) =>
+                {
+                    let fd = x.into_raw_fd();
+                    Ok(fd)
+                }
+
+                Err(e) => Err(format!("{}", e)),
+            }
+        }
     }
 
     pub mod raw
@@ -34579,7 +32912,7 @@ pub mod path
             {
                 collections::{ HashMap },
                 ffi::{ CStr, OsString },
-                libc::{ unix::{ * }, * },
+                libc::{ * },
                 os::unix::ffi::{ OsStringExt },
                 path::{ Path, PathBuf },
                 *,
@@ -34820,7 +33153,7 @@ pub mod path
             use ::
             {
                 ffi::{ OsString },
-                libc::windows::{ * },
+                libc::{ * },
                 path::{ PathBuf },
                 *,
             };
@@ -34966,6 +33299,57 @@ pub mod path
 
         s
     }
+    // pub fn find_file_in_path(filename: &str, exec: bool) -> String
+    pub fn find_file(filename: &str, exec: bool) -> String
+    {
+        let env_path = match env::var("PATH")
+        {
+            Ok(x) => x,
+            Err(e) => {
+                println_stderr!("cicada: error with env PATH: {:?}", e);
+                return String::new();
+            }
+        };
+
+        let vec_path: Vec<&str> = env_path.split(':').collect();
+        for p in &vec_path {
+            match read_dir(p) {
+                Ok(list) => {
+                    for entry in list.flatten() {
+                        if let Ok(name) = entry.file_name().into_string() {
+                            if name != filename {
+                                continue;
+                            }
+
+                            if exec {
+                                let _mode = match entry.metadata() {
+                                    Ok(x) => x,
+                                    Err(e) => {
+                                        println_stderr!("cicada: metadata error: {:?}", e);
+                                        continue;
+                                    }
+                                };
+                                let mode = _mode.permissions().mode();
+                                if mode & 0o111 == 0 {
+                                    // not binary
+                                    continue;
+                                }
+                            }
+
+                            return entry.path().to_string_lossy().to_string();
+                        }
+                    }
+                }
+                Err(e) => {
+                    if e.kind() == ErrorKind::NotFound {
+                        continue;
+                    }
+                    log!("cicada: fs read_dir error: {}: {}", p, e);
+                }
+            }
+        }
+        String::new()
+    }
 }
 
 pub mod process
@@ -34973,13 +33357,102 @@ pub mod process
     pub use std::process::{ * };
     use ::
     {
-        nix::{ Error, Result, libc::c_int, unistd::{ fork as nix_fork, ForkResult } },
+        error::
+        {
+            Error as ErrorTrait,
+            no::{ Errno, errno }
+        },
+        ffi::{ CString, NulError, OsStr, OsString },
+        libc::{ getpid as pid, pipe as tube, * },
+        nix::{ Error, Result, unistd::{ fork as nix_fork, ForkResult } },
         os::fd::{ RawFd },
         shell::{ Shell },
         types::{ * },
     };
+    /*exec v.0.0.0*/
+    /// Like `try!`, but it just returns the error directly without wrapping it in `Err`.
+    macro_rules! exec_try
+    {
+        ( $ expr : expr ) =>
+        {
+            match $expr
+            {
+                Ok(val) => val,
+                Err(err) => return From::from(err),
+            }
+        };
+    }
+    /// Build a command to execute.
+    pub struct Command
+    {
+        /// The program name and arguments, in typical C `argv` style.
+        argv: Vec<OsString>,
+    }
+    
+    impl Command
+    {
+        /// Create a new command builder, specifying the program to run.
+        pub fn new<S: AsRef<OsStr>>( program:S ) -> Command
+        {
+            Command
+            {
+                argv: vec!(program.as_ref().to_owned()),
+            }
+        }
+        /// Add an argument to the command builder.  This can be chained.
+        pub fn arg<S: AsRef<OsStr>>(&mut self, arg: S) -> &mut Command
+        {
+            self.argv.push(arg.as_ref().to_owned());
+            self
+        }
+        /// Add multiple arguments to the command builder.
+        pub fn args<S: AsRef<OsStr>>(&mut self, args: &[S]) -> &mut Command
+        {
+            for arg in args
+            {
+                self.arg(arg.as_ref());
+            }
+
+            self
+        }
+
+        /// Execute the command we built.
+        pub fn exec(&mut self) -> Error
+        {
+            execvp(&self.argv[0], &self.argv)
+        }
+    }
+    /// Run `program` with `args`, completely replacing the currently running program.
+    pub fn execvp<S, I>(program: S, args: I) -> Error where
+    S:AsRef<OsStr>, 
+    I:IntoIterator,
+    I::Item:AsRef<OsStr>
+    {
+        let program_cstring = exec_try!(CString::new(program.as_ref().as_bytes()));
+        let arg_cstrings = exec_try!(args.into_iter().map(|arg|
+        {
+            CString::new(arg.as_ref().as_bytes())
+        }).collect::<Result<Vec<_>, _>>());
+        let mut arg_charptrs: Vec<_> = arg_cstrings.iter().map(|arg|
+        {
+            arg.as_ptr()
+        }).collect();
+
+        arg_charptrs.push( ptr::null() );
+        
+        let res = unsafe
+        {
+            ::execvp(program_cstring.as_ptr(), arg_charptrs.as_ptr())
+        };
+
+        // Handle our error result.
+        if res < 0
+        {
+            Error::Errno(errno())
+        } else { panic!("execvp returned unexpectedly") }
+    }
     /**/
-    pub fn getpid() -> i32 { unsafe { getpid() } }
+    pub fn getpid() -> i32 { unsafe { pid() } }
 
     pub fn fork() -> Result<ForkResult> { unsafe{ nix_fork() } }
 
@@ -34988,7 +33461,7 @@ pub mod process
         unsafe
         {
             let mut fds = ::mem::MaybeUninit::<[c_int; 2]>::uninit();
-            let res = nix::libc::pipe(fds.as_mut_ptr() as *mut c_int);
+            let res = tube(fds.as_mut_ptr() as *mut c_int);
             Error::result(res)?;
             Ok((fds.assume_init()[0], fds.assume_init()[1]))
         }
@@ -35083,13 +33556,30 @@ pub mod run
 {
     use ::
     {
-        nix::libc::SIGCONT,
+        io::{ Write as _ },
+        libc::{ * },
         path::{ Path },
         regex::{ Regex },
         shell::{ Shell },
+        str::{ Tokenizes },
         types::{ * },
         *,
     };
+
+    #[derive( Debug )]
+    pub enum SubCommand
+    {
+        Add
+        {
+            timestamp: Option<f64>,
+            input: String,
+        },
+        
+        Delete
+        {
+            rowid: Vec<usize>,
+        }
+    }
 
     pub fn alias(sh: &mut shell::Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
     {
@@ -35204,17 +33694,22 @@ pub mod run
 
         {
             let mut result = sh.get_job_by_id(job_id);
-            // fall back to find job by using prcess group id
-            if result.is_none() {
+            
+            if result.is_none()
+            {
                 result = sh.get_job_by_gid(job_id);
             }
 
-            match result {
-                Some(job) => {
-                    unsafe {
-                        libc::killpg(job.gid, libc::SIGCONT);
+            match result
+            {
+                Some(job) =>
+                {
+                    unsafe
+                    {
+                        killpg(job.gid, SIGCONT);
                         gid = job.gid;
-                        if job.status == "Running" {
+                        if job.status == "Running"
+                        {
                             let info = format!("cicada: bg: job {} already in background", job.id);
                             print_stderr_with_capture(&info, &mut cr, cl, cmd, capture);
                             return cr;
@@ -35315,10 +33810,10 @@ pub mod run
         };
         info.push(("version", VERSION));
 
-        let os_name = libs::os_type::get_os_name();
+        let os_name = os::get_name();
         info.push(("os-name", &os_name));
 
-        let hfile = history::get_history_file();
+        let hfile = history::file();
         info.push(("history-file", &hfile));
 
         let rcf = rcfile::get_rc_file();
@@ -35392,7 +33887,7 @@ pub mod run
             return cr;
         }
 
-        let mut _cmd = exec::Command::new(&args[1]);
+        let mut _cmd = ::process::Command::new(&args[1]);
         let err = _cmd.args(&args[2..len]).exec();
         let info = format!("cicada: exec: {}", err);
         print_stderr_with_capture(&info, &mut cr, cl, cmd, capture);
@@ -35441,14 +33936,17 @@ pub mod run
     {
         let mut cr = CommandResult::new();
         let tokens = cmd.tokens.clone();
-
         let re_name_ptn = Regex::new(r"^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$").unwrap();
-        for (_, text) in tokens.iter() {
-            if text == "export" {
+
+        for (_, text) in tokens.iter()
+        {
+            if text == "export"
+            {
                 continue;
             }
 
-            if !tools::is_env(text) {
+            if !is::env(text)
+            {
                 let mut info = String::new();
                 info.push_str("export: invalid command\n");
                 info.push_str("usage: export XXX=YYY");
@@ -35456,7 +33954,8 @@ pub mod run
                 return cr;
             }
 
-            if !re_name_ptn.is_match(text) {
+            if !re_name_ptn.is_match(text)
+            {
                 let mut info = String::new();
                 info.push_str("export: invalid command\n");
                 info.push_str("usage: export XXX=YYY ZZ=123");
@@ -35464,10 +33963,12 @@ pub mod run
                 return cr;
             }
 
-            for cap in re_name_ptn.captures_iter(text) {
+            for cap in re_name_ptn.captures_iter(text)
+            {
                 let name = cap[1].to_string();
-                let token = parsers::line::unquote(&cap[2]);
-                let value = libs::path::expand_home(&token);
+                //let token = parsers::line::unquote(&cap[2]);
+                let token = cap[2].tokenize();
+                let value = path::expand_home(&token);
                 env::set_var(name, &value);
             }
         }
@@ -35533,8 +34034,8 @@ pub mod run
                         if !shell::give_terminal_to(job.gid) {
                             return CommandResult::error();
                         }
-
-                        libc::killpg(job.gid, libc::SIGCONT);
+                        
+                        killpg(job.gid, SIGCONT);
                         pid_list = job.pids.clone();
                         gid = job.gid;
                     }
@@ -35552,7 +34053,7 @@ pub mod run
 
             let cr = jobc::wait_fg_job(sh, gid, &pid_list);
 
-            let gid_shell = libc::getpgid(0);
+            let gid_shell = getpgid(0);
             if !shell::give_terminal_to(gid_shell) {
                 log!("failed to give term to back to shell : {}", gid_shell);
             }
@@ -35564,7 +34065,7 @@ pub mod run
     pub fn history(sh: &mut Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
     {
         let mut cr = CommandResult::new();
-        let hfile = history::get_history_file();
+        let hfile = history::file();
         let path = Path::new(hfile.as_str());
         if !path.exists() {
             let info = "no history file";
@@ -35669,7 +34170,7 @@ pub mod run
             Ok(fd) => {
                 let info = format!("{}", fd);
                 print_stdout_with_capture(&info, &mut cr, cl, cmd, capture);
-                unsafe { libc::close(fd); }
+                unsafe { close(fd); }
             }
             Err(e) => {
                 println_stderr!("cicada: minfd: error: {}", e);
@@ -35845,15 +34346,15 @@ pub mod run
     pub fn set_limit(limit_name: &str, value: u64, for_hard: bool) -> String
     {
         let limit_id = match limit_name {
-            "open_files" => libc::RLIMIT_NOFILE,
-            "core_file_size" => libc::RLIMIT_CORE,
+            "open_files" => RLIMIT_NOFILE,
+            "core_file_size" => RLIMIT_CORE,
             _ => return String::from("invalid limit name"),
         };
 
-        let mut rlp = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+        let mut rlp = rlimit { rlim_cur: 0, rlim_max: 0 };
 
         unsafe {
-            if libc::getrlimit(limit_id, &mut rlp) != 0 {
+            if getrlimit(limit_id, &mut rlp) != 0 {
                 return format!("cicada: ulimit: error getting limit: {}", Error::last_os_error());
             }
         }
@@ -35872,7 +34373,7 @@ pub mod run
         }
 
         unsafe {
-            if libc::setrlimit(limit_id, &rlp) != 0 {
+            if setrlimit(limit_id, &rlp) != 0 {
                 return format!("cicada: ulimit: error setting limit: {}", Error::last_os_error());
             }
         }
@@ -35883,25 +34384,25 @@ pub mod run
     pub fn get_limit(limit_name: &str, single_print: bool, for_hard: bool) -> (String, String)
     {
         let (desc, limit_id) = match limit_name {
-            "open_files" => ("open files", libc::RLIMIT_NOFILE),
-            "core_file_size" => ("core file size", libc::RLIMIT_CORE),
+            "open_files" => ("open files", RLIMIT_NOFILE),
+            "core_file_size" => ("core file size", RLIMIT_CORE),
             _ => return (String::new(), String::from("ulimit: error: invalid limit name")),
         };
 
-        let mut rlp = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+        let mut rlp = rlimit { rlim_cur: 0, rlim_max: 0 };
 
         let mut result_stdout = String::new();
         let mut result_stderr = String::new();
 
         unsafe {
-            if libc::getrlimit(limit_id, &mut rlp) != 0 {
+            if getrlimit(limit_id, &mut rlp) != 0 {
                 result_stderr.push_str(&format!("error getting limit: {}", Error::last_os_error()));
                 return (result_stdout, result_stderr);
             }
 
             let to_print = if for_hard { rlp.rlim_max } else { rlp.rlim_cur };
 
-            let info = if to_print == libc::RLIM_INFINITY {
+            let info = if to_print == RLIM_INFINITY {
                 if single_print { "unlimited\n".to_string() } else { format!("{}\t\tunlimited\n", desc) }
             } else if single_print {
                 format!("{}\n", to_print)
@@ -36174,16 +34675,16 @@ pub mod run
                     if let Some(fd) = _fd_err {
                         _fd_candidate = Some(fd);
                     } else {
-                        _fd_candidate = unsafe { Some(libc::dup(2)) };
+                        _fd_candidate = unsafe { Some( dup(2)) };
                     }
                 }
                 else
                 {
                     let append = item.1 == ">>";
-                    if let Ok(fd) = tools::create_raw_fd_from_file(&item.2, append) { _fd_candidate = Some(fd); }
+                    if let Ok(fd) = ::os::fd::create_raw_from_file(&item.2, append) { _fd_candidate = Some(fd); }
                 }
                 
-                if let Some(fd) = fd_out { unsafe { libc::close(fd); } }
+                if let Some(fd) = fd_out { unsafe { close(fd); } }
                 fd_out = _fd_candidate;
             }
 
@@ -36193,16 +34694,16 @@ pub mod run
 
                 if item.2 == "&1"
                 {
-                    if let Some(fd) = fd_out { _fd_candidate = unsafe { Some(libc::dup(fd)) }; }
+                    if let Some(fd) = fd_out { _fd_candidate = unsafe { Some( dup(fd)) }; }
                 }
                 
                 else
                 {
                     let append = item.1 == ">>";
-                    if let Ok(fd) = tools::create_raw_fd_from_file(&item.2, append) { _fd_candidate = Some(fd); }
+                    if let Ok(fd) = ::os::fd::create_raw_from_file(&item.2, append) { _fd_candidate = Some(fd); }
                 }
 
-                if let Some(fd) = fd_err { unsafe { libc::close(fd); } }
+                if let Some(fd) = fd_err { unsafe { close(fd); } }
 
                 fd_err = _fd_candidate;
             }
@@ -36217,12 +34718,12 @@ pub mod run
 
         let (_fd_out, _fd_err) = _get_std_fds(&cmd.redirects_to);
         
-        if let Some(fd) = _fd_err { unsafe { libc::close(fd); } }
+        if let Some(fd) = _fd_err { unsafe { close(fd); } }
 
         if let Some(fd) = _fd_out { fd }
         else
         {
-            let fd = unsafe { libc::dup(1) };
+            let fd = unsafe { dup(1) };
             if fd == -1
             {
                 let eno = errno();
@@ -36237,7 +34738,7 @@ pub mod run
         if cl.with_pipeline() { return 2; }
 
         let (_fd_out, _fd_err) = _get_std_fds(&cmd.redirects_to);
-        if let Some(fd) = _fd_out { unsafe { libc::close(fd); } }
+        if let Some(fd) = _fd_out { unsafe { close(fd); } }
 
         if let Some(fd) = _fd_err
         {
@@ -36246,7 +34747,7 @@ pub mod run
 
         else
         {
-            let fd = unsafe { libc::dup(2) };
+            let fd = unsafe { dup(2) };
             if fd == -1
             {
                 let eno = errno();
@@ -36395,8 +34896,8 @@ pub mod run
         {
             for fds in pipes
             {
-                libs::close(fds.0);
-                libs::close(fds.1);
+                close(fds.0);
+                close(fds.1);
             }
 
             return (false, CommandResult::error());
@@ -36410,7 +34911,7 @@ pub mod run
 
         let mut pgid: i32 = 0;
         let mut fg_pids: Vec<i32> = Vec::new();
-        let isatty = if tty { unsafe { libc::isatty(1) == 1 } } else { false };
+        let isatty = if tty { unsafe {  isatty(1) == 1 } } else { false };
 
         let options = CommandOptions
         {
@@ -36442,8 +34943,8 @@ pub mod run
                 {
                     if let Some(fds) = fds_capture_stdout
                     {
-                        libs::close(fds.0);
-                        libs::close(fds.1);
+                        close(fds.0);
+                        close(fds.1);
                     }
 
                     println_stderr!("cicada: pipeline3: {}", e);
@@ -36501,7 +35002,7 @@ pub mod shell
         collections::{ HashMap, HashSet },
         error::no::{ errno },
         io::{ Write },
-        nix::libc::{ * },
+        libc::{ * },
         os::fd::{ RawFd },
         regex::{ * },
         types::{ * },
@@ -36840,7 +35341,7 @@ pub mod shell
         sigaddset(&mut mask, SIGTTOU);
         sigaddset(&mut mask, SIGCHLD);
 
-        let rcode = pthread_sigmask( nix::libc::SIG_BLOCK, &mask, &mut old_mask );
+        let rcode = pthread_sigmask( SIG_BLOCK, &mask, &mut old_mask );
         
         if rcode != 0
         {
@@ -36974,7 +35475,7 @@ pub mod shell
                 result.push_str(format!("{}{}", head, sh.previous_status).as_str());
             } else if key == "$" {
                 unsafe {
-                    let val = libc::getpid();
+                    let val = getpid();
                     result.push_str(format!("{}{}", head, val).as_str());
                 }
             } else if let Ok(val) = env::var(&key) {
@@ -37360,7 +35861,7 @@ pub mod shell
                         let (term_given, cr) = run::pipeline(sh, &c, true, true, false);
                         if term_given {
                             unsafe {
-                                let gid = libc::getpgid(0);
+                                let gid = getpgid(0);
                                 give_terminal_to(gid);
                             }
                         }
@@ -37736,12 +36237,14 @@ pub mod shell
             }
         }
 
-        if errored_pipes {
-            // release fds that already created when errors occurred
-            for fds in pipes {
-                libs::close(fds.0);
-                libs::close(fds.1);
+        if errored_pipes
+        {
+            for fds in pipes
+            {
+                close(fds.0);
+                close(fds.1);
             }
+
             return (false, CommandResult::error());
         }
 
@@ -37777,10 +36280,12 @@ pub mod shell
             }
             match pipe() {
                 Ok(fds) => fds_capture_stderr = Some(fds),
-                Err(e) => {
-                    if let Some(fds) = fds_capture_stdout {
-                        libs::close(fds.0);
-                        libs::close(fds.1);
+                Err(e) =>
+                {
+                    if let Some(fds) = fds_capture_stdout
+                    {
+                        close(fds.1);
+                        close(fds.0);
                     }
                     println_stderr!("cicada: pipeline3: {}", e);
                     return (false, CommandResult::error());
@@ -37865,7 +36370,8 @@ pub mod shell
             let mut fds_stdin = None;
             let cmd = cl.commands.get(idx_cmd).unwrap();
 
-            if cmd.has_here_string() {
+            if cmd.has_here_string()
+            {
                 match pipe() {
                     Ok(fds) => fds_stdin = Some(fds),
                     Err(e) => {
@@ -37879,39 +36385,39 @@ pub mod shell
             {
                 Ok(ForkResult::Child) =>
                 {
-                    unsafe
-                    {
-                        libc::signal(libc::SIGTSTP, libc::SIG_DFL);
-                        libc::signal(libc::SIGQUIT, libc::SIG_DFL);
-                    }
+                    libc::signal(libc::SIGTSTP, libc::SIG_DFL);
+                    libc::signal(libc::SIGQUIT, libc::SIG_DFL);
                     
-                    if idx_cmd > 0 {
-                        for i in 0..idx_cmd - 1 {
+                    if idx_cmd > 0
+                    {
+                        for i in 0..idx_cmd - 1
+                        {
                             let fds = pipes[i];
-                            libs::close(fds.0);
-                            libs::close(fds.1);
+                            close(fds.0);
+                            close(fds.1);
                         }
                     }
                     
                     for i in idx_cmd + 1..pipes_count {
                         let fds = pipes[i];
-                        libs::close(fds.0);
-                        libs::close(fds.1);
+                        close(fds.0);
+                        close(fds.1);
                     }
                     
                     if idx_cmd < pipes_count {
                         if let Some(fds) = fds_capture_stdout {
-                            libs::close(fds.0);
-                            libs::close(fds.1);
+                            close(fds.0);
+                            close(fds.1);
                         }
                         if let Some(fds) = fds_capture_stderr {
-                            libs::close(fds.0);
-                            libs::close(fds.1);
+                            close(fds.0);
+                            close(fds.1);
                         }
                     }
 
                     if idx_cmd == 0 {
-                        unsafe {
+                        unsafe
+                        {
                             let pid = libc::getpid();
                             libc::setpgid(0, pid);
                         }
@@ -37923,15 +36429,15 @@ pub mod shell
                     
                     if idx_cmd > 0 {
                         let fds_prev = pipes[idx_cmd - 1];
-                        libs::dup2(fds_prev.0, 0);
-                        libs::close(fds_prev.0);
-                        libs::close(fds_prev.1);
+                        dup2(fds_prev.0, 0);
+                        close(fds_prev.0);
+                        close(fds_prev.1);
                     }
                     if idx_cmd < pipes_count {
                         let fds = pipes[idx_cmd];
-                        libs::dup2(fds.1, 1);
-                        libs::close(fds.1);
-                        libs::close(fds.0);
+                        dup2(fds.1, 1);
+                        close(fds.1);
+                        close(fds.0);
                     }
 
                     if cmd.has_redirect_from() {
@@ -37941,16 +36447,16 @@ pub mod shell
                                 process::exit(1);
                             }
 
-                            libs::dup2(fd, 0);
-                            libs::close(fd);
+                            dup2(fd, 0);
+                            close(fd);
                         }
                     }
 
                     if cmd.has_here_string() {
                         if let Some(fds) = fds_stdin {
-                            libs::close(fds.1);
-                            libs::dup2(fds.0, 0);
-                            libs::close(fds.0);
+                            close(fds.1);
+                            dup2(fds.0, 0);
+                            close(fds.0);
                         }
                     }
 
@@ -37962,46 +36468,59 @@ pub mod shell
                         let to_ = &item.2;
                         if to_ == "&1" && from_ == "2" {
                             if idx_cmd < pipes_count {
-                                libs::dup2(1, 2);
+                                dup2(1, 2);
                             } else if !options.capture_output {
-                                let fd = libs::dup(1);
+                                let fd = dup(1);
                                 if fd == -1 {
                                     println_stderr!("cicada: dup error");
                                     process::exit(1);
                                 }
-                                libs::dup2(fd, 2);
+                                dup2(fd, 2);
                             } else {
                                 
                             }
                         } else if to_ == "&2" && from_ == "1" {
                             if idx_cmd < pipes_count || !options.capture_output {
-                                let fd = libs::dup(2);
+                                let fd = dup(2);
                                 if fd == -1 {
                                     println_stderr!("cicada: dup error");
                                     process::exit(1);
                                 }
-                                libs::dup2(fd, 1);
+                                dup2(fd, 1);
                             } else {
                                 
                             }
-                        } else {
+                        }
+                        
+                        else
+                        {
                             let append = op_ == ">>";
-                            match tools::create_raw_fd_from_file(to_, append) {
-                                Ok(fd) => {
-                                    if fd == -1 {
+                            
+                            match ::os::fd::create_raw_from_file(to_, append)
+                            {
+                                Ok( fd ) =>
+                                {
+                                    if fd == -1
+                                    {
                                         println_stderr!("cicada: fork: fd error");
                                         process::exit(1);
                                     }
 
-                                    if from_ == "1" {
-                                        libs::dup2(fd, 1);
+                                    if from_ == "1"
+                                    {
+                                        dup2(fd, 1);
                                         stdout_redirected = true;
-                                    } else {
-                                        libs::dup2(fd, 2);
+                                    }
+                                    
+                                    else
+                                    {
+                                        dup2(fd, 2);
                                         stderr_redirected = true;
                                     }
                                 }
-                                Err(e) => {
+
+                                Err(e) =>
+                                {
                                     println_stderr!("cicada: fork: {}", e);
                                     process::exit(1);
                                 }
@@ -38012,16 +36531,16 @@ pub mod shell
                     if idx_cmd == pipes_count && options.capture_output {
                         if !stdout_redirected {
                             if let Some(fds) = fds_capture_stdout {
-                                libs::close(fds.0);
-                                libs::dup2(fds.1, 1);
-                                libs::close(fds.1);
+                                close(fds.0);
+                                dup2(fds.1, 1);
+                                close(fds.1);
                             }
                         }
                         if !stderr_redirected {
                             if let Some(fds) = fds_capture_stderr {
-                                libs::close(fds.0);
-                                libs::dup2(fds.1, 2);
-                                libs::close(fds.1);
+                                close(fds.0);
+                                dup2(fds.1, 2);
+                                close(fds.1);
                             }
                         }
                     }
@@ -38033,10 +36552,12 @@ pub mod shell
                     }
                     
                     let mut c_envs: Vec<_> = env::vars()
-                        .map(|(k, v)| {
-                            CString::new(format!("{}={}", k, v).as_str()).expect("CString error")
-                        })
-                        .collect();
+                    .map(|(k, v)|
+                    {
+                        CString::new(format!("{}={}", k, v).as_str()).expect("CString error")
+                    })
+                    .collect();
+
                     for (key, value) in cl.envs.iter() {
                         c_envs.push(
                             CString::new(format!("{}={}", key, value).as_str()).expect("CString error"),
@@ -38044,12 +36565,12 @@ pub mod shell
                     }
 
                     let program = &cmd.tokens[0].1;
-                    let path = if program.contains('/') {
-                        program.clone()
-                    } else {
-                        libs::path::find_file_in_path(program, true)
-                    };
-                    if path.is_empty() {
+                    
+                    let path = if program.contains('/') { program.clone() }
+                    else { ::path::find_file( program, true ) };
+
+                    if path.is_empty()
+                    {
                         println_stderr!("cicada: {}: command not found", program);
                         process::exit(127);
                     }
@@ -38115,7 +36636,7 @@ pub mod shell
                         if redirect_from.0 == "<<<" {
                             if let Some(fds) = fds_stdin {
                                 unsafe {
-                                    libs::close(fds.0);
+                                    close(fds.0);
 
                                     let mut f = File::from_raw_fd(fds.1);
                                     match f.write_all(redirect_from.1.clone().as_bytes()) {
@@ -38133,11 +36654,11 @@ pub mod shell
                     
                     if idx_cmd < pipes_count {
                         let fds = pipes[idx_cmd];
-                        libs::close(fds.1);
+                        close(fds.1);
                     }
                     if idx_cmd > 0 {
                         let fds = pipes[idx_cmd - 1];
-                        libs::close(fds.0);
+                        close(fds.0);
                     }
 
                     if idx_cmd == pipes_count && options.capture_output {
@@ -38146,7 +36667,7 @@ pub mod shell
 
                         unsafe {
                             if let Some(fds) = fds_capture_stdout {
-                                libs::close(fds.1);
+                                close(fds.1);
 
                                 let mut f = File::from_raw_fd(fds.0);
                                 match f.read_to_string(&mut s_out) {
@@ -38155,7 +36676,7 @@ pub mod shell
                                 }
                             }
                             if let Some(fds) = fds_capture_stderr {
-                                libs::close(fds.1);
+                                close(fds.1);
                                 let mut f_err = File::from_raw_fd(fds.0);
                                 match f_err.read_to_string(&mut s_err) {
                                     Ok(_) => {}
@@ -38308,7 +36829,7 @@ pub mod str
         fn tokenize( &self ) -> String;
     }
 
-    impl Tokenizes for &str
+    impl Tokenizes for str
     {
         fn tokenize( &self ) -> String
         {
@@ -51881,4 +50402,4 @@ fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 51884
+// 50405
