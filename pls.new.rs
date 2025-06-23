@@ -1,22 +1,17 @@
 #![allow
 (
     ambiguous_glob_reexports,
-    bad_style,
     dead_code,
     elided_named_lifetimes,
-    improper_ctypes,
     non_camel_case_types,
     non_snake_case,
-    overflowing_literals,
     private_interfaces,
-    renamed_and_removed_lints,
     stable_features,
     unknown_lints,
     unreachable_patterns,
     unused_assignments,
     unused_imports,
     unused_macros,
-    unused_macro_rules,
     unused_mut,
     unused_unsafe,
     unused_variables,
@@ -1437,7 +1432,8 @@ extern crate unicode_width;
     {
         ($fmt:expr) =>
         (
-            match writeln!(&mut ::io::stderr(), $fmt)
+            use ::io::Write;
+            match writeln!( &mut ::io::stderr(), $fmt)
             {
                 Ok(_) => {}
                 Err(e) => println!("write to stderr failed: {:?}", e)
@@ -1446,7 +1442,8 @@ extern crate unicode_width;
 
         ($fmt:expr, $($arg:tt)*) =>
         (
-            match writeln!(&mut ::io::stderr(), $fmt, $($arg)*)
+            use ::io::Write;
+            match writeln!( &mut ::io::stderr(), $fmt, $($arg)*)
             {
                 Ok(_) => {}
                 Err(e) => println!("write to stderr failed: {:?}", e)
@@ -2334,6 +2331,7 @@ pub mod database
             hash_map::{Iter, Keys, Values},
             HashMap,
         },
+        io::{ Write as _ },
         path::{ Path },
         *,
     };
@@ -5748,6 +5746,31 @@ pub mod database
         /// Load an `Obj` from a &str.
         pub fn load_from_str(contents: &str) -> ParseResult<Obj> { parser::parse_obj_str(contents) }
     } pub use self::parses::{ * };
+    /// Database, table, column, collation, function, module, vfs name
+    pub enum Named<'a> 
+    {
+        Small( SmallCString ),
+        C( &'a CStr ),
+    }
+
+    impl ops::Deref for Named<'_>
+    {
+        type Target = CStr;
+        #[inline] fn deref(&self) -> &CStr
+        {
+            match self
+            {
+                Named::Small(s) => s.as_cstr(),
+                Named::C(s) => s,
+            }
+        }
+    }
+
+    pub trait Name: fmt::Debug
+    {
+        /// As C string
+        fn as_cstr(&self) -> OverResult<Named<'_>>;
+    }
     /// pls custom database.
     #[derive(Eq, PartialEq, Clone, Debug)]
     pub struct Database
@@ -6147,6 +6170,253 @@ pub mod database
             }
         }
     }
+    #[repr(C)] #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    pub enum OpenFlags
+    {
+        /// The database is opened in read-only mode.
+        OPEN_READ_ONLY = 1,
+        /// The database is opened for reading and writing if possible, 
+        /// or reading only if the file is write-protected by the operating system.
+        OPEN_READ_WRITE = 2,
+        /// The database is created if it does not already exist
+        OPEN_CREATE = 4,
+        /// The filename can be interpreted as a URI if this flag is set.
+        OPEN_URI = 64,
+        /// The database will be opened as an in-memory database.
+        OPEN_MEMORY = 128,
+        /// The new database connection will not use a per-connection mutex.
+        OPEN_NO_MUTEX = 32768,
+        /// The new database connection will use the "serialized" threading mode.
+        OPEN_FULL_MUTEX = 65536,
+        /// The database is opened with shared cache enabled.
+        OPEN_SHARED_CACHE = 0x0002_0000,
+        /// The database is opened shared cache disabled.
+        OPEN_PRIVATE_CACHE = 0x0004_0000,
+        /// The database filename is not allowed to be a symbolic link. (3.31.0)
+        OPEN_NOFOLLOW = 0x0100_0000,
+        /// Extended result codes. (3.37.0)
+        OPEN_EXRESCODE = 0x0200_0000,
+    }    
+    /// A connection to a SQLite database.
+    pub struct Connection
+    {
+
+    }
+
+    impl Connection
+    {
+        /// Create a new connection
+        pub const fn new() -> Self
+        {
+            Self
+            {
+
+            }
+        }
+        /// Create a new connection
+        pub fn create() -> Self
+        {
+            Self
+            {
+
+            }
+        }
+        /// Open a new connection to a OVER database.
+        #[inline] pub fn open<P: AsRef<Path>>(path: P) -> OverResult<Self>
+        {
+            Ok( Self::new() )
+        }
+        /// Open a new connection to an in-memory OVER database.
+        #[inline] pub fn open_in_memory() -> OverResult<Self>
+        {
+            Ok( Self::new() )
+        }
+        /// Open a new connection to an OVER database with flags.
+        #[inline] pub fn open_with_flags<P: AsRef<Path>>(path: P, flags: OpenFlags) -> OverResult<Self>
+        {
+            Ok( Self::new() )
+        }
+        /// Open a new connection to an OVER database using the specific flags and vfs name.
+        pub fn open_with_flags_and_vfs<P: AsRef<Path>, V: Name>
+        (
+            path: P,
+            flags: OpenFlags,
+            vfs: V,
+        ) -> OverResult<Self>
+        {
+            Ok( Self::new() )
+        }
+        /// Open a new connection to an in-memory OVER database.
+        pub fn open_in_memory_with_flags(flags: OpenFlags) -> OverResult<Self>
+        {
+            Ok( Self::new() )
+        }
+        /// Open a new connection to an in-memory OVER database using the specific flags and vfs name.
+        #[inline] pub fn open_in_memory_with_flags_and_vfs<V: Name>(flags: OpenFlags, vfs: V) -> OverResult<Self>
+        {
+            Ok( Self::new() )
+        }
+        /// Convenience method to run multiple OVER statements.
+        pub fn execute_batch( &self, query:&str ) -> OverResult<()>
+        {
+            Ok( () )
+        }
+        /// Convenience method to prepare and execute a single OVER statement.
+        #[inline] pub fn execute<P: Params>(&self, query: &str, params: P) -> OverResult<usize>
+        {
+            Ok( () )
+        }
+        /// Returns the path to the database file, if one exists and is known.
+        #[inline] pub fn path(&self) -> Option<&str>
+        {
+            None
+        }
+        /// Attempts to free as much heap memory as possible from the database connection.
+        #[inline] pub fn release_memory(&self) -> OverResult<()>
+        {
+            Ok( () )
+        }
+        /// Get the SQLite rowid of the most recent successful INSERT.
+        #[inline] pub fn last_insert_rowid(&self) -> i64
+        {
+            0
+        }
+        /// Convenience method to execute a query that is expected to return a single row.
+        #[inline] pub fn query_row<T, P, F>(&self, query: &str, params: P, f: F) -> OverResult<T> where
+        P: Params,
+        F: FnOnce(&Row<'_>) -> OverResult<T>
+        {
+            Ok( () )
+        }
+        /// Convenience method to execute a query that is expected to return exactly one row.
+        pub fn query_one<T, P, F>(&self, query: &str, params: P, f: F) -> OverResult<T> where
+        P: Params,
+        F: FnOnce(&Row<'_>) -> OverResult<T>,
+        {
+            Ok( () )
+        }
+        /// Convenience method to execute a query that is expected to return a single row,
+        /// and execute a mapping via `f` on that returned row with the possibility of failure.
+        #[inline] pub fn query_row_and_then<T, P, F>(&self, query: &str, params: P, f: F) -> OverResult<T> where
+        P: Params,
+        F: FnOnce(&Row<'_>) -> OverResult<T>,
+        {
+            Ok( () )
+        }
+        /// Prepare a SQL statement for execution.
+        #[inline] pub fn prepare(&self, query: &str) -> OverResult<Statement<'_>>
+        {
+            Ok( () )
+        }
+        /// Prepare a SQL statement for execution.
+        #[inline] pub fn prepare_with_flags(&self, query: &str, flags: PrepFlags) -> OverResult<Statement<'_>>
+        {
+            Ok( () )
+        }
+        /// Close the SQLite connection.
+        #[inline] pub fn close(self) -> OverResult<()>
+        {
+            Ok( () )
+        }
+        /// Enable loading of OVER extensions from both OVER queries and Rust.
+        #[inline] pub unsafe fn load_extension_enable(&self) -> OverResult<()>
+        {
+            Ok( () )
+        }
+        /// Disable loading of SQLite extensions.
+        #[inline] pub fn load_extension_disable(&self) -> OverResult<()>
+        {
+            Ok( () )
+        }
+        /// Load the OVER extension at `dylib_path`. `dylib_path` is passed
+        /// through to `over_load_extension`, which may attempt OS-specific
+        /// modifications if the file cannot be loaded directly.
+        #[inline] pub unsafe fn load_extension<P: AsRef<Path>, N: Name>
+        (
+            &self,
+            dylib_path: P,
+            entry_point: Option<N>,
+        ) -> OverResult<()> 
+        {
+            Ok( () )
+        }
+        /// Get access to the underlying OVER database connection handle.
+        #[inline] pub unsafe fn handle(&self) -> *mut Database
+        {
+            ptr::null_mut()
+        }
+        /// Create a `Connection` from a raw handle.
+        #[inline] pub unsafe fn from_handle( db: *mut Database ) -> OverResult<Self>
+        {
+            Ok( Self { } )
+        }
+        /// Helper to register an OVER extension written in Rust.
+        pub unsafe fn extension_init2
+        (
+            db: *mut Database,
+            pz_err_msg: *mut *mut c_char,
+            p_api: *mut Routines,
+            init: fn(Self) -> OverResult<bool>,
+        ) -> c_int 
+        {
+            0            
+        }
+        /// Create a `Connection` from a raw owned handle.
+        #[inline] pub unsafe fn from_handle_owned( db: *mut Database ) -> OverResult<Self> 
+        {
+            Ok( Self { } )
+        }
+        /// Get access to a handle that can be used to interrupt long-running queries from another thread.
+        #[inline] pub fn get_interrupt_handle(&self) -> InterruptHandle 
+        {
+            InterruptHandle()
+        }
+
+        #[inline] pub fn decode_result(&self, code: c_int) -> OverResult<()>
+        {
+            Ok( () )
+        }
+        /// Return the number of rows modified, inserted or deleted by the most
+        /// recently completed INSERT, UPDATE or DELETE statement on the database
+        /// connection.
+        #[inline] pub fn changes(&self) -> u64 { 0 }
+        /// Return the total number of rows modified, inserted or deleted by all
+        /// completed INSERT, UPDATE or DELETE statements since the database
+        /// connection was opened, including those executed as part of trigger programs.
+        #[inline] pub fn total_changes(&self) -> u64 { 0 }
+        /// Test for auto-commit mode.
+        #[inline] pub fn is_autocommit(&self) -> bool { false }
+        /// Determine if all associated prepared statements have been reset.
+        #[inline] pub fn is_busy(&self) -> bool { false }
+        /// Flush caches to disk mid-transaction
+        pub fn cache_flush(&self) -> OverResult<()>
+        {
+            Ok( () )
+        }
+        /// Determine if a database is read-only
+        pub fn is_readonly<N: Name>(&self, db_name: N) -> OverResult<bool>
+        {
+            Ok( true )
+        }
+        /// Return the schema name for a database connection.
+        pub fn db_name(&self, index: usize) -> OverResult<String>
+        {
+            Ok( String::new() )
+        }
+        /// Determine whether an interrupt is currently in effect
+        pub fn is_interrupted(&self) -> bool { false }
+    }
+
+    impl Drop for Connection
+    {
+        #[inline] fn drop(&mut self)
+        {
+            self.flush_prepared_statement_cache();
+        }
+    }
+    
+    unsafe impl Send for Connection {}
+
     // pub fn init_db(hfile: &str, htable: &str)
     pub fn initialize(hfile: &str, htable: &str)
     {
@@ -6243,6 +6513,7 @@ pub mod error
         use ::
         {
             error::{ Error },
+            system::{ self as _ },
             *,
         };
 
@@ -6262,7 +6533,8 @@ pub mod error
                 use ::
                 {
                     error::no::{ Errno },
-                    libc::{ * },
+                    libc::{ unix::{ * }, * },
+                    nix::libc::{ ERANGE, strerror_r, strlen },
                     *,
                 };
 
@@ -6332,7 +6604,7 @@ pub mod error
                 {
                     char::{ self, REPLACEMENT_CHARACTER },
                     error::{ Error, no::{ Errno } },
-                    libc::{ * },
+                    libc::{ windows::{ * }, * },
                     *,
                 };
 
@@ -6397,6 +6669,10 @@ pub mod error
                     unsafe { SetLastError(errno as WIN32_ERROR) }
                 }
             } #[cfg( windows )] pub use self::windows::{ * };
+
+            pub fn with_description<F, T>(_err: Errno, _callback: F) -> T where
+            F: FnOnce(Result<&str, Errno>) -> T
+            { unreachable!() }
             /*
             pub fn with_description<F, T>(_err: Errno, _callback: F) -> T where
             F: FnOnce(Result<&str, Errno>) -> T
@@ -6414,7 +6690,7 @@ pub mod error
         {
             fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result 
             {
-                sys::with_description(*self, |desc| 
+                system::with_description(*self, |desc| 
                 {
                     fmt.debug_struct("Errno")
                     .field("code", &self.0)
@@ -6428,7 +6704,7 @@ pub mod error
         {
             fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result
             {
-                sys::with_description(*self, |desc| match desc
+                system::with_description(*self, |desc| match desc
                 {
                     Ok(desc) => fmt.write_str(desc),
                     Err(fm_err) => write!
@@ -6634,21 +6910,6 @@ pub mod fmt
 pub mod fs
 {
     pub use std::fs::{ * };
-
-    pub fn close(fd: i32)
-    {
-        unsafe { ::libc::close(fd); }
-    }
-
-    pub fn dup(fd: i32) -> i32
-    {
-        unsafe { ::libc::dup(fd) }
-    }
-
-    pub fn dup2(src: i32, dst: i32)
-    {
-        unsafe { ::libc::dup2(src, dst); }
-    }
 }
 
 pub mod hash
@@ -6661,130 +6922,131 @@ pub mod history
     use ::
     {
         collections::{ HashMap },
+        database::{ Database, Connection },
         path::{ Path },
         shell::{ Shell },
         system::{ DefaultTerminal, Interface },
-        time::c::{ DateTime },
         *,
     };
-    // pub fn init(rl: &mut Interface<DefaultTerminal>)
+    // pub fn init(rl: &mut Interface<DefaultTerminal>  )
     pub fn initialize(rl: &mut Interface<DefaultTerminal>)
     {
         let mut hist_size: usize = 99999;
-        
+
         if let Ok(x) = env::var("HISTORY_SIZE")
         {
-            if let Ok(y) = x.parse::<usize>() {
-                hist_size = y;
-            }
+            if let Ok(y) = x.parse::<usize>() { hist_size = y; }
         }
 
         rl.set_history_size(hist_size);
 
-        let history_table = table();
-        let hfile = file();
+        let history_table = get_table();
+        let hfile = get_file();
 
-        if !Path::new(&hfile).exists() {
-            init_db(&hfile, &history_table);
+        if !Path::new(&hfile).exists()
+        {
+            ::database::initialize(&hfile, &history_table);
         }
 
         let mut delete_dups = true;
-        if let Ok(x) = env::var("HISTORY_DELETE_DUPS") {
-            if x == "0" {
-                delete_dups = false;
-            }
+
+        if let Ok(x) = env::var("HISTORY_DELETE_DUPS")
+        {
+            if x == "0" { delete_dups = false; }
         }
-        if delete_dups {
-            delete_duplicated_histories();
+        
+        if delete_dups
+        {
+            deduplicate();
         }
 
-        let conn = match Conn::open(&hfile) {
+        let conn = match Connection::open(&hfile)
+        {
             Ok(x) => x,
-            Err(e) => {
+            Err(e) =>
+            {
                 println_stderr!("cicada: history: conn error: {}", e);
                 return;
             }
         };
-        let sql = format!("SELECT inp FROM {} ORDER BY tsb;", history_table);
-        let mut stmt = match conn.prepare(&sql) {
+        let query = format!("SELECT inp FROM {} ORDER BY tsb;", history_table);
+        let mut stmt = match conn.prepare(&query)
+        {
             Ok(x) => x,
-            Err(e) => {
+            Err(e) =>
+            {
                 println_stderr!("cicada: prepare select error: {}", e);
                 return;
             }
         };
 
-        let rows = match stmt.query_map([], |row| row.get(0)) {
+        let rows = match stmt.query_map([], |row| row.get(0))
+        {
             Ok(x) => x,
-            Err(e) => {
+            Err(e) => 
+            {
                 println_stderr!("cicada: query select error: {}", e);
                 return;
             }
         };
 
         let mut dict_helper: HashMap<String, bool> = HashMap::new();
-        for x in rows.flatten() {
+
+        for x in rows.flatten()
+        {
             let inp: String = x;
-            if dict_helper.contains_key(&inp) {
-                continue;
-            }
+
+            if dict_helper.contains_key(&inp) { continue; }
+            
             dict_helper.insert(inp.clone(), true);
             rl.add_history(inp.trim().to_string());
         }
     }
     // pub fn get_history_file() -> String 
-    pub fn file() -> String 
+    pub fn get_file() -> String 
     {
-        if let Ok(hfile) = env::var("HISTORY_FILE") {
-            hfile
-        } else if let Ok(d) = env::var("XDG_DATA_HOME") {
-            format!("{}/{}", d, "cicada/history.sqlite")
-        } else {
-            let home = tools::get_user_home();
+        if let Ok(hfile) = env::var("HISTORY_FILE") { hfile }
+        
+        else if let Ok(d) = env::var("XDG_DATA_HOME") { format!("{}/{}", d, "cicada/history.sqlite") }
+        
+        else
+        {
+            let home = get_user_home();
             format!("{}/{}", home, ".local/share/cicada/history.sqlite")
         }
     }
-    // pub fn get_history_table() -> String 
-    pub fn table() -> String 
+    // pub fn get_history_table() -> String
+    pub fn get_table() -> String
     {
-        if let Ok(hfile) = env::var("HISTORY_TABLE") {
-            hfile
-        } else {
-            String::from("cicada_history")
-        }
+        if let Ok(hfile) = env::var("HISTORY_TABLE") { hfile }        
+        else { String::from("cicada_history") }
     }
-    // pub fn delete_duplicated_histories() 
-    pub fn dedupe() 
+    // pub fn delete_duplicated_histories()
+    pub fn deduplicate()
     {
-        let hfile = file();
-        let history_table = table();
-        let conn = match Conn::open(&hfile)
+        let hfile = get_file();
+        let history_table = get_table();
+        let conn = match Connection::open(&hfile)
         {
             Ok(x) => x,
-            Err(e) => {
+            Err(e) => 
+            {
                 println_stderr!("cicada: history: conn error: {}", e);
                 return;
             }
         };
-        
-        let sql = format!
+
+        let query = format!
         (
-            r#"
-            DELETE FROM {} WHERE rowid NOT IN
-            (
-            SELECT MAX(rowid) FROM {} GROUP BY inp
-            )"#,
+            "DELETE FROM {} WHERE rowid NOT IN (SELECT MAX(rowid) FROM {} GROUP BY inp)",
             history_table, history_table
         );
-        
-        match conn.execute(&sql, [])
+        /*match conn.execute(&query, [])
         {
             Ok(_) => {}
-            
             Err(e) => match e
             {
-                SqliteFailure(ee, msg) =>
-                {
+                SqliteFailure(ee, msg) => {
                     if ee.extended_code == 5 {
                         log!(
                             "failed to delete dup histories: {}",
@@ -6798,36 +7060,29 @@ pub mod history
                         &msg
                     );
                 }
-
-                _ =>
-                {
+                _ => {
                     println_stderr!("cicada: history: delete dup error: {}", e);
                 }
             },
-        }
+        } */
     }
     // pub fn add_raw(sh: &shell::Shell, line: &str, status: i32, tsb: f64, tse: f64)
-    pub fn insert(sh: &shell::Shell, line: &str, status: i32, tsb: f64, tse: f64)
+    pub fn add(sh: &shell::Shell, line: &str, status: i32, tsb: f64, tse: f64)
     {
-        let hfile = file();
-        let history_table = table();
-        
-        if !Path::new(&hfile).exists()
-        {
+        let hfile = get_file();
+        let history_table = get_table();
+        if !Path::new(&hfile).exists() {
             init_db(&hfile, &history_table);
         }
 
-        let conn = match Conn::open(&hfile)
-        {
+        let conn = match Connection::open(&hfile) {
             Ok(x) => x,
             Err(e) => {
                 println_stderr!("cicada: history: conn error: {}", e);
                 return;
             }
         };
-
-        let sql = format!
-        (
+        let sql = format!(
             "INSERT INTO \
             {} (inp, rtn, tsb, tse, sessionid, info) \
             VALUES('{}', {}, {}, {}, '{}', 'dir:{}|');",
@@ -6839,100 +7094,78 @@ pub mod history
             sh.session_id,
             sh.current_dir,
         );
-
-        match conn.execute(&sql, [])
-        {
+        match conn.execute(&sql, []) {
             Ok(_) => {}
             Err(e) => println_stderr!("cicada: history: save error: {}", e),
         }
     }
-
-    pub fn add(sh: &shell::Shell, rl: &mut Interface<DefaultTerminal>, line: &str, status: i32, tsb: f64, tse: f64)
+    // pub fn add(sh: &shell::Shell, rl: &mut Interface<DefaultTerminal>, line: &str, status: i32, tsb: f64, tse: f64)
+    pub fn append(sh: &shell::Shell, rl: &mut Interface<DefaultTerminal>, line: &str, status: i32, tsb: f64, tse: f64)
     {
-        add_raw(sh, line, status, tsb, tse);
+        add( sh, line, status, tsb, tse );
         rl.add_history(line.to_string());
     }
-    // pub fn add_history(sh: &Shell, ts: f64, input: &str)
-    pub fn enter(sh: &Shell, ts: f64, input: &str)
+    // pub fn add_history(sh: &Shell, ts: f64, input: &str) 
+    pub fn insert(sh: &Shell, ts: f64, input: &str) 
     {
         let (tsb, tse) = (ts, ts + 1.0);
-        add_raw(sh, input, 0, tsb, tse);
+        add(sh, input, 0, tsb, tse);
     }
-    // pub fn list_current_history(sh: &Shell, conn: &Conn, opt: &OptMain) -> (String, String)
-    pub fn list(sh: &Shell, conn: &Conn, opt: &OptMain) -> (String, String)
+    // pub fn list_current_history(sh: &Shell, cx: &Connection, opt: &OptMain) -> (String, String) //
+    pub fn list( sh: &Shell, cx: &Connection ) -> ( String, String )
     {
-        let mut result_stderr = String::new();
-        let result_stdout = String::new();
+        /*
+            let mut result_stderr = String::new();
+            let result_stdout = String::new();
 
-        let history_table = get_history_table();
-        let mut sql = format!("SELECT ROWID, inp, tsb FROM {} WHERE ROWID > 0", history_table);
-        if !opt.pattern.is_empty() {
-            sql = format!("{} AND inp LIKE '%{}%'", sql, opt.pattern)
-        }
-        if opt.session {
-            sql = format!("{} AND sessionid = '{}'", sql, sh.session_id)
-        }
-        if opt.pwd {
-            sql = format!("{} AND info like '%dir:{}|%'", sql, sh.current_dir)
-        }
-
-        if opt.asc {
-            sql = format!("{} ORDER BY tsb", sql);
-        } else {
-            sql = format!("{} order by tsb desc", sql);
-        };
-        sql = format!("{} limit {} ", sql, opt.limit);
-
-        let mut stmt = match conn.prepare(&sql) {
-            Ok(x) => x,
-            Err(e) => {
-                let info = format!("history: prepare select error: {:?}", e);
-                result_stderr.push_str(&info);
-                return (result_stdout, result_stderr);
+            let history_table = get_table();
+            let mut sql = format!("SELECT ROWID, inp, tsb FROM {} WHERE ROWID > 0", history_table);
+            if !opt.pattern.is_empty() {
+                sql = format!("{} AND inp LIKE '%{}%'", sql, opt.pattern)
             }
-        };
 
-        let mut rows = match stmt.query([]) {
-            Ok(x) => x,
-            Err(e) => {
-                let info = format!("history: query error: {:?}", e);
-                result_stderr.push_str(&info);
-                return (result_stdout, result_stderr);
+            if opt.session {
+                sql = format!("{} AND sessionid = '{}'", sql, sh.session_id)
             }
-        };
+            if opt.pwd {
+                sql = format!("{} AND info like '%dir:{}|%'", sql, sh.current_dir)
+            }
 
-        let mut lines = Vec::new();
+            if opt.asc {
+                sql = format!("{} ORDER BY tsb", sql);
+            } else {
+                sql = format!("{} order by tsb desc", sql);
+            };
 
-        loop 
-        {
-            match rows.next() 
+            sql = format!("{} limit {} ", sql, opt.limit);
+
+            let mut stmt = match cx.prepare(&sql) {
+                Ok(x) => x,
+                Err(e) => {
+                    let info = format!("history: prepare select error: {:?}", e);
+                    result_stderr.push_str(&info);
+                    return (result_stdout, result_stderr);
+                }
+            };
+
+            let mut rows = match stmt.query([]) {
+                Ok(x) => x,
+                Err(e) => {
+                    let info = format!("history: query error: {:?}", e);
+                    result_stderr.push_str(&info);
+                    return (result_stdout, result_stderr);
+                }
+            };
+
+            let mut lines = Vec::new();
+            loop 
             {
-                Ok(_rows) => 
+                match rows.next() 
                 {
-                    if let Some(row) = _rows {
-                        let row_id: i32 = match row.get(0) {
-                            Ok(x) => x,
-                            Err(e) => {
-                                let info = format!("history: error: {:?}", e);
-                                result_stderr.push_str(&info);
-                                return (result_stdout, result_stderr);
-                            }
-                        };
-                        let inp: String = match row.get(1) {
-                            Ok(x) => x,
-                            Err(e) => {
-                                let info = format!("history: error: {:?}", e);
-                                result_stderr.push_str(&info);
-                                return (result_stdout, result_stderr);
-                            }
-                        };
-
-                        if opt.no_id {
-                            lines.push(inp.to_string());
-                        } else if opt.only_id {
-                            lines.push(row_id.to_string());
-                        } else if opt.show_date {
-                            let tsb: f64 = match row.get(2) {
+                    Ok(_rows) => 
+                    {
+                        if let Some(row) = _rows {
+                            let row_id: i32 = match row.get(0) {
                                 Ok(x) => x,
                                 Err(e) => {
                                     let info = format!("history: error: {:?}", e);
@@ -6940,37 +7173,61 @@ pub mod history
                                     return (result_stdout, result_stderr);
                                 }
                             };
-                            let dt = DateTime::from_timestamp(tsb);
-                            lines.push(format!("{}: {}: {}", row_id, dt, inp));
+                            let inp: String = match row.get(1) {
+                                Ok(x) => x,
+                                Err(e) => {
+                                    let info = format!("history: error: {:?}", e);
+                                    result_stderr.push_str(&info);
+                                    return (result_stdout, result_stderr);
+                                }
+                            };
+
+                            if opt.no_id {
+                                lines.push(inp.to_string());
+                            } else if opt.only_id {
+                                lines.push(row_id.to_string());
+                            } else if opt.show_date {
+                                let tsb: f64 = match row.get(2) {
+                                    Ok(x) => x,
+                                    Err(e) => {
+                                        let info = format!("history: error: {:?}", e);
+                                        result_stderr.push_str(&info);
+                                        return (result_stdout, result_stderr);
+                                    }
+                                };
+                                let dt = time::DateTime::from_timestamp(tsb);
+                                lines.push(format!("{}: {}: {}", row_id, dt, inp));
+                            } else {
+                                lines.push(format!("{}: {}", row_id, inp));
+                            }
                         } else {
-                            lines.push(format!("{}: {}", row_id, inp));
+                            break;
                         }
-                    } else {
-                        break;
+                    }
+
+                    Err(e) =>
+                    {
+                        let info = format!("history: rows next error: {:?}", e);
+                        result_stderr.push_str(&info);
+                        return (result_stdout, result_stderr);
                     }
                 }
-
-                Err(e) =>
-                {
-                    let info = format!("history: rows next error: {:?}", e);
-                    result_stderr.push_str(&info);
-                    return (result_stdout, result_stderr);
-                }
             }
-        }
 
-        if !opt.asc { lines.reverse(); }
+            if !opt.asc { lines.reverse(); }
 
-        let buffer = lines.join("\n");
+            let buffer = lines.join("\n");
 
-        (buffer, result_stderr)
+            (buffer, result_stderr)
+        */
+        ( String::new(), String::new() )
     }
     // pub fn delete_history_item(conn: &Conn, rowid: usize) -> bool
-    pub fn delete(conn: &Conn, rowid: usize) -> bool
+    pub fn delete( cx:&Connection, rowid:usize ) -> bool
     {
-        let history_table = history::get_history_table();
-        let sql = format!("DELETE from {} where rowid = {}", history_table, rowid);
-        match conn.execute(&sql, [])
+        let history_table = history::get_table();
+        let query = format!("DELETE from {} where rowid = {}", history_table, rowid);
+        match cx.execute( &query, [] )
         {
             Ok(_) => true,
             Err(e) =>
@@ -7192,6 +7449,8 @@ pub mod is
         }
         args[0].clone()
     }
+
+    
     */
 }
 /*
@@ -7199,12288 +7458,1734 @@ libc */
 pub mod libc
 {
     //! libc - Raw FFI bindings to platforms' system libraries
-    #[macro_use] mod macros
-    {
-        /// A macro for defining #[cfg] if-else statements.
-        macro_rules! cfg_if
-        {
-            // match if/else chains with a final `else`
-            ($(
-                if #[cfg($($meta:meta),*)] { $($it:item)* }
-            ) else * else {
-                $($it2:item)*
-            }) => {
-                cfg_if! {
-                    @__items
-                    () ;
-                    $( ( ($($meta),*) ($($it)*) ), )*
-                    ( () ($($it2)*) ),
-                }
-            };
-
-            // match if/else chains lacking a final `else`
-            (
-                if #[cfg($($i_met:meta),*)] { $($i_it:item)* }
-                $(
-                    else if #[cfg($($e_met:meta),*)] { $($e_it:item)* }
-                )*
-            ) => {
-                cfg_if! {
-                    @__items
-                    () ;
-                    ( ($($i_met),*) ($($i_it)*) ),
-                    $( ( ($($e_met),*) ($($e_it)*) ), )*
-                    ( () () ),
-                }
-            };
-
-            // Internal and recursive macro to emit all the items
-            //
-            // Collects all the negated `cfg`s in a list at the beginning and after the
-            // semicolon is all the remaining items
-            (@__items ($($not:meta,)*) ; ) => {};
-            (@__items ($($not:meta,)*) ; ( ($($m:meta),*) ($($it:item)*) ),
-            $($rest:tt)*) => {
-                // Emit all items within one block, applying an appropriate #[cfg]. The
-                // #[cfg] will require all `$m` matchers specified and must also negate
-                // all previous matchers.
-                cfg_if! { @__apply cfg(all($($m,)* not(any($($not),*)))), $($it)* }
-
-                // Recurse to emit all other items in `$rest`, and when we do so add all
-                // our `$m` matchers to the list of `$not` matchers as future emissions
-                // will have to negate everything we just matched as well.
-                cfg_if! { @__items ($($not,)* $($m,)*) ; $($rest)* }
-            };
-
-            // Internal macro to Apply a cfg attribute to a list of items
-            (@__apply $m:meta, $($it:item)*) => {
-                $(#[$m] $it)*
-            };
-        }
-        /// Create an internal crate prelude with `core` reexports and common types.
-        macro_rules! prelude
-        {
-            () =>
-            {
-                /// Frequently-used types that are available on all platforms
-                mod prelude
-                {
-                    #[allow(unused_imports)]
-                    pub use ::clone::Clone;
-                    #[allow(unused_imports)]
-                    pub use ::marker::{Copy, Send, Sync};
-                    #[allow(unused_imports)]
-                    pub use ::option::Option;
-                    #[allow(unused_imports)]
-                    pub use ::{fmt, hash, iter, mem};
-                    
-                    pub(crate) use super::
-                    {
-                        c_char, c_double, c_float, c_int, c_long, c_longlong, c_short, c_uchar, c_uint,
-                        c_ulong, c_ulonglong, c_ushort, c_void, intptr_t, size_t, ssize_t, uintptr_t,
-                    };
-                }
-            };
-        }
-        /// Implement `Clone` and `Copy` for a struct, as well as `Debug`, `Eq`, `Hash`, and `PartialEq`
-        /// if the `extra_traits` feature is enabled.
-        macro_rules! s 
-        {
-            ($(
-                $(#[$attr:meta])*
-                pub $t:ident $i:ident { $($field:tt)* }
-            )*) => ($(
-                s!(it: $(#[$attr])* pub $t $i { $($field)* });
-            )*);
-
-            (it: $(#[$attr:meta])* pub union $i:ident { $($field:tt)* }) => (
-                compile_error!("unions cannot derive extra traits, use s_no_extra_traits instead");
-            );
-
-            (it: $(#[$attr:meta])* pub struct $i:ident { $($field:tt)* }) => (
-                __item! {
-                    #[repr(C)]
-                    #[cfg_attr(
-                        feature = "extra_traits",
-                        ::core::prelude::v1::derive(Debug, Eq, Hash, PartialEq)
-                    )]
-                    #[::core::prelude::v1::derive(::core::clone::Clone, ::core::marker::Copy)]
-                    #[allow(deprecated)]
-                    $(#[$attr])*
-                    pub struct $i { $($field)* }
-                }
-            );
-        }
-        /// Implement `Clone` and `Copy` for a tuple struct, as well as `Debug`, `Eq`, `Hash`,
-        /// and `PartialEq` if the `extra_traits` feature is enabled.
-        ///
-        /// This is the same as [`s`] but works for tuple structs.
-        macro_rules! s_paren {
-            ($(
-                $(#[$attr:meta])*
-                pub struct $i:ident ( $($field:tt)* );
-            )*) => ($(
-                __item! {
-                    #[cfg_attr(
-                        feature = "extra_traits",
-                        ::core::prelude::v1::derive(Debug, Eq, Hash, PartialEq)
-                    )]
-                    #[::core::prelude::v1::derive(::core::clone::Clone, ::core::marker::Copy)]
-                    $(#[$attr])*
-                    pub struct $i ( $($field)* );
-                }
-            )*);
-        }
-
-        /// Implement `Clone` and `Copy` for a struct with no `extra_traits` feature, as well as `Debug`
-        /// with `extra_traits` since that can always be derived.
-        ///
-        /// Most items will prefer to use [`s`].
-        macro_rules! s_no_extra_traits {
-            ($(
-                $(#[$attr:meta])*
-                pub $t:ident $i:ident { $($field:tt)* }
-            )*) => ($(
-                s_no_extra_traits!(it: $(#[$attr])* pub $t $i { $($field)* });
-            )*);
-
-            (it: $(#[$attr:meta])* pub union $i:ident { $($field:tt)* }) => (
-                __item! {
-                    #[repr(C)]
-                    #[::core::prelude::v1::derive(::core::clone::Clone, ::core::marker::Copy)]
-                    $(#[$attr])*
-                    pub union $i { $($field)* }
-                }
-
-                #[cfg(feature = "extra_traits")]
-                impl ::core::fmt::Debug for $i {
-                    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
-                        f.debug_struct(::core::stringify!($i)).finish_non_exhaustive()
-                    }
-                }
-            );
-
-            (it: $(#[$attr:meta])* pub struct $i:ident { $($field:tt)* }) => (
-                __item! {
-                    #[repr(C)]
-                    #[::core::prelude::v1::derive(::core::clone::Clone, ::core::marker::Copy)]
-                    #[cfg_attr(feature = "extra_traits", ::core::prelude::v1::derive(Debug))]
-                    $(#[$attr])*
-                    pub struct $i { $($field)* }
-                }
-            );
-        }
-
-        /// Specify that an enum should have no traits that aren't specified in the macro
-        /// invocation, i.e. no `Clone` or `Copy`.
-        macro_rules! missing {
-            ($(
-                $(#[$attr:meta])*
-                pub enum $i:ident {}
-            )*) => ($(
-                $(#[$attr])*
-                #[allow(missing_copy_implementations)]
-                pub enum $i { }
-            )*);
-        }
-
-        /// Implement `Clone` and `Copy` for an enum, as well as `Debug`, `Eq`, `Hash`, and
-        /// `PartialEq` if the `extra_traits` feature is enabled.
-        // FIXME(#4419): Replace all uses of `e!` with `c_enum!`
-        macro_rules! e {
-            ($(
-                $(#[$attr:meta])*
-                pub enum $i:ident { $($field:tt)* }
-            )*) => ($(
-                __item! {
-                    #[cfg_attr(
-                        feature = "extra_traits",
-                        ::core::prelude::v1::derive(Debug, Eq, Hash, PartialEq)
-                    )]
-                    #[::core::prelude::v1::derive(::core::clone::Clone, ::core::marker::Copy)]
-                    $(#[$attr])*
-                    pub enum $i { $($field)* }
-                }
-            )*);
-        }
-
-        /// Represent a C enum as Rust constants and a type.
-        ///
-        /// C enums can't soundly be mapped to Rust enums since C enums are allowed to have duplicates or
-        /// unlisted values, but this is UB in Rust. This enum doesn't implement any traits, its main
-        /// purpose is to calculate the correct enum values.
-        ///
-        /// See <https://github.com/rust-lang/libc/issues/4419> for more.
-        macro_rules! c_enum {
-            (
-                $(#[repr($repr:ty)])?
-                enum $ty_name:ident {
-                    $($variant:ident $(= $value:literal)?,)+
-                }
-            ) => {
-                pub type $ty_name = c_enum!(@ty $($repr)?);
-                c_enum!(@one; $ty_name; 0; $($variant $(= $value)?,)+);
-            };
-
-            // Matcher for a single variant
-            (@one; $_ty_name:ident; $_idx:expr;) => {};
-            (
-                @one; $ty_name:ident; $default_val:expr;
-                $variant:ident $(= $value:literal)?,
-                $($tail:tt)*
-            ) => {
-                pub const $variant: $ty_name = {
-                    #[allow(unused_variables)]
-                    let r = $default_val;
-                    $(let r = $value;)?
-                    r
-                };
-
-                // The next value is always one more than the previous value, unless
-                // set explicitly.
-                c_enum!(@one; $ty_name; $variant + 1; $($tail)*);
-            };
-
-            // Use a specific type if provided, otherwise default to `c_uint`
-            (@ty $repr:ty) => { $repr };
-            (@ty) => { $crate::c_uint };
-        }
-
-        // This is a pretty horrible hack to allow us to conditionally mark some functions as 'const',
-        // without requiring users of this macro to care "libc_const_extern_fn".
-        //
-        // When 'libc_const_extern_fn' is enabled, we emit the captured 'const' keyword in the expanded
-        // function.
-        //
-        // When 'libc_const_extern_fn' is disabled, we always emit a plain 'pub unsafe extern fn'.
-        // Note that the expression matched by the macro is exactly the same - this allows
-        // users of this macro to work whether or not 'libc_const_extern_fn' is enabled
-        //
-        // Unfortunately, we need to duplicate most of this macro between the 'cfg_if' blocks.
-        // This is because 'const unsafe extern fn' won't even parse on older compilers,
-        // so we need to avoid emitting it at all of 'libc_const_extern_fn'.
-        //
-        // Specifically, moving the 'cfg_if' into the macro body will *not* work. Doing so would cause the
-        // '#[cfg(libc_const_extern_fn)]' to be emitted into user code. The 'cfg' gate will not stop Rust
-        // from trying to parse the 'pub const unsafe extern fn', so users would get a compiler error even
-        // when the 'libc_const_extern_fn' feature is disabled.
-
-        // FIXME(ctest): ctest can't handle `const extern` functions, we should be able to remove this
-        // cfg completely.
-        // FIXME(ctest): ctest can't handle `$(,)?` so we use `$(,)*` which isn't quite correct.
-        cfg_if! {
-            if #[cfg(libc_const_extern_fn)] {
-                /// Define an `unsafe` function that is const as long as `libc_const_extern_fn` is enabled.
-                macro_rules! f {
-                    ($(
-                        $(#[$attr:meta])*
-                        pub $({$constness:ident})* fn $i:ident($($arg:ident: $argty:ty),* $(,)*) -> $ret:ty
-                            $body:block
-                    )*) => ($(
-                        #[inline]
-                        $(#[$attr])*
-                        pub $($constness)* unsafe extern "C" fn $i($($arg: $argty),*) -> $ret
-                            $body
-                    )*)
-                }
-
-                /// Define a safe function that is const as long as `libc_const_extern_fn` is enabled.
-                macro_rules! safe_f {
-                    ($(
-                        $(#[$attr:meta])*
-                        pub $({$constness:ident})* fn $i:ident($($arg:ident: $argty:ty),* $(,)*) -> $ret:ty
-                            $body:block
-                    )*) => ($(
-                        #[inline]
-                        $(#[$attr])*
-                        pub $($constness)* extern "C" fn $i($($arg: $argty),*) -> $ret
-                            $body
-                    )*)
-                }
-
-                /// A nonpublic function that is const as long as `libc_const_extern_fn` is enabled.
-                macro_rules! const_fn {
-                    ($(
-                        $(#[$attr:meta])*
-                        $({$constness:ident})* fn $i:ident($($arg:ident: $argty:ty),* $(,)*) -> $ret:ty
-                            $body:block
-                    )*) => ($(
-                        #[inline]
-                        $(#[$attr])*
-                        $($constness)* fn $i($($arg: $argty),*) -> $ret
-                            $body
-                    )*)
-                }
-            } else {
-                /// Define an `unsafe` function that is const as long as `libc_const_extern_fn` is enabled.
-                macro_rules! f {
-                    ($(
-                        $(#[$attr:meta])*
-                        pub $({$constness:ident})* fn $i:ident($($arg:ident: $argty:ty),* $(,)*) -> $ret:ty
-                            $body:block
-                    )*) => ($(
-                        #[inline]
-                        $(#[$attr])*
-                        pub unsafe extern "C" fn $i($($arg: $argty),*) -> $ret
-                            $body
-                    )*)
-                }
-
-                /// Define a safe function that is const as long as `libc_const_extern_fn` is enabled.
-                macro_rules! safe_f {
-                    ($(
-                        $(#[$attr:meta])*
-                        pub $({$constness:ident})* fn $i:ident($($arg:ident: $argty:ty),* $(,)*) -> $ret:ty
-                            $body:block
-                    )*) => ($(
-                        #[inline]
-                        $(#[$attr])*
-                        pub extern "C" fn $i($($arg: $argty),*) -> $ret
-                            $body
-                    )*)
-                }
-
-                /// A nonpublic function that is const as long as `libc_const_extern_fn` is enabled.
-                macro_rules! const_fn {
-                    ($(
-                        $(#[$attr:meta])*
-                        $({$constness:ident})* fn $i:ident($($arg:ident: $argty:ty),* $(,)*) -> $ret:ty
-                            $body:block
-                    )*) => ($(
-                        #[inline]
-                        $(#[$attr])*
-                        fn $i($($arg: $argty),*) -> $ret
-                            $body
-                    )*)
-                }
-            }
-        }
-
-        macro_rules! __item {
-            ($i:item) => {
-                $i
-            };
-        }
-    }
-
-    mod primitives
+    pub mod primitives
     {
         //! This module contains type aliases for C's platform-specific types and fixed-width integer types.
+        use ::
+        {
+            *,
+        };
+
         pub type c_schar = i8;
         pub type c_uchar = u8;
         pub type c_short = i16;
         pub type c_ushort = u16;
+
         pub type c_longlong = i64;
         pub type c_ulonglong = u64;
+
         pub type c_float = f32;
         pub type c_double = f64;
+        
+        pub type c_char = i8;
+        
+        pub type c_int = i32;
+        pub type c_uint = u32;
 
-        cfg_if!
-        {
-            if #[cfg(all(
-                not(windows),
-                // FIXME(ctest): just use `target_vendor` = "apple"` once `ctest` supports it
-                not(any(
-                    target_os = "macos",
-                    target_os = "ios",
-                    target_os = "tvos",
-                    target_os = "watchos",
-                    target_os = "visionos",
-                )),
-                not(target_os = "vita"),
-                any(
-                    target_arch = "aarch64",
-                    target_arch = "arm",
-                    target_arch = "csky",
-                    target_arch = "hexagon",
-                    target_arch = "msp430",
-                    target_arch = "powerpc",
-                    target_arch = "powerpc64",
-                    target_arch = "riscv32",
-                    target_arch = "riscv64",
-                    target_arch = "s390x",
-                    target_arch = "xtensa",
-                )
-            ))] {
-                pub type c_char = u8;
-            } else {
-                // On every other target, c_char is signed.
-                pub type c_char = i8;
-            }
-        }
+        pub type c_long = i32;
+        pub type c_ulong = u32;
 
-        cfg_if! 
-        {
-            if #[cfg(any(target_arch = "avr", target_arch = "msp430"))] {
-                pub type c_int = i16;
-                pub type c_uint = u16;
-            } else {
-                pub type c_int = i32;
-                pub type c_uint = u32;
-            }
-        }
-
-        cfg_if! 
-        {
-            if #[cfg(all(target_pointer_width = "64", not(windows)))] {
-                pub type c_long = i64;
-                pub type c_ulong = u64;
-            } else {
-                // The minimal size of `long` in the C standard is 32 bits
-                pub type c_long = i32;
-                pub type c_ulong = u32;
-            }
-        }
-
-        pub type int8_t = i8;
-        pub type int16_t = i16;
-        pub type int32_t = i32;
-        pub type int64_t = i64;
-        pub type uint8_t = u8;
-        pub type uint16_t = u16;
-        pub type uint32_t = u32;
-        pub type uint64_t = u64;
-
-        cfg_if! 
-        {
-            if #[cfg(all(
-                target_arch = "aarch64",
-                not(any(
-                    target_os = "windows",
-                    target_os = "macos",
-                    target_os = "ios",
-                    target_os = "tvos",
-                    target_os = "watchos"
-                ))
-            ))]
-            {
-                /// C `__int128` (a GCC extension that's part of many ABIs)
-                pub type __int128 = i128;
-                /// C `unsigned __int128` (a GCC extension that's part of many ABIs)
-                pub type __uint128 = u128;
-                /// C __int128_t (alternate name for [__int128][])
-                pub type __int128_t = i128;
-                /// C __uint128_t (alternate name for [__uint128][])
-                pub type __uint128_t = u128;
-                const _SIZE_128: usize = 16;
-                const _ALIGN_128: usize = 16;
-            } else if #[cfg(all(
-                target_arch = "aarch64",
-                any(
-                    target_os = "macos",
-                    target_os = "ios",
-                    target_os = "tvos",
-                    target_os = "watchos"
-                )
-            ))] {
-                /// C `__int128_t`
-                pub type __int128_t = i128;
-                /// C `__uint128_t`
-                pub type __uint128_t = u128;
-            }
-        }
-        pub use ::ffi::c_void;
-    } pub use crate::primitives::*;
+    }  pub use self::primitives::{ * };
     
-    cfg_if! 
+    pub mod unix
     {
-        if #[cfg(windows)] 
+        use ::
         {
-            mod windows
-            {
-                //! Windows CRT definitions
-                use ::
-                {
-                    *,
-                };
-                
-                use super::prelude::*;
-
-                pub type intmax_t = i64;
-                pub type uintmax_t = u64;
-                pub type size_t = usize;
-                pub type ptrdiff_t = isize;
-                pub type intptr_t = isize;
-                pub type uintptr_t = usize;
-                pub type ssize_t = isize;
-                pub type sighandler_t = usize;
-                pub type wchar_t = u16;
-                pub type clock_t = i32;
-                pub type errno_t = c_int;
-                pub type time64_t = i64;
-                pub type SOCKET = super::uintptr_t;
-                pub type off_t = i32;
-                pub type dev_t = u32;
-                pub type ino_t = u16;
-
-                cfg_if! {
-                    if #[cfg(all(target_arch = "x86", target_env = "gnu"))] {
-                        pub type time_t = i32;
-                    } else {
-                        pub type time_t = i64;
-                    }
-                }
-
-                
-                #[cfg_attr(feature = "extra_traits", derive(Debug))]
-                pub enum timezone {}
-                impl Copy for timezone {}
-                impl Clone for timezone 
-                {
-                    fn clone(&self) -> timezone { *self }
-                }
-                
-                s! 
-                {
-                    // note this is the struct called stat64 in Windows. Not stat, nor stati64.
-                    pub struct stat {
-                        pub st_dev: dev_t,
-                        pub st_ino: ino_t,
-                        pub st_mode: c_ushort,
-                        pub st_nlink: c_short,
-                        pub st_uid: c_short,
-                        pub st_gid: c_short,
-                        pub st_rdev: dev_t,
-                        pub st_size: i64,
-                        pub st_atime: time64_t,
-                        pub st_mtime: time64_t,
-                        pub st_ctime: time64_t,
-                    }
-
-                    // note that this is called utimbuf64 in Windows
-                    pub struct utimbuf {
-                        pub actime: time64_t,
-                        pub modtime: time64_t,
-                    }
-
-                    pub struct tm {
-                        pub tm_sec: c_int,
-                        pub tm_min: c_int,
-                        pub tm_hour: c_int,
-                        pub tm_mday: c_int,
-                        pub tm_mon: c_int,
-                        pub tm_year: c_int,
-                        pub tm_wday: c_int,
-                        pub tm_yday: c_int,
-                        pub tm_isdst: c_int,
-                    }
-
-                    pub struct timeval {
-                        pub tv_sec: c_long,
-                        pub tv_usec: c_long,
-                    }
-
-                    pub struct timespec {
-                        pub tv_sec: time_t,
-                        pub tv_nsec: c_long,
-                    }
-
-                    pub struct sockaddr {
-                        pub sa_family: c_ushort,
-                        pub sa_data: [c_char; 14],
-                    }
-                }
-
-                pub const INT_MIN: c_int = -2147483648;
-                pub const INT_MAX: c_int = 2147483647;
-
-                pub const EXIT_FAILURE: c_int = 1;
-                pub const EXIT_SUCCESS: c_int = 0;
-                pub const RAND_MAX: c_int = 32767;
-                pub const EOF: c_int = -1;
-                pub const SEEK_SET: c_int = 0;
-                pub const SEEK_CUR: c_int = 1;
-                pub const SEEK_END: c_int = 2;
-                pub const _IOFBF: c_int = 0;
-                pub const _IONBF: c_int = 4;
-                pub const _IOLBF: c_int = 64;
-                pub const BUFSIZ: c_uint = 512;
-                pub const FOPEN_MAX: c_uint = 20;
-                pub const FILENAME_MAX: c_uint = 260;
-
-                // fcntl.h
-                pub const O_RDONLY: c_int = 0x0000;
-                pub const O_WRONLY: c_int = 0x0001;
-                pub const O_RDWR: c_int = 0x0002;
-                pub const O_APPEND: c_int = 0x0008;
-                pub const O_CREAT: c_int = 0x0100;
-                pub const O_TRUNC: c_int = 0x0200;
-                pub const O_EXCL: c_int = 0x0400;
-                pub const O_TEXT: c_int = 0x4000;
-                pub const O_BINARY: c_int = 0x8000;
-                pub const _O_WTEXT: c_int = 0x10000;
-                pub const _O_U16TEXT: c_int = 0x20000;
-                pub const _O_U8TEXT: c_int = 0x40000;
-                pub const O_RAW: c_int = O_BINARY;
-                pub const O_NOINHERIT: c_int = 0x0080;
-                pub const O_TEMPORARY: c_int = 0x0040;
-                pub const _O_SHORT_LIVED: c_int = 0x1000;
-                pub const _O_OBTAIN_DIR: c_int = 0x2000;
-                pub const O_SEQUENTIAL: c_int = 0x0020;
-                pub const O_RANDOM: c_int = 0x0010;
-
-                pub const S_IFCHR: c_ushort = 0o2_0000;
-                pub const S_IFDIR: c_ushort = 0o4_0000;
-                pub const S_IFREG: c_ushort = 0o10_0000;
-                pub const S_IFMT: c_ushort = 0o17_0000;
-                pub const S_IEXEC: c_ushort = 0o0100;
-                pub const S_IWRITE: c_ushort = 0o0200;
-                pub const S_IREAD: c_ushort = 0o0400;
-
-                pub const LC_ALL: c_int = 0;
-                pub const LC_COLLATE: c_int = 1;
-                pub const LC_CTYPE: c_int = 2;
-                pub const LC_MONETARY: c_int = 3;
-                pub const LC_NUMERIC: c_int = 4;
-                pub const LC_TIME: c_int = 5;
-
-                pub const EPERM: c_int = 1;
-                pub const ENOENT: c_int = 2;
-                pub const ESRCH: c_int = 3;
-                pub const EINTR: c_int = 4;
-                pub const EIO: c_int = 5;
-                pub const ENXIO: c_int = 6;
-                pub const E2BIG: c_int = 7;
-                pub const ENOEXEC: c_int = 8;
-                pub const EBADF: c_int = 9;
-                pub const ECHILD: c_int = 10;
-                pub const EAGAIN: c_int = 11;
-                pub const ENOMEM: c_int = 12;
-                pub const EACCES: c_int = 13;
-                pub const EFAULT: c_int = 14;
-                pub const EBUSY: c_int = 16;
-                pub const EEXIST: c_int = 17;
-                pub const EXDEV: c_int = 18;
-                pub const ENODEV: c_int = 19;
-                pub const ENOTDIR: c_int = 20;
-                pub const EISDIR: c_int = 21;
-                pub const EINVAL: c_int = 22;
-                pub const ENFILE: c_int = 23;
-                pub const EMFILE: c_int = 24;
-                pub const ENOTTY: c_int = 25;
-                pub const EFBIG: c_int = 27;
-                pub const ENOSPC: c_int = 28;
-                pub const ESPIPE: c_int = 29;
-                pub const EROFS: c_int = 30;
-                pub const EMLINK: c_int = 31;
-                pub const EPIPE: c_int = 32;
-                pub const EDOM: c_int = 33;
-                pub const ERANGE: c_int = 34;
-                pub const EDEADLK: c_int = 36;
-                pub const EDEADLOCK: c_int = 36;
-                pub const ENAMETOOLONG: c_int = 38;
-                pub const ENOLCK: c_int = 39;
-                pub const ENOSYS: c_int = 40;
-                pub const ENOTEMPTY: c_int = 41;
-                pub const EILSEQ: c_int = 42;
-                pub const STRUNCATE: c_int = 80;
-
-                // POSIX Supplement (from errno.h)
-                pub const EADDRINUSE: c_int = 100;
-                pub const EADDRNOTAVAIL: c_int = 101;
-                pub const EAFNOSUPPORT: c_int = 102;
-                pub const EALREADY: c_int = 103;
-                pub const EBADMSG: c_int = 104;
-                pub const ECANCELED: c_int = 105;
-                pub const ECONNABORTED: c_int = 106;
-                pub const ECONNREFUSED: c_int = 107;
-                pub const ECONNRESET: c_int = 108;
-                pub const EDESTADDRREQ: c_int = 109;
-                pub const EHOSTUNREACH: c_int = 110;
-                pub const EIDRM: c_int = 111;
-                pub const EINPROGRESS: c_int = 112;
-                pub const EISCONN: c_int = 113;
-                pub const ELOOP: c_int = 114;
-                pub const EMSGSIZE: c_int = 115;
-                pub const ENETDOWN: c_int = 116;
-                pub const ENETRESET: c_int = 117;
-                pub const ENETUNREACH: c_int = 118;
-                pub const ENOBUFS: c_int = 119;
-                pub const ENODATA: c_int = 120;
-                pub const ENOLINK: c_int = 121;
-                pub const ENOMSG: c_int = 122;
-                pub const ENOPROTOOPT: c_int = 123;
-                pub const ENOSR: c_int = 124;
-                pub const ENOSTR: c_int = 125;
-                pub const ENOTCONN: c_int = 126;
-                pub const ENOTRECOVERABLE: c_int = 127;
-                pub const ENOTSOCK: c_int = 128;
-                pub const ENOTSUP: c_int = 129;
-                pub const EOPNOTSUPP: c_int = 130;
-                pub const EOVERFLOW: c_int = 132;
-                pub const EOWNERDEAD: c_int = 133;
-                pub const EPROTO: c_int = 134;
-                pub const EPROTONOSUPPORT: c_int = 135;
-                pub const EPROTOTYPE: c_int = 136;
-                pub const ETIME: c_int = 137;
-                pub const ETIMEDOUT: c_int = 138;
-                pub const ETXTBSY: c_int = 139;
-                pub const EWOULDBLOCK: c_int = 140;
-
-                // signal codes
-                pub const SIGINT: c_int = 2;
-                pub const SIGILL: c_int = 4;
-                pub const SIGFPE: c_int = 8;
-                pub const SIGSEGV: c_int = 11;
-                pub const SIGTERM: c_int = 15;
-                pub const SIGABRT: c_int = 22;
-                pub const NSIG: c_int = 23;
-
-                pub const SIG_ERR: c_int = -1;
-                pub const SIG_DFL: crate::sighandler_t = 0;
-                pub const SIG_IGN: crate::sighandler_t = 1;
-                pub const SIG_GET: crate::sighandler_t = 2;
-                pub const SIG_SGE: crate::sighandler_t = 3;
-                pub const SIG_ACK: crate::sighandler_t = 4;
-
-                #[cfg_attr(feature = "extra_traits", derive(Debug))]
-                pub enum FILE {}
-                impl Copy for FILE {}
-                impl Clone for FILE {
-                    fn clone(&self) -> FILE {
-                        *self
-                    }
-                }
-                #[cfg_attr(feature = "extra_traits", derive(Debug))]
-                pub enum fpos_t {} // FIXME(windows): fill this out with a struct
-                impl Copy for fpos_t {}
-                impl Clone for fpos_t {
-                    fn clone(&self) -> fpos_t {
-                        *self
-                    }
-                }
-
-                // Special handling for all print and scan type functions because of https://github.com/rust-lang/libc/issues/2860
-                cfg_if! {
-                    if #[cfg(not(feature = "rustc-dep-of-std"))] {
-                        #[cfg_attr(
-                            all(windows, target_env = "msvc"),
-                            link(name = "legacy_stdio_definitions")
-                        )]
-                        extern "C" {
-                            pub fn printf(format: *const c_char, ...) -> c_int;
-                            pub fn fprintf(stream: *mut FILE, format: *const c_char, ...) -> c_int;
-                        }
-                    }
-                }
-
-                extern "C" {
-                    pub fn isalnum(c: c_int) -> c_int;
-                    pub fn isalpha(c: c_int) -> c_int;
-                    pub fn iscntrl(c: c_int) -> c_int;
-                    pub fn isdigit(c: c_int) -> c_int;
-                    pub fn isgraph(c: c_int) -> c_int;
-                    pub fn islower(c: c_int) -> c_int;
-                    pub fn isprint(c: c_int) -> c_int;
-                    pub fn ispunct(c: c_int) -> c_int;
-                    pub fn isspace(c: c_int) -> c_int;
-                    pub fn isupper(c: c_int) -> c_int;
-                    pub fn isxdigit(c: c_int) -> c_int;
-                    pub fn isblank(c: c_int) -> c_int;
-                    pub fn tolower(c: c_int) -> c_int;
-                    pub fn toupper(c: c_int) -> c_int;
-                    pub fn fopen(filename: *const c_char, mode: *const c_char) -> *mut FILE;
-                    pub fn freopen(filename: *const c_char, mode: *const c_char, file: *mut FILE) -> *mut FILE;
-                    pub fn fflush(file: *mut FILE) -> c_int;
-                    pub fn fclose(file: *mut FILE) -> c_int;
-                    pub fn remove(filename: *const c_char) -> c_int;
-                    pub fn rename(oldname: *const c_char, newname: *const c_char) -> c_int;
-                    pub fn tmpfile() -> *mut FILE;
-                    pub fn setvbuf(stream: *mut FILE, buffer: *mut c_char, mode: c_int, size: size_t) -> c_int;
-                    pub fn setbuf(stream: *mut FILE, buf: *mut c_char);
-                    pub fn getchar() -> c_int;
-                    pub fn putchar(c: c_int) -> c_int;
-                    pub fn fgetc(stream: *mut FILE) -> c_int;
-                    pub fn fgets(buf: *mut c_char, n: c_int, stream: *mut FILE) -> *mut c_char;
-                    pub fn fputc(c: c_int, stream: *mut FILE) -> c_int;
-                    pub fn fputs(s: *const c_char, stream: *mut FILE) -> c_int;
-                    pub fn puts(s: *const c_char) -> c_int;
-                    pub fn ungetc(c: c_int, stream: *mut FILE) -> c_int;
-                    pub fn fread(ptr: *mut c_void, size: size_t, nobj: size_t, stream: *mut FILE) -> size_t;
-                    pub fn fwrite(ptr: *const c_void, size: size_t, nobj: size_t, stream: *mut FILE) -> size_t;
-                    pub fn fseek(stream: *mut FILE, offset: c_long, whence: c_int) -> c_int;
-                    pub fn ftell(stream: *mut FILE) -> c_long;
-                    pub fn rewind(stream: *mut FILE);
-                    pub fn fgetpos(stream: *mut FILE, ptr: *mut fpos_t) -> c_int;
-                    pub fn fsetpos(stream: *mut FILE, ptr: *const fpos_t) -> c_int;
-                    pub fn feof(stream: *mut FILE) -> c_int;
-                    pub fn ferror(stream: *mut FILE) -> c_int;
-                    pub fn perror(s: *const c_char);
-                    pub fn atof(s: *const c_char) -> c_double;
-                    pub fn atoi(s: *const c_char) -> c_int;
-                    pub fn atol(s: *const c_char) -> c_long;
-                    pub fn atoll(s: *const c_char) -> c_longlong;
-                    pub fn strtod(s: *const c_char, endp: *mut *mut c_char) -> c_double;
-                    pub fn strtof(s: *const c_char, endp: *mut *mut c_char) -> c_float;
-                    pub fn strtol(s: *const c_char, endp: *mut *mut c_char, base: c_int) -> c_long;
-                    pub fn strtoll(s: *const c_char, endp: *mut *mut c_char, base: c_int) -> c_longlong;
-                    pub fn strtoul(s: *const c_char, endp: *mut *mut c_char, base: c_int) -> c_ulong;
-                    pub fn strtoull(s: *const c_char, endp: *mut *mut c_char, base: c_int) -> c_ulonglong;
-                    pub fn calloc(nobj: size_t, size: size_t) -> *mut c_void;
-                    pub fn malloc(size: size_t) -> *mut c_void;
-                    pub fn _msize(p: *mut c_void) -> size_t;
-                    pub fn realloc(p: *mut c_void, size: size_t) -> *mut c_void;
-                    pub fn free(p: *mut c_void);
-                    pub fn abort() -> !;
-                    pub fn exit(status: c_int) -> !;
-                    pub fn _exit(status: c_int) -> !;
-                    pub fn atexit(cb: extern "C" fn()) -> c_int;
-                    pub fn system(s: *const c_char) -> c_int;
-                    pub fn getenv(s: *const c_char) -> *mut c_char;
-
-                    pub fn strcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
-                    pub fn strncpy(dst: *mut c_char, src: *const c_char, n: size_t) -> *mut c_char;
-                    pub fn strcat(s: *mut c_char, ct: *const c_char) -> *mut c_char;
-                    pub fn strncat(s: *mut c_char, ct: *const c_char, n: size_t) -> *mut c_char;
-                    pub fn strcmp(cs: *const c_char, ct: *const c_char) -> c_int;
-                    pub fn strncmp(cs: *const c_char, ct: *const c_char, n: size_t) -> c_int;
-                    pub fn strcoll(cs: *const c_char, ct: *const c_char) -> c_int;
-                    pub fn strchr(cs: *const c_char, c: c_int) -> *mut c_char;
-                    pub fn strrchr(cs: *const c_char, c: c_int) -> *mut c_char;
-                    pub fn strspn(cs: *const c_char, ct: *const c_char) -> size_t;
-                    pub fn strcspn(cs: *const c_char, ct: *const c_char) -> size_t;
-                    pub fn strdup(cs: *const c_char) -> *mut c_char;
-                    pub fn strpbrk(cs: *const c_char, ct: *const c_char) -> *mut c_char;
-                    pub fn strstr(cs: *const c_char, ct: *const c_char) -> *mut c_char;
-                    pub fn strlen(cs: *const c_char) -> size_t;
-                    pub fn strnlen(cs: *const c_char, maxlen: size_t) -> size_t;
-                    pub fn strerror(n: c_int) -> *mut c_char;
-                    pub fn strtok(s: *mut c_char, t: *const c_char) -> *mut c_char;
-                    pub fn strxfrm(s: *mut c_char, ct: *const c_char, n: size_t) -> size_t;
-                    pub fn wcslen(buf: *const wchar_t) -> size_t;
-                    pub fn wcstombs(dest: *mut c_char, src: *const wchar_t, n: size_t) -> size_t;
-
-                    pub fn memchr(cx: *const c_void, c: c_int, n: size_t) -> *mut c_void;
-                    pub fn memcmp(cx: *const c_void, ct: *const c_void, n: size_t) -> c_int;
-                    pub fn memcpy(dest: *mut c_void, src: *const c_void, n: size_t) -> *mut c_void;
-                    pub fn memmove(dest: *mut c_void, src: *const c_void, n: size_t) -> *mut c_void;
-                    pub fn memset(dest: *mut c_void, c: c_int, n: size_t) -> *mut c_void;
-
-                    pub fn abs(i: c_int) -> c_int;
-                    pub fn labs(i: c_long) -> c_long;
-                    pub fn rand() -> c_int;
-                    pub fn srand(seed: c_uint);
-
-                    pub fn signal(signum: c_int, handler: sighandler_t) -> sighandler_t;
-                    pub fn raise(signum: c_int) -> c_int;
-
-                    pub fn clock() -> clock_t;
-                    pub fn ctime(sourceTime: *const time_t) -> *mut c_char;
-                    pub fn difftime(timeEnd: time_t, timeStart: time_t) -> c_double;
-                    #[link_name = "_gmtime64_s"]
-                    pub fn gmtime_s(destTime: *mut tm, srcTime: *const time_t) -> c_int;
-                    #[link_name = "_get_daylight"]
-                    pub fn get_daylight(hours: *mut c_int) -> errno_t;
-                    #[link_name = "_get_dstbias"]
-                    pub fn get_dstbias(seconds: *mut c_long) -> errno_t;
-                    #[link_name = "_get_timezone"]
-                    pub fn get_timezone(seconds: *mut c_long) -> errno_t;
-                    #[link_name = "_get_tzname"]
-                    pub fn get_tzname(
-                        p_return_value: *mut size_t,
-                        time_zone_name: *mut c_char,
-                        size_in_bytes: size_t,
-                        index: c_int,
-                    ) -> errno_t;
-                    #[link_name = "_localtime64_s"]
-                    pub fn localtime_s(tmDest: *mut tm, sourceTime: *const time_t) -> crate::errno_t;
-                    #[link_name = "_time64"]
-                    pub fn time(destTime: *mut time_t) -> time_t;
-                    #[link_name = "_tzset"]
-                    pub fn tzset();
-                    #[link_name = "_chmod"]
-                    pub fn chmod(path: *const c_char, mode: c_int) -> c_int;
-                    #[link_name = "_wchmod"]
-                    pub fn wchmod(path: *const wchar_t, mode: c_int) -> c_int;
-                    #[link_name = "_mkdir"]
-                    pub fn mkdir(path: *const c_char) -> c_int;
-                    #[link_name = "_wrmdir"]
-                    pub fn wrmdir(path: *const wchar_t) -> c_int;
-                    #[link_name = "_fstat64"]
-                    pub fn fstat(fildes: c_int, buf: *mut stat) -> c_int;
-                    #[link_name = "_stat64"]
-                    pub fn stat(path: *const c_char, buf: *mut stat) -> c_int;
-                    #[link_name = "_wstat64"]
-                    pub fn wstat(path: *const wchar_t, buf: *mut stat) -> c_int;
-                    #[link_name = "_wutime64"]
-                    pub fn wutime(file: *const wchar_t, buf: *mut utimbuf) -> c_int;
-                    #[link_name = "_popen"]
-                    pub fn popen(command: *const c_char, mode: *const c_char) -> *mut crate::FILE;
-                    #[link_name = "_pclose"]
-                    pub fn pclose(stream: *mut crate::FILE) -> c_int;
-                    #[link_name = "_fdopen"]
-                    pub fn fdopen(fd: c_int, mode: *const c_char) -> *mut crate::FILE;
-                    #[link_name = "_fileno"]
-                    pub fn fileno(stream: *mut crate::FILE) -> c_int;
-                    #[link_name = "_open"]
-                    pub fn open(path: *const c_char, oflag: c_int, ...) -> c_int;
-                    #[link_name = "_wopen"]
-                    pub fn wopen(path: *const wchar_t, oflag: c_int, ...) -> c_int;
-                    #[link_name = "_creat"]
-                    pub fn creat(path: *const c_char, mode: c_int) -> c_int;
-                    #[link_name = "_access"]
-                    pub fn access(path: *const c_char, amode: c_int) -> c_int;
-                    #[link_name = "_chdir"]
-                    pub fn chdir(dir: *const c_char) -> c_int;
-                    #[link_name = "_close"]
-                    pub fn close(fd: c_int) -> c_int;
-                    #[link_name = "_dup"]
-                    pub fn dup(fd: c_int) -> c_int;
-                    #[link_name = "_dup2"]
-                    pub fn dup2(src: c_int, dst: c_int) -> c_int;
-                    #[link_name = "_execl"]
-                    pub fn execl(path: *const c_char, arg0: *const c_char, ...) -> intptr_t;
-                    #[link_name = "_wexecl"]
-                    pub fn wexecl(path: *const wchar_t, arg0: *const wchar_t, ...) -> intptr_t;
-                    #[link_name = "_execle"]
-                    pub fn execle(path: *const c_char, arg0: *const c_char, ...) -> intptr_t;
-                    #[link_name = "_wexecle"]
-                    pub fn wexecle(path: *const wchar_t, arg0: *const wchar_t, ...) -> intptr_t;
-                    #[link_name = "_execlp"]
-                    pub fn execlp(path: *const c_char, arg0: *const c_char, ...) -> intptr_t;
-                    #[link_name = "_wexeclp"]
-                    pub fn wexeclp(path: *const wchar_t, arg0: *const wchar_t, ...) -> intptr_t;
-                    #[link_name = "_execlpe"]
-                    pub fn execlpe(path: *const c_char, arg0: *const c_char, ...) -> intptr_t;
-                    #[link_name = "_wexeclpe"]
-                    pub fn wexeclpe(path: *const wchar_t, arg0: *const wchar_t, ...) -> intptr_t;
-                    #[link_name = "_execv"]
-                    pub fn execv(prog: *const c_char, argv: *const *const c_char) -> intptr_t;
-                    #[link_name = "_execve"]
-                    pub fn execve(
-                        prog: *const c_char,
-                        argv: *const *const c_char,
-                        envp: *const *const c_char,
-                    ) -> intptr_t;
-                    #[link_name = "_execvp"]
-                    pub fn execvp(c: *const c_char, argv: *const *const c_char) -> intptr_t;
-                    #[link_name = "_execvpe"]
-                    pub fn execvpe(
-                        c: *const c_char,
-                        argv: *const *const c_char,
-                        envp: *const *const c_char,
-                    ) -> intptr_t;
-                    #[link_name = "_wexecv"]
-                    pub fn wexecv(prog: *const wchar_t, argv: *const *const wchar_t) -> intptr_t;
-                    #[link_name = "_wexecve"]
-                    pub fn wexecve(
-                        prog: *const wchar_t,
-                        argv: *const *const wchar_t,
-                        envp: *const *const wchar_t,
-                    ) -> intptr_t;
-                    #[link_name = "_wexecvp"]
-                    pub fn wexecvp(c: *const wchar_t, argv: *const *const wchar_t) -> intptr_t;
-                    #[link_name = "_wexecvpe"]
-                    pub fn wexecvpe(
-                        c: *const wchar_t,
-                        argv: *const *const wchar_t,
-                        envp: *const *const wchar_t,
-                    ) -> intptr_t;
-                    #[link_name = "_getcwd"]
-                    pub fn getcwd(buf: *mut c_char, size: c_int) -> *mut c_char;
-                    #[link_name = "_getpid"]
-                    pub fn getpid() -> c_int;
-                    #[link_name = "_isatty"]
-                    pub fn isatty(fd: c_int) -> c_int;
-                    #[link_name = "_lseek"]
-                    pub fn lseek(fd: c_int, offset: c_long, origin: c_int) -> c_long;
-                    #[link_name = "_lseeki64"]
-                    pub fn lseek64(fd: c_int, offset: c_longlong, origin: c_int) -> c_longlong;
-                    #[link_name = "_pipe"]
-                    pub fn pipe(fds: *mut c_int, psize: c_uint, textmode: c_int) -> c_int;
-                    #[link_name = "_read"]
-                    pub fn read(fd: c_int, buf: *mut c_void, count: c_uint) -> c_int;
-                    #[link_name = "_rmdir"]
-                    pub fn rmdir(path: *const c_char) -> c_int;
-                    #[link_name = "_unlink"]
-                    pub fn unlink(c: *const c_char) -> c_int;
-                    #[link_name = "_write"]
-                    pub fn write(fd: c_int, buf: *const c_void, count: c_uint) -> c_int;
-                    #[link_name = "_commit"]
-                    pub fn commit(fd: c_int) -> c_int;
-                    #[link_name = "_get_osfhandle"]
-                    pub fn get_osfhandle(fd: c_int) -> intptr_t;
-                    #[link_name = "_open_osfhandle"]
-                    pub fn open_osfhandle(osfhandle: intptr_t, flags: c_int) -> c_int;
-                    pub fn setlocale(category: c_int, locale: *const c_char) -> *mut c_char;
-                    #[link_name = "_wsetlocale"]
-                    pub fn wsetlocale(category: c_int, locale: *const wchar_t) -> *mut wchar_t;
-                    #[link_name = "_aligned_malloc"]
-                    pub fn aligned_malloc(size: size_t, alignment: size_t) -> *mut c_void;
-                    #[link_name = "_aligned_free"]
-                    pub fn aligned_free(ptr: *mut c_void);
-                    #[link_name = "_aligned_realloc"]
-                    pub fn aligned_realloc(memblock: *mut c_void, size: size_t, alignment: size_t) -> *mut c_void;
-                    #[link_name = "_putenv"]
-                    pub fn putenv(envstring: *const c_char) -> c_int;
-                    #[link_name = "_wputenv"]
-                    pub fn wputenv(envstring: *const crate::wchar_t) -> c_int;
-                    #[link_name = "_putenv_s"]
-                    pub fn putenv_s(envstring: *const c_char, value_string: *const c_char) -> crate::errno_t;
-                    #[link_name = "_wputenv_s"]
-                    pub fn wputenv_s(
-                        envstring: *const crate::wchar_t,
-                        value_string: *const crate::wchar_t,
-                    ) -> crate::errno_t;
-                }
-
-                extern "system" {
-                    pub fn listen(s: SOCKET, backlog: c_int) -> c_int;
-                    pub fn accept(s: SOCKET, addr: *mut crate::sockaddr, addrlen: *mut c_int) -> SOCKET;
-                    pub fn bind(s: SOCKET, name: *const crate::sockaddr, namelen: c_int) -> c_int;
-                    pub fn connect(s: SOCKET, name: *const crate::sockaddr, namelen: c_int) -> c_int;
-                    pub fn getpeername(s: SOCKET, name: *mut crate::sockaddr, nameln: *mut c_int) -> c_int;
-                    pub fn getsockname(s: SOCKET, name: *mut crate::sockaddr, nameln: *mut c_int) -> c_int;
-                    pub fn getsockopt(
-                        s: SOCKET,
-                        level: c_int,
-                        optname: c_int,
-                        optval: *mut c_char,
-                        optlen: *mut c_int,
-                    ) -> c_int;
-                    pub fn recvfrom(
-                        s: SOCKET,
-                        buf: *mut c_char,
-                        len: c_int,
-                        flags: c_int,
-                        from: *mut crate::sockaddr,
-                        fromlen: *mut c_int,
-                    ) -> c_int;
-                    pub fn sendto(
-                        s: SOCKET,
-                        buf: *const c_char,
-                        len: c_int,
-                        flags: c_int,
-                        to: *const crate::sockaddr,
-                        tolen: c_int,
-                    ) -> c_int;
-                    pub fn setsockopt(
-                        s: SOCKET,
-                        level: c_int,
-                        optname: c_int,
-                        optval: *const c_char,
-                        optlen: c_int,
-                    ) -> c_int;
-                    pub fn socket(af: c_int, socket_type: c_int, protocol: c_int) -> SOCKET;
-                }
-
-                cfg_if!
-                {
-                    if #[cfg(all(target_env = "gnu"))] {
-                        mod gnu
-                        {
-                            use ::
-                            {
-                                *
-                            };
-                        } pub use self::gnu::*;
-                    } else if #[cfg(all(target_env = "msvc"))] {
-                        mod msvc
-                        {
-                            use ::
-                            {
-                                *
-                            };
-                        } pub use self::msvc::*;
-                    } else {
-                        // Unknown target_env
-                    }
-                }
-            }
-
-            pub use crate::windows::*;
-            prelude!();
-        }
+            ffi::{ * },
+            *,
+        };
         
-        else if #[cfg(target_os = "fuchsia")] 
-        {
-            mod fuchsia
-            {
-                use ::
-                {
-                    *,
-                };
-            }
+        pub type intmax_t = i64;
+        pub type uintmax_t = u64;
+        pub type size_t = usize;
+        pub type ptrdiff_t = isize;
+        pub type intptr_t = isize;
+        pub type uintptr_t = usize;
+        pub type ssize_t = isize;
+        pub type pid_t = i32;
+        pub type in_addr_t = u32;
+        pub type in_port_t = u16;
+        pub type sighandler_t = size_t;
+        pub type cc_t = c_uchar;
+        pub type tcflag_t = c_uint;        
+        pub type uid_t = u32;
+        pub type gid_t = u32;
+        pub const NCCS: usize = 32;
 
-            pub use crate::fuchsia::*;
-            prelude!();
-        }
         
-        else if #[cfg(target_os = "switch")]
-        {
-            mod switch
-            {
-                use ::
-                {
-                    *,
-                };
-            }
-            
-            pub use switch::*;
-            prelude!();
-        }
-
-        else if #[cfg(target_os = "vxworks")]
-        {
-            mod vxworks
-            {
-                use ::
-                {
-                    *,
-                };
-            }
-            
-            pub use crate::vxworks::*;
-            prelude!();
-        }
+        pub const STDIN_FILENO: c_int = 0;
+        pub const STDOUT_FILENO: c_int = 1;
+        pub const STDERR_FILENO: c_int = 2;
         
-        else if #[cfg(target_os = "solid_asp3")]
-        {
-            mod solid
-            {
-                use ::
-                {
-                    *,
-                };
-            }
-            
-            pub use crate::solid::*;
-            prelude!();
-        }
+        pub const TIOCGWINSZ: c_int = 0x5401;
+        pub const TIOCSWINSZ: c_int = 0x5402;
+        pub const TIOCLINUX: c_int = 0x5403;
+        pub const TIOCGPGRP: c_int = 0x540f;
+        pub const TIOCSPGRP: c_int = 0x5410;
+
+        pub const _SC_GETPW_R_SIZE_MAX: c_int = 51;
         
-        else if #[cfg(unix)]
+        #[repr(C)]
+        pub struct passwd
         {
-            mod unix
-            {
-                //! Definitions found commonly among almost all Unix derivatives
-                use ::
-                {
-                    *,
-                };
-
-                use super::prelude::*;
-
-                pub type intmax_t = i64;
-                pub type uintmax_t = u64;
-
-                pub type size_t = usize;
-                pub type ptrdiff_t = isize;
-                pub type intptr_t = isize;
-                pub type uintptr_t = usize;
-                pub type ssize_t = isize;
-
-                pub type pid_t = i32;
-                pub type in_addr_t = u32;
-                pub type in_port_t = u16;
-                pub type sighandler_t = size_t;
-                pub type cc_t = c_uchar;
-
-                cfg_if! {
-                    if #[cfg(any(
-                        target_os = "espidf",
-                        target_os = "horizon",
-                        target_os = "vita"
-                    ))] {
-                        pub type uid_t = c_ushort;
-                        pub type gid_t = c_ushort;
-                    } else if #[cfg(target_os = "nto")] {
-                        pub type uid_t = i32;
-                        pub type gid_t = i32;
-                    } else {
-                        pub type uid_t = u32;
-                        pub type gid_t = u32;
-                    }
-                }
-
-                missing! {
-                    #[cfg_attr(feature = "extra_traits", derive(Debug))]
-                    pub enum DIR {}
-                }
-                pub type locale_t = *mut c_void;
-
-                s! {
-                    pub struct group {
-                        pub gr_name: *mut c_char,
-                        pub gr_passwd: *mut c_char,
-                        pub gr_gid: crate::gid_t,
-                        pub gr_mem: *mut *mut c_char,
-                    }
-
-                    pub struct utimbuf {
-                        pub actime: time_t,
-                        pub modtime: time_t,
-                    }
-
-                    pub struct timeval {
-                        pub tv_sec: time_t,
-                        #[cfg(not(gnu_time_bits64))]
-                        pub tv_usec: suseconds_t,
-                        // For 64 bit time on 32 bit linux glibc, suseconds_t is still
-                        // a 32 bit type.  Use __suseconds64_t instead
-                        #[cfg(gnu_time_bits64)]
-                        pub tv_usec: __suseconds64_t,
-                    }
-
-                    // linux x32 compatibility
-                    // See https://sourceware.org/bugzilla/show_bug.cgi?id=16437
-                    #[cfg(not(target_env = "gnu"))]
-                    pub struct timespec {
-                        pub tv_sec: time_t,
-                        #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
-                        pub tv_nsec: i64,
-                        #[cfg(not(all(target_arch = "x86_64", target_pointer_width = "32")))]
-                        pub tv_nsec: c_long,
-                    }
-
-                    pub struct rlimit {
-                        pub rlim_cur: rlim_t,
-                        pub rlim_max: rlim_t,
-                    }
-
-                    pub struct rusage {
-                        pub ru_utime: timeval,
-                        pub ru_stime: timeval,
-                        pub ru_maxrss: c_long,
-                        #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
-                        __pad1: u32,
-                        pub ru_ixrss: c_long,
-                        #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
-                        __pad2: u32,
-                        pub ru_idrss: c_long,
-                        #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
-                        __pad3: u32,
-                        pub ru_isrss: c_long,
-                        #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
-                        __pad4: u32,
-                        pub ru_minflt: c_long,
-                        #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
-                        __pad5: u32,
-                        pub ru_majflt: c_long,
-                        #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
-                        __pad6: u32,
-                        pub ru_nswap: c_long,
-                        #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
-                        __pad7: u32,
-                        pub ru_inblock: c_long,
-                        #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
-                        __pad8: u32,
-                        pub ru_oublock: c_long,
-                        #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
-                        __pad9: u32,
-                        pub ru_msgsnd: c_long,
-                        #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
-                        __pad10: u32,
-                        pub ru_msgrcv: c_long,
-                        #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
-                        __pad11: u32,
-                        pub ru_nsignals: c_long,
-                        #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
-                        __pad12: u32,
-                        pub ru_nvcsw: c_long,
-                        #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
-                        __pad13: u32,
-                        pub ru_nivcsw: c_long,
-                        #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
-                        __pad14: u32,
-
-                        #[cfg(any(target_env = "musl", target_env = "ohos", target_os = "emscripten"))]
-                        __reserved: [c_long; 16],
-                    }
-
-                    pub struct ipv6_mreq {
-                        pub ipv6mr_multiaddr: in6_addr,
-                        #[cfg(target_os = "android")]
-                        pub ipv6mr_interface: c_int,
-                        #[cfg(not(target_os = "android"))]
-                        pub ipv6mr_interface: c_uint,
-                    }
-
-                    #[cfg(not(target_os = "cygwin"))]
-                    pub struct hostent {
-                        pub h_name: *mut c_char,
-                        pub h_aliases: *mut *mut c_char,
-                        pub h_addrtype: c_int,
-                        pub h_length: c_int,
-                        pub h_addr_list: *mut *mut c_char,
-                    }
-
-                    pub struct iovec {
-                        pub iov_base: *mut c_void,
-                        pub iov_len: size_t,
-                    }
-
-                    pub struct pollfd {
-                        pub fd: c_int,
-                        pub events: c_short,
-                        pub revents: c_short,
-                    }
-
-                    #[cfg(not(target_os = "aix"))]
-                    pub struct winsize {
-                        pub ws_row: c_ushort,
-                        pub ws_col: c_ushort,
-                        pub ws_xpixel: c_ushort,
-                        pub ws_ypixel: c_ushort,
-                    }
-
-                    #[cfg(not(target_os = "cygwin"))]
-                    pub struct linger {
-                        pub l_onoff: c_int,
-                        pub l_linger: c_int,
-                    }
-
-                    pub struct sigval {
-                        // Actually a union of an int and a void*
-                        pub sival_ptr: *mut c_void,
-                    }
-
-                    // <sys/time.h>
-                    pub struct itimerval {
-                        pub it_interval: crate::timeval,
-                        pub it_value: crate::timeval,
-                    }
-
-                    // <sys/times.h>
-                    pub struct tms {
-                        pub tms_utime: crate::clock_t,
-                        pub tms_stime: crate::clock_t,
-                        pub tms_cutime: crate::clock_t,
-                        pub tms_cstime: crate::clock_t,
-                    }
-
-                    pub struct servent {
-                        pub s_name: *mut c_char,
-                        pub s_aliases: *mut *mut c_char,
-                        #[cfg(target_os = "cygwin")]
-                        pub s_port: c_short,
-                        #[cfg(not(target_os = "cygwin"))]
-                        pub s_port: c_int,
-                        pub s_proto: *mut c_char,
-                    }
-
-                    pub struct protoent {
-                        pub p_name: *mut c_char,
-                        pub p_aliases: *mut *mut c_char,
-                        #[cfg(not(target_os = "cygwin"))]
-                        pub p_proto: c_int,
-                        #[cfg(target_os = "cygwin")]
-                        pub p_proto: c_short,
-                    }
-
-                    #[repr(align(4))]
-                    pub struct in6_addr {
-                        pub s6_addr: [u8; 16],
-                    }
-                }
-
-                pub const INT_MIN: c_int = -2147483648;
-                pub const INT_MAX: c_int = 2147483647;
-
-                pub const SIG_DFL: sighandler_t = 0 as sighandler_t;
-                pub const SIG_IGN: sighandler_t = 1 as sighandler_t;
-                pub const SIG_ERR: sighandler_t = !0 as sighandler_t;
-
-                cfg_if! {
-                    if #[cfg(all(not(target_os = "nto"), not(target_os = "aix")))] {
-                        pub const DT_UNKNOWN: u8 = 0;
-                        pub const DT_FIFO: u8 = 1;
-                        pub const DT_CHR: u8 = 2;
-                        pub const DT_DIR: u8 = 4;
-                        pub const DT_BLK: u8 = 6;
-                        pub const DT_REG: u8 = 8;
-                        pub const DT_LNK: u8 = 10;
-                        pub const DT_SOCK: u8 = 12;
-                    }
-                }
-                cfg_if! {
-                    if #[cfg(not(target_os = "redox"))] {
-                        pub const FD_CLOEXEC: c_int = 0x1;
-                    }
-                }
-
-                cfg_if! {
-                    if #[cfg(not(target_os = "nto"))] {
-                        pub const USRQUOTA: c_int = 0;
-                        pub const GRPQUOTA: c_int = 1;
-                    }
-                }
-                pub const SIGIOT: c_int = 6;
-
-                pub const S_ISUID: mode_t = 0o4000;
-                pub const S_ISGID: mode_t = 0o2000;
-                pub const S_ISVTX: mode_t = 0o1000;
-
-                cfg_if! {
-                    if #[cfg(not(any(
-                        target_os = "haiku",
-                        target_os = "illumos",
-                        target_os = "solaris",
-                        target_os = "cygwin"
-                    )))] {
-                        pub const IF_NAMESIZE: size_t = 16;
-                        pub const IFNAMSIZ: size_t = IF_NAMESIZE;
-                    }
-                }
-
-                pub const LOG_EMERG: c_int = 0;
-                pub const LOG_ALERT: c_int = 1;
-                pub const LOG_CRIT: c_int = 2;
-                pub const LOG_ERR: c_int = 3;
-                pub const LOG_WARNING: c_int = 4;
-                pub const LOG_NOTICE: c_int = 5;
-                pub const LOG_INFO: c_int = 6;
-                pub const LOG_DEBUG: c_int = 7;
-
-                pub const LOG_KERN: c_int = 0;
-                pub const LOG_USER: c_int = 1 << 3;
-                pub const LOG_MAIL: c_int = 2 << 3;
-                pub const LOG_DAEMON: c_int = 3 << 3;
-                pub const LOG_AUTH: c_int = 4 << 3;
-                pub const LOG_SYSLOG: c_int = 5 << 3;
-                pub const LOG_LPR: c_int = 6 << 3;
-                pub const LOG_NEWS: c_int = 7 << 3;
-                pub const LOG_UUCP: c_int = 8 << 3;
-                pub const LOG_LOCAL0: c_int = 16 << 3;
-                pub const LOG_LOCAL1: c_int = 17 << 3;
-                pub const LOG_LOCAL2: c_int = 18 << 3;
-                pub const LOG_LOCAL3: c_int = 19 << 3;
-                pub const LOG_LOCAL4: c_int = 20 << 3;
-                pub const LOG_LOCAL5: c_int = 21 << 3;
-                pub const LOG_LOCAL6: c_int = 22 << 3;
-                pub const LOG_LOCAL7: c_int = 23 << 3;
-
-                cfg_if! {
-                    if #[cfg(not(target_os = "haiku"))] {
-                        pub const LOG_PID: c_int = 0x01;
-                        pub const LOG_CONS: c_int = 0x02;
-                        pub const LOG_ODELAY: c_int = 0x04;
-                        pub const LOG_NDELAY: c_int = 0x08;
-                        pub const LOG_NOWAIT: c_int = 0x10;
-                    }
-                }
-                pub const LOG_PRIMASK: c_int = 7;
-                pub const LOG_FACMASK: c_int = 0x3f8;
-
-                cfg_if! {
-                    if #[cfg(not(target_os = "nto"))] {
-                        pub const PRIO_MIN: c_int = -20;
-                        pub const PRIO_MAX: c_int = 20;
-                    }
-                }
-                pub const IPPROTO_ICMP: c_int = 1;
-                pub const IPPROTO_ICMPV6: c_int = 58;
-                pub const IPPROTO_TCP: c_int = 6;
-                pub const IPPROTO_UDP: c_int = 17;
-                pub const IPPROTO_IP: c_int = 0;
-                pub const IPPROTO_IPV6: c_int = 41;
-
-                pub const INADDR_LOOPBACK: in_addr_t = 2130706433;
-                pub const INADDR_ANY: in_addr_t = 0;
-                pub const INADDR_BROADCAST: in_addr_t = 4294967295;
-                pub const INADDR_NONE: in_addr_t = 4294967295;
-
-                pub const IN6ADDR_LOOPBACK_INIT: in6_addr = in6_addr {
-                    s6_addr: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-                };
-
-                pub const IN6ADDR_ANY_INIT: in6_addr = in6_addr {
-                    s6_addr: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                };
-
-                pub const ARPOP_REQUEST: u16 = 1;
-                pub const ARPOP_REPLY: u16 = 2;
-
-                pub const ATF_COM: c_int = 0x02;
-                pub const ATF_PERM: c_int = 0x04;
-                pub const ATF_PUBL: c_int = 0x08;
-                pub const ATF_USETRAILERS: c_int = 0x10;
-
-                cfg_if! {
-                    if #[cfg(any(target_os = "nto", target_os = "aix"))] {
-                        pub const FNM_PERIOD: c_int = 1 << 1;
-                    } else {
-                        pub const FNM_PERIOD: c_int = 1 << 2;
-                    }
-                }
-                pub const FNM_NOMATCH: c_int = 1;
-
-                cfg_if! {
-                    if #[cfg(any(target_os = "illumos", target_os = "solaris",))] {
-                        pub const FNM_CASEFOLD: c_int = 1 << 3;
-                    } else if #[cfg(not(target_os = "aix"))] {
-                        pub const FNM_CASEFOLD: c_int = 1 << 4;
-                    }
-                }
-
-                cfg_if! {
-                    if #[cfg(any(
-                        target_os = "macos",
-                        target_os = "freebsd",
-                        target_os = "android",
-                        target_os = "openbsd",
-                        target_os = "cygwin",
-                    ))] {
-                        pub const FNM_PATHNAME: c_int = 1 << 1;
-                    } else {
-                        pub const FNM_PATHNAME: c_int = 1 << 0;
-                    }
-                }
-
-                cfg_if! {
-                    if #[cfg(any(
-                        target_os = "macos",
-                        target_os = "freebsd",
-                        target_os = "android",
-                        target_os = "openbsd",
-                    ))] {
-                        pub const FNM_NOESCAPE: c_int = 1 << 0;
-                    } else if #[cfg(target_os = "nto")] {
-                        pub const FNM_NOESCAPE: c_int = 1 << 2;
-                    } else if #[cfg(target_os = "aix")] {
-                        pub const FNM_NOESCAPE: c_int = 1 << 3;
-                    } else {
-                        pub const FNM_NOESCAPE: c_int = 1 << 1;
-                    }
-                }
-
-                extern "C" {
-                    pub static in6addr_loopback: in6_addr;
-                    pub static in6addr_any: in6_addr;
-                }
-
-                cfg_if! {
-                    if #[cfg(any(
-                        target_os = "l4re",
-                        target_os = "espidf",
-                        target_os = "nuttx"
-                    ))] {
-                        // required libraries are linked externally for these platforms:
-                        // * L4Re
-                        // * ESP-IDF
-                        // * NuttX
-                    } else if #[cfg(feature = "std")] {
-                        // cargo build, don't pull in anything extra as the std dep
-                        // already pulls in all libs.
-                    } else if #[cfg(all(
-                        any(
-                            all(
-                                target_os = "linux",
-                                any(target_env = "gnu", target_env = "uclibc")
-                            ),
-                            target_os = "cygwin"
-                        ),
-                        feature = "rustc-dep-of-std"
-                    ))] {
-                        #[link(
-                            name = "util",
-                            kind = "static",
-                            modifiers = "-bundle",
-                            cfg(target_feature = "crt-static")
-                        )]
-                        #[link(
-                            name = "rt",
-                            kind = "static",
-                            modifiers = "-bundle",
-                            cfg(target_feature = "crt-static")
-                        )]
-                        #[link(
-                            name = "pthread",
-                            kind = "static",
-                            modifiers = "-bundle",
-                            cfg(target_feature = "crt-static")
-                        )]
-                        #[link(
-                            name = "m",
-                            kind = "static",
-                            modifiers = "-bundle",
-                            cfg(target_feature = "crt-static")
-                        )]
-                        #[link(
-                            name = "dl",
-                            kind = "static",
-                            modifiers = "-bundle",
-                            cfg(target_feature = "crt-static")
-                        )]
-                        #[link(
-                            name = "c",
-                            kind = "static",
-                            modifiers = "-bundle",
-                            cfg(target_feature = "crt-static")
-                        )]
-                        #[link(
-                            name = "gcc_eh",
-                            kind = "static",
-                            modifiers = "-bundle",
-                            cfg(target_feature = "crt-static")
-                        )]
-                        #[link(
-                            name = "gcc",
-                            kind = "static",
-                            modifiers = "-bundle",
-                            cfg(target_feature = "crt-static")
-                        )]
-                        #[link(
-                            name = "c",
-                            kind = "static",
-                            modifiers = "-bundle",
-                            cfg(target_feature = "crt-static")
-                        )]
-                        #[link(name = "util", cfg(not(target_feature = "crt-static")))]
-                        #[link(name = "rt", cfg(not(target_feature = "crt-static")))]
-                        #[link(name = "pthread", cfg(not(target_feature = "crt-static")))]
-                        #[link(name = "m", cfg(not(target_feature = "crt-static")))]
-                        #[link(name = "dl", cfg(not(target_feature = "crt-static")))]
-                        #[link(name = "c", cfg(not(target_feature = "crt-static")))]
-                        extern "C" {}
-                    } else if #[cfg(any(target_env = "musl", target_env = "ohos"))] {
-                        #[cfg_attr(
-                            feature = "rustc-dep-of-std",
-                            link(
-                                name = "c",
-                                kind = "static",
-                                modifiers = "-bundle",
-                                cfg(target_feature = "crt-static")
-                            )
-                        )]
-                        #[cfg_attr(
-                            feature = "rustc-dep-of-std",
-                            link(name = "c", cfg(not(target_feature = "crt-static")))
-                        )]
-                        extern "C" {}
-                    } else if #[cfg(target_os = "emscripten")] {
-                        // Don't pass -lc to Emscripten, it breaks. See:
-                        // https://github.com/emscripten-core/emscripten/issues/22758
-                    } else if #[cfg(all(target_os = "android", feature = "rustc-dep-of-std"))] {
-                        #[link(
-                            name = "c",
-                            kind = "static",
-                            modifiers = "-bundle",
-                            cfg(target_feature = "crt-static")
-                        )]
-                        #[link(
-                            name = "m",
-                            kind = "static",
-                            modifiers = "-bundle",
-                            cfg(target_feature = "crt-static")
-                        )]
-                        #[link(name = "m", cfg(not(target_feature = "crt-static")))]
-                        #[link(name = "c", cfg(not(target_feature = "crt-static")))]
-                        extern "C" {}
-                    } else if #[cfg(any(
-                        target_os = "macos",
-                        target_os = "ios",
-                        target_os = "tvos",
-                        target_os = "watchos",
-                        target_os = "visionos",
-                        target_os = "android",
-                        target_os = "openbsd",
-                        target_os = "nto",
-                    ))] {
-                        #[link(name = "c")]
-                        #[link(name = "m")]
-                        extern "C" {}
-                    } else if #[cfg(target_os = "haiku")] {
-                        #[link(name = "root")]
-                        #[link(name = "network")]
-                        extern "C" {}
-                    } else if #[cfg(target_env = "newlib")] {
-                        #[link(name = "c")]
-                        #[link(name = "m")]
-                        extern "C" {}
-                    } else if #[cfg(target_env = "illumos")] {
-                        #[link(name = "c")]
-                        #[link(name = "m")]
-                        extern "C" {}
-                    } else if #[cfg(target_os = "redox")] {
-                        #[cfg_attr(
-                            feature = "rustc-dep-of-std",
-                            link(
-                                name = "c",
-                                kind = "static",
-                                modifiers = "-bundle",
-                                cfg(target_feature = "crt-static")
-                            )
-                        )]
-                        #[cfg_attr(
-                            feature = "rustc-dep-of-std",
-                            link(name = "c", cfg(not(target_feature = "crt-static")))
-                        )]
-                        extern "C" {}
-                    } else if #[cfg(target_os = "aix")] {
-                        #[link(name = "c")]
-                        #[link(name = "m")]
-                        #[link(name = "bsd")]
-                        #[link(name = "pthread")]
-                        extern "C" {}
-                    } else {
-                        #[link(name = "c")]
-                        #[link(name = "m")]
-                        #[link(name = "rt")]
-                        #[link(name = "pthread")]
-                        extern "C" {}
-                    }
-                }
-
-                cfg_if! {
-                    if #[cfg(not(all(target_os = "linux", target_env = "gnu")))] {
-                        missing! {
-                            #[cfg_attr(feature = "extra_traits", derive(Debug))]
-                            pub enum fpos_t {} // FIXME(unix): fill this out with a struct
-                        }
-                    }
-                }
-
-                missing! {
-                    #[cfg_attr(feature = "extra_traits", derive(Debug))]
-                    pub enum FILE {}
-                }
-
-                extern "C" {
-                    pub fn isalnum(c: c_int) -> c_int;
-                    pub fn isalpha(c: c_int) -> c_int;
-                    pub fn iscntrl(c: c_int) -> c_int;
-                    pub fn isdigit(c: c_int) -> c_int;
-                    pub fn isgraph(c: c_int) -> c_int;
-                    pub fn islower(c: c_int) -> c_int;
-                    pub fn isprint(c: c_int) -> c_int;
-                    pub fn ispunct(c: c_int) -> c_int;
-                    pub fn isspace(c: c_int) -> c_int;
-                    pub fn isupper(c: c_int) -> c_int;
-                    pub fn isxdigit(c: c_int) -> c_int;
-                    pub fn isblank(c: c_int) -> c_int;
-                    pub fn tolower(c: c_int) -> c_int;
-                    pub fn toupper(c: c_int) -> c_int;
-                    pub fn qsort(
-                        base: *mut c_void,
-                        num: size_t,
-                        size: size_t,
-                        compar: Option<unsafe extern "C" fn(*const c_void, *const c_void) -> c_int>,
-                    );
-                    pub fn bsearch(
-                        key: *const c_void,
-                        base: *const c_void,
-                        num: size_t,
-                        size: size_t,
-                        compar: Option<unsafe extern "C" fn(*const c_void, *const c_void) -> c_int>,
-                    ) -> *mut c_void;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "fopen$UNIX2003"
-                    )]
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "fopen64")]
-                    pub fn fopen(filename: *const c_char, mode: *const c_char) -> *mut FILE;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "freopen$UNIX2003"
-                    )]
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "freopen64")]
-                    pub fn freopen(filename: *const c_char, mode: *const c_char, file: *mut FILE) -> *mut FILE;
-
-                    pub fn fflush(file: *mut FILE) -> c_int;
-                    pub fn fclose(file: *mut FILE) -> c_int;
-                    pub fn remove(filename: *const c_char) -> c_int;
-                    pub fn rename(oldname: *const c_char, newname: *const c_char) -> c_int;
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "tmpfile64")]
-                    pub fn tmpfile() -> *mut FILE;
-                    pub fn setvbuf(stream: *mut FILE, buffer: *mut c_char, mode: c_int, size: size_t) -> c_int;
-                    pub fn setbuf(stream: *mut FILE, buf: *mut c_char);
-                    pub fn getchar() -> c_int;
-                    pub fn putchar(c: c_int) -> c_int;
-                    pub fn fgetc(stream: *mut FILE) -> c_int;
-                    pub fn fgets(buf: *mut c_char, n: c_int, stream: *mut FILE) -> *mut c_char;
-                    pub fn fputc(c: c_int, stream: *mut FILE) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "fputs$UNIX2003"
-                    )]
-                    pub fn fputs(s: *const c_char, stream: *mut FILE) -> c_int;
-                    pub fn puts(s: *const c_char) -> c_int;
-                    pub fn ungetc(c: c_int, stream: *mut FILE) -> c_int;
-                    pub fn fread(ptr: *mut c_void, size: size_t, nobj: size_t, stream: *mut FILE) -> size_t;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "fwrite$UNIX2003"
-                    )]
-                    pub fn fwrite(ptr: *const c_void, size: size_t, nobj: size_t, stream: *mut FILE) -> size_t;
-                    pub fn fseek(stream: *mut FILE, offset: c_long, whence: c_int) -> c_int;
-                    pub fn ftell(stream: *mut FILE) -> c_long;
-                    pub fn rewind(stream: *mut FILE);
-                    #[cfg_attr(target_os = "netbsd", link_name = "__fgetpos50")]
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "fgetpos64")]
-                    pub fn fgetpos(stream: *mut FILE, ptr: *mut fpos_t) -> c_int;
-                    #[cfg_attr(target_os = "netbsd", link_name = "__fsetpos50")]
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "fsetpos64")]
-                    pub fn fsetpos(stream: *mut FILE, ptr: *const fpos_t) -> c_int;
-                    pub fn feof(stream: *mut FILE) -> c_int;
-                    pub fn ferror(stream: *mut FILE) -> c_int;
-                    pub fn clearerr(stream: *mut FILE);
-                    pub fn perror(s: *const c_char);
-                    pub fn atof(s: *const c_char) -> c_double;
-                    pub fn atoi(s: *const c_char) -> c_int;
-                    pub fn atol(s: *const c_char) -> c_long;
-                    pub fn atoll(s: *const c_char) -> c_longlong;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "strtod$UNIX2003"
-                    )]
-                    pub fn strtod(s: *const c_char, endp: *mut *mut c_char) -> c_double;
-                    pub fn strtof(s: *const c_char, endp: *mut *mut c_char) -> c_float;
-                    pub fn strtol(s: *const c_char, endp: *mut *mut c_char, base: c_int) -> c_long;
-                    pub fn strtoll(s: *const c_char, endp: *mut *mut c_char, base: c_int) -> c_longlong;
-                    pub fn strtoul(s: *const c_char, endp: *mut *mut c_char, base: c_int) -> c_ulong;
-                    pub fn strtoull(s: *const c_char, endp: *mut *mut c_char, base: c_int) -> c_ulonglong;
-                    #[cfg_attr(target_os = "aix", link_name = "vec_calloc")]
-                    pub fn calloc(nobj: size_t, size: size_t) -> *mut c_void;
-                    #[cfg_attr(target_os = "aix", link_name = "vec_malloc")]
-                    pub fn malloc(size: size_t) -> *mut c_void;
-                    pub fn realloc(p: *mut c_void, size: size_t) -> *mut c_void;
-                    pub fn free(p: *mut c_void);
-                    pub fn abort() -> !;
-                    pub fn exit(status: c_int) -> !;
-                    pub fn _exit(status: c_int) -> !;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "system$UNIX2003"
-                    )]
-                    pub fn system(s: *const c_char) -> c_int;
-                    pub fn getenv(s: *const c_char) -> *mut c_char;
-
-                    pub fn strcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
-                    pub fn strncpy(dst: *mut c_char, src: *const c_char, n: size_t) -> *mut c_char;
-                    pub fn stpcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char;
-                    pub fn strcat(s: *mut c_char, ct: *const c_char) -> *mut c_char;
-                    pub fn strncat(s: *mut c_char, ct: *const c_char, n: size_t) -> *mut c_char;
-                    pub fn strcmp(cs: *const c_char, ct: *const c_char) -> c_int;
-                    pub fn strncmp(cs: *const c_char, ct: *const c_char, n: size_t) -> c_int;
-                    pub fn strcoll(cs: *const c_char, ct: *const c_char) -> c_int;
-                    pub fn strchr(cs: *const c_char, c: c_int) -> *mut c_char;
-                    pub fn strrchr(cs: *const c_char, c: c_int) -> *mut c_char;
-                    pub fn strspn(cs: *const c_char, ct: *const c_char) -> size_t;
-                    pub fn strcspn(cs: *const c_char, ct: *const c_char) -> size_t;
-                    pub fn strdup(cs: *const c_char) -> *mut c_char;
-                    pub fn strndup(cs: *const c_char, n: size_t) -> *mut c_char;
-                    pub fn strpbrk(cs: *const c_char, ct: *const c_char) -> *mut c_char;
-                    pub fn strstr(cs: *const c_char, ct: *const c_char) -> *mut c_char;
-                    pub fn strcasecmp(s1: *const c_char, s2: *const c_char) -> c_int;
-                    pub fn strncasecmp(s1: *const c_char, s2: *const c_char, n: size_t) -> c_int;
-                    pub fn strlen(cs: *const c_char) -> size_t;
-                    pub fn strnlen(cs: *const c_char, maxlen: size_t) -> size_t;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "strerror$UNIX2003"
-                    )]
-                    pub fn strerror(n: c_int) -> *mut c_char;
-                    pub fn strtok(s: *mut c_char, t: *const c_char) -> *mut c_char;
-                    pub fn strtok_r(s: *mut c_char, t: *const c_char, p: *mut *mut c_char) -> *mut c_char;
-                    pub fn strxfrm(s: *mut c_char, ct: *const c_char, n: size_t) -> size_t;
-                    pub fn strsignal(sig: c_int) -> *mut c_char;
-                    pub fn wcslen(buf: *const wchar_t) -> size_t;
-                    pub fn wcstombs(dest: *mut c_char, src: *const wchar_t, n: size_t) -> size_t;
-
-                    pub fn memchr(cx: *const c_void, c: c_int, n: size_t) -> *mut c_void;
-                    pub fn wmemchr(cx: *const wchar_t, c: wchar_t, n: size_t) -> *mut wchar_t;
-                    pub fn memcmp(cx: *const c_void, ct: *const c_void, n: size_t) -> c_int;
-                    pub fn memcpy(dest: *mut c_void, src: *const c_void, n: size_t) -> *mut c_void;
-                    pub fn memmove(dest: *mut c_void, src: *const c_void, n: size_t) -> *mut c_void;
-                    pub fn memset(dest: *mut c_void, c: c_int, n: size_t) -> *mut c_void;
-                    pub fn memccpy(dest: *mut c_void, src: *const c_void, c: c_int, n: size_t) -> *mut c_void;
-                }
-
-                extern "C" {
-                    #[cfg_attr(target_os = "netbsd", link_name = "__getpwnam50")]
-                    pub fn getpwnam(name: *const c_char) -> *mut passwd;
-                    #[cfg_attr(target_os = "netbsd", link_name = "__getpwuid50")]
-                    pub fn getpwuid(uid: crate::uid_t) -> *mut passwd;
-
-                    pub fn fprintf(stream: *mut crate::FILE, format: *const c_char, ...) -> c_int;
-                    pub fn printf(format: *const c_char, ...) -> c_int;
-                    pub fn snprintf(s: *mut c_char, n: size_t, format: *const c_char, ...) -> c_int;
-                    pub fn sprintf(s: *mut c_char, format: *const c_char, ...) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "linux", not(target_env = "uclibc")),
-                        link_name = "__isoc99_fscanf"
-                    )]
-                    pub fn fscanf(stream: *mut crate::FILE, format: *const c_char, ...) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "linux", not(target_env = "uclibc")),
-                        link_name = "__isoc99_scanf"
-                    )]
-                    pub fn scanf(format: *const c_char, ...) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "linux", not(target_env = "uclibc")),
-                        link_name = "__isoc99_sscanf"
-                    )]
-                    pub fn sscanf(s: *const c_char, format: *const c_char, ...) -> c_int;
-                    pub fn getchar_unlocked() -> c_int;
-                    pub fn putchar_unlocked(c: c_int) -> c_int;
-
-                    #[cfg(not(all(target_arch = "powerpc", target_vendor = "nintendo")))]
-                    #[cfg_attr(target_os = "netbsd", link_name = "__socket30")]
-                    #[cfg_attr(target_os = "illumos", link_name = "__xnet_socket")]
-                    #[cfg_attr(target_os = "solaris", link_name = "__xnet7_socket")]
-                    #[cfg_attr(target_os = "espidf", link_name = "lwip_socket")]
-                    pub fn socket(domain: c_int, ty: c_int, protocol: c_int) -> c_int;
-                    #[cfg(not(all(target_arch = "powerpc", target_vendor = "nintendo")))]
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "connect$UNIX2003"
-                    )]
-                    #[cfg_attr(
-                        any(target_os = "illumos", target_os = "solaris"),
-                        link_name = "__xnet_connect"
-                    )]
-                    #[cfg_attr(target_os = "espidf", link_name = "lwip_connect")]
-                    pub fn connect(socket: c_int, address: *const sockaddr, len: socklen_t) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "listen$UNIX2003"
-                    )]
-                    #[cfg_attr(target_os = "espidf", link_name = "lwip_listen")]
-                    pub fn listen(socket: c_int, backlog: c_int) -> c_int;
-                    #[cfg(not(all(target_arch = "powerpc", target_vendor = "nintendo")))]
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "accept$UNIX2003"
-                    )]
-                    #[cfg_attr(target_os = "espidf", link_name = "lwip_accept")]
-                    #[cfg_attr(target_os = "aix", link_name = "naccept")]
-                    pub fn accept(socket: c_int, address: *mut sockaddr, address_len: *mut socklen_t) -> c_int;
-                    #[cfg(not(all(target_arch = "powerpc", target_vendor = "nintendo")))]
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "getpeername$UNIX2003"
-                    )]
-                    #[cfg_attr(target_os = "espidf", link_name = "lwip_getpeername")]
-                    #[cfg_attr(target_os = "aix", link_name = "ngetpeername")]
-                    pub fn getpeername(socket: c_int, address: *mut sockaddr, address_len: *mut socklen_t)
-                        -> c_int;
-                    #[cfg(not(all(target_arch = "powerpc", target_vendor = "nintendo")))]
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "getsockname$UNIX2003"
-                    )]
-                    #[cfg_attr(target_os = "espidf", link_name = "lwip_getsockname")]
-                    #[cfg_attr(target_os = "aix", link_name = "ngetsockname")]
-                    pub fn getsockname(socket: c_int, address: *mut sockaddr, address_len: *mut socklen_t)
-                        -> c_int;
-                    #[cfg_attr(target_os = "espidf", link_name = "lwip_setsockopt")]
-                    #[cfg_attr(gnu_time_bits64, link_name = "__setsockopt64")]
-                    pub fn setsockopt(
-                        socket: c_int,
-                        level: c_int,
-                        name: c_int,
-                        value: *const c_void,
-                        option_len: socklen_t,
-                    ) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "socketpair$UNIX2003"
-                    )]
-                    #[cfg_attr(
-                        any(target_os = "illumos", target_os = "solaris"),
-                        link_name = "__xnet_socketpair"
-                    )]
-                    pub fn socketpair(
-                        domain: c_int,
-                        type_: c_int,
-                        protocol: c_int,
-                        socket_vector: *mut c_int,
-                    ) -> c_int;
-                    #[cfg(not(all(target_arch = "powerpc", target_vendor = "nintendo")))]
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "sendto$UNIX2003"
-                    )]
-                    #[cfg_attr(
-                        any(target_os = "illumos", target_os = "solaris"),
-                        link_name = "__xnet_sendto"
-                    )]
-                    #[cfg_attr(target_os = "espidf", link_name = "lwip_sendto")]
-                    pub fn sendto(
-                        socket: c_int,
-                        buf: *const c_void,
-                        len: size_t,
-                        flags: c_int,
-                        addr: *const sockaddr,
-                        addrlen: socklen_t,
-                    ) -> ssize_t;
-                    #[cfg_attr(target_os = "espidf", link_name = "lwip_shutdown")]
-                    pub fn shutdown(socket: c_int, how: c_int) -> c_int;
-
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "chmod$UNIX2003"
-                    )]
-                    pub fn chmod(path: *const c_char, mode: mode_t) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "fchmod$UNIX2003"
-                    )]
-                    pub fn fchmod(fd: c_int, mode: mode_t) -> c_int;
-
-                    #[cfg_attr(
-                        all(target_os = "macos", not(target_arch = "aarch64")),
-                        link_name = "fstat$INODE64"
-                    )]
-                    #[cfg_attr(target_os = "netbsd", link_name = "__fstat50")]
-                    #[cfg_attr(
-                        all(target_os = "freebsd", any(freebsd11, freebsd10)),
-                        link_name = "fstat@FBSD_1.0"
-                    )]
-                    #[cfg_attr(gnu_time_bits64, link_name = "__fstat64_time64")]
-                    #[cfg_attr(
-                        all(not(gnu_time_bits64), gnu_file_offset_bits64),
-                        link_name = "fstat64"
-                    )]
-                    pub fn fstat(fildes: c_int, buf: *mut stat) -> c_int;
-
-                    pub fn mkdir(path: *const c_char, mode: mode_t) -> c_int;
-
-                    #[cfg_attr(
-                        all(target_os = "macos", not(target_arch = "aarch64")),
-                        link_name = "stat$INODE64"
-                    )]
-                    #[cfg_attr(target_os = "netbsd", link_name = "__stat50")]
-                    #[cfg_attr(
-                        all(target_os = "freebsd", any(freebsd11, freebsd10)),
-                        link_name = "stat@FBSD_1.0"
-                    )]
-                    #[cfg_attr(gnu_time_bits64, link_name = "__stat64_time64")]
-                    #[cfg_attr(
-                        all(not(gnu_time_bits64), gnu_file_offset_bits64),
-                        link_name = "stat64"
-                    )]
-                    pub fn stat(path: *const c_char, buf: *mut stat) -> c_int;
-
-                    pub fn pclose(stream: *mut crate::FILE) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "fdopen$UNIX2003"
-                    )]
-                    pub fn fdopen(fd: c_int, mode: *const c_char) -> *mut crate::FILE;
-                    pub fn fileno(stream: *mut crate::FILE) -> c_int;
-
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "open$UNIX2003"
-                    )]
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "open64")]
-                    pub fn open(path: *const c_char, oflag: c_int, ...) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "creat$UNIX2003"
-                    )]
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "creat64")]
-                    pub fn creat(path: *const c_char, mode: mode_t) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "fcntl$UNIX2003"
-                    )]
-                    #[cfg_attr(gnu_time_bits64, link_name = "__fcntl_time64")]
-                    #[cfg_attr(
-                        all(not(gnu_time_bits64), gnu_file_offset_bits64),
-                        link_name = "__fcntl_time64"
-                    )]
-                    pub fn fcntl(fd: c_int, cmd: c_int, ...) -> c_int;
-
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86_64"),
-                        link_name = "opendir$INODE64"
-                    )]
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "opendir$INODE64$UNIX2003"
-                    )]
-                    #[cfg_attr(target_os = "netbsd", link_name = "__opendir30")]
-                    pub fn opendir(dirname: *const c_char) -> *mut crate::DIR;
-
-                    #[cfg_attr(
-                        all(target_os = "macos", not(target_arch = "aarch64")),
-                        link_name = "readdir$INODE64"
-                    )]
-                    #[cfg_attr(target_os = "netbsd", link_name = "__readdir30")]
-                    #[cfg_attr(
-                        all(target_os = "freebsd", any(freebsd11, freebsd10)),
-                        link_name = "readdir@FBSD_1.0"
-                    )]
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "readdir64")]
-                    pub fn readdir(dirp: *mut crate::DIR) -> *mut crate::dirent;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "closedir$UNIX2003"
-                    )]
-                    pub fn closedir(dirp: *mut crate::DIR) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86_64"),
-                        link_name = "rewinddir$INODE64"
-                    )]
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "rewinddir$INODE64$UNIX2003"
-                    )]
-                    pub fn rewinddir(dirp: *mut crate::DIR);
-
-                    pub fn fchmodat(dirfd: c_int, pathname: *const c_char, mode: mode_t, flags: c_int) -> c_int;
-                    pub fn fchown(fd: c_int, owner: crate::uid_t, group: crate::gid_t) -> c_int;
-                    pub fn fchownat(
-                        dirfd: c_int,
-                        pathname: *const c_char,
-                        owner: crate::uid_t,
-                        group: crate::gid_t,
-                        flags: c_int,
-                    ) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", not(target_arch = "aarch64")),
-                        link_name = "fstatat$INODE64"
-                    )]
-                    #[cfg_attr(
-                        all(target_os = "freebsd", any(freebsd11, freebsd10)),
-                        link_name = "fstatat@FBSD_1.1"
-                    )]
-                    #[cfg_attr(gnu_time_bits64, link_name = "__fstatat64_time64")]
-                    #[cfg_attr(
-                        all(not(gnu_time_bits64), gnu_file_offset_bits64),
-                        link_name = "fstatat64"
-                    )]
-                    pub fn fstatat(dirfd: c_int, pathname: *const c_char, buf: *mut stat, flags: c_int) -> c_int;
-                    pub fn linkat(
-                        olddirfd: c_int,
-                        oldpath: *const c_char,
-                        newdirfd: c_int,
-                        newpath: *const c_char,
-                        flags: c_int,
-                    ) -> c_int;
-                    pub fn renameat(
-                        olddirfd: c_int,
-                        oldpath: *const c_char,
-                        newdirfd: c_int,
-                        newpath: *const c_char,
-                    ) -> c_int;
-                    pub fn symlinkat(target: *const c_char, newdirfd: c_int, linkpath: *const c_char) -> c_int;
-                    pub fn unlinkat(dirfd: c_int, pathname: *const c_char, flags: c_int) -> c_int;
-
-                    pub fn access(path: *const c_char, amode: c_int) -> c_int;
-                    pub fn alarm(seconds: c_uint) -> c_uint;
-                    pub fn chdir(dir: *const c_char) -> c_int;
-                    pub fn fchdir(dirfd: c_int) -> c_int;
-                    pub fn chown(path: *const c_char, uid: uid_t, gid: gid_t) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "lchown$UNIX2003"
-                    )]
-                    pub fn lchown(path: *const c_char, uid: uid_t, gid: gid_t) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "close$NOCANCEL$UNIX2003"
-                    )]
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86_64"),
-                        link_name = "close$NOCANCEL"
-                    )]
-                    pub fn close(fd: c_int) -> c_int;
-                    pub fn dup(fd: c_int) -> c_int;
-                    pub fn dup2(src: c_int, dst: c_int) -> c_int;
-
-                    pub fn execl(path: *const c_char, arg0: *const c_char, ...) -> c_int;
-                    pub fn execle(path: *const c_char, arg0: *const c_char, ...) -> c_int;
-                    pub fn execlp(file: *const c_char, arg0: *const c_char, ...) -> c_int;
-                    pub fn execv(prog: *const c_char, argv: *const *mut c_char) -> c_int;
-                    pub fn execve(prog: *const c_char, argv: *const *mut c_char, envp: *const *mut c_char)
-                        -> c_int;
-                    pub fn execvp(c: *const c_char, argv: *const *mut c_char) -> c_int;
-
-                    pub fn fork() -> pid_t;
-                    pub fn fpathconf(filedes: c_int, name: c_int) -> c_long;
-                    pub fn getcwd(buf: *mut c_char, size: size_t) -> *mut c_char;
-                    pub fn getegid() -> gid_t;
-                    pub fn geteuid() -> uid_t;
-                    pub fn getgid() -> gid_t;
-                    pub fn getgroups(ngroups_max: c_int, groups: *mut gid_t) -> c_int;
-                    #[cfg_attr(target_os = "illumos", link_name = "getloginx")]
-                    pub fn getlogin() -> *mut c_char;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "getopt$UNIX2003"
-                    )]
-                    pub fn getopt(argc: c_int, argv: *const *mut c_char, optstr: *const c_char) -> c_int;
-                    pub fn getpgid(pid: pid_t) -> pid_t;
-                    pub fn getpgrp() -> pid_t;
-                    pub fn getpid() -> pid_t;
-                    pub fn getppid() -> pid_t;
-                    pub fn getuid() -> uid_t;
-                    pub fn isatty(fd: c_int) -> c_int;
-                    #[cfg_attr(target_os = "solaris", link_name = "__link_xpg4")]
-                    pub fn link(src: *const c_char, dst: *const c_char) -> c_int;
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "lseek64")]
-                    pub fn lseek(fd: c_int, offset: off_t, whence: c_int) -> off_t;
-                    pub fn pathconf(path: *const c_char, name: c_int) -> c_long;
-                    pub fn pipe(fds: *mut c_int) -> c_int;
-                    pub fn posix_memalign(memptr: *mut *mut c_void, align: size_t, size: size_t) -> c_int;
-                    pub fn aligned_alloc(alignment: size_t, size: size_t) -> *mut c_void;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "read$UNIX2003"
-                    )]
-                    pub fn read(fd: c_int, buf: *mut c_void, count: size_t) -> ssize_t;
-                    pub fn rmdir(path: *const c_char) -> c_int;
-                    pub fn seteuid(uid: uid_t) -> c_int;
-                    pub fn setegid(gid: gid_t) -> c_int;
-                    pub fn setgid(gid: gid_t) -> c_int;
-                    pub fn setpgid(pid: pid_t, pgid: pid_t) -> c_int;
-                    pub fn setsid() -> pid_t;
-                    pub fn setuid(uid: uid_t) -> c_int;
-                    pub fn setreuid(ruid: uid_t, euid: uid_t) -> c_int;
-                    pub fn setregid(rgid: gid_t, egid: gid_t) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "sleep$UNIX2003"
-                    )]
-                    pub fn sleep(secs: c_uint) -> c_uint;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "nanosleep$UNIX2003"
-                    )]
-                    #[cfg_attr(target_os = "netbsd", link_name = "__nanosleep50")]
-                    #[cfg_attr(gnu_time_bits64, link_name = "__nanosleep64")]
-                    pub fn nanosleep(rqtp: *const timespec, rmtp: *mut timespec) -> c_int;
-                    pub fn tcgetpgrp(fd: c_int) -> pid_t;
-                    pub fn tcsetpgrp(fd: c_int, pgrp: crate::pid_t) -> c_int;
-                    pub fn ttyname(fd: c_int) -> *mut c_char;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "ttyname_r$UNIX2003"
-                    )]
-                    #[cfg_attr(
-                        any(target_os = "illumos", target_os = "solaris"),
-                        link_name = "__posix_ttyname_r"
-                    )]
-                    pub fn ttyname_r(fd: c_int, buf: *mut c_char, buflen: size_t) -> c_int;
-                    pub fn unlink(c: *const c_char) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "wait$UNIX2003"
-                    )]
-                    pub fn wait(status: *mut c_int) -> pid_t;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "waitpid$UNIX2003"
-                    )]
-                    pub fn waitpid(pid: pid_t, status: *mut c_int, options: c_int) -> pid_t;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "write$UNIX2003"
-                    )]
-                    pub fn write(fd: c_int, buf: *const c_void, count: size_t) -> ssize_t;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "pread$UNIX2003"
-                    )]
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "pread64")]
-                    pub fn pread(fd: c_int, buf: *mut c_void, count: size_t, offset: off_t) -> ssize_t;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "pwrite$UNIX2003"
-                    )]
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "pwrite64")]
-                    pub fn pwrite(fd: c_int, buf: *const c_void, count: size_t, offset: off_t) -> ssize_t;
-                    pub fn umask(mask: mode_t) -> mode_t;
-
-                    #[cfg_attr(target_os = "netbsd", link_name = "__utime50")]
-                    #[cfg_attr(gnu_time_bits64, link_name = "__utime64")]
-                    pub fn utime(file: *const c_char, buf: *const utimbuf) -> c_int;
-
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "kill$UNIX2003"
-                    )]
-                    pub fn kill(pid: pid_t, sig: c_int) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "killpg$UNIX2003"
-                    )]
-                    pub fn killpg(pgrp: pid_t, sig: c_int) -> c_int;
-
-                    pub fn mlock(addr: *const c_void, len: size_t) -> c_int;
-                    pub fn munlock(addr: *const c_void, len: size_t) -> c_int;
-                    pub fn mlockall(flags: c_int) -> c_int;
-                    pub fn munlockall() -> c_int;
-
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "mmap$UNIX2003"
-                    )]
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "mmap64")]
-                    pub fn mmap(
-                        addr: *mut c_void,
-                        len: size_t,
-                        prot: c_int,
-                        flags: c_int,
-                        fd: c_int,
-                        offset: off_t,
-                    ) -> *mut c_void;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "munmap$UNIX2003"
-                    )]
-                    pub fn munmap(addr: *mut c_void, len: size_t) -> c_int;
-
-                    pub fn if_nametoindex(ifname: *const c_char) -> c_uint;
-                    pub fn if_indextoname(ifindex: c_uint, ifname: *mut c_char) -> *mut c_char;
-
-                    #[cfg_attr(
-                        all(target_os = "macos", not(target_arch = "aarch64")),
-                        link_name = "lstat$INODE64"
-                    )]
-                    #[cfg_attr(target_os = "netbsd", link_name = "__lstat50")]
-                    #[cfg_attr(
-                        all(target_os = "freebsd", any(freebsd11, freebsd10)),
-                        link_name = "lstat@FBSD_1.0"
-                    )]
-                    #[cfg_attr(gnu_time_bits64, link_name = "__lstat64_time64")]
-                    #[cfg_attr(
-                        all(not(gnu_time_bits64), gnu_file_offset_bits64),
-                        link_name = "lstat64"
-                    )]
-                    pub fn lstat(path: *const c_char, buf: *mut stat) -> c_int;
-
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "fsync$UNIX2003"
-                    )]
-                    pub fn fsync(fd: c_int) -> c_int;
-
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "setenv$UNIX2003"
-                    )]
-                    pub fn setenv(name: *const c_char, val: *const c_char, overwrite: c_int) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "unsetenv$UNIX2003"
-                    )]
-                    #[cfg_attr(target_os = "netbsd", link_name = "__unsetenv13")]
-                    pub fn unsetenv(name: *const c_char) -> c_int;
-
-                    pub fn symlink(path1: *const c_char, path2: *const c_char) -> c_int;
-
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "truncate64")]
-                    pub fn truncate(path: *const c_char, length: off_t) -> c_int;
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "ftruncate64")]
-                    pub fn ftruncate(fd: c_int, length: off_t) -> c_int;
-
-                    pub fn signal(signum: c_int, handler: sighandler_t) -> sighandler_t;
-
-                    #[cfg_attr(target_os = "netbsd", link_name = "__getrusage50")]
-                    #[cfg_attr(gnu_time_bits64, link_name = "__getrusage64")]
-                    pub fn getrusage(resource: c_int, usage: *mut rusage) -> c_int;
-
-                    #[cfg_attr(
-                        any(
-                            target_os = "macos",
-                            target_os = "ios",
-                            target_os = "tvos",
-                            target_os = "watchos",
-                            target_os = "visionos"
-                        ),
-                        link_name = "realpath$DARWIN_EXTSN"
-                    )]
-                    pub fn realpath(pathname: *const c_char, resolved: *mut c_char) -> *mut c_char;
-
-                    #[cfg_attr(target_os = "netbsd", link_name = "__times13")]
-                    pub fn times(buf: *mut crate::tms) -> crate::clock_t;
-
-                    pub fn pthread_self() -> crate::pthread_t;
-                    pub fn pthread_equal(t1: crate::pthread_t, t2: crate::pthread_t) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "pthread_join$UNIX2003"
-                    )]
-                    pub fn pthread_join(native: crate::pthread_t, value: *mut *mut c_void) -> c_int;
-                    pub fn pthread_exit(value: *mut c_void) -> !;
-                    pub fn pthread_attr_init(attr: *mut crate::pthread_attr_t) -> c_int;
-                    pub fn pthread_attr_destroy(attr: *mut crate::pthread_attr_t) -> c_int;
-                    pub fn pthread_attr_getstacksize(
-                        attr: *const crate::pthread_attr_t,
-                        stacksize: *mut size_t,
-                    ) -> c_int;
-                    pub fn pthread_attr_setstacksize(attr: *mut crate::pthread_attr_t, stack_size: size_t)
-                        -> c_int;
-                    pub fn pthread_attr_setdetachstate(attr: *mut crate::pthread_attr_t, state: c_int) -> c_int;
-                    pub fn pthread_detach(thread: crate::pthread_t) -> c_int;
-                    #[cfg_attr(target_os = "netbsd", link_name = "__libc_thr_yield")]
-                    pub fn sched_yield() -> c_int;
-                    pub fn pthread_key_create(
-                        key: *mut pthread_key_t,
-                        dtor: Option<unsafe extern "C" fn(*mut c_void)>,
-                    ) -> c_int;
-                    pub fn pthread_key_delete(key: pthread_key_t) -> c_int;
-                    pub fn pthread_getspecific(key: pthread_key_t) -> *mut c_void;
-                    pub fn pthread_setspecific(key: pthread_key_t, value: *const c_void) -> c_int;
-                    pub fn pthread_mutex_init(
-                        lock: *mut pthread_mutex_t,
-                        attr: *const pthread_mutexattr_t,
-                    ) -> c_int;
-                    pub fn pthread_mutex_destroy(lock: *mut pthread_mutex_t) -> c_int;
-                    pub fn pthread_mutex_lock(lock: *mut pthread_mutex_t) -> c_int;
-                    pub fn pthread_mutex_trylock(lock: *mut pthread_mutex_t) -> c_int;
-                    pub fn pthread_mutex_unlock(lock: *mut pthread_mutex_t) -> c_int;
-
-                    pub fn pthread_mutexattr_init(attr: *mut pthread_mutexattr_t) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "pthread_mutexattr_destroy$UNIX2003"
-                    )]
-                    pub fn pthread_mutexattr_destroy(attr: *mut pthread_mutexattr_t) -> c_int;
-                    pub fn pthread_mutexattr_settype(attr: *mut pthread_mutexattr_t, _type: c_int) -> c_int;
-
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "pthread_cond_init$UNIX2003"
-                    )]
-                    pub fn pthread_cond_init(cond: *mut pthread_cond_t, attr: *const pthread_condattr_t) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "pthread_cond_wait$UNIX2003"
-                    )]
-                    pub fn pthread_cond_wait(cond: *mut pthread_cond_t, lock: *mut pthread_mutex_t) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "pthread_cond_timedwait$UNIX2003"
-                    )]
-                    #[cfg_attr(gnu_time_bits64, link_name = "__pthread_cond_timedwait64")]
-                    pub fn pthread_cond_timedwait(
-                        cond: *mut pthread_cond_t,
-                        lock: *mut pthread_mutex_t,
-                        abstime: *const crate::timespec,
-                    ) -> c_int;
-                    pub fn pthread_cond_signal(cond: *mut pthread_cond_t) -> c_int;
-                    pub fn pthread_cond_broadcast(cond: *mut pthread_cond_t) -> c_int;
-                    pub fn pthread_cond_destroy(cond: *mut pthread_cond_t) -> c_int;
-                    pub fn pthread_condattr_init(attr: *mut pthread_condattr_t) -> c_int;
-                    pub fn pthread_condattr_destroy(attr: *mut pthread_condattr_t) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "pthread_rwlock_init$UNIX2003"
-                    )]
-                    pub fn pthread_rwlock_init(
-                        lock: *mut pthread_rwlock_t,
-                        attr: *const pthread_rwlockattr_t,
-                    ) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "pthread_rwlock_destroy$UNIX2003"
-                    )]
-                    pub fn pthread_rwlock_destroy(lock: *mut pthread_rwlock_t) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "pthread_rwlock_rdlock$UNIX2003"
-                    )]
-                    pub fn pthread_rwlock_rdlock(lock: *mut pthread_rwlock_t) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "pthread_rwlock_tryrdlock$UNIX2003"
-                    )]
-                    pub fn pthread_rwlock_tryrdlock(lock: *mut pthread_rwlock_t) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "pthread_rwlock_wrlock$UNIX2003"
-                    )]
-                    pub fn pthread_rwlock_wrlock(lock: *mut pthread_rwlock_t) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "pthread_rwlock_trywrlock$UNIX2003"
-                    )]
-                    pub fn pthread_rwlock_trywrlock(lock: *mut pthread_rwlock_t) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "pthread_rwlock_unlock$UNIX2003"
-                    )]
-                    pub fn pthread_rwlock_unlock(lock: *mut pthread_rwlock_t) -> c_int;
-                    pub fn pthread_rwlockattr_init(attr: *mut pthread_rwlockattr_t) -> c_int;
-                    pub fn pthread_rwlockattr_destroy(attr: *mut pthread_rwlockattr_t) -> c_int;
-
-                    #[cfg_attr(
-                        any(target_os = "illumos", target_os = "solaris"),
-                        link_name = "__xnet_getsockopt"
-                    )]
-                    #[cfg_attr(target_os = "espidf", link_name = "lwip_getsockopt")]
-                    #[cfg_attr(gnu_time_bits64, link_name = "__getsockopt64")]
-                    pub fn getsockopt(
-                        sockfd: c_int,
-                        level: c_int,
-                        optname: c_int,
-                        optval: *mut c_void,
-                        optlen: *mut crate::socklen_t,
-                    ) -> c_int;
-                    pub fn raise(signum: c_int) -> c_int;
-
-                    #[cfg_attr(target_os = "netbsd", link_name = "__utimes50")]
-                    #[cfg_attr(gnu_time_bits64, link_name = "__utimes64")]
-                    pub fn utimes(filename: *const c_char, times: *const crate::timeval) -> c_int;
-                    pub fn dlopen(filename: *const c_char, flag: c_int) -> *mut c_void;
-                    pub fn dlerror() -> *mut c_char;
-                    pub fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
-                    pub fn dlclose(handle: *mut c_void) -> c_int;
-
-                    #[cfg(not(all(target_arch = "powerpc", target_vendor = "nintendo")))]
-                    #[cfg_attr(
-                        any(target_os = "illumos", target_os = "solaris"),
-                        link_name = "__xnet_getaddrinfo"
-                    )]
-                    #[cfg_attr(target_os = "espidf", link_name = "lwip_getaddrinfo")]
-                    pub fn getaddrinfo(
-                        node: *const c_char,
-                        service: *const c_char,
-                        hints: *const addrinfo,
-                        res: *mut *mut addrinfo,
-                    ) -> c_int;
-                    #[cfg(not(all(target_arch = "powerpc", target_vendor = "nintendo")))]
-                    #[cfg_attr(target_os = "espidf", link_name = "lwip_freeaddrinfo")]
-                    pub fn freeaddrinfo(res: *mut addrinfo);
-                    pub fn hstrerror(errcode: c_int) -> *const c_char;
-                    pub fn gai_strerror(errcode: c_int) -> *const c_char;
-                    #[cfg_attr(
-                        any(
-                            all(
-                                target_os = "linux",
-                                not(any(target_env = "musl", target_env = "ohos"))
-                            ),
-                            target_os = "freebsd",
-                            target_os = "cygwin",
-                            target_os = "dragonfly",
-                            target_os = "haiku"
-                        ),
-                        link_name = "__res_init"
-                    )]
-                    #[cfg_attr(
-                        any(
-                            target_os = "macos",
-                            target_os = "ios",
-                            target_os = "tvos",
-                            target_os = "watchos",
-                            target_os = "visionos"
-                        ),
-                        link_name = "res_9_init"
-                    )]
-                    #[cfg_attr(target_os = "aix", link_name = "_res_init")]
-                    pub fn res_init() -> c_int;
-
-                    #[cfg_attr(target_os = "netbsd", link_name = "__gmtime_r50")]
-                    #[cfg_attr(any(target_env = "musl", target_env = "ohos"), allow(deprecated))]
-                    // FIXME(time): for `time_t`
-                    #[cfg_attr(gnu_time_bits64, link_name = "__gmtime64_r")]
-                    pub fn gmtime_r(time_p: *const time_t, result: *mut tm) -> *mut tm;
-                    #[cfg_attr(target_os = "netbsd", link_name = "__localtime_r50")]
-                    #[cfg_attr(any(target_env = "musl", target_env = "ohos"), allow(deprecated))]
-                    // FIXME(time): for `time_t`
-                    #[cfg_attr(gnu_time_bits64, link_name = "__localtime64_r")]
-                    pub fn localtime_r(time_p: *const time_t, result: *mut tm) -> *mut tm;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "mktime$UNIX2003"
-                    )]
-                    #[cfg_attr(target_os = "netbsd", link_name = "__mktime50")]
-                    #[cfg_attr(any(target_env = "musl", target_env = "ohos"), allow(deprecated))]
-                    // FIXME: for `time_t`
-                    #[cfg_attr(gnu_time_bits64, link_name = "__mktime64")]
-                    pub fn mktime(tm: *mut tm) -> time_t;
-                    #[cfg_attr(target_os = "netbsd", link_name = "__time50")]
-                    #[cfg_attr(any(target_env = "musl", target_env = "ohos"), allow(deprecated))]
-                    // FIXME: for `time_t`
-                    #[cfg_attr(gnu_time_bits64, link_name = "__time64")]
-                    pub fn time(time: *mut time_t) -> time_t;
-                    #[cfg_attr(target_os = "netbsd", link_name = "__gmtime50")]
-                    #[cfg_attr(any(target_env = "musl", target_env = "ohos"), allow(deprecated))]
-                    // FIXME(time): for `time_t`
-                    #[cfg_attr(gnu_time_bits64, link_name = "__gmtime64")]
-                    pub fn gmtime(time_p: *const time_t) -> *mut tm;
-                    #[cfg_attr(target_os = "netbsd", link_name = "__locatime50")]
-                    #[cfg_attr(any(target_env = "musl", target_env = "ohos"), allow(deprecated))]
-                    // FIXME(time): for `time_t`
-                    #[cfg_attr(gnu_time_bits64, link_name = "__localtime64")]
-                    pub fn localtime(time_p: *const time_t) -> *mut tm;
-                    #[cfg_attr(target_os = "netbsd", link_name = "__difftime50")]
-                    #[cfg_attr(any(target_env = "musl", target_env = "ohos"), allow(deprecated))]
-                    // FIXME(time): for `time_t`
-                    #[cfg_attr(gnu_time_bits64, link_name = "__difftime64")]
-                    pub fn difftime(time1: time_t, time0: time_t) -> c_double;
-                    #[cfg(not(target_os = "aix"))]
-                    #[cfg_attr(target_os = "netbsd", link_name = "__timegm50")]
-                    #[cfg_attr(any(target_env = "musl", target_env = "ohos"), allow(deprecated))]
-                    // FIXME(time): for `time_t`
-                    #[cfg_attr(gnu_time_bits64, link_name = "__timegm64")]
-                    pub fn timegm(tm: *mut crate::tm) -> time_t;
-
-                    #[cfg_attr(target_os = "netbsd", link_name = "__mknod50")]
-                    #[cfg_attr(
-                        all(target_os = "freebsd", any(freebsd11, freebsd10)),
-                        link_name = "mknod@FBSD_1.0"
-                    )]
-                    pub fn mknod(pathname: *const c_char, mode: mode_t, dev: crate::dev_t) -> c_int;
-                    pub fn gethostname(name: *mut c_char, len: size_t) -> c_int;
-                    pub fn endservent();
-                    pub fn getservbyname(name: *const c_char, proto: *const c_char) -> *mut servent;
-                    pub fn getservbyport(port: c_int, proto: *const c_char) -> *mut servent;
-                    pub fn getservent() -> *mut servent;
-                    pub fn setservent(stayopen: c_int);
-                    pub fn getprotobyname(name: *const c_char) -> *mut protoent;
-                    pub fn getprotobynumber(proto: c_int) -> *mut protoent;
-                    pub fn chroot(name: *const c_char) -> c_int;
-                    #[cfg(target_os = "cygwin")]
-                    pub fn usleep(secs: useconds_t) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "usleep$UNIX2003"
-                    )]
-                    #[cfg(not(target_os = "cygwin"))]
-                    pub fn usleep(secs: c_uint) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "send$UNIX2003"
-                    )]
-                    #[cfg_attr(target_os = "espidf", link_name = "lwip_send")]
-                    pub fn send(socket: c_int, buf: *const c_void, len: size_t, flags: c_int) -> ssize_t;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "recv$UNIX2003"
-                    )]
-                    #[cfg_attr(target_os = "espidf", link_name = "lwip_recv")]
-                    pub fn recv(socket: c_int, buf: *mut c_void, len: size_t, flags: c_int) -> ssize_t;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "putenv$UNIX2003"
-                    )]
-                    #[cfg_attr(target_os = "netbsd", link_name = "__putenv50")]
-                    pub fn putenv(string: *mut c_char) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "poll$UNIX2003"
-                    )]
-                    pub fn poll(fds: *mut pollfd, nfds: nfds_t, timeout: c_int) -> c_int;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86_64"),
-                        link_name = "select$1050"
-                    )]
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "select$UNIX2003"
-                    )]
-                    #[cfg_attr(target_os = "netbsd", link_name = "__select50")]
-                    #[cfg_attr(target_os = "aix", link_name = "__fd_select")]
-                    #[cfg_attr(gnu_time_bits64, link_name = "__select64")]
-                    pub fn select(
-                        nfds: c_int,
-                        readfds: *mut fd_set,
-                        writefds: *mut fd_set,
-                        errorfds: *mut fd_set,
-                        timeout: *mut timeval,
-                    ) -> c_int;
-                    #[cfg_attr(target_os = "netbsd", link_name = "__setlocale50")]
-                    pub fn setlocale(category: c_int, locale: *const c_char) -> *mut c_char;
-                    pub fn localeconv() -> *mut lconv;
-
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "sem_wait$UNIX2003"
-                    )]
-                    pub fn sem_wait(sem: *mut sem_t) -> c_int;
-                    pub fn sem_trywait(sem: *mut sem_t) -> c_int;
-                    pub fn sem_post(sem: *mut sem_t) -> c_int;
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "statvfs64")]
-                    pub fn statvfs(path: *const c_char, buf: *mut statvfs) -> c_int;
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "fstatvfs64")]
-                    pub fn fstatvfs(fd: c_int, buf: *mut statvfs) -> c_int;
-
-                    #[cfg_attr(target_os = "netbsd", link_name = "__sigemptyset14")]
-                    pub fn sigemptyset(set: *mut sigset_t) -> c_int;
-                    #[cfg_attr(target_os = "netbsd", link_name = "__sigaddset14")]
-                    pub fn sigaddset(set: *mut sigset_t, signum: c_int) -> c_int;
-                    #[cfg_attr(target_os = "netbsd", link_name = "__sigfillset14")]
-                    pub fn sigfillset(set: *mut sigset_t) -> c_int;
-                    #[cfg_attr(target_os = "netbsd", link_name = "__sigdelset14")]
-                    pub fn sigdelset(set: *mut sigset_t, signum: c_int) -> c_int;
-                    #[cfg_attr(target_os = "netbsd", link_name = "__sigismember14")]
-                    pub fn sigismember(set: *const sigset_t, signum: c_int) -> c_int;
-
-                    #[cfg_attr(target_os = "netbsd", link_name = "__sigprocmask14")]
-                    pub fn sigprocmask(how: c_int, set: *const sigset_t, oldset: *mut sigset_t) -> c_int;
-                    #[cfg_attr(target_os = "netbsd", link_name = "__sigpending14")]
-                    pub fn sigpending(set: *mut sigset_t) -> c_int;
-
-                    #[cfg_attr(target_os = "solaris", link_name = "__sysconf_xpg7")]
-                    pub fn sysconf(name: c_int) -> c_long;
-
-                    pub fn mkfifo(path: *const c_char, mode: mode_t) -> c_int;
-
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "fseeko64")]
-                    pub fn fseeko(stream: *mut crate::FILE, offset: off_t, whence: c_int) -> c_int;
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "ftello64")]
-                    pub fn ftello(stream: *mut crate::FILE) -> off_t;
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "tcdrain$UNIX2003"
-                    )]
-                    pub fn tcdrain(fd: c_int) -> c_int;
-                    pub fn cfgetispeed(termios: *const crate::termios) -> crate::speed_t;
-                    pub fn cfgetospeed(termios: *const crate::termios) -> crate::speed_t;
-                    pub fn cfsetispeed(termios: *mut crate::termios, speed: crate::speed_t) -> c_int;
-                    pub fn cfsetospeed(termios: *mut crate::termios, speed: crate::speed_t) -> c_int;
-                    pub fn tcgetattr(fd: c_int, termios: *mut crate::termios) -> c_int;
-                    pub fn tcsetattr(fd: c_int, optional_actions: c_int, termios: *const crate::termios) -> c_int;
-                    pub fn tcflow(fd: c_int, action: c_int) -> c_int;
-                    pub fn tcflush(fd: c_int, action: c_int) -> c_int;
-                    pub fn tcgetsid(fd: c_int) -> crate::pid_t;
-                    pub fn tcsendbreak(fd: c_int, duration: c_int) -> c_int;
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "mkstemp64")]
-                    pub fn mkstemp(template: *mut c_char) -> c_int;
-                    pub fn mkdtemp(template: *mut c_char) -> *mut c_char;
-
-                    pub fn tmpnam(ptr: *mut c_char) -> *mut c_char;
-
-                    pub fn openlog(ident: *const c_char, logopt: c_int, facility: c_int);
-                    pub fn closelog();
-                    pub fn setlogmask(maskpri: c_int) -> c_int;
-                    #[cfg_attr(target_os = "macos", link_name = "syslog$DARWIN_EXTSN")]
-                    pub fn syslog(priority: c_int, message: *const c_char, ...);
-                    #[cfg_attr(
-                        all(target_os = "macos", target_arch = "x86"),
-                        link_name = "nice$UNIX2003"
-                    )]
-                    pub fn nice(incr: c_int) -> c_int;
-
-                    pub fn grantpt(fd: c_int) -> c_int;
-                    pub fn posix_openpt(flags: c_int) -> c_int;
-                    pub fn ptsname(fd: c_int) -> *mut c_char;
-                    pub fn unlockpt(fd: c_int) -> c_int;
-
-                    #[cfg(not(target_os = "aix"))]
-                    pub fn strcasestr(cs: *const c_char, ct: *const c_char) -> *mut c_char;
-                    pub fn getline(lineptr: *mut *mut c_char, n: *mut size_t, stream: *mut FILE) -> ssize_t;
-
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "lockf64")]
-                    pub fn lockf(fd: c_int, cmd: c_int, len: off_t) -> c_int;
-
-                }
-
-                safe_f! {
-                    // It seems htonl, etc are macros on macOS. So we have to reimplement them. So let's
-                    // reimplement them for all UNIX platforms
-                    pub {const} fn htonl(hostlong: u32) -> u32 {
-                        u32::to_be(hostlong)
-                    }
-                    pub {const} fn htons(hostshort: u16) -> u16 {
-                        u16::to_be(hostshort)
-                    }
-                    pub {const} fn ntohl(netlong: u32) -> u32 {
-                        u32::from_be(netlong)
-                    }
-                    pub {const} fn ntohs(netshort: u16) -> u16 {
-                        u16::from_be(netshort)
-                    }
-                }
-
-                cfg_if! {
-                    if #[cfg(not(any(
-                        target_os = "emscripten",
-                        target_os = "android",
-                        target_os = "haiku",
-                        target_os = "nto",
-                        target_os = "solaris",
-                        target_os = "cygwin",
-                        target_os = "aix",
-                    )))] {
-                        extern "C" {
-                            #[cfg_attr(gnu_time_bits64, link_name = "__adjtime64")]
-                            pub fn adjtime(delta: *const timeval, olddelta: *mut timeval) -> c_int;
-                        }
-                    } else if #[cfg(target_os = "solaris")] {
-                        extern "C" {
-                            pub fn adjtime(delta: *mut timeval, olddelta: *mut timeval) -> c_int;
-                        }
-                    }
-                }
-
-                cfg_if! {
-                    if #[cfg(not(any(
-                        target_os = "emscripten",
-                        target_os = "android",
-                        target_os = "nto"
-                    )))] {
-                        extern "C" {
-                            pub fn stpncpy(dst: *mut c_char, src: *const c_char, n: size_t) -> *mut c_char;
-                        }
-                    }
-                }
-
-                cfg_if! {
-                    if #[cfg(not(target_os = "android"))] {
-                        extern "C" {
-                            #[cfg_attr(
-                                all(target_os = "macos", target_arch = "x86"),
-                                link_name = "confstr$UNIX2003"
-                            )]
-                            #[cfg_attr(target_os = "solaris", link_name = "__confstr_xpg7")]
-                            pub fn confstr(name: c_int, buf: *mut c_char, len: size_t) -> size_t;
-                        }
-                    }
-                }
-
-                cfg_if! {
-                    if #[cfg(not(target_os = "aix"))] {
-                        extern "C" {
-                            pub fn dladdr(addr: *const c_void, info: *mut Dl_info) -> c_int;
-                        }
-                    }
-                }
-
-                cfg_if! {
-                    if #[cfg(not(target_os = "solaris"))] {
-                        extern "C" {
-                            pub fn flock(fd: c_int, operation: c_int) -> c_int;
-                        }
-                    }
-                }
-
-                cfg_if! {
-                    if #[cfg(not(any(target_env = "uclibc", target_os = "nto")))] {
-                        extern "C" {
-                            pub fn open_wmemstream(ptr: *mut *mut wchar_t, sizeloc: *mut size_t) -> *mut FILE;
-                        }
-                    }
-                }
-
-                cfg_if! {
-                    if #[cfg(not(target_os = "redox"))] {
-                        extern "C" {
-                            pub fn getsid(pid: pid_t) -> pid_t;
-                            #[cfg_attr(
-                                all(target_os = "macos", target_arch = "x86"),
-                                link_name = "pause$UNIX2003"
-                            )]
-                            pub fn pause() -> c_int;
-
-                            pub fn mkdirat(dirfd: c_int, pathname: *const c_char, mode: mode_t) -> c_int;
-                            #[cfg_attr(gnu_file_offset_bits64, link_name = "openat64")]
-                            pub fn openat(dirfd: c_int, pathname: *const c_char, flags: c_int, ...) -> c_int;
-
-                            #[cfg_attr(
-                                all(target_os = "macos", target_arch = "x86_64"),
-                                link_name = "fdopendir$INODE64"
-                            )]
-                            #[cfg_attr(
-                                all(target_os = "macos", target_arch = "x86"),
-                                link_name = "fdopendir$INODE64$UNIX2003"
-                            )]
-                            pub fn fdopendir(fd: c_int) -> *mut crate::DIR;
-
-                            #[cfg_attr(
-                                all(target_os = "macos", not(target_arch = "aarch64")),
-                                link_name = "readdir_r$INODE64"
-                            )]
-                            #[cfg_attr(target_os = "netbsd", link_name = "__readdir_r30")]
-                            #[cfg_attr(
-                                all(target_os = "freebsd", any(freebsd11, freebsd10)),
-                                link_name = "readdir_r@FBSD_1.0"
-                            )]
-                            #[allow(non_autolinks)] // FIXME(docs): `<>` breaks line length limit.
-                            /// The 64-bit libc on Solaris and illumos only has readdir_r. If a
-                            /// 32-bit Solaris or illumos target is ever created, it should use
-                            /// __posix_readdir_r. See libc(3LIB) on Solaris or illumos:
-                            /// https://illumos.org/man/3lib/libc
-                            /// https://docs.oracle.com/cd/E36784_01/html/E36873/libc-3lib.html
-                            /// https://www.unix.com/man-page/opensolaris/3LIB/libc/
-                            #[cfg_attr(gnu_file_offset_bits64, link_name = "readdir64_r")]
-                            pub fn readdir_r(
-                                dirp: *mut crate::DIR,
-                                entry: *mut crate::dirent,
-                                result: *mut *mut crate::dirent,
-                            ) -> c_int;
-                        }
-                    }
-                }
-
-                cfg_if! {
-                    if #[cfg(target_os = "nto")] {
-                        extern "C" {
-                            pub fn readlinkat(
-                                dirfd: c_int,
-                                pathname: *const c_char,
-                                buf: *mut c_char,
-                                bufsiz: size_t,
-                            ) -> c_int;
-                            pub fn readlink(path: *const c_char, buf: *mut c_char, bufsz: size_t) -> c_int;
-                            pub fn pselect(
-                                nfds: c_int,
-                                readfds: *mut fd_set,
-                                writefds: *mut fd_set,
-                                errorfds: *mut fd_set,
-                                timeout: *mut timespec,
-                                sigmask: *const sigset_t,
-                            ) -> c_int;
-                            pub fn sigaction(signum: c_int, act: *const sigaction, oldact: *mut sigaction)
-                                -> c_int;
-                        }
-                    } else {
-                        extern "C" {
-                            pub fn readlinkat(
-                                dirfd: c_int,
-                                pathname: *const c_char,
-                                buf: *mut c_char,
-                                bufsiz: size_t,
-                            ) -> ssize_t;
-                            pub fn fmemopen(buf: *mut c_void, size: size_t, mode: *const c_char) -> *mut FILE;
-                            pub fn open_memstream(ptr: *mut *mut c_char, sizeloc: *mut size_t) -> *mut FILE;
-                            pub fn atexit(cb: extern "C" fn()) -> c_int;
-                            #[cfg_attr(target_os = "netbsd", link_name = "__sigaction14")]
-                            pub fn sigaction(signum: c_int, act: *const sigaction, oldact: *mut sigaction)
-                                -> c_int;
-                            pub fn readlink(path: *const c_char, buf: *mut c_char, bufsz: size_t) -> ssize_t;
-                            #[cfg_attr(
-                                all(target_os = "macos", target_arch = "x86_64"),
-                                link_name = "pselect$1050"
-                            )]
-                            #[cfg_attr(
-                                all(target_os = "macos", target_arch = "x86"),
-                                link_name = "pselect$UNIX2003"
-                            )]
-                            #[cfg_attr(target_os = "netbsd", link_name = "__pselect50")]
-                            #[cfg_attr(gnu_time_bits64, link_name = "__pselect64")]
-                            pub fn pselect(
-                                nfds: c_int,
-                                readfds: *mut fd_set,
-                                writefds: *mut fd_set,
-                                errorfds: *mut fd_set,
-                                timeout: *const timespec,
-                                sigmask: *const sigset_t,
-                            ) -> c_int;
-                        }
-                    }
-                }
-
-                cfg_if! {
-                    if #[cfg(target_os = "aix")] {
-                        extern "C" {
-                            pub fn cfmakeraw(termios: *mut crate::termios) -> c_int;
-                            pub fn cfsetspeed(termios: *mut crate::termios, speed: crate::speed_t) -> c_int;
-                        }
-                    } else if #[cfg(not(any(
-                        target_os = "solaris",
-                        target_os = "illumos",
-                        target_os = "nto",
-                    )))] {
-                        extern "C" {
-                            pub fn cfmakeraw(termios: *mut crate::termios);
-                            pub fn cfsetspeed(termios: *mut crate::termios, speed: crate::speed_t) -> c_int;
-                        }
-                    }
-                }
-
-                extern "C" {
-                    pub fn fnmatch(pattern: *const c_char, name: *const c_char, flags: c_int) -> c_int;
-                }
-
-                cfg_if! {
-                    if #[cfg(target_env = "newlib")] {
-                        mod newlib;
-                        pub use self::newlib::*;
-                    } else if #[cfg(any(
-                        target_os = "linux",
-                        target_os = "l4re",
-                        target_os = "android",
-                        target_os = "emscripten"
-                    ))]
-                    {
-                        mod linux_like
-                        {
-                            use ::
-                            {
-                                *,
-                            };
-                            
-                            use ::libc::prelude::*;
-
-                            pub type sa_family_t = u16;
-                            pub type speed_t = c_uint;
-                            pub type tcflag_t = c_uint;
-                            pub type clockid_t = c_int;
-                            pub type timer_t = *mut c_void;
-                            pub type key_t = c_int;
-                            pub type id_t = c_uint;
-
-                            missing! {
-                                #[cfg_attr(feature = "extra_traits", derive(Debug))]
-                                pub enum timezone {}
-                            }
-
-                            s! {
-                                // FIXME(1.0): This should not implement `PartialEq`
-                                #[allow(unpredictable_function_pointer_comparisons)]
-                                pub struct __c_anonymous_sigev_thread {
-                                    pub _function: Option<extern "C" fn(crate::sigval) -> *mut c_void>,
-                                    pub _attribute: *mut crate::pthread_attr_t,
-                                }
-
-                                pub struct in_addr {
-                                    pub s_addr: crate::in_addr_t,
-                                }
-
-                                pub struct ip_mreq {
-                                    pub imr_multiaddr: in_addr,
-                                    pub imr_interface: in_addr,
-                                }
-
-                                pub struct ip_mreqn {
-                                    pub imr_multiaddr: in_addr,
-                                    pub imr_address: in_addr,
-                                    pub imr_ifindex: c_int,
-                                }
-
-                                pub struct ip_mreq_source {
-                                    pub imr_multiaddr: in_addr,
-                                    pub imr_interface: in_addr,
-                                    pub imr_sourceaddr: in_addr,
-                                }
-
-                                pub struct sockaddr {
-                                    pub sa_family: sa_family_t,
-                                    pub sa_data: [c_char; 14],
-                                }
-
-                                pub struct sockaddr_in {
-                                    pub sin_family: sa_family_t,
-                                    pub sin_port: crate::in_port_t,
-                                    pub sin_addr: crate::in_addr,
-                                    pub sin_zero: [u8; 8],
-                                }
-
-                                pub struct sockaddr_in6 {
-                                    pub sin6_family: sa_family_t,
-                                    pub sin6_port: crate::in_port_t,
-                                    pub sin6_flowinfo: u32,
-                                    pub sin6_addr: crate::in6_addr,
-                                    pub sin6_scope_id: u32,
-                                }
-
-                                // The order of the `ai_addr` field in this struct is crucial
-                                // for converting between the Rust and C types.
-                                pub struct addrinfo {
-                                    pub ai_flags: c_int,
-                                    pub ai_family: c_int,
-                                    pub ai_socktype: c_int,
-                                    pub ai_protocol: c_int,
-                                    pub ai_addrlen: socklen_t,
-
-                                    #[cfg(any(target_os = "linux", target_os = "emscripten"))]
-                                    pub ai_addr: *mut crate::sockaddr,
-
-                                    pub ai_canonname: *mut c_char,
-
-                                    #[cfg(target_os = "android")]
-                                    pub ai_addr: *mut crate::sockaddr,
-
-                                    pub ai_next: *mut addrinfo,
-                                }
-
-                                pub struct sockaddr_ll {
-                                    pub sll_family: c_ushort,
-                                    pub sll_protocol: c_ushort,
-                                    pub sll_ifindex: c_int,
-                                    pub sll_hatype: c_ushort,
-                                    pub sll_pkttype: c_uchar,
-                                    pub sll_halen: c_uchar,
-                                    pub sll_addr: [c_uchar; 8],
-                                }
-
-                                pub struct fd_set {
-                                    fds_bits: [c_ulong; FD_SETSIZE as usize / ULONG_SIZE],
-                                }
-
-                                pub struct tm {
-                                    pub tm_sec: c_int,
-                                    pub tm_min: c_int,
-                                    pub tm_hour: c_int,
-                                    pub tm_mday: c_int,
-                                    pub tm_mon: c_int,
-                                    pub tm_year: c_int,
-                                    pub tm_wday: c_int,
-                                    pub tm_yday: c_int,
-                                    pub tm_isdst: c_int,
-                                    pub tm_gmtoff: c_long,
-                                    pub tm_zone: *const c_char,
-                                }
-
-                                pub struct sched_param {
-                                    pub sched_priority: c_int,
-                                    #[cfg(any(target_env = "musl", target_os = "emscripten", target_env = "ohos"))]
-                                    pub sched_ss_low_priority: c_int,
-                                    #[cfg(any(target_env = "musl", target_os = "emscripten", target_env = "ohos"))]
-                                    pub sched_ss_repl_period: crate::timespec,
-                                    #[cfg(any(target_env = "musl", target_os = "emscripten", target_env = "ohos"))]
-                                    pub sched_ss_init_budget: crate::timespec,
-                                    #[cfg(any(target_env = "musl", target_os = "emscripten", target_env = "ohos"))]
-                                    pub sched_ss_max_repl: c_int,
-                                }
-
-                                pub struct Dl_info {
-                                    pub dli_fname: *const c_char,
-                                    pub dli_fbase: *mut c_void,
-                                    pub dli_sname: *const c_char,
-                                    pub dli_saddr: *mut c_void,
-                                }
-
-                                pub struct lconv {
-                                    pub decimal_point: *mut c_char,
-                                    pub thousands_sep: *mut c_char,
-                                    pub grouping: *mut c_char,
-                                    pub int_curr_symbol: *mut c_char,
-                                    pub currency_symbol: *mut c_char,
-                                    pub mon_decimal_point: *mut c_char,
-                                    pub mon_thousands_sep: *mut c_char,
-                                    pub mon_grouping: *mut c_char,
-                                    pub positive_sign: *mut c_char,
-                                    pub negative_sign: *mut c_char,
-                                    pub int_frac_digits: c_char,
-                                    pub frac_digits: c_char,
-                                    pub p_cs_precedes: c_char,
-                                    pub p_sep_by_space: c_char,
-                                    pub n_cs_precedes: c_char,
-                                    pub n_sep_by_space: c_char,
-                                    pub p_sign_posn: c_char,
-                                    pub n_sign_posn: c_char,
-                                    pub int_p_cs_precedes: c_char,
-                                    pub int_p_sep_by_space: c_char,
-                                    pub int_n_cs_precedes: c_char,
-                                    pub int_n_sep_by_space: c_char,
-                                    pub int_p_sign_posn: c_char,
-                                    pub int_n_sign_posn: c_char,
-                                }
-
-                                pub struct in_pktinfo {
-                                    pub ipi_ifindex: c_int,
-                                    pub ipi_spec_dst: crate::in_addr,
-                                    pub ipi_addr: crate::in_addr,
-                                }
-
-                                pub struct ifaddrs {
-                                    pub ifa_next: *mut ifaddrs,
-                                    pub ifa_name: *mut c_char,
-                                    pub ifa_flags: c_uint,
-                                    pub ifa_addr: *mut crate::sockaddr,
-                                    pub ifa_netmask: *mut crate::sockaddr,
-                                    pub ifa_ifu: *mut crate::sockaddr, // FIXME(union) This should be a union
-                                    pub ifa_data: *mut c_void,
-                                }
-
-                                pub struct in6_rtmsg {
-                                    rtmsg_dst: crate::in6_addr,
-                                    rtmsg_src: crate::in6_addr,
-                                    rtmsg_gateway: crate::in6_addr,
-                                    rtmsg_type: u32,
-                                    rtmsg_dst_len: u16,
-                                    rtmsg_src_len: u16,
-                                    rtmsg_metric: u32,
-                                    rtmsg_info: c_ulong,
-                                    rtmsg_flags: u32,
-                                    rtmsg_ifindex: c_int,
-                                }
-
-                                pub struct arpreq {
-                                    pub arp_pa: crate::sockaddr,
-                                    pub arp_ha: crate::sockaddr,
-                                    pub arp_flags: c_int,
-                                    pub arp_netmask: crate::sockaddr,
-                                    pub arp_dev: [c_char; 16],
-                                }
-
-                                pub struct arpreq_old {
-                                    pub arp_pa: crate::sockaddr,
-                                    pub arp_ha: crate::sockaddr,
-                                    pub arp_flags: c_int,
-                                    pub arp_netmask: crate::sockaddr,
-                                }
-
-                                pub struct arphdr {
-                                    pub ar_hrd: u16,
-                                    pub ar_pro: u16,
-                                    pub ar_hln: u8,
-                                    pub ar_pln: u8,
-                                    pub ar_op: u16,
-                                }
-
-                                pub struct mmsghdr {
-                                    pub msg_hdr: crate::msghdr,
-                                    pub msg_len: c_uint,
-                                }
-                            }
-
-                            cfg_if! {
-                                if #[cfg(not(target_os = "emscripten"))] {
-                                    s! {
-                                        pub struct file_clone_range {
-                                            pub src_fd: crate::__s64,
-                                            pub src_offset: crate::__u64,
-                                            pub src_length: crate::__u64,
-                                            pub dest_offset: crate::__u64,
-                                        }
-
-                                        // linux/filter.h
-                                        pub struct sock_filter {
-                                            pub code: __u16,
-                                            pub jt: __u8,
-                                            pub jf: __u8,
-                                            pub k: __u32,
-                                        }
-
-                                        pub struct sock_fprog {
-                                            pub len: c_ushort,
-                                            pub filter: *mut sock_filter,
-                                        }
-                                    }
-                                }
-                            }
-
-                            cfg_if! {
-                                if #[cfg(any(target_env = "gnu", target_os = "android"))] {
-                                    s! {
-                                        pub struct statx {
-                                            pub stx_mask: crate::__u32,
-                                            pub stx_blksize: crate::__u32,
-                                            pub stx_attributes: crate::__u64,
-                                            pub stx_nlink: crate::__u32,
-                                            pub stx_uid: crate::__u32,
-                                            pub stx_gid: crate::__u32,
-                                            pub stx_mode: crate::__u16,
-                                            __statx_pad1: [crate::__u16; 1],
-                                            pub stx_ino: crate::__u64,
-                                            pub stx_size: crate::__u64,
-                                            pub stx_blocks: crate::__u64,
-                                            pub stx_attributes_mask: crate::__u64,
-                                            pub stx_atime: statx_timestamp,
-                                            pub stx_btime: statx_timestamp,
-                                            pub stx_ctime: statx_timestamp,
-                                            pub stx_mtime: statx_timestamp,
-                                            pub stx_rdev_major: crate::__u32,
-                                            pub stx_rdev_minor: crate::__u32,
-                                            pub stx_dev_major: crate::__u32,
-                                            pub stx_dev_minor: crate::__u32,
-                                            pub stx_mnt_id: crate::__u64,
-                                            pub stx_dio_mem_align: crate::__u32,
-                                            pub stx_dio_offset_align: crate::__u32,
-                                            __statx_pad3: [crate::__u64; 12],
-                                        }
-
-                                        pub struct statx_timestamp {
-                                            pub tv_sec: crate::__s64,
-                                            pub tv_nsec: crate::__u32,
-                                            __statx_timestamp_pad1: [crate::__s32; 1],
-                                        }
-                                    }
-                                }
-                            }
-
-                            s_no_extra_traits! {
-                                #[cfg_attr(
-                                    any(
-                                        all(
-                                            target_arch = "x86",
-                                            not(target_env = "musl"),
-                                            not(target_os = "android")
-                                        ),
-                                        target_arch = "x86_64"
-                                    ),
-                                    repr(packed)
-                                )]
-                                pub struct epoll_event {
-                                    pub events: u32,
-                                    pub u64: u64,
-                                }
-
-                                pub union __c_anonymous_sigev_un {
-                                    _pad: [c_int; SIGEV_PAD_SIZE],
-                                    pub _tid: c_int,
-                                    pub _sigev_thread: __c_anonymous_sigev_thread,
-                                }
-
-                                pub struct sockaddr_un {
-                                    pub sun_family: sa_family_t,
-                                    pub sun_path: [c_char; 108],
-                                }
-
-                                pub struct sockaddr_storage {
-                                    pub ss_family: sa_family_t,
-                                    #[cfg(target_pointer_width = "32")]
-                                    __ss_pad2: [u8; 128 - 2 - 4],
-                                    #[cfg(target_pointer_width = "64")]
-                                    __ss_pad2: [u8; 128 - 2 - 8],
-                                    __ss_align: size_t,
-                                }
-
-                                pub struct utsname {
-                                    pub sysname: [c_char; 65],
-                                    pub nodename: [c_char; 65],
-                                    pub release: [c_char; 65],
-                                    pub version: [c_char; 65],
-                                    pub machine: [c_char; 65],
-                                    pub domainname: [c_char; 65],
-                                }
-
-                                pub struct sigevent {
-                                    pub sigev_value: crate::sigval,
-                                    pub sigev_signo: c_int,
-                                    pub sigev_notify: c_int,
-                                    pub _sigev_un: __c_anonymous_sigev_un,
-                                }
-                            }
-
-                            cfg_if! {
-                                if #[cfg(feature = "extra_traits")] {
-                                    impl PartialEq for epoll_event {
-                                        fn eq(&self, other: &epoll_event) -> bool {
-                                            self.events == other.events && self.u64 == other.u64
-                                        }
-                                    }
-                                    impl Eq for epoll_event {}
-                                    impl hash::Hash for epoll_event {
-                                        fn hash<H: hash::Hasher>(&self, state: &mut H) {
-                                            let events = self.events;
-                                            let u64 = self.u64;
-                                            events.hash(state);
-                                            u64.hash(state);
-                                        }
-                                    }
-
-                                    impl PartialEq for sockaddr_un {
-                                        fn eq(&self, other: &sockaddr_un) -> bool {
-                                            self.sun_family == other.sun_family
-                                                && self
-                                                    .sun_path
-                                                    .iter()
-                                                    .zip(other.sun_path.iter())
-                                                    .all(|(a, b)| a == b)
-                                        }
-                                    }
-                                    impl Eq for sockaddr_un {}
-                                    impl hash::Hash for sockaddr_un {
-                                        fn hash<H: hash::Hasher>(&self, state: &mut H) {
-                                            self.sun_family.hash(state);
-                                            self.sun_path.hash(state);
-                                        }
-                                    }
-
-                                    impl PartialEq for sockaddr_storage {
-                                        fn eq(&self, other: &sockaddr_storage) -> bool {
-                                            self.ss_family == other.ss_family
-                                                && self
-                                                    .__ss_pad2
-                                                    .iter()
-                                                    .zip(other.__ss_pad2.iter())
-                                                    .all(|(a, b)| a == b)
-                                        }
-                                    }
-
-                                    impl Eq for sockaddr_storage {}
-
-                                    impl hash::Hash for sockaddr_storage {
-                                        fn hash<H: hash::Hasher>(&self, state: &mut H) {
-                                            self.ss_family.hash(state);
-                                            self.__ss_pad2.hash(state);
-                                        }
-                                    }
-
-                                    impl PartialEq for utsname {
-                                        fn eq(&self, other: &utsname) -> bool {
-                                            self.sysname
-                                                .iter()
-                                                .zip(other.sysname.iter())
-                                                .all(|(a, b)| a == b)
-                                                && self
-                                                    .nodename
-                                                    .iter()
-                                                    .zip(other.nodename.iter())
-                                                    .all(|(a, b)| a == b)
-                                                && self
-                                                    .release
-                                                    .iter()
-                                                    .zip(other.release.iter())
-                                                    .all(|(a, b)| a == b)
-                                                && self
-                                                    .version
-                                                    .iter()
-                                                    .zip(other.version.iter())
-                                                    .all(|(a, b)| a == b)
-                                                && self
-                                                    .machine
-                                                    .iter()
-                                                    .zip(other.machine.iter())
-                                                    .all(|(a, b)| a == b)
-                                                && self
-                                                    .domainname
-                                                    .iter()
-                                                    .zip(other.domainname.iter())
-                                                    .all(|(a, b)| a == b)
-                                        }
-                                    }
-
-                                    impl Eq for utsname {}
-
-                                    impl hash::Hash for utsname {
-                                        fn hash<H: hash::Hasher>(&self, state: &mut H) {
-                                            self.sysname.hash(state);
-                                            self.nodename.hash(state);
-                                            self.release.hash(state);
-                                            self.version.hash(state);
-                                            self.machine.hash(state);
-                                            self.domainname.hash(state);
-                                        }
-                                    }
-                                }
-                            }
-
-                            // intentionally not public, only used for fd_set
-                            cfg_if! {
-                                if #[cfg(target_pointer_width = "32")] {
-                                    const ULONG_SIZE: usize = 32;
-                                } else if #[cfg(target_pointer_width = "64")] {
-                                    const ULONG_SIZE: usize = 64;
-                                } else {
-                                    // Unknown target_pointer_width
-                                }
-                            }
-
-                            pub const EXIT_FAILURE: c_int = 1;
-                            pub const EXIT_SUCCESS: c_int = 0;
-                            pub const RAND_MAX: c_int = 2147483647;
-                            pub const EOF: c_int = -1;
-                            pub const SEEK_SET: c_int = 0;
-                            pub const SEEK_CUR: c_int = 1;
-                            pub const SEEK_END: c_int = 2;
-                            pub const _IOFBF: c_int = 0;
-                            pub const _IONBF: c_int = 2;
-                            pub const _IOLBF: c_int = 1;
-
-                            pub const F_DUPFD: c_int = 0;
-                            pub const F_GETFD: c_int = 1;
-                            pub const F_SETFD: c_int = 2;
-                            pub const F_GETFL: c_int = 3;
-                            pub const F_SETFL: c_int = 4;
-
-                            // Linux-specific fcntls
-                            pub const F_SETLEASE: c_int = 1024;
-                            pub const F_GETLEASE: c_int = 1025;
-                            pub const F_NOTIFY: c_int = 1026;
-                            pub const F_CANCELLK: c_int = 1029;
-                            pub const F_DUPFD_CLOEXEC: c_int = 1030;
-                            pub const F_SETPIPE_SZ: c_int = 1031;
-                            pub const F_GETPIPE_SZ: c_int = 1032;
-                            pub const F_ADD_SEALS: c_int = 1033;
-                            pub const F_GET_SEALS: c_int = 1034;
-
-                            pub const F_SEAL_SEAL: c_int = 0x0001;
-                            pub const F_SEAL_SHRINK: c_int = 0x0002;
-                            pub const F_SEAL_GROW: c_int = 0x0004;
-                            pub const F_SEAL_WRITE: c_int = 0x0008;
-
-                            // FIXME(#235): Include file sealing fcntls once we have a way to verify them.
-
-                            pub const SIGTRAP: c_int = 5;
-
-                            pub const PTHREAD_CREATE_JOINABLE: c_int = 0;
-                            pub const PTHREAD_CREATE_DETACHED: c_int = 1;
-
-                            pub const CLOCK_REALTIME: crate::clockid_t = 0;
-                            pub const CLOCK_MONOTONIC: crate::clockid_t = 1;
-                            pub const CLOCK_PROCESS_CPUTIME_ID: crate::clockid_t = 2;
-                            pub const CLOCK_THREAD_CPUTIME_ID: crate::clockid_t = 3;
-                            pub const CLOCK_MONOTONIC_RAW: crate::clockid_t = 4;
-                            pub const CLOCK_REALTIME_COARSE: crate::clockid_t = 5;
-                            pub const CLOCK_MONOTONIC_COARSE: crate::clockid_t = 6;
-                            pub const CLOCK_BOOTTIME: crate::clockid_t = 7;
-                            pub const CLOCK_REALTIME_ALARM: crate::clockid_t = 8;
-                            pub const CLOCK_BOOTTIME_ALARM: crate::clockid_t = 9;
-                            pub const CLOCK_TAI: crate::clockid_t = 11;
-                            pub const TIMER_ABSTIME: c_int = 1;
-
-                            pub const RUSAGE_SELF: c_int = 0;
-
-                            pub const O_RDONLY: c_int = 0;
-                            pub const O_WRONLY: c_int = 1;
-                            pub const O_RDWR: c_int = 2;
-
-                            pub const SOCK_CLOEXEC: c_int = O_CLOEXEC;
-
-                            pub const S_IFIFO: mode_t = 0o1_0000;
-                            pub const S_IFCHR: mode_t = 0o2_0000;
-                            pub const S_IFBLK: mode_t = 0o6_0000;
-                            pub const S_IFDIR: mode_t = 0o4_0000;
-                            pub const S_IFREG: mode_t = 0o10_0000;
-                            pub const S_IFLNK: mode_t = 0o12_0000;
-                            pub const S_IFSOCK: mode_t = 0o14_0000;
-                            pub const S_IFMT: mode_t = 0o17_0000;
-                            pub const S_IRWXU: mode_t = 0o0700;
-                            pub const S_IXUSR: mode_t = 0o0100;
-                            pub const S_IWUSR: mode_t = 0o0200;
-                            pub const S_IRUSR: mode_t = 0o0400;
-                            pub const S_IRWXG: mode_t = 0o0070;
-                            pub const S_IXGRP: mode_t = 0o0010;
-                            pub const S_IWGRP: mode_t = 0o0020;
-                            pub const S_IRGRP: mode_t = 0o0040;
-                            pub const S_IRWXO: mode_t = 0o0007;
-                            pub const S_IXOTH: mode_t = 0o0001;
-                            pub const S_IWOTH: mode_t = 0o0002;
-                            pub const S_IROTH: mode_t = 0o0004;
-                            pub const F_OK: c_int = 0;
-                            pub const R_OK: c_int = 4;
-                            pub const W_OK: c_int = 2;
-                            pub const X_OK: c_int = 1;
-                            pub const STDIN_FILENO: c_int = 0;
-                            pub const STDOUT_FILENO: c_int = 1;
-                            pub const STDERR_FILENO: c_int = 2;
-                            pub const SIGHUP: c_int = 1;
-                            pub const SIGINT: c_int = 2;
-                            pub const SIGQUIT: c_int = 3;
-                            pub const SIGILL: c_int = 4;
-                            pub const SIGABRT: c_int = 6;
-                            pub const SIGFPE: c_int = 8;
-                            pub const SIGKILL: c_int = 9;
-                            pub const SIGSEGV: c_int = 11;
-                            pub const SIGPIPE: c_int = 13;
-                            pub const SIGALRM: c_int = 14;
-                            pub const SIGTERM: c_int = 15;
-
-                            const SIGEV_MAX_SIZE: usize = 64;
-                            cfg_if! {
-                                if #[cfg(target_pointer_width = "64")] {
-                                    const __ARCH_SIGEV_PREAMBLE_SIZE: usize = 4 * 2 + 8;
-                                } else {
-                                    const __ARCH_SIGEV_PREAMBLE_SIZE: usize = 4 * 2 + 4;
-                                }
-                            }
-                            const SIGEV_PAD_SIZE: usize = (SIGEV_MAX_SIZE - __ARCH_SIGEV_PREAMBLE_SIZE) / 4;
-
-                            pub const PROT_NONE: c_int = 0;
-                            pub const PROT_READ: c_int = 1;
-                            pub const PROT_WRITE: c_int = 2;
-                            pub const PROT_EXEC: c_int = 4;
-
-                            pub const XATTR_CREATE: c_int = 0x1;
-                            pub const XATTR_REPLACE: c_int = 0x2;
-
-                            cfg_if! {
-                                if #[cfg(target_os = "android")] {
-                                    pub const RLIM64_INFINITY: c_ulonglong = !0;
-                                } else {
-                                    pub const RLIM64_INFINITY: crate::rlim64_t = !0;
-                                }
-                            }
-
-                            cfg_if! {
-                                if #[cfg(target_env = "ohos")] {
-                                    pub const LC_CTYPE: c_int = 0;
-                                    pub const LC_NUMERIC: c_int = 1;
-                                    pub const LC_TIME: c_int = 2;
-                                    pub const LC_COLLATE: c_int = 3;
-                                    pub const LC_MONETARY: c_int = 4;
-                                    pub const LC_MESSAGES: c_int = 5;
-                                    pub const LC_PAPER: c_int = 6;
-                                    pub const LC_NAME: c_int = 7;
-                                    pub const LC_ADDRESS: c_int = 8;
-                                    pub const LC_TELEPHONE: c_int = 9;
-                                    pub const LC_MEASUREMENT: c_int = 10;
-                                    pub const LC_IDENTIFICATION: c_int = 11;
-                                    pub const LC_ALL: c_int = 12;
-                                } else if #[cfg(not(target_env = "uclibc"))] {
-                                    pub const LC_CTYPE: c_int = 0;
-                                    pub const LC_NUMERIC: c_int = 1;
-                                    pub const LC_TIME: c_int = 2;
-                                    pub const LC_COLLATE: c_int = 3;
-                                    pub const LC_MONETARY: c_int = 4;
-                                    pub const LC_MESSAGES: c_int = 5;
-                                    pub const LC_ALL: c_int = 6;
-                                }
-                            }
-
-                            pub const LC_CTYPE_MASK: c_int = 1 << LC_CTYPE;
-                            pub const LC_NUMERIC_MASK: c_int = 1 << LC_NUMERIC;
-                            pub const LC_TIME_MASK: c_int = 1 << LC_TIME;
-                            pub const LC_COLLATE_MASK: c_int = 1 << LC_COLLATE;
-                            pub const LC_MONETARY_MASK: c_int = 1 << LC_MONETARY;
-                            pub const LC_MESSAGES_MASK: c_int = 1 << LC_MESSAGES;
-                            // LC_ALL_MASK defined per platform
-
-                            pub const MAP_FILE: c_int = 0x0000;
-                            pub const MAP_SHARED: c_int = 0x0001;
-                            pub const MAP_PRIVATE: c_int = 0x0002;
-                            pub const MAP_FIXED: c_int = 0x0010;
-
-                            pub const MAP_FAILED: *mut c_void = !0 as *mut c_void;
-
-                            // MS_ flags for msync(2)
-                            pub const MS_ASYNC: c_int = 0x0001;
-                            pub const MS_INVALIDATE: c_int = 0x0002;
-                            pub const MS_SYNC: c_int = 0x0004;
-
-                            // MS_ flags for mount(2)
-                            pub const MS_RDONLY: c_ulong = 0x01;
-                            pub const MS_NOSUID: c_ulong = 0x02;
-                            pub const MS_NODEV: c_ulong = 0x04;
-                            pub const MS_NOEXEC: c_ulong = 0x08;
-                            pub const MS_SYNCHRONOUS: c_ulong = 0x10;
-                            pub const MS_REMOUNT: c_ulong = 0x20;
-                            pub const MS_MANDLOCK: c_ulong = 0x40;
-                            pub const MS_DIRSYNC: c_ulong = 0x80;
-                            pub const MS_NOATIME: c_ulong = 0x0400;
-                            pub const MS_NODIRATIME: c_ulong = 0x0800;
-                            pub const MS_BIND: c_ulong = 0x1000;
-                            pub const MS_MOVE: c_ulong = 0x2000;
-                            pub const MS_REC: c_ulong = 0x4000;
-                            pub const MS_SILENT: c_ulong = 0x8000;
-                            pub const MS_POSIXACL: c_ulong = 0x010000;
-                            pub const MS_UNBINDABLE: c_ulong = 0x020000;
-                            pub const MS_PRIVATE: c_ulong = 0x040000;
-                            pub const MS_SLAVE: c_ulong = 0x080000;
-                            pub const MS_SHARED: c_ulong = 0x100000;
-                            pub const MS_RELATIME: c_ulong = 0x200000;
-                            pub const MS_KERNMOUNT: c_ulong = 0x400000;
-                            pub const MS_I_VERSION: c_ulong = 0x800000;
-                            pub const MS_STRICTATIME: c_ulong = 0x1000000;
-                            pub const MS_LAZYTIME: c_ulong = 0x2000000;
-                            pub const MS_ACTIVE: c_ulong = 0x40000000;
-                            pub const MS_MGC_VAL: c_ulong = 0xc0ed0000;
-                            pub const MS_MGC_MSK: c_ulong = 0xffff0000;
-
-                            pub const SCM_RIGHTS: c_int = 0x01;
-                            pub const SCM_CREDENTIALS: c_int = 0x02;
-
-                            pub const PROT_GROWSDOWN: c_int = 0x1000000;
-                            pub const PROT_GROWSUP: c_int = 0x2000000;
-
-                            pub const MAP_TYPE: c_int = 0x000f;
-
-                            pub const MADV_NORMAL: c_int = 0;
-                            pub const MADV_RANDOM: c_int = 1;
-                            pub const MADV_SEQUENTIAL: c_int = 2;
-                            pub const MADV_WILLNEED: c_int = 3;
-                            pub const MADV_DONTNEED: c_int = 4;
-                            pub const MADV_FREE: c_int = 8;
-                            pub const MADV_REMOVE: c_int = 9;
-                            pub const MADV_DONTFORK: c_int = 10;
-                            pub const MADV_DOFORK: c_int = 11;
-                            pub const MADV_MERGEABLE: c_int = 12;
-                            pub const MADV_UNMERGEABLE: c_int = 13;
-                            pub const MADV_HUGEPAGE: c_int = 14;
-                            pub const MADV_NOHUGEPAGE: c_int = 15;
-                            pub const MADV_DONTDUMP: c_int = 16;
-                            pub const MADV_DODUMP: c_int = 17;
-                            pub const MADV_WIPEONFORK: c_int = 18;
-                            pub const MADV_KEEPONFORK: c_int = 19;
-                            pub const MADV_COLD: c_int = 20;
-                            pub const MADV_PAGEOUT: c_int = 21;
-                            pub const MADV_HWPOISON: c_int = 100;
-                            cfg_if! {
-                                if #[cfg(not(target_os = "emscripten"))] {
-                                    pub const MADV_POPULATE_READ: c_int = 22;
-                                    pub const MADV_POPULATE_WRITE: c_int = 23;
-                                    pub const MADV_DONTNEED_LOCKED: c_int = 24;
-                                }
-                            }
-
-                            pub const IFF_UP: c_int = 0x1;
-                            pub const IFF_BROADCAST: c_int = 0x2;
-                            pub const IFF_DEBUG: c_int = 0x4;
-                            pub const IFF_LOOPBACK: c_int = 0x8;
-                            pub const IFF_POINTOPOINT: c_int = 0x10;
-                            pub const IFF_NOTRAILERS: c_int = 0x20;
-                            pub const IFF_RUNNING: c_int = 0x40;
-                            pub const IFF_NOARP: c_int = 0x80;
-                            pub const IFF_PROMISC: c_int = 0x100;
-                            pub const IFF_ALLMULTI: c_int = 0x200;
-                            pub const IFF_MASTER: c_int = 0x400;
-                            pub const IFF_SLAVE: c_int = 0x800;
-                            pub const IFF_MULTICAST: c_int = 0x1000;
-                            pub const IFF_PORTSEL: c_int = 0x2000;
-                            pub const IFF_AUTOMEDIA: c_int = 0x4000;
-                            pub const IFF_DYNAMIC: c_int = 0x8000;
-
-                            pub const SOL_IP: c_int = 0;
-                            pub const SOL_TCP: c_int = 6;
-                            pub const SOL_UDP: c_int = 17;
-                            pub const SOL_IPV6: c_int = 41;
-                            pub const SOL_ICMPV6: c_int = 58;
-                            pub const SOL_RAW: c_int = 255;
-                            pub const SOL_DECNET: c_int = 261;
-                            pub const SOL_X25: c_int = 262;
-                            pub const SOL_PACKET: c_int = 263;
-                            pub const SOL_ATM: c_int = 264;
-                            pub const SOL_AAL: c_int = 265;
-                            pub const SOL_IRDA: c_int = 266;
-                            pub const SOL_NETBEUI: c_int = 267;
-                            pub const SOL_LLC: c_int = 268;
-                            pub const SOL_DCCP: c_int = 269;
-                            pub const SOL_NETLINK: c_int = 270;
-                            pub const SOL_TIPC: c_int = 271;
-                            pub const SOL_BLUETOOTH: c_int = 274;
-                            pub const SOL_ALG: c_int = 279;
-
-                            pub const AF_UNSPEC: c_int = 0;
-                            pub const AF_UNIX: c_int = 1;
-                            pub const AF_LOCAL: c_int = 1;
-                            pub const AF_INET: c_int = 2;
-                            pub const AF_AX25: c_int = 3;
-                            pub const AF_IPX: c_int = 4;
-                            pub const AF_APPLETALK: c_int = 5;
-                            pub const AF_NETROM: c_int = 6;
-                            pub const AF_BRIDGE: c_int = 7;
-                            pub const AF_ATMPVC: c_int = 8;
-                            pub const AF_X25: c_int = 9;
-                            pub const AF_INET6: c_int = 10;
-                            pub const AF_ROSE: c_int = 11;
-                            pub const AF_DECnet: c_int = 12;
-                            pub const AF_NETBEUI: c_int = 13;
-                            pub const AF_SECURITY: c_int = 14;
-                            pub const AF_KEY: c_int = 15;
-                            pub const AF_NETLINK: c_int = 16;
-                            pub const AF_ROUTE: c_int = AF_NETLINK;
-                            pub const AF_PACKET: c_int = 17;
-                            pub const AF_ASH: c_int = 18;
-                            pub const AF_ECONET: c_int = 19;
-                            pub const AF_ATMSVC: c_int = 20;
-                            pub const AF_RDS: c_int = 21;
-                            pub const AF_SNA: c_int = 22;
-                            pub const AF_IRDA: c_int = 23;
-                            pub const AF_PPPOX: c_int = 24;
-                            pub const AF_WANPIPE: c_int = 25;
-                            pub const AF_LLC: c_int = 26;
-                            pub const AF_CAN: c_int = 29;
-                            pub const AF_TIPC: c_int = 30;
-                            pub const AF_BLUETOOTH: c_int = 31;
-                            pub const AF_IUCV: c_int = 32;
-                            pub const AF_RXRPC: c_int = 33;
-                            pub const AF_ISDN: c_int = 34;
-                            pub const AF_PHONET: c_int = 35;
-                            pub const AF_IEEE802154: c_int = 36;
-                            pub const AF_CAIF: c_int = 37;
-                            pub const AF_ALG: c_int = 38;
-
-                            pub const PF_UNSPEC: c_int = AF_UNSPEC;
-                            pub const PF_UNIX: c_int = AF_UNIX;
-                            pub const PF_LOCAL: c_int = AF_LOCAL;
-                            pub const PF_INET: c_int = AF_INET;
-                            pub const PF_AX25: c_int = AF_AX25;
-                            pub const PF_IPX: c_int = AF_IPX;
-                            pub const PF_APPLETALK: c_int = AF_APPLETALK;
-                            pub const PF_NETROM: c_int = AF_NETROM;
-                            pub const PF_BRIDGE: c_int = AF_BRIDGE;
-                            pub const PF_ATMPVC: c_int = AF_ATMPVC;
-                            pub const PF_X25: c_int = AF_X25;
-                            pub const PF_INET6: c_int = AF_INET6;
-                            pub const PF_ROSE: c_int = AF_ROSE;
-                            pub const PF_DECnet: c_int = AF_DECnet;
-                            pub const PF_NETBEUI: c_int = AF_NETBEUI;
-                            pub const PF_SECURITY: c_int = AF_SECURITY;
-                            pub const PF_KEY: c_int = AF_KEY;
-                            pub const PF_NETLINK: c_int = AF_NETLINK;
-                            pub const PF_ROUTE: c_int = AF_ROUTE;
-                            pub const PF_PACKET: c_int = AF_PACKET;
-                            pub const PF_ASH: c_int = AF_ASH;
-                            pub const PF_ECONET: c_int = AF_ECONET;
-                            pub const PF_ATMSVC: c_int = AF_ATMSVC;
-                            pub const PF_RDS: c_int = AF_RDS;
-                            pub const PF_SNA: c_int = AF_SNA;
-                            pub const PF_IRDA: c_int = AF_IRDA;
-                            pub const PF_PPPOX: c_int = AF_PPPOX;
-                            pub const PF_WANPIPE: c_int = AF_WANPIPE;
-                            pub const PF_LLC: c_int = AF_LLC;
-                            pub const PF_CAN: c_int = AF_CAN;
-                            pub const PF_TIPC: c_int = AF_TIPC;
-                            pub const PF_BLUETOOTH: c_int = AF_BLUETOOTH;
-                            pub const PF_IUCV: c_int = AF_IUCV;
-                            pub const PF_RXRPC: c_int = AF_RXRPC;
-                            pub const PF_ISDN: c_int = AF_ISDN;
-                            pub const PF_PHONET: c_int = AF_PHONET;
-                            pub const PF_IEEE802154: c_int = AF_IEEE802154;
-                            pub const PF_CAIF: c_int = AF_CAIF;
-                            pub const PF_ALG: c_int = AF_ALG;
-
-                            pub const MSG_OOB: c_int = 1;
-                            pub const MSG_PEEK: c_int = 2;
-                            pub const MSG_DONTROUTE: c_int = 4;
-                            pub const MSG_CTRUNC: c_int = 8;
-                            pub const MSG_TRUNC: c_int = 0x20;
-                            pub const MSG_DONTWAIT: c_int = 0x40;
-                            pub const MSG_EOR: c_int = 0x80;
-                            pub const MSG_WAITALL: c_int = 0x100;
-                            pub const MSG_FIN: c_int = 0x200;
-                            pub const MSG_SYN: c_int = 0x400;
-                            pub const MSG_CONFIRM: c_int = 0x800;
-                            pub const MSG_RST: c_int = 0x1000;
-                            pub const MSG_ERRQUEUE: c_int = 0x2000;
-                            pub const MSG_NOSIGNAL: c_int = 0x4000;
-                            pub const MSG_MORE: c_int = 0x8000;
-                            pub const MSG_WAITFORONE: c_int = 0x10000;
-                            pub const MSG_FASTOPEN: c_int = 0x20000000;
-                            pub const MSG_CMSG_CLOEXEC: c_int = 0x40000000;
-
-                            pub const SCM_TIMESTAMP: c_int = SO_TIMESTAMP;
-
-                            pub const SOCK_RAW: c_int = 3;
-                            pub const SOCK_RDM: c_int = 4;
-                            pub const IP_TOS: c_int = 1;
-                            pub const IP_TTL: c_int = 2;
-                            pub const IP_HDRINCL: c_int = 3;
-                            pub const IP_OPTIONS: c_int = 4;
-                            pub const IP_ROUTER_ALERT: c_int = 5;
-                            pub const IP_RECVOPTS: c_int = 6;
-                            pub const IP_RETOPTS: c_int = 7;
-                            pub const IP_PKTINFO: c_int = 8;
-                            pub const IP_PKTOPTIONS: c_int = 9;
-                            pub const IP_MTU_DISCOVER: c_int = 10;
-                            pub const IP_RECVERR: c_int = 11;
-                            pub const IP_RECVTTL: c_int = 12;
-                            pub const IP_RECVTOS: c_int = 13;
-                            pub const IP_MTU: c_int = 14;
-                            pub const IP_FREEBIND: c_int = 15;
-                            pub const IP_IPSEC_POLICY: c_int = 16;
-                            pub const IP_XFRM_POLICY: c_int = 17;
-                            pub const IP_PASSSEC: c_int = 18;
-                            pub const IP_TRANSPARENT: c_int = 19;
-                            pub const IP_ORIGDSTADDR: c_int = 20;
-                            pub const IP_RECVORIGDSTADDR: c_int = IP_ORIGDSTADDR;
-                            pub const IP_MINTTL: c_int = 21;
-                            pub const IP_NODEFRAG: c_int = 22;
-                            pub const IP_CHECKSUM: c_int = 23;
-                            pub const IP_BIND_ADDRESS_NO_PORT: c_int = 24;
-                            pub const IP_MULTICAST_IF: c_int = 32;
-                            pub const IP_MULTICAST_TTL: c_int = 33;
-                            pub const IP_MULTICAST_LOOP: c_int = 34;
-                            pub const IP_ADD_MEMBERSHIP: c_int = 35;
-                            pub const IP_DROP_MEMBERSHIP: c_int = 36;
-                            pub const IP_UNBLOCK_SOURCE: c_int = 37;
-                            pub const IP_BLOCK_SOURCE: c_int = 38;
-                            pub const IP_ADD_SOURCE_MEMBERSHIP: c_int = 39;
-                            pub const IP_DROP_SOURCE_MEMBERSHIP: c_int = 40;
-                            pub const IP_MSFILTER: c_int = 41;
-                            pub const IP_MULTICAST_ALL: c_int = 49;
-                            pub const IP_UNICAST_IF: c_int = 50;
-
-                            pub const IP_DEFAULT_MULTICAST_TTL: c_int = 1;
-                            pub const IP_DEFAULT_MULTICAST_LOOP: c_int = 1;
-
-                            pub const IP_PMTUDISC_DONT: c_int = 0;
-                            pub const IP_PMTUDISC_WANT: c_int = 1;
-                            pub const IP_PMTUDISC_DO: c_int = 2;
-                            pub const IP_PMTUDISC_PROBE: c_int = 3;
-                            pub const IP_PMTUDISC_INTERFACE: c_int = 4;
-                            pub const IP_PMTUDISC_OMIT: c_int = 5;
-
-                            // IPPROTO_IP defined in src/unix/mod.rs
-                            /// Hop-by-hop option header
-                            pub const IPPROTO_HOPOPTS: c_int = 0;
-                            // IPPROTO_ICMP defined in src/unix/mod.rs
-                            /// group mgmt protocol
-                            pub const IPPROTO_IGMP: c_int = 2;
-                            /// for compatibility
-                            pub const IPPROTO_IPIP: c_int = 4;
-                            // IPPROTO_TCP defined in src/unix/mod.rs
-                            /// exterior gateway protocol
-                            pub const IPPROTO_EGP: c_int = 8;
-                            /// pup
-                            pub const IPPROTO_PUP: c_int = 12;
-                            // IPPROTO_UDP defined in src/unix/mod.rs
-                            /// xns idp
-                            pub const IPPROTO_IDP: c_int = 22;
-                            /// tp-4 w/ class negotiation
-                            pub const IPPROTO_TP: c_int = 29;
-                            /// DCCP
-                            pub const IPPROTO_DCCP: c_int = 33;
-                            // IPPROTO_IPV6 defined in src/unix/mod.rs
-                            /// IP6 routing header
-                            pub const IPPROTO_ROUTING: c_int = 43;
-                            /// IP6 fragmentation header
-                            pub const IPPROTO_FRAGMENT: c_int = 44;
-                            /// resource reservation
-                            pub const IPPROTO_RSVP: c_int = 46;
-                            /// General Routing Encap.
-                            pub const IPPROTO_GRE: c_int = 47;
-                            /// IP6 Encap Sec. Payload
-                            pub const IPPROTO_ESP: c_int = 50;
-                            /// IP6 Auth Header
-                            pub const IPPROTO_AH: c_int = 51;
-                            // IPPROTO_ICMPV6 defined in src/unix/mod.rs
-                            /// IP6 no next header
-                            pub const IPPROTO_NONE: c_int = 59;
-                            /// IP6 destination option
-                            pub const IPPROTO_DSTOPTS: c_int = 60;
-                            pub const IPPROTO_MTP: c_int = 92;
-                            /// encapsulation header
-                            pub const IPPROTO_ENCAP: c_int = 98;
-                            /// Protocol indep. multicast
-                            pub const IPPROTO_PIM: c_int = 103;
-                            /// IP Payload Comp. Protocol
-                            pub const IPPROTO_COMP: c_int = 108;
-                            /// SCTP
-                            pub const IPPROTO_SCTP: c_int = 132;
-                            pub const IPPROTO_MH: c_int = 135;
-                            pub const IPPROTO_UDPLITE: c_int = 136;
-                            /// raw IP packet
-                            pub const IPPROTO_RAW: c_int = 255;
-                            pub const IPPROTO_BEETPH: c_int = 94;
-                            pub const IPPROTO_MPLS: c_int = 137;
-                            /// Multipath TCP
-                            pub const IPPROTO_MPTCP: c_int = 262;
-                            /// Ethernet-within-IPv6 encapsulation.
-                            pub const IPPROTO_ETHERNET: c_int = 143;
-
-                            pub const MCAST_EXCLUDE: c_int = 0;
-                            pub const MCAST_INCLUDE: c_int = 1;
-                            pub const MCAST_JOIN_GROUP: c_int = 42;
-                            pub const MCAST_BLOCK_SOURCE: c_int = 43;
-                            pub const MCAST_UNBLOCK_SOURCE: c_int = 44;
-                            pub const MCAST_LEAVE_GROUP: c_int = 45;
-                            pub const MCAST_JOIN_SOURCE_GROUP: c_int = 46;
-                            pub const MCAST_LEAVE_SOURCE_GROUP: c_int = 47;
-                            pub const MCAST_MSFILTER: c_int = 48;
-
-                            pub const IPV6_ADDRFORM: c_int = 1;
-                            pub const IPV6_2292PKTINFO: c_int = 2;
-                            pub const IPV6_2292HOPOPTS: c_int = 3;
-                            pub const IPV6_2292DSTOPTS: c_int = 4;
-                            pub const IPV6_2292RTHDR: c_int = 5;
-                            pub const IPV6_2292PKTOPTIONS: c_int = 6;
-                            pub const IPV6_CHECKSUM: c_int = 7;
-                            pub const IPV6_2292HOPLIMIT: c_int = 8;
-                            pub const IPV6_NEXTHOP: c_int = 9;
-                            pub const IPV6_AUTHHDR: c_int = 10;
-                            pub const IPV6_UNICAST_HOPS: c_int = 16;
-                            pub const IPV6_MULTICAST_IF: c_int = 17;
-                            pub const IPV6_MULTICAST_HOPS: c_int = 18;
-                            pub const IPV6_MULTICAST_LOOP: c_int = 19;
-                            pub const IPV6_ADD_MEMBERSHIP: c_int = 20;
-                            pub const IPV6_DROP_MEMBERSHIP: c_int = 21;
-                            pub const IPV6_ROUTER_ALERT: c_int = 22;
-                            pub const IPV6_MTU_DISCOVER: c_int = 23;
-                            pub const IPV6_MTU: c_int = 24;
-                            pub const IPV6_RECVERR: c_int = 25;
-                            pub const IPV6_V6ONLY: c_int = 26;
-                            pub const IPV6_JOIN_ANYCAST: c_int = 27;
-                            pub const IPV6_LEAVE_ANYCAST: c_int = 28;
-                            pub const IPV6_IPSEC_POLICY: c_int = 34;
-                            pub const IPV6_XFRM_POLICY: c_int = 35;
-                            pub const IPV6_HDRINCL: c_int = 36;
-                            pub const IPV6_RECVPKTINFO: c_int = 49;
-                            pub const IPV6_PKTINFO: c_int = 50;
-                            pub const IPV6_RECVHOPLIMIT: c_int = 51;
-                            pub const IPV6_HOPLIMIT: c_int = 52;
-                            pub const IPV6_RECVHOPOPTS: c_int = 53;
-                            pub const IPV6_HOPOPTS: c_int = 54;
-                            pub const IPV6_RTHDRDSTOPTS: c_int = 55;
-                            pub const IPV6_RECVRTHDR: c_int = 56;
-                            pub const IPV6_RTHDR: c_int = 57;
-                            pub const IPV6_RECVDSTOPTS: c_int = 58;
-                            pub const IPV6_DSTOPTS: c_int = 59;
-                            pub const IPV6_RECVPATHMTU: c_int = 60;
-                            pub const IPV6_PATHMTU: c_int = 61;
-                            pub const IPV6_DONTFRAG: c_int = 62;
-                            pub const IPV6_RECVTCLASS: c_int = 66;
-                            pub const IPV6_TCLASS: c_int = 67;
-                            pub const IPV6_AUTOFLOWLABEL: c_int = 70;
-                            pub const IPV6_ADDR_PREFERENCES: c_int = 72;
-                            pub const IPV6_MINHOPCOUNT: c_int = 73;
-                            pub const IPV6_ORIGDSTADDR: c_int = 74;
-                            pub const IPV6_RECVORIGDSTADDR: c_int = IPV6_ORIGDSTADDR;
-                            pub const IPV6_TRANSPARENT: c_int = 75;
-                            pub const IPV6_UNICAST_IF: c_int = 76;
-                            pub const IPV6_PREFER_SRC_TMP: c_int = 0x0001;
-                            pub const IPV6_PREFER_SRC_PUBLIC: c_int = 0x0002;
-                            pub const IPV6_PREFER_SRC_PUBTMP_DEFAULT: c_int = 0x0100;
-                            pub const IPV6_PREFER_SRC_COA: c_int = 0x0004;
-                            pub const IPV6_PREFER_SRC_HOME: c_int = 0x0400;
-                            pub const IPV6_PREFER_SRC_CGA: c_int = 0x0008;
-                            pub const IPV6_PREFER_SRC_NONCGA: c_int = 0x0800;
-
-                            pub const IPV6_PMTUDISC_DONT: c_int = 0;
-                            pub const IPV6_PMTUDISC_WANT: c_int = 1;
-                            pub const IPV6_PMTUDISC_DO: c_int = 2;
-                            pub const IPV6_PMTUDISC_PROBE: c_int = 3;
-                            pub const IPV6_PMTUDISC_INTERFACE: c_int = 4;
-                            pub const IPV6_PMTUDISC_OMIT: c_int = 5;
-
-                            pub const TCP_NODELAY: c_int = 1;
-                            pub const TCP_MAXSEG: c_int = 2;
-                            pub const TCP_CORK: c_int = 3;
-                            pub const TCP_KEEPIDLE: c_int = 4;
-                            pub const TCP_KEEPINTVL: c_int = 5;
-                            pub const TCP_KEEPCNT: c_int = 6;
-                            pub const TCP_SYNCNT: c_int = 7;
-                            pub const TCP_LINGER2: c_int = 8;
-                            pub const TCP_DEFER_ACCEPT: c_int = 9;
-                            pub const TCP_WINDOW_CLAMP: c_int = 10;
-                            pub const TCP_INFO: c_int = 11;
-                            pub const TCP_QUICKACK: c_int = 12;
-                            pub const TCP_CONGESTION: c_int = 13;
-                            pub const TCP_MD5SIG: c_int = 14;
-                            cfg_if! {
-                                if #[cfg(all(
-                                    target_os = "linux",
-                                    any(target_env = "gnu", target_env = "musl", target_env = "ohos")
-                                ))] {
-                                    // WARN: deprecated
-                                    pub const TCP_COOKIE_TRANSACTIONS: c_int = 15;
-                                }
-                            }
-                            pub const TCP_THIN_LINEAR_TIMEOUTS: c_int = 16;
-                            pub const TCP_THIN_DUPACK: c_int = 17;
-                            pub const TCP_USER_TIMEOUT: c_int = 18;
-                            pub const TCP_REPAIR: c_int = 19;
-                            pub const TCP_REPAIR_QUEUE: c_int = 20;
-                            pub const TCP_QUEUE_SEQ: c_int = 21;
-                            pub const TCP_REPAIR_OPTIONS: c_int = 22;
-                            pub const TCP_FASTOPEN: c_int = 23;
-                            pub const TCP_TIMESTAMP: c_int = 24;
-                            pub const TCP_NOTSENT_LOWAT: c_int = 25;
-                            pub const TCP_CC_INFO: c_int = 26;
-                            pub const TCP_SAVE_SYN: c_int = 27;
-                            pub const TCP_SAVED_SYN: c_int = 28;
-                            cfg_if! {
-                                if #[cfg(not(target_os = "emscripten"))] {
-                                    // NOTE: emscripten doesn't support these options yet.
-
-                                    pub const TCP_REPAIR_WINDOW: c_int = 29;
-                                    pub const TCP_FASTOPEN_CONNECT: c_int = 30;
-                                    pub const TCP_ULP: c_int = 31;
-                                    pub const TCP_MD5SIG_EXT: c_int = 32;
-                                    pub const TCP_FASTOPEN_KEY: c_int = 33;
-                                    pub const TCP_FASTOPEN_NO_COOKIE: c_int = 34;
-                                    pub const TCP_ZEROCOPY_RECEIVE: c_int = 35;
-                                    pub const TCP_INQ: c_int = 36;
-                                    pub const TCP_CM_INQ: c_int = TCP_INQ;
-                                    // NOTE: Some CI images doesn't have this option yet.
-                                    // pub const TCP_TX_DELAY: c_int = 37;
-                                    pub const TCP_MD5SIG_MAXKEYLEN: usize = 80;
-                                }
-                            }
-
-                            pub const SO_DEBUG: c_int = 1;
-
-                            pub const SHUT_RD: c_int = 0;
-                            pub const SHUT_WR: c_int = 1;
-                            pub const SHUT_RDWR: c_int = 2;
-
-                            pub const LOCK_SH: c_int = 1;
-                            pub const LOCK_EX: c_int = 2;
-                            pub const LOCK_NB: c_int = 4;
-                            pub const LOCK_UN: c_int = 8;
-
-                            pub const SS_ONSTACK: c_int = 1;
-                            pub const SS_DISABLE: c_int = 2;
-
-                            pub const PATH_MAX: c_int = 4096;
-
-                            pub const UIO_MAXIOV: c_int = 1024;
-
-                            pub const FD_SETSIZE: c_int = 1024;
-
-                            pub const EPOLLIN: u32 = 0x1;
-                            pub const EPOLLPRI: u32 = 0x2;
-                            pub const EPOLLOUT: u32 = 0x4;
-                            pub const EPOLLERR: u32 = 0x8;
-                            pub const EPOLLHUP: u32 = 0x10;
-                            pub const EPOLLRDNORM: u32 = 0x40;
-                            pub const EPOLLRDBAND: u32 = 0x80;
-                            pub const EPOLLWRNORM: u32 = 0x100;
-                            pub const EPOLLWRBAND: u32 = 0x200;
-                            pub const EPOLLMSG: u32 = 0x400;
-                            pub const EPOLLRDHUP: u32 = 0x2000;
-                            pub const EPOLLEXCLUSIVE: u32 = 0x10000000;
-                            pub const EPOLLWAKEUP: u32 = 0x20000000;
-                            pub const EPOLLONESHOT: u32 = 0x40000000;
-                            pub const EPOLLET: u32 = 0x80000000;
-
-                            pub const EPOLL_CTL_ADD: c_int = 1;
-                            pub const EPOLL_CTL_MOD: c_int = 3;
-                            pub const EPOLL_CTL_DEL: c_int = 2;
-
-                            pub const MNT_FORCE: c_int = 0x1;
-                            pub const MNT_DETACH: c_int = 0x2;
-                            pub const MNT_EXPIRE: c_int = 0x4;
-                            pub const UMOUNT_NOFOLLOW: c_int = 0x8;
-
-                            pub const Q_GETFMT: c_int = 0x800004;
-                            pub const Q_GETINFO: c_int = 0x800005;
-                            pub const Q_SETINFO: c_int = 0x800006;
-                            pub const QIF_BLIMITS: u32 = 1;
-                            pub const QIF_SPACE: u32 = 2;
-                            pub const QIF_ILIMITS: u32 = 4;
-                            pub const QIF_INODES: u32 = 8;
-                            pub const QIF_BTIME: u32 = 16;
-                            pub const QIF_ITIME: u32 = 32;
-                            pub const QIF_LIMITS: u32 = 5;
-                            pub const QIF_USAGE: u32 = 10;
-                            pub const QIF_TIMES: u32 = 48;
-                            pub const QIF_ALL: u32 = 63;
-
-                            pub const Q_SYNC: c_int = 0x800001;
-                            pub const Q_QUOTAON: c_int = 0x800002;
-                            pub const Q_QUOTAOFF: c_int = 0x800003;
-                            pub const Q_GETQUOTA: c_int = 0x800007;
-                            pub const Q_SETQUOTA: c_int = 0x800008;
-
-                            pub const TCIOFF: c_int = 2;
-                            pub const TCION: c_int = 3;
-                            pub const TCOOFF: c_int = 0;
-                            pub const TCOON: c_int = 1;
-                            pub const TCIFLUSH: c_int = 0;
-                            pub const TCOFLUSH: c_int = 1;
-                            pub const TCIOFLUSH: c_int = 2;
-                            pub const NL0: crate::tcflag_t = 0x00000000;
-                            pub const NL1: crate::tcflag_t = 0x00000100;
-                            pub const TAB0: crate::tcflag_t = 0x00000000;
-                            pub const CR0: crate::tcflag_t = 0x00000000;
-                            pub const FF0: crate::tcflag_t = 0x00000000;
-                            pub const BS0: crate::tcflag_t = 0x00000000;
-                            pub const VT0: crate::tcflag_t = 0x00000000;
-                            pub const VERASE: usize = 2;
-                            pub const VKILL: usize = 3;
-                            pub const VINTR: usize = 0;
-                            pub const VQUIT: usize = 1;
-                            pub const VLNEXT: usize = 15;
-                            pub const IGNBRK: crate::tcflag_t = 0x00000001;
-                            pub const BRKINT: crate::tcflag_t = 0x00000002;
-                            pub const IGNPAR: crate::tcflag_t = 0x00000004;
-                            pub const PARMRK: crate::tcflag_t = 0x00000008;
-                            pub const INPCK: crate::tcflag_t = 0x00000010;
-                            pub const ISTRIP: crate::tcflag_t = 0x00000020;
-                            pub const INLCR: crate::tcflag_t = 0x00000040;
-                            pub const IGNCR: crate::tcflag_t = 0x00000080;
-                            pub const ICRNL: crate::tcflag_t = 0x00000100;
-                            pub const IXANY: crate::tcflag_t = 0x00000800;
-                            pub const IMAXBEL: crate::tcflag_t = 0x00002000;
-                            pub const OPOST: crate::tcflag_t = 0x1;
-                            pub const CS5: crate::tcflag_t = 0x00000000;
-                            pub const CRTSCTS: crate::tcflag_t = 0x80000000;
-                            pub const ECHO: crate::tcflag_t = 0x00000008;
-                            pub const OCRNL: crate::tcflag_t = 0o000010;
-                            pub const ONOCR: crate::tcflag_t = 0o000020;
-                            pub const ONLRET: crate::tcflag_t = 0o000040;
-                            pub const OFILL: crate::tcflag_t = 0o000100;
-                            pub const OFDEL: crate::tcflag_t = 0o000200;
-
-                            pub const CLONE_VM: c_int = 0x100;
-                            pub const CLONE_FS: c_int = 0x200;
-                            pub const CLONE_FILES: c_int = 0x400;
-                            pub const CLONE_SIGHAND: c_int = 0x800;
-                            pub const CLONE_PTRACE: c_int = 0x2000;
-                            pub const CLONE_VFORK: c_int = 0x4000;
-                            pub const CLONE_PARENT: c_int = 0x8000;
-                            pub const CLONE_THREAD: c_int = 0x10000;
-                            pub const CLONE_NEWNS: c_int = 0x20000;
-                            pub const CLONE_SYSVSEM: c_int = 0x40000;
-                            pub const CLONE_SETTLS: c_int = 0x80000;
-                            pub const CLONE_PARENT_SETTID: c_int = 0x100000;
-                            pub const CLONE_CHILD_CLEARTID: c_int = 0x200000;
-                            pub const CLONE_DETACHED: c_int = 0x400000;
-                            pub const CLONE_UNTRACED: c_int = 0x800000;
-                            pub const CLONE_CHILD_SETTID: c_int = 0x01000000;
-                            pub const CLONE_NEWCGROUP: c_int = 0x02000000;
-                            pub const CLONE_NEWUTS: c_int = 0x04000000;
-                            pub const CLONE_NEWIPC: c_int = 0x08000000;
-                            pub const CLONE_NEWUSER: c_int = 0x10000000;
-                            pub const CLONE_NEWPID: c_int = 0x20000000;
-                            pub const CLONE_NEWNET: c_int = 0x40000000;
-                            pub const CLONE_IO: c_int = 0x80000000;
-
-                            pub const WNOHANG: c_int = 0x00000001;
-                            pub const WUNTRACED: c_int = 0x00000002;
-                            pub const WSTOPPED: c_int = WUNTRACED;
-                            pub const WEXITED: c_int = 0x00000004;
-                            pub const WCONTINUED: c_int = 0x00000008;
-                            pub const WNOWAIT: c_int = 0x01000000;
-
-                            // Options for personality(2).
-                            pub const ADDR_NO_RANDOMIZE: c_int = 0x0040000;
-                            pub const MMAP_PAGE_ZERO: c_int = 0x0100000;
-                            pub const ADDR_COMPAT_LAYOUT: c_int = 0x0200000;
-                            pub const READ_IMPLIES_EXEC: c_int = 0x0400000;
-                            pub const ADDR_LIMIT_32BIT: c_int = 0x0800000;
-                            pub const SHORT_INODE: c_int = 0x1000000;
-                            pub const WHOLE_SECONDS: c_int = 0x2000000;
-                            pub const STICKY_TIMEOUTS: c_int = 0x4000000;
-                            pub const ADDR_LIMIT_3GB: c_int = 0x8000000;
-
-                            // Options set using PTRACE_SETOPTIONS.
-                            pub const PTRACE_O_TRACESYSGOOD: c_int = 0x00000001;
-                            pub const PTRACE_O_TRACEFORK: c_int = 0x00000002;
-                            pub const PTRACE_O_TRACEVFORK: c_int = 0x00000004;
-                            pub const PTRACE_O_TRACECLONE: c_int = 0x00000008;
-                            pub const PTRACE_O_TRACEEXEC: c_int = 0x00000010;
-                            pub const PTRACE_O_TRACEVFORKDONE: c_int = 0x00000020;
-                            pub const PTRACE_O_TRACEEXIT: c_int = 0x00000040;
-                            pub const PTRACE_O_TRACESECCOMP: c_int = 0x00000080;
-                            pub const PTRACE_O_SUSPEND_SECCOMP: c_int = 0x00200000;
-                            pub const PTRACE_O_EXITKILL: c_int = 0x00100000;
-                            pub const PTRACE_O_MASK: c_int = 0x003000ff;
-
-                            // Wait extended result codes for the above trace options.
-                            pub const PTRACE_EVENT_FORK: c_int = 1;
-                            pub const PTRACE_EVENT_VFORK: c_int = 2;
-                            pub const PTRACE_EVENT_CLONE: c_int = 3;
-                            pub const PTRACE_EVENT_EXEC: c_int = 4;
-                            pub const PTRACE_EVENT_VFORK_DONE: c_int = 5;
-                            pub const PTRACE_EVENT_EXIT: c_int = 6;
-                            pub const PTRACE_EVENT_SECCOMP: c_int = 7;
-
-                            pub const __WNOTHREAD: c_int = 0x20000000;
-                            pub const __WALL: c_int = 0x40000000;
-                            pub const __WCLONE: c_int = 0x80000000;
-
-                            pub const SPLICE_F_MOVE: c_uint = 0x01;
-                            pub const SPLICE_F_NONBLOCK: c_uint = 0x02;
-                            pub const SPLICE_F_MORE: c_uint = 0x04;
-                            pub const SPLICE_F_GIFT: c_uint = 0x08;
-
-                            pub const RTLD_LOCAL: c_int = 0;
-                            pub const RTLD_LAZY: c_int = 1;
-
-                            pub const POSIX_FADV_NORMAL: c_int = 0;
-                            pub const POSIX_FADV_RANDOM: c_int = 1;
-                            pub const POSIX_FADV_SEQUENTIAL: c_int = 2;
-                            pub const POSIX_FADV_WILLNEED: c_int = 3;
-
-                            pub const AT_FDCWD: c_int = -100;
-                            pub const AT_SYMLINK_NOFOLLOW: c_int = 0x100;
-                            pub const AT_REMOVEDIR: c_int = 0x200;
-                            pub const AT_SYMLINK_FOLLOW: c_int = 0x400;
-                            pub const AT_NO_AUTOMOUNT: c_int = 0x800;
-                            pub const AT_EMPTY_PATH: c_int = 0x1000;
-                            pub const AT_RECURSIVE: c_int = 0x8000;
-
-                            pub const LOG_CRON: c_int = 9 << 3;
-                            pub const LOG_AUTHPRIV: c_int = 10 << 3;
-                            pub const LOG_FTP: c_int = 11 << 3;
-                            pub const LOG_PERROR: c_int = 0x20;
-
-                            pub const PIPE_BUF: usize = 4096;
-
-                            pub const SI_LOAD_SHIFT: c_uint = 16;
-
-                            // si_code values
-                            pub const SI_USER: c_int = 0;
-                            pub const SI_KERNEL: c_int = 0x80;
-                            pub const SI_QUEUE: c_int = -1;
-                            cfg_if! {
-                                if #[cfg(not(any(target_arch = "mips", target_arch = "mips32r6")))] {
-                                    pub const SI_TIMER: c_int = -2;
-                                    pub const SI_MESGQ: c_int = -3;
-                                    pub const SI_ASYNCIO: c_int = -4;
-                                } else {
-                                    pub const SI_TIMER: c_int = -3;
-                                    pub const SI_MESGQ: c_int = -4;
-                                    pub const SI_ASYNCIO: c_int = -2;
-                                }
-                            }
-                            pub const SI_SIGIO: c_int = -5;
-                            pub const SI_TKILL: c_int = -6;
-                            pub const SI_ASYNCNL: c_int = -60;
-
-                            // si_code values for SIGBUS signal
-                            pub const BUS_ADRALN: c_int = 1;
-                            pub const BUS_ADRERR: c_int = 2;
-                            pub const BUS_OBJERR: c_int = 3;
-                            // Linux-specific si_code values for SIGBUS signal
-                            pub const BUS_MCEERR_AR: c_int = 4;
-                            pub const BUS_MCEERR_AO: c_int = 5;
-
-                            // si_code values for SIGTRAP
-                            pub const TRAP_BRKPT: c_int = 1;
-                            pub const TRAP_TRACE: c_int = 2;
-                            pub const TRAP_BRANCH: c_int = 3;
-                            pub const TRAP_HWBKPT: c_int = 4;
-                            pub const TRAP_UNK: c_int = 5;
-
-                            // si_code values for SIGCHLD signal
-                            pub const CLD_EXITED: c_int = 1;
-                            pub const CLD_KILLED: c_int = 2;
-                            pub const CLD_DUMPED: c_int = 3;
-                            pub const CLD_TRAPPED: c_int = 4;
-                            pub const CLD_STOPPED: c_int = 5;
-                            pub const CLD_CONTINUED: c_int = 6;
-
-                            pub const SIGEV_SIGNAL: c_int = 0;
-                            pub const SIGEV_NONE: c_int = 1;
-                            pub const SIGEV_THREAD: c_int = 2;
-
-                            pub const P_ALL: idtype_t = 0;
-                            pub const P_PID: idtype_t = 1;
-                            pub const P_PGID: idtype_t = 2;
-                            cfg_if! {
-                                if #[cfg(not(target_os = "emscripten"))] {
-                                    pub const P_PIDFD: idtype_t = 3;
-                                }
-                            }
-
-                            pub const UTIME_OMIT: c_long = 1073741822;
-                            pub const UTIME_NOW: c_long = 1073741823;
-
-                            pub const POLLIN: c_short = 0x1;
-                            pub const POLLPRI: c_short = 0x2;
-                            pub const POLLOUT: c_short = 0x4;
-                            pub const POLLERR: c_short = 0x8;
-                            pub const POLLHUP: c_short = 0x10;
-                            pub const POLLNVAL: c_short = 0x20;
-                            pub const POLLRDNORM: c_short = 0x040;
-                            pub const POLLRDBAND: c_short = 0x080;
-                            #[cfg(not(any(target_arch = "sparc", target_arch = "sparc64")))]
-                            pub const POLLRDHUP: c_short = 0x2000;
-                            #[cfg(any(target_arch = "sparc", target_arch = "sparc64"))]
-                            pub const POLLRDHUP: c_short = 0x800;
-
-                            pub const IPTOS_LOWDELAY: u8 = 0x10;
-                            pub const IPTOS_THROUGHPUT: u8 = 0x08;
-                            pub const IPTOS_RELIABILITY: u8 = 0x04;
-                            pub const IPTOS_MINCOST: u8 = 0x02;
-
-                            pub const IPTOS_PREC_NETCONTROL: u8 = 0xe0;
-                            pub const IPTOS_PREC_INTERNETCONTROL: u8 = 0xc0;
-                            pub const IPTOS_PREC_CRITIC_ECP: u8 = 0xa0;
-                            pub const IPTOS_PREC_FLASHOVERRIDE: u8 = 0x80;
-                            pub const IPTOS_PREC_FLASH: u8 = 0x60;
-                            pub const IPTOS_PREC_IMMEDIATE: u8 = 0x40;
-                            pub const IPTOS_PREC_PRIORITY: u8 = 0x20;
-                            pub const IPTOS_PREC_ROUTINE: u8 = 0x00;
-
-                            pub const IPTOS_ECN_MASK: u8 = 0x03;
-                            pub const IPTOS_ECN_ECT1: u8 = 0x01;
-                            pub const IPTOS_ECN_ECT0: u8 = 0x02;
-                            pub const IPTOS_ECN_CE: u8 = 0x03;
-
-                            pub const IPOPT_COPY: u8 = 0x80;
-                            pub const IPOPT_CLASS_MASK: u8 = 0x60;
-                            pub const IPOPT_NUMBER_MASK: u8 = 0x1f;
-
-                            pub const IPOPT_CONTROL: u8 = 0x00;
-                            pub const IPOPT_RESERVED1: u8 = 0x20;
-                            pub const IPOPT_MEASUREMENT: u8 = 0x40;
-                            pub const IPOPT_RESERVED2: u8 = 0x60;
-                            pub const IPOPT_END: u8 = 0 | IPOPT_CONTROL;
-                            pub const IPOPT_NOOP: u8 = 1 | IPOPT_CONTROL;
-                            pub const IPOPT_SEC: u8 = 2 | IPOPT_CONTROL | IPOPT_COPY;
-                            pub const IPOPT_LSRR: u8 = 3 | IPOPT_CONTROL | IPOPT_COPY;
-                            pub const IPOPT_TIMESTAMP: u8 = 4 | IPOPT_MEASUREMENT;
-                            pub const IPOPT_RR: u8 = 7 | IPOPT_CONTROL;
-                            pub const IPOPT_SID: u8 = 8 | IPOPT_CONTROL | IPOPT_COPY;
-                            pub const IPOPT_SSRR: u8 = 9 | IPOPT_CONTROL | IPOPT_COPY;
-                            pub const IPOPT_RA: u8 = 20 | IPOPT_CONTROL | IPOPT_COPY;
-                            pub const IPVERSION: u8 = 4;
-                            pub const MAXTTL: u8 = 255;
-                            pub const IPDEFTTL: u8 = 64;
-                            pub const IPOPT_OPTVAL: u8 = 0;
-                            pub const IPOPT_OLEN: u8 = 1;
-                            pub const IPOPT_OFFSET: u8 = 2;
-                            pub const IPOPT_MINOFF: u8 = 4;
-                            pub const MAX_IPOPTLEN: u8 = 40;
-                            pub const IPOPT_NOP: u8 = IPOPT_NOOP;
-                            pub const IPOPT_EOL: u8 = IPOPT_END;
-                            pub const IPOPT_TS: u8 = IPOPT_TIMESTAMP;
-                            pub const IPOPT_TS_TSONLY: u8 = 0;
-                            pub const IPOPT_TS_TSANDADDR: u8 = 1;
-                            pub const IPOPT_TS_PRESPEC: u8 = 3;
-
-                            pub const ARPOP_RREQUEST: u16 = 3;
-                            pub const ARPOP_RREPLY: u16 = 4;
-                            pub const ARPOP_InREQUEST: u16 = 8;
-                            pub const ARPOP_InREPLY: u16 = 9;
-                            pub const ARPOP_NAK: u16 = 10;
-
-                            pub const ATF_NETMASK: c_int = 0x20;
-                            pub const ATF_DONTPUB: c_int = 0x40;
-
-                            pub const ARPHRD_NETROM: u16 = 0;
-                            pub const ARPHRD_ETHER: u16 = 1;
-                            pub const ARPHRD_EETHER: u16 = 2;
-                            pub const ARPHRD_AX25: u16 = 3;
-                            pub const ARPHRD_PRONET: u16 = 4;
-                            pub const ARPHRD_CHAOS: u16 = 5;
-                            pub const ARPHRD_IEEE802: u16 = 6;
-                            pub const ARPHRD_ARCNET: u16 = 7;
-                            pub const ARPHRD_APPLETLK: u16 = 8;
-                            pub const ARPHRD_DLCI: u16 = 15;
-                            pub const ARPHRD_ATM: u16 = 19;
-                            pub const ARPHRD_METRICOM: u16 = 23;
-                            pub const ARPHRD_IEEE1394: u16 = 24;
-                            pub const ARPHRD_EUI64: u16 = 27;
-                            pub const ARPHRD_INFINIBAND: u16 = 32;
-
-                            pub const ARPHRD_SLIP: u16 = 256;
-                            pub const ARPHRD_CSLIP: u16 = 257;
-                            pub const ARPHRD_SLIP6: u16 = 258;
-                            pub const ARPHRD_CSLIP6: u16 = 259;
-                            pub const ARPHRD_RSRVD: u16 = 260;
-                            pub const ARPHRD_ADAPT: u16 = 264;
-                            pub const ARPHRD_ROSE: u16 = 270;
-                            pub const ARPHRD_X25: u16 = 271;
-                            pub const ARPHRD_HWX25: u16 = 272;
-                            pub const ARPHRD_CAN: u16 = 280;
-                            pub const ARPHRD_PPP: u16 = 512;
-                            pub const ARPHRD_CISCO: u16 = 513;
-                            pub const ARPHRD_HDLC: u16 = ARPHRD_CISCO;
-                            pub const ARPHRD_LAPB: u16 = 516;
-                            pub const ARPHRD_DDCMP: u16 = 517;
-                            pub const ARPHRD_RAWHDLC: u16 = 518;
-
-                            pub const ARPHRD_TUNNEL: u16 = 768;
-                            pub const ARPHRD_TUNNEL6: u16 = 769;
-                            pub const ARPHRD_FRAD: u16 = 770;
-                            pub const ARPHRD_SKIP: u16 = 771;
-                            pub const ARPHRD_LOOPBACK: u16 = 772;
-                            pub const ARPHRD_LOCALTLK: u16 = 773;
-                            pub const ARPHRD_FDDI: u16 = 774;
-                            pub const ARPHRD_BIF: u16 = 775;
-                            pub const ARPHRD_SIT: u16 = 776;
-                            pub const ARPHRD_IPDDP: u16 = 777;
-                            pub const ARPHRD_IPGRE: u16 = 778;
-                            pub const ARPHRD_PIMREG: u16 = 779;
-                            pub const ARPHRD_HIPPI: u16 = 780;
-                            pub const ARPHRD_ASH: u16 = 781;
-                            pub const ARPHRD_ECONET: u16 = 782;
-                            pub const ARPHRD_IRDA: u16 = 783;
-                            pub const ARPHRD_FCPP: u16 = 784;
-                            pub const ARPHRD_FCAL: u16 = 785;
-                            pub const ARPHRD_FCPL: u16 = 786;
-                            pub const ARPHRD_FCFABRIC: u16 = 787;
-                            pub const ARPHRD_IEEE802_TR: u16 = 800;
-                            pub const ARPHRD_IEEE80211: u16 = 801;
-                            pub const ARPHRD_IEEE80211_PRISM: u16 = 802;
-                            pub const ARPHRD_IEEE80211_RADIOTAP: u16 = 803;
-                            pub const ARPHRD_IEEE802154: u16 = 804;
-
-                            pub const ARPHRD_VOID: u16 = 0xFFFF;
-                            pub const ARPHRD_NONE: u16 = 0xFFFE;
-
-                            cfg_if! {
-                                if #[cfg(not(target_os = "emscripten"))] {
-                                    // linux/if_tun.h
-                                    /* TUNSETIFF ifr flags */
-                                    pub const IFF_TUN: c_int = 0x0001;
-                                    pub const IFF_TAP: c_int = 0x0002;
-                                    pub const IFF_NAPI: c_int = 0x0010;
-                                    pub const IFF_NAPI_FRAGS: c_int = 0x0020;
-                                    // Used in TUNSETIFF to bring up tun/tap without carrier
-                                    pub const IFF_NO_CARRIER: c_int = 0x0040;
-                                    pub const IFF_NO_PI: c_int = 0x1000;
-                                    // Read queue size
-                                    pub const TUN_READQ_SIZE: c_short = 500;
-                                    // TUN device type flags: deprecated. Use IFF_TUN/IFF_TAP instead.
-                                    pub const TUN_TUN_DEV: c_short = crate::IFF_TUN as c_short;
-                                    pub const TUN_TAP_DEV: c_short = crate::IFF_TAP as c_short;
-                                    pub const TUN_TYPE_MASK: c_short = 0x000f;
-                                    // This flag has no real effect
-                                    pub const IFF_ONE_QUEUE: c_int = 0x2000;
-                                    pub const IFF_VNET_HDR: c_int = 0x4000;
-                                    pub const IFF_TUN_EXCL: c_int = 0x8000;
-                                    pub const IFF_MULTI_QUEUE: c_int = 0x0100;
-                                    pub const IFF_ATTACH_QUEUE: c_int = 0x0200;
-                                    pub const IFF_DETACH_QUEUE: c_int = 0x0400;
-                                    // read-only flag
-                                    pub const IFF_PERSIST: c_int = 0x0800;
-                                    pub const IFF_NOFILTER: c_int = 0x1000;
-                                    // Socket options
-                                    pub const TUN_TX_TIMESTAMP: c_int = 1;
-                                    // Features for GSO (TUNSETOFFLOAD)
-                                    pub const TUN_F_CSUM: c_uint = 0x01;
-                                    pub const TUN_F_TSO4: c_uint = 0x02;
-                                    pub const TUN_F_TSO6: c_uint = 0x04;
-                                    pub const TUN_F_TSO_ECN: c_uint = 0x08;
-                                    pub const TUN_F_UFO: c_uint = 0x10;
-                                    pub const TUN_F_USO4: c_uint = 0x20;
-                                    pub const TUN_F_USO6: c_uint = 0x40;
-                                    // Protocol info prepended to the packets (when IFF_NO_PI is not set)
-                                    pub const TUN_PKT_STRIP: c_int = 0x0001;
-                                    // Accept all multicast packets
-                                    pub const TUN_FLT_ALLMULTI: c_int = 0x0001;
-                                    // Ioctl operation codes
-                                    const T_TYPE: u32 = b'T' as u32;
-                                    pub const TUNSETNOCSUM: Ioctl = _IOW::<c_int>(T_TYPE, 200);
-                                    pub const TUNSETDEBUG: Ioctl = _IOW::<c_int>(T_TYPE, 201);
-                                    pub const TUNSETIFF: Ioctl = _IOW::<c_int>(T_TYPE, 202);
-                                    pub const TUNSETPERSIST: Ioctl = _IOW::<c_int>(T_TYPE, 203);
-                                    pub const TUNSETOWNER: Ioctl = _IOW::<c_int>(T_TYPE, 204);
-                                    pub const TUNSETLINK: Ioctl = _IOW::<c_int>(T_TYPE, 205);
-                                    pub const TUNSETGROUP: Ioctl = _IOW::<c_int>(T_TYPE, 206);
-                                    pub const TUNGETFEATURES: Ioctl = _IOR::<c_int>(T_TYPE, 207);
-                                    pub const TUNSETOFFLOAD: Ioctl = _IOW::<c_int>(T_TYPE, 208);
-                                    pub const TUNSETTXFILTER: Ioctl = _IOW::<c_int>(T_TYPE, 209);
-                                    pub const TUNGETIFF: Ioctl = _IOR::<c_int>(T_TYPE, 210);
-                                    pub const TUNGETSNDBUF: Ioctl = _IOR::<c_int>(T_TYPE, 211);
-                                    pub const TUNSETSNDBUF: Ioctl = _IOW::<c_int>(T_TYPE, 212);
-                                    pub const TUNATTACHFILTER: Ioctl = _IOW::<sock_fprog>(T_TYPE, 213);
-                                    pub const TUNDETACHFILTER: Ioctl = _IOW::<sock_fprog>(T_TYPE, 214);
-                                    pub const TUNGETVNETHDRSZ: Ioctl = _IOR::<c_int>(T_TYPE, 215);
-                                    pub const TUNSETVNETHDRSZ: Ioctl = _IOW::<c_int>(T_TYPE, 216);
-                                    pub const TUNSETQUEUE: Ioctl = _IOW::<c_int>(T_TYPE, 217);
-                                    pub const TUNSETIFINDEX: Ioctl = _IOW::<c_int>(T_TYPE, 218);
-                                    pub const TUNGETFILTER: Ioctl = _IOR::<sock_fprog>(T_TYPE, 219);
-                                    pub const TUNSETVNETLE: Ioctl = _IOW::<c_int>(T_TYPE, 220);
-                                    pub const TUNGETVNETLE: Ioctl = _IOR::<c_int>(T_TYPE, 221);
-                                    pub const TUNSETVNETBE: Ioctl = _IOW::<c_int>(T_TYPE, 222);
-                                    pub const TUNGETVNETBE: Ioctl = _IOR::<c_int>(T_TYPE, 223);
-                                    pub const TUNSETSTEERINGEBPF: Ioctl = _IOR::<c_int>(T_TYPE, 224);
-                                    pub const TUNSETFILTEREBPF: Ioctl = _IOR::<c_int>(T_TYPE, 225);
-                                    pub const TUNSETCARRIER: Ioctl = _IOW::<c_int>(T_TYPE, 226);
-                                    pub const TUNGETDEVNETNS: Ioctl = _IO(T_TYPE, 227);
-
-                                    // linux/fs.h
-                                    pub const FS_IOC_GETFLAGS: Ioctl = _IOR::<c_long>('f' as u32, 1);
-                                    pub const FS_IOC_SETFLAGS: Ioctl = _IOW::<c_long>('f' as u32, 2);
-                                    pub const FS_IOC_GETVERSION: Ioctl = _IOR::<c_long>('v' as u32, 1);
-                                    pub const FS_IOC_SETVERSION: Ioctl = _IOW::<c_long>('v' as u32, 2);
-                                    pub const FS_IOC32_GETFLAGS: Ioctl = _IOR::<c_int>('f' as u32, 1);
-                                    pub const FS_IOC32_SETFLAGS: Ioctl = _IOW::<c_int>('f' as u32, 2);
-                                    pub const FS_IOC32_GETVERSION: Ioctl = _IOR::<c_int>('v' as u32, 1);
-                                    pub const FS_IOC32_SETVERSION: Ioctl = _IOW::<c_int>('v' as u32, 2);
-
-                                    pub const FICLONE: Ioctl = _IOW::<c_int>(0x94, 9);
-                                    pub const FICLONERANGE: Ioctl = _IOW::<crate::file_clone_range>(0x94, 13);
-                                }
-                            }
-
-                            cfg_if! {
-                                if #[cfg(target_os = "emscripten")] {
-                                    // Emscripten does not define any `*_SUPER_MAGIC` constants.
-                                } else if #[cfg(not(target_arch = "s390x"))] {
-                                    pub const ADFS_SUPER_MAGIC: c_long = 0x0000adf5;
-                                    pub const AFFS_SUPER_MAGIC: c_long = 0x0000adff;
-                                    pub const AFS_SUPER_MAGIC: c_long = 0x5346414f;
-                                    pub const AUTOFS_SUPER_MAGIC: c_long = 0x0187;
-                                    pub const BPF_FS_MAGIC: c_long = 0xcafe4a11;
-                                    pub const BTRFS_SUPER_MAGIC: c_long = 0x9123683e;
-                                    pub const CGROUP2_SUPER_MAGIC: c_long = 0x63677270;
-                                    pub const CGROUP_SUPER_MAGIC: c_long = 0x27e0eb;
-                                    pub const CODA_SUPER_MAGIC: c_long = 0x73757245;
-                                    pub const CRAMFS_MAGIC: c_long = 0x28cd3d45;
-                                    pub const DEBUGFS_MAGIC: c_long = 0x64626720;
-                                    pub const DEVPTS_SUPER_MAGIC: c_long = 0x1cd1;
-                                    pub const ECRYPTFS_SUPER_MAGIC: c_long = 0xf15f;
-                                    pub const EFS_SUPER_MAGIC: c_long = 0x00414a53;
-                                    pub const EXT2_SUPER_MAGIC: c_long = 0x0000ef53;
-                                    pub const EXT3_SUPER_MAGIC: c_long = 0x0000ef53;
-                                    pub const EXT4_SUPER_MAGIC: c_long = 0x0000ef53;
-                                    pub const F2FS_SUPER_MAGIC: c_long = 0xf2f52010;
-                                    pub const FUSE_SUPER_MAGIC: c_long = 0x65735546;
-                                    pub const FUTEXFS_SUPER_MAGIC: c_long = 0xbad1dea;
-                                    pub const HOSTFS_SUPER_MAGIC: c_long = 0x00c0ffee;
-                                    pub const HPFS_SUPER_MAGIC: c_long = 0xf995e849;
-                                    pub const HUGETLBFS_MAGIC: c_long = 0x958458f6;
-                                    pub const ISOFS_SUPER_MAGIC: c_long = 0x00009660;
-                                    pub const JFFS2_SUPER_MAGIC: c_long = 0x000072b6;
-                                    pub const MINIX2_SUPER_MAGIC2: c_long = 0x00002478;
-                                    pub const MINIX2_SUPER_MAGIC: c_long = 0x00002468;
-                                    pub const MINIX3_SUPER_MAGIC: c_long = 0x4d5a;
-                                    pub const MINIX_SUPER_MAGIC2: c_long = 0x0000138f;
-                                    pub const MINIX_SUPER_MAGIC: c_long = 0x0000137f;
-                                    pub const MSDOS_SUPER_MAGIC: c_long = 0x00004d44;
-                                    pub const NCP_SUPER_MAGIC: c_long = 0x0000564c;
-                                    pub const NFS_SUPER_MAGIC: c_long = 0x00006969;
-                                    pub const NILFS_SUPER_MAGIC: c_long = 0x3434;
-                                    pub const OCFS2_SUPER_MAGIC: c_long = 0x7461636f;
-                                    pub const OPENPROM_SUPER_MAGIC: c_long = 0x00009fa1;
-                                    pub const OVERLAYFS_SUPER_MAGIC: c_long = 0x794c7630;
-                                    pub const PROC_SUPER_MAGIC: c_long = 0x00009fa0;
-                                    pub const QNX4_SUPER_MAGIC: c_long = 0x0000002f;
-                                    pub const QNX6_SUPER_MAGIC: c_long = 0x68191122;
-                                    pub const RDTGROUP_SUPER_MAGIC: c_long = 0x7655821;
-                                    pub const REISERFS_SUPER_MAGIC: c_long = 0x52654973;
-                                    pub const SECURITYFS_MAGIC: c_long = 0x73636673;
-                                    pub const SELINUX_MAGIC: c_long = 0xf97cff8c;
-                                    pub const SMACK_MAGIC: c_long = 0x43415d53;
-                                    pub const SMB_SUPER_MAGIC: c_long = 0x0000517b;
-                                    pub const SYSFS_MAGIC: c_long = 0x62656572;
-                                    pub const TMPFS_MAGIC: c_long = 0x01021994;
-                                    pub const TRACEFS_MAGIC: c_long = 0x74726163;
-                                    pub const UDF_SUPER_MAGIC: c_long = 0x15013346;
-                                    pub const USBDEVICE_SUPER_MAGIC: c_long = 0x00009fa2;
-                                    pub const XENFS_SUPER_MAGIC: c_long = 0xabba1974;
-                                    pub const NSFS_MAGIC: c_long = 0x6e736673;
-                                } else if #[cfg(target_arch = "s390x")] {
-                                    pub const ADFS_SUPER_MAGIC: c_uint = 0x0000adf5;
-                                    pub const AFFS_SUPER_MAGIC: c_uint = 0x0000adff;
-                                    pub const AFS_SUPER_MAGIC: c_uint = 0x5346414f;
-                                    pub const AUTOFS_SUPER_MAGIC: c_uint = 0x0187;
-                                    pub const BPF_FS_MAGIC: c_uint = 0xcafe4a11;
-                                    pub const BTRFS_SUPER_MAGIC: c_uint = 0x9123683e;
-                                    pub const CGROUP2_SUPER_MAGIC: c_uint = 0x63677270;
-                                    pub const CGROUP_SUPER_MAGIC: c_uint = 0x27e0eb;
-                                    pub const CODA_SUPER_MAGIC: c_uint = 0x73757245;
-                                    pub const CRAMFS_MAGIC: c_uint = 0x28cd3d45;
-                                    pub const DEBUGFS_MAGIC: c_uint = 0x64626720;
-                                    pub const DEVPTS_SUPER_MAGIC: c_uint = 0x1cd1;
-                                    pub const ECRYPTFS_SUPER_MAGIC: c_uint = 0xf15f;
-                                    pub const EFS_SUPER_MAGIC: c_uint = 0x00414a53;
-                                    pub const EXT2_SUPER_MAGIC: c_uint = 0x0000ef53;
-                                    pub const EXT3_SUPER_MAGIC: c_uint = 0x0000ef53;
-                                    pub const EXT4_SUPER_MAGIC: c_uint = 0x0000ef53;
-                                    pub const F2FS_SUPER_MAGIC: c_uint = 0xf2f52010;
-                                    pub const FUSE_SUPER_MAGIC: c_uint = 0x65735546;
-                                    pub const FUTEXFS_SUPER_MAGIC: c_uint = 0xbad1dea;
-                                    pub const HOSTFS_SUPER_MAGIC: c_uint = 0x00c0ffee;
-                                    pub const HPFS_SUPER_MAGIC: c_uint = 0xf995e849;
-                                    pub const HUGETLBFS_MAGIC: c_uint = 0x958458f6;
-                                    pub const ISOFS_SUPER_MAGIC: c_uint = 0x00009660;
-                                    pub const JFFS2_SUPER_MAGIC: c_uint = 0x000072b6;
-                                    pub const MINIX2_SUPER_MAGIC2: c_uint = 0x00002478;
-                                    pub const MINIX2_SUPER_MAGIC: c_uint = 0x00002468;
-                                    pub const MINIX3_SUPER_MAGIC: c_uint = 0x4d5a;
-                                    pub const MINIX_SUPER_MAGIC2: c_uint = 0x0000138f;
-                                    pub const MINIX_SUPER_MAGIC: c_uint = 0x0000137f;
-                                    pub const MSDOS_SUPER_MAGIC: c_uint = 0x00004d44;
-                                    pub const NCP_SUPER_MAGIC: c_uint = 0x0000564c;
-                                    pub const NFS_SUPER_MAGIC: c_uint = 0x00006969;
-                                    pub const NILFS_SUPER_MAGIC: c_uint = 0x3434;
-                                    pub const OCFS2_SUPER_MAGIC: c_uint = 0x7461636f;
-                                    pub const OPENPROM_SUPER_MAGIC: c_uint = 0x00009fa1;
-                                    pub const OVERLAYFS_SUPER_MAGIC: c_uint = 0x794c7630;
-                                    pub const PROC_SUPER_MAGIC: c_uint = 0x00009fa0;
-                                    pub const QNX4_SUPER_MAGIC: c_uint = 0x0000002f;
-                                    pub const QNX6_SUPER_MAGIC: c_uint = 0x68191122;
-                                    pub const RDTGROUP_SUPER_MAGIC: c_uint = 0x7655821;
-                                    pub const REISERFS_SUPER_MAGIC: c_uint = 0x52654973;
-                                    pub const SECURITYFS_MAGIC: c_uint = 0x73636673;
-                                    pub const SELINUX_MAGIC: c_uint = 0xf97cff8c;
-                                    pub const SMACK_MAGIC: c_uint = 0x43415d53;
-                                    pub const SMB_SUPER_MAGIC: c_uint = 0x0000517b;
-                                    pub const SYSFS_MAGIC: c_uint = 0x62656572;
-                                    pub const TMPFS_MAGIC: c_uint = 0x01021994;
-                                    pub const TRACEFS_MAGIC: c_uint = 0x74726163;
-                                    pub const UDF_SUPER_MAGIC: c_uint = 0x15013346;
-                                    pub const USBDEVICE_SUPER_MAGIC: c_uint = 0x00009fa2;
-                                    pub const XENFS_SUPER_MAGIC: c_uint = 0xabba1974;
-                                    pub const NSFS_MAGIC: c_uint = 0x6e736673;
-                                }
-                            }
-
-                            cfg_if! {
-                                if #[cfg(any(target_env = "gnu", target_os = "android"))] {
-                                    pub const AT_STATX_SYNC_TYPE: c_int = 0x6000;
-                                    pub const AT_STATX_SYNC_AS_STAT: c_int = 0x0000;
-                                    pub const AT_STATX_FORCE_SYNC: c_int = 0x2000;
-                                    pub const AT_STATX_DONT_SYNC: c_int = 0x4000;
-                                    pub const STATX_TYPE: c_uint = 0x0001;
-                                    pub const STATX_MODE: c_uint = 0x0002;
-                                    pub const STATX_NLINK: c_uint = 0x0004;
-                                    pub const STATX_UID: c_uint = 0x0008;
-                                    pub const STATX_GID: c_uint = 0x0010;
-                                    pub const STATX_ATIME: c_uint = 0x0020;
-                                    pub const STATX_MTIME: c_uint = 0x0040;
-                                    pub const STATX_CTIME: c_uint = 0x0080;
-                                    pub const STATX_INO: c_uint = 0x0100;
-                                    pub const STATX_SIZE: c_uint = 0x0200;
-                                    pub const STATX_BLOCKS: c_uint = 0x0400;
-                                    pub const STATX_BASIC_STATS: c_uint = 0x07ff;
-                                    pub const STATX_BTIME: c_uint = 0x0800;
-                                    pub const STATX_ALL: c_uint = 0x0fff;
-                                    pub const STATX_MNT_ID: c_uint = 0x1000;
-                                    pub const STATX_DIOALIGN: c_uint = 0x2000;
-                                    pub const STATX__RESERVED: c_int = 0x80000000;
-                                    pub const STATX_ATTR_COMPRESSED: c_int = 0x0004;
-                                    pub const STATX_ATTR_IMMUTABLE: c_int = 0x0010;
-                                    pub const STATX_ATTR_APPEND: c_int = 0x0020;
-                                    pub const STATX_ATTR_NODUMP: c_int = 0x0040;
-                                    pub const STATX_ATTR_ENCRYPTED: c_int = 0x0800;
-                                    pub const STATX_ATTR_AUTOMOUNT: c_int = 0x1000;
-                                    pub const STATX_ATTR_MOUNT_ROOT: c_int = 0x2000;
-                                    pub const STATX_ATTR_VERITY: c_int = 0x100000;
-                                    pub const STATX_ATTR_DAX: c_int = 0x200000;
-                                }
-                            }
-
-                            // https://github.com/search?q=repo%3Atorvalds%2Flinux+%22%23define+_IOC_NONE%22&type=code
-                            cfg_if! {
-                                if #[cfg(not(target_os = "emscripten"))] {
-                                    const _IOC_NRBITS: u32 = 8;
-                                    const _IOC_TYPEBITS: u32 = 8;
-
-                                    cfg_if! {
-                                        if #[cfg(any(
-                                            any(target_arch = "powerpc", target_arch = "powerpc64"),
-                                            any(target_arch = "sparc", target_arch = "sparc64"),
-                                            any(target_arch = "mips", target_arch = "mips64"),
-                                        ))] {
-                                            // https://github.com/torvalds/linux/blob/b311c1b497e51a628aa89e7cb954481e5f9dced2/arch/powerpc/include/uapi/asm/ioctl.h
-                                            // https://github.com/torvalds/linux/blob/b311c1b497e51a628aa89e7cb954481e5f9dced2/arch/sparc/include/uapi/asm/ioctl.h
-                                            // https://github.com/torvalds/linux/blob/b311c1b497e51a628aa89e7cb954481e5f9dced2/arch/mips/include/uapi/asm/ioctl.h
-
-                                            const _IOC_SIZEBITS: u32 = 13;
-                                            const _IOC_DIRBITS: u32 = 3;
-
-                                            const _IOC_NONE: u32 = 1;
-                                            const _IOC_READ: u32 = 2;
-                                            const _IOC_WRITE: u32 = 4;
-                                        } else {
-                                            // https://github.com/torvalds/linux/blob/b311c1b497e51a628aa89e7cb954481e5f9dced2/include/uapi/asm-generic/ioctl.h
-
-                                            const _IOC_SIZEBITS: u32 = 14;
-                                            const _IOC_DIRBITS: u32 = 2;
-
-                                            const _IOC_NONE: u32 = 0;
-                                            const _IOC_WRITE: u32 = 1;
-                                            const _IOC_READ: u32 = 2;
-                                        }
-                                    }
-                                    const _IOC_NRMASK: u32 = (1 << _IOC_NRBITS) - 1;
-                                    const _IOC_TYPEMASK: u32 = (1 << _IOC_TYPEBITS) - 1;
-                                    const _IOC_SIZEMASK: u32 = (1 << _IOC_SIZEBITS) - 1;
-                                    const _IOC_DIRMASK: u32 = (1 << _IOC_DIRBITS) - 1;
-
-                                    const _IOC_NRSHIFT: u32 = 0;
-                                    const _IOC_TYPESHIFT: u32 = _IOC_NRSHIFT + _IOC_NRBITS;
-                                    const _IOC_SIZESHIFT: u32 = _IOC_TYPESHIFT + _IOC_TYPEBITS;
-                                    const _IOC_DIRSHIFT: u32 = _IOC_SIZESHIFT + _IOC_SIZEBITS;
-
-                                    // adapted from https://github.com/torvalds/linux/blob/8a696a29c6905594e4abf78eaafcb62165ac61f1/rust/kernel/ioctl.rs
-
-                                    /// Build an ioctl number, analogous to the C macro of the same name.
-                                    const fn _IOC(dir: u32, ty: u32, nr: u32, size: usize) -> Ioctl {
-                                        // FIXME(ctest) the `garando_syntax` crate (used by ctest in the CI test suite)
-                                        // cannot currently parse these `debug_assert!`s
-                                        //
-                                        // debug_assert!(dir <= _IOC_DIRMASK);
-                                        // debug_assert!(ty <= _IOC_TYPEMASK);
-                                        // debug_assert!(nr <= _IOC_NRMASK);
-                                        // debug_assert!(size <= (_IOC_SIZEMASK as usize));
-
-                                        ((dir << _IOC_DIRSHIFT)
-                                            | (ty << _IOC_TYPESHIFT)
-                                            | (nr << _IOC_NRSHIFT)
-                                            | ((size as u32) << _IOC_SIZESHIFT)) as Ioctl
-                                    }
-
-                                    /// Build an ioctl number for an argumentless ioctl.
-                                    pub const fn _IO(ty: u32, nr: u32) -> Ioctl {
-                                        _IOC(_IOC_NONE, ty, nr, 0)
-                                    }
-
-                                    /// Build an ioctl number for an read-only ioctl.
-                                    pub const fn _IOR<T>(ty: u32, nr: u32) -> Ioctl {
-                                        _IOC(_IOC_READ, ty, nr, mem::size_of::<T>())
-                                    }
-
-                                    /// Build an ioctl number for an write-only ioctl.
-                                    pub const fn _IOW<T>(ty: u32, nr: u32) -> Ioctl {
-                                        _IOC(_IOC_WRITE, ty, nr, mem::size_of::<T>())
-                                    }
-
-                                    /// Build an ioctl number for a read-write ioctl.
-                                    pub const fn _IOWR<T>(ty: u32, nr: u32) -> Ioctl {
-                                        _IOC(_IOC_READ | _IOC_WRITE, ty, nr, mem::size_of::<T>())
-                                    }
-
-                                    extern "C" {
-                                        #[cfg_attr(gnu_time_bits64, link_name = "__ioctl_time64")]
-                                        pub fn ioctl(fd: c_int, request: Ioctl, ...) -> c_int;
-                                    }
-                                }
-                            }
-
-                            const_fn! {
-                                {const} fn CMSG_ALIGN(len: usize) -> usize {
-                                    (len + mem::size_of::<usize>() - 1) & !(mem::size_of::<usize>() - 1)
-                                }
-                            }
-
-                            f! {
-                                pub fn CMSG_FIRSTHDR(mhdr: *const msghdr) -> *mut cmsghdr {
-                                    if (*mhdr).msg_controllen as usize >= mem::size_of::<cmsghdr>() {
-                                        (*mhdr).msg_control.cast::<cmsghdr>()
-                                    } else {
-                                        core::ptr::null_mut::<cmsghdr>()
-                                    }
-                                }
-
-                                pub fn CMSG_DATA(cmsg: *const cmsghdr) -> *mut c_uchar {
-                                    cmsg.offset(1) as *mut c_uchar
-                                }
-
-                                pub {const} fn CMSG_SPACE(length: c_uint) -> c_uint {
-                                    (CMSG_ALIGN(length as usize) + CMSG_ALIGN(mem::size_of::<cmsghdr>())) as c_uint
-                                }
-
-                                pub {const} fn CMSG_LEN(length: c_uint) -> c_uint {
-                                    CMSG_ALIGN(mem::size_of::<cmsghdr>()) as c_uint + length
-                                }
-
-                                pub fn FD_CLR(fd: c_int, set: *mut fd_set) -> () {
-                                    let fd = fd as usize;
-                                    let size = mem::size_of_val(&(*set).fds_bits[0]) * 8;
-                                    (*set).fds_bits[fd / size] &= !(1 << (fd % size));
-                                    return;
-                                }
-
-                                pub fn FD_ISSET(fd: c_int, set: *const fd_set) -> bool {
-                                    let fd = fd as usize;
-                                    let size = mem::size_of_val(&(*set).fds_bits[0]) * 8;
-                                    return ((*set).fds_bits[fd / size] & (1 << (fd % size))) != 0;
-                                }
-
-                                pub fn FD_SET(fd: c_int, set: *mut fd_set) -> () {
-                                    let fd = fd as usize;
-                                    let size = mem::size_of_val(&(*set).fds_bits[0]) * 8;
-                                    (*set).fds_bits[fd / size] |= 1 << (fd % size);
-                                    return;
-                                }
-
-                                pub fn FD_ZERO(set: *mut fd_set) -> () {
-                                    for slot in &mut (*set).fds_bits {
-                                        *slot = 0;
-                                    }
-                                }
-                            }
-
-                            safe_f! {
-                                pub fn SIGRTMAX() -> c_int {
-                                    unsafe { __libc_current_sigrtmax() }
-                                }
-
-                                pub fn SIGRTMIN() -> c_int {
-                                    unsafe { __libc_current_sigrtmin() }
-                                }
-
-                                pub {const} fn WIFSTOPPED(status: c_int) -> bool {
-                                    (status & 0xff) == 0x7f
-                                }
-
-                                pub {const} fn WSTOPSIG(status: c_int) -> c_int {
-                                    (status >> 8) & 0xff
-                                }
-
-                                pub {const} fn WIFCONTINUED(status: c_int) -> bool {
-                                    status == 0xffff
-                                }
-
-                                pub {const} fn WIFSIGNALED(status: c_int) -> bool {
-                                    ((status & 0x7f) + 1) as i8 >= 2
-                                }
-
-                                pub {const} fn WTERMSIG(status: c_int) -> c_int {
-                                    status & 0x7f
-                                }
-
-                                pub {const} fn WIFEXITED(status: c_int) -> bool {
-                                    (status & 0x7f) == 0
-                                }
-
-                                pub {const} fn WEXITSTATUS(status: c_int) -> c_int {
-                                    (status >> 8) & 0xff
-                                }
-
-                                pub {const} fn WCOREDUMP(status: c_int) -> bool {
-                                    (status & 0x80) != 0
-                                }
-
-                                pub {const} fn W_EXITCODE(ret: c_int, sig: c_int) -> c_int {
-                                    (ret << 8) | sig
-                                }
-
-                                pub {const} fn W_STOPCODE(sig: c_int) -> c_int {
-                                    (sig << 8) | 0x7f
-                                }
-
-                                pub {const} fn QCMD(cmd: c_int, type_: c_int) -> c_int {
-                                    (cmd << 8) | (type_ & 0x00ff)
-                                }
-
-                                pub {const} fn IPOPT_COPIED(o: u8) -> u8 {
-                                    o & IPOPT_COPY
-                                }
-
-                                pub {const} fn IPOPT_CLASS(o: u8) -> u8 {
-                                    o & IPOPT_CLASS_MASK
-                                }
-
-                                pub {const} fn IPOPT_NUMBER(o: u8) -> u8 {
-                                    o & IPOPT_NUMBER_MASK
-                                }
-
-                                pub {const} fn IPTOS_ECN(x: u8) -> u8 {
-                                    x & crate::IPTOS_ECN_MASK
-                                }
-
-                                #[allow(ellipsis_inclusive_range_patterns)]
-                                pub {const} fn KERNEL_VERSION(a: u32, b: u32, c: u32) -> u32 {
-                                    ((a << 16) + (b << 8)) + if c > 255 { 255 } else { c }
-                                }
-                            }
-
-                            extern "C" {
-                                #[doc(hidden)]
-                                pub fn __libc_current_sigrtmax() -> c_int;
-                                #[doc(hidden)]
-                                pub fn __libc_current_sigrtmin() -> c_int;
-
-                                pub fn sem_destroy(sem: *mut sem_t) -> c_int;
-                                pub fn sem_init(sem: *mut sem_t, pshared: c_int, value: c_uint) -> c_int;
-                                pub fn fdatasync(fd: c_int) -> c_int;
-                                pub fn mincore(addr: *mut c_void, len: size_t, vec: *mut c_uchar) -> c_int;
-
-                                #[cfg_attr(gnu_time_bits64, link_name = "__clock_getres64")]
-                                pub fn clock_getres(clk_id: crate::clockid_t, tp: *mut crate::timespec) -> c_int;
-                                #[cfg_attr(gnu_time_bits64, link_name = "__clock_gettime64")]
-                                pub fn clock_gettime(clk_id: crate::clockid_t, tp: *mut crate::timespec) -> c_int;
-                                #[cfg_attr(gnu_time_bits64, link_name = "__clock_settime64")]
-                                pub fn clock_settime(clk_id: crate::clockid_t, tp: *const crate::timespec) -> c_int;
-                                pub fn clock_getcpuclockid(pid: crate::pid_t, clk_id: *mut crate::clockid_t) -> c_int;
-
-                                pub fn dirfd(dirp: *mut crate::DIR) -> c_int;
-
-                                pub fn pthread_getattr_np(native: crate::pthread_t, attr: *mut crate::pthread_attr_t) -> c_int;
-                                pub fn pthread_attr_getstack(
-                                    attr: *const crate::pthread_attr_t,
-                                    stackaddr: *mut *mut c_void,
-                                    stacksize: *mut size_t,
-                                ) -> c_int;
-                                pub fn pthread_attr_setstack(
-                                    attr: *mut crate::pthread_attr_t,
-                                    stackaddr: *mut c_void,
-                                    stacksize: size_t,
-                                ) -> c_int;
-                                pub fn memalign(align: size_t, size: size_t) -> *mut c_void;
-                                pub fn setgroups(ngroups: size_t, ptr: *const crate::gid_t) -> c_int;
-                                pub fn pipe2(fds: *mut c_int, flags: c_int) -> c_int;
-                                #[cfg_attr(gnu_file_offset_bits64, link_name = "statfs64")]
-                                pub fn statfs(path: *const c_char, buf: *mut statfs) -> c_int;
-                                #[cfg_attr(gnu_file_offset_bits64, link_name = "fstatfs64")]
-                                pub fn fstatfs(fd: c_int, buf: *mut statfs) -> c_int;
-                                pub fn memrchr(cx: *const c_void, c: c_int, n: size_t) -> *mut c_void;
-                                #[cfg_attr(gnu_file_offset_bits64, link_name = "posix_fadvise64")]
-                                pub fn posix_fadvise(fd: c_int, offset: off_t, len: off_t, advise: c_int) -> c_int;
-                                #[cfg_attr(gnu_time_bits64, link_name = "__futimens64")]
-                                pub fn futimens(fd: c_int, times: *const crate::timespec) -> c_int;
-                                #[cfg_attr(gnu_time_bits64, link_name = "__utimensat64")]
-                                pub fn utimensat(
-                                    dirfd: c_int,
-                                    path: *const c_char,
-                                    times: *const crate::timespec,
-                                    flag: c_int,
-                                ) -> c_int;
-                                pub fn duplocale(base: crate::locale_t) -> crate::locale_t;
-                                pub fn freelocale(loc: crate::locale_t);
-                                pub fn newlocale(mask: c_int, locale: *const c_char, base: crate::locale_t) -> crate::locale_t;
-                                pub fn uselocale(loc: crate::locale_t) -> crate::locale_t;
-                                pub fn mknodat(dirfd: c_int, pathname: *const c_char, mode: mode_t, dev: dev_t) -> c_int;
-                                pub fn pthread_condattr_getclock(
-                                    attr: *const pthread_condattr_t,
-                                    clock_id: *mut clockid_t,
-                                ) -> c_int;
-                                pub fn pthread_condattr_setclock(
-                                    attr: *mut pthread_condattr_t,
-                                    clock_id: crate::clockid_t,
-                                ) -> c_int;
-                                pub fn pthread_condattr_setpshared(attr: *mut pthread_condattr_t, pshared: c_int) -> c_int;
-                                pub fn pthread_mutexattr_setpshared(attr: *mut pthread_mutexattr_t, pshared: c_int) -> c_int;
-                                pub fn pthread_rwlockattr_getpshared(
-                                    attr: *const pthread_rwlockattr_t,
-                                    val: *mut c_int,
-                                ) -> c_int;
-                                pub fn pthread_rwlockattr_setpshared(attr: *mut pthread_rwlockattr_t, val: c_int) -> c_int;
-                                pub fn ptsname_r(fd: c_int, buf: *mut c_char, buflen: size_t) -> c_int;
-                                pub fn clearenv() -> c_int;
-                                pub fn waitid(
-                                    idtype: idtype_t,
-                                    id: id_t,
-                                    infop: *mut crate::siginfo_t,
-                                    options: c_int,
-                                ) -> c_int;
-                                pub fn getresuid(
-                                    ruid: *mut crate::uid_t,
-                                    euid: *mut crate::uid_t,
-                                    suid: *mut crate::uid_t,
-                                ) -> c_int;
-                                pub fn getresgid(
-                                    rgid: *mut crate::gid_t,
-                                    egid: *mut crate::gid_t,
-                                    sgid: *mut crate::gid_t,
-                                ) -> c_int;
-                                pub fn acct(filename: *const c_char) -> c_int;
-                                pub fn brk(addr: *mut c_void) -> c_int;
-                                pub fn sbrk(increment: intptr_t) -> *mut c_void;
-                                pub fn setresgid(rgid: crate::gid_t, egid: crate::gid_t, sgid: crate::gid_t) -> c_int;
-                                pub fn setresuid(ruid: crate::uid_t, euid: crate::uid_t, suid: crate::uid_t) -> c_int;
-                                #[cfg_attr(gnu_time_bits64, link_name = "__wait4_time64")]
-                                pub fn wait4(
-                                    pid: crate::pid_t,
-                                    status: *mut c_int,
-                                    options: c_int,
-                                    rusage: *mut crate::rusage,
-                                ) -> crate::pid_t;
-                                pub fn login_tty(fd: c_int) -> c_int;
-                                pub fn execvpe(
-                                    file: *const c_char,
-                                    argv: *const *mut c_char,
-                                    envp: *const *mut c_char,
-                                ) -> c_int;
-                                pub fn fexecve(fd: c_int, argv: *const *mut c_char, envp: *const *mut c_char) -> c_int;
-                                pub fn getifaddrs(ifap: *mut *mut crate::ifaddrs) -> c_int;
-                                pub fn freeifaddrs(ifa: *mut crate::ifaddrs);
-                                pub fn bind(
-                                    socket: c_int,
-                                    address: *const crate::sockaddr,
-                                    address_len: crate::socklen_t,
-                                ) -> c_int;
-
-                                pub fn writev(fd: c_int, iov: *const crate::iovec, iovcnt: c_int) -> ssize_t;
-                                pub fn readv(fd: c_int, iov: *const crate::iovec, iovcnt: c_int) -> ssize_t;
-
-                                #[cfg_attr(gnu_time_bits64, link_name = "__sendmsg64")]
-                                pub fn sendmsg(fd: c_int, msg: *const crate::msghdr, flags: c_int) -> ssize_t;
-                                #[cfg_attr(gnu_time_bits64, link_name = "__recvmsg64")]
-                                pub fn recvmsg(fd: c_int, msg: *mut crate::msghdr, flags: c_int) -> ssize_t;
-                                pub fn uname(buf: *mut crate::utsname) -> c_int;
-
-                                pub fn strchrnul(s: *const c_char, c: c_int) -> *mut c_char;
-
-                                pub fn strftime(
-                                    s: *mut c_char,
-                                    max: size_t,
-                                    format: *const c_char,
-                                    tm: *const crate::tm,
-                                ) -> size_t;
-                                pub fn strftime_l(
-                                    s: *mut c_char,
-                                    max: size_t,
-                                    format: *const c_char,
-                                    tm: *const crate::tm,
-                                    locale: crate::locale_t,
-                                ) -> size_t;
-                                pub fn strptime(s: *const c_char, format: *const c_char, tm: *mut crate::tm) -> *mut c_char;
-
-                                #[cfg_attr(gnu_file_offset_bits64, link_name = "mkostemp64")]
-                                pub fn mkostemp(template: *mut c_char, flags: c_int) -> c_int;
-                                #[cfg_attr(gnu_file_offset_bits64, link_name = "mkostemps64")]
-                                pub fn mkostemps(template: *mut c_char, suffixlen: c_int, flags: c_int) -> c_int;
-
-                                pub fn getdomainname(name: *mut c_char, len: size_t) -> c_int;
-                                pub fn setdomainname(name: *const c_char, len: size_t) -> c_int;
-                            }
-
-                            // LFS64 extensions
-                            //
-                            // * musl and Emscripten has 64-bit versions only so aliases the LFS64 symbols to the standard ones
-                            // * ulibc doesn't have preadv64/pwritev64
-                            cfg_if! {
-                                if #[cfg(not(any(target_env = "musl", target_os = "emscripten")))] {
-                                    extern "C" {
-                                        pub fn fstatfs64(fd: c_int, buf: *mut statfs64) -> c_int;
-                                        pub fn statvfs64(path: *const c_char, buf: *mut statvfs64) -> c_int;
-                                        pub fn fstatvfs64(fd: c_int, buf: *mut statvfs64) -> c_int;
-                                        pub fn statfs64(path: *const c_char, buf: *mut statfs64) -> c_int;
-                                        pub fn creat64(path: *const c_char, mode: mode_t) -> c_int;
-                                        #[cfg_attr(gnu_time_bits64, link_name = "__fstat64_time64")]
-                                        pub fn fstat64(fildes: c_int, buf: *mut stat64) -> c_int;
-                                        #[cfg_attr(gnu_time_bits64, link_name = "__fstatat64_time64")]
-                                        pub fn fstatat64(
-                                            dirfd: c_int,
-                                            pathname: *const c_char,
-                                            buf: *mut stat64,
-                                            flags: c_int,
-                                        ) -> c_int;
-                                        pub fn ftruncate64(fd: c_int, length: off64_t) -> c_int;
-                                        pub fn lseek64(fd: c_int, offset: off64_t, whence: c_int) -> off64_t;
-                                        #[cfg_attr(gnu_time_bits64, link_name = "__lstat64_time64")]
-                                        pub fn lstat64(path: *const c_char, buf: *mut stat64) -> c_int;
-                                        pub fn mmap64(
-                                            addr: *mut c_void,
-                                            len: size_t,
-                                            prot: c_int,
-                                            flags: c_int,
-                                            fd: c_int,
-                                            offset: off64_t,
-                                        ) -> *mut c_void;
-                                        pub fn open64(path: *const c_char, oflag: c_int, ...) -> c_int;
-                                        pub fn openat64(fd: c_int, path: *const c_char, oflag: c_int, ...) -> c_int;
-                                        pub fn posix_fadvise64(
-                                            fd: c_int,
-                                            offset: off64_t,
-                                            len: off64_t,
-                                            advise: c_int,
-                                        ) -> c_int;
-                                        pub fn pread64(fd: c_int, buf: *mut c_void, count: size_t, offset: off64_t) -> ssize_t;
-                                        pub fn pwrite64(
-                                            fd: c_int,
-                                            buf: *const c_void,
-                                            count: size_t,
-                                            offset: off64_t,
-                                        ) -> ssize_t;
-                                        pub fn readdir64(dirp: *mut crate::DIR) -> *mut crate::dirent64;
-                                        pub fn readdir64_r(
-                                            dirp: *mut crate::DIR,
-                                            entry: *mut crate::dirent64,
-                                            result: *mut *mut crate::dirent64,
-                                        ) -> c_int;
-                                        #[cfg_attr(gnu_time_bits64, link_name = "__stat64_time64")]
-                                        pub fn stat64(path: *const c_char, buf: *mut stat64) -> c_int;
-                                        pub fn truncate64(path: *const c_char, length: off64_t) -> c_int;
-                                    }
-                                }
-                            }
-
-                            cfg_if! {
-                                if #[cfg(not(any(
-                                    target_env = "uclibc",
-                                    target_env = "musl",
-                                    target_os = "emscripten"
-                                )))] {
-                                    extern "C" {
-                                        pub fn preadv64(
-                                            fd: c_int,
-                                            iov: *const crate::iovec,
-                                            iovcnt: c_int,
-                                            offset: off64_t,
-                                        ) -> ssize_t;
-                                        pub fn pwritev64(
-                                            fd: c_int,
-                                            iov: *const crate::iovec,
-                                            iovcnt: c_int,
-                                            offset: off64_t,
-                                        ) -> ssize_t;
-                                    }
-                                }
-                            }
-
-                            cfg_if! {
-                                if #[cfg(not(target_env = "uclibc"))] {
-                                    extern "C" {
-                                        // uclibc has separate non-const version of this function
-                                        pub fn forkpty(
-                                            amaster: *mut c_int,
-                                            name: *mut c_char,
-                                            termp: *const termios,
-                                            winp: *const crate::winsize,
-                                        ) -> crate::pid_t;
-                                        // uclibc has separate non-const version of this function
-                                        pub fn openpty(
-                                            amaster: *mut c_int,
-                                            aslave: *mut c_int,
-                                            name: *mut c_char,
-                                            termp: *const termios,
-                                            winp: *const crate::winsize,
-                                        ) -> c_int;
-                                    }
-                                }
-                            }
-
-                            // The statx syscall, available on some libcs.
-                            cfg_if! {
-                                if #[cfg(any(target_env = "gnu", target_os = "android"))] {
-                                    extern "C" {
-                                        pub fn statx(
-                                            dirfd: c_int,
-                                            pathname: *const c_char,
-                                            flags: c_int,
-                                            mask: c_uint,
-                                            statxbuf: *mut statx,
-                                        ) -> c_int;
-                                    }
-                                }
-                            }
-
-                            mod linux
-                            {
-                                //! Linux-specific definitions for linux-like values
-                                use ::
-                                {
-                                    *
-                                };
-                                
-                                use ::mem::size_of;
-
-                                use libc::prelude::*;
-                                use libc::{sock_filter, _IO, _IOR, _IOW, _IOWR};
-
-                                pub type useconds_t = u32;
-                                pub type dev_t = u64;
-                                pub type socklen_t = u32;
-                                pub type mode_t = u32;
-                                pub type ino64_t = u64;
-                                pub type off64_t = i64;
-                                pub type blkcnt64_t = i64;
-                                pub type rlim64_t = u64;
-                                pub type mqd_t = c_int;
-                                pub type nfds_t = c_ulong;
-                                pub type nl_item = c_int;
-                                pub type idtype_t = c_uint;
-                                pub type loff_t = c_longlong;
-                                pub type pthread_key_t = c_uint;
-                                pub type pthread_once_t = c_int;
-                                pub type pthread_spinlock_t = c_int;
-                                pub type __kernel_fsid_t = __c_anonymous__kernel_fsid_t;
-                                pub type __kernel_clockid_t = c_int;
-
-                                pub type __u8 = c_uchar;
-                                pub type __u16 = c_ushort;
-                                pub type __s16 = c_short;
-                                pub type __u32 = c_uint;
-                                pub type __s32 = c_int;
-
-                                pub type Elf32_Half = u16;
-                                pub type Elf32_Word = u32;
-                                pub type Elf32_Off = u32;
-                                pub type Elf32_Addr = u32;
-                                pub type Elf32_Xword = u64;
-                                pub type Elf32_Sword = i32;
-
-                                pub type Elf64_Half = u16;
-                                pub type Elf64_Word = u32;
-                                pub type Elf64_Off = u64;
-                                pub type Elf64_Addr = u64;
-                                pub type Elf64_Xword = u64;
-                                pub type Elf64_Sxword = i64;
-                                pub type Elf64_Sword = i32;
-
-                                pub type Elf32_Section = u16;
-                                pub type Elf64_Section = u16;
-
-                                pub type Elf32_Relr = Elf32_Word;
-                                pub type Elf64_Relr = Elf32_Xword;
-                                pub type Elf32_Rel = __c_anonymous_elf32_rel;
-                                pub type Elf64_Rel = __c_anonymous_elf64_rel;
-
-                                cfg_if! {
-                                    if #[cfg(not(target_arch = "sparc64"))] {
-                                        pub type Elf32_Rela = __c_anonymous_elf32_rela;
-                                        pub type Elf64_Rela = __c_anonymous_elf64_rela;
-                                    }
-                                }
-
-                                // linux/can.h
-                                pub type canid_t = u32;
-
-                                // linux/can/j1939.h
-                                pub type can_err_mask_t = u32;
-                                pub type pgn_t = u32;
-                                pub type priority_t = u8;
-                                pub type name_t = u64;
-
-                                pub type iconv_t = *mut c_void;
-
-                                // linux/sctp.h
-                                pub type sctp_assoc_t = __s32;
-
-                                pub type eventfd_t = u64;
-
-                                cfg_if! {
-                                    if #[cfg(not(target_env = "gnu"))] {
-                                        missing! {
-                                            #[cfg_attr(feature = "extra_traits", derive(Debug))]
-                                            pub enum fpos64_t {} // FIXME(linux): fill this out with a struct
-                                        }
-                                    }
-                                }
-
-                                c_enum! {
-                                    enum tpacket_versions {
-                                        TPACKET_V1,
-                                        TPACKET_V2,
-                                        TPACKET_V3,
-                                    }
-                                }
-
-                                c_enum! {
-                                    enum pid_type {
-                                        PIDTYPE_PID,
-                                        PIDTYPE_TGID,
-                                        PIDTYPE_PGID,
-                                        PIDTYPE_SID,
-                                        PIDTYPE_MAX,
-                                    }
-                                }
-
-                                s! {
-                                    pub struct glob_t {
-                                        pub gl_pathc: size_t,
-                                        pub gl_pathv: *mut *mut c_char,
-                                        pub gl_offs: size_t,
-                                        pub gl_flags: c_int,
-
-                                        __unused1: *mut c_void,
-                                        __unused2: *mut c_void,
-                                        __unused3: *mut c_void,
-                                        __unused4: *mut c_void,
-                                        __unused5: *mut c_void,
-                                    }
-
-                                    pub struct passwd {
-                                        pub pw_name: *mut c_char,
-                                        pub pw_passwd: *mut c_char,
-                                        pub pw_uid: crate::uid_t,
-                                        pub pw_gid: crate::gid_t,
-                                        pub pw_gecos: *mut c_char,
-                                        pub pw_dir: *mut c_char,
-                                        pub pw_shell: *mut c_char,
-                                    }
-
-                                    pub struct spwd {
-                                        pub sp_namp: *mut c_char,
-                                        pub sp_pwdp: *mut c_char,
-                                        pub sp_lstchg: c_long,
-                                        pub sp_min: c_long,
-                                        pub sp_max: c_long,
-                                        pub sp_warn: c_long,
-                                        pub sp_inact: c_long,
-                                        pub sp_expire: c_long,
-                                        pub sp_flag: c_ulong,
-                                    }
-
-                                    pub struct dqblk {
-                                        pub dqb_bhardlimit: u64,
-                                        pub dqb_bsoftlimit: u64,
-                                        pub dqb_curspace: u64,
-                                        pub dqb_ihardlimit: u64,
-                                        pub dqb_isoftlimit: u64,
-                                        pub dqb_curinodes: u64,
-                                        pub dqb_btime: u64,
-                                        pub dqb_itime: u64,
-                                        pub dqb_valid: u32,
-                                    }
-
-                                    pub struct signalfd_siginfo {
-                                        pub ssi_signo: u32,
-                                        pub ssi_errno: i32,
-                                        pub ssi_code: i32,
-                                        pub ssi_pid: u32,
-                                        pub ssi_uid: u32,
-                                        pub ssi_fd: i32,
-                                        pub ssi_tid: u32,
-                                        pub ssi_band: u32,
-                                        pub ssi_overrun: u32,
-                                        pub ssi_trapno: u32,
-                                        pub ssi_status: i32,
-                                        pub ssi_int: i32,
-                                        pub ssi_ptr: u64,
-                                        pub ssi_utime: u64,
-                                        pub ssi_stime: u64,
-                                        pub ssi_addr: u64,
-                                        pub ssi_addr_lsb: u16,
-                                        _pad2: u16,
-                                        pub ssi_syscall: i32,
-                                        pub ssi_call_addr: u64,
-                                        pub ssi_arch: u32,
-                                        _pad: [u8; 28],
-                                    }
-
-                                    pub struct itimerspec {
-                                        pub it_interval: crate::timespec,
-                                        pub it_value: crate::timespec,
-                                    }
-
-                                    pub struct fsid_t {
-                                        __val: [c_int; 2],
-                                    }
-
-                                    pub struct fanout_args {
-                                        #[cfg(target_endian = "little")]
-                                        pub id: __u16,
-                                        pub type_flags: __u16,
-                                        #[cfg(target_endian = "big")]
-                                        pub id: __u16,
-                                        pub max_num_members: __u32,
-                                    }
-
-                                    pub struct packet_mreq {
-                                        pub mr_ifindex: c_int,
-                                        pub mr_type: c_ushort,
-                                        pub mr_alen: c_ushort,
-                                        pub mr_address: [c_uchar; 8],
-                                    }
-
-                                    #[deprecated(since = "0.2.70", note = "sockaddr_ll type must be used instead")]
-                                    pub struct sockaddr_pkt {
-                                        pub spkt_family: c_ushort,
-                                        pub spkt_device: [c_uchar; 14],
-                                        pub spkt_protocol: c_ushort,
-                                    }
-
-                                    pub struct tpacket_auxdata {
-                                        pub tp_status: __u32,
-                                        pub tp_len: __u32,
-                                        pub tp_snaplen: __u32,
-                                        pub tp_mac: __u16,
-                                        pub tp_net: __u16,
-                                        pub tp_vlan_tci: __u16,
-                                        pub tp_vlan_tpid: __u16,
-                                    }
-
-                                    pub struct tpacket_hdr {
-                                        pub tp_status: c_ulong,
-                                        pub tp_len: c_uint,
-                                        pub tp_snaplen: c_uint,
-                                        pub tp_mac: c_ushort,
-                                        pub tp_net: c_ushort,
-                                        pub tp_sec: c_uint,
-                                        pub tp_usec: c_uint,
-                                    }
-
-                                    pub struct tpacket_hdr_variant1 {
-                                        pub tp_rxhash: __u32,
-                                        pub tp_vlan_tci: __u32,
-                                        pub tp_vlan_tpid: __u16,
-                                        pub tp_padding: __u16,
-                                    }
-
-                                    pub struct tpacket2_hdr {
-                                        pub tp_status: __u32,
-                                        pub tp_len: __u32,
-                                        pub tp_snaplen: __u32,
-                                        pub tp_mac: __u16,
-                                        pub tp_net: __u16,
-                                        pub tp_sec: __u32,
-                                        pub tp_nsec: __u32,
-                                        pub tp_vlan_tci: __u16,
-                                        pub tp_vlan_tpid: __u16,
-                                        pub tp_padding: [__u8; 4],
-                                    }
-
-                                    pub struct tpacket_req {
-                                        pub tp_block_size: c_uint,
-                                        pub tp_block_nr: c_uint,
-                                        pub tp_frame_size: c_uint,
-                                        pub tp_frame_nr: c_uint,
-                                    }
-
-                                    pub struct tpacket_req3 {
-                                        pub tp_block_size: c_uint,
-                                        pub tp_block_nr: c_uint,
-                                        pub tp_frame_size: c_uint,
-                                        pub tp_frame_nr: c_uint,
-                                        pub tp_retire_blk_tov: c_uint,
-                                        pub tp_sizeof_priv: c_uint,
-                                        pub tp_feature_req_word: c_uint,
-                                    }
-
-                                    #[repr(align(8))]
-                                    pub struct tpacket_rollover_stats {
-                                        pub tp_all: crate::__u64,
-                                        pub tp_huge: crate::__u64,
-                                        pub tp_failed: crate::__u64,
-                                    }
-
-                                    pub struct tpacket_stats {
-                                        pub tp_packets: c_uint,
-                                        pub tp_drops: c_uint,
-                                    }
-
-                                    pub struct tpacket_stats_v3 {
-                                        pub tp_packets: c_uint,
-                                        pub tp_drops: c_uint,
-                                        pub tp_freeze_q_cnt: c_uint,
-                                    }
-
-                                    pub struct tpacket3_hdr {
-                                        pub tp_next_offset: __u32,
-                                        pub tp_sec: __u32,
-                                        pub tp_nsec: __u32,
-                                        pub tp_snaplen: __u32,
-                                        pub tp_len: __u32,
-                                        pub tp_status: __u32,
-                                        pub tp_mac: __u16,
-                                        pub tp_net: __u16,
-                                        pub hv1: crate::tpacket_hdr_variant1,
-                                        pub tp_padding: [__u8; 8],
-                                    }
-
-                                    pub struct tpacket_bd_ts {
-                                        pub ts_sec: c_uint,
-                                        pub ts_usec: c_uint,
-                                    }
-
-                                    #[repr(align(8))]
-                                    pub struct tpacket_hdr_v1 {
-                                        pub block_status: __u32,
-                                        pub num_pkts: __u32,
-                                        pub offset_to_first_pkt: __u32,
-                                        pub blk_len: __u32,
-                                        pub seq_num: crate::__u64,
-                                        pub ts_first_pkt: crate::tpacket_bd_ts,
-                                        pub ts_last_pkt: crate::tpacket_bd_ts,
-                                    }
-
-                                    pub struct cpu_set_t {
-                                        #[cfg(all(target_pointer_width = "32", not(target_arch = "x86_64")))]
-                                        bits: [u32; 32],
-                                        #[cfg(not(all(target_pointer_width = "32", not(target_arch = "x86_64"))))]
-                                        bits: [u64; 16],
-                                    }
-
-                                    pub struct if_nameindex {
-                                        pub if_index: c_uint,
-                                        pub if_name: *mut c_char,
-                                    }
-
-                                    // System V IPC
-                                    pub struct msginfo {
-                                        pub msgpool: c_int,
-                                        pub msgmap: c_int,
-                                        pub msgmax: c_int,
-                                        pub msgmnb: c_int,
-                                        pub msgmni: c_int,
-                                        pub msgssz: c_int,
-                                        pub msgtql: c_int,
-                                        pub msgseg: c_ushort,
-                                    }
-
-                                    pub struct sembuf {
-                                        pub sem_num: c_ushort,
-                                        pub sem_op: c_short,
-                                        pub sem_flg: c_short,
-                                    }
-
-                                    pub struct input_event {
-                                        // FIXME(1.0): Change to the commented variant, see https://github.com/rust-lang/libc/pull/4148#discussion_r1857511742
-                                        #[cfg(any(target_pointer_width = "64", not(linux_time_bits64)))]
-                                        pub time: crate::timeval,
-                                        // #[cfg(any(target_pointer_width = "64", not(linux_time_bits64)))]
-                                        // pub input_event_sec: time_t,
-                                        // #[cfg(any(target_pointer_width = "64", not(linux_time_bits64)))]
-                                        // pub input_event_usec: suseconds_t,
-                                        // #[cfg(target_arch = "sparc64")]
-                                        // _pad1: c_int,
-                                        #[cfg(all(target_pointer_width = "32", linux_time_bits64))]
-                                        pub input_event_sec: c_ulong,
-
-                                        #[cfg(all(target_pointer_width = "32", linux_time_bits64))]
-                                        pub input_event_usec: c_ulong,
-
-                                        pub type_: __u16,
-                                        pub code: __u16,
-                                        pub value: __s32,
-                                    }
-
-                                    pub struct input_id {
-                                        pub bustype: __u16,
-                                        pub vendor: __u16,
-                                        pub product: __u16,
-                                        pub version: __u16,
-                                    }
-
-                                    pub struct input_absinfo {
-                                        pub value: __s32,
-                                        pub minimum: __s32,
-                                        pub maximum: __s32,
-                                        pub fuzz: __s32,
-                                        pub flat: __s32,
-                                        pub resolution: __s32,
-                                    }
-
-                                    pub struct input_keymap_entry {
-                                        pub flags: __u8,
-                                        pub len: __u8,
-                                        pub index: __u16,
-                                        pub keycode: __u32,
-                                        pub scancode: [__u8; 32],
-                                    }
-
-                                    pub struct input_mask {
-                                        pub type_: __u32,
-                                        pub codes_size: __u32,
-                                        pub codes_ptr: crate::__u64,
-                                    }
-
-                                    pub struct ff_replay {
-                                        pub length: __u16,
-                                        pub delay: __u16,
-                                    }
-
-                                    pub struct ff_trigger {
-                                        pub button: __u16,
-                                        pub interval: __u16,
-                                    }
-
-                                    pub struct ff_envelope {
-                                        pub attack_length: __u16,
-                                        pub attack_level: __u16,
-                                        pub fade_length: __u16,
-                                        pub fade_level: __u16,
-                                    }
-
-                                    pub struct ff_constant_effect {
-                                        pub level: __s16,
-                                        pub envelope: ff_envelope,
-                                    }
-
-                                    pub struct ff_ramp_effect {
-                                        pub start_level: __s16,
-                                        pub end_level: __s16,
-                                        pub envelope: ff_envelope,
-                                    }
-
-                                    pub struct ff_condition_effect {
-                                        pub right_saturation: __u16,
-                                        pub left_saturation: __u16,
-
-                                        pub right_coeff: __s16,
-                                        pub left_coeff: __s16,
-
-                                        pub deadband: __u16,
-                                        pub center: __s16,
-                                    }
-
-                                    pub struct ff_periodic_effect {
-                                        pub waveform: __u16,
-                                        pub period: __u16,
-                                        pub magnitude: __s16,
-                                        pub offset: __s16,
-                                        pub phase: __u16,
-
-                                        pub envelope: ff_envelope,
-
-                                        pub custom_len: __u32,
-                                        pub custom_data: *mut __s16,
-                                    }
-
-                                    pub struct ff_rumble_effect {
-                                        pub strong_magnitude: __u16,
-                                        pub weak_magnitude: __u16,
-                                    }
-
-                                    pub struct ff_effect {
-                                        pub type_: __u16,
-                                        pub id: __s16,
-                                        pub direction: __u16,
-                                        pub trigger: ff_trigger,
-                                        pub replay: ff_replay,
-                                        // FIXME(1.0): this is actually a union
-                                        #[cfg(target_pointer_width = "64")]
-                                        pub u: [u64; 4],
-                                        #[cfg(target_pointer_width = "32")]
-                                        pub u: [u32; 7],
-                                    }
-
-                                    pub struct uinput_ff_upload {
-                                        pub request_id: __u32,
-                                        pub retval: __s32,
-                                        pub effect: ff_effect,
-                                        pub old: ff_effect,
-                                    }
-
-                                    pub struct uinput_ff_erase {
-                                        pub request_id: __u32,
-                                        pub retval: __s32,
-                                        pub effect_id: __u32,
-                                    }
-
-                                    pub struct uinput_abs_setup {
-                                        pub code: __u16,
-                                        pub absinfo: input_absinfo,
-                                    }
-
-                                    pub struct dl_phdr_info {
-                                        #[cfg(target_pointer_width = "64")]
-                                        pub dlpi_addr: Elf64_Addr,
-                                        #[cfg(target_pointer_width = "32")]
-                                        pub dlpi_addr: Elf32_Addr,
-
-                                        pub dlpi_name: *const c_char,
-
-                                        #[cfg(target_pointer_width = "64")]
-                                        pub dlpi_phdr: *const Elf64_Phdr,
-                                        #[cfg(target_pointer_width = "32")]
-                                        pub dlpi_phdr: *const Elf32_Phdr,
-
-                                        #[cfg(target_pointer_width = "64")]
-                                        pub dlpi_phnum: Elf64_Half,
-                                        #[cfg(target_pointer_width = "32")]
-                                        pub dlpi_phnum: Elf32_Half,
-
-                                        // As of uClibc 1.0.36, the following fields are
-                                        // gated behind a "#if 0" block which always evaluates
-                                        // to false. So I'm just removing these, and if uClibc changes
-                                        // the #if block in the future to include the following fields, these
-                                        // will probably need including here. tsidea, skrap
-                                        // QNX (NTO) platform does not define these fields
-                                        #[cfg(not(any(target_env = "uclibc", target_os = "nto")))]
-                                        pub dlpi_adds: c_ulonglong,
-                                        #[cfg(not(any(target_env = "uclibc", target_os = "nto")))]
-                                        pub dlpi_subs: c_ulonglong,
-                                        #[cfg(not(any(target_env = "uclibc", target_os = "nto")))]
-                                        pub dlpi_tls_modid: size_t,
-                                        #[cfg(not(any(target_env = "uclibc", target_os = "nto")))]
-                                        pub dlpi_tls_data: *mut c_void,
-                                    }
-
-                                    pub struct Elf32_Ehdr {
-                                        pub e_ident: [c_uchar; 16],
-                                        pub e_type: Elf32_Half,
-                                        pub e_machine: Elf32_Half,
-                                        pub e_version: Elf32_Word,
-                                        pub e_entry: Elf32_Addr,
-                                        pub e_phoff: Elf32_Off,
-                                        pub e_shoff: Elf32_Off,
-                                        pub e_flags: Elf32_Word,
-                                        pub e_ehsize: Elf32_Half,
-                                        pub e_phentsize: Elf32_Half,
-                                        pub e_phnum: Elf32_Half,
-                                        pub e_shentsize: Elf32_Half,
-                                        pub e_shnum: Elf32_Half,
-                                        pub e_shstrndx: Elf32_Half,
-                                    }
-
-                                    pub struct Elf64_Ehdr {
-                                        pub e_ident: [c_uchar; 16],
-                                        pub e_type: Elf64_Half,
-                                        pub e_machine: Elf64_Half,
-                                        pub e_version: Elf64_Word,
-                                        pub e_entry: Elf64_Addr,
-                                        pub e_phoff: Elf64_Off,
-                                        pub e_shoff: Elf64_Off,
-                                        pub e_flags: Elf64_Word,
-                                        pub e_ehsize: Elf64_Half,
-                                        pub e_phentsize: Elf64_Half,
-                                        pub e_phnum: Elf64_Half,
-                                        pub e_shentsize: Elf64_Half,
-                                        pub e_shnum: Elf64_Half,
-                                        pub e_shstrndx: Elf64_Half,
-                                    }
-
-                                    pub struct Elf32_Sym {
-                                        pub st_name: Elf32_Word,
-                                        pub st_value: Elf32_Addr,
-                                        pub st_size: Elf32_Word,
-                                        pub st_info: c_uchar,
-                                        pub st_other: c_uchar,
-                                        pub st_shndx: Elf32_Section,
-                                    }
-
-                                    pub struct Elf64_Sym {
-                                        pub st_name: Elf64_Word,
-                                        pub st_info: c_uchar,
-                                        pub st_other: c_uchar,
-                                        pub st_shndx: Elf64_Section,
-                                        pub st_value: Elf64_Addr,
-                                        pub st_size: Elf64_Xword,
-                                    }
-
-                                    pub struct Elf32_Phdr {
-                                        pub p_type: Elf32_Word,
-                                        pub p_offset: Elf32_Off,
-                                        pub p_vaddr: Elf32_Addr,
-                                        pub p_paddr: Elf32_Addr,
-                                        pub p_filesz: Elf32_Word,
-                                        pub p_memsz: Elf32_Word,
-                                        pub p_flags: Elf32_Word,
-                                        pub p_align: Elf32_Word,
-                                    }
-
-                                    pub struct Elf64_Phdr {
-                                        pub p_type: Elf64_Word,
-                                        pub p_flags: Elf64_Word,
-                                        pub p_offset: Elf64_Off,
-                                        pub p_vaddr: Elf64_Addr,
-                                        pub p_paddr: Elf64_Addr,
-                                        pub p_filesz: Elf64_Xword,
-                                        pub p_memsz: Elf64_Xword,
-                                        pub p_align: Elf64_Xword,
-                                    }
-
-                                    pub struct Elf32_Shdr {
-                                        pub sh_name: Elf32_Word,
-                                        pub sh_type: Elf32_Word,
-                                        pub sh_flags: Elf32_Word,
-                                        pub sh_addr: Elf32_Addr,
-                                        pub sh_offset: Elf32_Off,
-                                        pub sh_size: Elf32_Word,
-                                        pub sh_link: Elf32_Word,
-                                        pub sh_info: Elf32_Word,
-                                        pub sh_addralign: Elf32_Word,
-                                        pub sh_entsize: Elf32_Word,
-                                    }
-
-                                    pub struct Elf64_Shdr {
-                                        pub sh_name: Elf64_Word,
-                                        pub sh_type: Elf64_Word,
-                                        pub sh_flags: Elf64_Xword,
-                                        pub sh_addr: Elf64_Addr,
-                                        pub sh_offset: Elf64_Off,
-                                        pub sh_size: Elf64_Xword,
-                                        pub sh_link: Elf64_Word,
-                                        pub sh_info: Elf64_Word,
-                                        pub sh_addralign: Elf64_Xword,
-                                        pub sh_entsize: Elf64_Xword,
-                                    }
-
-                                    pub struct __c_anonymous_elf32_rel {
-                                        pub r_offset: Elf32_Addr,
-                                        pub r_info: Elf32_Word,
-                                    }
-
-                                    pub struct __c_anonymous_elf64_rel {
-                                        pub r_offset: Elf64_Addr,
-                                        pub r_info: Elf64_Xword,
-                                    }
-
-                                    pub struct __c_anonymous__kernel_fsid_t {
-                                        pub val: [c_int; 2],
-                                    }
-
-                                    pub struct ucred {
-                                        pub pid: crate::pid_t,
-                                        pub uid: crate::uid_t,
-                                        pub gid: crate::gid_t,
-                                    }
-
-                                    pub struct mntent {
-                                        pub mnt_fsname: *mut c_char,
-                                        pub mnt_dir: *mut c_char,
-                                        pub mnt_type: *mut c_char,
-                                        pub mnt_opts: *mut c_char,
-                                        pub mnt_freq: c_int,
-                                        pub mnt_passno: c_int,
-                                    }
-
-                                    pub struct posix_spawn_file_actions_t {
-                                        __allocated: c_int,
-                                        __used: c_int,
-                                        __actions: *mut c_int,
-                                        __pad: [c_int; 16],
-                                    }
-
-                                    pub struct posix_spawnattr_t {
-                                        __flags: c_short,
-                                        __pgrp: crate::pid_t,
-                                        __sd: crate::sigset_t,
-                                        __ss: crate::sigset_t,
-                                        #[cfg(any(target_env = "musl", target_env = "ohos"))]
-                                        __prio: c_int,
-                                        #[cfg(not(any(target_env = "musl", target_env = "ohos")))]
-                                        __sp: crate::sched_param,
-                                        __policy: c_int,
-                                        __pad: [c_int; 16],
-                                    }
-
-                                    pub struct genlmsghdr {
-                                        pub cmd: u8,
-                                        pub version: u8,
-                                        pub reserved: u16,
-                                    }
-
-                                    pub struct in6_pktinfo {
-                                        pub ipi6_addr: crate::in6_addr,
-                                        pub ipi6_ifindex: c_uint,
-                                    }
-
-                                    pub struct arpd_request {
-                                        pub req: c_ushort,
-                                        pub ip: u32,
-                                        pub dev: c_ulong,
-                                        pub stamp: c_ulong,
-                                        pub updated: c_ulong,
-                                        pub ha: [c_uchar; crate::MAX_ADDR_LEN],
-                                    }
-
-                                    pub struct inotify_event {
-                                        pub wd: c_int,
-                                        pub mask: u32,
-                                        pub cookie: u32,
-                                        pub len: u32,
-                                    }
-
-                                    pub struct fanotify_response {
-                                        pub fd: c_int,
-                                        pub response: __u32,
-                                    }
-
-                                    pub struct fanotify_event_info_header {
-                                        pub info_type: __u8,
-                                        pub pad: __u8,
-                                        pub len: __u16,
-                                    }
-
-                                    pub struct fanotify_event_info_fid {
-                                        pub hdr: fanotify_event_info_header,
-                                        pub fsid: crate::__kernel_fsid_t,
-                                        pub handle: [c_uchar; 0],
-                                    }
-
-                                    pub struct sockaddr_vm {
-                                        pub svm_family: crate::sa_family_t,
-                                        pub svm_reserved1: c_ushort,
-                                        pub svm_port: c_uint,
-                                        pub svm_cid: c_uint,
-                                        pub svm_flags: u8,
-                                        pub svm_zero: [u8; 3],
-                                    }
-
-                                    pub struct regmatch_t {
-                                        pub rm_so: regoff_t,
-                                        pub rm_eo: regoff_t,
-                                    }
-
-                                    pub struct sock_extended_err {
-                                        pub ee_errno: u32,
-                                        pub ee_origin: u8,
-                                        pub ee_type: u8,
-                                        pub ee_code: u8,
-                                        pub ee_pad: u8,
-                                        pub ee_info: u32,
-                                        pub ee_data: u32,
-                                    }
-
-                                    // linux/can.h
-                                    pub struct __c_anonymous_sockaddr_can_tp {
-                                        pub rx_id: canid_t,
-                                        pub tx_id: canid_t,
-                                    }
-
-                                    pub struct __c_anonymous_sockaddr_can_j1939 {
-                                        pub name: u64,
-                                        pub pgn: u32,
-                                        pub addr: u8,
-                                    }
-
-                                    pub struct can_filter {
-                                        pub can_id: canid_t,
-                                        pub can_mask: canid_t,
-                                    }
-
-                                    // linux/can/j1939.h
-                                    pub struct j1939_filter {
-                                        pub name: name_t,
-                                        pub name_mask: name_t,
-                                        pub pgn: pgn_t,
-                                        pub pgn_mask: pgn_t,
-                                        pub addr: u8,
-                                        pub addr_mask: u8,
-                                    }
-
-                                    // linux/seccomp.h
-                                    pub struct seccomp_data {
-                                        pub nr: c_int,
-                                        pub arch: __u32,
-                                        pub instruction_pointer: crate::__u64,
-                                        pub args: [crate::__u64; 6],
-                                    }
-
-                                    pub struct seccomp_notif_sizes {
-                                        pub seccomp_notif: __u16,
-                                        pub seccomp_notif_resp: __u16,
-                                        pub seccomp_data: __u16,
-                                    }
-
-                                    pub struct seccomp_notif {
-                                        pub id: crate::__u64,
-                                        pub pid: __u32,
-                                        pub flags: __u32,
-                                        pub data: seccomp_data,
-                                    }
-
-                                    pub struct seccomp_notif_resp {
-                                        pub id: crate::__u64,
-                                        pub val: crate::__s64,
-                                        pub error: __s32,
-                                        pub flags: __u32,
-                                    }
-
-                                    pub struct seccomp_notif_addfd {
-                                        pub id: crate::__u64,
-                                        pub flags: __u32,
-                                        pub srcfd: __u32,
-                                        pub newfd: __u32,
-                                        pub newfd_flags: __u32,
-                                    }
-
-                                    pub struct nlmsghdr {
-                                        pub nlmsg_len: u32,
-                                        pub nlmsg_type: u16,
-                                        pub nlmsg_flags: u16,
-                                        pub nlmsg_seq: u32,
-                                        pub nlmsg_pid: u32,
-                                    }
-
-                                    pub struct nlmsgerr {
-                                        pub error: c_int,
-                                        pub msg: nlmsghdr,
-                                    }
-
-                                    pub struct nlattr {
-                                        pub nla_len: u16,
-                                        pub nla_type: u16,
-                                    }
-
-                                    pub struct __c_anonymous_ifru_map {
-                                        pub mem_start: c_ulong,
-                                        pub mem_end: c_ulong,
-                                        pub base_addr: c_ushort,
-                                        pub irq: c_uchar,
-                                        pub dma: c_uchar,
-                                        pub port: c_uchar,
-                                    }
-
-                                    pub struct in6_ifreq {
-                                        pub ifr6_addr: crate::in6_addr,
-                                        pub ifr6_prefixlen: u32,
-                                        pub ifr6_ifindex: c_int,
-                                    }
-
-                                    pub struct option {
-                                        pub name: *const c_char,
-                                        pub has_arg: c_int,
-                                        pub flag: *mut c_int,
-                                        pub val: c_int,
-                                    }
-
-                                    // linux/openat2.h
-                                    #[non_exhaustive]
-                                    pub struct open_how {
-                                        pub flags: crate::__u64,
-                                        pub mode: crate::__u64,
-                                        pub resolve: crate::__u64,
-                                    }
-
-                                    // linux/ptp_clock.h
-                                    pub struct ptp_clock_time {
-                                        pub sec: crate::__s64,
-                                        pub nsec: __u32,
-                                        pub reserved: __u32,
-                                    }
-
-                                    pub struct ptp_extts_request {
-                                        pub index: c_uint,
-                                        pub flags: c_uint,
-                                        pub rsv: [c_uint; 2],
-                                    }
-
-                                    pub struct ptp_sys_offset_extended {
-                                        pub n_samples: c_uint,
-                                        pub clockid: __kernel_clockid_t,
-                                        pub rsv: [c_uint; 2],
-                                        pub ts: [[ptp_clock_time; 3]; PTP_MAX_SAMPLES as usize],
-                                    }
-
-                                    pub struct ptp_sys_offset_precise {
-                                        pub device: ptp_clock_time,
-                                        pub sys_realtime: ptp_clock_time,
-                                        pub sys_monoraw: ptp_clock_time,
-                                        pub rsv: [c_uint; 4],
-                                    }
-
-                                    pub struct ptp_extts_event {
-                                        pub t: ptp_clock_time,
-                                        index: c_uint,
-                                        flags: c_uint,
-                                        rsv: [c_uint; 2],
-                                    }
-
-                                    // linux/sctp.h
-
-                                    pub struct sctp_initmsg {
-                                        pub sinit_num_ostreams: __u16,
-                                        pub sinit_max_instreams: __u16,
-                                        pub sinit_max_attempts: __u16,
-                                        pub sinit_max_init_timeo: __u16,
-                                    }
-
-                                    pub struct sctp_sndrcvinfo {
-                                        pub sinfo_stream: __u16,
-                                        pub sinfo_ssn: __u16,
-                                        pub sinfo_flags: __u16,
-                                        pub sinfo_ppid: __u32,
-                                        pub sinfo_context: __u32,
-                                        pub sinfo_timetolive: __u32,
-                                        pub sinfo_tsn: __u32,
-                                        pub sinfo_cumtsn: __u32,
-                                        pub sinfo_assoc_id: crate::sctp_assoc_t,
-                                    }
-
-                                    pub struct sctp_sndinfo {
-                                        pub snd_sid: __u16,
-                                        pub snd_flags: __u16,
-                                        pub snd_ppid: __u32,
-                                        pub snd_context: __u32,
-                                        pub snd_assoc_id: crate::sctp_assoc_t,
-                                    }
-
-                                    pub struct sctp_rcvinfo {
-                                        pub rcv_sid: __u16,
-                                        pub rcv_ssn: __u16,
-                                        pub rcv_flags: __u16,
-                                        pub rcv_ppid: __u32,
-                                        pub rcv_tsn: __u32,
-                                        pub rcv_cumtsn: __u32,
-                                        pub rcv_context: __u32,
-                                        pub rcv_assoc_id: crate::sctp_assoc_t,
-                                    }
-
-                                    pub struct sctp_nxtinfo {
-                                        pub nxt_sid: __u16,
-                                        pub nxt_flags: __u16,
-                                        pub nxt_ppid: __u32,
-                                        pub nxt_length: __u32,
-                                        pub nxt_assoc_id: crate::sctp_assoc_t,
-                                    }
-
-                                    pub struct sctp_prinfo {
-                                        pub pr_policy: __u16,
-                                        pub pr_value: __u32,
-                                    }
-
-                                    pub struct sctp_authinfo {
-                                        pub auth_keynumber: __u16,
-                                    }
-
-                                    pub struct rlimit64 {
-                                        pub rlim_cur: rlim64_t,
-                                        pub rlim_max: rlim64_t,
-                                    }
-
-                                    // linux/tls.h
-
-                                    pub struct tls_crypto_info {
-                                        pub version: __u16,
-                                        pub cipher_type: __u16,
-                                    }
-
-                                    pub struct tls12_crypto_info_aes_gcm_128 {
-                                        pub info: tls_crypto_info,
-                                        pub iv: [c_uchar; TLS_CIPHER_AES_GCM_128_IV_SIZE],
-                                        pub key: [c_uchar; TLS_CIPHER_AES_GCM_128_KEY_SIZE],
-                                        pub salt: [c_uchar; TLS_CIPHER_AES_GCM_128_SALT_SIZE],
-                                        pub rec_seq: [c_uchar; TLS_CIPHER_AES_GCM_128_REC_SEQ_SIZE],
-                                    }
-
-                                    pub struct tls12_crypto_info_aes_gcm_256 {
-                                        pub info: tls_crypto_info,
-                                        pub iv: [c_uchar; TLS_CIPHER_AES_GCM_256_IV_SIZE],
-                                        pub key: [c_uchar; TLS_CIPHER_AES_GCM_256_KEY_SIZE],
-                                        pub salt: [c_uchar; TLS_CIPHER_AES_GCM_256_SALT_SIZE],
-                                        pub rec_seq: [c_uchar; TLS_CIPHER_AES_GCM_256_REC_SEQ_SIZE],
-                                    }
-
-                                    pub struct tls12_crypto_info_aes_ccm_128 {
-                                        pub info: tls_crypto_info,
-                                        pub iv: [c_uchar; TLS_CIPHER_AES_CCM_128_IV_SIZE],
-                                        pub key: [c_uchar; TLS_CIPHER_AES_CCM_128_KEY_SIZE],
-                                        pub salt: [c_uchar; TLS_CIPHER_AES_CCM_128_SALT_SIZE],
-                                        pub rec_seq: [c_uchar; TLS_CIPHER_AES_CCM_128_REC_SEQ_SIZE],
-                                    }
-
-                                    pub struct tls12_crypto_info_chacha20_poly1305 {
-                                        pub info: tls_crypto_info,
-                                        pub iv: [c_uchar; TLS_CIPHER_CHACHA20_POLY1305_IV_SIZE],
-                                        pub key: [c_uchar; TLS_CIPHER_CHACHA20_POLY1305_KEY_SIZE],
-                                        pub salt: [c_uchar; TLS_CIPHER_CHACHA20_POLY1305_SALT_SIZE],
-                                        pub rec_seq: [c_uchar; TLS_CIPHER_CHACHA20_POLY1305_REC_SEQ_SIZE],
-                                    }
-
-                                    pub struct tls12_crypto_info_sm4_gcm {
-                                        pub info: tls_crypto_info,
-                                        pub iv: [c_uchar; TLS_CIPHER_SM4_GCM_IV_SIZE],
-                                        pub key: [c_uchar; TLS_CIPHER_SM4_GCM_KEY_SIZE],
-                                        pub salt: [c_uchar; TLS_CIPHER_SM4_GCM_SALT_SIZE],
-                                        pub rec_seq: [c_uchar; TLS_CIPHER_SM4_GCM_REC_SEQ_SIZE],
-                                    }
-
-                                    pub struct tls12_crypto_info_sm4_ccm {
-                                        pub info: tls_crypto_info,
-                                        pub iv: [c_uchar; TLS_CIPHER_SM4_CCM_IV_SIZE],
-                                        pub key: [c_uchar; TLS_CIPHER_SM4_CCM_KEY_SIZE],
-                                        pub salt: [c_uchar; TLS_CIPHER_SM4_CCM_SALT_SIZE],
-                                        pub rec_seq: [c_uchar; TLS_CIPHER_SM4_CCM_REC_SEQ_SIZE],
-                                    }
-
-                                    pub struct tls12_crypto_info_aria_gcm_128 {
-                                        pub info: tls_crypto_info,
-                                        pub iv: [c_uchar; TLS_CIPHER_ARIA_GCM_128_IV_SIZE],
-                                        pub key: [c_uchar; TLS_CIPHER_ARIA_GCM_128_KEY_SIZE],
-                                        pub salt: [c_uchar; TLS_CIPHER_ARIA_GCM_128_SALT_SIZE],
-                                        pub rec_seq: [c_uchar; TLS_CIPHER_ARIA_GCM_128_REC_SEQ_SIZE],
-                                    }
-
-                                    pub struct tls12_crypto_info_aria_gcm_256 {
-                                        pub info: tls_crypto_info,
-                                        pub iv: [c_uchar; TLS_CIPHER_ARIA_GCM_256_IV_SIZE],
-                                        pub key: [c_uchar; TLS_CIPHER_ARIA_GCM_256_KEY_SIZE],
-                                        pub salt: [c_uchar; TLS_CIPHER_ARIA_GCM_256_SALT_SIZE],
-                                        pub rec_seq: [c_uchar; TLS_CIPHER_ARIA_GCM_256_REC_SEQ_SIZE],
-                                    }
-
-                                    // linux/wireless.h
-
-                                    pub struct iw_param {
-                                        pub value: __s32,
-                                        pub fixed: __u8,
-                                        pub disabled: __u8,
-                                        pub flags: __u16,
-                                    }
-
-                                    pub struct iw_point {
-                                        pub pointer: *mut c_void,
-                                        pub length: __u16,
-                                        pub flags: __u16,
-                                    }
-
-                                    pub struct iw_freq {
-                                        pub m: __s32,
-                                        pub e: __s16,
-                                        pub i: __u8,
-                                        pub flags: __u8,
-                                    }
-
-                                    pub struct iw_quality {
-                                        pub qual: __u8,
-                                        pub level: __u8,
-                                        pub noise: __u8,
-                                        pub updated: __u8,
-                                    }
-
-                                    pub struct iw_discarded {
-                                        pub nwid: __u32,
-                                        pub code: __u32,
-                                        pub fragment: __u32,
-                                        pub retries: __u32,
-                                        pubmisc: __u32,
-                                    }
-
-                                    pub struct iw_missed {
-                                        pub beacon: __u32,
-                                    }
-
-                                    pub struct iw_scan_req {
-                                        pub scan_type: __u8,
-                                        pub essid_len: __u8,
-                                        pub num_channels: __u8,
-                                        pub flags: __u8,
-                                        pub bssid: crate::sockaddr,
-                                        pub essid: [__u8; IW_ESSID_MAX_SIZE],
-                                        pub min_channel_time: __u32,
-                                        pub max_channel_time: __u32,
-                                        pub channel_list: [iw_freq; IW_MAX_FREQUENCIES],
-                                    }
-
-                                    pub struct iw_encode_ext {
-                                        pub ext_flags: __u32,
-                                        pub tx_seq: [__u8; IW_ENCODE_SEQ_MAX_SIZE],
-                                        pub rx_seq: [__u8; IW_ENCODE_SEQ_MAX_SIZE],
-                                        pub addr: crate::sockaddr,
-                                        pub alg: __u16,
-                                        pub key_len: __u16,
-                                        pub key: [__u8; 0],
-                                    }
-
-                                    pub struct iw_pmksa {
-                                        pub cmd: __u32,
-                                        pub bssid: crate::sockaddr,
-                                        pub pmkid: [__u8; IW_PMKID_LEN],
-                                    }
-
-                                    pub struct iw_pmkid_cand {
-                                        pub flags: __u32,
-                                        pub index: __u32,
-                                        pub bssid: crate::sockaddr,
-                                    }
-
-                                    pub struct iw_statistics {
-                                        pub status: __u16,
-                                        pub qual: iw_quality,
-                                        pub discard: iw_discarded,
-                                        pub miss: iw_missed,
-                                    }
-
-                                    pub struct iw_range {
-                                        pub throughput: __u32,
-                                        pub min_nwid: __u32,
-                                        pub max_nwid: __u32,
-                                        pub old_num_channels: __u16,
-                                        pub old_num_frequency: __u8,
-                                        pub scan_capa: __u8,
-                                        pub event_capa: [__u32; 6],
-                                        pub sensitivity: __s32,
-                                        pub max_qual: iw_quality,
-                                        pub avg_qual: iw_quality,
-                                        pub num_bitrates: __u8,
-                                        pub bitrate: [__s32; IW_MAX_BITRATES],
-                                        pub min_rts: __s32,
-                                        pub max_rts: __s32,
-                                        pub min_frag: __s32,
-                                        pub max_frag: __s32,
-                                        pub min_pmp: __s32,
-                                        pub max_pmp: __s32,
-                                        pub min_pmt: __s32,
-                                        pub max_pmt: __s32,
-                                        pub pmp_flags: __u16,
-                                        pub pmt_flags: __u16,
-                                        pub pm_capa: __u16,
-                                        pub encoding_size: [__u16; IW_MAX_ENCODING_SIZES],
-                                        pub num_encoding_sizes: __u8,
-                                        pub max_encoding_tokens: __u8,
-                                        pub encoding_login_index: __u8,
-                                        pub txpower_capa: __u16,
-                                        pub num_txpower: __u8,
-                                        pub txpower: [__s32; IW_MAX_TXPOWER],
-                                        pub we_version_compiled: __u8,
-                                        pub we_version_source: __u8,
-                                        pub retry_capa: __u16,
-                                        pub retry_flags: __u16,
-                                        pub r_time_flags: __u16,
-                                        pub min_retry: __s32,
-                                        pub max_retry: __s32,
-                                        pub min_r_time: __s32,
-                                        pub max_r_time: __s32,
-                                        pub num_channels: __u16,
-                                        pub num_frequency: __u8,
-                                        pub freq: [iw_freq; IW_MAX_FREQUENCIES],
-                                        pub enc_capa: __u32,
-                                    }
-
-                                    pub struct iw_priv_args {
-                                        pub cmd: __u32,
-                                        pub set_args: __u16,
-                                        pub get_args: __u16,
-                                        pub name: [c_char; crate::IFNAMSIZ],
-                                    }
-
-                                    // #include <linux/eventpoll.h>
-
-                                    pub struct epoll_params {
-                                        pub busy_poll_usecs: u32,
-                                        pub busy_poll_budget: u16,
-                                        pub prefer_busy_poll: u8,
-                                        pub __pad: u8, // Must be zero
-                                    }
-
-                                    #[cfg_attr(
-                                        any(
-                                            target_pointer_width = "32",
-                                            target_arch = "x86_64",
-                                            target_arch = "powerpc64",
-                                            target_arch = "mips64",
-                                            target_arch = "mips64r6",
-                                            target_arch = "s390x",
-                                            target_arch = "sparc64",
-                                            target_arch = "aarch64",
-                                            target_arch = "riscv64",
-                                            target_arch = "riscv32",
-                                            target_arch = "loongarch64"
-                                        ),
-                                        repr(align(4))
-                                    )]
-                                    #[cfg_attr(
-                                        not(any(
-                                            target_pointer_width = "32",
-                                            target_arch = "x86_64",
-                                            target_arch = "powerpc64",
-                                            target_arch = "mips64",
-                                            target_arch = "mips64r6",
-                                            target_arch = "s390x",
-                                            target_arch = "sparc64",
-                                            target_arch = "aarch64",
-                                            target_arch = "riscv64",
-                                            target_arch = "riscv32",
-                                            target_arch = "loongarch64"
-                                        )),
-                                        repr(align(8))
-                                    )]
-                                    pub struct pthread_mutexattr_t {
-                                        #[doc(hidden)]
-                                        size: [u8; crate::__SIZEOF_PTHREAD_MUTEXATTR_T],
-                                    }
-
-                                    #[cfg_attr(
-                                        any(target_env = "musl", target_env = "ohos", target_pointer_width = "32"),
-                                        repr(align(4))
-                                    )]
-                                    #[cfg_attr(
-                                        all(
-                                            not(target_env = "musl"),
-                                            not(target_env = "ohos"),
-                                            target_pointer_width = "64"
-                                        ),
-                                        repr(align(8))
-                                    )]
-                                    pub struct pthread_rwlockattr_t {
-                                        #[doc(hidden)]
-                                        size: [u8; crate::__SIZEOF_PTHREAD_RWLOCKATTR_T],
-                                    }
-
-                                    #[repr(align(4))]
-                                    pub struct pthread_condattr_t {
-                                        #[doc(hidden)]
-                                        size: [u8; crate::__SIZEOF_PTHREAD_CONDATTR_T],
-                                    }
-
-                                    #[repr(align(4))]
-                                    pub struct pthread_barrierattr_t {
-                                        #[doc(hidden)]
-                                        size: [u8; crate::__SIZEOF_PTHREAD_BARRIERATTR_T],
-                                    }
-
-                                    #[repr(align(8))]
-                                    pub struct fanotify_event_metadata {
-                                        pub event_len: __u32,
-                                        pub vers: __u8,
-                                        pub reserved: __u8,
-                                        pub metadata_len: __u16,
-                                        pub mask: __u64,
-                                        pub fd: c_int,
-                                        pub pid: c_int,
-                                    }
-
-                                    // linux/ptp_clock.h
-
-                                    pub struct ptp_sys_offset {
-                                        pub n_samples: c_uint,
-                                        pub rsv: [c_uint; 3],
-                                        // FIXME(garando): replace length with `2 * PTP_MAX_SAMPLES + 1` when supported
-                                        pub ts: [ptp_clock_time; 51],
-                                    }
-
-                                    pub struct ptp_pin_desc {
-                                        pub name: [c_char; 64],
-                                        pub index: c_uint,
-                                        pub func: c_uint,
-                                        pub chan: c_uint,
-                                        pub rsv: [c_uint; 5],
-                                    }
-
-                                    pub struct ptp_clock_caps {
-                                        pub max_adj: c_int,
-                                        pub n_alarm: c_int,
-                                        pub n_ext_ts: c_int,
-                                        pub n_per_out: c_int,
-                                        pub pps: c_int,
-                                        pub n_pins: c_int,
-                                        pub cross_timestamping: c_int,
-                                        pub adjust_phase: c_int,
-                                        pub max_phase_adj: c_int,
-                                        pub rsv: [c_int; 11],
-                                    }
-
-                                    // linux/if_xdp.h
-
-                                    pub struct sockaddr_xdp {
-                                        pub sxdp_family: crate::__u16,
-                                        pub sxdp_flags: crate::__u16,
-                                        pub sxdp_ifindex: crate::__u32,
-                                        pub sxdp_queue_id: crate::__u32,
-                                        pub sxdp_shared_umem_fd: crate::__u32,
-                                    }
-
-                                    pub struct xdp_ring_offset {
-                                        pub producer: crate::__u64,
-                                        pub consumer: crate::__u64,
-                                        pub desc: crate::__u64,
-                                        pub flags: crate::__u64,
-                                    }
-
-                                    pub struct xdp_mmap_offsets {
-                                        pub rx: xdp_ring_offset,
-                                        pub tx: xdp_ring_offset,
-                                        pub fr: xdp_ring_offset,
-                                        pub cr: xdp_ring_offset,
-                                    }
-
-                                    pub struct xdp_ring_offset_v1 {
-                                        pub producer: crate::__u64,
-                                        pub consumer: crate::__u64,
-                                        pub desc: crate::__u64,
-                                    }
-
-                                    pub struct xdp_mmap_offsets_v1 {
-                                        pub rx: xdp_ring_offset_v1,
-                                        pub tx: xdp_ring_offset_v1,
-                                        pub fr: xdp_ring_offset_v1,
-                                        pub cr: xdp_ring_offset_v1,
-                                    }
-
-                                    pub struct xdp_umem_reg {
-                                        pub addr: crate::__u64,
-                                        pub len: crate::__u64,
-                                        pub chunk_size: crate::__u32,
-                                        pub headroom: crate::__u32,
-                                        pub flags: crate::__u32,
-                                        pub tx_metadata_len: crate::__u32,
-                                    }
-
-                                    pub struct xdp_umem_reg_v1 {
-                                        pub addr: crate::__u64,
-                                        pub len: crate::__u64,
-                                        pub chunk_size: crate::__u32,
-                                        pub headroom: crate::__u32,
-                                    }
-
-                                    pub struct xdp_statistics {
-                                        pub rx_dropped: crate::__u64,
-                                        pub rx_invalid_descs: crate::__u64,
-                                        pub tx_invalid_descs: crate::__u64,
-                                        pub rx_ring_full: crate::__u64,
-                                        pub rx_fill_ring_empty_descs: crate::__u64,
-                                        pub tx_ring_empty_descs: crate::__u64,
-                                    }
-
-                                    pub struct xdp_statistics_v1 {
-                                        pub rx_dropped: crate::__u64,
-                                        pub rx_invalid_descs: crate::__u64,
-                                        pub tx_invalid_descs: crate::__u64,
-                                    }
-
-                                    pub struct xdp_options {
-                                        pub flags: crate::__u32,
-                                    }
-
-                                    pub struct xdp_desc {
-                                        pub addr: crate::__u64,
-                                        pub len: crate::__u32,
-                                        pub options: crate::__u32,
-                                    }
-
-                                    pub struct xsk_tx_metadata_completion {
-                                        pub tx_timestamp: crate::__u64,
-                                    }
-
-                                    pub struct xsk_tx_metadata_request {
-                                        pub csum_start: __u16,
-                                        pub csum_offset: __u16,
-                                    }
-
-                                    // linux/mount.h
-
-                                    pub struct mount_attr {
-                                        pub attr_set: crate::__u64,
-                                        pub attr_clr: crate::__u64,
-                                        pub propagation: crate::__u64,
-                                        pub userns_fd: crate::__u64,
-                                    }
-
-                                    // linux/nsfs.h
-                                    pub struct mnt_ns_info {
-                                        pub size: crate::__u32,
-                                        pub nr_mounts: crate::__u32,
-                                        pub mnt_ns_id: crate::__u64,
-                                    }
-
-                                    // linux/pidfd.h
-
-                                    #[non_exhaustive]
-                                    pub struct pidfd_info {
-                                        pub mask: crate::__u64,
-                                        pub cgroupid: crate::__u64,
-                                        pub pid: crate::__u32,
-                                        pub tgid: crate::__u32,
-                                        pub ppid: crate::__u32,
-                                        pub ruid: crate::__u32,
-                                        pub rgid: crate::__u32,
-                                        pub euid: crate::__u32,
-                                        pub egid: crate::__u32,
-                                        pub suid: crate::__u32,
-                                        pub sgid: crate::__u32,
-                                        pub fsuid: crate::__u32,
-                                        pub fsgid: crate::__u32,
-                                        pub exit_code: crate::__s32,
-                                    }
-
-                                    // linux/uio.h
-
-                                    pub struct dmabuf_cmsg {
-                                        pub frag_offset: crate::__u64,
-                                        pub frag_size: crate::__u32,
-                                        pub frag_token: crate::__u32,
-                                        pub dmabuf_id: crate::__u32,
-                                        pub flags: crate::__u32,
-                                    }
-
-                                    pub struct dmabuf_token {
-                                        pub token_start: crate::__u32,
-                                        pub token_count: crate::__u32,
-                                    }
-                                }
-
-                                cfg_if! {
-                                    if #[cfg(not(target_arch = "sparc64"))] {
-                                        s! {
-                                            pub struct iw_thrspy {
-                                                pub addr: crate::sockaddr,
-                                                pub qual: iw_quality,
-                                                pub low: iw_quality,
-                                                pub high: iw_quality,
-                                            }
-
-                                            pub struct iw_mlme {
-                                                pub cmd: __u16,
-                                                pub reason_code: __u16,
-                                                pub addr: crate::sockaddr,
-                                            }
-
-                                            pub struct iw_michaelmicfailure {
-                                                pub flags: __u32,
-                                                pub src_addr: crate::sockaddr,
-                                                pub tsc: [__u8; IW_ENCODE_SEQ_MAX_SIZE],
-                                            }
-
-                                            pub struct __c_anonymous_elf32_rela {
-                                                pub r_offset: Elf32_Addr,
-                                                pub r_info: Elf32_Word,
-                                                pub r_addend: Elf32_Sword,
-                                            }
-
-                                            pub struct __c_anonymous_elf64_rela {
-                                                pub r_offset: Elf64_Addr,
-                                                pub r_info: Elf64_Xword,
-                                                pub r_addend: Elf64_Sxword,
-                                            }
-                                        }
-                                    }
-                                }
-
-                                s_no_extra_traits! {
-                                    pub struct sockaddr_nl {
-                                        pub nl_family: crate::sa_family_t,
-                                        nl_pad: c_ushort,
-                                        pub nl_pid: u32,
-                                        pub nl_groups: u32,
-                                    }
-
-                                    pub struct dirent {
-                                        pub d_ino: crate::ino_t,
-                                        pub d_off: off_t,
-                                        pub d_reclen: c_ushort,
-                                        pub d_type: c_uchar,
-                                        pub d_name: [c_char; 256],
-                                    }
-
-                                    pub struct sockaddr_alg {
-                                        pub salg_family: crate::sa_family_t,
-                                        pub salg_type: [c_uchar; 14],
-                                        pub salg_feat: u32,
-                                        pub salg_mask: u32,
-                                        pub salg_name: [c_uchar; 64],
-                                    }
-
-                                    pub struct uinput_setup {
-                                        pub id: input_id,
-                                        pub name: [c_char; UINPUT_MAX_NAME_SIZE],
-                                        pub ff_effects_max: __u32,
-                                    }
-
-                                    pub struct uinput_user_dev {
-                                        pub name: [c_char; UINPUT_MAX_NAME_SIZE],
-                                        pub id: input_id,
-                                        pub ff_effects_max: __u32,
-                                        pub absmax: [__s32; ABS_CNT],
-                                        pub absmin: [__s32; ABS_CNT],
-                                        pub absfuzz: [__s32; ABS_CNT],
-                                        pub absflat: [__s32; ABS_CNT],
-                                    }
-
-                                    #[allow(missing_debug_implementations)]
-                                    pub struct af_alg_iv {
-                                        pub ivlen: u32,
-                                        pub iv: [c_uchar; 0],
-                                    }
-
-                                    // x32 compatibility
-                                    // See https://sourceware.org/bugzilla/show_bug.cgi?id=21279
-                                    pub struct mq_attr {
-                                        #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
-                                        pub mq_flags: i64,
-                                        #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
-                                        pub mq_maxmsg: i64,
-                                        #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
-                                        pub mq_msgsize: i64,
-                                        #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
-                                        pub mq_curmsgs: i64,
-                                        #[cfg(all(target_arch = "x86_64", target_pointer_width = "32"))]
-                                        pad: [i64; 4],
-
-                                        #[cfg(not(all(target_arch = "x86_64", target_pointer_width = "32")))]
-                                        pub mq_flags: c_long,
-                                        #[cfg(not(all(target_arch = "x86_64", target_pointer_width = "32")))]
-                                        pub mq_maxmsg: c_long,
-                                        #[cfg(not(all(target_arch = "x86_64", target_pointer_width = "32")))]
-                                        pub mq_msgsize: c_long,
-                                        #[cfg(not(all(target_arch = "x86_64", target_pointer_width = "32")))]
-                                        pub mq_curmsgs: c_long,
-                                        #[cfg(not(all(target_arch = "x86_64", target_pointer_width = "32")))]
-                                        pad: [c_long; 4],
-                                    }
-
-                                    pub union __c_anonymous_ifr_ifru {
-                                        pub ifru_addr: crate::sockaddr,
-                                        pub ifru_dstaddr: crate::sockaddr,
-                                        pub ifru_broadaddr: crate::sockaddr,
-                                        pub ifru_netmask: crate::sockaddr,
-                                        pub ifru_hwaddr: crate::sockaddr,
-                                        pub ifru_flags: c_short,
-                                        pub ifru_ifindex: c_int,
-                                        pub ifru_metric: c_int,
-                                        pub ifru_mtu: c_int,
-                                        pub ifru_map: __c_anonymous_ifru_map,
-                                        pub ifru_slave: [c_char; crate::IFNAMSIZ],
-                                        pub ifru_newname: [c_char; crate::IFNAMSIZ],
-                                        pub ifru_data: *mut c_char,
-                                    }
-
-                                    pub struct ifreq {
-                                        /// interface name, e.g. "en0"
-                                        pub ifr_name: [c_char; crate::IFNAMSIZ],
-                                        pub ifr_ifru: __c_anonymous_ifr_ifru,
-                                    }
-
-                                    pub union __c_anonymous_ifc_ifcu {
-                                        pub ifcu_buf: *mut c_char,
-                                        pub ifcu_req: *mut crate::ifreq,
-                                    }
-
-                                    /// Structure used in SIOCGIFCONF request.  Used to retrieve interface configuration for
-                                    /// machine (useful for programs which must know all networks accessible).
-                                    pub struct ifconf {
-                                        /// Size of buffer
-                                        pub ifc_len: c_int,
-                                        pub ifc_ifcu: __c_anonymous_ifc_ifcu,
-                                    }
-
-                                    pub struct hwtstamp_config {
-                                        pub flags: c_int,
-                                        pub tx_type: c_int,
-                                        pub rx_filter: c_int,
-                                    }
-
-                                    pub struct dirent64 {
-                                        pub d_ino: crate::ino64_t,
-                                        pub d_off: off64_t,
-                                        pub d_reclen: c_ushort,
-                                        pub d_type: c_uchar,
-                                        pub d_name: [c_char; 256],
-                                    }
-
-                                    pub struct sched_attr {
-                                        pub size: __u32,
-                                        pub sched_policy: __u32,
-                                        pub sched_flags: crate::__u64,
-                                        pub sched_nice: __s32,
-                                        pub sched_priority: __u32,
-                                        pub sched_runtime: crate::__u64,
-                                        pub sched_deadline: crate::__u64,
-                                        pub sched_period: crate::__u64,
-                                    }
-
-                                    #[allow(missing_debug_implementations)]
-                                    pub union tpacket_req_u {
-                                        pub req: crate::tpacket_req,
-                                        pub req3: crate::tpacket_req3,
-                                    }
-
-                                    #[allow(missing_debug_implementations)]
-                                    pub union tpacket_bd_header_u {
-                                        pub bh1: crate::tpacket_hdr_v1,
-                                    }
-
-                                    #[allow(missing_debug_implementations)]
-                                    pub struct tpacket_block_desc {
-                                        pub version: __u32,
-                                        pub offset_to_priv: __u32,
-                                        pub hdr: crate::tpacket_bd_header_u,
-                                    }
-
-                                    #[cfg_attr(
-                                        all(
-                                            any(target_env = "musl", target_env = "ohos"),
-                                            target_pointer_width = "32"
-                                        ),
-                                        repr(align(4))
-                                    )]
-                                    #[cfg_attr(
-                                        all(
-                                            any(target_env = "musl", target_env = "ohos"),
-                                            target_pointer_width = "64"
-                                        ),
-                                        repr(align(8))
-                                    )]
-                                    #[cfg_attr(
-                                        all(
-                                            not(any(target_env = "musl", target_env = "ohos")),
-                                            target_arch = "x86"
-                                        ),
-                                        repr(align(4))
-                                    )]
-                                    #[cfg_attr(
-                                        all(
-                                            not(any(target_env = "musl", target_env = "ohos")),
-                                            not(target_arch = "x86")
-                                        ),
-                                        repr(align(8))
-                                    )]
-                                    pub struct pthread_cond_t {
-                                        #[doc(hidden)]
-                                        size: [u8; crate::__SIZEOF_PTHREAD_COND_T],
-                                    }
-
-                                    #[cfg_attr(
-                                        all(
-                                            target_pointer_width = "32",
-                                            any(
-                                                target_arch = "mips",
-                                                target_arch = "mips32r6",
-                                                target_arch = "arm",
-                                                target_arch = "hexagon",
-                                                target_arch = "m68k",
-                                                target_arch = "csky",
-                                                target_arch = "powerpc",
-                                                target_arch = "sparc",
-                                                target_arch = "x86_64",
-                                                target_arch = "x86"
-                                            )
-                                        ),
-                                        repr(align(4))
-                                    )]
-                                    #[cfg_attr(
-                                        any(
-                                            target_pointer_width = "64",
-                                            not(any(
-                                                target_arch = "mips",
-                                                target_arch = "mips32r6",
-                                                target_arch = "arm",
-                                                target_arch = "hexagon",
-                                                target_arch = "m68k",
-                                                target_arch = "csky",
-                                                target_arch = "powerpc",
-                                                target_arch = "sparc",
-                                                target_arch = "x86_64",
-                                                target_arch = "x86"
-                                            ))
-                                        ),
-                                        repr(align(8))
-                                    )]
-                                    pub struct pthread_mutex_t {
-                                        #[doc(hidden)]
-                                        size: [u8; crate::__SIZEOF_PTHREAD_MUTEX_T],
-                                    }
-
-                                    #[cfg_attr(
-                                        all(
-                                            target_pointer_width = "32",
-                                            any(
-                                                target_arch = "mips",
-                                                target_arch = "mips32r6",
-                                                target_arch = "arm",
-                                                target_arch = "hexagon",
-                                                target_arch = "m68k",
-                                                target_arch = "csky",
-                                                target_arch = "powerpc",
-                                                target_arch = "sparc",
-                                                target_arch = "x86_64",
-                                                target_arch = "x86"
-                                            )
-                                        ),
-                                        repr(align(4))
-                                    )]
-                                    #[cfg_attr(
-                                        any(
-                                            target_pointer_width = "64",
-                                            not(any(
-                                                target_arch = "mips",
-                                                target_arch = "mips32r6",
-                                                target_arch = "arm",
-                                                target_arch = "hexagon",
-                                                target_arch = "m68k",
-                                                target_arch = "powerpc",
-                                                target_arch = "sparc",
-                                                target_arch = "x86_64",
-                                                target_arch = "x86"
-                                            ))
-                                        ),
-                                        repr(align(8))
-                                    )]
-                                    pub struct pthread_rwlock_t {
-                                        size: [u8; crate::__SIZEOF_PTHREAD_RWLOCK_T],
-                                    }
-
-                                    #[cfg_attr(
-                                        all(
-                                            target_pointer_width = "32",
-                                            any(
-                                                target_arch = "mips",
-                                                target_arch = "mips32r6",
-                                                target_arch = "arm",
-                                                target_arch = "hexagon",
-                                                target_arch = "m68k",
-                                                target_arch = "csky",
-                                                target_arch = "powerpc",
-                                                target_arch = "sparc",
-                                                target_arch = "x86_64",
-                                                target_arch = "x86"
-                                            )
-                                        ),
-                                        repr(align(4))
-                                    )]
-                                    #[cfg_attr(
-                                        any(
-                                            target_pointer_width = "64",
-                                            not(any(
-                                                target_arch = "mips",
-                                                target_arch = "mips32r6",
-                                                target_arch = "arm",
-                                                target_arch = "hexagon",
-                                                target_arch = "m68k",
-                                                target_arch = "csky",
-                                                target_arch = "powerpc",
-                                                target_arch = "sparc",
-                                                target_arch = "x86_64",
-                                                target_arch = "x86"
-                                            ))
-                                        ),
-                                        repr(align(8))
-                                    )]
-                                    pub struct pthread_barrier_t {
-                                        size: [u8; crate::__SIZEOF_PTHREAD_BARRIER_T],
-                                    }
-
-                                    // linux/net_tstamp.h
-                                    #[allow(missing_debug_implementations)]
-                                    pub struct sock_txtime {
-                                        pub clockid: crate::clockid_t,
-                                        pub flags: __u32,
-                                    }
-
-                                    // linux/can.h
-                                    #[repr(align(8))]
-                                    #[allow(missing_debug_implementations)]
-                                    pub struct can_frame {
-                                        pub can_id: canid_t,
-                                        // FIXME(1.0): this field was renamed to `len` in Linux 5.11
-                                        pub can_dlc: u8,
-                                        __pad: u8,
-                                        __res0: u8,
-                                        pub len8_dlc: u8,
-                                        pub data: [u8; CAN_MAX_DLEN],
-                                    }
-
-                                    #[repr(align(8))]
-                                    #[allow(missing_debug_implementations)]
-                                    pub struct canfd_frame {
-                                        pub can_id: canid_t,
-                                        pub len: u8,
-                                        pub flags: u8,
-                                        __res0: u8,
-                                        __res1: u8,
-                                        pub data: [u8; CANFD_MAX_DLEN],
-                                    }
-
-                                    #[repr(align(8))]
-                                    #[allow(missing_debug_implementations)]
-                                    pub struct canxl_frame {
-                                        pub prio: canid_t,
-                                        pub flags: u8,
-                                        pub sdt: u8,
-                                        pub len: u16,
-                                        pub af: u32,
-                                        pub data: [u8; CANXL_MAX_DLEN],
-                                    }
-
-                                    #[allow(missing_debug_implementations)]
-                                    pub union __c_anonymous_sockaddr_can_can_addr {
-                                        pub tp: __c_anonymous_sockaddr_can_tp,
-                                        pub j1939: __c_anonymous_sockaddr_can_j1939,
-                                    }
-
-                                    #[allow(missing_debug_implementations)]
-                                    pub struct sockaddr_can {
-                                        pub can_family: crate::sa_family_t,
-                                        pub can_ifindex: c_int,
-                                        pub can_addr: __c_anonymous_sockaddr_can_can_addr,
-                                    }
-
-                                    // linux/wireless.h
-                                    pub union iwreq_data {
-                                        pub name: [c_char; crate::IFNAMSIZ],
-                                        pub essid: iw_point,
-                                        pub nwid: iw_param,
-                                        pub freq: iw_freq,
-                                        pub sens: iw_param,
-                                        pub bitrate: iw_param,
-                                        pub txpower: iw_param,
-                                        pub rts: iw_param,
-                                        pub frag: iw_param,
-                                        pub mode: __u32,
-                                        pub retry: iw_param,
-                                        pub encoding: iw_point,
-                                        pub power: iw_param,
-                                        pub qual: iw_quality,
-                                        pub ap_addr: crate::sockaddr,
-                                        pub addr: crate::sockaddr,
-                                        pub param: iw_param,
-                                        pub data: iw_point,
-                                    }
-
-                                    pub struct iw_event {
-                                        pub len: __u16,
-                                        pub cmd: __u16,
-                                        pub u: iwreq_data,
-                                    }
-
-                                    pub union __c_anonymous_iwreq {
-                                        pub ifrn_name: [c_char; crate::IFNAMSIZ],
-                                    }
-
-                                    pub struct iwreq {
-                                        pub ifr_ifrn: __c_anonymous_iwreq,
-                                        pub u: iwreq_data,
-                                    }
-
-                                    // linux/ptp_clock.h
-                                    pub union __c_anonymous_ptp_perout_request_1 {
-                                        pub start: ptp_clock_time,
-                                        pub phase: ptp_clock_time,
-                                    }
-
-                                    pub union __c_anonymous_ptp_perout_request_2 {
-                                        pub on: ptp_clock_time,
-                                        pub rsv: [c_uint; 4],
-                                    }
-
-                                    #[allow(missing_debug_implementations)]
-                                    pub struct ptp_perout_request {
-                                        pub anonymous_1: __c_anonymous_ptp_perout_request_1,
-                                        pub period: ptp_clock_time,
-                                        pub index: c_uint,
-                                        pub flags: c_uint,
-                                        pub anonymous_2: __c_anonymous_ptp_perout_request_2,
-                                    }
-
-                                    // linux/if_xdp.h
-                                    #[allow(missing_debug_implementations)]
-                                    pub struct xsk_tx_metadata {
-                                        pub flags: crate::__u64,
-                                        pub xsk_tx_metadata_union: __c_anonymous_xsk_tx_metadata_union,
-                                    }
-
-                                    pub union __c_anonymous_xsk_tx_metadata_union {
-                                        pub request: xsk_tx_metadata_request,
-                                        pub completion: xsk_tx_metadata_completion,
-                                    }
-                                }
-
-                                cfg_if! {
-                                    if #[cfg(feature = "extra_traits")] {
-                                        impl PartialEq for sockaddr_nl {
-                                            fn eq(&self, other: &sockaddr_nl) -> bool {
-                                                self.nl_family == other.nl_family
-                                                    && self.nl_pid == other.nl_pid
-                                                    && self.nl_groups == other.nl_groups
-                                            }
-                                        }
-                                        impl Eq for sockaddr_nl {}
-                                        impl hash::Hash for sockaddr_nl {
-                                            fn hash<H: hash::Hasher>(&self, state: &mut H) {
-                                                self.nl_family.hash(state);
-                                                self.nl_pid.hash(state);
-                                                self.nl_groups.hash(state);
-                                            }
-                                        }
-
-                                        impl PartialEq for dirent {
-                                            fn eq(&self, other: &dirent) -> bool {
-                                                self.d_ino == other.d_ino
-                                                    && self.d_off == other.d_off
-                                                    && self.d_reclen == other.d_reclen
-                                                    && self.d_type == other.d_type
-                                                    && self
-                                                        .d_name
-                                                        .iter()
-                                                        .zip(other.d_name.iter())
-                                                        .all(|(a, b)| a == b)
-                                            }
-                                        }
-
-                                        impl Eq for dirent {}
-
-                                        impl hash::Hash for dirent {
-                                            fn hash<H: hash::Hasher>(&self, state: &mut H) {
-                                                self.d_ino.hash(state);
-                                                self.d_off.hash(state);
-                                                self.d_reclen.hash(state);
-                                                self.d_type.hash(state);
-                                                self.d_name.hash(state);
-                                            }
-                                        }
-
-                                        impl PartialEq for dirent64 {
-                                            fn eq(&self, other: &dirent64) -> bool {
-                                                self.d_ino == other.d_ino
-                                                    && self.d_off == other.d_off
-                                                    && self.d_reclen == other.d_reclen
-                                                    && self.d_type == other.d_type
-                                                    && self
-                                                        .d_name
-                                                        .iter()
-                                                        .zip(other.d_name.iter())
-                                                        .all(|(a, b)| a == b)
-                                            }
-                                        }
-
-                                        impl Eq for dirent64 {}
-
-                                        impl hash::Hash for dirent64 {
-                                            fn hash<H: hash::Hasher>(&self, state: &mut H) {
-                                                self.d_ino.hash(state);
-                                                self.d_off.hash(state);
-                                                self.d_reclen.hash(state);
-                                                self.d_type.hash(state);
-                                                self.d_name.hash(state);
-                                            }
-                                        }
-
-                                        impl PartialEq for pthread_cond_t {
-                                            fn eq(&self, other: &pthread_cond_t) -> bool {
-                                                self.size.iter().zip(other.size.iter()).all(|(a, b)| a == b)
-                                            }
-                                        }
-
-                                        impl Eq for pthread_cond_t {}
-
-                                        impl hash::Hash for pthread_cond_t {
-                                            fn hash<H: hash::Hasher>(&self, state: &mut H) {
-                                                self.size.hash(state);
-                                            }
-                                        }
-
-                                        impl PartialEq for pthread_mutex_t {
-                                            fn eq(&self, other: &pthread_mutex_t) -> bool {
-                                                self.size.iter().zip(other.size.iter()).all(|(a, b)| a == b)
-                                            }
-                                        }
-
-                                        impl Eq for pthread_mutex_t {}
-
-                                        impl hash::Hash for pthread_mutex_t {
-                                            fn hash<H: hash::Hasher>(&self, state: &mut H) {
-                                                self.size.hash(state);
-                                            }
-                                        }
-
-                                        impl PartialEq for pthread_rwlock_t {
-                                            fn eq(&self, other: &pthread_rwlock_t) -> bool {
-                                                self.size.iter().zip(other.size.iter()).all(|(a, b)| a == b)
-                                            }
-                                        }
-
-                                        impl Eq for pthread_rwlock_t {}
-
-                                        impl hash::Hash for pthread_rwlock_t {
-                                            fn hash<H: hash::Hasher>(&self, state: &mut H) {
-                                                self.size.hash(state);
-                                            }
-                                        }
-
-                                        impl PartialEq for pthread_barrier_t {
-                                            fn eq(&self, other: &pthread_barrier_t) -> bool {
-                                                self.size.iter().zip(other.size.iter()).all(|(a, b)| a == b)
-                                            }
-                                        }
-
-                                        impl Eq for pthread_barrier_t {}
-
-                                        impl hash::Hash for pthread_barrier_t {
-                                            fn hash<H: hash::Hasher>(&self, state: &mut H) {
-                                                self.size.hash(state);
-                                            }
-                                        }
-
-                                        impl PartialEq for sockaddr_alg {
-                                            fn eq(&self, other: &sockaddr_alg) -> bool {
-                                                self.salg_family == other.salg_family
-                                                    && self
-                                                        .salg_type
-                                                        .iter()
-                                                        .zip(other.salg_type.iter())
-                                                        .all(|(a, b)| a == b)
-                                                    && self.salg_feat == other.salg_feat
-                                                    && self.salg_mask == other.salg_mask
-                                                    && self
-                                                        .salg_name
-                                                        .iter()
-                                                        .zip(other.salg_name.iter())
-                                                        .all(|(a, b)| a == b)
-                                            }
-                                        }
-
-                                        impl Eq for sockaddr_alg {}
-
-                                        impl hash::Hash for sockaddr_alg {
-                                            fn hash<H: hash::Hasher>(&self, state: &mut H) {
-                                                self.salg_family.hash(state);
-                                                self.salg_type.hash(state);
-                                                self.salg_feat.hash(state);
-                                                self.salg_mask.hash(state);
-                                                self.salg_name.hash(state);
-                                            }
-                                        }
-
-                                        impl PartialEq for uinput_setup {
-                                            fn eq(&self, other: &uinput_setup) -> bool {
-                                                self.id == other.id
-                                                    && self.name[..] == other.name[..]
-                                                    && self.ff_effects_max == other.ff_effects_max
-                                            }
-                                        }
-                                        impl Eq for uinput_setup {}
-
-                                        impl hash::Hash for uinput_setup {
-                                            fn hash<H: hash::Hasher>(&self, state: &mut H) {
-                                                self.id.hash(state);
-                                                self.name.hash(state);
-                                                self.ff_effects_max.hash(state);
-                                            }
-                                        }
-
-                                        impl PartialEq for uinput_user_dev {
-                                            fn eq(&self, other: &uinput_user_dev) -> bool {
-                                                self.name[..] == other.name[..]
-                                                    && self.id == other.id
-                                                    && self.ff_effects_max == other.ff_effects_max
-                                                    && self.absmax[..] == other.absmax[..]
-                                                    && self.absmin[..] == other.absmin[..]
-                                                    && self.absfuzz[..] == other.absfuzz[..]
-                                                    && self.absflat[..] == other.absflat[..]
-                                            }
-                                        }
-                                        impl Eq for uinput_user_dev {}
-
-                                        impl hash::Hash for uinput_user_dev {
-                                            fn hash<H: hash::Hasher>(&self, state: &mut H) {
-                                                self.name.hash(state);
-                                                self.id.hash(state);
-                                                self.ff_effects_max.hash(state);
-                                                self.absmax.hash(state);
-                                                self.absmin.hash(state);
-                                                self.absfuzz.hash(state);
-                                                self.absflat.hash(state);
-                                            }
-                                        }
-
-                                        impl PartialEq for mq_attr {
-                                            fn eq(&self, other: &mq_attr) -> bool {
-                                                self.mq_flags == other.mq_flags
-                                                    && self.mq_maxmsg == other.mq_maxmsg
-                                                    && self.mq_msgsize == other.mq_msgsize
-                                                    && self.mq_curmsgs == other.mq_curmsgs
-                                            }
-                                        }
-                                        impl Eq for mq_attr {}
-                                        impl hash::Hash for mq_attr {
-                                            fn hash<H: hash::Hasher>(&self, state: &mut H) {
-                                                self.mq_flags.hash(state);
-                                                self.mq_maxmsg.hash(state);
-                                                self.mq_msgsize.hash(state);
-                                                self.mq_curmsgs.hash(state);
-                                            }
-                                        }
-                                        impl PartialEq for hwtstamp_config {
-                                            fn eq(&self, other: &hwtstamp_config) -> bool {
-                                                self.flags == other.flags
-                                                    && self.tx_type == other.tx_type
-                                                    && self.rx_filter == other.rx_filter
-                                            }
-                                        }
-                                        impl Eq for hwtstamp_config {}
-                                        impl hash::Hash for hwtstamp_config {
-                                            fn hash<H: hash::Hasher>(&self, state: &mut H) {
-                                                self.flags.hash(state);
-                                                self.tx_type.hash(state);
-                                                self.rx_filter.hash(state);
-                                            }
-                                        }
-
-                                        impl PartialEq for sched_attr {
-                                            fn eq(&self, other: &sched_attr) -> bool {
-                                                self.size == other.size
-                                                    && self.sched_policy == other.sched_policy
-                                                    && self.sched_flags == other.sched_flags
-                                                    && self.sched_nice == other.sched_nice
-                                                    && self.sched_priority == other.sched_priority
-                                                    && self.sched_runtime == other.sched_runtime
-                                                    && self.sched_deadline == other.sched_deadline
-                                                    && self.sched_period == other.sched_period
-                                            }
-                                        }
-                                        impl Eq for sched_attr {}
-                                        impl hash::Hash for sched_attr {
-                                            fn hash<H: hash::Hasher>(&self, state: &mut H) {
-                                                self.size.hash(state);
-                                                self.sched_policy.hash(state);
-                                                self.sched_flags.hash(state);
-                                                self.sched_nice.hash(state);
-                                                self.sched_priority.hash(state);
-                                                self.sched_runtime.hash(state);
-                                                self.sched_deadline.hash(state);
-                                                self.sched_period.hash(state);
-                                            }
-                                        }
-                                    }
-                                }
-
-                                cfg_if! {
-                                    if #[cfg(any(
-                                        target_env = "gnu",
-                                        target_env = "musl",
-                                        target_env = "ohos"
-                                    ))] {
-                                        pub const ABDAY_1: crate::nl_item = 0x20000;
-                                        pub const ABDAY_2: crate::nl_item = 0x20001;
-                                        pub const ABDAY_3: crate::nl_item = 0x20002;
-                                        pub const ABDAY_4: crate::nl_item = 0x20003;
-                                        pub const ABDAY_5: crate::nl_item = 0x20004;
-                                        pub const ABDAY_6: crate::nl_item = 0x20005;
-                                        pub const ABDAY_7: crate::nl_item = 0x20006;
-
-                                        pub const DAY_1: crate::nl_item = 0x20007;
-                                        pub const DAY_2: crate::nl_item = 0x20008;
-                                        pub const DAY_3: crate::nl_item = 0x20009;
-                                        pub const DAY_4: crate::nl_item = 0x2000A;
-                                        pub const DAY_5: crate::nl_item = 0x2000B;
-                                        pub const DAY_6: crate::nl_item = 0x2000C;
-                                        pub const DAY_7: crate::nl_item = 0x2000D;
-
-                                        pub const ABMON_1: crate::nl_item = 0x2000E;
-                                        pub const ABMON_2: crate::nl_item = 0x2000F;
-                                        pub const ABMON_3: crate::nl_item = 0x20010;
-                                        pub const ABMON_4: crate::nl_item = 0x20011;
-                                        pub const ABMON_5: crate::nl_item = 0x20012;
-                                        pub const ABMON_6: crate::nl_item = 0x20013;
-                                        pub const ABMON_7: crate::nl_item = 0x20014;
-                                        pub const ABMON_8: crate::nl_item = 0x20015;
-                                        pub const ABMON_9: crate::nl_item = 0x20016;
-                                        pub const ABMON_10: crate::nl_item = 0x20017;
-                                        pub const ABMON_11: crate::nl_item = 0x20018;
-                                        pub const ABMON_12: crate::nl_item = 0x20019;
-
-                                        pub const MON_1: crate::nl_item = 0x2001A;
-                                        pub const MON_2: crate::nl_item = 0x2001B;
-                                        pub const MON_3: crate::nl_item = 0x2001C;
-                                        pub const MON_4: crate::nl_item = 0x2001D;
-                                        pub const MON_5: crate::nl_item = 0x2001E;
-                                        pub const MON_6: crate::nl_item = 0x2001F;
-                                        pub const MON_7: crate::nl_item = 0x20020;
-                                        pub const MON_8: crate::nl_item = 0x20021;
-                                        pub const MON_9: crate::nl_item = 0x20022;
-                                        pub const MON_10: crate::nl_item = 0x20023;
-                                        pub const MON_11: crate::nl_item = 0x20024;
-                                        pub const MON_12: crate::nl_item = 0x20025;
-
-                                        pub const AM_STR: crate::nl_item = 0x20026;
-                                        pub const PM_STR: crate::nl_item = 0x20027;
-
-                                        pub const D_T_FMT: crate::nl_item = 0x20028;
-                                        pub const D_FMT: crate::nl_item = 0x20029;
-                                        pub const T_FMT: crate::nl_item = 0x2002A;
-                                        pub const T_FMT_AMPM: crate::nl_item = 0x2002B;
-
-                                        pub const ERA: crate::nl_item = 0x2002C;
-                                        pub const ERA_D_FMT: crate::nl_item = 0x2002E;
-                                        pub const ALT_DIGITS: crate::nl_item = 0x2002F;
-                                        pub const ERA_D_T_FMT: crate::nl_item = 0x20030;
-                                        pub const ERA_T_FMT: crate::nl_item = 0x20031;
-
-                                        pub const CODESET: crate::nl_item = 14;
-                                        pub const CRNCYSTR: crate::nl_item = 0x4000F;
-                                        pub const RADIXCHAR: crate::nl_item = 0x10000;
-                                        pub const THOUSEP: crate::nl_item = 0x10001;
-                                        pub const YESEXPR: crate::nl_item = 0x50000;
-                                        pub const NOEXPR: crate::nl_item = 0x50001;
-                                        pub const YESSTR: crate::nl_item = 0x50002;
-                                        pub const NOSTR: crate::nl_item = 0x50003;
-                                    }
-                                }
-
-                                pub const RUSAGE_CHILDREN: c_int = -1;
-                                pub const L_tmpnam: c_uint = 20;
-                                pub const _PC_LINK_MAX: c_int = 0;
-                                pub const _PC_MAX_CANON: c_int = 1;
-                                pub const _PC_MAX_INPUT: c_int = 2;
-                                pub const _PC_NAME_MAX: c_int = 3;
-                                pub const _PC_PATH_MAX: c_int = 4;
-                                pub const _PC_PIPE_BUF: c_int = 5;
-                                pub const _PC_CHOWN_RESTRICTED: c_int = 6;
-                                pub const _PC_NO_TRUNC: c_int = 7;
-                                pub const _PC_VDISABLE: c_int = 8;
-                                pub const _PC_SYNC_IO: c_int = 9;
-                                pub const _PC_ASYNC_IO: c_int = 10;
-                                pub const _PC_PRIO_IO: c_int = 11;
-                                pub const _PC_SOCK_MAXBUF: c_int = 12;
-                                pub const _PC_FILESIZEBITS: c_int = 13;
-                                pub const _PC_REC_INCR_XFER_SIZE: c_int = 14;
-                                pub const _PC_REC_MAX_XFER_SIZE: c_int = 15;
-                                pub const _PC_REC_MIN_XFER_SIZE: c_int = 16;
-                                pub const _PC_REC_XFER_ALIGN: c_int = 17;
-                                pub const _PC_ALLOC_SIZE_MIN: c_int = 18;
-                                pub const _PC_SYMLINK_MAX: c_int = 19;
-                                pub const _PC_2_SYMLINKS: c_int = 20;
-
-                                pub const MS_NOUSER: c_ulong = 0xffffffff80000000;
-
-                                pub const _SC_ARG_MAX: c_int = 0;
-                                pub const _SC_CHILD_MAX: c_int = 1;
-                                pub const _SC_CLK_TCK: c_int = 2;
-                                pub const _SC_NGROUPS_MAX: c_int = 3;
-                                pub const _SC_OPEN_MAX: c_int = 4;
-                                pub const _SC_STREAM_MAX: c_int = 5;
-                                pub const _SC_TZNAME_MAX: c_int = 6;
-                                pub const _SC_JOB_CONTROL: c_int = 7;
-                                pub const _SC_SAVED_IDS: c_int = 8;
-                                pub const _SC_REALTIME_SIGNALS: c_int = 9;
-                                pub const _SC_PRIORITY_SCHEDULING: c_int = 10;
-                                pub const _SC_TIMERS: c_int = 11;
-                                pub const _SC_ASYNCHRONOUS_IO: c_int = 12;
-                                pub const _SC_PRIORITIZED_IO: c_int = 13;
-                                pub const _SC_SYNCHRONIZED_IO: c_int = 14;
-                                pub const _SC_FSYNC: c_int = 15;
-                                pub const _SC_MAPPED_FILES: c_int = 16;
-                                pub const _SC_MEMLOCK: c_int = 17;
-                                pub const _SC_MEMLOCK_RANGE: c_int = 18;
-                                pub const _SC_MEMORY_PROTECTION: c_int = 19;
-                                pub const _SC_MESSAGE_PASSING: c_int = 20;
-                                pub const _SC_SEMAPHORES: c_int = 21;
-                                pub const _SC_SHARED_MEMORY_OBJECTS: c_int = 22;
-                                pub const _SC_AIO_LISTIO_MAX: c_int = 23;
-                                pub const _SC_AIO_MAX: c_int = 24;
-                                pub const _SC_AIO_PRIO_DELTA_MAX: c_int = 25;
-                                pub const _SC_DELAYTIMER_MAX: c_int = 26;
-                                pub const _SC_MQ_OPEN_MAX: c_int = 27;
-                                pub const _SC_MQ_PRIO_MAX: c_int = 28;
-                                pub const _SC_VERSION: c_int = 29;
-                                pub const _SC_PAGESIZE: c_int = 30;
-                                pub const _SC_PAGE_SIZE: c_int = _SC_PAGESIZE;
-                                pub const _SC_RTSIG_MAX: c_int = 31;
-                                pub const _SC_SEM_NSEMS_MAX: c_int = 32;
-                                pub const _SC_SEM_VALUE_MAX: c_int = 33;
-                                pub const _SC_SIGQUEUE_MAX: c_int = 34;
-                                pub const _SC_TIMER_MAX: c_int = 35;
-                                pub const _SC_BC_BASE_MAX: c_int = 36;
-                                pub const _SC_BC_DIM_MAX: c_int = 37;
-                                pub const _SC_BC_SCALE_MAX: c_int = 38;
-                                pub const _SC_BC_STRING_MAX: c_int = 39;
-                                pub const _SC_COLL_WEIGHTS_MAX: c_int = 40;
-                                pub const _SC_EXPR_NEST_MAX: c_int = 42;
-                                pub const _SC_LINE_MAX: c_int = 43;
-                                pub const _SC_RE_DUP_MAX: c_int = 44;
-                                pub const _SC_2_VERSION: c_int = 46;
-                                pub const _SC_2_C_BIND: c_int = 47;
-                                pub const _SC_2_C_DEV: c_int = 48;
-                                pub const _SC_2_FORT_DEV: c_int = 49;
-                                pub const _SC_2_FORT_RUN: c_int = 50;
-                                pub const _SC_2_SW_DEV: c_int = 51;
-                                pub const _SC_2_LOCALEDEF: c_int = 52;
-                                pub const _SC_UIO_MAXIOV: c_int = 60;
-                                pub const _SC_IOV_MAX: c_int = 60;
-                                pub const _SC_THREADS: c_int = 67;
-                                pub const _SC_THREAD_SAFE_FUNCTIONS: c_int = 68;
-                                pub const _SC_GETGR_R_SIZE_MAX: c_int = 69;
-                                pub const _SC_GETPW_R_SIZE_MAX: c_int = 70;
-                                pub const _SC_LOGIN_NAME_MAX: c_int = 71;
-                                pub const _SC_TTY_NAME_MAX: c_int = 72;
-                                pub const _SC_THREAD_DESTRUCTOR_ITERATIONS: c_int = 73;
-                                pub const _SC_THREAD_KEYS_MAX: c_int = 74;
-                                pub const _SC_THREAD_STACK_MIN: c_int = 75;
-                                pub const _SC_THREAD_THREADS_MAX: c_int = 76;
-                                pub const _SC_THREAD_ATTR_STACKADDR: c_int = 77;
-                                pub const _SC_THREAD_ATTR_STACKSIZE: c_int = 78;
-                                pub const _SC_THREAD_PRIORITY_SCHEDULING: c_int = 79;
-                                pub const _SC_THREAD_PRIO_INHERIT: c_int = 80;
-                                pub const _SC_THREAD_PRIO_PROTECT: c_int = 81;
-                                pub const _SC_THREAD_PROCESS_SHARED: c_int = 82;
-                                pub const _SC_NPROCESSORS_CONF: c_int = 83;
-                                pub const _SC_NPROCESSORS_ONLN: c_int = 84;
-                                pub const _SC_PHYS_PAGES: c_int = 85;
-                                pub const _SC_AVPHYS_PAGES: c_int = 86;
-                                pub const _SC_ATEXIT_MAX: c_int = 87;
-                                pub const _SC_PASS_MAX: c_int = 88;
-                                pub const _SC_XOPEN_VERSION: c_int = 89;
-                                pub const _SC_XOPEN_XCU_VERSION: c_int = 90;
-                                pub const _SC_XOPEN_UNIX: c_int = 91;
-                                pub const _SC_XOPEN_CRYPT: c_int = 92;
-                                pub const _SC_XOPEN_ENH_I18N: c_int = 93;
-                                pub const _SC_XOPEN_SHM: c_int = 94;
-                                pub const _SC_2_CHAR_TERM: c_int = 95;
-                                pub const _SC_2_UPE: c_int = 97;
-                                pub const _SC_XOPEN_XPG2: c_int = 98;
-                                pub const _SC_XOPEN_XPG3: c_int = 99;
-                                pub const _SC_XOPEN_XPG4: c_int = 100;
-                                pub const _SC_NZERO: c_int = 109;
-                                pub const _SC_XBS5_ILP32_OFF32: c_int = 125;
-                                pub const _SC_XBS5_ILP32_OFFBIG: c_int = 126;
-                                pub const _SC_XBS5_LP64_OFF64: c_int = 127;
-                                pub const _SC_XBS5_LPBIG_OFFBIG: c_int = 128;
-                                pub const _SC_XOPEN_LEGACY: c_int = 129;
-                                pub const _SC_XOPEN_REALTIME: c_int = 130;
-                                pub const _SC_XOPEN_REALTIME_THREADS: c_int = 131;
-                                pub const _SC_ADVISORY_INFO: c_int = 132;
-                                pub const _SC_BARRIERS: c_int = 133;
-                                pub const _SC_CLOCK_SELECTION: c_int = 137;
-                                pub const _SC_CPUTIME: c_int = 138;
-                                pub const _SC_THREAD_CPUTIME: c_int = 139;
-                                pub const _SC_MONOTONIC_CLOCK: c_int = 149;
-                                pub const _SC_READER_WRITER_LOCKS: c_int = 153;
-                                pub const _SC_SPIN_LOCKS: c_int = 154;
-                                pub const _SC_REGEXP: c_int = 155;
-                                pub const _SC_SHELL: c_int = 157;
-                                pub const _SC_SPAWN: c_int = 159;
-                                pub const _SC_SPORADIC_SERVER: c_int = 160;
-                                pub const _SC_THREAD_SPORADIC_SERVER: c_int = 161;
-                                pub const _SC_TIMEOUTS: c_int = 164;
-                                pub const _SC_TYPED_MEMORY_OBJECTS: c_int = 165;
-                                pub const _SC_2_PBS: c_int = 168;
-                                pub const _SC_2_PBS_ACCOUNTING: c_int = 169;
-                                pub const _SC_2_PBS_LOCATE: c_int = 170;
-                                pub const _SC_2_PBS_MESSAGE: c_int = 171;
-                                pub const _SC_2_PBS_TRACK: c_int = 172;
-                                pub const _SC_SYMLOOP_MAX: c_int = 173;
-                                pub const _SC_STREAMS: c_int = 174;
-                                pub const _SC_2_PBS_CHECKPOINT: c_int = 175;
-                                pub const _SC_V6_ILP32_OFF32: c_int = 176;
-                                pub const _SC_V6_ILP32_OFFBIG: c_int = 177;
-                                pub const _SC_V6_LP64_OFF64: c_int = 178;
-                                pub const _SC_V6_LPBIG_OFFBIG: c_int = 179;
-                                pub const _SC_HOST_NAME_MAX: c_int = 180;
-                                pub const _SC_TRACE: c_int = 181;
-                                pub const _SC_TRACE_EVENT_FILTER: c_int = 182;
-                                pub const _SC_TRACE_INHERIT: c_int = 183;
-                                pub const _SC_TRACE_LOG: c_int = 184;
-                                pub const _SC_IPV6: c_int = 235;
-                                pub const _SC_RAW_SOCKETS: c_int = 236;
-                                pub const _SC_V7_ILP32_OFF32: c_int = 237;
-                                pub const _SC_V7_ILP32_OFFBIG: c_int = 238;
-                                pub const _SC_V7_LP64_OFF64: c_int = 239;
-                                pub const _SC_V7_LPBIG_OFFBIG: c_int = 240;
-                                pub const _SC_SS_REPL_MAX: c_int = 241;
-                                pub const _SC_TRACE_EVENT_NAME_MAX: c_int = 242;
-                                pub const _SC_TRACE_NAME_MAX: c_int = 243;
-                                pub const _SC_TRACE_SYS_MAX: c_int = 244;
-                                pub const _SC_TRACE_USER_EVENT_MAX: c_int = 245;
-                                pub const _SC_XOPEN_STREAMS: c_int = 246;
-                                pub const _SC_THREAD_ROBUST_PRIO_INHERIT: c_int = 247;
-                                pub const _SC_THREAD_ROBUST_PRIO_PROTECT: c_int = 248;
-
-                                pub const _CS_PATH: c_int = 0;
-                                pub const _CS_POSIX_V6_WIDTH_RESTRICTED_ENVS: c_int = 1;
-                                pub const _CS_POSIX_V5_WIDTH_RESTRICTED_ENVS: c_int = 4;
-                                pub const _CS_POSIX_V7_WIDTH_RESTRICTED_ENVS: c_int = 5;
-                                pub const _CS_POSIX_V6_ILP32_OFF32_CFLAGS: c_int = 1116;
-                                pub const _CS_POSIX_V6_ILP32_OFF32_LDFLAGS: c_int = 1117;
-                                pub const _CS_POSIX_V6_ILP32_OFF32_LIBS: c_int = 1118;
-                                pub const _CS_POSIX_V6_ILP32_OFF32_LINTFLAGS: c_int = 1119;
-                                pub const _CS_POSIX_V6_ILP32_OFFBIG_CFLAGS: c_int = 1120;
-                                pub const _CS_POSIX_V6_ILP32_OFFBIG_LDFLAGS: c_int = 1121;
-                                pub const _CS_POSIX_V6_ILP32_OFFBIG_LIBS: c_int = 1122;
-                                pub const _CS_POSIX_V6_ILP32_OFFBIG_LINTFLAGS: c_int = 1123;
-                                pub const _CS_POSIX_V6_LP64_OFF64_CFLAGS: c_int = 1124;
-                                pub const _CS_POSIX_V6_LP64_OFF64_LDFLAGS: c_int = 1125;
-                                pub const _CS_POSIX_V6_LP64_OFF64_LIBS: c_int = 1126;
-                                pub const _CS_POSIX_V6_LP64_OFF64_LINTFLAGS: c_int = 1127;
-                                pub const _CS_POSIX_V6_LPBIG_OFFBIG_CFLAGS: c_int = 1128;
-                                pub const _CS_POSIX_V6_LPBIG_OFFBIG_LDFLAGS: c_int = 1129;
-                                pub const _CS_POSIX_V6_LPBIG_OFFBIG_LIBS: c_int = 1130;
-                                pub const _CS_POSIX_V6_LPBIG_OFFBIG_LINTFLAGS: c_int = 1131;
-                                pub const _CS_POSIX_V7_ILP32_OFF32_CFLAGS: c_int = 1132;
-                                pub const _CS_POSIX_V7_ILP32_OFF32_LDFLAGS: c_int = 1133;
-                                pub const _CS_POSIX_V7_ILP32_OFF32_LIBS: c_int = 1134;
-                                pub const _CS_POSIX_V7_ILP32_OFF32_LINTFLAGS: c_int = 1135;
-                                pub const _CS_POSIX_V7_ILP32_OFFBIG_CFLAGS: c_int = 1136;
-                                pub const _CS_POSIX_V7_ILP32_OFFBIG_LDFLAGS: c_int = 1137;
-                                pub const _CS_POSIX_V7_ILP32_OFFBIG_LIBS: c_int = 1138;
-                                pub const _CS_POSIX_V7_ILP32_OFFBIG_LINTFLAGS: c_int = 1139;
-                                pub const _CS_POSIX_V7_LP64_OFF64_CFLAGS: c_int = 1140;
-                                pub const _CS_POSIX_V7_LP64_OFF64_LDFLAGS: c_int = 1141;
-                                pub const _CS_POSIX_V7_LP64_OFF64_LIBS: c_int = 1142;
-                                pub const _CS_POSIX_V7_LP64_OFF64_LINTFLAGS: c_int = 1143;
-                                pub const _CS_POSIX_V7_LPBIG_OFFBIG_CFLAGS: c_int = 1144;
-                                pub const _CS_POSIX_V7_LPBIG_OFFBIG_LDFLAGS: c_int = 1145;
-                                pub const _CS_POSIX_V7_LPBIG_OFFBIG_LIBS: c_int = 1146;
-                                pub const _CS_POSIX_V7_LPBIG_OFFBIG_LINTFLAGS: c_int = 1147;
-
-                                pub const RLIM_SAVED_MAX: crate::rlim_t = RLIM_INFINITY;
-                                pub const RLIM_SAVED_CUR: crate::rlim_t = RLIM_INFINITY;
-
-                                // elf.h - Fields in the e_ident array.
-                                pub const EI_NIDENT: usize = 16;
-
-                                pub const EI_MAG0: usize = 0;
-                                pub const ELFMAG0: u8 = 0x7f;
-                                pub const EI_MAG1: usize = 1;
-                                pub const ELFMAG1: u8 = b'E';
-                                pub const EI_MAG2: usize = 2;
-                                pub const ELFMAG2: u8 = b'L';
-                                pub const EI_MAG3: usize = 3;
-                                pub const ELFMAG3: u8 = b'F';
-                                pub const SELFMAG: usize = 4;
-
-                                pub const EI_CLASS: usize = 4;
-                                pub const ELFCLASSNONE: u8 = 0;
-                                pub const ELFCLASS32: u8 = 1;
-                                pub const ELFCLASS64: u8 = 2;
-                                pub const ELFCLASSNUM: usize = 3;
-
-                                pub const EI_DATA: usize = 5;
-                                pub const ELFDATANONE: u8 = 0;
-                                pub const ELFDATA2LSB: u8 = 1;
-                                pub const ELFDATA2MSB: u8 = 2;
-                                pub const ELFDATANUM: usize = 3;
-
-                                pub const EI_VERSION: usize = 6;
-
-                                pub const EI_OSABI: usize = 7;
-                                pub const ELFOSABI_NONE: u8 = 0;
-                                pub const ELFOSABI_SYSV: u8 = 0;
-                                pub const ELFOSABI_HPUX: u8 = 1;
-                                pub const ELFOSABI_NETBSD: u8 = 2;
-                                pub const ELFOSABI_GNU: u8 = 3;
-                                pub const ELFOSABI_LINUX: u8 = ELFOSABI_GNU;
-                                pub const ELFOSABI_SOLARIS: u8 = 6;
-                                pub const ELFOSABI_AIX: u8 = 7;
-                                pub const ELFOSABI_IRIX: u8 = 8;
-                                pub const ELFOSABI_FREEBSD: u8 = 9;
-                                pub const ELFOSABI_TRU64: u8 = 10;
-                                pub const ELFOSABI_MODESTO: u8 = 11;
-                                pub const ELFOSABI_OPENBSD: u8 = 12;
-                                pub const ELFOSABI_ARM: u8 = 97;
-                                pub const ELFOSABI_STANDALONE: u8 = 255;
-
-                                pub const EI_ABIVERSION: usize = 8;
-
-                                pub const EI_PAD: usize = 9;
-
-                                // elf.h - Legal values for e_type (object file type).
-                                pub const ET_NONE: u16 = 0;
-                                pub const ET_REL: u16 = 1;
-                                pub const ET_EXEC: u16 = 2;
-                                pub const ET_DYN: u16 = 3;
-                                pub const ET_CORE: u16 = 4;
-                                pub const ET_NUM: u16 = 5;
-                                pub const ET_LOOS: u16 = 0xfe00;
-                                pub const ET_HIOS: u16 = 0xfeff;
-                                pub const ET_LOPROC: u16 = 0xff00;
-                                pub const ET_HIPROC: u16 = 0xffff;
-
-                                // elf.h - Legal values for e_machine (architecture).
-                                pub const EM_NONE: u16 = 0;
-                                pub const EM_M32: u16 = 1;
-                                pub const EM_SPARC: u16 = 2;
-                                pub const EM_386: u16 = 3;
-                                pub const EM_68K: u16 = 4;
-                                pub const EM_88K: u16 = 5;
-                                pub const EM_860: u16 = 7;
-                                pub const EM_MIPS: u16 = 8;
-                                pub const EM_S370: u16 = 9;
-                                pub const EM_MIPS_RS3_LE: u16 = 10;
-                                pub const EM_PARISC: u16 = 15;
-                                pub const EM_VPP500: u16 = 17;
-                                pub const EM_SPARC32PLUS: u16 = 18;
-                                pub const EM_960: u16 = 19;
-                                pub const EM_PPC: u16 = 20;
-                                pub const EM_PPC64: u16 = 21;
-                                pub const EM_S390: u16 = 22;
-                                pub const EM_V800: u16 = 36;
-                                pub const EM_FR20: u16 = 37;
-                                pub const EM_RH32: u16 = 38;
-                                pub const EM_RCE: u16 = 39;
-                                pub const EM_ARM: u16 = 40;
-                                pub const EM_FAKE_ALPHA: u16 = 41;
-                                pub const EM_SH: u16 = 42;
-                                pub const EM_SPARCV9: u16 = 43;
-                                pub const EM_TRICORE: u16 = 44;
-                                pub const EM_ARC: u16 = 45;
-                                pub const EM_H8_300: u16 = 46;
-                                pub const EM_H8_300H: u16 = 47;
-                                pub const EM_H8S: u16 = 48;
-                                pub const EM_H8_500: u16 = 49;
-                                pub const EM_IA_64: u16 = 50;
-                                pub const EM_MIPS_X: u16 = 51;
-                                pub const EM_COLDFIRE: u16 = 52;
-                                pub const EM_68HC12: u16 = 53;
-                                pub const EM_MMA: u16 = 54;
-                                pub const EM_PCP: u16 = 55;
-                                pub const EM_NCPU: u16 = 56;
-                                pub const EM_NDR1: u16 = 57;
-                                pub const EM_STARCORE: u16 = 58;
-                                pub const EM_ME16: u16 = 59;
-                                pub const EM_ST100: u16 = 60;
-                                pub const EM_TINYJ: u16 = 61;
-                                pub const EM_X86_64: u16 = 62;
-                                pub const EM_PDSP: u16 = 63;
-                                pub const EM_FX66: u16 = 66;
-                                pub const EM_ST9PLUS: u16 = 67;
-                                pub const EM_ST7: u16 = 68;
-                                pub const EM_68HC16: u16 = 69;
-                                pub const EM_68HC11: u16 = 70;
-                                pub const EM_68HC08: u16 = 71;
-                                pub const EM_68HC05: u16 = 72;
-                                pub const EM_SVX: u16 = 73;
-                                pub const EM_ST19: u16 = 74;
-                                pub const EM_VAX: u16 = 75;
-                                pub const EM_CRIS: u16 = 76;
-                                pub const EM_JAVELIN: u16 = 77;
-                                pub const EM_FIREPATH: u16 = 78;
-                                pub const EM_ZSP: u16 = 79;
-                                pub const EM_MMIX: u16 = 80;
-                                pub const EM_HUANY: u16 = 81;
-                                pub const EM_PRISM: u16 = 82;
-                                pub const EM_AVR: u16 = 83;
-                                pub const EM_FR30: u16 = 84;
-                                pub const EM_D10V: u16 = 85;
-                                pub const EM_D30V: u16 = 86;
-                                pub const EM_V850: u16 = 87;
-                                pub const EM_M32R: u16 = 88;
-                                pub const EM_MN10300: u16 = 89;
-                                pub const EM_MN10200: u16 = 90;
-                                pub const EM_PJ: u16 = 91;
-                                pub const EM_OPENRISC: u16 = 92;
-                                pub const EM_ARC_A5: u16 = 93;
-                                pub const EM_XTENSA: u16 = 94;
-                                pub const EM_AARCH64: u16 = 183;
-                                pub const EM_TILEPRO: u16 = 188;
-                                pub const EM_TILEGX: u16 = 191;
-                                pub const EM_ALPHA: u16 = 0x9026;
-
-                                // elf.h - Legal values for e_version (version).
-                                pub const EV_NONE: u32 = 0;
-                                pub const EV_CURRENT: u32 = 1;
-                                pub const EV_NUM: u32 = 2;
-
-                                // elf.h - Legal values for p_type (segment type).
-                                pub const PT_NULL: u32 = 0;
-                                pub const PT_LOAD: u32 = 1;
-                                pub const PT_DYNAMIC: u32 = 2;
-                                pub const PT_INTERP: u32 = 3;
-                                pub const PT_NOTE: u32 = 4;
-                                pub const PT_SHLIB: u32 = 5;
-                                pub const PT_PHDR: u32 = 6;
-                                pub const PT_TLS: u32 = 7;
-                                pub const PT_NUM: u32 = 8;
-                                pub const PT_LOOS: u32 = 0x60000000;
-                                pub const PT_GNU_EH_FRAME: u32 = 0x6474e550;
-                                pub const PT_GNU_STACK: u32 = 0x6474e551;
-                                pub const PT_GNU_RELRO: u32 = 0x6474e552;
-                                pub const PT_LOSUNW: u32 = 0x6ffffffa;
-                                pub const PT_SUNWBSS: u32 = 0x6ffffffa;
-                                pub const PT_SUNWSTACK: u32 = 0x6ffffffb;
-                                pub const PT_HISUNW: u32 = 0x6fffffff;
-                                pub const PT_HIOS: u32 = 0x6fffffff;
-                                pub const PT_LOPROC: u32 = 0x70000000;
-                                pub const PT_HIPROC: u32 = 0x7fffffff;
-
-                                // Legal values for p_flags (segment flags).
-                                pub const PF_X: u32 = 1 << 0;
-                                pub const PF_W: u32 = 1 << 1;
-                                pub const PF_R: u32 = 1 << 2;
-                                pub const PF_MASKOS: u32 = 0x0ff00000;
-                                pub const PF_MASKPROC: u32 = 0xf0000000;
-
-                                // elf.h - Legal values for a_type (entry type).
-                                pub const AT_NULL: c_ulong = 0;
-                                pub const AT_IGNORE: c_ulong = 1;
-                                pub const AT_EXECFD: c_ulong = 2;
-                                pub const AT_PHDR: c_ulong = 3;
-                                pub const AT_PHENT: c_ulong = 4;
-                                pub const AT_PHNUM: c_ulong = 5;
-                                pub const AT_PAGESZ: c_ulong = 6;
-                                pub const AT_BASE: c_ulong = 7;
-                                pub const AT_FLAGS: c_ulong = 8;
-                                pub const AT_ENTRY: c_ulong = 9;
-                                pub const AT_NOTELF: c_ulong = 10;
-                                pub const AT_UID: c_ulong = 11;
-                                pub const AT_EUID: c_ulong = 12;
-                                pub const AT_GID: c_ulong = 13;
-                                pub const AT_EGID: c_ulong = 14;
-                                pub const AT_PLATFORM: c_ulong = 15;
-                                pub const AT_HWCAP: c_ulong = 16;
-                                pub const AT_CLKTCK: c_ulong = 17;
-
-                                pub const AT_SECURE: c_ulong = 23;
-                                pub const AT_BASE_PLATFORM: c_ulong = 24;
-                                pub const AT_RANDOM: c_ulong = 25;
-                                pub const AT_HWCAP2: c_ulong = 26;
-
-                                pub const AT_EXECFN: c_ulong = 31;
-
-                                // defined in arch/<arch>/include/uapi/asm/auxvec.h but has the same value
-                                // wherever it is defined.
-                                pub const AT_SYSINFO_EHDR: c_ulong = 33;
-                                pub const AT_MINSIGSTKSZ: c_ulong = 51;
-
-                                pub const GLOB_ERR: c_int = 1 << 0;
-                                pub const GLOB_MARK: c_int = 1 << 1;
-                                pub const GLOB_NOSORT: c_int = 1 << 2;
-                                pub const GLOB_DOOFFS: c_int = 1 << 3;
-                                pub const GLOB_NOCHECK: c_int = 1 << 4;
-                                pub const GLOB_APPEND: c_int = 1 << 5;
-                                pub const GLOB_NOESCAPE: c_int = 1 << 6;
-
-                                pub const GLOB_NOSPACE: c_int = 1;
-                                pub const GLOB_ABORTED: c_int = 2;
-                                pub const GLOB_NOMATCH: c_int = 3;
-
-                                pub const POSIX_MADV_NORMAL: c_int = 0;
-                                pub const POSIX_MADV_RANDOM: c_int = 1;
-                                pub const POSIX_MADV_SEQUENTIAL: c_int = 2;
-                                pub const POSIX_MADV_WILLNEED: c_int = 3;
-                                pub const POSIX_SPAWN_USEVFORK: c_short = 64;
-                                pub const POSIX_SPAWN_SETSID: c_short = 128;
-
-                                pub const S_IEXEC: mode_t = 0o0100;
-                                pub const S_IWRITE: mode_t = 0o0200;
-                                pub const S_IREAD: mode_t = 0o0400;
-
-                                pub const F_LOCK: c_int = 1;
-                                pub const F_TEST: c_int = 3;
-                                pub const F_TLOCK: c_int = 2;
-                                pub const F_ULOCK: c_int = 0;
-
-                                pub const F_SEAL_FUTURE_WRITE: c_int = 0x0010;
-                                pub const F_SEAL_EXEC: c_int = 0x0020;
-
-                                pub const IFF_LOWER_UP: c_int = 0x10000;
-                                pub const IFF_DORMANT: c_int = 0x20000;
-                                pub const IFF_ECHO: c_int = 0x40000;
-
-                                // linux/if_addr.h
-                                pub const IFA_UNSPEC: c_ushort = 0;
-                                pub const IFA_ADDRESS: c_ushort = 1;
-                                pub const IFA_LOCAL: c_ushort = 2;
-                                pub const IFA_LABEL: c_ushort = 3;
-                                pub const IFA_BROADCAST: c_ushort = 4;
-                                pub const IFA_ANYCAST: c_ushort = 5;
-                                pub const IFA_CACHEINFO: c_ushort = 6;
-                                pub const IFA_MULTICAST: c_ushort = 7;
-                                pub const IFA_FLAGS: c_ushort = 8;
-
-                                pub const IFA_F_SECONDARY: u32 = 0x01;
-                                pub const IFA_F_TEMPORARY: u32 = 0x01;
-                                pub const IFA_F_NODAD: u32 = 0x02;
-                                pub const IFA_F_OPTIMISTIC: u32 = 0x04;
-                                pub const IFA_F_DADFAILED: u32 = 0x08;
-                                pub const IFA_F_HOMEADDRESS: u32 = 0x10;
-                                pub const IFA_F_DEPRECATED: u32 = 0x20;
-                                pub const IFA_F_TENTATIVE: u32 = 0x40;
-                                pub const IFA_F_PERMANENT: u32 = 0x80;
-                                pub const IFA_F_MANAGETEMPADDR: u32 = 0x100;
-                                pub const IFA_F_NOPREFIXROUTE: u32 = 0x200;
-                                pub const IFA_F_MCAUTOJOIN: u32 = 0x400;
-                                pub const IFA_F_STABLE_PRIVACY: u32 = 0x800;
-
-                                // linux/fs.h
-
-                                // Flags for preadv2/pwritev2
-                                pub const RWF_HIPRI: c_int = 0x00000001;
-                                pub const RWF_DSYNC: c_int = 0x00000002;
-                                pub const RWF_SYNC: c_int = 0x00000004;
-                                pub const RWF_NOWAIT: c_int = 0x00000008;
-                                pub const RWF_APPEND: c_int = 0x00000010;
-                                pub const RWF_NOAPPEND: c_int = 0x00000020;
-                                pub const RWF_ATOMIC: c_int = 0x00000040;
-                                pub const RWF_DONTCACHE: c_int = 0x00000080;
-
-                                // linux/if_link.h
-                                pub const IFLA_UNSPEC: c_ushort = 0;
-                                pub const IFLA_ADDRESS: c_ushort = 1;
-                                pub const IFLA_BROADCAST: c_ushort = 2;
-                                pub const IFLA_IFNAME: c_ushort = 3;
-                                pub const IFLA_MTU: c_ushort = 4;
-                                pub const IFLA_LINK: c_ushort = 5;
-                                pub const IFLA_QDISC: c_ushort = 6;
-                                pub const IFLA_STATS: c_ushort = 7;
-                                pub const IFLA_COST: c_ushort = 8;
-                                pub const IFLA_PRIORITY: c_ushort = 9;
-                                pub const IFLA_MASTER: c_ushort = 10;
-                                pub const IFLA_WIRELESS: c_ushort = 11;
-                                pub const IFLA_PROTINFO: c_ushort = 12;
-                                pub const IFLA_TXQLEN: c_ushort = 13;
-                                pub const IFLA_MAP: c_ushort = 14;
-                                pub const IFLA_WEIGHT: c_ushort = 15;
-                                pub const IFLA_OPERSTATE: c_ushort = 16;
-                                pub const IFLA_LINKMODE: c_ushort = 17;
-                                pub const IFLA_LINKINFO: c_ushort = 18;
-                                pub const IFLA_NET_NS_PID: c_ushort = 19;
-                                pub const IFLA_IFALIAS: c_ushort = 20;
-                                pub const IFLA_NUM_VF: c_ushort = 21;
-                                pub const IFLA_VFINFO_LIST: c_ushort = 22;
-                                pub const IFLA_STATS64: c_ushort = 23;
-                                pub const IFLA_VF_PORTS: c_ushort = 24;
-                                pub const IFLA_PORT_SELF: c_ushort = 25;
-                                pub const IFLA_AF_SPEC: c_ushort = 26;
-                                pub const IFLA_GROUP: c_ushort = 27;
-                                pub const IFLA_NET_NS_FD: c_ushort = 28;
-                                pub const IFLA_EXT_MASK: c_ushort = 29;
-                                pub const IFLA_PROMISCUITY: c_ushort = 30;
-                                pub const IFLA_NUM_TX_QUEUES: c_ushort = 31;
-                                pub const IFLA_NUM_RX_QUEUES: c_ushort = 32;
-                                pub const IFLA_CARRIER: c_ushort = 33;
-                                pub const IFLA_PHYS_PORT_ID: c_ushort = 34;
-                                pub const IFLA_CARRIER_CHANGES: c_ushort = 35;
-                                pub const IFLA_PHYS_SWITCH_ID: c_ushort = 36;
-                                pub const IFLA_LINK_NETNSID: c_ushort = 37;
-                                pub const IFLA_PHYS_PORT_NAME: c_ushort = 38;
-                                pub const IFLA_PROTO_DOWN: c_ushort = 39;
-                                pub const IFLA_GSO_MAX_SEGS: c_ushort = 40;
-                                pub const IFLA_GSO_MAX_SIZE: c_ushort = 41;
-                                pub const IFLA_PAD: c_ushort = 42;
-                                pub const IFLA_XDP: c_ushort = 43;
-                                pub const IFLA_EVENT: c_ushort = 44;
-                                pub const IFLA_NEW_NETNSID: c_ushort = 45;
-                                pub const IFLA_IF_NETNSID: c_ushort = 46;
-                                pub const IFLA_TARGET_NETNSID: c_ushort = IFLA_IF_NETNSID;
-                                pub const IFLA_CARRIER_UP_COUNT: c_ushort = 47;
-                                pub const IFLA_CARRIER_DOWN_COUNT: c_ushort = 48;
-                                pub const IFLA_NEW_IFINDEX: c_ushort = 49;
-                                pub const IFLA_MIN_MTU: c_ushort = 50;
-                                pub const IFLA_MAX_MTU: c_ushort = 51;
-                                pub const IFLA_PROP_LIST: c_ushort = 52;
-                                pub const IFLA_ALT_IFNAME: c_ushort = 53;
-                                pub const IFLA_PERM_ADDRESS: c_ushort = 54;
-                                pub const IFLA_PROTO_DOWN_REASON: c_ushort = 55;
-                                pub const IFLA_PARENT_DEV_NAME: c_ushort = 56;
-                                pub const IFLA_PARENT_DEV_BUS_NAME: c_ushort = 57;
-                                pub const IFLA_GRO_MAX_SIZE: c_ushort = 58;
-                                pub const IFLA_TSO_MAX_SIZE: c_ushort = 59;
-                                pub const IFLA_TSO_MAX_SEGS: c_ushort = 60;
-                                pub const IFLA_ALLMULTI: c_ushort = 61;
-
-                                pub const IFLA_INFO_UNSPEC: c_ushort = 0;
-                                pub const IFLA_INFO_KIND: c_ushort = 1;
-                                pub const IFLA_INFO_DATA: c_ushort = 2;
-                                pub const IFLA_INFO_XSTATS: c_ushort = 3;
-                                pub const IFLA_INFO_SLAVE_KIND: c_ushort = 4;
-                                pub const IFLA_INFO_SLAVE_DATA: c_ushort = 5;
-
-                                // Since Linux 3.1
-                                pub const SEEK_DATA: c_int = 3;
-                                pub const SEEK_HOLE: c_int = 4;
-
-                                pub const ST_RDONLY: c_ulong = 1;
-                                pub const ST_NOSUID: c_ulong = 2;
-                                pub const ST_NODEV: c_ulong = 4;
-                                pub const ST_NOEXEC: c_ulong = 8;
-                                pub const ST_SYNCHRONOUS: c_ulong = 16;
-                                pub const ST_MANDLOCK: c_ulong = 64;
-                                pub const ST_WRITE: c_ulong = 128;
-                                pub const ST_APPEND: c_ulong = 256;
-                                pub const ST_IMMUTABLE: c_ulong = 512;
-                                pub const ST_NOATIME: c_ulong = 1024;
-                                pub const ST_NODIRATIME: c_ulong = 2048;
-
-                                pub const RTLD_NEXT: *mut c_void = -1i64 as *mut c_void;
-                                pub const RTLD_DEFAULT: *mut c_void = 0i64 as *mut c_void;
-                                pub const RTLD_NODELETE: c_int = 0x1000;
-                                pub const RTLD_NOW: c_int = 0x2;
-
-                                pub const AT_EACCESS: c_int = 0x200;
-
-                                // linux/mempolicy.h
-                                pub const MPOL_DEFAULT: c_int = 0;
-                                pub const MPOL_PREFERRED: c_int = 1;
-                                pub const MPOL_BIND: c_int = 2;
-                                pub const MPOL_INTERLEAVE: c_int = 3;
-                                pub const MPOL_LOCAL: c_int = 4;
-                                pub const MPOL_F_NUMA_BALANCING: c_int = 1 << 13;
-                                pub const MPOL_F_RELATIVE_NODES: c_int = 1 << 14;
-                                pub const MPOL_F_STATIC_NODES: c_int = 1 << 15;
-
-                                // linux/membarrier.h
-                                pub const MEMBARRIER_CMD_QUERY: c_int = 0;
-                                pub const MEMBARRIER_CMD_GLOBAL: c_int = 1 << 0;
-                                pub const MEMBARRIER_CMD_GLOBAL_EXPEDITED: c_int = 1 << 1;
-                                pub const MEMBARRIER_CMD_REGISTER_GLOBAL_EXPEDITED: c_int = 1 << 2;
-                                pub const MEMBARRIER_CMD_PRIVATE_EXPEDITED: c_int = 1 << 3;
-                                pub const MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED: c_int = 1 << 4;
-                                pub const MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE: c_int = 1 << 5;
-                                pub const MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_SYNC_CORE: c_int = 1 << 6;
-                                pub const MEMBARRIER_CMD_PRIVATE_EXPEDITED_RSEQ: c_int = 1 << 7;
-                                pub const MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_RSEQ: c_int = 1 << 8;
-
-                                pub const PTHREAD_MUTEX_INITIALIZER: pthread_mutex_t = pthread_mutex_t {
-                                    size: [0; __SIZEOF_PTHREAD_MUTEX_T],
-                                };
-                                pub const PTHREAD_COND_INITIALIZER: pthread_cond_t = pthread_cond_t {
-                                    size: [0; __SIZEOF_PTHREAD_COND_T],
-                                };
-                                pub const PTHREAD_RWLOCK_INITIALIZER: pthread_rwlock_t = pthread_rwlock_t {
-                                    size: [0; __SIZEOF_PTHREAD_RWLOCK_T],
-                                };
-
-                                pub const PTHREAD_BARRIER_SERIAL_THREAD: c_int = -1;
-                                pub const PTHREAD_ONCE_INIT: pthread_once_t = 0;
-                                pub const PTHREAD_MUTEX_NORMAL: c_int = 0;
-                                pub const PTHREAD_MUTEX_RECURSIVE: c_int = 1;
-                                pub const PTHREAD_MUTEX_ERRORCHECK: c_int = 2;
-                                pub const PTHREAD_MUTEX_DEFAULT: c_int = PTHREAD_MUTEX_NORMAL;
-                                pub const PTHREAD_MUTEX_STALLED: c_int = 0;
-                                pub const PTHREAD_MUTEX_ROBUST: c_int = 1;
-                                pub const PTHREAD_PRIO_NONE: c_int = 0;
-                                pub const PTHREAD_PRIO_INHERIT: c_int = 1;
-                                pub const PTHREAD_PRIO_PROTECT: c_int = 2;
-                                pub const PTHREAD_PROCESS_PRIVATE: c_int = 0;
-                                pub const PTHREAD_PROCESS_SHARED: c_int = 1;
-                                pub const PTHREAD_INHERIT_SCHED: c_int = 0;
-                                pub const PTHREAD_EXPLICIT_SCHED: c_int = 1;
-                                pub const __SIZEOF_PTHREAD_COND_T: usize = 48;
-
-                                pub const RENAME_NOREPLACE: c_uint = 1;
-                                pub const RENAME_EXCHANGE: c_uint = 2;
-                                pub const RENAME_WHITEOUT: c_uint = 4;
-
-                                // netinet/in.h
-                                // NOTE: These are in addition to the constants defined in src/unix/mod.rs
-
-                                #[deprecated(
-                                    since = "0.2.80",
-                                    note = "This value was increased in the newer kernel \
-                                            and we'll change this following upstream in the future release. \
-                                            See #1896 for more info."
-                                )]
-                                pub const IPPROTO_MAX: c_int = 256;
-
-                                // System V IPC
-                                pub const IPC_PRIVATE: crate::key_t = 0;
-
-                                pub const IPC_CREAT: c_int = 0o1000;
-                                pub const IPC_EXCL: c_int = 0o2000;
-                                pub const IPC_NOWAIT: c_int = 0o4000;
-
-                                pub const IPC_RMID: c_int = 0;
-                                pub const IPC_SET: c_int = 1;
-                                pub const IPC_STAT: c_int = 2;
-                                pub const IPC_INFO: c_int = 3;
-                                pub const MSG_STAT: c_int = 11;
-                                pub const MSG_INFO: c_int = 12;
-                                pub const MSG_NOTIFICATION: c_int = 0x8000;
-
-                                pub const MSG_NOERROR: c_int = 0o10000;
-                                pub const MSG_EXCEPT: c_int = 0o20000;
-                                pub const MSG_ZEROCOPY: c_int = 0x4000000;
-
-                                pub const SEM_UNDO: c_int = 0x1000;
-
-                                pub const GETPID: c_int = 11;
-                                pub const GETVAL: c_int = 12;
-                                pub const GETALL: c_int = 13;
-                                pub const GETNCNT: c_int = 14;
-                                pub const GETZCNT: c_int = 15;
-                                pub const SETVAL: c_int = 16;
-                                pub const SETALL: c_int = 17;
-                                pub const SEM_STAT: c_int = 18;
-                                pub const SEM_INFO: c_int = 19;
-                                pub const SEM_STAT_ANY: c_int = 20;
-
-                                pub const SHM_R: c_int = 0o400;
-                                pub const SHM_W: c_int = 0o200;
-
-                                pub const SHM_RDONLY: c_int = 0o10000;
-                                pub const SHM_RND: c_int = 0o20000;
-                                pub const SHM_REMAP: c_int = 0o40000;
-
-                                pub const SHM_LOCK: c_int = 11;
-                                pub const SHM_UNLOCK: c_int = 12;
-
-                                pub const SHM_HUGETLB: c_int = 0o4000;
-                                #[cfg(not(all(target_env = "uclibc", target_arch = "mips")))]
-                                pub const SHM_NORESERVE: c_int = 0o10000;
-
-                                pub const QFMT_VFS_OLD: c_int = 1;
-                                pub const QFMT_VFS_V0: c_int = 2;
-                                pub const QFMT_VFS_V1: c_int = 4;
-
-                                pub const EFD_SEMAPHORE: c_int = 0x1;
-
-                                pub const LOG_NFACILITIES: c_int = 24;
-
-                                pub const SEM_FAILED: *mut crate::sem_t = 0 as *mut sem_t;
-
-                                pub const RB_AUTOBOOT: c_int = 0x01234567u32 as i32;
-                                pub const RB_HALT_SYSTEM: c_int = 0xcdef0123u32 as i32;
-                                pub const RB_ENABLE_CAD: c_int = 0x89abcdefu32 as i32;
-                                pub const RB_DISABLE_CAD: c_int = 0x00000000u32 as i32;
-                                pub const RB_POWER_OFF: c_int = 0x4321fedcu32 as i32;
-                                pub const RB_SW_SUSPEND: c_int = 0xd000fce2u32 as i32;
-                                pub const RB_KEXEC: c_int = 0x45584543u32 as i32;
-
-                                pub const AI_PASSIVE: c_int = 0x0001;
-                                pub const AI_CANONNAME: c_int = 0x0002;
-                                pub const AI_NUMERICHOST: c_int = 0x0004;
-                                pub const AI_V4MAPPED: c_int = 0x0008;
-                                pub const AI_ALL: c_int = 0x0010;
-                                pub const AI_ADDRCONFIG: c_int = 0x0020;
-
-                                pub const AI_NUMERICSERV: c_int = 0x0400;
-
-                                pub const EAI_BADFLAGS: c_int = -1;
-                                pub const EAI_NONAME: c_int = -2;
-                                pub const EAI_AGAIN: c_int = -3;
-                                pub const EAI_FAIL: c_int = -4;
-                                pub const EAI_NODATA: c_int = -5;
-                                pub const EAI_FAMILY: c_int = -6;
-                                pub const EAI_SOCKTYPE: c_int = -7;
-                                pub const EAI_SERVICE: c_int = -8;
-                                pub const EAI_MEMORY: c_int = -10;
-                                pub const EAI_SYSTEM: c_int = -11;
-                                pub const EAI_OVERFLOW: c_int = -12;
-
-                                pub const NI_NUMERICHOST: c_int = 1;
-                                pub const NI_NUMERICSERV: c_int = 2;
-                                pub const NI_NOFQDN: c_int = 4;
-                                pub const NI_NAMEREQD: c_int = 8;
-                                pub const NI_DGRAM: c_int = 16;
-                                pub const NI_IDN: c_int = 32;
-
-                                pub const SYNC_FILE_RANGE_WAIT_BEFORE: c_uint = 1;
-                                pub const SYNC_FILE_RANGE_WRITE: c_uint = 2;
-                                pub const SYNC_FILE_RANGE_WAIT_AFTER: c_uint = 4;
-
-                                cfg_if! {
-                                    if #[cfg(not(target_env = "uclibc"))] {
-                                        pub const AIO_CANCELED: c_int = 0;
-                                        pub const AIO_NOTCANCELED: c_int = 1;
-                                        pub const AIO_ALLDONE: c_int = 2;
-                                        pub const LIO_READ: c_int = 0;
-                                        pub const LIO_WRITE: c_int = 1;
-                                        pub const LIO_NOP: c_int = 2;
-                                        pub const LIO_WAIT: c_int = 0;
-                                        pub const LIO_NOWAIT: c_int = 1;
-                                        pub const RUSAGE_THREAD: c_int = 1;
-                                        pub const MSG_COPY: c_int = 0o40000;
-                                        pub const SHM_EXEC: c_int = 0o100000;
-                                        pub const IPV6_MULTICAST_ALL: c_int = 29;
-                                        pub const IPV6_ROUTER_ALERT_ISOLATE: c_int = 30;
-                                        pub const PACKET_MR_UNICAST: c_int = 3;
-                                        pub const PTRACE_EVENT_STOP: c_int = 128;
-                                        pub const UDP_SEGMENT: c_int = 103;
-                                        pub const UDP_GRO: c_int = 104;
-                                    }
-                                }
-
-                                pub const MREMAP_MAYMOVE: c_int = 1;
-                                pub const MREMAP_FIXED: c_int = 2;
-                                pub const MREMAP_DONTUNMAP: c_int = 4;
-
-                                // linux/nsfs.h
-                                const NSIO: c_uint = 0xb7;
-
-                                pub const NS_GET_USERNS: Ioctl = _IO(NSIO, 0x1);
-                                pub const NS_GET_PARENT: Ioctl = _IO(NSIO, 0x2);
-                                pub const NS_GET_NSTYPE: Ioctl = _IO(NSIO, 0x3);
-                                pub const NS_GET_OWNER_UID: Ioctl = _IO(NSIO, 0x4);
-
-                                pub const NS_GET_MNTNS_ID: Ioctl = _IOR::<__u64>(NSIO, 0x5);
-
-                                pub const NS_GET_PID_FROM_PIDNS: Ioctl = _IOR::<c_int>(NSIO, 0x6);
-                                pub const NS_GET_TGID_FROM_PIDNS: Ioctl = _IOR::<c_int>(NSIO, 0x7);
-                                pub const NS_GET_PID_IN_PIDNS: Ioctl = _IOR::<c_int>(NSIO, 0x8);
-                                pub const NS_GET_TGID_IN_PIDNS: Ioctl = _IOR::<c_int>(NSIO, 0x9);
-
-                                pub const MNT_NS_INFO_SIZE_VER0: Ioctl = 16;
-
-                                pub const NS_MNT_GET_INFO: Ioctl = _IOR::<mnt_ns_info>(NSIO, 10);
-                                pub const NS_MNT_GET_NEXT: Ioctl = _IOR::<mnt_ns_info>(NSIO, 11);
-                                pub const NS_MNT_GET_PREV: Ioctl = _IOR::<mnt_ns_info>(NSIO, 12);
-
-                                // linux/pidfd.h
-                                pub const PIDFD_NONBLOCK: c_uint = O_NONBLOCK as c_uint;
-                                pub const PIDFD_THREAD: c_uint = O_EXCL as c_uint;
-
-                                pub const PIDFD_SIGNAL_THREAD: c_uint = 1 << 0;
-                                pub const PIDFD_SIGNAL_THREAD_GROUP: c_uint = 1 << 1;
-                                pub const PIDFD_SIGNAL_PROCESS_GROUP: c_uint = 1 << 2;
-
-                                pub const PIDFD_INFO_PID: c_uint = 1 << 0;
-                                pub const PIDFD_INFO_CREDS: c_uint = 1 << 1;
-                                pub const PIDFD_INFO_CGROUPID: c_uint = 1 << 2;
-                                pub const PIDFD_INFO_EXIT: c_uint = 1 << 3;
-
-                                pub const PIDFD_INFO_SIZE_VER0: c_uint = 64;
-
-                                const PIDFS_IOCTL_MAGIC: c_uint = 0xFF;
-                                pub const PIDFD_GET_CGROUP_NAMESPACE: Ioctl = _IO(PIDFS_IOCTL_MAGIC, 1);
-                                pub const PIDFD_GET_IPC_NAMESPACE: Ioctl = _IO(PIDFS_IOCTL_MAGIC, 2);
-                                pub const PIDFD_GET_MNT_NAMESPACE: Ioctl = _IO(PIDFS_IOCTL_MAGIC, 3);
-                                pub const PIDFD_GET_NET_NAMESPACE: Ioctl = _IO(PIDFS_IOCTL_MAGIC, 4);
-                                pub const PIDFD_GET_PID_NAMESPACE: Ioctl = _IO(PIDFS_IOCTL_MAGIC, 5);
-                                pub const PIDFD_GET_PID_FOR_CHILDREN_NAMESPACE: Ioctl = _IO(PIDFS_IOCTL_MAGIC, 6);
-                                pub const PIDFD_GET_TIME_NAMESPACE: Ioctl = _IO(PIDFS_IOCTL_MAGIC, 7);
-                                pub const PIDFD_GET_TIME_FOR_CHILDREN_NAMESPACE: Ioctl = _IO(PIDFS_IOCTL_MAGIC, 8);
-                                pub const PIDFD_GET_USER_NAMESPACE: Ioctl = _IO(PIDFS_IOCTL_MAGIC, 9);
-                                pub const PIDFD_GET_UTS_NAMESPACE: Ioctl = _IO(PIDFS_IOCTL_MAGIC, 10);
-                                pub const PIDFD_GET_INFO: Ioctl = _IOWR::<pidfd_info>(PIDFS_IOCTL_MAGIC, 11);
-
-                                // linux/prctl.h
-                                pub const PR_SET_PDEATHSIG: c_int = 1;
-                                pub const PR_GET_PDEATHSIG: c_int = 2;
-
-                                pub const PR_GET_DUMPABLE: c_int = 3;
-                                pub const PR_SET_DUMPABLE: c_int = 4;
-
-                                pub const PR_GET_UNALIGN: c_int = 5;
-                                pub const PR_SET_UNALIGN: c_int = 6;
-                                pub const PR_UNALIGN_NOPRINT: c_int = 1;
-                                pub const PR_UNALIGN_SIGBUS: c_int = 2;
-
-                                pub const PR_GET_KEEPCAPS: c_int = 7;
-                                pub const PR_SET_KEEPCAPS: c_int = 8;
-
-                                pub const PR_GET_FPEMU: c_int = 9;
-                                pub const PR_SET_FPEMU: c_int = 10;
-                                pub const PR_FPEMU_NOPRINT: c_int = 1;
-                                pub const PR_FPEMU_SIGFPE: c_int = 2;
-
-                                pub const PR_GET_FPEXC: c_int = 11;
-                                pub const PR_SET_FPEXC: c_int = 12;
-                                pub const PR_FP_EXC_SW_ENABLE: c_int = 0x80;
-                                pub const PR_FP_EXC_DIV: c_int = 0x010000;
-                                pub const PR_FP_EXC_OVF: c_int = 0x020000;
-                                pub const PR_FP_EXC_UND: c_int = 0x040000;
-                                pub const PR_FP_EXC_RES: c_int = 0x080000;
-                                pub const PR_FP_EXC_INV: c_int = 0x100000;
-                                pub const PR_FP_EXC_DISABLED: c_int = 0;
-                                pub const PR_FP_EXC_NONRECOV: c_int = 1;
-                                pub const PR_FP_EXC_ASYNC: c_int = 2;
-                                pub const PR_FP_EXC_PRECISE: c_int = 3;
-
-                                pub const PR_GET_TIMING: c_int = 13;
-                                pub const PR_SET_TIMING: c_int = 14;
-                                pub const PR_TIMING_STATISTICAL: c_int = 0;
-                                pub const PR_TIMING_TIMESTAMP: c_int = 1;
-
-                                pub const PR_SET_NAME: c_int = 15;
-                                pub const PR_GET_NAME: c_int = 16;
-
-                                pub const PR_GET_ENDIAN: c_int = 19;
-                                pub const PR_SET_ENDIAN: c_int = 20;
-                                pub const PR_ENDIAN_BIG: c_int = 0;
-                                pub const PR_ENDIAN_LITTLE: c_int = 1;
-                                pub const PR_ENDIAN_PPC_LITTLE: c_int = 2;
-
-                                pub const PR_GET_SECCOMP: c_int = 21;
-                                pub const PR_SET_SECCOMP: c_int = 22;
-
-                                pub const PR_CAPBSET_READ: c_int = 23;
-                                pub const PR_CAPBSET_DROP: c_int = 24;
-
-                                pub const PR_GET_TSC: c_int = 25;
-                                pub const PR_SET_TSC: c_int = 26;
-                                pub const PR_TSC_ENABLE: c_int = 1;
-                                pub const PR_TSC_SIGSEGV: c_int = 2;
-
-                                pub const PR_GET_SECUREBITS: c_int = 27;
-                                pub const PR_SET_SECUREBITS: c_int = 28;
-
-                                pub const PR_SET_TIMERSLACK: c_int = 29;
-                                pub const PR_GET_TIMERSLACK: c_int = 30;
-
-                                pub const PR_TASK_PERF_EVENTS_DISABLE: c_int = 31;
-                                pub const PR_TASK_PERF_EVENTS_ENABLE: c_int = 32;
-
-                                pub const PR_MCE_KILL: c_int = 33;
-                                pub const PR_MCE_KILL_CLEAR: c_int = 0;
-                                pub const PR_MCE_KILL_SET: c_int = 1;
-
-                                pub const PR_MCE_KILL_LATE: c_int = 0;
-                                pub const PR_MCE_KILL_EARLY: c_int = 1;
-                                pub const PR_MCE_KILL_DEFAULT: c_int = 2;
-
-                                pub const PR_MCE_KILL_GET: c_int = 34;
-
-                                pub const PR_SET_MM: c_int = 35;
-                                pub const PR_SET_MM_START_CODE: c_int = 1;
-                                pub const PR_SET_MM_END_CODE: c_int = 2;
-                                pub const PR_SET_MM_START_DATA: c_int = 3;
-                                pub const PR_SET_MM_END_DATA: c_int = 4;
-                                pub const PR_SET_MM_START_STACK: c_int = 5;
-                                pub const PR_SET_MM_START_BRK: c_int = 6;
-                                pub const PR_SET_MM_BRK: c_int = 7;
-                                pub const PR_SET_MM_ARG_START: c_int = 8;
-                                pub const PR_SET_MM_ARG_END: c_int = 9;
-                                pub const PR_SET_MM_ENV_START: c_int = 10;
-                                pub const PR_SET_MM_ENV_END: c_int = 11;
-                                pub const PR_SET_MM_AUXV: c_int = 12;
-                                pub const PR_SET_MM_EXE_FILE: c_int = 13;
-                                pub const PR_SET_MM_MAP: c_int = 14;
-                                pub const PR_SET_MM_MAP_SIZE: c_int = 15;
-
-                                pub const PR_SET_PTRACER: c_int = 0x59616d61;
-                                pub const PR_SET_PTRACER_ANY: c_ulong = 0xffffffffffffffff;
-
-                                pub const PR_SET_CHILD_SUBREAPER: c_int = 36;
-                                pub const PR_GET_CHILD_SUBREAPER: c_int = 37;
-
-                                pub const PR_SET_NO_NEW_PRIVS: c_int = 38;
-                                pub const PR_GET_NO_NEW_PRIVS: c_int = 39;
-
-                                pub const PR_SET_MDWE: c_int = 65;
-                                pub const PR_GET_MDWE: c_int = 66;
-                                pub const PR_MDWE_REFUSE_EXEC_GAIN: c_uint = 1 << 0;
-                                pub const PR_MDWE_NO_INHERIT: c_uint = 1 << 1;
-
-                                pub const PR_GET_TID_ADDRESS: c_int = 40;
-
-                                pub const PR_SET_THP_DISABLE: c_int = 41;
-                                pub const PR_GET_THP_DISABLE: c_int = 42;
-
-                                pub const PR_MPX_ENABLE_MANAGEMENT: c_int = 43;
-                                pub const PR_MPX_DISABLE_MANAGEMENT: c_int = 44;
-
-                                pub const PR_SET_FP_MODE: c_int = 45;
-                                pub const PR_GET_FP_MODE: c_int = 46;
-                                pub const PR_FP_MODE_FR: c_int = 1 << 0;
-                                pub const PR_FP_MODE_FRE: c_int = 1 << 1;
-
-                                pub const PR_CAP_AMBIENT: c_int = 47;
-                                pub const PR_CAP_AMBIENT_IS_SET: c_int = 1;
-                                pub const PR_CAP_AMBIENT_RAISE: c_int = 2;
-                                pub const PR_CAP_AMBIENT_LOWER: c_int = 3;
-                                pub const PR_CAP_AMBIENT_CLEAR_ALL: c_int = 4;
-
-                                pub const PR_SET_VMA: c_int = 0x53564d41;
-                                pub const PR_SET_VMA_ANON_NAME: c_int = 0;
-
-                                pub const PR_SCHED_CORE: c_int = 62;
-                                pub const PR_SCHED_CORE_GET: c_int = 0;
-                                pub const PR_SCHED_CORE_CREATE: c_int = 1;
-                                pub const PR_SCHED_CORE_SHARE_TO: c_int = 2;
-                                pub const PR_SCHED_CORE_SHARE_FROM: c_int = 3;
-                                pub const PR_SCHED_CORE_MAX: c_int = 4;
-                                pub const PR_SCHED_CORE_SCOPE_THREAD: c_int = 0;
-                                pub const PR_SCHED_CORE_SCOPE_THREAD_GROUP: c_int = 1;
-                                pub const PR_SCHED_CORE_SCOPE_PROCESS_GROUP: c_int = 2;
-
-                                pub const GRND_NONBLOCK: c_uint = 0x0001;
-                                pub const GRND_RANDOM: c_uint = 0x0002;
-                                pub const GRND_INSECURE: c_uint = 0x0004;
-
-                                // <linux/seccomp.h>
-                                pub const SECCOMP_MODE_DISABLED: c_uint = 0;
-                                pub const SECCOMP_MODE_STRICT: c_uint = 1;
-                                pub const SECCOMP_MODE_FILTER: c_uint = 2;
-
-                                pub const SECCOMP_SET_MODE_STRICT: c_uint = 0;
-                                pub const SECCOMP_SET_MODE_FILTER: c_uint = 1;
-                                pub const SECCOMP_GET_ACTION_AVAIL: c_uint = 2;
-                                pub const SECCOMP_GET_NOTIF_SIZES: c_uint = 3;
-
-                                pub const SECCOMP_FILTER_FLAG_TSYNC: c_ulong = 1 << 0;
-                                pub const SECCOMP_FILTER_FLAG_LOG: c_ulong = 1 << 1;
-                                pub const SECCOMP_FILTER_FLAG_SPEC_ALLOW: c_ulong = 1 << 2;
-                                pub const SECCOMP_FILTER_FLAG_NEW_LISTENER: c_ulong = 1 << 3;
-                                pub const SECCOMP_FILTER_FLAG_TSYNC_ESRCH: c_ulong = 1 << 4;
-                                pub const SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV: c_ulong = 1 << 5;
-
-                                pub const SECCOMP_RET_KILL_PROCESS: c_uint = 0x80000000;
-                                pub const SECCOMP_RET_KILL_THREAD: c_uint = 0x00000000;
-                                pub const SECCOMP_RET_KILL: c_uint = SECCOMP_RET_KILL_THREAD;
-                                pub const SECCOMP_RET_TRAP: c_uint = 0x00030000;
-                                pub const SECCOMP_RET_ERRNO: c_uint = 0x00050000;
-                                pub const SECCOMP_RET_USER_NOTIF: c_uint = 0x7fc00000;
-                                pub const SECCOMP_RET_TRACE: c_uint = 0x7ff00000;
-                                pub const SECCOMP_RET_LOG: c_uint = 0x7ffc0000;
-                                pub const SECCOMP_RET_ALLOW: c_uint = 0x7fff0000;
-
-                                pub const SECCOMP_RET_ACTION_FULL: c_uint = 0xffff0000;
-                                pub const SECCOMP_RET_ACTION: c_uint = 0x7fff0000;
-                                pub const SECCOMP_RET_DATA: c_uint = 0x0000ffff;
-
-                                pub const SECCOMP_USER_NOTIF_FLAG_CONTINUE: c_ulong = 1;
-
-                                pub const SECCOMP_ADDFD_FLAG_SETFD: c_ulong = 1;
-                                pub const SECCOMP_ADDFD_FLAG_SEND: c_ulong = 2;
-
-                                pub const ITIMER_REAL: c_int = 0;
-                                pub const ITIMER_VIRTUAL: c_int = 1;
-                                pub const ITIMER_PROF: c_int = 2;
-
-                                pub const TFD_CLOEXEC: c_int = O_CLOEXEC;
-                                pub const TFD_NONBLOCK: c_int = O_NONBLOCK;
-                                pub const TFD_TIMER_ABSTIME: c_int = 1;
-                                pub const TFD_TIMER_CANCEL_ON_SET: c_int = 2;
-
-                                pub const _POSIX_VDISABLE: crate::cc_t = 0;
-
-                                pub const FALLOC_FL_KEEP_SIZE: c_int = 0x01;
-                                pub const FALLOC_FL_PUNCH_HOLE: c_int = 0x02;
-                                pub const FALLOC_FL_COLLAPSE_RANGE: c_int = 0x08;
-                                pub const FALLOC_FL_ZERO_RANGE: c_int = 0x10;
-                                pub const FALLOC_FL_INSERT_RANGE: c_int = 0x20;
-                                pub const FALLOC_FL_UNSHARE_RANGE: c_int = 0x40;
-
-                                #[deprecated(
-                                    since = "0.2.55",
-                                    note = "ENOATTR is not available on Linux; use ENODATA instead"
-                                )]
-                                pub const ENOATTR: c_int = crate::ENODATA;
-
-                                pub const SO_ORIGINAL_DST: c_int = 80;
-
-                                pub const IP_RECVFRAGSIZE: c_int = 25;
-
-                                pub const IPV6_FLOWINFO: c_int = 11;
-                                pub const IPV6_FLOWLABEL_MGR: c_int = 32;
-                                pub const IPV6_FLOWINFO_SEND: c_int = 33;
-                                pub const IPV6_RECVFRAGSIZE: c_int = 77;
-                                pub const IPV6_FREEBIND: c_int = 78;
-                                pub const IPV6_FLOWINFO_FLOWLABEL: c_int = 0x000fffff;
-                                pub const IPV6_FLOWINFO_PRIORITY: c_int = 0x0ff00000;
-
-                                pub const IPV6_RTHDR_LOOSE: c_int = 0;
-                                pub const IPV6_RTHDR_STRICT: c_int = 1;
-
-                                // SO_MEMINFO offsets
-                                pub const SK_MEMINFO_RMEM_ALLOC: c_int = 0;
-                                pub const SK_MEMINFO_RCVBUF: c_int = 1;
-                                pub const SK_MEMINFO_WMEM_ALLOC: c_int = 2;
-                                pub const SK_MEMINFO_SNDBUF: c_int = 3;
-                                pub const SK_MEMINFO_FWD_ALLOC: c_int = 4;
-                                pub const SK_MEMINFO_WMEM_QUEUED: c_int = 5;
-                                pub const SK_MEMINFO_OPTMEM: c_int = 6;
-                                pub const SK_MEMINFO_BACKLOG: c_int = 7;
-                                pub const SK_MEMINFO_DROPS: c_int = 8;
-
-                                pub const IUTF8: crate::tcflag_t = 0x00004000;
-                                #[cfg(not(all(target_env = "uclibc", target_arch = "mips")))]
-                                pub const CMSPAR: crate::tcflag_t = 0o10000000000;
-
-                                pub const MFD_CLOEXEC: c_uint = 0x0001;
-                                pub const MFD_ALLOW_SEALING: c_uint = 0x0002;
-                                pub const MFD_HUGETLB: c_uint = 0x0004;
-                                pub const MFD_NOEXEC_SEAL: c_uint = 0x0008;
-                                pub const MFD_EXEC: c_uint = 0x0010;
-                                pub const MFD_HUGE_64KB: c_uint = 0x40000000;
-                                pub const MFD_HUGE_512KB: c_uint = 0x4c000000;
-                                pub const MFD_HUGE_1MB: c_uint = 0x50000000;
-                                pub const MFD_HUGE_2MB: c_uint = 0x54000000;
-                                pub const MFD_HUGE_8MB: c_uint = 0x5c000000;
-                                pub const MFD_HUGE_16MB: c_uint = 0x60000000;
-                                pub const MFD_HUGE_32MB: c_uint = 0x64000000;
-                                pub const MFD_HUGE_256MB: c_uint = 0x70000000;
-                                pub const MFD_HUGE_512MB: c_uint = 0x74000000;
-                                pub const MFD_HUGE_1GB: c_uint = 0x78000000;
-                                pub const MFD_HUGE_2GB: c_uint = 0x7c000000;
-                                pub const MFD_HUGE_16GB: c_uint = 0x88000000;
-                                pub const MFD_HUGE_MASK: c_uint = 63;
-                                pub const MFD_HUGE_SHIFT: c_uint = 26;
-
-                                // linux/close_range.h
-                                pub const CLOSE_RANGE_UNSHARE: c_uint = 1 << 1;
-                                pub const CLOSE_RANGE_CLOEXEC: c_uint = 1 << 2;
-
-                                // linux/filter.h
-                                pub const SKF_AD_OFF: c_int = -0x1000;
-                                pub const SKF_AD_PROTOCOL: c_int = 0;
-                                pub const SKF_AD_PKTTYPE: c_int = 4;
-                                pub const SKF_AD_IFINDEX: c_int = 8;
-                                pub const SKF_AD_NLATTR: c_int = 12;
-                                pub const SKF_AD_NLATTR_NEST: c_int = 16;
-                                pub const SKF_AD_MARK: c_int = 20;
-                                pub const SKF_AD_QUEUE: c_int = 24;
-                                pub const SKF_AD_HATYPE: c_int = 28;
-                                pub const SKF_AD_RXHASH: c_int = 32;
-                                pub const SKF_AD_CPU: c_int = 36;
-                                pub const SKF_AD_ALU_XOR_X: c_int = 40;
-                                pub const SKF_AD_VLAN_TAG: c_int = 44;
-                                pub const SKF_AD_VLAN_TAG_PRESENT: c_int = 48;
-                                pub const SKF_AD_PAY_OFFSET: c_int = 52;
-                                pub const SKF_AD_RANDOM: c_int = 56;
-                                pub const SKF_AD_VLAN_TPID: c_int = 60;
-                                pub const SKF_AD_MAX: c_int = 64;
-                                pub const SKF_NET_OFF: c_int = -0x100000;
-                                pub const SKF_LL_OFF: c_int = -0x200000;
-                                pub const BPF_NET_OFF: c_int = SKF_NET_OFF;
-                                pub const BPF_LL_OFF: c_int = SKF_LL_OFF;
-                                pub const BPF_MEMWORDS: c_int = 16;
-                                pub const BPF_MAXINSNS: c_int = 4096;
-
-                                // linux/bpf_common.h
-                                pub const BPF_LD: __u32 = 0x00;
-                                pub const BPF_LDX: __u32 = 0x01;
-                                pub const BPF_ST: __u32 = 0x02;
-                                pub const BPF_STX: __u32 = 0x03;
-                                pub const BPF_ALU: __u32 = 0x04;
-                                pub const BPF_JMP: __u32 = 0x05;
-                                pub const BPF_RET: __u32 = 0x06;
-                                pub const BPF_MISC: __u32 = 0x07;
-                                pub const BPF_W: __u32 = 0x00;
-                                pub const BPF_H: __u32 = 0x08;
-                                pub const BPF_B: __u32 = 0x10;
-                                pub const BPF_IMM: __u32 = 0x00;
-                                pub const BPF_ABS: __u32 = 0x20;
-                                pub const BPF_IND: __u32 = 0x40;
-                                pub const BPF_MEM: __u32 = 0x60;
-                                pub const BPF_LEN: __u32 = 0x80;
-                                pub const BPF_MSH: __u32 = 0xa0;
-                                pub const BPF_ADD: __u32 = 0x00;
-                                pub const BPF_SUB: __u32 = 0x10;
-                                pub const BPF_MUL: __u32 = 0x20;
-                                pub const BPF_DIV: __u32 = 0x30;
-                                pub const BPF_OR: __u32 = 0x40;
-                                pub const BPF_AND: __u32 = 0x50;
-                                pub const BPF_LSH: __u32 = 0x60;
-                                pub const BPF_RSH: __u32 = 0x70;
-                                pub const BPF_NEG: __u32 = 0x80;
-                                pub const BPF_MOD: __u32 = 0x90;
-                                pub const BPF_XOR: __u32 = 0xa0;
-                                pub const BPF_JA: __u32 = 0x00;
-                                pub const BPF_JEQ: __u32 = 0x10;
-                                pub const BPF_JGT: __u32 = 0x20;
-                                pub const BPF_JGE: __u32 = 0x30;
-                                pub const BPF_JSET: __u32 = 0x40;
-                                pub const BPF_K: __u32 = 0x00;
-                                pub const BPF_X: __u32 = 0x08;
-
-                                // linux/filter.h
-
-                                pub const BPF_A: __u32 = 0x10;
-                                pub const BPF_TAX: __u32 = 0x00;
-                                pub const BPF_TXA: __u32 = 0x80;
-
-                                // linux/openat2.h
-                                pub const RESOLVE_NO_XDEV: crate::__u64 = 0x01;
-                                pub const RESOLVE_NO_MAGICLINKS: crate::__u64 = 0x02;
-                                pub const RESOLVE_NO_SYMLINKS: crate::__u64 = 0x04;
-                                pub const RESOLVE_BENEATH: crate::__u64 = 0x08;
-                                pub const RESOLVE_IN_ROOT: crate::__u64 = 0x10;
-                                pub const RESOLVE_CACHED: crate::__u64 = 0x20;
-
-                                // linux/if_ether.h
-                                pub const ETH_ALEN: c_int = 6;
-                                pub const ETH_HLEN: c_int = 14;
-                                pub const ETH_ZLEN: c_int = 60;
-                                pub const ETH_DATA_LEN: c_int = 1500;
-                                pub const ETH_FRAME_LEN: c_int = 1514;
-                                pub const ETH_FCS_LEN: c_int = 4;
-
-                                // These are the defined Ethernet Protocol ID's.
-                                pub const ETH_P_LOOP: c_int = 0x0060;
-                                pub const ETH_P_PUP: c_int = 0x0200;
-                                pub const ETH_P_PUPAT: c_int = 0x0201;
-                                pub const ETH_P_IP: c_int = 0x0800;
-                                pub const ETH_P_X25: c_int = 0x0805;
-                                pub const ETH_P_ARP: c_int = 0x0806;
-                                pub const ETH_P_BPQ: c_int = 0x08FF;
-                                pub const ETH_P_IEEEPUP: c_int = 0x0a00;
-                                pub const ETH_P_IEEEPUPAT: c_int = 0x0a01;
-                                pub const ETH_P_BATMAN: c_int = 0x4305;
-                                pub const ETH_P_DEC: c_int = 0x6000;
-                                pub const ETH_P_DNA_DL: c_int = 0x6001;
-                                pub const ETH_P_DNA_RC: c_int = 0x6002;
-                                pub const ETH_P_DNA_RT: c_int = 0x6003;
-                                pub const ETH_P_LAT: c_int = 0x6004;
-                                pub const ETH_P_DIAG: c_int = 0x6005;
-                                pub const ETH_P_CUST: c_int = 0x6006;
-                                pub const ETH_P_SCA: c_int = 0x6007;
-                                pub const ETH_P_TEB: c_int = 0x6558;
-                                pub const ETH_P_RARP: c_int = 0x8035;
-                                pub const ETH_P_ATALK: c_int = 0x809B;
-                                pub const ETH_P_AARP: c_int = 0x80F3;
-                                pub const ETH_P_8021Q: c_int = 0x8100;
-                                pub const ETH_P_IPX: c_int = 0x8137;
-                                pub const ETH_P_IPV6: c_int = 0x86DD;
-                                pub const ETH_P_PAUSE: c_int = 0x8808;
-                                pub const ETH_P_SLOW: c_int = 0x8809;
-                                pub const ETH_P_WCCP: c_int = 0x883E;
-                                pub const ETH_P_MPLS_UC: c_int = 0x8847;
-                                pub const ETH_P_MPLS_MC: c_int = 0x8848;
-                                pub const ETH_P_ATMMPOA: c_int = 0x884c;
-                                pub const ETH_P_PPP_DISC: c_int = 0x8863;
-                                pub const ETH_P_PPP_SES: c_int = 0x8864;
-                                pub const ETH_P_LINK_CTL: c_int = 0x886c;
-                                pub const ETH_P_ATMFATE: c_int = 0x8884;
-                                pub const ETH_P_PAE: c_int = 0x888E;
-                                pub const ETH_P_AOE: c_int = 0x88A2;
-                                pub const ETH_P_8021AD: c_int = 0x88A8;
-                                pub const ETH_P_802_EX1: c_int = 0x88B5;
-                                pub const ETH_P_TIPC: c_int = 0x88CA;
-                                pub const ETH_P_MACSEC: c_int = 0x88E5;
-                                pub const ETH_P_8021AH: c_int = 0x88E7;
-                                pub const ETH_P_MVRP: c_int = 0x88F5;
-                                pub const ETH_P_1588: c_int = 0x88F7;
-                                pub const ETH_P_PRP: c_int = 0x88FB;
-                                pub const ETH_P_FCOE: c_int = 0x8906;
-                                pub const ETH_P_TDLS: c_int = 0x890D;
-                                pub const ETH_P_FIP: c_int = 0x8914;
-                                pub const ETH_P_80221: c_int = 0x8917;
-                                pub const ETH_P_LOOPBACK: c_int = 0x9000;
-                                pub const ETH_P_QINQ1: c_int = 0x9100;
-                                pub const ETH_P_QINQ2: c_int = 0x9200;
-                                pub const ETH_P_QINQ3: c_int = 0x9300;
-                                pub const ETH_P_EDSA: c_int = 0xDADA;
-                                pub const ETH_P_AF_IUCV: c_int = 0xFBFB;
-
-                                pub const ETH_P_802_3_MIN: c_int = 0x0600;
-
-                                // Non DIX types. Won't clash for 1500 types.
-                                pub const ETH_P_802_3: c_int = 0x0001;
-                                pub const ETH_P_AX25: c_int = 0x0002;
-                                pub const ETH_P_ALL: c_int = 0x0003;
-                                pub const ETH_P_802_2: c_int = 0x0004;
-                                pub const ETH_P_SNAP: c_int = 0x0005;
-                                pub const ETH_P_DDCMP: c_int = 0x0006;
-                                pub const ETH_P_WAN_PPP: c_int = 0x0007;
-                                pub const ETH_P_PPP_MP: c_int = 0x0008;
-                                pub const ETH_P_LOCALTALK: c_int = 0x0009;
-                                pub const ETH_P_CANFD: c_int = 0x000D;
-                                pub const ETH_P_PPPTALK: c_int = 0x0010;
-                                pub const ETH_P_TR_802_2: c_int = 0x0011;
-                                pub const ETH_P_MOBITEX: c_int = 0x0015;
-                                pub const ETH_P_CONTROL: c_int = 0x0016;
-                                pub const ETH_P_IRDA: c_int = 0x0017;
-                                pub const ETH_P_ECONET: c_int = 0x0018;
-                                pub const ETH_P_HDLC: c_int = 0x0019;
-                                pub const ETH_P_ARCNET: c_int = 0x001A;
-                                pub const ETH_P_DSA: c_int = 0x001B;
-                                pub const ETH_P_TRAILER: c_int = 0x001C;
-                                pub const ETH_P_PHONET: c_int = 0x00F5;
-                                pub const ETH_P_IEEE802154: c_int = 0x00F6;
-                                pub const ETH_P_CAIF: c_int = 0x00F7;
-
-                                pub const POSIX_SPAWN_RESETIDS: c_short = 0x01;
-                                pub const POSIX_SPAWN_SETPGROUP: c_short = 0x02;
-                                pub const POSIX_SPAWN_SETSIGDEF: c_short = 0x04;
-                                pub const POSIX_SPAWN_SETSIGMASK: c_short = 0x08;
-                                pub const POSIX_SPAWN_SETSCHEDPARAM: c_short = 0x10;
-                                pub const POSIX_SPAWN_SETSCHEDULER: c_short = 0x20;
-
-                                pub const NLMSG_NOOP: c_int = 0x1;
-                                pub const NLMSG_ERROR: c_int = 0x2;
-                                pub const NLMSG_DONE: c_int = 0x3;
-                                pub const NLMSG_OVERRUN: c_int = 0x4;
-                                pub const NLMSG_MIN_TYPE: c_int = 0x10;
-
-                                // linux/netfilter/nfnetlink.h
-                                pub const NFNLGRP_NONE: c_int = 0;
-                                pub const NFNLGRP_CONNTRACK_NEW: c_int = 1;
-                                pub const NFNLGRP_CONNTRACK_UPDATE: c_int = 2;
-                                pub const NFNLGRP_CONNTRACK_DESTROY: c_int = 3;
-                                pub const NFNLGRP_CONNTRACK_EXP_NEW: c_int = 4;
-                                pub const NFNLGRP_CONNTRACK_EXP_UPDATE: c_int = 5;
-                                pub const NFNLGRP_CONNTRACK_EXP_DESTROY: c_int = 6;
-                                pub const NFNLGRP_NFTABLES: c_int = 7;
-                                pub const NFNLGRP_ACCT_QUOTA: c_int = 8;
-                                pub const NFNLGRP_NFTRACE: c_int = 9;
-
-                                pub const NFNETLINK_V0: c_int = 0;
-
-                                pub const NFNL_SUBSYS_NONE: c_int = 0;
-                                pub const NFNL_SUBSYS_CTNETLINK: c_int = 1;
-                                pub const NFNL_SUBSYS_CTNETLINK_EXP: c_int = 2;
-                                pub const NFNL_SUBSYS_QUEUE: c_int = 3;
-                                pub const NFNL_SUBSYS_ULOG: c_int = 4;
-                                pub const NFNL_SUBSYS_OSF: c_int = 5;
-                                pub const NFNL_SUBSYS_IPSET: c_int = 6;
-                                pub const NFNL_SUBSYS_ACCT: c_int = 7;
-                                pub const NFNL_SUBSYS_CTNETLINK_TIMEOUT: c_int = 8;
-                                pub const NFNL_SUBSYS_CTHELPER: c_int = 9;
-                                pub const NFNL_SUBSYS_NFTABLES: c_int = 10;
-                                pub const NFNL_SUBSYS_NFT_COMPAT: c_int = 11;
-                                pub const NFNL_SUBSYS_HOOK: c_int = 12;
-                                pub const NFNL_SUBSYS_COUNT: c_int = 13;
-
-                                pub const NFNL_MSG_BATCH_BEGIN: c_int = NLMSG_MIN_TYPE;
-                                pub const NFNL_MSG_BATCH_END: c_int = NLMSG_MIN_TYPE + 1;
-
-                                pub const NFNL_BATCH_UNSPEC: c_int = 0;
-                                pub const NFNL_BATCH_GENID: c_int = 1;
-
-                                // linux/netfilter/nfnetlink_log.h
-                                pub const NFULNL_MSG_PACKET: c_int = 0;
-                                pub const NFULNL_MSG_CONFIG: c_int = 1;
-
-                                pub const NFULA_VLAN_UNSPEC: c_int = 0;
-                                pub const NFULA_VLAN_PROTO: c_int = 1;
-                                pub const NFULA_VLAN_TCI: c_int = 2;
-
-                                pub const NFULA_UNSPEC: c_int = 0;
-                                pub const NFULA_PACKET_HDR: c_int = 1;
-                                pub const NFULA_MARK: c_int = 2;
-                                pub const NFULA_TIMESTAMP: c_int = 3;
-                                pub const NFULA_IFINDEX_INDEV: c_int = 4;
-                                pub const NFULA_IFINDEX_OUTDEV: c_int = 5;
-                                pub const NFULA_IFINDEX_PHYSINDEV: c_int = 6;
-                                pub const NFULA_IFINDEX_PHYSOUTDEV: c_int = 7;
-                                pub const NFULA_HWADDR: c_int = 8;
-                                pub const NFULA_PAYLOAD: c_int = 9;
-                                pub const NFULA_PREFIX: c_int = 10;
-                                pub const NFULA_UID: c_int = 11;
-                                pub const NFULA_SEQ: c_int = 12;
-                                pub const NFULA_SEQ_GLOBAL: c_int = 13;
-                                pub const NFULA_GID: c_int = 14;
-                                pub const NFULA_HWTYPE: c_int = 15;
-                                pub const NFULA_HWHEADER: c_int = 16;
-                                pub const NFULA_HWLEN: c_int = 17;
-                                pub const NFULA_CT: c_int = 18;
-                                pub const NFULA_CT_INFO: c_int = 19;
-                                pub const NFULA_VLAN: c_int = 20;
-                                pub const NFULA_L2HDR: c_int = 21;
-
-                                pub const NFULNL_CFG_CMD_NONE: c_int = 0;
-                                pub const NFULNL_CFG_CMD_BIND: c_int = 1;
-                                pub const NFULNL_CFG_CMD_UNBIND: c_int = 2;
-                                pub const NFULNL_CFG_CMD_PF_BIND: c_int = 3;
-                                pub const NFULNL_CFG_CMD_PF_UNBIND: c_int = 4;
-
-                                pub const NFULA_CFG_UNSPEC: c_int = 0;
-                                pub const NFULA_CFG_CMD: c_int = 1;
-                                pub const NFULA_CFG_MODE: c_int = 2;
-                                pub const NFULA_CFG_NLBUFSIZ: c_int = 3;
-                                pub const NFULA_CFG_TIMEOUT: c_int = 4;
-                                pub const NFULA_CFG_QTHRESH: c_int = 5;
-                                pub const NFULA_CFG_FLAGS: c_int = 6;
-
-                                pub const NFULNL_COPY_NONE: c_int = 0x00;
-                                pub const NFULNL_COPY_META: c_int = 0x01;
-                                pub const NFULNL_COPY_PACKET: c_int = 0x02;
-
-                                pub const NFULNL_CFG_F_SEQ: c_int = 0x0001;
-                                pub const NFULNL_CFG_F_SEQ_GLOBAL: c_int = 0x0002;
-                                pub const NFULNL_CFG_F_CONNTRACK: c_int = 0x0004;
-
-                                // linux/netfilter/nfnetlink_queue.h
-                                pub const NFQNL_MSG_PACKET: c_int = 0;
-                                pub const NFQNL_MSG_VERDICT: c_int = 1;
-                                pub const NFQNL_MSG_CONFIG: c_int = 2;
-                                pub const NFQNL_MSG_VERDICT_BATCH: c_int = 3;
-
-                                pub const NFQA_UNSPEC: c_int = 0;
-                                pub const NFQA_PACKET_HDR: c_int = 1;
-                                pub const NFQA_VERDICT_HDR: c_int = 2;
-                                pub const NFQA_MARK: c_int = 3;
-                                pub const NFQA_TIMESTAMP: c_int = 4;
-                                pub const NFQA_IFINDEX_INDEV: c_int = 5;
-                                pub const NFQA_IFINDEX_OUTDEV: c_int = 6;
-                                pub const NFQA_IFINDEX_PHYSINDEV: c_int = 7;
-                                pub const NFQA_IFINDEX_PHYSOUTDEV: c_int = 8;
-                                pub const NFQA_HWADDR: c_int = 9;
-                                pub const NFQA_PAYLOAD: c_int = 10;
-                                pub const NFQA_CT: c_int = 11;
-                                pub const NFQA_CT_INFO: c_int = 12;
-                                pub const NFQA_CAP_LEN: c_int = 13;
-                                pub const NFQA_SKB_INFO: c_int = 14;
-                                pub const NFQA_EXP: c_int = 15;
-                                pub const NFQA_UID: c_int = 16;
-                                pub const NFQA_GID: c_int = 17;
-                                pub const NFQA_SECCTX: c_int = 18;
-                                pub const NFQA_VLAN: c_int = 19;
-                                pub const NFQA_L2HDR: c_int = 20;
-                                pub const NFQA_PRIORITY: c_int = 21;
-
-                                pub const NFQA_VLAN_UNSPEC: c_int = 0;
-                                pub const NFQA_VLAN_PROTO: c_int = 1;
-                                pub const NFQA_VLAN_TCI: c_int = 2;
-
-                                pub const NFQNL_CFG_CMD_NONE: c_int = 0;
-                                pub const NFQNL_CFG_CMD_BIND: c_int = 1;
-                                pub const NFQNL_CFG_CMD_UNBIND: c_int = 2;
-                                pub const NFQNL_CFG_CMD_PF_BIND: c_int = 3;
-                                pub const NFQNL_CFG_CMD_PF_UNBIND: c_int = 4;
-
-                                pub const NFQNL_COPY_NONE: c_int = 0;
-                                pub const NFQNL_COPY_META: c_int = 1;
-                                pub const NFQNL_COPY_PACKET: c_int = 2;
-
-                                pub const NFQA_CFG_UNSPEC: c_int = 0;
-                                pub const NFQA_CFG_CMD: c_int = 1;
-                                pub const NFQA_CFG_PARAMS: c_int = 2;
-                                pub const NFQA_CFG_QUEUE_MAXLEN: c_int = 3;
-                                pub const NFQA_CFG_MASK: c_int = 4;
-                                pub const NFQA_CFG_FLAGS: c_int = 5;
-
-                                pub const NFQA_CFG_F_FAIL_OPEN: c_int = 0x0001;
-                                pub const NFQA_CFG_F_CONNTRACK: c_int = 0x0002;
-                                pub const NFQA_CFG_F_GSO: c_int = 0x0004;
-                                pub const NFQA_CFG_F_UID_GID: c_int = 0x0008;
-                                pub const NFQA_CFG_F_SECCTX: c_int = 0x0010;
-                                pub const NFQA_CFG_F_MAX: c_int = 0x0020;
-
-                                pub const NFQA_SKB_CSUMNOTREADY: c_int = 0x0001;
-                                pub const NFQA_SKB_GSO: c_int = 0x0002;
-                                pub const NFQA_SKB_CSUM_NOTVERIFIED: c_int = 0x0004;
-
-                                // linux/genetlink.h
-
-                                pub const GENL_NAMSIZ: c_int = 16;
-
-                                pub const GENL_MIN_ID: c_int = NLMSG_MIN_TYPE;
-                                pub const GENL_MAX_ID: c_int = 1023;
-
-                                pub const GENL_ADMIN_PERM: c_int = 0x01;
-                                pub const GENL_CMD_CAP_DO: c_int = 0x02;
-                                pub const GENL_CMD_CAP_DUMP: c_int = 0x04;
-                                pub const GENL_CMD_CAP_HASPOL: c_int = 0x08;
-
-                                pub const GENL_ID_CTRL: c_int = NLMSG_MIN_TYPE;
-
-                                pub const CTRL_CMD_UNSPEC: c_int = 0;
-                                pub const CTRL_CMD_NEWFAMILY: c_int = 1;
-                                pub const CTRL_CMD_DELFAMILY: c_int = 2;
-                                pub const CTRL_CMD_GETFAMILY: c_int = 3;
-                                pub const CTRL_CMD_NEWOPS: c_int = 4;
-                                pub const CTRL_CMD_DELOPS: c_int = 5;
-                                pub const CTRL_CMD_GETOPS: c_int = 6;
-                                pub const CTRL_CMD_NEWMCAST_GRP: c_int = 7;
-                                pub const CTRL_CMD_DELMCAST_GRP: c_int = 8;
-                                pub const CTRL_CMD_GETMCAST_GRP: c_int = 9;
-
-                                pub const CTRL_ATTR_UNSPEC: c_int = 0;
-                                pub const CTRL_ATTR_FAMILY_ID: c_int = 1;
-                                pub const CTRL_ATTR_FAMILY_NAME: c_int = 2;
-                                pub const CTRL_ATTR_VERSION: c_int = 3;
-                                pub const CTRL_ATTR_HDRSIZE: c_int = 4;
-                                pub const CTRL_ATTR_MAXATTR: c_int = 5;
-                                pub const CTRL_ATTR_OPS: c_int = 6;
-                                pub const CTRL_ATTR_MCAST_GROUPS: c_int = 7;
-
-                                pub const CTRL_ATTR_OP_UNSPEC: c_int = 0;
-                                pub const CTRL_ATTR_OP_ID: c_int = 1;
-                                pub const CTRL_ATTR_OP_FLAGS: c_int = 2;
-
-                                pub const CTRL_ATTR_MCAST_GRP_UNSPEC: c_int = 0;
-                                pub const CTRL_ATTR_MCAST_GRP_NAME: c_int = 1;
-                                pub const CTRL_ATTR_MCAST_GRP_ID: c_int = 2;
-
-                                // linux/if_packet.h
-                                pub const PACKET_HOST: c_uchar = 0;
-                                pub const PACKET_BROADCAST: c_uchar = 1;
-                                pub const PACKET_MULTICAST: c_uchar = 2;
-                                pub const PACKET_OTHERHOST: c_uchar = 3;
-                                pub const PACKET_OUTGOING: c_uchar = 4;
-                                pub const PACKET_LOOPBACK: c_uchar = 5;
-                                pub const PACKET_USER: c_uchar = 6;
-                                pub const PACKET_KERNEL: c_uchar = 7;
-
-                                pub const PACKET_ADD_MEMBERSHIP: c_int = 1;
-                                pub const PACKET_DROP_MEMBERSHIP: c_int = 2;
-                                pub const PACKET_RX_RING: c_int = 5;
-                                pub const PACKET_STATISTICS: c_int = 6;
-                                pub const PACKET_AUXDATA: c_int = 8;
-                                pub const PACKET_VERSION: c_int = 10;
-                                pub const PACKET_RESERVE: c_int = 12;
-                                pub const PACKET_TX_RING: c_int = 13;
-                                pub const PACKET_LOSS: c_int = 14;
-                                pub const PACKET_TIMESTAMP: c_int = 17;
-                                pub const PACKET_FANOUT: c_int = 18;
-                                pub const PACKET_QDISC_BYPASS: c_int = 20;
-                                pub const PACKET_IGNORE_OUTGOING: c_int = 23;
-
-                                pub const PACKET_FANOUT_HASH: c_uint = 0;
-                                pub const PACKET_FANOUT_LB: c_uint = 1;
-                                pub const PACKET_FANOUT_CPU: c_uint = 2;
-                                pub const PACKET_FANOUT_ROLLOVER: c_uint = 3;
-                                pub const PACKET_FANOUT_RND: c_uint = 4;
-                                pub const PACKET_FANOUT_QM: c_uint = 5;
-                                pub const PACKET_FANOUT_CBPF: c_uint = 6;
-                                pub const PACKET_FANOUT_EBPF: c_uint = 7;
-                                pub const PACKET_FANOUT_FLAG_ROLLOVER: c_uint = 0x1000;
-                                pub const PACKET_FANOUT_FLAG_UNIQUEID: c_uint = 0x2000;
-                                pub const PACKET_FANOUT_FLAG_DEFRAG: c_uint = 0x8000;
-
-                                pub const PACKET_MR_MULTICAST: c_int = 0;
-                                pub const PACKET_MR_PROMISC: c_int = 1;
-                                pub const PACKET_MR_ALLMULTI: c_int = 2;
-
-                                pub const TP_STATUS_KERNEL: __u32 = 0;
-                                pub const TP_STATUS_USER: __u32 = 1 << 0;
-                                pub const TP_STATUS_COPY: __u32 = 1 << 1;
-                                pub const TP_STATUS_LOSING: __u32 = 1 << 2;
-                                pub const TP_STATUS_CSUMNOTREADY: __u32 = 1 << 3;
-                                pub const TP_STATUS_VLAN_VALID: __u32 = 1 << 4;
-                                pub const TP_STATUS_BLK_TMO: __u32 = 1 << 5;
-                                pub const TP_STATUS_VLAN_TPID_VALID: __u32 = 1 << 6;
-                                pub const TP_STATUS_CSUM_VALID: __u32 = 1 << 7;
-
-                                pub const TP_STATUS_AVAILABLE: __u32 = 0;
-                                pub const TP_STATUS_SEND_REQUEST: __u32 = 1 << 0;
-                                pub const TP_STATUS_SENDING: __u32 = 1 << 1;
-                                pub const TP_STATUS_WRONG_FORMAT: __u32 = 1 << 2;
-
-                                pub const TP_STATUS_TS_SOFTWARE: __u32 = 1 << 29;
-                                pub const TP_STATUS_TS_SYS_HARDWARE: __u32 = 1 << 30;
-                                pub const TP_STATUS_TS_RAW_HARDWARE: __u32 = 1 << 31;
-
-                                pub const TP_FT_REQ_FILL_RXHASH: __u32 = 1;
-
-                                pub const TPACKET_ALIGNMENT: usize = 16;
-
-                                pub const TPACKET_HDRLEN: usize = ((size_of::<crate::tpacket_hdr>() + TPACKET_ALIGNMENT - 1)
-                                    & !(TPACKET_ALIGNMENT - 1))
-                                    + size_of::<crate::sockaddr_ll>();
-                                pub const TPACKET2_HDRLEN: usize = ((size_of::<crate::tpacket2_hdr>() + TPACKET_ALIGNMENT - 1)
-                                    & !(TPACKET_ALIGNMENT - 1))
-                                    + size_of::<crate::sockaddr_ll>();
-                                pub const TPACKET3_HDRLEN: usize = ((size_of::<crate::tpacket3_hdr>() + TPACKET_ALIGNMENT - 1)
-                                    & !(TPACKET_ALIGNMENT - 1))
-                                    + size_of::<crate::sockaddr_ll>();
-
-                                // linux/netfilter.h
-                                pub const NF_DROP: c_int = 0;
-                                pub const NF_ACCEPT: c_int = 1;
-                                pub const NF_STOLEN: c_int = 2;
-                                pub const NF_QUEUE: c_int = 3;
-                                pub const NF_REPEAT: c_int = 4;
-                                pub const NF_STOP: c_int = 5;
-                                pub const NF_MAX_VERDICT: c_int = NF_STOP;
-
-                                pub const NF_VERDICT_MASK: c_int = 0x000000ff;
-                                pub const NF_VERDICT_FLAG_QUEUE_BYPASS: c_int = 0x00008000;
-
-                                pub const NF_VERDICT_QMASK: c_int = 0xffff0000;
-                                pub const NF_VERDICT_QBITS: c_int = 16;
-
-                                pub const NF_VERDICT_BITS: c_int = 16;
-
-                                pub const NF_INET_PRE_ROUTING: c_int = 0;
-                                pub const NF_INET_LOCAL_IN: c_int = 1;
-                                pub const NF_INET_FORWARD: c_int = 2;
-                                pub const NF_INET_LOCAL_OUT: c_int = 3;
-                                pub const NF_INET_POST_ROUTING: c_int = 4;
-                                pub const NF_INET_NUMHOOKS: c_int = 5;
-                                pub const NF_INET_INGRESS: c_int = NF_INET_NUMHOOKS;
-
-                                pub const NF_NETDEV_INGRESS: c_int = 0;
-                                pub const NF_NETDEV_EGRESS: c_int = 1;
-                                pub const NF_NETDEV_NUMHOOKS: c_int = 2;
-
-                                // Some NFPROTO are not compatible with musl and are defined in submodules.
-                                pub const NFPROTO_UNSPEC: c_int = 0;
-                                pub const NFPROTO_INET: c_int = 1;
-                                pub const NFPROTO_IPV4: c_int = 2;
-                                pub const NFPROTO_ARP: c_int = 3;
-                                pub const NFPROTO_NETDEV: c_int = 5;
-                                pub const NFPROTO_BRIDGE: c_int = 7;
-                                pub const NFPROTO_IPV6: c_int = 10;
-                                pub const NFPROTO_DECNET: c_int = 12;
-                                pub const NFPROTO_NUMPROTO: c_int = 13;
-
-                                // linux/netfilter_arp.h
-                                pub const NF_ARP: c_int = 0;
-                                pub const NF_ARP_IN: c_int = 0;
-                                pub const NF_ARP_OUT: c_int = 1;
-                                pub const NF_ARP_FORWARD: c_int = 2;
-                                pub const NF_ARP_NUMHOOKS: c_int = 3;
-
-                                // linux/netfilter_bridge.h
-                                pub const NF_BR_PRE_ROUTING: c_int = 0;
-                                pub const NF_BR_LOCAL_IN: c_int = 1;
-                                pub const NF_BR_FORWARD: c_int = 2;
-                                pub const NF_BR_LOCAL_OUT: c_int = 3;
-                                pub const NF_BR_POST_ROUTING: c_int = 4;
-                                pub const NF_BR_BROUTING: c_int = 5;
-                                pub const NF_BR_NUMHOOKS: c_int = 6;
-
-                                pub const NF_BR_PRI_FIRST: c_int = crate::INT_MIN;
-                                pub const NF_BR_PRI_NAT_DST_BRIDGED: c_int = -300;
-                                pub const NF_BR_PRI_FILTER_BRIDGED: c_int = -200;
-                                pub const NF_BR_PRI_BRNF: c_int = 0;
-                                pub const NF_BR_PRI_NAT_DST_OTHER: c_int = 100;
-                                pub const NF_BR_PRI_FILTER_OTHER: c_int = 200;
-                                pub const NF_BR_PRI_NAT_SRC: c_int = 300;
-                                pub const NF_BR_PRI_LAST: c_int = crate::INT_MAX;
-
-                                // linux/netfilter_ipv4.h
-                                pub const NF_IP_PRE_ROUTING: c_int = 0;
-                                pub const NF_IP_LOCAL_IN: c_int = 1;
-                                pub const NF_IP_FORWARD: c_int = 2;
-                                pub const NF_IP_LOCAL_OUT: c_int = 3;
-                                pub const NF_IP_POST_ROUTING: c_int = 4;
-                                pub const NF_IP_NUMHOOKS: c_int = 5;
-
-                                pub const NF_IP_PRI_FIRST: c_int = crate::INT_MIN;
-                                pub const NF_IP_PRI_RAW_BEFORE_DEFRAG: c_int = -450;
-                                pub const NF_IP_PRI_CONNTRACK_DEFRAG: c_int = -400;
-                                pub const NF_IP_PRI_RAW: c_int = -300;
-                                pub const NF_IP_PRI_SELINUX_FIRST: c_int = -225;
-                                pub const NF_IP_PRI_CONNTRACK: c_int = -200;
-                                pub const NF_IP_PRI_MANGLE: c_int = -150;
-                                pub const NF_IP_PRI_NAT_DST: c_int = -100;
-                                pub const NF_IP_PRI_FILTER: c_int = 0;
-                                pub const NF_IP_PRI_SECURITY: c_int = 50;
-                                pub const NF_IP_PRI_NAT_SRC: c_int = 100;
-                                pub const NF_IP_PRI_SELINUX_LAST: c_int = 225;
-                                pub const NF_IP_PRI_CONNTRACK_HELPER: c_int = 300;
-                                pub const NF_IP_PRI_CONNTRACK_CONFIRM: c_int = crate::INT_MAX;
-                                pub const NF_IP_PRI_LAST: c_int = crate::INT_MAX;
-
-                                // linux/netfilter_ipv6.h
-                                pub const NF_IP6_PRE_ROUTING: c_int = 0;
-                                pub const NF_IP6_LOCAL_IN: c_int = 1;
-                                pub const NF_IP6_FORWARD: c_int = 2;
-                                pub const NF_IP6_LOCAL_OUT: c_int = 3;
-                                pub const NF_IP6_POST_ROUTING: c_int = 4;
-                                pub const NF_IP6_NUMHOOKS: c_int = 5;
-
-                                pub const NF_IP6_PRI_FIRST: c_int = crate::INT_MIN;
-                                pub const NF_IP6_PRI_RAW_BEFORE_DEFRAG: c_int = -450;
-                                pub const NF_IP6_PRI_CONNTRACK_DEFRAG: c_int = -400;
-                                pub const NF_IP6_PRI_RAW: c_int = -300;
-                                pub const NF_IP6_PRI_SELINUX_FIRST: c_int = -225;
-                                pub const NF_IP6_PRI_CONNTRACK: c_int = -200;
-                                pub const NF_IP6_PRI_MANGLE: c_int = -150;
-                                pub const NF_IP6_PRI_NAT_DST: c_int = -100;
-                                pub const NF_IP6_PRI_FILTER: c_int = 0;
-                                pub const NF_IP6_PRI_SECURITY: c_int = 50;
-                                pub const NF_IP6_PRI_NAT_SRC: c_int = 100;
-                                pub const NF_IP6_PRI_SELINUX_LAST: c_int = 225;
-                                pub const NF_IP6_PRI_CONNTRACK_HELPER: c_int = 300;
-                                pub const NF_IP6_PRI_LAST: c_int = crate::INT_MAX;
-
-                                // linux/netfilter_ipv6/ip6_tables.h
-                                pub const IP6T_SO_ORIGINAL_DST: c_int = 80;
-
-                                pub const SIOCADDRT: c_ulong = 0x0000890B;
-                                pub const SIOCDELRT: c_ulong = 0x0000890C;
-                                pub const SIOCGIFNAME: c_ulong = 0x00008910;
-                                pub const SIOCSIFLINK: c_ulong = 0x00008911;
-                                pub const SIOCGIFCONF: c_ulong = 0x00008912;
-                                pub const SIOCGIFFLAGS: c_ulong = 0x00008913;
-                                pub const SIOCSIFFLAGS: c_ulong = 0x00008914;
-                                pub const SIOCGIFADDR: c_ulong = 0x00008915;
-                                pub const SIOCSIFADDR: c_ulong = 0x00008916;
-                                pub const SIOCGIFDSTADDR: c_ulong = 0x00008917;
-                                pub const SIOCSIFDSTADDR: c_ulong = 0x00008918;
-                                pub const SIOCGIFBRDADDR: c_ulong = 0x00008919;
-                                pub const SIOCSIFBRDADDR: c_ulong = 0x0000891A;
-                                pub const SIOCGIFNETMASK: c_ulong = 0x0000891B;
-                                pub const SIOCSIFNETMASK: c_ulong = 0x0000891C;
-                                pub const SIOCGIFMETRIC: c_ulong = 0x0000891D;
-                                pub const SIOCSIFMETRIC: c_ulong = 0x0000891E;
-                                pub const SIOCGIFMEM: c_ulong = 0x0000891F;
-                                pub const SIOCSIFMEM: c_ulong = 0x00008920;
-                                pub const SIOCGIFMTU: c_ulong = 0x00008921;
-                                pub const SIOCSIFMTU: c_ulong = 0x00008922;
-                                pub const SIOCSIFNAME: c_ulong = 0x00008923;
-                                pub const SIOCSIFHWADDR: c_ulong = 0x00008924;
-                                pub const SIOCGIFENCAP: c_ulong = 0x00008925;
-                                pub const SIOCSIFENCAP: c_ulong = 0x00008926;
-                                pub const SIOCGIFHWADDR: c_ulong = 0x00008927;
-                                pub const SIOCGIFSLAVE: c_ulong = 0x00008929;
-                                pub const SIOCSIFSLAVE: c_ulong = 0x00008930;
-                                pub const SIOCADDMULTI: c_ulong = 0x00008931;
-                                pub const SIOCDELMULTI: c_ulong = 0x00008932;
-                                pub const SIOCGIFINDEX: c_ulong = 0x00008933;
-                                pub const SIOGIFINDEX: c_ulong = SIOCGIFINDEX;
-                                pub const SIOCSIFPFLAGS: c_ulong = 0x00008934;
-                                pub const SIOCGIFPFLAGS: c_ulong = 0x00008935;
-                                pub const SIOCDIFADDR: c_ulong = 0x00008936;
-                                pub const SIOCSIFHWBROADCAST: c_ulong = 0x00008937;
-                                pub const SIOCGIFCOUNT: c_ulong = 0x00008938;
-                                pub const SIOCGIFBR: c_ulong = 0x00008940;
-                                pub const SIOCSIFBR: c_ulong = 0x00008941;
-                                pub const SIOCGIFTXQLEN: c_ulong = 0x00008942;
-                                pub const SIOCSIFTXQLEN: c_ulong = 0x00008943;
-                                pub const SIOCETHTOOL: c_ulong = 0x00008946;
-                                pub const SIOCGMIIPHY: c_ulong = 0x00008947;
-                                pub const SIOCGMIIREG: c_ulong = 0x00008948;
-                                pub const SIOCSMIIREG: c_ulong = 0x00008949;
-                                pub const SIOCWANDEV: c_ulong = 0x0000894A;
-                                pub const SIOCOUTQNSD: c_ulong = 0x0000894B;
-                                pub const SIOCGSKNS: c_ulong = 0x0000894C;
-                                pub const SIOCDARP: c_ulong = 0x00008953;
-                                pub const SIOCGARP: c_ulong = 0x00008954;
-                                pub const SIOCSARP: c_ulong = 0x00008955;
-                                pub const SIOCDRARP: c_ulong = 0x00008960;
-                                pub const SIOCGRARP: c_ulong = 0x00008961;
-                                pub const SIOCSRARP: c_ulong = 0x00008962;
-                                pub const SIOCGIFMAP: c_ulong = 0x00008970;
-                                pub const SIOCSIFMAP: c_ulong = 0x00008971;
-                                pub const SIOCSHWTSTAMP: c_ulong = 0x000089b0;
-                                pub const SIOCGHWTSTAMP: c_ulong = 0x000089b1;
-
-                                // wireless.h
-                                pub const WIRELESS_EXT: c_ulong = 0x16;
-
-                                pub const SIOCSIWCOMMIT: c_ulong = 0x8B00;
-                                pub const SIOCGIWNAME: c_ulong = 0x8B01;
-
-                                pub const SIOCSIWNWID: c_ulong = 0x8B02;
-                                pub const SIOCGIWNWID: c_ulong = 0x8B03;
-                                pub const SIOCSIWFREQ: c_ulong = 0x8B04;
-                                pub const SIOCGIWFREQ: c_ulong = 0x8B05;
-                                pub const SIOCSIWMODE: c_ulong = 0x8B06;
-                                pub const SIOCGIWMODE: c_ulong = 0x8B07;
-                                pub const SIOCSIWSENS: c_ulong = 0x8B08;
-                                pub const SIOCGIWSENS: c_ulong = 0x8B09;
-
-                                pub const SIOCSIWRANGE: c_ulong = 0x8B0A;
-                                pub const SIOCGIWRANGE: c_ulong = 0x8B0B;
-                                pub const SIOCSIWPRIV: c_ulong = 0x8B0C;
-                                pub const SIOCGIWPRIV: c_ulong = 0x8B0D;
-                                pub const SIOCSIWSTATS: c_ulong = 0x8B0E;
-                                pub const SIOCGIWSTATS: c_ulong = 0x8B0F;
-
-                                pub const SIOCSIWSPY: c_ulong = 0x8B10;
-                                pub const SIOCGIWSPY: c_ulong = 0x8B11;
-                                pub const SIOCSIWTHRSPY: c_ulong = 0x8B12;
-                                pub const SIOCGIWTHRSPY: c_ulong = 0x8B13;
-
-                                pub const SIOCSIWAP: c_ulong = 0x8B14;
-                                pub const SIOCGIWAP: c_ulong = 0x8B15;
-                                pub const SIOCGIWAPLIST: c_ulong = 0x8B17;
-                                pub const SIOCSIWSCAN: c_ulong = 0x8B18;
-                                pub const SIOCGIWSCAN: c_ulong = 0x8B19;
-
-                                pub const SIOCSIWESSID: c_ulong = 0x8B1A;
-                                pub const SIOCGIWESSID: c_ulong = 0x8B1B;
-                                pub const SIOCSIWNICKN: c_ulong = 0x8B1C;
-                                pub const SIOCGIWNICKN: c_ulong = 0x8B1D;
-
-                                pub const SIOCSIWRATE: c_ulong = 0x8B20;
-                                pub const SIOCGIWRATE: c_ulong = 0x8B21;
-                                pub const SIOCSIWRTS: c_ulong = 0x8B22;
-                                pub const SIOCGIWRTS: c_ulong = 0x8B23;
-                                pub const SIOCSIWFRAG: c_ulong = 0x8B24;
-                                pub const SIOCGIWFRAG: c_ulong = 0x8B25;
-                                pub const SIOCSIWTXPOW: c_ulong = 0x8B26;
-                                pub const SIOCGIWTXPOW: c_ulong = 0x8B27;
-                                pub const SIOCSIWRETRY: c_ulong = 0x8B28;
-                                pub const SIOCGIWRETRY: c_ulong = 0x8B29;
-
-                                pub const SIOCSIWENCODE: c_ulong = 0x8B2A;
-                                pub const SIOCGIWENCODE: c_ulong = 0x8B2B;
-
-                                pub const SIOCSIWPOWER: c_ulong = 0x8B2C;
-                                pub const SIOCGIWPOWER: c_ulong = 0x8B2D;
-
-                                pub const SIOCSIWGENIE: c_ulong = 0x8B30;
-                                pub const SIOCGIWGENIE: c_ulong = 0x8B31;
-
-                                pub const SIOCSIWMLME: c_ulong = 0x8B16;
-
-                                pub const SIOCSIWAUTH: c_ulong = 0x8B32;
-                                pub const SIOCGIWAUTH: c_ulong = 0x8B33;
-
-                                pub const SIOCSIWENCODEEXT: c_ulong = 0x8B34;
-                                pub const SIOCGIWENCODEEXT: c_ulong = 0x8B35;
-
-                                pub const SIOCSIWPMKSA: c_ulong = 0x8B36;
-
-                                pub const SIOCIWFIRSTPRIV: c_ulong = 0x8BE0;
-                                pub const SIOCIWLASTPRIV: c_ulong = 0x8BFF;
-
-                                pub const SIOCIWFIRST: c_ulong = 0x8B00;
-                                pub const SIOCIWLAST: c_ulong = SIOCIWLASTPRIV;
-
-                                pub const IWEVTXDROP: c_ulong = 0x8C00;
-                                pub const IWEVQUAL: c_ulong = 0x8C01;
-                                pub const IWEVCUSTOM: c_ulong = 0x8C02;
-                                pub const IWEVREGISTERED: c_ulong = 0x8C03;
-                                pub const IWEVEXPIRED: c_ulong = 0x8C04;
-                                pub const IWEVGENIE: c_ulong = 0x8C05;
-                                pub const IWEVMICHAELMICFAILURE: c_ulong = 0x8C06;
-                                pub const IWEVASSOCREQIE: c_ulong = 0x8C07;
-                                pub const IWEVASSOCRESPIE: c_ulong = 0x8C08;
-                                pub const IWEVPMKIDCAND: c_ulong = 0x8C09;
-                                pub const IWEVFIRST: c_ulong = 0x8C00;
-
-                                pub const IW_PRIV_TYPE_MASK: c_ulong = 0x7000;
-                                pub const IW_PRIV_TYPE_NONE: c_ulong = 0x0000;
-                                pub const IW_PRIV_TYPE_BYTE: c_ulong = 0x1000;
-                                pub const IW_PRIV_TYPE_CHAR: c_ulong = 0x2000;
-                                pub const IW_PRIV_TYPE_INT: c_ulong = 0x4000;
-                                pub const IW_PRIV_TYPE_FLOAT: c_ulong = 0x5000;
-                                pub const IW_PRIV_TYPE_ADDR: c_ulong = 0x6000;
-
-                                pub const IW_PRIV_SIZE_FIXED: c_ulong = 0x0800;
-
-                                pub const IW_PRIV_SIZE_MASK: c_ulong = 0x07FF;
-
-                                pub const IW_MAX_FREQUENCIES: usize = 32;
-                                pub const IW_MAX_BITRATES: usize = 32;
-                                pub const IW_MAX_TXPOWER: usize = 8;
-                                pub const IW_MAX_SPY: usize = 8;
-                                pub const IW_MAX_AP: usize = 64;
-                                pub const IW_ESSID_MAX_SIZE: usize = 32;
-
-                                pub const IW_MODE_AUTO: usize = 0;
-                                pub const IW_MODE_ADHOC: usize = 1;
-                                pub const IW_MODE_INFRA: usize = 2;
-                                pub const IW_MODE_MASTER: usize = 3;
-                                pub const IW_MODE_REPEAT: usize = 4;
-                                pub const IW_MODE_SECOND: usize = 5;
-                                pub const IW_MODE_MONITOR: usize = 6;
-                                pub const IW_MODE_MESH: usize = 7;
-
-                                pub const IW_QUAL_QUAL_UPDATED: c_ulong = 0x01;
-                                pub const IW_QUAL_LEVEL_UPDATED: c_ulong = 0x02;
-                                pub const IW_QUAL_NOISE_UPDATED: c_ulong = 0x04;
-                                pub const IW_QUAL_ALL_UPDATED: c_ulong = 0x07;
-                                pub const IW_QUAL_DBM: c_ulong = 0x08;
-                                pub const IW_QUAL_QUAL_INVALID: c_ulong = 0x10;
-                                pub const IW_QUAL_LEVEL_INVALID: c_ulong = 0x20;
-                                pub const IW_QUAL_NOISE_INVALID: c_ulong = 0x40;
-                                pub const IW_QUAL_RCPI: c_ulong = 0x80;
-                                pub const IW_QUAL_ALL_INVALID: c_ulong = 0x70;
-
-                                pub const IW_FREQ_AUTO: c_ulong = 0x00;
-                                pub const IW_FREQ_FIXED: c_ulong = 0x01;
-
-                                pub const IW_MAX_ENCODING_SIZES: usize = 8;
-                                pub const IW_ENCODING_TOKEN_MAX: usize = 64;
-
-                                pub const IW_ENCODE_INDEX: c_ulong = 0x00FF;
-                                pub const IW_ENCODE_FLAGS: c_ulong = 0xFF00;
-                                pub const IW_ENCODE_MODE: c_ulong = 0xF000;
-                                pub const IW_ENCODE_DISABLED: c_ulong = 0x8000;
-                                pub const IW_ENCODE_ENABLED: c_ulong = 0x0000;
-                                pub const IW_ENCODE_RESTRICTED: c_ulong = 0x4000;
-                                pub const IW_ENCODE_OPEN: c_ulong = 0x2000;
-                                pub const IW_ENCODE_NOKEY: c_ulong = 0x0800;
-                                pub const IW_ENCODE_TEMP: c_ulong = 0x0400;
-
-                                pub const IW_POWER_ON: c_ulong = 0x0000;
-                                pub const IW_POWER_TYPE: c_ulong = 0xF000;
-                                pub const IW_POWER_PERIOD: c_ulong = 0x1000;
-                                pub const IW_POWER_TIMEOUT: c_ulong = 0x2000;
-                                pub const IW_POWER_MODE: c_ulong = 0x0F00;
-                                pub const IW_POWER_UNICAST_R: c_ulong = 0x0100;
-                                pub const IW_POWER_MULTICAST_R: c_ulong = 0x0200;
-                                pub const IW_POWER_ALL_R: c_ulong = 0x0300;
-                                pub const IW_POWER_FORCE_S: c_ulong = 0x0400;
-                                pub const IW_POWER_REPEATER: c_ulong = 0x0800;
-                                pub const IW_POWER_MODIFIER: c_ulong = 0x000F;
-                                pub const IW_POWER_MIN: c_ulong = 0x0001;
-                                pub const IW_POWER_MAX: c_ulong = 0x0002;
-                                pub const IW_POWER_RELATIVE: c_ulong = 0x0004;
-
-                                pub const IW_TXPOW_TYPE: c_ulong = 0x00FF;
-                                pub const IW_TXPOW_DBM: c_ulong = 0x0000;
-                                pub const IW_TXPOW_MWATT: c_ulong = 0x0001;
-                                pub const IW_TXPOW_RELATIVE: c_ulong = 0x0002;
-                                pub const IW_TXPOW_RANGE: c_ulong = 0x1000;
-
-                                pub const IW_RETRY_ON: c_ulong = 0x0000;
-                                pub const IW_RETRY_TYPE: c_ulong = 0xF000;
-                                pub const IW_RETRY_LIMIT: c_ulong = 0x1000;
-                                pub const IW_RETRY_LIFETIME: c_ulong = 0x2000;
-                                pub const IW_RETRY_MODIFIER: c_ulong = 0x00FF;
-                                pub const IW_RETRY_MIN: c_ulong = 0x0001;
-                                pub const IW_RETRY_MAX: c_ulong = 0x0002;
-                                pub const IW_RETRY_RELATIVE: c_ulong = 0x0004;
-                                pub const IW_RETRY_SHORT: c_ulong = 0x0010;
-                                pub const IW_RETRY_LONG: c_ulong = 0x0020;
-
-                                pub const IW_SCAN_DEFAULT: c_ulong = 0x0000;
-                                pub const IW_SCAN_ALL_ESSID: c_ulong = 0x0001;
-                                pub const IW_SCAN_THIS_ESSID: c_ulong = 0x0002;
-                                pub const IW_SCAN_ALL_FREQ: c_ulong = 0x0004;
-                                pub const IW_SCAN_THIS_FREQ: c_ulong = 0x0008;
-                                pub const IW_SCAN_ALL_MODE: c_ulong = 0x0010;
-                                pub const IW_SCAN_THIS_MODE: c_ulong = 0x0020;
-                                pub const IW_SCAN_ALL_RATE: c_ulong = 0x0040;
-                                pub const IW_SCAN_THIS_RATE: c_ulong = 0x0080;
-
-                                pub const IW_SCAN_TYPE_ACTIVE: usize = 0;
-                                pub const IW_SCAN_TYPE_PASSIVE: usize = 1;
-
-                                pub const IW_SCAN_MAX_DATA: usize = 4096;
-
-                                pub const IW_SCAN_CAPA_NONE: c_ulong = 0x00;
-                                pub const IW_SCAN_CAPA_ESSID: c_ulong = 0x01;
-                                pub const IW_SCAN_CAPA_BSSID: c_ulong = 0x02;
-                                pub const IW_SCAN_CAPA_CHANNEL: c_ulong = 0x04;
-                                pub const IW_SCAN_CAPA_MODE: c_ulong = 0x08;
-                                pub const IW_SCAN_CAPA_RATE: c_ulong = 0x10;
-                                pub const IW_SCAN_CAPA_TYPE: c_ulong = 0x20;
-                                pub const IW_SCAN_CAPA_TIME: c_ulong = 0x40;
-
-                                pub const IW_CUSTOM_MAX: c_ulong = 256;
-
-                                pub const IW_GENERIC_IE_MAX: c_ulong = 1024;
-
-                                pub const IW_MLME_DEAUTH: c_ulong = 0;
-                                pub const IW_MLME_DISASSOC: c_ulong = 1;
-                                pub const IW_MLME_AUTH: c_ulong = 2;
-                                pub const IW_MLME_ASSOC: c_ulong = 3;
-
-                                pub const IW_AUTH_INDEX: c_ulong = 0x0FFF;
-                                pub const IW_AUTH_FLAGS: c_ulong = 0xF000;
-
-                                pub const IW_AUTH_WPA_VERSION: usize = 0;
-                                pub const IW_AUTH_CIPHER_PAIRWISE: usize = 1;
-                                pub const IW_AUTH_CIPHER_GROUP: usize = 2;
-                                pub const IW_AUTH_KEY_MGMT: usize = 3;
-                                pub const IW_AUTH_TKIP_COUNTERMEASURES: usize = 4;
-                                pub const IW_AUTH_DROP_UNENCRYPTED: usize = 5;
-                                pub const IW_AUTH_80211_AUTH_ALG: usize = 6;
-                                pub const IW_AUTH_WPA_ENABLED: usize = 7;
-                                pub const IW_AUTH_RX_UNENCRYPTED_EAPOL: usize = 8;
-                                pub const IW_AUTH_ROAMING_CONTROL: usize = 9;
-                                pub const IW_AUTH_PRIVACY_INVOKED: usize = 10;
-                                pub const IW_AUTH_CIPHER_GROUP_MGMT: usize = 11;
-                                pub const IW_AUTH_MFP: usize = 12;
-
-                                pub const IW_AUTH_WPA_VERSION_DISABLED: c_ulong = 0x00000001;
-                                pub const IW_AUTH_WPA_VERSION_WPA: c_ulong = 0x00000002;
-                                pub const IW_AUTH_WPA_VERSION_WPA2: c_ulong = 0x00000004;
-
-                                pub const IW_AUTH_CIPHER_NONE: c_ulong = 0x00000001;
-                                pub const IW_AUTH_CIPHER_WEP40: c_ulong = 0x00000002;
-                                pub const IW_AUTH_CIPHER_TKIP: c_ulong = 0x00000004;
-                                pub const IW_AUTH_CIPHER_CCMP: c_ulong = 0x00000008;
-                                pub const IW_AUTH_CIPHER_WEP104: c_ulong = 0x00000010;
-                                pub const IW_AUTH_CIPHER_AES_CMAC: c_ulong = 0x00000020;
-
-                                pub const IW_AUTH_KEY_MGMT_802_1X: usize = 1;
-                                pub const IW_AUTH_KEY_MGMT_PSK: usize = 2;
-
-                                pub const IW_AUTH_ALG_OPEN_SYSTEM: c_ulong = 0x00000001;
-                                pub const IW_AUTH_ALG_SHARED_KEY: c_ulong = 0x00000002;
-                                pub const IW_AUTH_ALG_LEAP: c_ulong = 0x00000004;
-
-                                pub const IW_AUTH_ROAMING_ENABLE: usize = 0;
-                                pub const IW_AUTH_ROAMING_DISABLE: usize = 1;
-
-                                pub const IW_AUTH_MFP_DISABLED: usize = 0;
-                                pub const IW_AUTH_MFP_OPTIONAL: usize = 1;
-                                pub const IW_AUTH_MFP_REQUIRED: usize = 2;
-
-                                pub const IW_ENCODE_SEQ_MAX_SIZE: usize = 8;
-
-                                pub const IW_ENCODE_ALG_NONE: usize = 0;
-                                pub const IW_ENCODE_ALG_WEP: usize = 1;
-                                pub const IW_ENCODE_ALG_TKIP: usize = 2;
-                                pub const IW_ENCODE_ALG_CCMP: usize = 3;
-                                pub const IW_ENCODE_ALG_PMK: usize = 4;
-                                pub const IW_ENCODE_ALG_AES_CMAC: usize = 5;
-
-                                pub const IW_ENCODE_EXT_TX_SEQ_VALID: c_ulong = 0x00000001;
-                                pub const IW_ENCODE_EXT_RX_SEQ_VALID: c_ulong = 0x00000002;
-                                pub const IW_ENCODE_EXT_GROUP_KEY: c_ulong = 0x00000004;
-                                pub const IW_ENCODE_EXT_SET_TX_KEY: c_ulong = 0x00000008;
-
-                                pub const IW_MICFAILURE_KEY_ID: c_ulong = 0x00000003;
-                                pub const IW_MICFAILURE_GROUP: c_ulong = 0x00000004;
-                                pub const IW_MICFAILURE_PAIRWISE: c_ulong = 0x00000008;
-                                pub const IW_MICFAILURE_STAKEY: c_ulong = 0x00000010;
-                                pub const IW_MICFAILURE_COUNT: c_ulong = 0x00000060;
-
-                                pub const IW_ENC_CAPA_WPA: c_ulong = 0x00000001;
-                                pub const IW_ENC_CAPA_WPA2: c_ulong = 0x00000002;
-                                pub const IW_ENC_CAPA_CIPHER_TKIP: c_ulong = 0x00000004;
-                                pub const IW_ENC_CAPA_CIPHER_CCMP: c_ulong = 0x00000008;
-                                pub const IW_ENC_CAPA_4WAY_HANDSHAKE: c_ulong = 0x00000010;
-
-                                pub const IW_EVENT_CAPA_K_0: c_ulong = 0x4000050; //   IW_EVENT_CAPA_MASK(0x8B04) | IW_EVENT_CAPA_MASK(0x8B06) | IW_EVENT_CAPA_MASK(0x8B1A);
-                                pub const IW_EVENT_CAPA_K_1: c_ulong = 0x400; //   W_EVENT_CAPA_MASK(0x8B2A);
-
-                                pub const IW_PMKSA_ADD: usize = 1;
-                                pub const IW_PMKSA_REMOVE: usize = 2;
-                                pub const IW_PMKSA_FLUSH: usize = 3;
-
-                                pub const IW_PMKID_LEN: usize = 16;
-
-                                pub const IW_PMKID_CAND_PREAUTH: c_ulong = 0x00000001;
-
-                                pub const IW_EV_LCP_PK_LEN: usize = 4;
-
-                                pub const IW_EV_CHAR_PK_LEN: usize = 20; // IW_EV_LCP_PK_LEN + crate::IFNAMSIZ;
-                                pub const IW_EV_UINT_PK_LEN: usize = 8; // IW_EV_LCP_PK_LEN + size_of::<u32>();
-                                pub const IW_EV_FREQ_PK_LEN: usize = 12; // IW_EV_LCP_PK_LEN + size_of::<iw_freq>();
-                                pub const IW_EV_PARAM_PK_LEN: usize = 12; // IW_EV_LCP_PK_LEN + size_of::<iw_param>();
-                                pub const IW_EV_ADDR_PK_LEN: usize = 20; // IW_EV_LCP_PK_LEN + size_of::<crate::sockaddr>();
-                                pub const IW_EV_QUAL_PK_LEN: usize = 8; // IW_EV_LCP_PK_LEN + size_of::<iw_quality>();
-                                pub const IW_EV_POINT_PK_LEN: usize = 8; // IW_EV_LCP_PK_LEN + 4;
-
-                                pub const IPTOS_TOS_MASK: u8 = 0x1E;
-                                pub const IPTOS_PREC_MASK: u8 = 0xE0;
-
-                                pub const IPTOS_ECN_NOT_ECT: u8 = 0x00;
-
-                                pub const RTF_UP: c_ushort = 0x0001;
-                                pub const RTF_GATEWAY: c_ushort = 0x0002;
-
-                                pub const RTF_HOST: c_ushort = 0x0004;
-                                pub const RTF_REINSTATE: c_ushort = 0x0008;
-                                pub const RTF_DYNAMIC: c_ushort = 0x0010;
-                                pub const RTF_MODIFIED: c_ushort = 0x0020;
-                                pub const RTF_MTU: c_ushort = 0x0040;
-                                pub const RTF_MSS: c_ushort = RTF_MTU;
-                                pub const RTF_WINDOW: c_ushort = 0x0080;
-                                pub const RTF_IRTT: c_ushort = 0x0100;
-                                pub const RTF_REJECT: c_ushort = 0x0200;
-                                pub const RTF_STATIC: c_ushort = 0x0400;
-                                pub const RTF_XRESOLVE: c_ushort = 0x0800;
-                                pub const RTF_NOFORWARD: c_ushort = 0x1000;
-                                pub const RTF_THROW: c_ushort = 0x2000;
-                                pub const RTF_NOPMTUDISC: c_ushort = 0x4000;
-
-                                pub const RTF_DEFAULT: u32 = 0x00010000;
-                                pub const RTF_ALLONLINK: u32 = 0x00020000;
-                                pub const RTF_ADDRCONF: u32 = 0x00040000;
-                                pub const RTF_LINKRT: u32 = 0x00100000;
-                                pub const RTF_NONEXTHOP: u32 = 0x00200000;
-                                pub const RTF_CACHE: u32 = 0x01000000;
-                                pub const RTF_FLOW: u32 = 0x02000000;
-                                pub const RTF_POLICY: u32 = 0x04000000;
-
-                                pub const RTCF_VALVE: u32 = 0x00200000;
-                                pub const RTCF_MASQ: u32 = 0x00400000;
-                                pub const RTCF_NAT: u32 = 0x00800000;
-                                pub const RTCF_DOREDIRECT: u32 = 0x01000000;
-                                pub const RTCF_LOG: u32 = 0x02000000;
-                                pub const RTCF_DIRECTSRC: u32 = 0x04000000;
-
-                                pub const RTF_LOCAL: u32 = 0x80000000;
-                                pub const RTF_INTERFACE: u32 = 0x40000000;
-                                pub const RTF_MULTICAST: u32 = 0x20000000;
-                                pub const RTF_BROADCAST: u32 = 0x10000000;
-                                pub const RTF_NAT: u32 = 0x08000000;
-                                pub const RTF_ADDRCLASSMASK: u32 = 0xF8000000;
-
-                                pub const RT_CLASS_UNSPEC: u8 = 0;
-                                pub const RT_CLASS_DEFAULT: u8 = 253;
-                                pub const RT_CLASS_MAIN: u8 = 254;
-                                pub const RT_CLASS_LOCAL: u8 = 255;
-                                pub const RT_CLASS_MAX: u8 = 255;
-
-                                // linux/neighbor.h
-                                pub const NUD_NONE: u16 = 0x00;
-                                pub const NUD_INCOMPLETE: u16 = 0x01;
-                                pub const NUD_REACHABLE: u16 = 0x02;
-                                pub const NUD_STALE: u16 = 0x04;
-                                pub const NUD_DELAY: u16 = 0x08;
-                                pub const NUD_PROBE: u16 = 0x10;
-                                pub const NUD_FAILED: u16 = 0x20;
-                                pub const NUD_NOARP: u16 = 0x40;
-                                pub const NUD_PERMANENT: u16 = 0x80;
-
-                                pub const NTF_USE: u8 = 0x01;
-                                pub const NTF_SELF: u8 = 0x02;
-                                pub const NTF_MASTER: u8 = 0x04;
-                                pub const NTF_PROXY: u8 = 0x08;
-                                pub const NTF_ROUTER: u8 = 0x80;
-
-                                pub const NDA_UNSPEC: c_ushort = 0;
-                                pub const NDA_DST: c_ushort = 1;
-                                pub const NDA_LLADDR: c_ushort = 2;
-                                pub const NDA_CACHEINFO: c_ushort = 3;
-                                pub const NDA_PROBES: c_ushort = 4;
-                                pub const NDA_VLAN: c_ushort = 5;
-                                pub const NDA_PORT: c_ushort = 6;
-                                pub const NDA_VNI: c_ushort = 7;
-                                pub const NDA_IFINDEX: c_ushort = 8;
-
-                                // linux/netlink.h
-                                pub const NLA_ALIGNTO: c_int = 4;
-
-                                pub const NETLINK_ROUTE: c_int = 0;
-                                pub const NETLINK_UNUSED: c_int = 1;
-                                pub const NETLINK_USERSOCK: c_int = 2;
-                                pub const NETLINK_FIREWALL: c_int = 3;
-                                pub const NETLINK_SOCK_DIAG: c_int = 4;
-                                pub const NETLINK_NFLOG: c_int = 5;
-                                pub const NETLINK_XFRM: c_int = 6;
-                                pub const NETLINK_SELINUX: c_int = 7;
-                                pub const NETLINK_ISCSI: c_int = 8;
-                                pub const NETLINK_AUDIT: c_int = 9;
-                                pub const NETLINK_FIB_LOOKUP: c_int = 10;
-                                pub const NETLINK_CONNECTOR: c_int = 11;
-                                pub const NETLINK_NETFILTER: c_int = 12;
-                                pub const NETLINK_IP6_FW: c_int = 13;
-                                pub const NETLINK_DNRTMSG: c_int = 14;
-                                pub const NETLINK_KOBJECT_UEVENT: c_int = 15;
-                                pub const NETLINK_GENERIC: c_int = 16;
-                                pub const NETLINK_SCSITRANSPORT: c_int = 18;
-                                pub const NETLINK_ECRYPTFS: c_int = 19;
-                                pub const NETLINK_RDMA: c_int = 20;
-                                pub const NETLINK_CRYPTO: c_int = 21;
-                                pub const NETLINK_INET_DIAG: c_int = NETLINK_SOCK_DIAG;
-
-                                pub const NLM_F_REQUEST: c_int = 1;
-                                pub const NLM_F_MULTI: c_int = 2;
-                                pub const NLM_F_ACK: c_int = 4;
-                                pub const NLM_F_ECHO: c_int = 8;
-                                pub const NLM_F_DUMP_INTR: c_int = 16;
-                                pub const NLM_F_DUMP_FILTERED: c_int = 32;
-
-                                pub const NLM_F_ROOT: c_int = 0x100;
-                                pub const NLM_F_MATCH: c_int = 0x200;
-                                pub const NLM_F_ATOMIC: c_int = 0x400;
-                                pub const NLM_F_DUMP: c_int = NLM_F_ROOT | NLM_F_MATCH;
-
-                                pub const NLM_F_REPLACE: c_int = 0x100;
-                                pub const NLM_F_EXCL: c_int = 0x200;
-                                pub const NLM_F_CREATE: c_int = 0x400;
-                                pub const NLM_F_APPEND: c_int = 0x800;
-
-                                pub const NLM_F_NONREC: c_int = 0x100;
-                                pub const NLM_F_BULK: c_int = 0x200;
-
-                                pub const NLM_F_CAPPED: c_int = 0x100;
-                                pub const NLM_F_ACK_TLVS: c_int = 0x200;
-
-                                pub const NETLINK_ADD_MEMBERSHIP: c_int = 1;
-                                pub const NETLINK_DROP_MEMBERSHIP: c_int = 2;
-                                pub const NETLINK_PKTINFO: c_int = 3;
-                                pub const NETLINK_BROADCAST_ERROR: c_int = 4;
-                                pub const NETLINK_NO_ENOBUFS: c_int = 5;
-                                pub const NETLINK_RX_RING: c_int = 6;
-                                pub const NETLINK_TX_RING: c_int = 7;
-                                pub const NETLINK_LISTEN_ALL_NSID: c_int = 8;
-                                pub const NETLINK_LIST_MEMBERSHIPS: c_int = 9;
-                                pub const NETLINK_CAP_ACK: c_int = 10;
-                                pub const NETLINK_EXT_ACK: c_int = 11;
-                                pub const NETLINK_GET_STRICT_CHK: c_int = 12;
-
-                                pub const NLA_F_NESTED: c_int = 1 << 15;
-                                pub const NLA_F_NET_BYTEORDER: c_int = 1 << 14;
-                                pub const NLA_TYPE_MASK: c_int = !(NLA_F_NESTED | NLA_F_NET_BYTEORDER);
-
-                                // linux/rtnetlink.h
-                                pub const TCA_UNSPEC: c_ushort = 0;
-                                pub const TCA_KIND: c_ushort = 1;
-                                pub const TCA_OPTIONS: c_ushort = 2;
-                                pub const TCA_STATS: c_ushort = 3;
-                                pub const TCA_XSTATS: c_ushort = 4;
-                                pub const TCA_RATE: c_ushort = 5;
-                                pub const TCA_FCNT: c_ushort = 6;
-                                pub const TCA_STATS2: c_ushort = 7;
-                                pub const TCA_STAB: c_ushort = 8;
-
-                                pub const RTM_NEWLINK: u16 = 16;
-                                pub const RTM_DELLINK: u16 = 17;
-                                pub const RTM_GETLINK: u16 = 18;
-                                pub const RTM_SETLINK: u16 = 19;
-                                pub const RTM_NEWADDR: u16 = 20;
-                                pub const RTM_DELADDR: u16 = 21;
-                                pub const RTM_GETADDR: u16 = 22;
-                                pub const RTM_NEWROUTE: u16 = 24;
-                                pub const RTM_DELROUTE: u16 = 25;
-                                pub const RTM_GETROUTE: u16 = 26;
-                                pub const RTM_NEWNEIGH: u16 = 28;
-                                pub const RTM_DELNEIGH: u16 = 29;
-                                pub const RTM_GETNEIGH: u16 = 30;
-                                pub const RTM_NEWRULE: u16 = 32;
-                                pub const RTM_DELRULE: u16 = 33;
-                                pub const RTM_GETRULE: u16 = 34;
-                                pub const RTM_NEWQDISC: u16 = 36;
-                                pub const RTM_DELQDISC: u16 = 37;
-                                pub const RTM_GETQDISC: u16 = 38;
-                                pub const RTM_NEWTCLASS: u16 = 40;
-                                pub const RTM_DELTCLASS: u16 = 41;
-                                pub const RTM_GETTCLASS: u16 = 42;
-                                pub const RTM_NEWTFILTER: u16 = 44;
-                                pub const RTM_DELTFILTER: u16 = 45;
-                                pub const RTM_GETTFILTER: u16 = 46;
-                                pub const RTM_NEWACTION: u16 = 48;
-                                pub const RTM_DELACTION: u16 = 49;
-                                pub const RTM_GETACTION: u16 = 50;
-                                pub const RTM_NEWPREFIX: u16 = 52;
-                                pub const RTM_GETMULTICAST: u16 = 58;
-                                pub const RTM_GETANYCAST: u16 = 62;
-                                pub const RTM_NEWNEIGHTBL: u16 = 64;
-                                pub const RTM_GETNEIGHTBL: u16 = 66;
-                                pub const RTM_SETNEIGHTBL: u16 = 67;
-                                pub const RTM_NEWNDUSEROPT: u16 = 68;
-                                pub const RTM_NEWADDRLABEL: u16 = 72;
-                                pub const RTM_DELADDRLABEL: u16 = 73;
-                                pub const RTM_GETADDRLABEL: u16 = 74;
-                                pub const RTM_GETDCB: u16 = 78;
-                                pub const RTM_SETDCB: u16 = 79;
-                                pub const RTM_NEWNETCONF: u16 = 80;
-                                pub const RTM_GETNETCONF: u16 = 82;
-                                pub const RTM_NEWMDB: u16 = 84;
-                                pub const RTM_DELMDB: u16 = 85;
-                                pub const RTM_GETMDB: u16 = 86;
-                                pub const RTM_NEWNSID: u16 = 88;
-                                pub const RTM_DELNSID: u16 = 89;
-                                pub const RTM_GETNSID: u16 = 90;
-
-                                pub const RTM_F_NOTIFY: c_uint = 0x100;
-                                pub const RTM_F_CLONED: c_uint = 0x200;
-                                pub const RTM_F_EQUALIZE: c_uint = 0x400;
-                                pub const RTM_F_PREFIX: c_uint = 0x800;
-
-                                pub const RTA_UNSPEC: c_ushort = 0;
-                                pub const RTA_DST: c_ushort = 1;
-                                pub const RTA_SRC: c_ushort = 2;
-                                pub const RTA_IIF: c_ushort = 3;
-                                pub const RTA_OIF: c_ushort = 4;
-                                pub const RTA_GATEWAY: c_ushort = 5;
-                                pub const RTA_PRIORITY: c_ushort = 6;
-                                pub const RTA_PREFSRC: c_ushort = 7;
-                                pub const RTA_METRICS: c_ushort = 8;
-                                pub const RTA_MULTIPATH: c_ushort = 9;
-                                pub const RTA_PROTOINFO: c_ushort = 10; // No longer used
-                                pub const RTA_FLOW: c_ushort = 11;
-                                pub const RTA_CACHEINFO: c_ushort = 12;
-                                pub const RTA_SESSION: c_ushort = 13; // No longer used
-                                pub const RTA_MP_ALGO: c_ushort = 14; // No longer used
-                                pub const RTA_TABLE: c_ushort = 15;
-                                pub const RTA_MARK: c_ushort = 16;
-                                pub const RTA_MFC_STATS: c_ushort = 17;
-
-                                pub const RTN_UNSPEC: c_uchar = 0;
-                                pub const RTN_UNICAST: c_uchar = 1;
-                                pub const RTN_LOCAL: c_uchar = 2;
-                                pub const RTN_BROADCAST: c_uchar = 3;
-                                pub const RTN_ANYCAST: c_uchar = 4;
-                                pub const RTN_MULTICAST: c_uchar = 5;
-                                pub const RTN_BLACKHOLE: c_uchar = 6;
-                                pub const RTN_UNREACHABLE: c_uchar = 7;
-                                pub const RTN_PROHIBIT: c_uchar = 8;
-                                pub const RTN_THROW: c_uchar = 9;
-                                pub const RTN_NAT: c_uchar = 10;
-                                pub const RTN_XRESOLVE: c_uchar = 11;
-
-                                pub const RTPROT_UNSPEC: c_uchar = 0;
-                                pub const RTPROT_REDIRECT: c_uchar = 1;
-                                pub const RTPROT_KERNEL: c_uchar = 2;
-                                pub const RTPROT_BOOT: c_uchar = 3;
-                                pub const RTPROT_STATIC: c_uchar = 4;
-
-                                pub const RT_SCOPE_UNIVERSE: c_uchar = 0;
-                                pub const RT_SCOPE_SITE: c_uchar = 200;
-                                pub const RT_SCOPE_LINK: c_uchar = 253;
-                                pub const RT_SCOPE_HOST: c_uchar = 254;
-                                pub const RT_SCOPE_NOWHERE: c_uchar = 255;
-
-                                pub const RT_TABLE_UNSPEC: c_uchar = 0;
-                                pub const RT_TABLE_COMPAT: c_uchar = 252;
-                                pub const RT_TABLE_DEFAULT: c_uchar = 253;
-                                pub const RT_TABLE_MAIN: c_uchar = 254;
-                                pub const RT_TABLE_LOCAL: c_uchar = 255;
-
-                                pub const RTMSG_OVERRUN: u32 = crate::NLMSG_OVERRUN as u32;
-                                pub const RTMSG_NEWDEVICE: u32 = 0x11;
-                                pub const RTMSG_DELDEVICE: u32 = 0x12;
-                                pub const RTMSG_NEWROUTE: u32 = 0x21;
-                                pub const RTMSG_DELROUTE: u32 = 0x22;
-                                pub const RTMSG_NEWRULE: u32 = 0x31;
-                                pub const RTMSG_DELRULE: u32 = 0x32;
-                                pub const RTMSG_CONTROL: u32 = 0x40;
-                                pub const RTMSG_AR_FAILED: u32 = 0x51;
-
-                                pub const MAX_ADDR_LEN: usize = 7;
-                                pub const ARPD_UPDATE: c_ushort = 0x01;
-                                pub const ARPD_LOOKUP: c_ushort = 0x02;
-                                pub const ARPD_FLUSH: c_ushort = 0x03;
-                                pub const ATF_MAGIC: c_int = 0x80;
-
-                                pub const RTEXT_FILTER_VF: c_int = 1 << 0;
-                                pub const RTEXT_FILTER_BRVLAN: c_int = 1 << 1;
-                                pub const RTEXT_FILTER_BRVLAN_COMPRESSED: c_int = 1 << 2;
-                                pub const RTEXT_FILTER_SKIP_STATS: c_int = 1 << 3;
-                                pub const RTEXT_FILTER_MRP: c_int = 1 << 4;
-                                pub const RTEXT_FILTER_CFM_CONFIG: c_int = 1 << 5;
-                                pub const RTEXT_FILTER_CFM_STATUS: c_int = 1 << 6;
-
-                                // userspace compat definitions for RTNLGRP_*
-                                pub const RTMGRP_LINK: c_int = 0x00001;
-                                pub const RTMGRP_NOTIFY: c_int = 0x00002;
-                                pub const RTMGRP_NEIGH: c_int = 0x00004;
-                                pub const RTMGRP_TC: c_int = 0x00008;
-                                pub const RTMGRP_IPV4_IFADDR: c_int = 0x00010;
-                                pub const RTMGRP_IPV4_MROUTE: c_int = 0x00020;
-                                pub const RTMGRP_IPV4_ROUTE: c_int = 0x00040;
-                                pub const RTMGRP_IPV4_RULE: c_int = 0x00080;
-                                pub const RTMGRP_IPV6_IFADDR: c_int = 0x00100;
-                                pub const RTMGRP_IPV6_MROUTE: c_int = 0x00200;
-                                pub const RTMGRP_IPV6_ROUTE: c_int = 0x00400;
-                                pub const RTMGRP_IPV6_IFINFO: c_int = 0x00800;
-                                pub const RTMGRP_DECnet_IFADDR: c_int = 0x01000;
-                                pub const RTMGRP_DECnet_ROUTE: c_int = 0x04000;
-                                pub const RTMGRP_IPV6_PREFIX: c_int = 0x20000;
-
-                                // enum rtnetlink_groups
-                                pub const RTNLGRP_NONE: c_uint = 0x00;
-                                pub const RTNLGRP_LINK: c_uint = 0x01;
-                                pub const RTNLGRP_NOTIFY: c_uint = 0x02;
-                                pub const RTNLGRP_NEIGH: c_uint = 0x03;
-                                pub const RTNLGRP_TC: c_uint = 0x04;
-                                pub const RTNLGRP_IPV4_IFADDR: c_uint = 0x05;
-                                pub const RTNLGRP_IPV4_MROUTE: c_uint = 0x06;
-                                pub const RTNLGRP_IPV4_ROUTE: c_uint = 0x07;
-                                pub const RTNLGRP_IPV4_RULE: c_uint = 0x08;
-                                pub const RTNLGRP_IPV6_IFADDR: c_uint = 0x09;
-                                pub const RTNLGRP_IPV6_MROUTE: c_uint = 0x0a;
-                                pub const RTNLGRP_IPV6_ROUTE: c_uint = 0x0b;
-                                pub const RTNLGRP_IPV6_IFINFO: c_uint = 0x0c;
-                                pub const RTNLGRP_DECnet_IFADDR: c_uint = 0x0d;
-                                pub const RTNLGRP_NOP2: c_uint = 0x0e;
-                                pub const RTNLGRP_DECnet_ROUTE: c_uint = 0x0f;
-                                pub const RTNLGRP_DECnet_RULE: c_uint = 0x10;
-                                pub const RTNLGRP_NOP4: c_uint = 0x11;
-                                pub const RTNLGRP_IPV6_PREFIX: c_uint = 0x12;
-                                pub const RTNLGRP_IPV6_RULE: c_uint = 0x13;
-                                pub const RTNLGRP_ND_USEROPT: c_uint = 0x14;
-                                pub const RTNLGRP_PHONET_IFADDR: c_uint = 0x15;
-                                pub const RTNLGRP_PHONET_ROUTE: c_uint = 0x16;
-                                pub const RTNLGRP_DCB: c_uint = 0x17;
-                                pub const RTNLGRP_IPV4_NETCONF: c_uint = 0x18;
-                                pub const RTNLGRP_IPV6_NETCONF: c_uint = 0x19;
-                                pub const RTNLGRP_MDB: c_uint = 0x1a;
-                                pub const RTNLGRP_MPLS_ROUTE: c_uint = 0x1b;
-                                pub const RTNLGRP_NSID: c_uint = 0x1c;
-                                pub const RTNLGRP_MPLS_NETCONF: c_uint = 0x1d;
-                                pub const RTNLGRP_IPV4_MROUTE_R: c_uint = 0x1e;
-                                pub const RTNLGRP_IPV6_MROUTE_R: c_uint = 0x1f;
-                                pub const RTNLGRP_NEXTHOP: c_uint = 0x20;
-                                pub const RTNLGRP_BRVLAN: c_uint = 0x21;
-                                pub const RTNLGRP_MCTP_IFADDR: c_uint = 0x22;
-                                pub const RTNLGRP_TUNNEL: c_uint = 0x23;
-                                pub const RTNLGRP_STATS: c_uint = 0x24;
-
-                                // linux/cn_proc.h
-                                c_enum! {
-                                    enum proc_cn_mcast_op {
-                                        PROC_CN_MCAST_LISTEN = 1,
-                                        PROC_CN_MCAST_IGNORE = 2,
-                                    }
-                                }
-
-                                c_enum! {
-                                    enum proc_cn_event {
-                                        PROC_EVENT_NONE = 0x00000000,
-                                        PROC_EVENT_FORK = 0x00000001,
-                                        PROC_EVENT_EXEC = 0x00000002,
-                                        PROC_EVENT_UID = 0x00000004,
-                                        PROC_EVENT_GID = 0x00000040,
-                                        PROC_EVENT_SID = 0x00000080,
-                                        PROC_EVENT_PTRACE = 0x00000100,
-                                        PROC_EVENT_COMM = 0x00000200,
-                                        PROC_EVENT_NONZERO_EXIT = 0x20000000,
-                                        PROC_EVENT_COREDUMP = 0x40000000,
-                                        PROC_EVENT_EXIT = 0x80000000,
-                                    }
-                                }
-
-                                // linux/connector.h
-                                pub const CN_IDX_PROC: c_uint = 0x1;
-                                pub const CN_VAL_PROC: c_uint = 0x1;
-                                pub const CN_IDX_CIFS: c_uint = 0x2;
-                                pub const CN_VAL_CIFS: c_uint = 0x1;
-                                pub const CN_W1_IDX: c_uint = 0x3;
-                                pub const CN_W1_VAL: c_uint = 0x1;
-                                pub const CN_IDX_V86D: c_uint = 0x4;
-                                pub const CN_VAL_V86D_UVESAFB: c_uint = 0x1;
-                                pub const CN_IDX_BB: c_uint = 0x5;
-                                pub const CN_DST_IDX: c_uint = 0x6;
-                                pub const CN_DST_VAL: c_uint = 0x1;
-                                pub const CN_IDX_DM: c_uint = 0x7;
-                                pub const CN_VAL_DM_USERSPACE_LOG: c_uint = 0x1;
-                                pub const CN_IDX_DRBD: c_uint = 0x8;
-                                pub const CN_VAL_DRBD: c_uint = 0x1;
-                                pub const CN_KVP_IDX: c_uint = 0x9;
-                                pub const CN_KVP_VAL: c_uint = 0x1;
-                                pub const CN_VSS_IDX: c_uint = 0xA;
-                                pub const CN_VSS_VAL: c_uint = 0x1;
-
-                                // linux/module.h
-                                pub const MODULE_INIT_IGNORE_MODVERSIONS: c_uint = 0x0001;
-                                pub const MODULE_INIT_IGNORE_VERMAGIC: c_uint = 0x0002;
-
-                                // linux/net_tstamp.h
-                                pub const SOF_TIMESTAMPING_TX_HARDWARE: c_uint = 1 << 0;
-                                pub const SOF_TIMESTAMPING_TX_SOFTWARE: c_uint = 1 << 1;
-                                pub const SOF_TIMESTAMPING_RX_HARDWARE: c_uint = 1 << 2;
-                                pub const SOF_TIMESTAMPING_RX_SOFTWARE: c_uint = 1 << 3;
-                                pub const SOF_TIMESTAMPING_SOFTWARE: c_uint = 1 << 4;
-                                pub const SOF_TIMESTAMPING_SYS_HARDWARE: c_uint = 1 << 5;
-                                pub const SOF_TIMESTAMPING_RAW_HARDWARE: c_uint = 1 << 6;
-                                pub const SOF_TIMESTAMPING_OPT_ID: c_uint = 1 << 7;
-                                pub const SOF_TIMESTAMPING_TX_SCHED: c_uint = 1 << 8;
-                                pub const SOF_TIMESTAMPING_TX_ACK: c_uint = 1 << 9;
-                                pub const SOF_TIMESTAMPING_OPT_CMSG: c_uint = 1 << 10;
-                                pub const SOF_TIMESTAMPING_OPT_TSONLY: c_uint = 1 << 11;
-                                pub const SOF_TIMESTAMPING_OPT_STATS: c_uint = 1 << 12;
-                                pub const SOF_TIMESTAMPING_OPT_PKTINFO: c_uint = 1 << 13;
-                                pub const SOF_TIMESTAMPING_OPT_TX_SWHW: c_uint = 1 << 14;
-                                pub const SOF_TIMESTAMPING_BIND_PHC: c_uint = 1 << 15;
-                                pub const SOF_TIMESTAMPING_OPT_ID_TCP: c_uint = 1 << 16;
-                                pub const SOF_TIMESTAMPING_OPT_RX_FILTER: c_uint = 1 << 17;
-                                pub const SOF_TXTIME_DEADLINE_MODE: u32 = 1 << 0;
-                                pub const SOF_TXTIME_REPORT_ERRORS: u32 = 1 << 1;
-
-                                pub const HWTSTAMP_TX_OFF: c_uint = 0;
-                                pub const HWTSTAMP_TX_ON: c_uint = 1;
-                                pub const HWTSTAMP_TX_ONESTEP_SYNC: c_uint = 2;
-                                pub const HWTSTAMP_TX_ONESTEP_P2P: c_uint = 3;
-
-                                pub const HWTSTAMP_FILTER_NONE: c_uint = 0;
-                                pub const HWTSTAMP_FILTER_ALL: c_uint = 1;
-                                pub const HWTSTAMP_FILTER_SOME: c_uint = 2;
-                                pub const HWTSTAMP_FILTER_PTP_V1_L4_EVENT: c_uint = 3;
-                                pub const HWTSTAMP_FILTER_PTP_V1_L4_SYNC: c_uint = 4;
-                                pub const HWTSTAMP_FILTER_PTP_V1_L4_DELAY_REQ: c_uint = 5;
-                                pub const HWTSTAMP_FILTER_PTP_V2_L4_EVENT: c_uint = 6;
-                                pub const HWTSTAMP_FILTER_PTP_V2_L4_SYNC: c_uint = 7;
-                                pub const HWTSTAMP_FILTER_PTP_V2_L4_DELAY_REQ: c_uint = 8;
-                                pub const HWTSTAMP_FILTER_PTP_V2_L2_EVENT: c_uint = 9;
-                                pub const HWTSTAMP_FILTER_PTP_V2_L2_SYNC: c_uint = 10;
-                                pub const HWTSTAMP_FILTER_PTP_V2_L2_DELAY_REQ: c_uint = 11;
-                                pub const HWTSTAMP_FILTER_PTP_V2_EVENT: c_uint = 12;
-                                pub const HWTSTAMP_FILTER_PTP_V2_SYNC: c_uint = 13;
-                                pub const HWTSTAMP_FILTER_PTP_V2_DELAY_REQ: c_uint = 14;
-                                pub const HWTSTAMP_FILTER_NTP_ALL: c_uint = 15;
-
-                                // linux/ptp_clock.h
-                                pub const PTP_MAX_SAMPLES: c_uint = 25; // Maximum allowed offset measurement samples.
-
-                                const PTP_CLK_MAGIC: u32 = b'=' as u32;
-
-                                pub const PTP_CLOCK_GETCAPS: Ioctl = _IOR::<ptp_clock_caps>(PTP_CLK_MAGIC, 1);
-                                pub const PTP_EXTTS_REQUEST: Ioctl = _IOW::<ptp_extts_request>(PTP_CLK_MAGIC, 2);
-                                pub const PTP_PEROUT_REQUEST: Ioctl = _IOW::<ptp_perout_request>(PTP_CLK_MAGIC, 3);
-                                pub const PTP_ENABLE_PPS: Ioctl = _IOW::<c_int>(PTP_CLK_MAGIC, 4);
-                                pub const PTP_SYS_OFFSET: Ioctl = _IOW::<ptp_sys_offset>(PTP_CLK_MAGIC, 5);
-                                pub const PTP_PIN_GETFUNC: Ioctl = _IOWR::<ptp_pin_desc>(PTP_CLK_MAGIC, 6);
-                                pub const PTP_PIN_SETFUNC: Ioctl = _IOW::<ptp_pin_desc>(PTP_CLK_MAGIC, 7);
-                                pub const PTP_SYS_OFFSET_PRECISE: Ioctl = _IOWR::<ptp_sys_offset_precise>(PTP_CLK_MAGIC, 8);
-                                pub const PTP_SYS_OFFSET_EXTENDED: Ioctl = _IOWR::<ptp_sys_offset_extended>(PTP_CLK_MAGIC, 9);
-
-                                pub const PTP_CLOCK_GETCAPS2: Ioctl = _IOR::<ptp_clock_caps>(PTP_CLK_MAGIC, 10);
-                                pub const PTP_EXTTS_REQUEST2: Ioctl = _IOW::<ptp_extts_request>(PTP_CLK_MAGIC, 11);
-                                pub const PTP_PEROUT_REQUEST2: Ioctl = _IOW::<ptp_perout_request>(PTP_CLK_MAGIC, 12);
-                                pub const PTP_ENABLE_PPS2: Ioctl = _IOW::<c_int>(PTP_CLK_MAGIC, 13);
-                                pub const PTP_SYS_OFFSET2: Ioctl = _IOW::<ptp_sys_offset>(PTP_CLK_MAGIC, 14);
-                                pub const PTP_PIN_GETFUNC2: Ioctl = _IOWR::<ptp_pin_desc>(PTP_CLK_MAGIC, 15);
-                                pub const PTP_PIN_SETFUNC2: Ioctl = _IOW::<ptp_pin_desc>(PTP_CLK_MAGIC, 16);
-                                pub const PTP_SYS_OFFSET_PRECISE2: Ioctl = _IOWR::<ptp_sys_offset_precise>(PTP_CLK_MAGIC, 17);
-                                pub const PTP_SYS_OFFSET_EXTENDED2: Ioctl = _IOWR::<ptp_sys_offset_extended>(PTP_CLK_MAGIC, 18);
-
-                                // enum ptp_pin_function
-                                pub const PTP_PF_NONE: c_uint = 0;
-                                pub const PTP_PF_EXTTS: c_uint = 1;
-                                pub const PTP_PF_PEROUT: c_uint = 2;
-                                pub const PTP_PF_PHYSYNC: c_uint = 3;
-
-                                // linux/tls.h
-                                pub const TLS_TX: c_int = 1;
-                                pub const TLS_RX: c_int = 2;
-
-                                pub const TLS_TX_ZEROCOPY_RO: c_int = 3;
-                                pub const TLS_RX_EXPECT_NO_PAD: c_int = 4;
-
-                                pub const TLS_1_2_VERSION_MAJOR: __u8 = 0x3;
-                                pub const TLS_1_2_VERSION_MINOR: __u8 = 0x3;
-                                pub const TLS_1_2_VERSION: __u16 =
-                                    ((TLS_1_2_VERSION_MAJOR as __u16) << 8) | (TLS_1_2_VERSION_MINOR as __u16);
-
-                                pub const TLS_1_3_VERSION_MAJOR: __u8 = 0x3;
-                                pub const TLS_1_3_VERSION_MINOR: __u8 = 0x4;
-                                pub const TLS_1_3_VERSION: __u16 =
-                                    ((TLS_1_3_VERSION_MAJOR as __u16) << 8) | (TLS_1_3_VERSION_MINOR as __u16);
-
-                                pub const TLS_CIPHER_AES_GCM_128: __u16 = 51;
-                                pub const TLS_CIPHER_AES_GCM_128_IV_SIZE: usize = 8;
-                                pub const TLS_CIPHER_AES_GCM_128_KEY_SIZE: usize = 16;
-                                pub const TLS_CIPHER_AES_GCM_128_SALT_SIZE: usize = 4;
-                                pub const TLS_CIPHER_AES_GCM_128_TAG_SIZE: usize = 16;
-                                pub const TLS_CIPHER_AES_GCM_128_REC_SEQ_SIZE: usize = 8;
-
-                                pub const TLS_CIPHER_AES_GCM_256: __u16 = 52;
-                                pub const TLS_CIPHER_AES_GCM_256_IV_SIZE: usize = 8;
-                                pub const TLS_CIPHER_AES_GCM_256_KEY_SIZE: usize = 32;
-                                pub const TLS_CIPHER_AES_GCM_256_SALT_SIZE: usize = 4;
-                                pub const TLS_CIPHER_AES_GCM_256_TAG_SIZE: usize = 16;
-                                pub const TLS_CIPHER_AES_GCM_256_REC_SEQ_SIZE: usize = 8;
-
-                                pub const TLS_CIPHER_AES_CCM_128: __u16 = 53;
-                                pub const TLS_CIPHER_AES_CCM_128_IV_SIZE: usize = 8;
-                                pub const TLS_CIPHER_AES_CCM_128_KEY_SIZE: usize = 16;
-                                pub const TLS_CIPHER_AES_CCM_128_SALT_SIZE: usize = 4;
-                                pub const TLS_CIPHER_AES_CCM_128_TAG_SIZE: usize = 16;
-                                pub const TLS_CIPHER_AES_CCM_128_REC_SEQ_SIZE: usize = 8;
-
-                                pub const TLS_CIPHER_CHACHA20_POLY1305: __u16 = 54;
-                                pub const TLS_CIPHER_CHACHA20_POLY1305_IV_SIZE: usize = 12;
-                                pub const TLS_CIPHER_CHACHA20_POLY1305_KEY_SIZE: usize = 32;
-                                pub const TLS_CIPHER_CHACHA20_POLY1305_SALT_SIZE: usize = 0;
-                                pub const TLS_CIPHER_CHACHA20_POLY1305_TAG_SIZE: usize = 16;
-                                pub const TLS_CIPHER_CHACHA20_POLY1305_REC_SEQ_SIZE: usize = 8;
-
-                                pub const TLS_CIPHER_SM4_GCM: __u16 = 55;
-                                pub const TLS_CIPHER_SM4_GCM_IV_SIZE: usize = 8;
-                                pub const TLS_CIPHER_SM4_GCM_KEY_SIZE: usize = 16;
-                                pub const TLS_CIPHER_SM4_GCM_SALT_SIZE: usize = 4;
-                                pub const TLS_CIPHER_SM4_GCM_TAG_SIZE: usize = 16;
-                                pub const TLS_CIPHER_SM4_GCM_REC_SEQ_SIZE: usize = 8;
-
-                                pub const TLS_CIPHER_SM4_CCM: __u16 = 56;
-                                pub const TLS_CIPHER_SM4_CCM_IV_SIZE: usize = 8;
-                                pub const TLS_CIPHER_SM4_CCM_KEY_SIZE: usize = 16;
-                                pub const TLS_CIPHER_SM4_CCM_SALT_SIZE: usize = 4;
-                                pub const TLS_CIPHER_SM4_CCM_TAG_SIZE: usize = 16;
-                                pub const TLS_CIPHER_SM4_CCM_REC_SEQ_SIZE: usize = 8;
-
-                                pub const TLS_CIPHER_ARIA_GCM_128: __u16 = 57;
-                                pub const TLS_CIPHER_ARIA_GCM_128_IV_SIZE: usize = 8;
-                                pub const TLS_CIPHER_ARIA_GCM_128_KEY_SIZE: usize = 16;
-                                pub const TLS_CIPHER_ARIA_GCM_128_SALT_SIZE: usize = 4;
-                                pub const TLS_CIPHER_ARIA_GCM_128_TAG_SIZE: usize = 16;
-                                pub const TLS_CIPHER_ARIA_GCM_128_REC_SEQ_SIZE: usize = 8;
-
-                                pub const TLS_CIPHER_ARIA_GCM_256: __u16 = 58;
-                                pub const TLS_CIPHER_ARIA_GCM_256_IV_SIZE: usize = 8;
-                                pub const TLS_CIPHER_ARIA_GCM_256_KEY_SIZE: usize = 32;
-                                pub const TLS_CIPHER_ARIA_GCM_256_SALT_SIZE: usize = 4;
-                                pub const TLS_CIPHER_ARIA_GCM_256_TAG_SIZE: usize = 16;
-                                pub const TLS_CIPHER_ARIA_GCM_256_REC_SEQ_SIZE: usize = 8;
-
-                                pub const TLS_SET_RECORD_TYPE: c_int = 1;
-                                pub const TLS_GET_RECORD_TYPE: c_int = 2;
-
-                                pub const SOL_TLS: c_int = 282;
-
-                                // enum
-                                pub const TLS_INFO_UNSPEC: c_int = 0x00;
-                                pub const TLS_INFO_VERSION: c_int = 0x01;
-                                pub const TLS_INFO_CIPHER: c_int = 0x02;
-                                pub const TLS_INFO_TXCONF: c_int = 0x03;
-                                pub const TLS_INFO_RXCONF: c_int = 0x04;
-                                pub const TLS_INFO_ZC_RO_TX: c_int = 0x05;
-                                pub const TLS_INFO_RX_NO_PAD: c_int = 0x06;
-
-                                pub const TLS_CONF_BASE: c_int = 1;
-                                pub const TLS_CONF_SW: c_int = 2;
-                                pub const TLS_CONF_HW: c_int = 3;
-                                pub const TLS_CONF_HW_RECORD: c_int = 4;
-
-                                // linux/if_alg.h
-                                pub const ALG_SET_KEY: c_int = 1;
-                                pub const ALG_SET_IV: c_int = 2;
-                                pub const ALG_SET_OP: c_int = 3;
-                                pub const ALG_SET_AEAD_ASSOCLEN: c_int = 4;
-                                pub const ALG_SET_AEAD_AUTHSIZE: c_int = 5;
-                                pub const ALG_SET_DRBG_ENTROPY: c_int = 6;
-                                pub const ALG_SET_KEY_BY_KEY_SERIAL: c_int = 7;
-
-                                pub const ALG_OP_DECRYPT: c_int = 0;
-                                pub const ALG_OP_ENCRYPT: c_int = 1;
-
-                                // include/uapi/linux/if.h
-                                pub const IF_OPER_UNKNOWN: c_int = 0;
-                                pub const IF_OPER_NOTPRESENT: c_int = 1;
-                                pub const IF_OPER_DOWN: c_int = 2;
-                                pub const IF_OPER_LOWERLAYERDOWN: c_int = 3;
-                                pub const IF_OPER_TESTING: c_int = 4;
-                                pub const IF_OPER_DORMANT: c_int = 5;
-                                pub const IF_OPER_UP: c_int = 6;
-
-                                pub const IF_LINK_MODE_DEFAULT: c_int = 0;
-                                pub const IF_LINK_MODE_DORMANT: c_int = 1;
-                                pub const IF_LINK_MODE_TESTING: c_int = 2;
-
-                                // include/uapi/linux/udp.h
-                                pub const UDP_CORK: c_int = 1;
-                                pub const UDP_ENCAP: c_int = 100;
-                                pub const UDP_NO_CHECK6_TX: c_int = 101;
-                                pub const UDP_NO_CHECK6_RX: c_int = 102;
-
-                                // include/uapi/linux/mman.h
-                                pub const MAP_SHARED_VALIDATE: c_int = 0x3;
-                                pub const MAP_DROPPABLE: c_int = 0x8;
-
-                                // include/uapi/asm-generic/mman-common.h
-                                pub const MAP_FIXED_NOREPLACE: c_int = 0x100000;
-                                pub const MLOCK_ONFAULT: c_uint = 0x01;
-
-                                // uapi/linux/vm_sockets.h
-                                pub const VMADDR_CID_ANY: c_uint = 0xFFFFFFFF;
-                                pub const VMADDR_CID_HYPERVISOR: c_uint = 0;
-                                #[deprecated(
-                                    since = "0.2.74",
-                                    note = "VMADDR_CID_RESERVED is removed since Linux v5.6 and \
-                                            replaced with VMADDR_CID_LOCAL"
-                                )]
-                                pub const VMADDR_CID_RESERVED: c_uint = 1;
-                                pub const VMADDR_CID_LOCAL: c_uint = 1;
-                                pub const VMADDR_CID_HOST: c_uint = 2;
-                                pub const VMADDR_PORT_ANY: c_uint = 0xFFFFFFFF;
-
-                                // uapi/linux/inotify.h
-                                pub const IN_ACCESS: u32 = 0x0000_0001;
-                                pub const IN_MODIFY: u32 = 0x0000_0002;
-                                pub const IN_ATTRIB: u32 = 0x0000_0004;
-                                pub const IN_CLOSE_WRITE: u32 = 0x0000_0008;
-                                pub const IN_CLOSE_NOWRITE: u32 = 0x0000_0010;
-                                pub const IN_CLOSE: u32 = IN_CLOSE_WRITE | IN_CLOSE_NOWRITE;
-                                pub const IN_OPEN: u32 = 0x0000_0020;
-                                pub const IN_MOVED_FROM: u32 = 0x0000_0040;
-                                pub const IN_MOVED_TO: u32 = 0x0000_0080;
-                                pub const IN_MOVE: u32 = IN_MOVED_FROM | IN_MOVED_TO;
-                                pub const IN_CREATE: u32 = 0x0000_0100;
-                                pub const IN_DELETE: u32 = 0x0000_0200;
-                                pub const IN_DELETE_SELF: u32 = 0x0000_0400;
-                                pub const IN_MOVE_SELF: u32 = 0x0000_0800;
-                                pub const IN_UNMOUNT: u32 = 0x0000_2000;
-                                pub const IN_Q_OVERFLOW: u32 = 0x0000_4000;
-                                pub const IN_IGNORED: u32 = 0x0000_8000;
-                                pub const IN_ONLYDIR: u32 = 0x0100_0000;
-                                pub const IN_DONT_FOLLOW: u32 = 0x0200_0000;
-                                pub const IN_EXCL_UNLINK: u32 = 0x0400_0000;
-
-                                // linux/keyctl.h
-                                pub const KEY_SPEC_THREAD_KEYRING: i32 = -1;
-                                pub const KEY_SPEC_PROCESS_KEYRING: i32 = -2;
-                                pub const KEY_SPEC_SESSION_KEYRING: i32 = -3;
-                                pub const KEY_SPEC_USER_KEYRING: i32 = -4;
-                                pub const KEY_SPEC_USER_SESSION_KEYRING: i32 = -5;
-                                pub const KEY_SPEC_GROUP_KEYRING: i32 = -6;
-                                pub const KEY_SPEC_REQKEY_AUTH_KEY: i32 = -7;
-                                pub const KEY_SPEC_REQUESTOR_KEYRING: i32 = -8;
-
-                                pub const KEY_REQKEY_DEFL_NO_CHANGE: i32 = -1;
-                                pub const KEY_REQKEY_DEFL_DEFAULT: i32 = 0;
-                                pub const KEY_REQKEY_DEFL_THREAD_KEYRING: i32 = 1;
-                                pub const KEY_REQKEY_DEFL_PROCESS_KEYRING: i32 = 2;
-                                pub const KEY_REQKEY_DEFL_SESSION_KEYRING: i32 = 3;
-                                pub const KEY_REQKEY_DEFL_USER_KEYRING: i32 = 4;
-                                pub const KEY_REQKEY_DEFL_USER_SESSION_KEYRING: i32 = 5;
-                                pub const KEY_REQKEY_DEFL_GROUP_KEYRING: i32 = 6;
-                                pub const KEY_REQKEY_DEFL_REQUESTOR_KEYRING: i32 = 7;
-
-                                pub const KEYCTL_GET_KEYRING_ID: u32 = 0;
-                                pub const KEYCTL_JOIN_SESSION_KEYRING: u32 = 1;
-                                pub const KEYCTL_UPDATE: u32 = 2;
-                                pub const KEYCTL_REVOKE: u32 = 3;
-                                pub const KEYCTL_CHOWN: u32 = 4;
-                                pub const KEYCTL_SETPERM: u32 = 5;
-                                pub const KEYCTL_DESCRIBE: u32 = 6;
-                                pub const KEYCTL_CLEAR: u32 = 7;
-                                pub const KEYCTL_LINK: u32 = 8;
-                                pub const KEYCTL_UNLINK: u32 = 9;
-                                pub const KEYCTL_SEARCH: u32 = 10;
-                                pub const KEYCTL_READ: u32 = 11;
-                                pub const KEYCTL_INSTANTIATE: u32 = 12;
-                                pub const KEYCTL_NEGATE: u32 = 13;
-                                pub const KEYCTL_SET_REQKEY_KEYRING: u32 = 14;
-                                pub const KEYCTL_SET_TIMEOUT: u32 = 15;
-                                pub const KEYCTL_ASSUME_AUTHORITY: u32 = 16;
-                                pub const KEYCTL_GET_SECURITY: u32 = 17;
-                                pub const KEYCTL_SESSION_TO_PARENT: u32 = 18;
-                                pub const KEYCTL_REJECT: u32 = 19;
-                                pub const KEYCTL_INSTANTIATE_IOV: u32 = 20;
-                                pub const KEYCTL_INVALIDATE: u32 = 21;
-                                pub const KEYCTL_GET_PERSISTENT: u32 = 22;
-
-                                pub const IN_MASK_CREATE: u32 = 0x1000_0000;
-                                pub const IN_MASK_ADD: u32 = 0x2000_0000;
-                                pub const IN_ISDIR: u32 = 0x4000_0000;
-                                pub const IN_ONESHOT: u32 = 0x8000_0000;
-
-                                pub const IN_ALL_EVENTS: u32 = IN_ACCESS
-                                    | IN_MODIFY
-                                    | IN_ATTRIB
-                                    | IN_CLOSE_WRITE
-                                    | IN_CLOSE_NOWRITE
-                                    | IN_OPEN
-                                    | IN_MOVED_FROM
-                                    | IN_MOVED_TO
-                                    | IN_DELETE
-                                    | IN_CREATE
-                                    | IN_DELETE_SELF
-                                    | IN_MOVE_SELF;
-
-                                pub const IN_CLOEXEC: c_int = O_CLOEXEC;
-                                pub const IN_NONBLOCK: c_int = O_NONBLOCK;
-
-                                // uapi/linux/mount.h
-                                pub const OPEN_TREE_CLONE: c_uint = 0x01;
-                                pub const OPEN_TREE_CLOEXEC: c_uint = O_CLOEXEC as c_uint;
-
-                                // uapi/linux/netfilter/nf_tables.h
-                                pub const NFT_TABLE_MAXNAMELEN: c_int = 256;
-                                pub const NFT_CHAIN_MAXNAMELEN: c_int = 256;
-                                pub const NFT_SET_MAXNAMELEN: c_int = 256;
-                                pub const NFT_OBJ_MAXNAMELEN: c_int = 256;
-                                pub const NFT_USERDATA_MAXLEN: c_int = 256;
-
-                                pub const NFT_REG_VERDICT: c_int = 0;
-                                pub const NFT_REG_1: c_int = 1;
-                                pub const NFT_REG_2: c_int = 2;
-                                pub const NFT_REG_3: c_int = 3;
-                                pub const NFT_REG_4: c_int = 4;
-                                pub const __NFT_REG_MAX: c_int = 5;
-                                pub const NFT_REG32_00: c_int = 8;
-                                pub const NFT_REG32_01: c_int = 9;
-                                pub const NFT_REG32_02: c_int = 10;
-                                pub const NFT_REG32_03: c_int = 11;
-                                pub const NFT_REG32_04: c_int = 12;
-                                pub const NFT_REG32_05: c_int = 13;
-                                pub const NFT_REG32_06: c_int = 14;
-                                pub const NFT_REG32_07: c_int = 15;
-                                pub const NFT_REG32_08: c_int = 16;
-                                pub const NFT_REG32_09: c_int = 17;
-                                pub const NFT_REG32_10: c_int = 18;
-                                pub const NFT_REG32_11: c_int = 19;
-                                pub const NFT_REG32_12: c_int = 20;
-                                pub const NFT_REG32_13: c_int = 21;
-                                pub const NFT_REG32_14: c_int = 22;
-                                pub const NFT_REG32_15: c_int = 23;
-
-                                pub const NFT_REG_SIZE: c_int = 16;
-                                pub const NFT_REG32_SIZE: c_int = 4;
-
-                                pub const NFT_CONTINUE: c_int = -1;
-                                pub const NFT_BREAK: c_int = -2;
-                                pub const NFT_JUMP: c_int = -3;
-                                pub const NFT_GOTO: c_int = -4;
-                                pub const NFT_RETURN: c_int = -5;
-
-                                pub const NFT_MSG_NEWTABLE: c_int = 0;
-                                pub const NFT_MSG_GETTABLE: c_int = 1;
-                                pub const NFT_MSG_DELTABLE: c_int = 2;
-                                pub const NFT_MSG_NEWCHAIN: c_int = 3;
-                                pub const NFT_MSG_GETCHAIN: c_int = 4;
-                                pub const NFT_MSG_DELCHAIN: c_int = 5;
-                                pub const NFT_MSG_NEWRULE: c_int = 6;
-                                pub const NFT_MSG_GETRULE: c_int = 7;
-                                pub const NFT_MSG_DELRULE: c_int = 8;
-                                pub const NFT_MSG_NEWSET: c_int = 9;
-                                pub const NFT_MSG_GETSET: c_int = 10;
-                                pub const NFT_MSG_DELSET: c_int = 11;
-                                pub const NFT_MSG_NEWSETELEM: c_int = 12;
-                                pub const NFT_MSG_GETSETELEM: c_int = 13;
-                                pub const NFT_MSG_DELSETELEM: c_int = 14;
-                                pub const NFT_MSG_NEWGEN: c_int = 15;
-                                pub const NFT_MSG_GETGEN: c_int = 16;
-                                pub const NFT_MSG_TRACE: c_int = 17;
-                                cfg_if! {
-                                    if #[cfg(not(target_arch = "sparc64"))] {
-                                        pub const NFT_MSG_NEWOBJ: c_int = 18;
-                                        pub const NFT_MSG_GETOBJ: c_int = 19;
-                                        pub const NFT_MSG_DELOBJ: c_int = 20;
-                                        pub const NFT_MSG_GETOBJ_RESET: c_int = 21;
-                                    }
-                                }
-                                pub const NFT_MSG_MAX: c_int = 25;
-
-                                pub const NFT_SET_ANONYMOUS: c_int = 0x1;
-                                pub const NFT_SET_CONSTANT: c_int = 0x2;
-                                pub const NFT_SET_INTERVAL: c_int = 0x4;
-                                pub const NFT_SET_MAP: c_int = 0x8;
-                                pub const NFT_SET_TIMEOUT: c_int = 0x10;
-                                pub const NFT_SET_EVAL: c_int = 0x20;
-
-                                pub const NFT_SET_POL_PERFORMANCE: c_int = 0;
-                                pub const NFT_SET_POL_MEMORY: c_int = 1;
-
-                                pub const NFT_SET_ELEM_INTERVAL_END: c_int = 0x1;
-
-                                pub const NFT_DATA_VALUE: c_uint = 0;
-                                pub const NFT_DATA_VERDICT: c_uint = 0xffffff00;
-
-                                pub const NFT_DATA_RESERVED_MASK: c_uint = 0xffffff00;
-
-                                pub const NFT_DATA_VALUE_MAXLEN: c_int = 64;
-
-                                pub const NFT_BYTEORDER_NTOH: c_int = 0;
-                                pub const NFT_BYTEORDER_HTON: c_int = 1;
-
-                                pub const NFT_CMP_EQ: c_int = 0;
-                                pub const NFT_CMP_NEQ: c_int = 1;
-                                pub const NFT_CMP_LT: c_int = 2;
-                                pub const NFT_CMP_LTE: c_int = 3;
-                                pub const NFT_CMP_GT: c_int = 4;
-                                pub const NFT_CMP_GTE: c_int = 5;
-
-                                pub const NFT_RANGE_EQ: c_int = 0;
-                                pub const NFT_RANGE_NEQ: c_int = 1;
-
-                                pub const NFT_LOOKUP_F_INV: c_int = 1 << 0;
-
-                                pub const NFT_DYNSET_OP_ADD: c_int = 0;
-                                pub const NFT_DYNSET_OP_UPDATE: c_int = 1;
-
-                                pub const NFT_DYNSET_F_INV: c_int = 1 << 0;
-
-                                pub const NFT_PAYLOAD_LL_HEADER: c_int = 0;
-                                pub const NFT_PAYLOAD_NETWORK_HEADER: c_int = 1;
-                                pub const NFT_PAYLOAD_TRANSPORT_HEADER: c_int = 2;
-
-                                pub const NFT_PAYLOAD_CSUM_NONE: c_int = 0;
-                                pub const NFT_PAYLOAD_CSUM_INET: c_int = 1;
-
-                                pub const NFT_META_LEN: c_int = 0;
-                                pub const NFT_META_PROTOCOL: c_int = 1;
-                                pub const NFT_META_PRIORITY: c_int = 2;
-                                pub const NFT_META_MARK: c_int = 3;
-                                pub const NFT_META_IIF: c_int = 4;
-                                pub const NFT_META_OIF: c_int = 5;
-                                pub const NFT_META_IIFNAME: c_int = 6;
-                                pub const NFT_META_OIFNAME: c_int = 7;
-                                pub const NFT_META_IIFTYPE: c_int = 8;
-                                pub const NFT_META_OIFTYPE: c_int = 9;
-                                pub const NFT_META_SKUID: c_int = 10;
-                                pub const NFT_META_SKGID: c_int = 11;
-                                pub const NFT_META_NFTRACE: c_int = 12;
-                                pub const NFT_META_RTCLASSID: c_int = 13;
-                                pub const NFT_META_SECMARK: c_int = 14;
-                                pub const NFT_META_NFPROTO: c_int = 15;
-                                pub const NFT_META_L4PROTO: c_int = 16;
-                                pub const NFT_META_BRI_IIFNAME: c_int = 17;
-                                pub const NFT_META_BRI_OIFNAME: c_int = 18;
-                                pub const NFT_META_PKTTYPE: c_int = 19;
-                                pub const NFT_META_CPU: c_int = 20;
-                                pub const NFT_META_IIFGROUP: c_int = 21;
-                                pub const NFT_META_OIFGROUP: c_int = 22;
-                                pub const NFT_META_CGROUP: c_int = 23;
-                                pub const NFT_META_PRANDOM: c_int = 24;
-
-                                pub const NFT_CT_STATE: c_int = 0;
-                                pub const NFT_CT_DIRECTION: c_int = 1;
-                                pub const NFT_CT_STATUS: c_int = 2;
-                                pub const NFT_CT_MARK: c_int = 3;
-                                pub const NFT_CT_SECMARK: c_int = 4;
-                                pub const NFT_CT_EXPIRATION: c_int = 5;
-                                pub const NFT_CT_HELPER: c_int = 6;
-                                pub const NFT_CT_L3PROTOCOL: c_int = 7;
-                                pub const NFT_CT_SRC: c_int = 8;
-                                pub const NFT_CT_DST: c_int = 9;
-                                pub const NFT_CT_PROTOCOL: c_int = 10;
-                                pub const NFT_CT_PROTO_SRC: c_int = 11;
-                                pub const NFT_CT_PROTO_DST: c_int = 12;
-                                pub const NFT_CT_LABELS: c_int = 13;
-                                pub const NFT_CT_PKTS: c_int = 14;
-                                pub const NFT_CT_BYTES: c_int = 15;
-                                pub const NFT_CT_AVGPKT: c_int = 16;
-                                pub const NFT_CT_ZONE: c_int = 17;
-                                pub const NFT_CT_EVENTMASK: c_int = 18;
-                                pub const NFT_CT_SRC_IP: c_int = 19;
-                                pub const NFT_CT_DST_IP: c_int = 20;
-                                pub const NFT_CT_SRC_IP6: c_int = 21;
-                                pub const NFT_CT_DST_IP6: c_int = 22;
-
-                                pub const NFT_LIMIT_PKTS: c_int = 0;
-                                pub const NFT_LIMIT_PKT_BYTES: c_int = 1;
-
-                                pub const NFT_LIMIT_F_INV: c_int = 1 << 0;
-
-                                pub const NFT_QUEUE_FLAG_BYPASS: c_int = 0x01;
-                                pub const NFT_QUEUE_FLAG_CPU_FANOUT: c_int = 0x02;
-                                pub const NFT_QUEUE_FLAG_MASK: c_int = 0x03;
-
-                                pub const NFT_QUOTA_F_INV: c_int = 1 << 0;
-
-                                pub const NFT_REJECT_ICMP_UNREACH: c_int = 0;
-                                pub const NFT_REJECT_TCP_RST: c_int = 1;
-                                pub const NFT_REJECT_ICMPX_UNREACH: c_int = 2;
-
-                                pub const NFT_REJECT_ICMPX_NO_ROUTE: c_int = 0;
-                                pub const NFT_REJECT_ICMPX_PORT_UNREACH: c_int = 1;
-                                pub const NFT_REJECT_ICMPX_HOST_UNREACH: c_int = 2;
-                                pub const NFT_REJECT_ICMPX_ADMIN_PROHIBITED: c_int = 3;
-
-                                pub const NFT_NAT_SNAT: c_int = 0;
-                                pub const NFT_NAT_DNAT: c_int = 1;
-
-                                pub const NFT_TRACETYPE_UNSPEC: c_int = 0;
-                                pub const NFT_TRACETYPE_POLICY: c_int = 1;
-                                pub const NFT_TRACETYPE_RETURN: c_int = 2;
-                                pub const NFT_TRACETYPE_RULE: c_int = 3;
-
-                                pub const NFT_NG_INCREMENTAL: c_int = 0;
-                                pub const NFT_NG_RANDOM: c_int = 1;
-
-                                // linux/input.h
-                                pub const FF_MAX: __u16 = 0x7f;
-                                pub const FF_CNT: usize = FF_MAX as usize + 1;
-
-                                // linux/input-event-codes.h
-                                pub const INPUT_PROP_POINTER: __u16 = 0x00;
-                                pub const INPUT_PROP_DIRECT: __u16 = 0x01;
-                                pub const INPUT_PROP_BUTTONPAD: __u16 = 0x02;
-                                pub const INPUT_PROP_SEMI_MT: __u16 = 0x03;
-                                pub const INPUT_PROP_TOPBUTTONPAD: __u16 = 0x04;
-                                pub const INPUT_PROP_POINTING_STICK: __u16 = 0x05;
-                                pub const INPUT_PROP_ACCELEROMETER: __u16 = 0x06;
-                                pub const INPUT_PROP_MAX: __u16 = 0x1f;
-                                pub const INPUT_PROP_CNT: usize = INPUT_PROP_MAX as usize + 1;
-                                pub const EV_MAX: __u16 = 0x1f;
-                                pub const EV_CNT: usize = EV_MAX as usize + 1;
-                                pub const SYN_MAX: __u16 = 0xf;
-                                pub const SYN_CNT: usize = SYN_MAX as usize + 1;
-                                pub const KEY_MAX: __u16 = 0x2ff;
-                                pub const KEY_CNT: usize = KEY_MAX as usize + 1;
-                                pub const REL_MAX: __u16 = 0x0f;
-                                pub const REL_CNT: usize = REL_MAX as usize + 1;
-                                pub const ABS_MAX: __u16 = 0x3f;
-                                pub const ABS_CNT: usize = ABS_MAX as usize + 1;
-                                pub const SW_MAX: __u16 = 0x10;
-                                pub const SW_CNT: usize = SW_MAX as usize + 1;
-                                pub const MSC_MAX: __u16 = 0x07;
-                                pub const MSC_CNT: usize = MSC_MAX as usize + 1;
-                                pub const LED_MAX: __u16 = 0x0f;
-                                pub const LED_CNT: usize = LED_MAX as usize + 1;
-                                pub const REP_MAX: __u16 = 0x01;
-                                pub const REP_CNT: usize = REP_MAX as usize + 1;
-                                pub const SND_MAX: __u16 = 0x07;
-                                pub const SND_CNT: usize = SND_MAX as usize + 1;
-
-                                // linux/uinput.h
-                                pub const UINPUT_VERSION: c_uint = 5;
-                                pub const UINPUT_MAX_NAME_SIZE: usize = 80;
-
-                                // uapi/linux/fanotify.h
-                                pub const FAN_ACCESS: u64 = 0x0000_0001;
-                                pub const FAN_MODIFY: u64 = 0x0000_0002;
-                                pub const FAN_ATTRIB: u64 = 0x0000_0004;
-                                pub const FAN_CLOSE_WRITE: u64 = 0x0000_0008;
-                                pub const FAN_CLOSE_NOWRITE: u64 = 0x0000_0010;
-                                pub const FAN_OPEN: u64 = 0x0000_0020;
-                                pub const FAN_MOVED_FROM: u64 = 0x0000_0040;
-                                pub const FAN_MOVED_TO: u64 = 0x0000_0080;
-                                pub const FAN_CREATE: u64 = 0x0000_0100;
-                                pub const FAN_DELETE: u64 = 0x0000_0200;
-                                pub const FAN_DELETE_SELF: u64 = 0x0000_0400;
-                                pub const FAN_MOVE_SELF: u64 = 0x0000_0800;
-                                pub const FAN_OPEN_EXEC: u64 = 0x0000_1000;
-
-                                pub const FAN_Q_OVERFLOW: u64 = 0x0000_4000;
-                                pub const FAN_FS_ERROR: u64 = 0x0000_8000;
-
-                                pub const FAN_OPEN_PERM: u64 = 0x0001_0000;
-                                pub const FAN_ACCESS_PERM: u64 = 0x0002_0000;
-                                pub const FAN_OPEN_EXEC_PERM: u64 = 0x0004_0000;
-
-                                pub const FAN_EVENT_ON_CHILD: u64 = 0x0800_0000;
-
-                                pub const FAN_RENAME: u64 = 0x1000_0000;
-
-                                pub const FAN_ONDIR: u64 = 0x4000_0000;
-
-                                pub const FAN_CLOSE: u64 = FAN_CLOSE_WRITE | FAN_CLOSE_NOWRITE;
-                                pub const FAN_MOVE: u64 = FAN_MOVED_FROM | FAN_MOVED_TO;
-
-                                pub const FAN_CLOEXEC: c_uint = 0x0000_0001;
-                                pub const FAN_NONBLOCK: c_uint = 0x0000_0002;
-
-                                pub const FAN_CLASS_NOTIF: c_uint = 0x0000_0000;
-                                pub const FAN_CLASS_CONTENT: c_uint = 0x0000_0004;
-                                pub const FAN_CLASS_PRE_CONTENT: c_uint = 0x0000_0008;
-
-                                pub const FAN_UNLIMITED_QUEUE: c_uint = 0x0000_0010;
-                                pub const FAN_UNLIMITED_MARKS: c_uint = 0x0000_0020;
-                                pub const FAN_ENABLE_AUDIT: c_uint = 0x0000_0040;
-
-                                pub const FAN_REPORT_PIDFD: c_uint = 0x0000_0080;
-                                pub const FAN_REPORT_TID: c_uint = 0x0000_0100;
-                                pub const FAN_REPORT_FID: c_uint = 0x0000_0200;
-                                pub const FAN_REPORT_DIR_FID: c_uint = 0x0000_0400;
-                                pub const FAN_REPORT_NAME: c_uint = 0x0000_0800;
-                                pub const FAN_REPORT_TARGET_FID: c_uint = 0x0000_1000;
-
-                                pub const FAN_REPORT_DFID_NAME: c_uint = FAN_REPORT_DIR_FID | FAN_REPORT_NAME;
-                                pub const FAN_REPORT_DFID_NAME_TARGET: c_uint =
-                                    FAN_REPORT_DFID_NAME | FAN_REPORT_FID | FAN_REPORT_TARGET_FID;
-
-                                pub const FAN_MARK_ADD: c_uint = 0x0000_0001;
-                                pub const FAN_MARK_REMOVE: c_uint = 0x0000_0002;
-                                pub const FAN_MARK_DONT_FOLLOW: c_uint = 0x0000_0004;
-                                pub const FAN_MARK_ONLYDIR: c_uint = 0x0000_0008;
-                                pub const FAN_MARK_IGNORED_MASK: c_uint = 0x0000_0020;
-                                pub const FAN_MARK_IGNORED_SURV_MODIFY: c_uint = 0x0000_0040;
-                                pub const FAN_MARK_FLUSH: c_uint = 0x0000_0080;
-                                pub const FAN_MARK_EVICTABLE: c_uint = 0x0000_0200;
-                                pub const FAN_MARK_IGNORE: c_uint = 0x0000_0400;
-
-                                pub const FAN_MARK_INODE: c_uint = 0x0000_0000;
-                                pub const FAN_MARK_MOUNT: c_uint = 0x0000_0010;
-                                pub const FAN_MARK_FILESYSTEM: c_uint = 0x0000_0100;
-
-                                pub const FAN_MARK_IGNORE_SURV: c_uint = FAN_MARK_IGNORE | FAN_MARK_IGNORED_SURV_MODIFY;
-
-                                pub const FANOTIFY_METADATA_VERSION: u8 = 3;
-
-                                pub const FAN_EVENT_INFO_TYPE_FID: u8 = 1;
-                                pub const FAN_EVENT_INFO_TYPE_DFID_NAME: u8 = 2;
-                                pub const FAN_EVENT_INFO_TYPE_DFID: u8 = 3;
-                                pub const FAN_EVENT_INFO_TYPE_PIDFD: u8 = 4;
-                                pub const FAN_EVENT_INFO_TYPE_ERROR: u8 = 5;
-
-                                pub const FAN_EVENT_INFO_TYPE_OLD_DFID_NAME: u8 = 10;
-                                pub const FAN_EVENT_INFO_TYPE_NEW_DFID_NAME: u8 = 12;
-
-                                pub const FAN_RESPONSE_INFO_NONE: u8 = 0;
-                                pub const FAN_RESPONSE_INFO_AUDIT_RULE: u8 = 1;
-
-                                pub const FAN_ALLOW: u32 = 0x01;
-                                pub const FAN_DENY: u32 = 0x02;
-                                pub const FAN_AUDIT: u32 = 0x10;
-                                pub const FAN_INFO: u32 = 0x20;
-
-                                pub const FAN_NOFD: c_int = -1;
-                                pub const FAN_NOPIDFD: c_int = FAN_NOFD;
-                                pub const FAN_EPIDFD: c_int = -2;
-
-                                // linux/futex.h
-                                pub const FUTEX_WAIT: c_int = 0;
-                                pub const FUTEX_WAKE: c_int = 1;
-                                pub const FUTEX_FD: c_int = 2;
-                                pub const FUTEX_REQUEUE: c_int = 3;
-                                pub const FUTEX_CMP_REQUEUE: c_int = 4;
-                                pub const FUTEX_WAKE_OP: c_int = 5;
-                                pub const FUTEX_LOCK_PI: c_int = 6;
-                                pub const FUTEX_UNLOCK_PI: c_int = 7;
-                                pub const FUTEX_TRYLOCK_PI: c_int = 8;
-                                pub const FUTEX_WAIT_BITSET: c_int = 9;
-                                pub const FUTEX_WAKE_BITSET: c_int = 10;
-                                pub const FUTEX_WAIT_REQUEUE_PI: c_int = 11;
-                                pub const FUTEX_CMP_REQUEUE_PI: c_int = 12;
-                                pub const FUTEX_LOCK_PI2: c_int = 13;
-
-                                pub const FUTEX_PRIVATE_FLAG: c_int = 128;
-                                pub const FUTEX_CLOCK_REALTIME: c_int = 256;
-                                pub const FUTEX_CMD_MASK: c_int = !(FUTEX_PRIVATE_FLAG | FUTEX_CLOCK_REALTIME);
-
-                                pub const FUTEX_WAITERS: u32 = 0x80000000;
-                                pub const FUTEX_OWNER_DIED: u32 = 0x40000000;
-                                pub const FUTEX_TID_MASK: u32 = 0x3fffffff;
-
-                                pub const FUTEX_BITSET_MATCH_ANY: c_int = 0xffffffff;
-
-                                pub const FUTEX_OP_SET: c_int = 0;
-                                pub const FUTEX_OP_ADD: c_int = 1;
-                                pub const FUTEX_OP_OR: c_int = 2;
-                                pub const FUTEX_OP_ANDN: c_int = 3;
-                                pub const FUTEX_OP_XOR: c_int = 4;
-
-                                pub const FUTEX_OP_OPARG_SHIFT: c_int = 8;
-
-                                pub const FUTEX_OP_CMP_EQ: c_int = 0;
-                                pub const FUTEX_OP_CMP_NE: c_int = 1;
-                                pub const FUTEX_OP_CMP_LT: c_int = 2;
-                                pub const FUTEX_OP_CMP_LE: c_int = 3;
-                                pub const FUTEX_OP_CMP_GT: c_int = 4;
-                                pub const FUTEX_OP_CMP_GE: c_int = 5;
-
-                                pub fn FUTEX_OP(op: c_int, oparg: c_int, cmp: c_int, cmparg: c_int) -> c_int {
-                                    ((op & 0xf) << 28) | ((cmp & 0xf) << 24) | ((oparg & 0xfff) << 12) | (cmparg & 0xfff)
-                                }
-
-                                // linux/kexec.h
-                                pub const KEXEC_ON_CRASH: c_int = 0x00000001;
-                                pub const KEXEC_PRESERVE_CONTEXT: c_int = 0x00000002;
-                                pub const KEXEC_ARCH_MASK: c_int = 0xffff0000;
-                                pub const KEXEC_FILE_UNLOAD: c_int = 0x00000001;
-                                pub const KEXEC_FILE_ON_CRASH: c_int = 0x00000002;
-                                pub const KEXEC_FILE_NO_INITRAMFS: c_int = 0x00000004;
-
-                                // linux/reboot.h
-                                pub const LINUX_REBOOT_MAGIC1: c_int = 0xfee1dead;
-                                pub const LINUX_REBOOT_MAGIC2: c_int = 672274793;
-                                pub const LINUX_REBOOT_MAGIC2A: c_int = 85072278;
-                                pub const LINUX_REBOOT_MAGIC2B: c_int = 369367448;
-                                pub const LINUX_REBOOT_MAGIC2C: c_int = 537993216;
-
-                                pub const LINUX_REBOOT_CMD_RESTART: c_int = 0x01234567;
-                                pub const LINUX_REBOOT_CMD_HALT: c_int = 0xCDEF0123;
-                                pub const LINUX_REBOOT_CMD_CAD_ON: c_int = 0x89ABCDEF;
-                                pub const LINUX_REBOOT_CMD_CAD_OFF: c_int = 0x00000000;
-                                pub const LINUX_REBOOT_CMD_POWER_OFF: c_int = 0x4321FEDC;
-                                pub const LINUX_REBOOT_CMD_RESTART2: c_int = 0xA1B2C3D4;
-                                pub const LINUX_REBOOT_CMD_SW_SUSPEND: c_int = 0xD000FCE2;
-                                pub const LINUX_REBOOT_CMD_KEXEC: c_int = 0x45584543;
-
-                                pub const REG_EXTENDED: c_int = 1;
-                                pub const REG_ICASE: c_int = 2;
-                                pub const REG_NEWLINE: c_int = 4;
-                                pub const REG_NOSUB: c_int = 8;
-
-                                pub const REG_NOTBOL: c_int = 1;
-                                pub const REG_NOTEOL: c_int = 2;
-
-                                pub const REG_ENOSYS: c_int = -1;
-                                pub const REG_NOMATCH: c_int = 1;
-                                pub const REG_BADPAT: c_int = 2;
-                                pub const REG_ECOLLATE: c_int = 3;
-                                pub const REG_ECTYPE: c_int = 4;
-                                pub const REG_EESCAPE: c_int = 5;
-                                pub const REG_ESUBREG: c_int = 6;
-                                pub const REG_EBRACK: c_int = 7;
-                                pub const REG_EPAREN: c_int = 8;
-                                pub const REG_EBRACE: c_int = 9;
-                                pub const REG_BADBR: c_int = 10;
-                                pub const REG_ERANGE: c_int = 11;
-                                pub const REG_ESPACE: c_int = 12;
-                                pub const REG_BADRPT: c_int = 13;
-
-                                // linux/errqueue.h
-                                pub const SO_EE_ORIGIN_NONE: u8 = 0;
-                                pub const SO_EE_ORIGIN_LOCAL: u8 = 1;
-                                pub const SO_EE_ORIGIN_ICMP: u8 = 2;
-                                pub const SO_EE_ORIGIN_ICMP6: u8 = 3;
-                                pub const SO_EE_ORIGIN_TXSTATUS: u8 = 4;
-                                pub const SO_EE_ORIGIN_TIMESTAMPING: u8 = SO_EE_ORIGIN_TXSTATUS;
-
-                                // errno.h
-                                pub const EPERM: c_int = 1;
-                                pub const ENOENT: c_int = 2;
-                                pub const ESRCH: c_int = 3;
-                                pub const EINTR: c_int = 4;
-                                pub const EIO: c_int = 5;
-                                pub const ENXIO: c_int = 6;
-                                pub const E2BIG: c_int = 7;
-                                pub const ENOEXEC: c_int = 8;
-                                pub const EBADF: c_int = 9;
-                                pub const ECHILD: c_int = 10;
-                                pub const EAGAIN: c_int = 11;
-                                pub const ENOMEM: c_int = 12;
-                                pub const EACCES: c_int = 13;
-                                pub const EFAULT: c_int = 14;
-                                pub const ENOTBLK: c_int = 15;
-                                pub const EBUSY: c_int = 16;
-                                pub const EEXIST: c_int = 17;
-                                pub const EXDEV: c_int = 18;
-                                pub const ENODEV: c_int = 19;
-                                pub const ENOTDIR: c_int = 20;
-                                pub const EISDIR: c_int = 21;
-                                pub const EINVAL: c_int = 22;
-                                pub const ENFILE: c_int = 23;
-                                pub const EMFILE: c_int = 24;
-                                pub const ENOTTY: c_int = 25;
-                                pub const ETXTBSY: c_int = 26;
-                                pub const EFBIG: c_int = 27;
-                                pub const ENOSPC: c_int = 28;
-                                pub const ESPIPE: c_int = 29;
-                                pub const EROFS: c_int = 30;
-                                pub const EMLINK: c_int = 31;
-                                pub const EPIPE: c_int = 32;
-                                pub const EDOM: c_int = 33;
-                                pub const ERANGE: c_int = 34;
-                                pub const EWOULDBLOCK: c_int = EAGAIN;
-
-                                // linux/can.h
-                                pub const CAN_EFF_FLAG: canid_t = 0x80000000;
-                                pub const CAN_RTR_FLAG: canid_t = 0x40000000;
-                                pub const CAN_ERR_FLAG: canid_t = 0x20000000;
-                                pub const CAN_SFF_MASK: canid_t = 0x000007FF;
-                                pub const CAN_EFF_MASK: canid_t = 0x1FFFFFFF;
-                                pub const CAN_ERR_MASK: canid_t = 0x1FFFFFFF;
-                                pub const CANXL_PRIO_MASK: crate::canid_t = CAN_SFF_MASK;
-
-                                pub const CAN_SFF_ID_BITS: c_int = 11;
-                                pub const CAN_EFF_ID_BITS: c_int = 29;
-                                pub const CANXL_PRIO_BITS: c_int = CAN_SFF_ID_BITS;
-
-                                pub const CAN_MAX_DLC: c_int = 8;
-                                pub const CAN_MAX_DLEN: usize = 8;
-                                pub const CANFD_MAX_DLC: c_int = 15;
-                                pub const CANFD_MAX_DLEN: usize = 64;
-
-                                pub const CANFD_BRS: c_int = 0x01;
-                                pub const CANFD_ESI: c_int = 0x02;
-                                pub const CANFD_FDF: c_int = 0x04;
-
-                                pub const CANXL_MIN_DLC: c_int = 0;
-                                pub const CANXL_MAX_DLC: c_int = 2047;
-                                pub const CANXL_MAX_DLC_MASK: c_int = 0x07FF;
-                                pub const CANXL_MIN_DLEN: usize = 1;
-                                pub const CANXL_MAX_DLEN: usize = 2048;
-
-                                pub const CANXL_XLF: c_int = 0x80;
-                                pub const CANXL_SEC: c_int = 0x01;
-
-                                pub const CAN_MTU: usize = size_of::<can_frame>();
-                                pub const CANFD_MTU: usize = size_of::<canfd_frame>();
-                                pub const CANXL_MTU: usize = size_of::<canxl_frame>();
-                                // FIXME(offset_of): use `core::mem::offset_of!` once that is available
-                                // https://github.com/rust-lang/rfcs/pull/3308
-                                // pub const CANXL_HDR_SIZE: usize = core::mem::offset_of!(canxl_frame, data);
-                                pub const CANXL_HDR_SIZE: usize = 12;
-                                pub const CANXL_MIN_MTU: usize = CANXL_HDR_SIZE + 64;
-                                pub const CANXL_MAX_MTU: usize = CANXL_MTU;
-
-                                pub const CAN_RAW: c_int = 1;
-                                pub const CAN_BCM: c_int = 2;
-                                pub const CAN_TP16: c_int = 3;
-                                pub const CAN_TP20: c_int = 4;
-                                pub const CAN_MCNET: c_int = 5;
-                                pub const CAN_ISOTP: c_int = 6;
-                                pub const CAN_J1939: c_int = 7;
-                                pub const CAN_NPROTO: c_int = 8;
-
-                                pub const SOL_CAN_BASE: c_int = 100;
-
-                                pub const CAN_INV_FILTER: canid_t = 0x20000000;
-                                pub const CAN_RAW_FILTER_MAX: c_int = 512;
-
-                                // linux/can/raw.h
-                                pub const SOL_CAN_RAW: c_int = SOL_CAN_BASE + CAN_RAW;
-                                pub const CAN_RAW_FILTER: c_int = 1;
-                                pub const CAN_RAW_ERR_FILTER: c_int = 2;
-                                pub const CAN_RAW_LOOPBACK: c_int = 3;
-                                pub const CAN_RAW_RECV_OWN_MSGS: c_int = 4;
-                                pub const CAN_RAW_FD_FRAMES: c_int = 5;
-                                pub const CAN_RAW_JOIN_FILTERS: c_int = 6;
-                                pub const CAN_RAW_XL_FRAMES: c_int = 7;
-
-                                // linux/can/j1939.h
-                                pub const SOL_CAN_J1939: c_int = SOL_CAN_BASE + CAN_J1939;
-
-                                pub const J1939_MAX_UNICAST_ADDR: c_uchar = 0xfd;
-                                pub const J1939_IDLE_ADDR: c_uchar = 0xfe;
-                                pub const J1939_NO_ADDR: c_uchar = 0xff;
-                                pub const J1939_NO_NAME: c_ulong = 0;
-                                pub const J1939_PGN_REQUEST: c_uint = 0x0ea00;
-                                pub const J1939_PGN_ADDRESS_CLAIMED: c_uint = 0x0ee00;
-                                pub const J1939_PGN_ADDRESS_COMMANDED: c_uint = 0x0fed8;
-                                pub const J1939_PGN_PDU1_MAX: c_uint = 0x3ff00;
-                                pub const J1939_PGN_MAX: c_uint = 0x3ffff;
-                                pub const J1939_NO_PGN: c_uint = 0x40000;
-
-                                pub const SO_J1939_FILTER: c_int = 1;
-                                pub const SO_J1939_PROMISC: c_int = 2;
-                                pub const SO_J1939_SEND_PRIO: c_int = 3;
-                                pub const SO_J1939_ERRQUEUE: c_int = 4;
-
-                                pub const SCM_J1939_DEST_ADDR: c_int = 1;
-                                pub const SCM_J1939_DEST_NAME: c_int = 2;
-                                pub const SCM_J1939_PRIO: c_int = 3;
-                                pub const SCM_J1939_ERRQUEUE: c_int = 4;
-
-                                pub const J1939_NLA_PAD: c_int = 0;
-                                pub const J1939_NLA_BYTES_ACKED: c_int = 1;
-                                pub const J1939_NLA_TOTAL_SIZE: c_int = 2;
-                                pub const J1939_NLA_PGN: c_int = 3;
-                                pub const J1939_NLA_SRC_NAME: c_int = 4;
-                                pub const J1939_NLA_DEST_NAME: c_int = 5;
-                                pub const J1939_NLA_SRC_ADDR: c_int = 6;
-                                pub const J1939_NLA_DEST_ADDR: c_int = 7;
-
-                                pub const J1939_EE_INFO_NONE: c_int = 0;
-                                pub const J1939_EE_INFO_TX_ABORT: c_int = 1;
-                                pub const J1939_EE_INFO_RX_RTS: c_int = 2;
-                                pub const J1939_EE_INFO_RX_DPO: c_int = 3;
-                                pub const J1939_EE_INFO_RX_ABORT: c_int = 4;
-
-                                pub const J1939_FILTER_MAX: c_int = 512;
-
-                                // linux/sctp.h
-                                pub const SCTP_FUTURE_ASSOC: c_int = 0;
-                                pub const SCTP_CURRENT_ASSOC: c_int = 1;
-                                pub const SCTP_ALL_ASSOC: c_int = 2;
-                                pub const SCTP_RTOINFO: c_int = 0;
-                                pub const SCTP_ASSOCINFO: c_int = 1;
-                                pub const SCTP_INITMSG: c_int = 2;
-                                pub const SCTP_NODELAY: c_int = 3;
-                                pub const SCTP_AUTOCLOSE: c_int = 4;
-                                pub const SCTP_SET_PEER_PRIMARY_ADDR: c_int = 5;
-                                pub const SCTP_PRIMARY_ADDR: c_int = 6;
-                                pub const SCTP_ADAPTATION_LAYER: c_int = 7;
-                                pub const SCTP_DISABLE_FRAGMENTS: c_int = 8;
-                                pub const SCTP_PEER_ADDR_PARAMS: c_int = 9;
-                                pub const SCTP_DEFAULT_SEND_PARAM: c_int = 10;
-                                pub const SCTP_EVENTS: c_int = 11;
-                                pub const SCTP_I_WANT_MAPPED_V4_ADDR: c_int = 12;
-                                pub const SCTP_MAXSEG: c_int = 13;
-                                pub const SCTP_STATUS: c_int = 14;
-                                pub const SCTP_GET_PEER_ADDR_INFO: c_int = 15;
-                                pub const SCTP_DELAYED_ACK_TIME: c_int = 16;
-                                pub const SCTP_DELAYED_ACK: c_int = SCTP_DELAYED_ACK_TIME;
-                                pub const SCTP_DELAYED_SACK: c_int = SCTP_DELAYED_ACK_TIME;
-                                pub const SCTP_CONTEXT: c_int = 17;
-                                pub const SCTP_FRAGMENT_INTERLEAVE: c_int = 18;
-                                pub const SCTP_PARTIAL_DELIVERY_POINT: c_int = 19;
-                                pub const SCTP_MAX_BURST: c_int = 20;
-                                pub const SCTP_AUTH_CHUNK: c_int = 21;
-                                pub const SCTP_HMAC_IDENT: c_int = 22;
-                                pub const SCTP_AUTH_KEY: c_int = 23;
-                                pub const SCTP_AUTH_ACTIVE_KEY: c_int = 24;
-                                pub const SCTP_AUTH_DELETE_KEY: c_int = 25;
-                                pub const SCTP_PEER_AUTH_CHUNKS: c_int = 26;
-                                pub const SCTP_LOCAL_AUTH_CHUNKS: c_int = 27;
-                                pub const SCTP_GET_ASSOC_NUMBER: c_int = 28;
-                                pub const SCTP_GET_ASSOC_ID_LIST: c_int = 29;
-                                pub const SCTP_AUTO_ASCONF: c_int = 30;
-                                pub const SCTP_PEER_ADDR_THLDS: c_int = 31;
-                                pub const SCTP_RECVRCVINFO: c_int = 32;
-                                pub const SCTP_RECVNXTINFO: c_int = 33;
-                                pub const SCTP_DEFAULT_SNDINFO: c_int = 34;
-                                pub const SCTP_AUTH_DEACTIVATE_KEY: c_int = 35;
-                                pub const SCTP_REUSE_PORT: c_int = 36;
-                                pub const SCTP_PEER_ADDR_THLDS_V2: c_int = 37;
-                                pub const SCTP_PR_SCTP_NONE: c_int = 0x0000;
-                                pub const SCTP_PR_SCTP_TTL: c_int = 0x0010;
-                                pub const SCTP_PR_SCTP_RTX: c_int = 0x0020;
-                                pub const SCTP_PR_SCTP_PRIO: c_int = 0x0030;
-                                pub const SCTP_PR_SCTP_MAX: c_int = SCTP_PR_SCTP_PRIO;
-                                pub const SCTP_PR_SCTP_MASK: c_int = 0x0030;
-                                pub const SCTP_ENABLE_RESET_STREAM_REQ: c_int = 0x01;
-                                pub const SCTP_ENABLE_RESET_ASSOC_REQ: c_int = 0x02;
-                                pub const SCTP_ENABLE_CHANGE_ASSOC_REQ: c_int = 0x04;
-                                pub const SCTP_ENABLE_STRRESET_MASK: c_int = 0x07;
-                                pub const SCTP_STREAM_RESET_INCOMING: c_int = 0x01;
-                                pub const SCTP_STREAM_RESET_OUTGOING: c_int = 0x02;
-
-                                pub const SCTP_INIT: c_int = 0;
-                                pub const SCTP_SNDRCV: c_int = 1;
-                                pub const SCTP_SNDINFO: c_int = 2;
-                                pub const SCTP_RCVINFO: c_int = 3;
-                                pub const SCTP_NXTINFO: c_int = 4;
-                                pub const SCTP_PRINFO: c_int = 5;
-                                pub const SCTP_AUTHINFO: c_int = 6;
-                                pub const SCTP_DSTADDRV4: c_int = 7;
-                                pub const SCTP_DSTADDRV6: c_int = 8;
-
-                                pub const SCTP_UNORDERED: c_int = 1 << 0;
-                                pub const SCTP_ADDR_OVER: c_int = 1 << 1;
-                                pub const SCTP_ABORT: c_int = 1 << 2;
-                                pub const SCTP_SACK_IMMEDIATELY: c_int = 1 << 3;
-                                pub const SCTP_SENDALL: c_int = 1 << 6;
-                                pub const SCTP_PR_SCTP_ALL: c_int = 1 << 7;
-                                pub const SCTP_NOTIFICATION: c_int = MSG_NOTIFICATION;
-                                pub const SCTP_EOF: c_int = crate::MSG_FIN;
-
-                                /* DCCP socket options */
-                                pub const DCCP_SOCKOPT_PACKET_SIZE: c_int = 1;
-                                pub const DCCP_SOCKOPT_SERVICE: c_int = 2;
-                                pub const DCCP_SOCKOPT_CHANGE_L: c_int = 3;
-                                pub const DCCP_SOCKOPT_CHANGE_R: c_int = 4;
-                                pub const DCCP_SOCKOPT_GET_CUR_MPS: c_int = 5;
-                                pub const DCCP_SOCKOPT_SERVER_TIMEWAIT: c_int = 6;
-                                pub const DCCP_SOCKOPT_SEND_CSCOV: c_int = 10;
-                                pub const DCCP_SOCKOPT_RECV_CSCOV: c_int = 11;
-                                pub const DCCP_SOCKOPT_AVAILABLE_CCIDS: c_int = 12;
-                                pub const DCCP_SOCKOPT_CCID: c_int = 13;
-                                pub const DCCP_SOCKOPT_TX_CCID: c_int = 14;
-                                pub const DCCP_SOCKOPT_RX_CCID: c_int = 15;
-                                pub const DCCP_SOCKOPT_QPOLICY_ID: c_int = 16;
-                                pub const DCCP_SOCKOPT_QPOLICY_TXQLEN: c_int = 17;
-                                pub const DCCP_SOCKOPT_CCID_RX_INFO: c_int = 128;
-                                pub const DCCP_SOCKOPT_CCID_TX_INFO: c_int = 192;
-
-                                /// maximum number of services provided on the same listening port
-                                pub const DCCP_SERVICE_LIST_MAX_LEN: c_int = 32;
-
-                                pub const CTL_KERN: c_int = 1;
-                                pub const CTL_VM: c_int = 2;
-                                pub const CTL_NET: c_int = 3;
-                                pub const CTL_FS: c_int = 5;
-                                pub const CTL_DEBUG: c_int = 6;
-                                pub const CTL_DEV: c_int = 7;
-                                pub const CTL_BUS: c_int = 8;
-                                pub const CTL_ABI: c_int = 9;
-                                pub const CTL_CPU: c_int = 10;
-
-                                pub const CTL_BUS_ISA: c_int = 1;
-
-                                pub const INOTIFY_MAX_USER_INSTANCES: c_int = 1;
-                                pub const INOTIFY_MAX_USER_WATCHES: c_int = 2;
-                                pub const INOTIFY_MAX_QUEUED_EVENTS: c_int = 3;
-
-                                pub const KERN_OSTYPE: c_int = 1;
-                                pub const KERN_OSRELEASE: c_int = 2;
-                                pub const KERN_OSREV: c_int = 3;
-                                pub const KERN_VERSION: c_int = 4;
-                                pub const KERN_SECUREMASK: c_int = 5;
-                                pub const KERN_PROF: c_int = 6;
-                                pub const KERN_NODENAME: c_int = 7;
-                                pub const KERN_DOMAINNAME: c_int = 8;
-                                pub const KERN_PANIC: c_int = 15;
-                                pub const KERN_REALROOTDEV: c_int = 16;
-                                pub const KERN_SPARC_REBOOT: c_int = 21;
-                                pub const KERN_CTLALTDEL: c_int = 22;
-                                pub const KERN_PRINTK: c_int = 23;
-                                pub const KERN_NAMETRANS: c_int = 24;
-                                pub const KERN_PPC_HTABRECLAIM: c_int = 25;
-                                pub const KERN_PPC_ZEROPAGED: c_int = 26;
-                                pub const KERN_PPC_POWERSAVE_NAP: c_int = 27;
-                                pub const KERN_MODPROBE: c_int = 28;
-                                pub const KERN_SG_BIG_BUFF: c_int = 29;
-                                pub const KERN_ACCT: c_int = 30;
-                                pub const KERN_PPC_L2CR: c_int = 31;
-                                pub const KERN_RTSIGNR: c_int = 32;
-                                pub const KERN_RTSIGMAX: c_int = 33;
-                                pub const KERN_SHMMAX: c_int = 34;
-                                pub const KERN_MSGMAX: c_int = 35;
-                                pub const KERN_MSGMNB: c_int = 36;
-                                pub const KERN_MSGPOOL: c_int = 37;
-                                pub const KERN_SYSRQ: c_int = 38;
-                                pub const KERN_MAX_THREADS: c_int = 39;
-                                pub const KERN_RANDOM: c_int = 40;
-                                pub const KERN_SHMALL: c_int = 41;
-                                pub const KERN_MSGMNI: c_int = 42;
-                                pub const KERN_SEM: c_int = 43;
-                                pub const KERN_SPARC_STOP_A: c_int = 44;
-                                pub const KERN_SHMMNI: c_int = 45;
-                                pub const KERN_OVERFLOWUID: c_int = 46;
-                                pub const KERN_OVERFLOWGID: c_int = 47;
-                                pub const KERN_SHMPATH: c_int = 48;
-                                pub const KERN_HOTPLUG: c_int = 49;
-                                pub const KERN_IEEE_EMULATION_WARNINGS: c_int = 50;
-                                pub const KERN_S390_USER_DEBUG_LOGGING: c_int = 51;
-                                pub const KERN_CORE_USES_PID: c_int = 52;
-                                pub const KERN_TAINTED: c_int = 53;
-                                pub const KERN_CADPID: c_int = 54;
-                                pub const KERN_PIDMAX: c_int = 55;
-                                pub const KERN_CORE_PATTERN: c_int = 56;
-                                pub const KERN_PANIC_ON_OOPS: c_int = 57;
-                                pub const KERN_HPPA_PWRSW: c_int = 58;
-                                pub const KERN_HPPA_UNALIGNED: c_int = 59;
-                                pub const KERN_PRINTK_RATELIMIT: c_int = 60;
-                                pub const KERN_PRINTK_RATELIMIT_BURST: c_int = 61;
-                                pub const KERN_PTY: c_int = 62;
-                                pub const KERN_NGROUPS_MAX: c_int = 63;
-                                pub const KERN_SPARC_SCONS_PWROFF: c_int = 64;
-                                pub const KERN_HZ_TIMER: c_int = 65;
-                                pub const KERN_UNKNOWN_NMI_PANIC: c_int = 66;
-                                pub const KERN_BOOTLOADER_TYPE: c_int = 67;
-                                pub const KERN_RANDOMIZE: c_int = 68;
-                                pub const KERN_SETUID_DUMPABLE: c_int = 69;
-                                pub const KERN_SPIN_RETRY: c_int = 70;
-                                pub const KERN_ACPI_VIDEO_FLAGS: c_int = 71;
-                                pub const KERN_IA64_UNALIGNED: c_int = 72;
-                                pub const KERN_COMPAT_LOG: c_int = 73;
-                                pub const KERN_MAX_LOCK_DEPTH: c_int = 74;
-                                pub const KERN_NMI_WATCHDOG: c_int = 75;
-                                pub const KERN_PANIC_ON_NMI: c_int = 76;
-
-                                pub const VM_OVERCOMMIT_MEMORY: c_int = 5;
-                                pub const VM_PAGE_CLUSTER: c_int = 10;
-                                pub const VM_DIRTY_BACKGROUND: c_int = 11;
-                                pub const VM_DIRTY_RATIO: c_int = 12;
-                                pub const VM_DIRTY_WB_CS: c_int = 13;
-                                pub const VM_DIRTY_EXPIRE_CS: c_int = 14;
-                                pub const VM_NR_PDFLUSH_THREADS: c_int = 15;
-                                pub const VM_OVERCOMMIT_RATIO: c_int = 16;
-                                pub const VM_PAGEBUF: c_int = 17;
-                                pub const VM_HUGETLB_PAGES: c_int = 18;
-                                pub const VM_SWAPPINESS: c_int = 19;
-                                pub const VM_LOWMEM_RESERVE_RATIO: c_int = 20;
-                                pub const VM_MIN_FREE_KBYTES: c_int = 21;
-                                pub const VM_MAX_MAP_COUNT: c_int = 22;
-                                pub const VM_LAPTOP_MODE: c_int = 23;
-                                pub const VM_BLOCK_DUMP: c_int = 24;
-                                pub const VM_HUGETLB_GROUP: c_int = 25;
-                                pub const VM_VFS_CACHE_PRESSURE: c_int = 26;
-                                pub const VM_LEGACY_VA_LAYOUT: c_int = 27;
-                                pub const VM_SWAP_TOKEN_TIMEOUT: c_int = 28;
-                                pub const VM_DROP_PAGECACHE: c_int = 29;
-                                pub const VM_PERCPU_PAGELIST_FRACTION: c_int = 30;
-                                pub const VM_ZONE_RECLAIM_MODE: c_int = 31;
-                                pub const VM_MIN_UNMAPPED: c_int = 32;
-                                pub const VM_PANIC_ON_OOM: c_int = 33;
-                                pub const VM_VDSO_ENABLED: c_int = 34;
-                                pub const VM_MIN_SLAB: c_int = 35;
-
-                                pub const NET_CORE: c_int = 1;
-                                pub const NET_ETHER: c_int = 2;
-                                pub const NET_802: c_int = 3;
-                                pub const NET_UNIX: c_int = 4;
-                                pub const NET_IPV4: c_int = 5;
-                                pub const NET_IPX: c_int = 6;
-                                pub const NET_ATALK: c_int = 7;
-                                pub const NET_NETROM: c_int = 8;
-                                pub const NET_AX25: c_int = 9;
-                                pub const NET_BRIDGE: c_int = 10;
-                                pub const NET_ROSE: c_int = 11;
-                                pub const NET_IPV6: c_int = 12;
-                                pub const NET_X25: c_int = 13;
-                                pub const NET_TR: c_int = 14;
-                                pub const NET_DECNET: c_int = 15;
-                                pub const NET_ECONET: c_int = 16;
-                                pub const NET_SCTP: c_int = 17;
-                                pub const NET_LLC: c_int = 18;
-                                pub const NET_NETFILTER: c_int = 19;
-                                pub const NET_DCCP: c_int = 20;
-                                pub const NET_IRDA: c_int = 412;
-
-                                // include/linux/sched.h
-                                /// I'm a virtual CPU.
-                                pub const PF_VCPU: c_int = 0x00000001;
-                                /// I am an IDLE thread.
-                                pub const PF_IDLE: c_int = 0x00000002;
-                                /// Getting shut down.
-                                pub const PF_EXITING: c_int = 0x00000004;
-                                /// Coredumps should ignore this task.
-                                pub const PF_POSTCOREDUMP: c_int = 0x00000008;
-                                /// Task is an IO worker.
-                                pub const PF_IO_WORKER: c_int = 0x00000010;
-                                /// I'm a workqueue worker.
-                                pub const PF_WQ_WORKER: c_int = 0x00000020;
-                                /// Forked but didn't exec.
-                                pub const PF_FORKNOEXEC: c_int = 0x00000040;
-                                /// Process policy on mce errors.
-                                pub const PF_MCE_PROCESS: c_int = 0x00000080;
-                                /// Used super-user privileges.
-                                pub const PF_SUPERPRIV: c_int = 0x00000100;
-                                /// Dumped core.
-                                pub const PF_DUMPCORE: c_int = 0x00000200;
-                                /// Killed by a signal.
-                                pub const PF_SIGNALED: c_int = 0x00000400;
-                                /// Allocating memory to free memory.
-                                ///
-                                /// See `memalloc_noreclaim_save()`.
-                                pub const PF_MEMALLOC: c_int = 0x00000800;
-                                /// `set_user()` noticed that `RLIMIT_NPROC` was exceeded.
-                                pub const PF_NPROC_EXCEEDED: c_int = 0x00001000;
-                                /// If unset the fpu must be initialized before use.
-                                pub const PF_USED_MATH: c_int = 0x00002000;
-                                /// Kernel thread cloned from userspace thread.
-                                pub const PF_USER_WORKER: c_int = 0x00004000;
-                                /// This thread should not be frozen.
-                                pub const PF_NOFREEZE: c_int = 0x00008000;
-                                /// I am `kswapd`.
-                                pub const PF_KSWAPD: c_int = 0x00020000;
-                                /// All allocations inherit `GFP_NOFS`.
-                                ///
-                                /// See `memalloc_nfs_save()`.
-                                pub const PF_MEMALLOC_NOFS: c_int = 0x00040000;
-                                /// All allocations inherit `GFP_NOIO`.
-                                ///
-                                /// See `memalloc_noio_save()`.
-                                pub const PF_MEMALLOC_NOIO: c_int = 0x00080000;
-                                /// Throttle writes only against the bdi I write to, I am cleaning
-                                /// dirty pages from some other bdi.
-                                pub const PF_LOCAL_THROTTLE: c_int = 0x00100000;
-                                /// I am a kernel thread.
-                                pub const PF_KTHREAD: c_int = 0x00200000;
-                                /// Randomize virtual address space.
-                                pub const PF_RANDOMIZE: c_int = 0x00400000;
-                                /// Userland is not allowed to meddle with `cpus_mask`.
-                                pub const PF_NO_SETAFFINITY: c_int = 0x04000000;
-                                /// Early kill for mce process policy.
-                                pub const PF_MCE_EARLY: c_int = 0x08000000;
-                                /// Allocations constrained to zones which allow long term pinning.
-                                ///
-                                /// See `memalloc_pin_save()`.
-                                pub const PF_MEMALLOC_PIN: c_int = 0x10000000;
-                                /// Plug has ts that needs updating.
-                                pub const PF_BLOCK_TS: c_int = 0x20000000;
-                                /// This thread called `freeze_processes()` and should not be frozen.
-                                pub const PF_SUSPEND_TASK: c_int = PF_SUSPEND_TASK_UINT as _;
-                                // The used value is the highest possible bit fitting on 32 bits, so directly
-                                // defining it as a signed integer causes the compiler to report an overflow.
-                                // Use instead a private intermediary that assuringly has the correct type and
-                                // cast it where necessary to the wanted final type, which preserves the
-                                // desired information as-is in terms of integer representation.
-                                const PF_SUSPEND_TASK_UINT: c_uint = 0x80000000;
-
-                                pub const CSIGNAL: c_int = 0x000000ff;
-
-                                pub const SCHED_NORMAL: c_int = 0;
-                                pub const SCHED_OTHER: c_int = 0;
-                                pub const SCHED_FIFO: c_int = 1;
-                                pub const SCHED_RR: c_int = 2;
-                                pub const SCHED_BATCH: c_int = 3;
-                                pub const SCHED_IDLE: c_int = 5;
-                                pub const SCHED_DEADLINE: c_int = 6;
-
-                                pub const SCHED_RESET_ON_FORK: c_int = 0x40000000;
-
-                                pub const CLONE_PIDFD: c_int = 0x1000;
-
-                                pub const SCHED_FLAG_RESET_ON_FORK: c_int = 0x01;
-                                pub const SCHED_FLAG_RECLAIM: c_int = 0x02;
-                                pub const SCHED_FLAG_DL_OVERRUN: c_int = 0x04;
-                                pub const SCHED_FLAG_KEEP_POLICY: c_int = 0x08;
-                                pub const SCHED_FLAG_KEEP_PARAMS: c_int = 0x10;
-                                pub const SCHED_FLAG_UTIL_CLAMP_MIN: c_int = 0x20;
-                                pub const SCHED_FLAG_UTIL_CLAMP_MAX: c_int = 0x40;
-
-                                // linux/if_xdp.h
-                                pub const XDP_SHARED_UMEM: crate::__u16 = 1 << 0;
-                                pub const XDP_COPY: crate::__u16 = 1 << 1;
-                                pub const XDP_ZEROCOPY: crate::__u16 = 1 << 2;
-                                pub const XDP_USE_NEED_WAKEUP: crate::__u16 = 1 << 3;
-                                pub const XDP_USE_SG: crate::__u16 = 1 << 4;
-
-                                pub const XDP_UMEM_UNALIGNED_CHUNK_FLAG: crate::__u32 = 1 << 0;
-
-                                pub const XDP_RING_NEED_WAKEUP: crate::__u32 = 1 << 0;
-
-                                pub const XDP_MMAP_OFFSETS: c_int = 1;
-                                pub const XDP_RX_RING: c_int = 2;
-                                pub const XDP_TX_RING: c_int = 3;
-                                pub const XDP_UMEM_REG: c_int = 4;
-                                pub const XDP_UMEM_FILL_RING: c_int = 5;
-        pub const XDP_UMEM_COMPLETION_RING: c_int = 6;
-        pub const XDP_STATISTICS: c_int = 7;
-        pub const XDP_OPTIONS: c_int = 8;
-
-        pub const XDP_OPTIONS_ZEROCOPY: crate::__u32 = 1 << 0;
-
-        pub const XDP_PGOFF_RX_RING: crate::off_t = 0;
-        pub const XDP_PGOFF_TX_RING: crate::off_t = 0x80000000;
-        pub const XDP_UMEM_PGOFF_FILL_RING: crate::c_ulonglong = 0x100000000;
-        pub const XDP_UMEM_PGOFF_COMPLETION_RING: crate::c_ulonglong = 0x180000000;
-
-        pub const XSK_UNALIGNED_BUF_OFFSET_SHIFT: crate::c_int = 48;
-        pub const XSK_UNALIGNED_BUF_ADDR_MASK: crate::c_ulonglong =
-            (1 << XSK_UNALIGNED_BUF_OFFSET_SHIFT) - 1;
-
-        pub const XDP_PKT_CONTD: crate::__u32 = 1 << 0;
-
-        pub const XDP_UMEM_TX_SW_CSUM: crate::__u32 = 1 << 1;
-        pub const XDP_UMEM_TX_METADATA_LEN: crate::__u32 = 1 << 2;
-
-        pub const XDP_TXMD_FLAGS_TIMESTAMP: crate::__u32 = 1 << 0;
-        pub const XDP_TXMD_FLAGS_CHECKSUM: crate::__u32 = 1 << 1;
-
-        pub const XDP_TX_METADATA: crate::__u32 = 1 << 1;
-
-        pub const SOL_XDP: c_int = 283;
-
-        // linux/mount.h
-        pub const MOUNT_ATTR_RDONLY: crate::__u64 = 0x00000001;
-        pub const MOUNT_ATTR_NOSUID: crate::__u64 = 0x00000002;
-        pub const MOUNT_ATTR_NODEV: crate::__u64 = 0x00000004;
-        pub const MOUNT_ATTR_NOEXEC: crate::__u64 = 0x00000008;
-        pub const MOUNT_ATTR__ATIME: crate::__u64 = 0x00000070;
-        pub const MOUNT_ATTR_RELATIME: crate::__u64 = 0x00000000;
-        pub const MOUNT_ATTR_NOATIME: crate::__u64 = 0x00000010;
-        pub const MOUNT_ATTR_STRICTATIME: crate::__u64 = 0x00000020;
-        pub const MOUNT_ATTR_NODIRATIME: crate::__u64 = 0x00000080;
-        pub const MOUNT_ATTR_IDMAP: crate::__u64 = 0x00100000;
-        pub const MOUNT_ATTR_NOSYMFOLLOW: crate::__u64 = 0x00200000;
-
-        pub const MOUNT_ATTR_SIZE_VER0: c_int = 32;
-
-        // elf.h
-        pub const NT_PRSTATUS: c_int = 1;
-        pub const NT_PRFPREG: c_int = 2;
-        pub const NT_FPREGSET: c_int = 2;
-        pub const NT_PRPSINFO: c_int = 3;
-        pub const NT_PRXREG: c_int = 4;
-        pub const NT_TASKSTRUCT: c_int = 4;
-        pub const NT_PLATFORM: c_int = 5;
-        pub const NT_AUXV: c_int = 6;
-        pub const NT_GWINDOWS: c_int = 7;
-        pub const NT_ASRS: c_int = 8;
-        pub const NT_PSTATUS: c_int = 10;
-        pub const NT_PSINFO: c_int = 13;
-        pub const NT_PRCRED: c_int = 14;
-        pub const NT_UTSNAME: c_int = 15;
-        pub const NT_LWPSTATUS: c_int = 16;
-        pub const NT_LWPSINFO: c_int = 17;
-        pub const NT_PRFPXREG: c_int = 20;
-
-        pub const SCHED_FLAG_KEEP_ALL: c_int = SCHED_FLAG_KEEP_POLICY | SCHED_FLAG_KEEP_PARAMS;
-
-        pub const SCHED_FLAG_UTIL_CLAMP: c_int = SCHED_FLAG_UTIL_CLAMP_MIN | SCHED_FLAG_UTIL_CLAMP_MAX;
-
-        pub const SCHED_FLAG_ALL: c_int = SCHED_FLAG_RESET_ON_FORK
-            | SCHED_FLAG_RECLAIM
-            | SCHED_FLAG_DL_OVERRUN
-            | SCHED_FLAG_KEEP_ALL
-            | SCHED_FLAG_UTIL_CLAMP;
-
-        // ioctl_eventpoll: added in Linux 6.9
-        pub const EPIOCSPARAMS: Ioctl = 0x40088a01;
-        pub const EPIOCGPARAMS: Ioctl = 0x80088a02;
-
-        // siginfo.h
-        pub const SI_DETHREAD: c_int = -7;
-        pub const TRAP_PERF: c_int = 6;
-
-        f! {
-            pub fn NLA_ALIGN(len: c_int) -> c_int {
-                return ((len) + NLA_ALIGNTO - 1) & !(NLA_ALIGNTO - 1);
-            }
-
-            pub fn CMSG_NXTHDR(mhdr: *const msghdr, cmsg: *const cmsghdr) -> *mut cmsghdr {
-                if ((*cmsg).cmsg_len as usize) < size_of::<cmsghdr>() {
-                    return core::ptr::null_mut::<cmsghdr>();
-                }
-                let next = (cmsg as usize + super::CMSG_ALIGN((*cmsg).cmsg_len as usize)) as *mut cmsghdr;
-                let max = (*mhdr).msg_control as usize + (*mhdr).msg_controllen as usize;
-                if (next.wrapping_offset(1)) as usize > max
-                    || next as usize + super::CMSG_ALIGN((*next).cmsg_len as usize) > max
-                {
-                    core::ptr::null_mut::<cmsghdr>()
-                } else {
-                    next
-                }
-            }
-
-            pub fn CPU_ALLOC_SIZE(count: c_int) -> size_t {
-                let _dummy: cpu_set_t = mem::zeroed();
-                let size_in_bits = 8 * mem::size_of_val(&_dummy.bits[0]);
-                ((count as size_t + size_in_bits - 1) / 8) as size_t
-            }
-
-            pub fn CPU_ZERO(cpuset: &mut cpu_set_t) -> () {
-                for slot in &mut cpuset.bits {
-                    *slot = 0;
-                }
-            }
-
-            pub fn CPU_SET(cpu: usize, cpuset: &mut cpu_set_t) -> () {
-                let size_in_bits = 8 * mem::size_of_val(&cpuset.bits[0]); // 32, 64 etc
-                let (idx, offset) = (cpu / size_in_bits, cpu % size_in_bits);
-                cpuset.bits[idx] |= 1 << offset;
-            }
-
-            pub fn CPU_CLR(cpu: usize, cpuset: &mut cpu_set_t) -> () {
-                let size_in_bits = 8 * mem::size_of_val(&cpuset.bits[0]); // 32, 64 etc
-                let (idx, offset) = (cpu / size_in_bits, cpu % size_in_bits);
-                cpuset.bits[idx] &= !(1 << offset);
-            }
-
-            pub fn CPU_ISSET(cpu: usize, cpuset: &cpu_set_t) -> bool {
-                let size_in_bits = 8 * mem::size_of_val(&cpuset.bits[0]);
-                let (idx, offset) = (cpu / size_in_bits, cpu % size_in_bits);
-                0 != (cpuset.bits[idx] & (1 << offset))
-            }
-
-            pub fn CPU_COUNT_S(size: usize, cpuset: &cpu_set_t) -> c_int {
-                let mut s: u32 = 0;
-                let size_of_mask = mem::size_of_val(&cpuset.bits[0]);
-                for i in &cpuset.bits[..(size / size_of_mask)] {
-                    s += i.count_ones();
-                }
-                s as c_int
-            }
-
-            pub fn CPU_COUNT(cpuset: &cpu_set_t) -> c_int {
-                CPU_COUNT_S(size_of::<cpu_set_t>(), cpuset)
-            }
-
-            pub fn CPU_EQUAL(set1: &cpu_set_t, set2: &cpu_set_t) -> bool {
-                set1.bits == set2.bits
-            }
-
-            pub fn SCTP_PR_INDEX(policy: c_int) -> c_int {
-                policy >> (4 - 1)
-            }
-
-            pub fn SCTP_PR_POLICY(policy: c_int) -> c_int {
-                policy & SCTP_PR_SCTP_MASK
-            }
-
-            pub fn SCTP_PR_SET_POLICY(flags: &mut c_int, policy: c_int) -> () {
-                *flags &= !SCTP_PR_SCTP_MASK;
-                *flags |= policy;
-            }
-
-            pub fn IPTOS_TOS(tos: u8) -> u8 {
-                tos & IPTOS_TOS_MASK
-            }
-
-            pub fn IPTOS_PREC(tos: u8) -> u8 {
-                tos & IPTOS_PREC_MASK
-            }
-
-            pub fn RT_TOS(tos: u8) -> u8 {
-                tos & crate::IPTOS_TOS_MASK
-            }
-
-            pub fn RT_ADDRCLASS(flags: u32) -> u32 {
-                flags >> 23
-            }
-
-            pub fn RT_LOCALADDR(flags: u32) -> bool {
-                (flags & RTF_ADDRCLASSMASK) == (RTF_LOCAL | RTF_INTERFACE)
-            }
-
-            pub fn SO_EE_OFFENDER(ee: *const crate::sock_extended_err) -> *mut crate::sockaddr {
-                ee.offset(1) as *mut crate::sockaddr
-            }
-
-            pub fn TPACKET_ALIGN(x: usize) -> usize {
-                (x + TPACKET_ALIGNMENT - 1) & !(TPACKET_ALIGNMENT - 1)
-            }
-
-            pub fn BPF_CLASS(code: __u32) -> __u32 {
-                code & 0x07
-            }
-
-            pub fn BPF_SIZE(code: __u32) -> __u32 {
-                code & 0x18
-            }
-
-            pub fn BPF_MODE(code: __u32) -> __u32 {
-                code & 0xe0
-            }
-
-            pub fn BPF_OP(code: __u32) -> __u32 {
-                code & 0xf0
-            }
-
-            pub fn BPF_SRC(code: __u32) -> __u32 {
-                code & 0x08
-            }
-
-            pub fn BPF_RVAL(code: __u32) -> __u32 {
-                code & 0x18
-            }
-
-            pub fn BPF_MISCOP(code: __u32) -> __u32 {
-                code & 0xf8
-            }
-
-            pub fn BPF_STMT(code: __u16, k: __u32) -> sock_filter {
-                sock_filter {
-                    code,
-                    jt: 0,
-                    jf: 0,
-                    k,
-                }
-            }
-
-            pub fn BPF_JUMP(code: __u16, k: __u32, jt: __u8, jf: __u8) -> sock_filter {
-                sock_filter { code, jt, jf, k }
-            }
-
-            pub fn ELF32_R_SYM(val: Elf32_Word) -> Elf32_Word {
-                val >> 8
-            }
-
-            pub fn ELF32_R_TYPE(val: Elf32_Word) -> Elf32_Word {
-                val & 0xff
-            }
-
-            pub fn ELF32_R_INFO(sym: Elf32_Word, t: Elf32_Word) -> Elf32_Word {
-                sym << (8 + t) & 0xff
-            }
-
-            pub fn ELF64_R_SYM(val: Elf64_Xword) -> Elf64_Xword {
-                val >> 32
-            }
-
-            pub fn ELF64_R_TYPE(val: Elf64_Xword) -> Elf64_Xword {
-                val & 0xffffffff
-            }
-
-            pub fn ELF64_R_INFO(sym: Elf64_Xword, t: Elf64_Xword) -> Elf64_Xword {
-                sym << (32 + t)
-            }
+            pub pw_name: *mut c_char,
+            pub pw_passwd: *mut c_char,
+            pub pw_uid: uid_t,
+            pub pw_gid: gid_t,
+            pub pw_gecos: *mut c_char,
+            pub pw_dir: *mut c_char,
+            pub pw_shell: *mut c_char,
         }
 
-        safe_f! {
-            pub {const} fn makedev(major: c_uint, minor: c_uint) -> crate::dev_t {
-                let major = major as crate::dev_t;
-                let minor = minor as crate::dev_t;
-                let mut dev = 0;
-                dev |= (major & 0x00000fff) << 8;
-                dev |= (major & 0xfffff000) << 32;
-                dev |= (minor & 0x000000ff) << 0;
-                dev |= (minor & 0xffffff00) << 12;
-                dev
-            }
-
-            pub {const} fn major(dev: crate::dev_t) -> c_uint {
-                let mut major = 0;
-                major |= (dev & 0x00000000000fff00) >> 8;
-                major |= (dev & 0xfffff00000000000) >> 32;
-                major as c_uint
-            }
-
-            pub {const} fn minor(dev: crate::dev_t) -> c_uint {
-                let mut minor = 0;
-                minor |= (dev & 0x00000000000000ff) >> 0;
-                minor |= (dev & 0x00000ffffff00000) >> 12;
-                minor as c_uint
-            }
-
-            pub {const} fn SCTP_PR_TTL_ENABLED(policy: c_int) -> bool {
-                policy == SCTP_PR_SCTP_TTL
-            }
-
-            pub {const} fn SCTP_PR_RTX_ENABLED(policy: c_int) -> bool {
-                policy == SCTP_PR_SCTP_RTX
-            }
-
-            pub {const} fn SCTP_PR_PRIO_ENABLED(policy: c_int) -> bool {
-                policy == SCTP_PR_SCTP_PRIO
-            }
-        }
-
-        cfg_if! {
-            if #[cfg(all(
-                any(target_env = "gnu", target_env = "musl", target_env = "ohos"),
-                any(target_arch = "x86_64", target_arch = "x86")
-            ))] {
-                extern "C" {
-                    pub fn iopl(level: c_int) -> c_int;
-                    pub fn ioperm(from: c_ulong, num: c_ulong, turn_on: c_int) -> c_int;
-                }
-            }
-        }
-
-        cfg_if! {
-            if #[cfg(all(not(target_env = "uclibc"), not(target_env = "ohos")))] {
-                extern "C" {
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "aio_read64")]
-                    pub fn aio_read(aiocbp: *mut aiocb) -> c_int;
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "aio_write64")]
-                    pub fn aio_write(aiocbp: *mut aiocb) -> c_int;
-                    pub fn aio_fsync(op: c_int, aiocbp: *mut aiocb) -> c_int;
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "aio_error64")]
-                    pub fn aio_error(aiocbp: *const aiocb) -> c_int;
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "aio_return64")]
-                    pub fn aio_return(aiocbp: *mut aiocb) -> ssize_t;
-                    #[cfg_attr(gnu_time_bits64, link_name = "__aio_suspend_time64")]
-                    pub fn aio_suspend(
-                        aiocb_list: *const *const aiocb,
-                        nitems: c_int,
-                        timeout: *const crate::timespec,
-                    ) -> c_int;
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "aio_cancel64")]
-                    pub fn aio_cancel(fd: c_int, aiocbp: *mut aiocb) -> c_int;
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "lio_listio64")]
-                    pub fn lio_listio(
-                        mode: c_int,
-                        aiocb_list: *const *mut aiocb,
-                        nitems: c_int,
-                        sevp: *mut crate::sigevent,
-                    ) -> c_int;
-                }
-            }
-        }
-
-        cfg_if! {
-            if #[cfg(not(target_env = "uclibc"))] {
-                extern "C" {
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "pwritev64")]
-                    pub fn pwritev(
-                        fd: c_int,
-                        iov: *const crate::iovec,
-                        iovcnt: c_int,
-                        offset: off_t,
-                    ) -> ssize_t;
-                    #[cfg_attr(gnu_file_offset_bits64, link_name = "preadv64")]
-                    pub fn preadv(
-                        fd: c_int,
-                        iov: *const crate::iovec,
-                        iovcnt: c_int,
-                        offset: off_t,
-                    ) -> ssize_t;
-                    pub fn getnameinfo(
-                        sa: *const crate::sockaddr,
-                        salen: crate::socklen_t,
-                        host: *mut c_char,
-                        hostlen: crate::socklen_t,
-                        serv: *mut c_char,
-                        servlen: crate::socklen_t,
-                        flags: c_int,
-                    ) -> c_int;
-                    pub fn getloadavg(loadavg: *mut c_double, nelem: c_int) -> c_int;
-                    pub fn process_vm_readv(
-                        pid: crate::pid_t,
-                        local_iov: *const crate::iovec,
-                        liovcnt: c_ulong,
-                        remote_iov: *const crate::iovec,
-                        riovcnt: c_ulong,
-                        flags: c_ulong,
-                    ) -> isize;
-                    pub fn process_vm_writev(
-                        pid: crate::pid_t,
-                        local_iov: *const crate::iovec,
-                        liovcnt: c_ulong,
-                        remote_iov: *const crate::iovec,
-                        riovcnt: c_ulong,
-                        flags: c_ulong,
-                    ) -> isize;
-                    #[cfg_attr(gnu_time_bits64, link_name = "__futimes64")]
-                    pub fn futimes(fd: c_int, times: *const crate::timeval) -> c_int;
-                }
-            }
-        }
-
-        // These functions are not available on OpenHarmony
-        cfg_if! {
-            if #[cfg(not(target_env = "ohos"))] {
-                extern "C" {
-                    // Only `getspnam_r` is implemented for musl, out of all of the reenterant
-                    // functions from `shadow.h`.
-                    // https://git.musl-libc.org/cgit/musl/tree/include/shadow.h
-                    pub fn getspnam_r(
-                        name: *const c_char,
-                        spbuf: *mut spwd,
-                        buf: *mut c_char,
-                        buflen: size_t,
-                        spbufp: *mut *mut spwd,
-                    ) -> c_int;
-
-                    pub fn mq_open(name: *const c_char, oflag: c_int, ...) -> crate::mqd_t;
-                    pub fn mq_close(mqd: crate::mqd_t) -> c_int;
-                    pub fn mq_unlink(name: *const c_char) -> c_int;
-                    pub fn mq_receive(
-                        mqd: crate::mqd_t,
-                        msg_ptr: *mut c_char,
-                        msg_len: size_t,
-                        msg_prio: *mut c_uint,
-                    ) -> ssize_t;
-                    #[cfg_attr(gnu_time_bits64, link_name = "__mq_timedreceive_time64")]
-                    pub fn mq_timedreceive(
-                        mqd: crate::mqd_t,
-                        msg_ptr: *mut c_char,
-                        msg_len: size_t,
-                        msg_prio: *mut c_uint,
-                        abs_timeout: *const crate::timespec,
-                    ) -> ssize_t;
-                    pub fn mq_send(
-                        mqd: crate::mqd_t,
-                        msg_ptr: *const c_char,
-                        msg_len: size_t,
-                        msg_prio: c_uint,
-                    ) -> c_int;
-                    #[cfg_attr(gnu_time_bits64, link_name = "__mq_timedsend_time64")]
-                    pub fn mq_timedsend(
-                        mqd: crate::mqd_t,
-                        msg_ptr: *const c_char,
-                        msg_len: size_t,
-                        msg_prio: c_uint,
-                        abs_timeout: *const crate::timespec,
-                    ) -> c_int;
-                    pub fn mq_getattr(mqd: crate::mqd_t, attr: *mut crate::mq_attr) -> c_int;
-                    pub fn mq_setattr(
-                        mqd: crate::mqd_t,
-                        newattr: *const crate::mq_attr,
-                        oldattr: *mut crate::mq_attr,
-                    ) -> c_int;
-
-                    pub fn pthread_mutex_consistent(mutex: *mut pthread_mutex_t) -> c_int;
-                    pub fn pthread_cancel(thread: crate::pthread_t) -> c_int;
-                    pub fn pthread_mutexattr_getrobust(
-                        attr: *const pthread_mutexattr_t,
-                        robustness: *mut c_int,
-                    ) -> c_int;
-                    pub fn pthread_mutexattr_setrobust(
-                        attr: *mut pthread_mutexattr_t,
-                        robustness: c_int,
-                    ) -> c_int;
-                }
-            }
-        }
-
-        extern "C" {
-            #[cfg_attr(
-                not(any(target_env = "musl", target_env = "ohos")),
-                link_name = "__xpg_strerror_r"
-            )]
-            pub fn strerror_r(errnum: c_int, buf: *mut c_char, buflen: size_t) -> c_int;
-
-            pub fn abs(i: c_int) -> c_int;
-            pub fn labs(i: c_long) -> c_long;
-            pub fn rand() -> c_int;
-            pub fn srand(seed: c_uint);
-
-            pub fn drand48() -> c_double;
-            pub fn erand48(xseed: *mut c_ushort) -> c_double;
-            pub fn lrand48() -> c_long;
-            pub fn nrand48(xseed: *mut c_ushort) -> c_long;
-            pub fn mrand48() -> c_long;
-            pub fn jrand48(xseed: *mut c_ushort) -> c_long;
-            pub fn srand48(seed: c_long);
-            pub fn seed48(xseed: *mut c_ushort) -> *mut c_ushort;
-            pub fn lcong48(p: *mut c_ushort);
-
-            #[cfg_attr(gnu_time_bits64, link_name = "__lutimes64")]
-            pub fn lutimes(file: *const c_char, times: *const crate::timeval) -> c_int;
-
-            pub fn setpwent();
-            pub fn endpwent();
-            pub fn getpwent() -> *mut passwd;
-            pub fn setgrent();
-            pub fn endgrent();
-            pub fn getgrent() -> *mut crate::group;
-            pub fn setspent();
-            pub fn endspent();
-            pub fn getspent() -> *mut spwd;
-
-            pub fn getspnam(name: *const c_char) -> *mut spwd;
-
-            pub fn shm_open(name: *const c_char, oflag: c_int, mode: mode_t) -> c_int;
-            pub fn shm_unlink(name: *const c_char) -> c_int;
-
-            // System V IPC
-            pub fn shmget(key: crate::key_t, size: size_t, shmflg: c_int) -> c_int;
-            pub fn shmat(shmid: c_int, shmaddr: *const c_void, shmflg: c_int) -> *mut c_void;
-            pub fn shmdt(shmaddr: *const c_void) -> c_int;
-            #[cfg_attr(gnu_time_bits64, link_name = "__shmctl64")]
-            pub fn shmctl(shmid: c_int, cmd: c_int, buf: *mut crate::shmid_ds) -> c_int;
-            pub fn ftok(pathname: *const c_char, proj_id: c_int) -> crate::key_t;
-            pub fn semget(key: crate::key_t, nsems: c_int, semflag: c_int) -> c_int;
-            pub fn semop(semid: c_int, sops: *mut crate::sembuf, nsops: size_t) -> c_int;
-            #[cfg_attr(gnu_time_bits64, link_name = "__semctl64")]
-            pub fn semctl(semid: c_int, semnum: c_int, cmd: c_int, ...) -> c_int;
-            #[cfg_attr(gnu_time_bits64, link_name = "__msgctl64")]
-            pub fn msgctl(msqid: c_int, cmd: c_int, buf: *mut msqid_ds) -> c_int;
-            pub fn msgget(key: crate::key_t, msgflg: c_int) -> c_int;
-            pub fn msgrcv(
-                msqid: c_int,
-                msgp: *mut c_void,
-                msgsz: size_t,
-                msgtyp: c_long,
-                msgflg: c_int,
-            ) -> ssize_t;
-            pub fn msgsnd(msqid: c_int, msgp: *const c_void, msgsz: size_t, msgflg: c_int) -> c_int;
-
-            pub fn mprotect(addr: *mut c_void, len: size_t, prot: c_int) -> c_int;
-            pub fn __errno_location() -> *mut c_int;
-
-            #[cfg_attr(gnu_file_offset_bits64, link_name = "fallocate64")]
-            pub fn fallocate(fd: c_int, mode: c_int, offset: off_t, len: off_t) -> c_int;
-            #[cfg_attr(gnu_file_offset_bits64, link_name = "posix_fallocate64")]
-            pub fn posix_fallocate(fd: c_int, offset: off_t, len: off_t) -> c_int;
-            pub fn readahead(fd: c_int, offset: off64_t, count: size_t) -> ssize_t;
-            pub fn getxattr(
-                path: *const c_char,
-                name: *const c_char,
-                value: *mut c_void,
-                size: size_t,
-            ) -> ssize_t;
-            pub fn lgetxattr(
-                path: *const c_char,
-                name: *const c_char,
-                value: *mut c_void,
-                size: size_t,
-            ) -> ssize_t;
-            pub fn fgetxattr(
-                filedes: c_int,
-                name: *const c_char,
-                value: *mut c_void,
-                size: size_t,
-            ) -> ssize_t;
-            pub fn setxattr(
-                path: *const c_char,
-                name: *const c_char,
-                value: *const c_void,
-                size: size_t,
-                flags: c_int,
+        extern "C"
+        {
+            pub fn ioctl( fd:c_int, request:c_int, ... ) -> c_int;
+            pub fn sysconf( name:c_int ) -> c_long;
+            pub fn getopt(argc: c_int, argv: *const *mut c_char, optstr: *const c_char) -> c_int;
+            pub fn getpgid(pid: pid_t) -> pid_t;
+            pub fn getpgrp() -> pid_t;
+            pub fn getpid() -> pid_t;
+            pub fn getppid() -> pid_t;
+            pub fn getuid() -> uid_t;
+            pub fn isatty(fd: c_int) -> c_int;
+            pub fn getpwuid_r
+            (
+                uid: uid_t,
+                pwd: *mut passwd,
+                buf: *mut c_char,
+                buflen: size_t,
+                result: *mut *mut passwd,
             ) -> c_int;
-            pub fn lsetxattr(
-                path: *const c_char,
-                name: *const c_char,
-                value: *const c_void,
-            size: size_t,
-            flags: c_int,
-        ) -> c_int;
-        pub fn fsetxattr(
-            filedes: c_int,
-            name: *const c_char,
-            value: *const c_void,
-            size: size_t,
-            flags: c_int,
-        ) -> c_int;
-        pub fn listxattr(path: *const c_char, list: *mut c_char, size: size_t) -> ssize_t;
-        pub fn llistxattr(path: *const c_char, list: *mut c_char, size: size_t) -> ssize_t;
-        pub fn flistxattr(filedes: c_int, list: *mut c_char, size: size_t) -> ssize_t;
-        pub fn removexattr(path: *const c_char, name: *const c_char) -> c_int;
-        pub fn lremovexattr(path: *const c_char, name: *const c_char) -> c_int;
-        pub fn fremovexattr(filedes: c_int, name: *const c_char) -> c_int;
-        pub fn signalfd(fd: c_int, mask: *const crate::sigset_t, flags: c_int) -> c_int;
-        pub fn timerfd_create(clockid: crate::clockid_t, flags: c_int) -> c_int;
-        #[cfg_attr(gnu_time_bits64, link_name = "__timerfd_gettime64")]
-        pub fn timerfd_gettime(fd: c_int, curr_value: *mut itimerspec) -> c_int;
-        #[cfg_attr(gnu_time_bits64, link_name = "__timerfd_settime64")]
-        pub fn timerfd_settime(
-            fd: c_int,
-            flags: c_int,
-            new_value: *const itimerspec,
-            old_value: *mut itimerspec,
-        ) -> c_int;
-        pub fn quotactl(cmd: c_int, special: *const c_char, id: c_int, data: *mut c_char) -> c_int;
-        pub fn epoll_pwait(
-            epfd: c_int,
-            events: *mut crate::epoll_event,
-            maxevents: c_int,
-            timeout: c_int,
-            sigmask: *const crate::sigset_t,
-        ) -> c_int;
-        pub fn dup3(oldfd: c_int, newfd: c_int, flags: c_int) -> c_int;
-        #[cfg_attr(gnu_time_bits64, link_name = "__sigtimedwait64")]
-        pub fn sigtimedwait(
-            set: *const sigset_t,
-            info: *mut siginfo_t,
-            timeout: *const crate::timespec,
-        ) -> c_int;
-        pub fn sigwaitinfo(set: *const sigset_t, info: *mut siginfo_t) -> c_int;
-        pub fn nl_langinfo_l(item: crate::nl_item, locale: crate::locale_t) -> *mut c_char;
-        pub fn accept4(
-            fd: c_int,
-            addr: *mut crate::sockaddr,
-            len: *mut crate::socklen_t,
-            flg: c_int,
-        ) -> c_int;
-        pub fn pthread_getaffinity_np(
-            thread: crate::pthread_t,
-            cpusetsize: size_t,
-            cpuset: *mut crate::cpu_set_t,
-        ) -> c_int;
-        pub fn pthread_setaffinity_np(
-            thread: crate::pthread_t,
-            cpusetsize: size_t,
-            cpuset: *const crate::cpu_set_t,
-        ) -> c_int;
-        pub fn pthread_setschedprio(native: crate::pthread_t, priority: c_int) -> c_int;
-        pub fn reboot(how_to: c_int) -> c_int;
-        pub fn setfsgid(gid: crate::gid_t) -> c_int;
-        pub fn setfsuid(uid: crate::uid_t) -> c_int;
+        }
 
-        // Not available now on Android
-        pub fn mkfifoat(dirfd: c_int, pathname: *const c_char, mode: mode_t) -> c_int;
-        pub fn if_nameindex() -> *mut if_nameindex;
-        pub fn if_freenameindex(ptr: *mut if_nameindex);
-        pub fn sync_file_range(fd: c_int, offset: off64_t, nbytes: off64_t, flags: c_uint) -> c_int;
-        pub fn mremap(
-            addr: *mut c_void,
-            len: size_t,
-            new_len: size_t,
-            flags: c_int,
-            ...
-        ) -> *mut c_void;
+        pub struct termios
+        {
+            pub c_iflag: tcflag_t,
+            pub c_oflag: tcflag_t,
+            pub c_cflag: tcflag_t,
+            pub c_lflag: tcflag_t,
+            pub c_line: cc_t,
+            pub c_cc: [cc_t; NCCS],
+        }
 
-        #[cfg_attr(gnu_time_bits64, link_name = "__glob64_time64")]
-        #[cfg_attr(
-            all(not(gnu_time_bits64), gnu_file_offset_bits64),
-            link_name = "glob64"
-        )]
-        pub fn glob(
-            pattern: *const c_char,
-            flags: c_int,
-            errfunc: Option<extern "C" fn(epath: *const c_char, errno: c_int) -> c_int>,
-            pglob: *mut crate::glob_t,
-        ) -> c_int;
-        #[cfg_attr(gnu_time_bits64, link_name = "__globfree64_time64")]
-        #[cfg_attr(
-            all(not(gnu_time_bits64), gnu_file_offset_bits64),
-            link_name = "globfree64"
-        )]
-        pub fn globfree(pglob: *mut crate::glob_t);
+    } #[cfg(unix)] pub use self::unix::*;
 
-        pub fn posix_madvise(addr: *mut c_void, len: size_t, advice: c_int) -> c_int;
+    pub mod windows
+    {
+        use ::
+        {
+            ffi::{ OsStr },
+            os::
+            {
+                raw::{ c_void },
+            },
+            *,
+        };
 
-        pub fn seekdir(dirp: *mut crate::DIR, loc: c_long);
+        pub mod constants
+        {
+            use super::{ * };
 
-        pub fn telldir(dirp: *mut crate::DIR) -> c_long;
-        pub fn madvise(addr: *mut c_void, len: size_t, advice: c_int) -> c_int;
+            pub const S_OK: HRESULT = 0;
+            pub const S_FALSE: HRESULT = 1;
+            pub const MAX_PATH: usize = 260;
+            pub const FALSE: BOOL = 0;
+            pub const TRUE: BOOL = 1;
+            pub const INFINITE: DWORD = 0xFFFFFFFF;            
+            pub const RIGHT_ALT_PRESSED: DWORD = 0x0001;
+            pub const LEFT_ALT_PRESSED: DWORD = 0x0002;
+            pub const RIGHT_CTRL_PRESSED: DWORD = 0x0004;
+            pub const LEFT_CTRL_PRESSED: DWORD = 0x0008;
+            pub const SHIFT_PRESSED: DWORD = 0x0010;
+            pub const NUMLOCK_ON: DWORD = 0x0020;
+            pub const SCROLLLOCK_ON: DWORD = 0x0040;
+            pub const CAPSLOCK_ON: DWORD = 0x0080;
+            pub const ENHANCED_KEY: DWORD = 0x0100;
+            pub const NLS_DBCSCHAR: DWORD = 0x00010000;
+            pub const NLS_ALPHANUMERIC: DWORD = 0x00000000;
+            pub const NLS_KATAKANA: DWORD = 0x00020000;
+            pub const NLS_HIRAGANA: DWORD = 0x00040000;
+            pub const NLS_ROMAN: DWORD = 0x00400000;
+            pub const NLS_IME_CONVERSION: DWORD = 0x00800000;
+            pub const NLS_IME_DISABLE: DWORD = 0x20000000;
+            pub const CTRL_C_EVENT: DWORD = 0;
+            pub const CTRL_BREAK_EVENT: DWORD = 1;
+            pub const CTRL_CLOSE_EVENT: DWORD = 2;
+            pub const CTRL_LOGOFF_EVENT: DWORD = 5;
+            pub const CTRL_SHUTDOWN_EVENT: DWORD = 6;
+            pub const ENABLE_PROCESSED_INPUT: DWORD = 0x0001;
+            pub const ENABLE_LINE_INPUT: DWORD = 0x0002;
+            pub const ENABLE_ECHO_INPUT: DWORD = 0x0004;
+            pub const ENABLE_WINDOW_INPUT: DWORD = 0x0008;
+            pub const ENABLE_MOUSE_INPUT: DWORD = 0x0010;
+            pub const ENABLE_INSERT_MODE: DWORD = 0x0020;
+            pub const ENABLE_QUICK_EDIT_MODE: DWORD = 0x0040;
+            pub const ENABLE_EXTENDED_FLAGS: DWORD = 0x0080;
+            pub const ENABLE_AUTO_POSITION: DWORD = 0x0100;
+            pub const ENABLE_VIRTUAL_TERMINAL_INPUT: DWORD = 0x0200;
+            pub const ENABLE_PROCESSED_OUTPUT: DWORD = 0x0001;
+            pub const ENABLE_WRAP_AT_EOL_OUTPUT: DWORD = 0x0002;
+            pub const ENABLE_VIRTUAL_TERMINAL_PROCESSING: DWORD = 0x0004;
+            pub const DISABLE_NEWLINE_AUTO_RETURN: DWORD = 0x0008;
+            pub const ENABLE_LVB_GRID_WORLDWIDE: DWORD = 0x0010;
+            pub const MAXIMUM_PROC_PER_GROUP: UCHAR = 64;
+            pub const MAXIMUM_PROCESSORS: UCHAR = MAXIMUM_PROC_PER_GROUP;
+            pub const OBJ_HANDLE_TAGBITS: usize = 0x00000003;
+            pub const SYSTEM_CACHE_ALIGNMENT_SIZE: usize = 128;
+            pub const UCSCHAR_INVALID_CHARACTER: UCSCHAR = 0xffffffff;
+            pub const MIN_UCSCHAR: UCSCHAR = 0;
+            pub const MAX_UCSCHAR: UCSCHAR = 0x0010FFFF;
+            pub const WAIT_TIMEOUT: DWORD = 258;
+            pub const FILE_SHARE_READ: DWORD = 0x00000001;
+            pub const FILE_SHARE_WRITE: DWORD = 0x00000002;
+            pub const FILE_SHARE_DELETE: DWORD = 0x00000004;
+            pub const CONSOLE_TEXTMODE_BUFFER: DWORD = 1;
+            pub const DELETE: DWORD = 0x00010000;
+            pub const READ_CONTROL: DWORD = 0x00020000;
+            pub const WRITE_DAC: DWORD = 0x00040000;
+            pub const WRITE_OWNER: DWORD = 0x00080000;
+            pub const SYNCHRONIZE: DWORD = 0x00100000;
+            pub const STANDARD_RIGHTS_REQUIRED: DWORD = 0x000F0000;
+            pub const STANDARD_RIGHTS_READ: DWORD = READ_CONTROL;
+            pub const STANDARD_RIGHTS_WRITE: DWORD = READ_CONTROL;
+            pub const STANDARD_RIGHTS_EXECUTE: DWORD = READ_CONTROL;
+            pub const STANDARD_RIGHTS_ALL: DWORD = 0x001F0000;
+            pub const SPECIFIC_RIGHTS_ALL: DWORD = 0x0000FFFF;
+            pub const ACCESS_SYSTEM_SECURITY: DWORD = 0x01000000;
+            pub const MAXIMUM_ALLOWED: DWORD = 0x02000000;
+            pub const GENERIC_READ: DWORD = 0x80000000;
+            pub const GENERIC_WRITE: DWORD = 0x40000000;
+            pub const GENERIC_EXECUTE: DWORD = 0x20000000;
+            pub const GENERIC_ALL: DWORD = 0x10000000;
+            pub const STD_INPUT_HANDLE: DWORD = -10i32 as u32;
+            pub const STD_OUTPUT_HANDLE: DWORD = -11i32 as u32;
+            pub const STD_ERROR_HANDLE: DWORD = -12i32 as u32;
+            pub const FROM_LEFT_1ST_BUTTON_PRESSED: DWORD = 0x0001;
+            pub const RIGHTMOST_BUTTON_PRESSED: DWORD = 0x0002;
+            pub const FROM_LEFT_2ND_BUTTON_PRESSED: DWORD = 0x0004;
+            pub const FROM_LEFT_3RD_BUTTON_PRESSED: DWORD = 0x0008;
+            pub const FROM_LEFT_4TH_BUTTON_PRESSED: DWORD = 0x0010;
+            pub const MOUSE_MOVED: DWORD = 0x0001;
+            pub const DOUBLE_CLICK: DWORD = 0x0002;
+            pub const MOUSE_WHEELED: DWORD = 0x0004;
+            pub const MOUSE_HWHEELED: DWORD = 0x0008;
+            pub const VK_LBUTTON: c_int = 0x01;
+            pub const VK_RBUTTON: c_int = 0x02;
+            pub const VK_CANCEL: c_int = 0x03;
+            pub const VK_MBUTTON: c_int = 0x04;
+            pub const VK_XBUTTON1: c_int = 0x05;
+            pub const VK_XBUTTON2: c_int = 0x06;
+            pub const VK_BACK: c_int = 0x08;
+            pub const VK_TAB: c_int = 0x09;
+            pub const VK_CLEAR: c_int = 0x0C;
+            pub const VK_RETURN: c_int = 0x0D;
+            pub const VK_SHIFT: c_int = 0x10;
+            pub const VK_CONTROL: c_int = 0x11;
+            pub const VK_MENU: c_int = 0x12;
+            pub const VK_PAUSE: c_int = 0x13;
+            pub const VK_CAPITAL: c_int = 0x14;
+            pub const VK_KANA: c_int = 0x15;
+            pub const VK_HANGEUL: c_int = 0x15;
+            pub const VK_HANGUL: c_int = 0x15;
+            pub const VK_JUNJA: c_int = 0x17;
+            pub const VK_FINAL: c_int = 0x18;
+            pub const VK_HANJA: c_int = 0x19;
+            pub const VK_KANJI: c_int = 0x19;
+            pub const VK_ESCAPE: c_int = 0x1B;
+            pub const VK_CONVERT: c_int = 0x1C;
+            pub const VK_NONCONVERT: c_int = 0x1D;
+            pub const VK_ACCEPT: c_int = 0x1E;
+            pub const VK_MODECHANGE: c_int = 0x1F;
+            pub const VK_SPACE: c_int = 0x20;
+            pub const VK_PRIOR: c_int = 0x21;
+            pub const VK_NEXT: c_int = 0x22;
+            pub const VK_END: c_int = 0x23;
+            pub const VK_HOME: c_int = 0x24;
+            pub const VK_LEFT: c_int = 0x25;
+            pub const VK_UP: c_int = 0x26;
+            pub const VK_RIGHT: c_int = 0x27;
+            pub const VK_DOWN: c_int = 0x28;
+            pub const VK_SELECT: c_int = 0x29;
+            pub const VK_PRINT: c_int = 0x2A;
+            pub const VK_EXECUTE: c_int = 0x2B;
+            pub const VK_SNAPSHOT: c_int = 0x2C;
+            pub const VK_INSERT: c_int = 0x2D;
+            pub const VK_DELETE: c_int = 0x2E;
+            pub const VK_HELP: c_int = 0x2F;
+            pub const VK_LWIN: c_int = 0x5B;
+            pub const VK_RWIN: c_int = 0x5C;
+            pub const VK_APPS: c_int = 0x5D;
+            pub const VK_SLEEP: c_int = 0x5F;
+            pub const FOREGROUND_BLUE: WORD = 0x0001;
+            pub const FOREGROUND_GREEN: WORD = 0x0002;
+            pub const FOREGROUND_RED: WORD = 0x0004;
+            pub const FOREGROUND_INTENSITY: WORD = 0x0008;
+            pub const BACKGROUND_BLUE: WORD = 0x0010;
+            pub const BACKGROUND_GREEN: WORD = 0x0020;
+            pub const BACKGROUND_RED: WORD = 0x0040;
+            pub const BACKGROUND_INTENSITY: WORD = 0x0080;
+            pub const COMMON_LVB_LEADING_BYTE: WORD = 0x0100;
+            pub const COMMON_LVB_TRAILING_BYTE: WORD = 0x0200;
+            pub const COMMON_LVB_GRID_HORIZONTAL: WORD = 0x0400;
+            pub const COMMON_LVB_GRID_LVERTICAL: WORD = 0x0800;
+            pub const COMMON_LVB_GRID_RVERTICAL: WORD = 0x1000;
+            pub const COMMON_LVB_REVERSE_VIDEO: WORD = 0x4000;
+            pub const COMMON_LVB_UNDERSCORE: WORD = 0x8000;
+            pub const COMMON_LVB_SBCSDBCS: WORD = 0x0300;
+            pub const KEY_EVENT: WORD = 0x0001;
+            pub const MOUSE_EVENT: WORD = 0x0002;
+            pub const WINDOW_BUFFER_SIZE_EVENT: WORD = 0x0004;
+            pub const MENU_EVENT: WORD = 0x0008;
+            pub const FOCUS_EVENT: WORD = 0x0010;
+            pub const ATTACH_PARENT_PROCESS: DWORD = 0xFFFFFFFF;
+            pub const STATUS_USER_APC: NTSTATUS = 0x000000C0;
+            pub const STATUS_WAIT_0: NTSTATUS = 0x00000000;
+            pub const STATUS_ABANDONED_WAIT_0: NTSTATUS = 0x00000080;
+            pub const WAIT_FAILED: DWORD = 0xFFFFFFFF;
+            pub const WAIT_OBJECT_0: DWORD = STATUS_WAIT_0 as u32;
+            pub const WAIT_ABANDONED: DWORD = STATUS_ABANDONED_WAIT_0 as u32;
+            pub const WAIT_ABANDONED_0: DWORD = STATUS_ABANDONED_WAIT_0 as u32;
+            pub const WAIT_IO_COMPLETION: DWORD = STATUS_USER_APC as u32;
+            pub const FOLDERID_Profile:GUID = GUID::create( 0x5E6C858F, 0x0E22, 0x4760, [ 0x9A, 0xFE, 0xEA, 0x33, 0x17, 0xB6, 0x71, 0x73 ] );
+            pub const FOLDERID_RoamingAppData:GUID = GUID::create( 0x3EB685DB, 0x65F9, 0x4CF6, [ 0xA0, 0x3A, 0xE3, 0xEF, 0x65, 0x72, 0x9F, 0x3D ] );
+            pub const FOLDERID_LocalAppData:GUID = GUID::create( 0xF1B32785, 0x6FBA, 0x4FCF, [ 0x9D, 0x55, 0x7B, 0x8E, 0x7F, 0x15, 0x70, 0x91 ] );
+            pub const FOLDERID_Music:GUID = GUID::create( 0x4BD8D571, 0x6D19, 0x48D3, [ 0xBE, 0x97, 0x42, 0x22, 0x20, 0x08, 0x0E, 0x43 ] );
+            pub const FOLDERID_Desktop:GUID = GUID::create( 0xB4BFCC3A, 0xDB2C, 0x424C, [ 0xB0, 0x29, 0x7F, 0xE9, 0x9A, 0x87, 0xC6, 0x41 ] );
+            pub const FOLDERID_Documents:GUID = GUID::create( 0xFDD39AD0, 0x238F, 0x46AF, [ 0xAD, 0xB4, 0x6C, 0x85, 0x48, 0x03, 0x69, 0xC7 ] );
+            pub const FOLDERID_Downloads:GUID = GUID::create( 0x374de290, 0x123f, 0x4565, [ 0x91, 0x64, 0x39, 0xc4, 0x92, 0x5e, 0x46, 0x7b ] );
+            pub const FOLDERID_Pictures:GUID = GUID::create( 0xa990ae9f, 0xa03b, 0x4e80, [ 0x94, 0xbc, 0x99, 0x12, 0xd7, 0x50, 0x41, 0x4 ] );
+            pub const FOLDERID_Public:GUID = GUID::create( 0xDFDF76A2, 0xC82A, 0x4D63, [ 0x90, 0x6A, 0x56, 0x44, 0xAC, 0x45, 0x73, 0x85 ] );
+            pub const FOLDERID_Templates:GUID = GUID::create( 0xA63293E8, 0x664E, 0x48DB, [ 0xA0, 0x79, 0xDF, 0x75, 0x9E, 0x05, 0x09, 0xF7 ] );
+            pub const FOLDERID_Videos:GUID = GUID::create( 0x18989B1D, 0x99B5, 0x455B, [ 0xA0, 0x79, 0xDF, 0x75, 0x9E, 0x05, 0x09, 0xF7 ] );
+            pub const MAXLONGLONG: LONGLONG = 0x7fffffffffffffff;
+            pub const UTF8_REPLACEMENT_CHARACTER: &str = "\u{FFFD}";
+            pub const FORMAT_MESSAGE_IGNORE_INSERTS: DWORD = 0x00000200;
+            pub const FORMAT_MESSAGE_FROM_STRING: DWORD = 0x00000400;
+            pub const FORMAT_MESSAGE_FROM_HMODULE: DWORD = 0x00000800;
+            pub const FORMAT_MESSAGE_FROM_SYSTEM: DWORD = 0x00001000;
+            pub const FORMAT_MESSAGE_ARGUMENT_ARRAY: DWORD = 0x00002000;
+            pub const FORMAT_MESSAGE_MAX_WIDTH_MASK: DWORD = 0x000000FF;
+            pub const FORMAT_MESSAGE_ALLOCATE_BUFFER: DWORD = 0x00000100;
+            
+        } pub use self::constants::{ * };
+        
+        pub mod structs
+        {
+            use borrow::Cow;
+            use sync::Arc;
+            use rc::Rc;
+            use ::hash::Hasher;
+            use ::hash::Hash;
+            use ::system::AsInner;
+            use super::{ * };
 
-        pub fn msync(addr: *mut c_void, len: size_t, flags: c_int) -> c_int;
-        pub fn remap_file_pages(
-            addr: *mut c_void,
-            size: size_t,
-            prot: c_int,
-            pgoff: size_t,
-            flags: c_int,
-        ) -> c_int;
-        pub fn recvfrom(
-            socket: c_int,
-            buf: *mut c_void,
-            len: size_t,
-            flags: c_int,
-            addr: *mut crate::sockaddr,
-            addrlen: *mut crate::socklen_t,
-        ) -> ssize_t;
-        #[cfg_attr(gnu_file_offset_bits64, link_name = "mkstemps64")]
-        pub fn mkstemps(template: *mut c_char, suffixlen: c_int) -> c_int;
-
-        pub fn nl_langinfo(item: crate::nl_item) -> *mut c_char;
-
-        pub fn vhangup() -> c_int;
-        pub fn sync();
-        pub fn syncfs(fd: c_int) -> c_int;
-        pub fn syscall(num: c_long, ...) -> c_long;
-        pub fn sched_getaffinity(
-            pid: crate::pid_t,
-            cpusetsize: size_t,
-            cpuset: *mut cpu_set_t,
-        ) -> c_int;
-        pub fn sched_setaffinity(
-            pid: crate::pid_t,
-            cpusetsize: size_t,
-            cpuset: *const cpu_set_t,
-        ) -> c_int;
-        pub fn epoll_create(size: c_int) -> c_int;
-        pub fn epoll_create1(flags: c_int) -> c_int;
-        pub fn epoll_wait(
-            epfd: c_int,
-            events: *mut crate::epoll_event,
-            maxevents: c_int,
-            timeout: c_int,
-        ) -> c_int;
-        pub fn epoll_ctl(epfd: c_int, op: c_int, fd: c_int, event: *mut crate::epoll_event) -> c_int;
-        pub fn pthread_getschedparam(
-            native: crate::pthread_t,
-            policy: *mut c_int,
-            param: *mut crate::sched_param,
-        ) -> c_int;
-        pub fn unshare(flags: c_int) -> c_int;
-        pub fn umount(target: *const c_char) -> c_int;
-        pub fn sched_get_priority_max(policy: c_int) -> c_int;
-        pub fn tee(fd_in: c_int, fd_out: c_int, len: size_t, flags: c_uint) -> ssize_t;
-        #[cfg_attr(gnu_time_bits64, link_name = "__settimeofday64")]
-        pub fn settimeofday(tv: *const crate::timeval, tz: *const crate::timezone) -> c_int;
-        pub fn splice(
-            fd_in: c_int,
-            off_in: *mut crate::loff_t,
-            fd_out: c_int,
-            off_out: *mut crate::loff_t,
-            len: size_t,
-            flags: c_uint,
-        ) -> ssize_t;
-        pub fn eventfd(init: c_uint, flags: c_int) -> c_int;
-        pub fn eventfd_read(fd: c_int, value: *mut eventfd_t) -> c_int;
-        pub fn eventfd_write(fd: c_int, value: eventfd_t) -> c_int;
-
-        #[cfg_attr(gnu_time_bits64, link_name = "__sched_rr_get_interval64")]
-        pub fn sched_rr_get_interval(pid: crate::pid_t, tp: *mut crate::timespec) -> c_int;
-        #[cfg_attr(gnu_time_bits64, link_name = "__sem_timedwait64")]
-        pub fn sem_timedwait(sem: *mut sem_t, abstime: *const crate::timespec) -> c_int;
-        pub fn sem_getvalue(sem: *mut sem_t, sval: *mut c_int) -> c_int;
-        pub fn sched_setparam(pid: crate::pid_t, param: *const crate::sched_param) -> c_int;
-        pub fn setns(fd: c_int, nstype: c_int) -> c_int;
-        pub fn swapoff(path: *const c_char) -> c_int;
-        pub fn vmsplice(fd: c_int, iov: *const crate::iovec, nr_segs: size_t, flags: c_uint)
-            -> ssize_t;
-        pub fn mount(
-            src: *const c_char,
-            target: *const c_char,
-            fstype: *const c_char,
-            flags: c_ulong,
-            data: *const c_void,
-        ) -> c_int;
-        pub fn personality(persona: c_ulong) -> c_int;
-        #[cfg_attr(gnu_time_bits64, link_name = "__prctl_time64")]
-        pub fn prctl(option: c_int, ...) -> c_int;
-        pub fn sched_getparam(pid: crate::pid_t, param: *mut crate::sched_param) -> c_int;
-        #[cfg_attr(gnu_time_bits64, link_name = "__ppoll64")]
-        pub fn ppoll(
-            fds: *mut crate::pollfd,
-            nfds: nfds_t,
-            timeout: *const crate::timespec,
-            sigmask: *const sigset_t,
-        ) -> c_int;
-        pub fn pthread_mutexattr_getprotocol(
-            attr: *const pthread_mutexattr_t,
-            protocol: *mut c_int,
-        ) -> c_int;
-        pub fn pthread_mutexattr_setprotocol(attr: *mut pthread_mutexattr_t, protocol: c_int) -> c_int;
-
-        #[cfg_attr(gnu_time_bits64, link_name = "__pthread_mutex_timedlock64")]
-        pub fn pthread_mutex_timedlock(
-            lock: *mut pthread_mutex_t,
-            abstime: *const crate::timespec,
-        ) -> c_int;
-        pub fn pthread_barrierattr_init(attr: *mut crate::pthread_barrierattr_t) -> c_int;
-        pub fn pthread_barrierattr_destroy(attr: *mut crate::pthread_barrierattr_t) -> c_int;
-        pub fn pthread_barrierattr_getpshared(
-            attr: *const crate::pthread_barrierattr_t,
-            shared: *mut c_int,
-        ) -> c_int;
-        pub fn pthread_barrierattr_setpshared(
-            attr: *mut crate::pthread_barrierattr_t,
-            shared: c_int,
-        ) -> c_int;
-        pub fn pthread_barrier_init(
-            barrier: *mut pthread_barrier_t,
-            attr: *const crate::pthread_barrierattr_t,
-            count: c_uint,
-        ) -> c_int;
-        pub fn pthread_barrier_destroy(barrier: *mut pthread_barrier_t) -> c_int;
-        pub fn pthread_barrier_wait(barrier: *mut pthread_barrier_t) -> c_int;
-        pub fn pthread_spin_init(lock: *mut crate::pthread_spinlock_t, pshared: c_int) -> c_int;
-        pub fn pthread_spin_destroy(lock: *mut crate::pthread_spinlock_t) -> c_int;
-        pub fn pthread_spin_lock(lock: *mut crate::pthread_spinlock_t) -> c_int;
-        pub fn pthread_spin_trylock(lock: *mut crate::pthread_spinlock_t) -> c_int;
-        pub fn pthread_spin_unlock(lock: *mut crate::pthread_spinlock_t) -> c_int;
-        pub fn clone(
-            cb: extern "C" fn(*mut c_void) -> c_int,
-            child_stack: *mut c_void,
-            flags: c_int,
-            arg: *mut c_void,
-            ...
-        ) -> c_int;
-        pub fn sched_getscheduler(pid: crate::pid_t) -> c_int;
-        #[cfg_attr(gnu_time_bits64, link_name = "__clock_nanosleep_time64")]
-        pub fn clock_nanosleep(
-            clk_id: crate::clockid_t,
-            flags: c_int,
-            rqtp: *const crate::timespec,
-            rmtp: *mut crate::timespec,
-        ) -> c_int;
-        pub fn pthread_attr_getguardsize(
-            attr: *const crate::pthread_attr_t,
-            guardsize: *mut size_t,
-        ) -> c_int;
-        pub fn pthread_attr_setguardsize(attr: *mut crate::pthread_attr_t, guardsize: size_t) -> c_int;
-        pub fn pthread_attr_getinheritsched(
-            attr: *const crate::pthread_attr_t,
-            inheritsched: *mut c_int,
-        ) -> c_int;
-        pub fn pthread_attr_setinheritsched(
-            attr: *mut crate::pthread_attr_t,
-            inheritsched: c_int,
-        ) -> c_int;
-        pub fn pthread_attr_getschedpolicy(
-            attr: *const crate::pthread_attr_t,
-            policy: *mut c_int,
-        ) -> c_int;
-        pub fn pthread_attr_setschedpolicy(attr: *mut crate::pthread_attr_t, policy: c_int) -> c_int;
-        pub fn pthread_attr_getschedparam(
-            attr: *const crate::pthread_attr_t,
-            param: *mut crate::sched_param,
-        ) -> c_int;
-        pub fn pthread_attr_setschedparam(
-            attr: *mut crate::pthread_attr_t,
-            param: *const crate::sched_param,
-        ) -> c_int;
-        pub fn sethostname(name: *const c_char, len: size_t) -> c_int;
-        pub fn sched_get_priority_min(policy: c_int) -> c_int;
-        pub fn pthread_condattr_getpshared(
-            attr: *const pthread_condattr_t,
-            pshared: *mut c_int,
-        ) -> c_int;
-        pub fn sysinfo(info: *mut crate::sysinfo) -> c_int;
-        pub fn umount2(target: *const c_char, flags: c_int) -> c_int;
-        pub fn pthread_setschedparam(
-            native: crate::pthread_t,
-            policy: c_int,
-            param: *const crate::sched_param,
-        ) -> c_int;
-        pub fn swapon(path: *const c_char, swapflags: c_int) -> c_int;
-        pub fn sched_setscheduler(
-            pid: crate::pid_t,
-            policy: c_int,
-            param: *const crate::sched_param,
-        ) -> c_int;
-        #[cfg_attr(gnu_file_offset_bits64, link_name = "sendfile64")]
-        pub fn sendfile(out_fd: c_int, in_fd: c_int, offset: *mut off_t, count: size_t) -> ssize_t;
-        pub fn sigsuspend(mask: *const crate::sigset_t) -> c_int;
-        pub fn getgrgid_r(
-            gid: crate::gid_t,
-            grp: *mut crate::group,
-            buf: *mut c_char,
-            buflen: size_t,
-            result: *mut *mut crate::group,
-        ) -> c_int;
-        pub fn sigaltstack(ss: *const stack_t, oss: *mut stack_t) -> c_int;
-        pub fn sem_close(sem: *mut sem_t) -> c_int;
-        pub fn getdtablesize() -> c_int;
-        pub fn getgrnam_r(
-            name: *const c_char,
-            grp: *mut crate::group,
-            buf: *mut c_char,
-            buflen: size_t,
-            result: *mut *mut crate::group,
-        ) -> c_int;
-        pub fn initgroups(user: *const c_char, group: crate::gid_t) -> c_int;
-        pub fn pthread_sigmask(how: c_int, set: *const sigset_t, oldset: *mut sigset_t) -> c_int;
-        pub fn sem_open(name: *const c_char, oflag: c_int, ...) -> *mut sem_t;
-        pub fn getgrnam(name: *const c_char) -> *mut crate::group;
-        pub fn pthread_kill(thread: crate::pthread_t, sig: c_int) -> c_int;
-        pub fn sem_unlink(name: *const c_char) -> c_int;
-        pub fn daemon(nochdir: c_int, noclose: c_int) -> c_int;
-        pub fn getpwnam_r(
-            name: *const c_char,
-            pwd: *mut passwd,
-            buf: *mut c_char,
-            buflen: size_t,
-            result: *mut *mut passwd,
-        ) -> c_int;
-        pub fn getpwuid_r(
-            uid: crate::uid_t,
-            pwd: *mut passwd,
-            buf: *mut c_char,
-            buflen: size_t,
-            result: *mut *mut passwd,
-        ) -> c_int;
-        pub fn sigwait(set: *const sigset_t, sig: *mut c_int) -> c_int;
-        pub fn pthread_atfork(
-            prepare: Option<unsafe extern "C" fn()>,
-            parent: Option<unsafe extern "C" fn()>,
-            child: Option<unsafe extern "C" fn()>,
-        ) -> c_int;
-        pub fn getgrgid(gid: crate::gid_t) -> *mut crate::group;
-        pub fn getgrouplist(
-            user: *const c_char,
-            group: crate::gid_t,
-            groups: *mut crate::gid_t,
-            ngroups: *mut c_int,
-        ) -> c_int;
-        pub fn pthread_mutexattr_getpshared(
-            attr: *const pthread_mutexattr_t,
-            pshared: *mut c_int,
-        ) -> c_int;
-        pub fn popen(command: *const c_char, mode: *const c_char) -> *mut crate::FILE;
-        pub fn faccessat(dirfd: c_int, pathname: *const c_char, mode: c_int, flags: c_int) -> c_int;
-        pub fn pthread_create(
-            native: *mut crate::pthread_t,
-            attr: *const crate::pthread_attr_t,
-            f: extern "C" fn(*mut c_void) -> *mut c_void,
-            value: *mut c_void,
-        ) -> c_int;
-        pub fn dl_iterate_phdr(
-            callback: Option<
-                unsafe extern "C" fn(
-                    info: *mut crate::dl_phdr_info,
-                    size: size_t,
-                    data: *mut c_void,
-                ) -> c_int,
-            >,
-            data: *mut c_void,
-        ) -> c_int;
-
-        pub fn setmntent(filename: *const c_char, ty: *const c_char) -> *mut crate::FILE;
-        pub fn getmntent(stream: *mut crate::FILE) -> *mut crate::mntent;
-        pub fn addmntent(stream: *mut crate::FILE, mnt: *const crate::mntent) -> c_int;
-        pub fn endmntent(streamp: *mut crate::FILE) -> c_int;
-        pub fn hasmntopt(mnt: *const crate::mntent, opt: *const c_char) -> *mut c_char;
-
-        pub fn posix_spawn(
-            pid: *mut crate::pid_t,
-            path: *const c_char,
-            file_actions: *const crate::posix_spawn_file_actions_t,
-            attrp: *const crate::posix_spawnattr_t,
-            argv: *const *mut c_char,
-            envp: *const *mut c_char,
-        ) -> c_int;
-        pub fn posix_spawnp(
-            pid: *mut crate::pid_t,
-            file: *const c_char,
-            file_actions: *const crate::posix_spawn_file_actions_t,
-            attrp: *const crate::posix_spawnattr_t,
-            argv: *const *mut c_char,
-            envp: *const *mut c_char,
-        ) -> c_int;
-        pub fn posix_spawnattr_init(attr: *mut posix_spawnattr_t) -> c_int;
-        pub fn posix_spawnattr_destroy(attr: *mut posix_spawnattr_t) -> c_int;
-        pub fn posix_spawnattr_getsigdefault(
-            attr: *const posix_spawnattr_t,
-            default: *mut crate::sigset_t,
-        ) -> c_int;
-        pub fn posix_spawnattr_setsigdefault(
-            attr: *mut posix_spawnattr_t,
-            default: *const crate::sigset_t,
-        ) -> c_int;
-        pub fn posix_spawnattr_getsigmask(
-            attr: *const posix_spawnattr_t,
-            default: *mut crate::sigset_t,
-        ) -> c_int;
-        pub fn posix_spawnattr_setsigmask(
-            attr: *mut posix_spawnattr_t,
-            default: *const crate::sigset_t,
-        ) -> c_int;
-        pub fn posix_spawnattr_getflags(attr: *const posix_spawnattr_t, flags: *mut c_short) -> c_int;
-        pub fn posix_spawnattr_setflags(attr: *mut posix_spawnattr_t, flags: c_short) -> c_int;
-        pub fn posix_spawnattr_getpgroup(
-            attr: *const posix_spawnattr_t,
-            flags: *mut crate::pid_t,
-        ) -> c_int;
-        pub fn posix_spawnattr_setpgroup(attr: *mut posix_spawnattr_t, flags: crate::pid_t) -> c_int;
-        pub fn posix_spawnattr_getschedpolicy(
-            attr: *const posix_spawnattr_t,
-            flags: *mut c_int,
-        ) -> c_int;
-        pub fn posix_spawnattr_setschedpolicy(attr: *mut posix_spawnattr_t, flags: c_int) -> c_int;
-        pub fn posix_spawnattr_getschedparam(
-            attr: *const posix_spawnattr_t,
-            param: *mut crate::sched_param,
-        ) -> c_int;
-        pub fn posix_spawnattr_setschedparam(
-            attr: *mut posix_spawnattr_t,
-            param: *const crate::sched_param,
-        ) -> c_int;
-
-        pub fn posix_spawn_file_actions_init(actions: *mut posix_spawn_file_actions_t) -> c_int;
-        pub fn posix_spawn_file_actions_destroy(actions: *mut posix_spawn_file_actions_t) -> c_int;
-        pub fn posix_spawn_file_actions_addopen(
-            actions: *mut posix_spawn_file_actions_t,
-            fd: c_int,
-            path: *const c_char,
-            oflag: c_int,
-            mode: mode_t,
-        ) -> c_int;
-        pub fn posix_spawn_file_actions_addclose(
-            actions: *mut posix_spawn_file_actions_t,
-            fd: c_int,
-        ) -> c_int;
-        pub fn posix_spawn_file_actions_adddup2(
-            actions: *mut posix_spawn_file_actions_t,
-            fd: c_int,
-            newfd: c_int,
-        ) -> c_int;
-        pub fn fread_unlocked(
-            buf: *mut c_void,
-            size: size_t,
-            nobj: size_t,
-            stream: *mut crate::FILE,
-        ) -> size_t;
-        pub fn inotify_rm_watch(fd: c_int, wd: c_int) -> c_int;
-        pub fn inotify_init() -> c_int;
-        pub fn inotify_init1(flags: c_int) -> c_int;
-        pub fn inotify_add_watch(fd: c_int, path: *const c_char, mask: u32) -> c_int;
-        pub fn fanotify_init(flags: c_uint, event_f_flags: c_uint) -> c_int;
-
-        pub fn regcomp(preg: *mut crate::regex_t, pattern: *const c_char, cflags: c_int) -> c_int;
-
-        pub fn regexec(
-            preg: *const crate::regex_t,
-            input: *const c_char,
-            nmatch: size_t,
-            pmatch: *mut regmatch_t,
-            eflags: c_int,
-        ) -> c_int;
-
-        pub fn regerror(
-            errcode: c_int,
-            preg: *const crate::regex_t,
-            errbuf: *mut c_char,
-            errbuf_size: size_t,
-        ) -> size_t;
-
-        pub fn regfree(preg: *mut crate::regex_t);
-
-        pub fn iconv_open(tocode: *const c_char, fromcode: *const c_char) -> iconv_t;
-        pub fn iconv(
-            cd: iconv_t,
-            inbuf: *mut *mut c_char,
-            inbytesleft: *mut size_t,
-            outbuf: *mut *mut c_char,
-            outbytesleft: *mut size_t,
-        ) -> size_t;
-        pub fn iconv_close(cd: iconv_t) -> c_int;
-
-        pub fn gettid() -> crate::pid_t;
-
-        pub fn timer_create(
-            clockid: crate::clockid_t,
-            sevp: *mut crate::sigevent,
-            timerid: *mut crate::timer_t,
-        ) -> c_int;
-        pub fn timer_delete(timerid: crate::timer_t) -> c_int;
-        pub fn timer_getoverrun(timerid: crate::timer_t) -> c_int;
-        #[cfg_attr(gnu_time_bits64, link_name = "__timer_gettime64")]
-        pub fn timer_gettime(timerid: crate::timer_t, curr_value: *mut crate::itimerspec) -> c_int;
-        #[cfg_attr(gnu_time_bits64, link_name = "__timer_settime64")]
-        pub fn timer_settime(
-            timerid: crate::timer_t,
-            flags: c_int,
-            new_value: *const crate::itimerspec,
-            old_value: *mut crate::itimerspec,
-        ) -> c_int;
-
-        pub fn gethostid() -> c_long;
-
-        pub fn pthread_getcpuclockid(thread: crate::pthread_t, clk_id: *mut crate::clockid_t) -> c_int;
-        pub fn memmem(
-            haystack: *const c_void,
-            haystacklen: size_t,
-            needle: *const c_void,
-            needlelen: size_t,
-        ) -> *mut c_void;
-        pub fn sched_getcpu() -> c_int;
-
-        pub fn pthread_getname_np(thread: crate::pthread_t, name: *mut c_char, len: size_t) -> c_int;
-        pub fn pthread_setname_np(thread: crate::pthread_t, name: *const c_char) -> c_int;
-        pub fn getopt_long(
-            argc: c_int,
-            argv: *const *mut c_char,
-            optstring: *const c_char,
-            longopts: *const option,
-            longindex: *mut c_int,
-        ) -> c_int;
-
-        pub fn pthread_once(control: *mut pthread_once_t, routine: extern "C" fn()) -> c_int;
-
-        pub fn copy_file_range(
-            fd_in: c_int,
-            off_in: *mut off64_t,
-            fd_out: c_int,
-            off_out: *mut off64_t,
-            len: size_t,
-            flags: c_uint,
-        ) -> ssize_t;
-
-        pub fn klogctl(syslog_type: c_int, bufp: *mut c_char, len: c_int) -> c_int;
-    }
-
-    // LFS64 extensions
-    //
-    // * musl has 64-bit versions only so aliases the LFS64 symbols to the standard ones
-    cfg_if! {
-        if #[cfg(not(target_env = "musl"))] {
-            extern "C" {
-                pub fn fallocate64(fd: c_int, mode: c_int, offset: off64_t, len: off64_t) -> c_int;
-                pub fn fgetpos64(stream: *mut crate::FILE, ptr: *mut fpos64_t) -> c_int;
-                pub fn fopen64(filename: *const c_char, mode: *const c_char) -> *mut crate::FILE;
-                pub fn freopen64(
-                    filename: *const c_char,
-                    mode: *const c_char,
-                    file: *mut crate::FILE,
-                ) -> *mut crate::FILE;
-                pub fn fseeko64(stream: *mut crate::FILE, offset: off64_t, whence: c_int) -> c_int;
-                pub fn fsetpos64(stream: *mut crate::FILE, ptr: *const fpos64_t) -> c_int;
-                pub fn ftello64(stream: *mut crate::FILE) -> off64_t;
-                pub fn posix_fallocate64(fd: c_int, offset: off64_t, len: off64_t) -> c_int;
-                pub fn sendfile64(
-                    out_fd: c_int,
-                    in_fd: c_int,
-                    offset: *mut off64_t,
-                    count: size_t,
-                ) -> ssize_t;
-                pub fn tmpfile64() -> *mut crate::FILE;
+            #[repr( C )]
+            pub struct GROUP_AFFINITY 
+            {
+                Mask: KAFFINITY,
+                Group: USHORT,
+                Reserved: [USHORT; 3],
             }
-        }
-    }
+            
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct GUID
+            {
+                pub Data1: c_ulong,
+                pub Data2: c_ushort,
+                pub Data3: c_ushort,
+                pub Data4: [c_uchar; 8],
+            }
 
-    cfg_if! {
-        if #[cfg(target_env = "uclibc")] {
-            mod uclibc;
-            pub use self::uclibc::*;
-        } else if #[cfg(any(target_env = "musl", target_env = "ohos"))] {
-            mod musl;
-            pub use self::musl::*;
-        } else if #[cfg(target_env = "gnu")] {
-            mod gnu;
-            pub use self::gnu::*;
-        }
-    }
+            impl GUID
+            {
+                pub const fn create( Data1:c_ulong, Data2:c_ushort, Data3:c_ushort, Data4:[c_uchar; 8] ) -> Self
+                {
+                    Self
+                    {
+                        Data1,
+                        Data2,
+                        Data3,
+                        Data4,
+                    }
+                }
 
-    mod arch;
-    pub use self::arch::*;
-                                }
+                pub fn folder_id_profile() -> *const Self
+                {
+                    unsafe
+                    {
+                        ::mem::transmute( &FOLDERID_Profile )
+                    }
+                }
 
-                            cfg_if! {
-                                if #[cfg(target_os = "emscripten")] {
-                                    mod emscripten;
-                                    pub use self::emscripten::*;
-                                } else if #[cfg(target_os = "linux")] {
-                                    mod linux
-                                    {
-                                        use ::
-                                        {
-                                            *,
-                                        };
-                                    } pub use self::linux::*;
-                                } else if #[cfg(target_os = "l4re")] {
-                                    mod linux
-                                    {
-                                        use ::
-                                        {
-                                            *,
-                                        };
-                                    } pub use self::linux::*;
-                                } else if #[cfg(target_os = "android")] {
-                                    mod android;
-                                    pub use self::android::*;
-                                } else {
-                                    // Unknown target_os
-                                }
-                            }
-                        }
-                        pub use self::linux_like::*;
-                    } else if #[cfg(any(
-                        target_os = "macos",
-                        target_os = "ios",
-                        target_os = "tvos",
-                        target_os = "watchos",
-                        target_os = "visionos",
-                        target_os = "freebsd",
-                        target_os = "dragonfly",
-                        target_os = "openbsd",
-                        target_os = "netbsd"
-                    ))] {
-                        mod bsd;
-                        pub use self::bsd::*;
-                    } else if #[cfg(any(target_os = "solaris", target_os = "illumos"))] {
-                        mod solarish;
-                        pub use self::solarish::*;
-                    } else if #[cfg(target_os = "haiku")] {
-                        mod haiku;
-                        pub use self::haiku::*;
-                    } else if #[cfg(target_os = "redox")] {
-                        mod redox;
-                        pub use self::redox::*;
-                    } else if #[cfg(target_os = "cygwin")] {
-                        mod cygwin;
-                        pub use self::cygwin::*;
-                    } else if #[cfg(target_os = "nto")] {
-                        mod nto;
-                        pub use self::nto::*;
-                    } else if #[cfg(target_os = "aix")] {
-                        mod aix;
-                        pub use self::aix::*;
-                    } else if #[cfg(target_os = "hurd")] {
-                        mod hurd;
-                        pub use self::hurd::*;
-                    } else if #[cfg(target_os = "nuttx")] {
-                        mod nuttx;
-                        pub use self::nuttx::*;
-                    } else {
-                        // Unknown target_os
+                pub fn folder_id_roaming_app_data() -> *const Self
+                {
+                    unsafe
+                    {
+                        ::mem::transmute( &FOLDERID_RoamingAppData )
+                    }
+                }
+
+                pub fn folder_id_local_app_data() -> *const Self
+                {
+                    unsafe
+                    {
+                        ::mem::transmute( &FOLDERID_LocalAppData )
+                    }
+                }
+                
+                pub fn folder_id_music() -> *const Self
+                {
+                    unsafe
+                    {
+                        ::mem::transmute( &FOLDERID_Music )
+                    }
+                }
+                
+                pub fn folder_id_desktop() -> *const Self
+                {
+                    unsafe
+                    {
+                        ::mem::transmute( &FOLDERID_Desktop )
+                    }
+                }
+                
+                pub fn folder_id_documents() -> *const Self
+                {
+                    unsafe
+                    {
+                        ::mem::transmute( &FOLDERID_Documents )
+                    }
+                }
+                
+                pub fn folder_id_downloads() -> *const Self
+                {
+                    unsafe
+                    {
+                        ::mem::transmute( &FOLDERID_Downloads )
+                    }
+                }
+                
+                pub fn folder_id_pictures() -> *const Self
+                {
+                    unsafe
+                    {
+                        ::mem::transmute( &FOLDERID_Pictures )
+                    }
+                }
+                
+                pub fn folder_id_public() -> *const Self
+                {
+                    unsafe
+                    {
+                        ::mem::transmute( &FOLDERID_Public )
+                    }
+                }
+                
+                pub fn folder_id_templates() -> *const Self
+                {
+                    unsafe
+                    {
+                        ::mem::transmute( &FOLDERID_Templates )
+                    }
+                }
+                
+                pub fn folder_id_videos() -> *const Self
+                {
+                    unsafe
+                    {
+                        ::mem::transmute( &FOLDERID_Videos )
                     }
                 }
             }
-            
-            pub use crate::unix::*;
-            prelude!();
-        }
-        
-        else if #[cfg(target_os = "hermit")]
-        {
-            mod hermit
-            {
-                use ::
-                {
-                    *,
-                };
-            }
-            
-            pub use crate::hermit::*;
-            prelude!();
-        }
-        
-        else if #[cfg(target_os = "teeos")]
-        {
-            mod teeos
-            {
-                use ::
-                {
-                    *,
-                };
-            }
-            
-            pub use teeos::*;
-            prelude!();
-        }
-        
-        else if #[cfg(target_os = "trusty")]
-        {
-            mod trusty
-            {
-                use ::
-                {
-                    *,
-                };
-            }
-            
-            pub use crate::trusty::*;
-            prelude!();
-        }
-        
-        else if #[cfg(all(target_env = "sgx", target_vendor = "fortanix"))]
-        {
-            mod sgx
-            {
-                use ::
-                {
-                    *,
-                };
-            }
-            
-            pub use crate::sgx::*;
-            prelude!();
-        }
-        
-        else if #[cfg(any(target_env = "wasi", target_os = "wasi"))]
-        {
-            mod wasi
-            {
-                use ::
-                {
-                    *,
-                };
-            }
-            
-            pub use crate::wasi::*;
-            prelude!();
-        }
-        
-        else if #[cfg(target_os = "xous")]
-        {
-            mod xous
-            {
-                use ::
-                {
-                    *,
-                };
-            }
-            
-            pub use crate::xous::*;
-            prelude!();
-        }
 
-        else { /* non-supported targets: empty... */ }
-    }
+            #[repr( C )] #[derive( Clone, Copy )]
+            pub struct FLOAT128
+            {
+                pub LowPart: __int64,
+                pub HighPart: __int64,
+            }
+            
+            #[repr( C )] #[derive( Clone, Copy )]
+            pub struct CONTEXT_u( () );
+
+            #[repr( C )] #[derive( Clone, Copy )]
+            pub struct M128A 
+            {
+                pub Low: ULONGLONG,
+                pub High: LONGLONG,
+            }
+
+            #[repr( C )] #[derive( Clone, Copy )]
+            pub struct CONTEXT 
+            {
+                pub P1Home: DWORD64,
+                pub P2Home: DWORD64,
+                pub P3Home: DWORD64,
+                pub P4Home: DWORD64,
+                pub P5Home: DWORD64,
+                pub P6Home: DWORD64,
+                pub ContextFlags: DWORD,
+                pub MxCsr: DWORD,
+                pub SegCs: WORD,
+                pub SegDs: WORD,
+                pub SegEs: WORD,
+                pub SegFs: WORD,
+                pub SegGs: WORD,
+                pub SegSs: WORD,
+                pub EFlags: DWORD,
+                pub Dr0: DWORD64,
+                pub Dr1: DWORD64,
+                pub Dr2: DWORD64,
+                pub Dr3: DWORD64,
+                pub Dr6: DWORD64,
+                pub Dr7: DWORD64,
+                pub Rax: DWORD64,
+                pub Rcx: DWORD64,
+                pub Rdx: DWORD64,
+                pub Rbx: DWORD64,
+                pub Rsp: DWORD64,
+                pub Rbp: DWORD64,
+                pub Rsi: DWORD64,
+                pub Rdi: DWORD64,
+                pub R8: DWORD64,
+                pub R9: DWORD64,
+                pub R10: DWORD64,
+                pub R11: DWORD64,
+                pub R12: DWORD64,
+                pub R13: DWORD64,
+                pub R14: DWORD64,
+                pub R15: DWORD64,
+                pub Rip: DWORD64,
+                pub u: CONTEXT_u,
+                pub VectorRegister: [M128A; 26],
+                pub VectorControl: DWORD64,
+                pub DebugControl: DWORD64,
+                pub LastBranchToRip: DWORD64,
+                pub LastBranchFromRip: DWORD64,
+                pub LastExceptionToRip: DWORD64,
+                pub LastExceptionFromRip: DWORD64,
+            }
+            
+            #[repr( C )] #[derive( Clone, Copy )]
+            pub struct EXCEPTION_RECORD {
+                pub ExceptionCode: DWORD,
+                pub ExceptionFlags: DWORD,
+                pub ExceptionRecord: *mut EXCEPTION_RECORD,
+                pub ExceptionAddress: PVOID,
+                pub NumberParameters: DWORD,
+                pub ExceptionInformation: [ULONG_PTR; 15],
+            }
+
+            #[repr( C )] #[derive( Clone, Copy )]
+            pub struct EXCEPTION_POINTERS {
+                pub ExceptionRecord: PEXCEPTION_RECORD,
+                pub ContextRecord: PCONTEXT,
+            }
+
+            #[repr( C )] #[derive( Clone, Copy )]
+            pub struct CONSOLE_READCONSOLE_CONTROL
+            {
+                pub nLength: ULONG,
+                pub nInitialChars: ULONG,
+                pub dwCtrlWakeupMask: ULONG,
+                pub dwControlKeyState: ULONG,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct WINDOW_BUFFER_SIZE_RECORD
+            {
+                pub dwSize: COORD,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct SECURITY_ATTRIBUTES
+            {
+                pub nLength: DWORD,
+                pub lpSecurityDescriptor: LPVOID,
+                pub bInheritHandle: BOOL,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct CHAR_INFO_Char(()); 
+
+            impl CHAR_INFO_Char
+            {
+                pub unsafe fn UnicodeChar_mut(&mut self) -> &mut WCHAR
+                {
+                    unsafe
+                    {
+                        mem::transmute( ptr::null_mut::<&mut WCHAR>() )
+                    }
+                }
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct CONSOLE_FONT_INFO
+            {
+                pub nFont: DWORD,
+                pub dwFontSize: COORD,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct CONSOLE_FONT_INFOEX
+            {
+                pub cbSize: ULONG,
+                pub nFont: DWORD,
+                pub dwFontSize: COORD,
+                pub FontFamily: UINT,
+                pub FontWeight: UINT,
+                pub FaceName: [WCHAR; 32],
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct CONSOLE_SCREEN_BUFFER_INFOEX
+            {
+                pub cbSize: ULONG,
+                pub dwSize: COORD,
+                pub dwCursorPosition: COORD,
+                pub wAttributes: WORD,
+                pub srWindow: SMALL_RECT,
+                pub dwMaximumWindowSize: COORD,
+                pub wPopupAttributes: WORD,
+                pub bFullscreenSupported: BOOL,
+                pub ColorTable: [COLORREF; 16],
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct MOUSE_EVENT_RECORD
+            {
+                pub dwMousePosition: COORD,
+                pub dwButtonState: DWORD,
+                pub dwControlKeyState: DWORD,
+                pub dwEventFlags: DWORD,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct CONSOLE_HISTORY_INFO 
+            {
+                pub cbSize: UINT,
+                pub HistoryBufferSize: UINT,
+                pub NumberOfHistoryBuffers: UINT,
+                pub dwFlags: DWORD,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct CONSOLE_SELECTION_INFO
+            {
+                pub dwFlags: DWORD,
+                pub dwSelectionAnchor: COORD,
+                pub srSelection: SMALL_RECT,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct CONSOLE_CURSOR_INFO
+            {
+                pub dwSize: DWORD,
+                pub bVisible: BOOL,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct INPUT_RECORD_Event( () );
+
+            impl INPUT_RECORD_Event
+            {
+                pub unsafe fn WindowBufferSizeEvent(&self) -> &WINDOW_BUFFER_SIZE_RECORD
+                {
+                    unsafe
+                    {
+                        mem::transmute( ptr::null::<&WINDOW_BUFFER_SIZE_RECORD>() )
+                    }
+                }
+                
+                pub unsafe fn KeyEvent(&self) -> &KEY_EVENT_RECORD
+                {
+                    unsafe
+                    {
+                        mem::transmute( ptr::null::<&KEY_EVENT_RECORD>() )
+                    }
+                }
+                
+                pub unsafe fn MouseEvent(&self) -> &MOUSE_EVENT_RECORD
+                {
+                    unsafe
+                    {
+                        mem::transmute( ptr::null::<&MOUSE_EVENT_RECORD>() )
+                    }
+                }
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct INPUT_RECORD 
+            {
+                pub EventType: WORD,
+                pub Event: INPUT_RECORD_Event,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct CHAR_INFO 
+            {
+                pub Char: CHAR_INFO_Char,
+                pub Attributes: WORD,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct COORD
+            {
+                pub X: SHORT,
+                pub Y: SHORT,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct SMALL_RECT
+            {
+                pub Left: SHORT,
+                pub Top: SHORT,
+                pub Right: SHORT,
+                pub Bottom: SHORT,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct CONSOLE_SCREEN_BUFFER_INFO 
+            {
+                pub dwSize: COORD,
+                pub dwCursorPosition: COORD,
+                pub wAttributes: WORD,
+                pub srWindow: SMALL_RECT,
+                pub dwMaximumWindowSize: COORD,
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct KEY_EVENT_RECORD_uChar( () );
+
+            impl KEY_EVENT_RECORD_uChar
+            {
+                pub unsafe fn UnicodeChar(&self) -> &WCHAR
+                {
+                    unsafe
+                    {
+                        mem::transmute( ptr::null::<&WCHAR>() )
+                    }
+                }
+            }
+
+            #[repr(C)] #[derive( Clone, Copy )]
+            pub struct KEY_EVENT_RECORD
+            {
+                pub bKeyDown: BOOL,
+                pub wRepeatCount: WORD,
+                pub wVirtualKeyCode: WORD,
+                pub wVirtualScanCode: WORD,
+                pub uChar: KEY_EVENT_RECORD_uChar,
+                pub dwControlKeyState: DWORD,
+            }
+
+            impl KEY_EVENT_RECORD
+            {
+                pub unsafe fn UnicodeChar(&self) -> &WCHAR
+                {
+                    unsafe
+                    {
+                        mem::transmute( ptr::null::<&WCHAR>() )
+                    }
+                }
+            }
+            /// A Unicode code point: from U+0000 to U+10FFFF.
+            #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy)]
+            pub struct CodePoint
+            {
+                value: u32,
+            }
+
+            impl ::hash::Hash for CodePoint
+            {
+                #[inline] fn hash<H: ::hash::Hasher>(&self, state: &mut H) { self.value.hash(state) }
+            }
+            /// Iterator for the code points of a WTF-8 string.
+            #[derive(Clone)]
+            pub struct Wtf8CodePoints<'a>
+            {
+                pub bytes: slice::Iter<'a, u8>,
+            }
+
+            impl Iterator for Wtf8CodePoints<'_> 
+            {
+                type Item = CodePoint;
+
+                #[inline] fn next(&mut self) -> Option<CodePoint>
+                {
+                    unsafe { str::next_code_point(&mut self.bytes).map(|c| CodePoint { value: c }) }
+                }
+
+                #[inline] fn size_hint(&self) -> (usize, Option<usize>)
+                {
+                    let len = self.bytes.len();
+                    (len.saturating_add(3) / 4, Some(len))
+                }
+            }
+            /// Generates a wide character sequence for potentially ill-formed UTF-16.
+            #[derive(Clone)]
+            pub struct EncodeWide<'a>
+            {
+                pub code_points: Wtf8CodePoints<'a>,
+                pub extra: u16,
+            }
+
+            impl Iterator for EncodeWide<'_>
+            {
+                type Item = u16;
+
+                #[inline] fn next(&mut self) -> Option<u16> 
+                {
+                    if self.extra != 0 {
+                        let tmp = self.extra;
+                        self.extra = 0;
+                        return Some(tmp);
+                    }
+
+                    let mut buf = [0; 2];
+                    self.code_points.next().map(|code_point|
+                    {
+                        self.extra = buf[1];
+                        buf[0]
+                    })
+                }
+
+                #[inline] fn size_hint(&self) -> (usize, Option<usize>) 
+                {
+                    let (low, high) = self.code_points.size_hint();
+                    let ext = (self.extra != 0) as usize;
+                    (low + ext, high.and_then(|n| n.checked_mul(2)).and_then(|n| n.checked_add(ext)))
+                }
+            }
+            
+            impl ::iter::FusedIterator for EncodeWide<'_> {}
+            /// An owned, growable string of well-formed WTF-8 data.
+            #[derive(Eq, PartialEq, Ord, PartialOrd, Clone)]
+            pub struct Wtf8Buf
+            {
+                bytes: Vec<u8>,
+                is_known_utf8: bool,
+            }
+            
+            impl Hash for Wtf8Buf 
+            {
+                #[inline] fn hash<H:Hasher>( &self, state:&mut H )
+                {
+                    state.write(&self.bytes);
+                    0xfeu8.hash(state)
+                }
+            }
+            /// A borrowed slice of well-formed WTF-8 data.
+            #[repr( transparent )] #[derive( Eq, Ord, PartialEq, PartialOrd )]
+            pub struct Wtf8
+            {
+                pub bytes: [u8],
+            }
+
+            impl AsInner<[u8]> for Wtf8
+            {
+                #[inline] fn as_inner(&self) -> &[u8] { &self.bytes }
+            }
+            /// Formats the string in double quotes, with characters escaped according to [`char::escape_debug`]
+            /// and unpaired surrogates represented as `\u{xxxx}`, where each `x` is a hexadecimal digit.
+            impl fmt::Debug for Wtf8
+            {
+                fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    fn write_str_escaped(f: &mut fmt::Formatter<'_>, s: &str) -> fmt::Result {
+                        use crate::fmt::Write;
+                        for c in s.chars().flat_map(|c| c.escape_debug()) {
+                            f.write_char(c)?
+                        }
+                        Ok(())
+                    }
+
+                    formatter.write_str("\"")?;
+                    let mut pos = 0;
+                    while let Some((surrogate_pos, surrogate)) = self.next_surrogate(pos) {
+                        write_str_escaped(formatter, unsafe {
+                            str::from_utf8_unchecked(&self.bytes[pos..surrogate_pos])
+                        })?;
+                        write!(formatter, "\\u{{{:x}}}", surrogate)?;
+                        pos = surrogate_pos + 3;
+                    }
+                    write_str_escaped(formatter, unsafe { str::from_utf8_unchecked(&self.bytes[pos..]) })?;
+                    formatter.write_str("\"")
+                }
+            }
+            /// Formats the string with unpaired surrogates substituted with the replacement character, U+FFFD.
+            impl fmt::Display for Wtf8
+            {
+                fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    let wtf8_bytes = &self.bytes;
+                    let mut pos = 0;
+                    loop {
+                        match self.next_surrogate(pos) {
+                            Some((surrogate_pos, _)) => {
+                                formatter.write_str(unsafe {
+                                    str::from_utf8_unchecked(&wtf8_bytes[pos..surrogate_pos])
+                                })?;
+                                formatter.write_str(UTF8_REPLACEMENT_CHARACTER)?;
+                                pos = surrogate_pos + 3;
+                            }
+                            None => {
+                                let s = unsafe { str::from_utf8_unchecked(&wtf8_bytes[pos..]) };
+                                if pos == 0 { return s.fmt(formatter) } else { return formatter.write_str(s) }
+                            }
+                        }
+                    }
+                }
+            }
+
+            impl Wtf8
+            {
+                /// Creates a WTF-8 slice from a UTF-8 `&str` slice.
+                #[inline] pub fn from_str(value: &str) -> &Wtf8 
+                {
+                    unsafe { Wtf8::from_bytes_unchecked(value.as_bytes()) }
+                }
+                /// Creates a WTF-8 slice from a WTF-8 byte slice.
+                #[inline] pub unsafe fn from_bytes_unchecked(value: &[u8]) -> &Wtf8 
+                {
+                    unsafe { &*(value as *const [u8] as *const Wtf8) }
+                }
+                /// Creates a mutable WTF-8 slice from a mutable WTF-8 byte slice.
+                #[inline] unsafe fn from_mut_bytes_unchecked(value: &mut [u8]) -> &mut Wtf8 
+                {
+                    unsafe { &mut *(value as *mut [u8] as *mut Wtf8) }
+                }
+                /// Returns the length, in WTF-8 bytes.
+                #[inline] pub fn len(&self) -> usize 
+                {
+                    self.bytes.len()
+                }
+
+                #[inline] pub fn is_empty(&self) -> bool 
+                {
+                    self.bytes.is_empty()
+                }
+                /// Returns the code point at `position` if it is in the ASCII range, or `b'\xFF'` otherwise.
+                #[inline] pub fn ascii_byte_at(&self, position: usize) -> u8 
+                {
+                    match self.bytes[position] {
+                        ascii_byte @ 0x00..=0x7F => ascii_byte,
+                        _ => 0xFF,
+                    }
+                }
+                /// Returns an iterator for the string’s code points.
+                #[inline] pub fn code_points(&self) -> Wtf8CodePoints<'_> 
+                {
+                    Wtf8CodePoints { bytes: self.bytes.iter() }
+                }
+                /// Access raw bytes of WTF-8 data
+                #[inline] pub fn as_bytes(&self) -> &[u8]
+                {
+                    &self.bytes
+                }
+                /// Tries to convert the string to UTF-8 and return a `&str` slice.
+                #[inline] pub fn as_str(&self) -> Result<&str, str::Utf8Error> 
+                {
+                    str::from_utf8(&self.bytes)
+                }
+                /// Creates an owned `Wtf8Buf` from a borrowed `Wtf8`.
+                pub fn to_owned(&self) -> Wtf8Buf
+                {
+                    Wtf8Buf { bytes: self.bytes.to_vec(), is_known_utf8: false }
+                }
+                /// Lossily converts the string to UTF-8.
+                pub fn to_string_lossy(&self) -> Cow<'_, str> 
+                {
+                    let Some((surrogate_pos, _)) = self.next_surrogate(0) else {
+                        return Cow::Borrowed(unsafe { str::from_utf8_unchecked(&self.bytes) });
+                    };
+                    let wtf8_bytes = &self.bytes;
+                    let mut utf8_bytes = Vec::with_capacity(self.len());
+                    utf8_bytes.extend_from_slice(&wtf8_bytes[..surrogate_pos]);
+                    utf8_bytes.extend_from_slice(UTF8_REPLACEMENT_CHARACTER.as_bytes());
+                    let mut pos = surrogate_pos + 3;
+                    loop {
+                        match self.next_surrogate(pos) {
+                            Some((surrogate_pos, _)) => {
+                                utf8_bytes.extend_from_slice(&wtf8_bytes[pos..surrogate_pos]);
+                                utf8_bytes.extend_from_slice(UTF8_REPLACEMENT_CHARACTER.as_bytes());
+                                pos = surrogate_pos + 3;
+                            }
+                            None => {
+                                utf8_bytes.extend_from_slice(&wtf8_bytes[pos..]);
+                                return Cow::Owned(unsafe { String::from_utf8_unchecked(utf8_bytes) });
+                            }
+                        }
+                    }
+                }
+                /// Converts the WTF-8 string to potentially ill-formed UTF-16
+                /// and return an iterator of 16-bit code units.
+                #[inline] pub fn encode_wide(&self) -> EncodeWide<'_> 
+                {
+                    EncodeWide { code_points: self.code_points(), extra: 0 }
+                }
+
+                #[inline] fn next_surrogate(&self, mut pos: usize) -> Option<(usize, u16)> 
+                {
+                    let mut iter = self.bytes[pos..].iter();
+                    loop 
+                    {
+                        let b = *iter.next()?;
+
+                        if b < 0x80 
+                        {
+                            pos += 1;
+                        }
+                        
+                        else if b < 0xE0 
+                        {
+                            iter.next();
+                            pos += 2;
+                        } 
+
+                        else if b == 0xED 
+                        {
+                            match (iter.next(), iter.next()) {
+                                (Some(&b2), Some(&b3)) if b2 >= 0xA0 => {
+                                    return Some((pos, decode_surrogate(b2, b3)));
+                                }
+                                _ => pos += 3,
+                            }
+                        }
+
+                        else if b < 0xF0 
+                        {
+                            iter.next();
+                            iter.next();
+                            pos += 3;
+                        } 
+
+                        else 
+                        {
+                            iter.next();
+                            iter.next();
+                            iter.next();
+                            pos += 4;
+                        }
+                    }
+                }
+
+                #[inline] fn final_lead_surrogate(&self) -> Option<u16> 
+                {
+                    match self.bytes 
+                    {
+                        [.., 0xED, b2 @ 0xA0..=0xAF, b3] => Some(decode_surrogate(b2, b3)),
+                        _ => None,
+                    }
+                }
+
+                #[inline] fn initial_trail_surrogate(&self) -> Option<u16> 
+                {
+                    match self.bytes 
+                    {
+                        [0xED, b2 @ 0xB0..=0xBF, b3, ..] => Some(decode_surrogate(b2, b3)),
+                        _ => None,
+                    }
+                }
+
+                pub fn clone_into(&self, buf: &mut Wtf8Buf) 
+                {
+                    buf.is_known_utf8 = false;
+                    self.bytes.clone_into(&mut buf.bytes);
+                }
+                /// Boxes this `Wtf8`.
+                #[inline] pub fn into_box(&self) -> Box<Wtf8> 
+                {
+                    let boxed: Box<[u8]> = self.bytes.into();
+                    unsafe { mem::transmute(boxed) }
+                }
+                /// Creates a boxed, empty `Wtf8`.
+                pub fn empty_box() -> Box<Wtf8> 
+                {
+                    let boxed: Box<[u8]> = Default::default();
+                    unsafe { mem::transmute(boxed) }
+                }
+
+                #[inline] pub fn into_arc(&self) -> Arc<Wtf8> 
+                {
+                    let arc: Arc<[u8]> = Arc::from(&self.bytes);
+                    unsafe { Arc::from_raw(Arc::into_raw(arc) as *const Wtf8) }
+                }
+
+                #[inline] pub fn into_rc(&self) -> Rc<Wtf8> 
+                {
+                    let rc: Rc<[u8]> = Rc::from(&self.bytes);
+                    unsafe { Rc::from_raw(Rc::into_raw(rc) as *const Wtf8) }
+                }
+
+                #[inline] pub fn make_ascii_lowercase(&mut self) { self.bytes.make_ascii_lowercase() }
+
+                #[inline] pub fn make_ascii_uppercase(&mut self) { self.bytes.make_ascii_uppercase() }
+
+                #[inline] pub fn to_ascii_lowercase(&self) -> Wtf8Buf 
+                { Wtf8Buf { bytes: self.bytes.to_ascii_lowercase(), is_known_utf8: false } }
+
+                #[inline] pub fn to_ascii_uppercase(&self) -> Wtf8Buf 
+                { Wtf8Buf { bytes: self.bytes.to_ascii_uppercase(), is_known_utf8: false } }
+
+                #[inline] pub fn is_ascii(&self) -> bool { self.bytes.is_ascii() }
+
+                #[inline] pub fn eq_ignore_ascii_case(&self, other: &Self) -> bool 
+                { self.bytes.eq_ignore_ascii_case(&other.bytes) }
+            }
+            /// Returns a slice of the given string for the byte range \[`begin`..`end`).
+            impl ops::Index<ops::Range<usize>> for Wtf8
+            {
+                type Output = Wtf8;
+
+                #[inline] fn index(&self, range: ops::Range<usize>) -> &Wtf8
+                {
+                    if range.start <= range.end
+                    && is_code_point_boundary(self, range.start)
+                    && is_code_point_boundary(self, range.end)
+                    { unsafe { slice_unchecked(self, range.start, range.end) } }
+                    else { slice_error_fail(self, range.start, range.end) }
+                }
+            }
+            /// Returns a slice of the given string from byte `begin` to its end.
+            impl ops::Index<ops::RangeFrom<usize>> for Wtf8
+            {
+                type Output = Wtf8;
+
+                #[inline] fn index(&self, range: ops::RangeFrom<usize>) -> &Wtf8
+                {
+                    if is_code_point_boundary(self, range.start) {
+                        unsafe { slice_unchecked(self, range.start, self.len()) }
+                    } else {
+                        slice_error_fail(self, range.start, self.len())
+                    }
+                }
+            }
+            /// Returns a slice of the given string from its beginning to byte `end`.
+            impl ops::Index<ops::RangeTo<usize>> for Wtf8
+            {
+                type Output = Wtf8;
+
+                #[inline] fn index(&self, range: ops::RangeTo<usize>) -> &Wtf8
+                {
+                    if is_code_point_boundary(self, range.end) {
+                        unsafe { slice_unchecked(self, 0, range.end) }
+                    } else {
+                        slice_error_fail(self, 0, range.end)
+                    }
+                }
+            }
+
+            impl ops::Index<ops::RangeFull> for Wtf8
+            {
+                type Output = Wtf8;
+                #[inline] fn index(&self, _range: ops::RangeFull) -> &Wtf8 { self }
+            }
+
+            impl Hash for Wtf8 
+            {
+                #[inline] fn hash<H: Hasher>(&self, state: &mut H) {
+                    state.write(&self.bytes);
+                    0xfeu8.hash(state)
+                }
+            }
+            #[repr(transparent)]
+            pub struct Slice
+            {
+                pub inner: Wtf8,
+            }
+
+            impl fmt::Debug for Slice 
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    fmt::Debug::fmt(&self.inner, f)
+                }
+            }
+
+            impl fmt::Display for Slice
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+                {
+                    fmt::Display::fmt(&self.inner, f)
+                }
+            }
+
+        } pub use self::structs::{ * };
+
+        pub mod traits
+        {
+            use super::{ * };
+
+            use ::system::common::AsInner;
+            
+            pub trait OsStrExt
+            {
+                /// Re-encodes an `OsStr` as a wide character sequence. ❤
+                fn encodes_wide( &self ) -> EncodeWide<'_>;
+            }
+            
+            impl OsStrExt for OsStr
+            {
+                #[inline] fn encodes_wide(&self) -> EncodeWide<'_> { self.as_inner().inner.encode_wide() }
+            }
+            
+            impl AsInner<Slice> for OsStr 
+            {
+                #[inline] fn as_inner(&self) -> &Slice { unsafe { ::mem::transmute( self ) } }
+            }
+        } pub use self::traits::{ * };
+        
+        pub mod types
+        {
+            use super::{ * };
+            
+            pub type c_char = i8;
+            pub type c_schar = i8;
+            pub type c_uchar = u8;
+            pub type c_short = i16;
+            pub type c_ushort = u16;
+            pub type c_int = i32;
+            pub type c_uint = u32;
+            pub type c_long = i32;
+            pub type c_ulong = u32;
+            pub type c_longlong = i64;
+            pub type c_ulonglong = u64;
+            pub type c_float = f32;
+            pub type c_double = f64;
+            pub type __int8 = i8;
+            pub type __uint8 = u8;
+            pub type __int16 = i16;
+            pub type __uint16 = u16;
+            pub type __int32 = i32;
+            pub type __uint32 = u32;
+            pub type __int64 = i64;
+            pub type __uint64 = u64;
+            pub type wchar_t = u16;
+            pub type ULONG = c_ulong;
+            pub type PULONG = *mut ULONG;
+            pub type USHORT = c_ushort;
+            pub type PUSHORT = *mut USHORT;
+            pub type UCHAR = c_uchar;
+            pub type PUCHAR = *mut UCHAR;
+            pub type PSZ = *mut c_char;
+            pub type DWORD = c_ulong;
+            pub type BOOL = c_int;
+            pub type BYTE = c_uchar;
+            pub type WORD = c_ushort;
+            pub type FLOAT = c_float;
+            pub type PFLOAT = *mut FLOAT;
+            pub type PBOOL = *mut BOOL;
+            pub type LPBOOL = *mut BOOL;
+            pub type PBYTE = *mut BYTE;
+            pub type LPBYTE = *mut BYTE;
+            pub type PINT = *mut c_int;
+            pub type LPINT = *mut c_int;
+            pub type PWORD = *mut WORD;
+            pub type LPWORD = *mut WORD;
+            pub type LPLONG = *mut c_long;
+            pub type PDWORD = *mut DWORD;
+            pub type LPDWORD = *mut DWORD;
+            pub type LPVOID = *mut c_void;
+            pub type LPCVOID = *const c_void;
+            pub type INT = c_int;
+            pub type UINT = c_uint;
+            pub type PUINT = *mut c_uint;
+            pub type POINTER_64_INT = usize;
+            pub type INT8 = c_schar;
+            pub type PINT8 = *mut c_schar;
+            pub type INT16 = c_short;
+            pub type PINT16 = *mut c_short;
+            pub type INT32 = c_int;
+            pub type PINT32 = *mut c_int;
+            pub type INT64 = __int64;
+            pub type PINT64 = *mut __int64;
+            pub type UINT8 = c_uchar;
+            pub type PUINT8 = *mut c_uchar;
+            pub type UINT16 = c_ushort;
+            pub type PUINT16 = *mut c_ushort;
+            pub type UINT32 = c_uint;
+            pub type PUINT32 = *mut c_uint;
+            pub type UINT64 = __uint64;
+            pub type PUINT64 = *mut __uint64;
+            pub type LONG32 = c_int;
+            pub type PLONG32 = *mut c_int;
+            pub type ULONG32 = c_uint;
+            pub type PULONG32 = *mut c_uint;
+            pub type DWORD32 = c_uint;
+            pub type PDWORD32 = *mut c_uint;
+            pub type INT_PTR = isize;
+            pub type PINT_PTR = *mut isize;
+            pub type UINT_PTR = usize;
+            pub type PUINT_PTR = *mut usize;
+            pub type LONG_PTR = isize;
+            pub type PLONG_PTR = *mut isize;
+            pub type ULONG_PTR = usize;
+            pub type PULONG_PTR = *mut usize;
+            pub type SHANDLE_PTR = isize;
+            pub type HANDLE_PTR = usize;
+            pub type WPARAM = UINT_PTR;
+            pub type LPARAM = LONG_PTR;
+            pub type LRESULT = LONG_PTR;
+            #[cfg(target_pointer_width = "32")]
+            pub type PHALF_PTR = *mut c_short;
+            #[cfg(target_pointer_width = "64")]
+            pub type PHALF_PTR = *mut c_int;
+            pub type SIZE_T = ULONG_PTR;
+            pub type PSIZE_T = *mut ULONG_PTR;
+            pub type SSIZE_T = LONG_PTR;
+            pub type PSSIZE_T = *mut LONG_PTR;
+            pub type DWORD_PTR = ULONG_PTR;
+            pub type PDWORD_PTR = *mut ULONG_PTR;
+            pub type LONG64 = __int64;
+            pub type PLONG64 = *mut __int64;
+            pub type ULONG64 = __uint64;
+            pub type PULONG64 = *mut __uint64;
+            pub type DWORD64 = __uint64;
+            pub type PDWORD64 = *mut __uint64;
+            pub type KAFFINITY = ULONG_PTR;
+            pub type PKAFFINITY = *mut KAFFINITY;
+            pub type PKEY_EVENT_RECORD = *mut KEY_EVENT_RECORD;
+            pub type PGROUP_AFFINITY = *mut GROUP_AFFINITY;
+            pub type PLONGLONG = *mut LONGLONG;
+            pub type PULONGLONG = *mut ULONGLONG;
+            pub type USN = LONGLONG;
+            pub type HANDLE = *mut c_void;
+            pub type PHANDLE = *mut HANDLE;
+            pub type FCHAR = UCHAR;
+            pub type FSHORT = USHORT;
+            pub type FLONG = ULONG;
+            pub type HRESULT = c_long;        
+            pub type CCHAR = c_char;
+            pub type CSHORT = c_short;
+            pub type CLONG = ULONG;
+            pub type PCCHAR = *mut CCHAR;
+            pub type PCSHORT = *mut CSHORT;
+            pub type PCLONG = *mut CLONG;
+            pub type LCID = ULONG;
+            pub type PLCID = PULONG;
+            pub type LANGID = USHORT;        
+            pub type PVOID = *mut c_void;
+            pub type PVOID64 = u64;
+            pub type VOID = c_void;
+            pub type CHAR = c_char;
+            pub type SHORT = c_short;
+            pub type LONG = c_long;
+            pub type WCHAR = wchar_t;
+            pub type PWCHAR = *mut WCHAR;
+            pub type LPWCH = *mut WCHAR;
+            pub type PWCH = *mut WCHAR;
+            pub type LPCWCH = *const WCHAR;
+            pub type PCWCH = *const WCHAR;
+            pub type NWPSTR = *mut WCHAR;
+            pub type LPWSTR = *mut WCHAR;
+            pub type LPTSTR = LPSTR;
+            pub type PWSTR = *mut WCHAR;
+            pub type PZPWSTR = *mut PWSTR;
+            pub type PCZPWSTR = *const PWSTR;
+            pub type LPUWSTR = *mut WCHAR;
+            pub type PUWSTR = *mut WCHAR;
+            pub type LPCWSTR = *const WCHAR;
+            pub type PCWSTR = *const WCHAR;
+            pub type PZPCWSTR = *mut PCWSTR;
+            pub type PCZPCWSTR = *const PCWSTR;
+            pub type LPCUWSTR = *const WCHAR;
+            pub type PCUWSTR = *const WCHAR;
+            pub type PZZWSTR = *mut WCHAR;
+            pub type PCZZWSTR = *const WCHAR;
+            pub type PUZZWSTR = *mut WCHAR;
+            pub type PCUZZWSTR = *const WCHAR;
+            pub type PNZWCH = *mut WCHAR;
+            pub type PCNZWCH = *const WCHAR;
+            pub type PUNZWCH = *mut WCHAR;
+            pub type PCUNZWCH = *const WCHAR;
+            pub type LPCWCHAR = *const WCHAR;
+            pub type PCWCHAR = *const WCHAR;
+            pub type LPCUWCHAR = *const WCHAR;
+            pub type PCUWCHAR = *const WCHAR;
+            pub type UCSCHAR = c_ulong;
+            pub type PUCSCHAR = *mut UCSCHAR;
+            pub type PCUCSCHAR = *const UCSCHAR;
+            pub type PUCSSTR = *mut UCSCHAR;
+            pub type PUUCSSTR = *mut UCSCHAR;
+            pub type PCUCSSTR = *const UCSCHAR;
+            pub type PCUUCSSTR = *const UCSCHAR;
+            pub type PUUCSCHAR = *mut UCSCHAR;
+            pub type PCUUCSCHAR = *const UCSCHAR;
+            pub type PCHAR = *mut CHAR;
+            pub type LPCH = *mut CHAR;
+            pub type PCH = *mut CHAR;
+            pub type LPCCH = *const CHAR;
+            pub type PCCH = *const CHAR;
+            pub type NPSTR = *mut CHAR;
+            pub type LPSTR = *mut CHAR;
+            pub type PSTR = *mut CHAR;
+            pub type PZPSTR = *mut PSTR;
+            pub type PCZPSTR = *const PSTR;
+            pub type LPCSTR = *const CHAR;
+            pub type PCSTR = *const CHAR;
+            pub type PZPCSTR = *mut PCSTR;
+            pub type PCZPCSTR = *const PCSTR;
+            pub type PZZSTR = *mut CHAR;
+            pub type PCZZSTR = *const CHAR;
+            pub type PNZCH = *mut CHAR;
+            pub type PCNZCH = *const CHAR;
+            pub type DOUBLE = c_double;
+            pub type PCONSOLE_READCONSOLE_CONTROL = *mut CONSOLE_READCONSOLE_CONTROL;
+            pub type PEXCEPTION_POINTERS = *mut EXCEPTION_POINTERS;
+            pub type PACCESS_TOKEN = PVOID;
+            pub type PSECURITY_DESCRIPTOR = PVOID;
+            pub type PSID = PVOID;
+            pub type PCLAIMS_BLOB = PVOID;
+            pub type ACCESS_MASK = DWORD;
+            pub type PACCESS_MASK = *mut ACCESS_MASK;
+            pub type PMOUSE_EVENT_RECORD = *mut MOUSE_EVENT_RECORD;
+            pub type PCONTEXT = *mut CONTEXT;
+            pub type PEXCEPTION_RECORD = *mut EXCEPTION_RECORD;
+            pub type KNOWNFOLDERID = GUID;
+            pub type REFKNOWNFOLDERID = *const KNOWNFOLDERID;
+            pub type PHANDLER_ROUTINE = Option<unsafe extern "system" fn(CtrlType: DWORD) -> BOOL>;
+            pub type NTSTATUS = LONG;
+            pub type PCONSOLE_FONT_INFO = *mut CONSOLE_FONT_INFO;
+            pub type PCONSOLE_FONT_INFOEX = *mut CONSOLE_FONT_INFOEX;
+            pub type PCONSOLE_CURSOR_INFO = *mut CONSOLE_CURSOR_INFO;
+            pub type PCONSOLE_SELECTION_INFO = *mut CONSOLE_SELECTION_INFO;
+            pub type PCONSOLE_HISTORY_INFO = *mut CONSOLE_HISTORY_INFO;
+            pub type PCONSOLE_SCREEN_BUFFER_INFO = *mut CONSOLE_SCREEN_BUFFER_INFO;
+            pub type PCONSOLE_SCREEN_BUFFER_INFOEX = *mut CONSOLE_SCREEN_BUFFER_INFOEX;
+            pub type COLORREF = DWORD;
+            pub type PINPUT_RECORD = *mut INPUT_RECORD;
+            pub type PFLOAT128 = *mut FLOAT128;
+            pub type LONGLONG = __int64;
+            pub type ULONGLONG = __uint64;
+            pub type va_list = *mut c_char;
+            pub type WIN32_ERROR = u32;
+
+        } pub use self::types::{ * };
+        
+        extern "system"
+        {
+            pub fn GetEnvironmentStrings() -> LPCH;
+            pub fn GetEnvironmentStringsW() -> LPWCH;
+            pub fn SetEnvironmentStringsW( NewEnvironment: LPWCH ) -> BOOL;
+            pub fn FreeEnvironmentStringsA( penv: LPCH ) -> BOOL;
+            pub fn FreeEnvironmentStringsW( penv: LPWCH ) -> BOOL;
+            pub fn GetStdHandle( nStdHandle: DWORD ) -> HANDLE;
+            pub fn SetStdHandle( nStdHandle: DWORD, hHandle: HANDLE ) -> BOOL;
+            pub fn SetStdHandleEx( nStdHandle: DWORD, hHandle: HANDLE, phPrevValue: PHANDLE ) -> BOOL;
+        
+            pub fn GetConsoleScreenBufferInfo(
+                hConsoleOutput: HANDLE,
+                lpConsoleScreenBufferInfo: PCONSOLE_SCREEN_BUFFER_INFO,
+            ) -> BOOL;
+            pub fn GetConsoleScreenBufferInfoEx(
+                hConsoleOutput: HANDLE,
+                lpConsoleScreenBufferInfoEx: PCONSOLE_SCREEN_BUFFER_INFOEX,
+            ) -> BOOL;
+            pub fn SetConsoleScreenBufferInfoEx(
+                hConsoleOutput: HANDLE,
+                lpConsoleScreenBufferInfoEx: PCONSOLE_SCREEN_BUFFER_INFOEX,
+            ) -> BOOL;
+            pub fn GetLargestConsoleWindowSize(
+                hConsoleOutput: HANDLE,
+            ) -> COORD;
+            pub fn GetConsoleCursorInfo(
+                hConsoleOutput: HANDLE,
+                lpConsoleCursorInfo: PCONSOLE_CURSOR_INFO,
+            ) -> BOOL;
+            pub fn GetCurrentConsoleFont(
+                hConsoleOutput: HANDLE,
+                bMaximumWindow: BOOL,
+                lpConsoleCurrentFont: PCONSOLE_FONT_INFO,
+            ) -> BOOL;
+            pub fn GetCurrentConsoleFontEx(
+                hConsoleOutput: HANDLE,
+                bMaximumWindow: BOOL,
+                lpConsoleCurrentFontEx: PCONSOLE_FONT_INFOEX,
+            ) -> BOOL;
+            pub fn SetCurrentConsoleFontEx(
+                hConsoleOutput: HANDLE,
+                bMaximumWindow: BOOL,
+                lpConsoleCurrentFontEx: PCONSOLE_FONT_INFOEX,
+            ) -> BOOL;
+            pub fn GetConsoleHistoryInfo(
+                lpConsoleHistoryInfo: PCONSOLE_HISTORY_INFO,
+            ) -> BOOL;
+            pub fn SetConsoleHistoryInfo(
+                lpConsoleHistoryInfo: PCONSOLE_HISTORY_INFO,
+            ) -> BOOL;
+            pub fn GetConsoleFontSize(
+                hConsoleOutput: HANDLE,
+                nFont: DWORD,
+            ) -> COORD;
+            pub fn GetConsoleSelectionInfo(
+                lpConsoleSelectionInfo: PCONSOLE_SELECTION_INFO,
+            ) -> BOOL;
+            pub fn GetNumberOfConsoleMouseButtons(
+                lpNumberOfMouseButtons: LPDWORD,
+            ) -> BOOL;
+            pub fn SetConsoleActiveScreenBuffer(
+                hConsoleOutput: HANDLE,
+            ) -> BOOL;
+            pub fn FlushConsoleInputBuffer(
+                hConsoleInput: HANDLE,
+            ) -> BOOL;
+            pub fn SetConsoleScreenBufferSize(
+                hConsoleOutput: HANDLE,
+                dwSize: COORD,
+            ) -> BOOL;
+            pub fn SetConsoleCursorPosition(
+                hConsoleOutput: HANDLE,
+                dwCursorPosition: COORD,
+            ) -> BOOL;
+            pub fn SetConsoleCursorInfo(
+                hConsoleOutput: HANDLE,
+                lpConsoleCursorInfo: *const CONSOLE_CURSOR_INFO,
+            ) -> BOOL;
+            pub fn ScrollConsoleScreenBufferA(
+                hConsoleOutput: HANDLE,
+                lpScrollRectangle: *const SMALL_RECT,
+                lpClipRectangle: *const SMALL_RECT,
+                dwDestinationOrigin: COORD,
+                lpFill: *const CHAR_INFO,
+            ) -> BOOL;
+            pub fn ScrollConsoleScreenBufferW(
+                hConsoleOutput: HANDLE,
+                lpScrollRectangle: *const SMALL_RECT,
+                lpClipRectangle: *const SMALL_RECT,
+                dwDestinationOrigin: COORD,
+                lpFill: *const CHAR_INFO,
+            ) -> BOOL;
+            pub fn SetConsoleWindowInfo(
+                hConsoleOutput: HANDLE,
+                bAbsolute: BOOL,
+                lpConsoleWindow: *const SMALL_RECT,
+            ) -> BOOL;
+            pub fn SetConsoleTextAttribute(
+                hConsoleOutput: HANDLE,
+                wAttributes: WORD,
+            ) -> BOOL;
+            pub fn GenerateConsoleCtrlEvent(
+                dwCtrlEvent: DWORD,
+                dwProcessGroupId: DWORD,
+            ) -> BOOL;
+            pub fn FreeConsole() -> BOOL;
+            pub fn AttachConsole(
+                dwProcessId: DWORD,
+            ) -> BOOL;
+            
+            pub fn GetConsoleTitleA(
+                lpConsoleTitle: LPSTR,
+                nSize: DWORD,
+            ) -> DWORD;
+            pub fn GetConsoleTitleW(
+                lpConsoleTitle: LPWSTR,
+                nSize: DWORD,
+            ) -> DWORD;
+            pub fn GetConsoleOriginalTitleA(
+                lpConsoleTitle: LPSTR,
+                nSize: DWORD,
+            ) -> DWORD;
+            pub fn GetConsoleOriginalTitleW(
+                lpConsoleTitle: LPWSTR,
+                nSize: DWORD,
+            ) -> DWORD;
+            pub fn SetConsoleTitleA(
+                lpConsoleTitle: LPCSTR,
+            ) -> BOOL;
+
+            pub fn WriteConsoleInputW
+            (
+                hConsoleInput: HANDLE,
+                lpBuffer: *const INPUT_RECORD,
+                nLength: DWORD,
+                lpNumberOfEventsWritten: LPDWORD,
+            ) -> BOOL;
+
+            pub fn CloseHandle(
+                hObject: HANDLE,
+            ) -> BOOL;
+
+            pub fn CreateConsoleScreenBuffer(
+                dwDesiredAccess: DWORD,
+                dwShareMode: DWORD,
+                lpSecurityAttributes: *const SECURITY_ATTRIBUTES,
+                dwFlags: DWORD,
+                lpScreenBufferData: LPVOID,
+            ) -> HANDLE;
+
+            pub fn SetConsoleMode
+            (
+                hConsoleHandle: HANDLE,
+                dwMode: DWORD,
+            ) -> BOOL;
+
+            pub fn AllocConsole() -> BOOL;
+            pub fn GetConsoleCP() -> UINT;
+            pub fn GetConsoleMode
+            (
+                hConsoleHandle: HANDLE,
+                lpMode: LPDWORD,
+            ) -> BOOL;
+
+            
+            pub fn FillConsoleOutputCharacterA
+            (
+                hConsoleOutput: HANDLE,
+                cCharacter: CHAR,
+                nLength: DWORD,
+                dwWriteCoord: COORD,
+                lpNumberOfCharsWritten: LPDWORD,
+            ) -> BOOL;
+
+            pub fn FillConsoleOutputCharacterW
+            (
+                hConsoleOutput: HANDLE,
+                cCharacter: WCHAR,
+                nLength: DWORD,
+                dwWriteCoord: COORD,
+                lpNumberOfCharsWritten: LPDWORD,
+            ) -> BOOL;
+
+            pub fn FillConsoleOutputAttribute
+            (
+                hConsoleOutput: HANDLE,
+                wAttribute: WORD,
+                nLength: DWORD,
+                dwWriteCoord: COORD,
+                lpNumberOfAttrsWritten: LPDWORD,
+            ) -> BOOL;
+
+            pub fn ReadConsoleInputW
+            (
+                hConsoleInput: HANDLE,
+                lpBuffer: PINPUT_RECORD,
+                nLength: DWORD,
+                lpNumberOfEventsRead: LPDWORD,
+            ) -> BOOL;
+
+            pub fn ReadConsoleW
+            (
+                hConsoleInput: HANDLE,
+                lpBuffer: LPVOID,
+                nNumberOfCharsToRead: DWORD,
+                lpNumberOfCharsRead: LPDWORD,
+                pInputControl: PCONSOLE_READCONSOLE_CONTROL,
+            ) -> BOOL;
+
+            pub fn WaitForSingleObject(
+                hHandle: HANDLE,
+                dwMilliseconds: DWORD,
+            ) -> DWORD;
+
+            pub fn SetConsoleCtrlHandler(
+                HandlerRoutine: PHANDLER_ROUTINE,
+                Add: BOOL,
+            ) -> BOOL;
+            
+            pub fn CoTaskMemFree(
+                pv: LPVOID,
+            );
+
+            pub fn SHGetKnownFolderPath
+            (
+                rfid: REFKNOWNFOLDERID,
+                dwFlags: DWORD,
+                hToken: HANDLE,
+                pszPath: *mut PWSTR,
+            ) -> HRESULT;
+
+            pub fn lstrlenW( lpString: LPCWSTR ) -> c_int;
+
+            pub fn WriteConsoleA
+            (
+                hConsoleOutput: HANDLE,
+                lpBuffer: *const VOID,
+                nNumberOfCharsToWrite: DWORD,
+                lpNumberOfCharsWritten: LPDWORD,
+                lpReserved: LPVOID,
+            ) -> BOOL;
+
+            pub fn WriteConsoleW
+            (
+                hConsoleOutput: HANDLE,
+                lpBuffer: *const VOID,
+                nNumberOfCharsToWrite: DWORD,
+                lpNumberOfCharsWritten: LPDWORD,
+                lpReserved: LPVOID,
+            ) -> BOOL;
+
+            pub fn FormatMessageW
+            (
+                dwFlags: DWORD,
+                lpSource: LPCVOID,
+                dwMessageId: DWORD,
+                dwLanguageId: DWORD,
+                lpBuffer: LPWSTR,
+                nSize: DWORD,
+                Arguments: *mut va_list,
+            ) -> DWORD;
+            pub fn GetLastError() -> DWORD;
+            pub fn SetLastError( dwErrCode: DWORD, );
+            pub fn GetErrorMode() -> UINT;
+            pub fn SetErrorMode( uMode: UINT, ) -> UINT;
+        }
+        
+        #[inline] pub fn decode_surrogate(second_byte: u8, third_byte: u8) -> u16
+        { 0xD800 | (second_byte as u16 & 0x3F) << 6 | third_byte as u16 & 0x3F }
+
+        #[inline] pub fn decode_surrogate_pair(lead: u16, trail: u16) -> char
+        {
+            let code_point = 0x10000 + ((((lead - 0xD800) as u32) << 10) | (trail - 0xDC00) as u32);
+            unsafe { char::from_u32_unchecked(code_point) }
+        }
+        
+        #[inline] pub fn is_code_point_boundary(slice: &Wtf8, index: usize) -> bool
+        {
+            if index == 0 { return true; }
+
+            match slice.bytes.get(index)
+            {
+                None => index == slice.len(),
+                Some(&b) => (b as i8) >= -0x40,
+            }
+        }
+        /// Verify that `index` is at the edge of either a valid UTF-8 codepoint or of the whole string.
+        #[inline] #[track_caller] pub fn check_utf8_boundary(slice: &Wtf8, index: usize)
+        {
+            if index == 0 { return; }
+
+            match slice.bytes.get(index)
+            {
+                Some(0xED) => (),
+                Some(&b) if (b as i8) >= -0x40 => return,
+                Some(_) => panic!("byte index {index} is not a codepoint boundary"),
+                None if index == slice.len() => return,
+                None => panic!("byte index {index} is out of bounds"),
+            }
+
+            if slice.bytes[index + 1] >= 0xA0
+            {
+                if index >= 3 && slice.bytes[index - 3] == 0xED && slice.bytes[index - 2] >= 0xA0
+                { panic!("byte index {index} lies between surrogate codepoints"); }
+            }
+        }
+        
+        #[inline] pub unsafe fn slice_unchecked(s: &Wtf8, begin: usize, end: usize) -> &Wtf8 
+        {
+            unsafe 
+            {
+                let len = end - begin;
+                let start = s.as_bytes().as_ptr().add(begin);
+                Wtf8::from_bytes_unchecked(slice::from_raw_parts(start, len))
+            }
+        }
+        
+        #[inline(never)] pub fn slice_error_fail(s: &Wtf8, begin: usize, end: usize) -> ! 
+        {
+            assert!(begin <= end);
+            panic!("index {begin} and/or {end} in `{s:?}` do not lie on character boundary");
+        }
+    } #[cfg(windows)] pub use self::windows::*;
 }
 
 pub mod marker
@@ -21191,9 +10896,9 @@ pub mod now
 {
     use ::
     {
-        collections::{ HashMap },
+        collections::{ HashMap }, 
         io::{ self, Read, Write },
-        regex::{ Regex },
+        regex::{ contains, Regex },
         shell::{ self, Shell },
         types::{ * },
         *,
@@ -21212,7 +10917,7 @@ pub mod now
                 log!("run non tty command: {}", &buffer);
                 run_command_line(sh, &buffer, false, false);
             }
-            
+
             Err(e) => { println!("cicada: stdin.read_to_string() failed: {:?}", e); }
         }
     }
@@ -21232,7 +10937,7 @@ pub mod now
             }
 
             if sep == "&&" && status != 0 { break; }
-
+            
             if sep == "||" && status == 0 { break; }
 
             let cmd = token.clone();
@@ -21241,24 +10946,22 @@ pub mod now
             sh.previous_status = status;
             cr_list.push(cr);
         }
+
         cr_list
     }
 
-    fn drain_env_tokens(tokens: &mut Tokens) -> HashMap<String, String> 
+    fn drain_env_tokens(tokens: &mut Tokens) -> HashMap<String, String>
     {
         let mut envs: HashMap<String, String> = HashMap::new();
         let mut n = 0;
         let ptn_env_exp = r"^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$";
         let re = Regex::new(ptn_env_exp).unwrap();
         
-        for (sep, text) in tokens.iter() 
+        for (sep, text) in tokens.iter()
         {
-            if !sep.is_empty() || !regex::contains(text, ptn_env_exp) 
-            {
-                break;
-            }
+            if !sep.is_empty() || !contains(text, ptn_env_exp) { break; }
 
-            for cap in re.captures_iter(text) 
+            for cap in re.captures_iter(text)
             {
                 let name = cap[1].to_string();
                 let value = parsers::line::unquote(&cap[2]);
@@ -21267,7 +10970,7 @@ pub mod now
 
             n += 1;
         }
-        
+
         if n > 0 { tokens.drain(0..n); }
 
         envs
@@ -21275,7 +10978,7 @@ pub mod now
 
     fn line_to_tokens(sh: &mut Shell, line: &str) -> (Tokens, HashMap<String, String>)
     {
-        let linfo = parsers::line::parse_line(line);
+        let linfo = parsers::line::parse(line);
         let mut tokens = linfo.tokens;
         shell::do_expansion(sh, &mut tokens);
         let envs = drain_env_tokens(&mut tokens);
@@ -21290,70 +10993,82 @@ pub mod now
         }
     }
     /// Run simple command or pipeline without using `&&`, `||`, `;`.
-    pub fn run_proc(sh: &mut Shell, line: &str, tty: bool, capture: bool) -> CommandResult
+    fn run_proc(sh: &mut Shell, line: &str, tty: bool, capture: bool) -> CommandResult
     {
         let log_cmd = !sh.cmd.starts_with(' ');
-        
-        match CommandLine::from_line(line, sh) {
+
+        match CommandLine::from_line(line, sh)
+        {
             Ok(cl) =>
             {
                 if cl.is_empty()
                 {
                     if !cl.envs.is_empty() { set_shell_vars(sh, &cl.envs); }
-
                     return CommandResult::new();
                 }
 
-                let (term_given, cr) = run::pipeline(sh, &cl, tty, capture, log_cmd);
-                
+                let (term_given, cr) = core::run_pipeline(sh, &cl, tty, capture, log_cmd);
+
                 if term_given
                 {
-                    unsafe {
-                        let gid = ::libc::getpgid(0);
+                    unsafe
+                    {
+                        let gid = libc::getpgid(0);
                         shell::give_terminal_to(gid);
                     }
                 }
 
                 cr
             }
-            Err(e) => {
+            
+            Err(e) =>
+            {
                 println_stderr!("cicada: {}", e);
                 CommandResult::from_status(0, 1)
             }
         }
     }
 
-    fn run_with_shell(sh: &mut Shell, line: &str) -> CommandResult {
+    fn run_with_shell(sh: &mut Shell, line: &str) -> CommandResult
+    {
         let (tokens, envs) = line_to_tokens(sh, line);
-        if tokens.is_empty() {
+        
+        if tokens.is_empty()
+        {
             set_shell_vars(sh, &envs);
             return CommandResult::new();
         }
 
-        match CommandLine::from_line(line, sh) {
-            Ok(c) => {
-                let (term_given, cr) = run::pipeline(sh, &c, false, true, false);
-                if term_given {
-                    unsafe {
-                        let gid = ::libc::getpgid(0);
+        match CommandLine::from_line(line, sh)
+        {
+            Ok(c) =>
+            {
+                let (term_given, cr) = core::run_pipeline(sh, &c, false, true, false);
+                if term_given
+                {
+                    unsafe
+                    {
+                        let gid = libc::getpgid(0);
                         shell::give_terminal_to(gid);
                     }
                 }
 
                 cr
             }
-            Err(e) => {
+
+            Err(e) =>
+            {
                 println_stderr!("cicada: {}", e);
                 CommandResult::from_status(0, 1)
             }
         }
     }
 
-    pub fn run(line: &str) -> CommandResult {
+    pub fn run(line: &str) -> CommandResult
+    {
         let mut sh = Shell::new();
         run_with_shell(&mut sh, line)
     }
-
 }
 
 pub mod num
@@ -37656,33 +27371,6 @@ pub mod os
     {
         //! Owned and borrowed Unix-like file descriptors.
         pub use std::os::fd::{ * };
-        // pub fn create_raw_fd_from_file(file_name: &str, append: bool) -> Result<i32, String>
-        pub fn create_raw_from_file( file_name:&str, append:bool ) -> Result<i32, String>
-        {
-            let mut oos = ::fs::OpenOptions::new();
-            
-            if append
-            {
-                oos.append(true);
-            }
-            
-            else
-            {
-                oos.write(true);
-                oos.truncate(true);
-            }
-
-            match oos.create(true).open(file_name)
-            {
-                Ok(x) =>
-                {
-                    let fd = x.into_raw_fd();
-                    Ok(fd)
-                }
-
-                Err(e) => Err(format!("{}", e)),
-            }
-        }
     }
 
     pub mod raw
@@ -37703,39 +27391,40 @@ pub mod os
         #[cfg( windows )] pub use std::os::windows::{ * };
 
     } #[cfg( windows )] pub use self::windows::{ * };
-    // pub fn get_os_name() -> String 
-    pub fn get_name() -> String 
+    // pub fn get_os_name() -> String
+    pub fn get_name() -> String
     {
         let uname = get_uname();
-
-        if uname.to_lowercase() == "darwin" { get_macos_name() } else { get_other_os_name() }
+        if uname.to_lowercase() == "darwin" {
+            get_macos_name()
+        } else {
+            get_other_name()
+        }
     }
     // fn get_other_os_name() -> String
     pub fn get_other_name() -> String
     {
         let mut name = get_release_value("PRETTY_NAME");
-
-        if !name.is_empty() { return name; }
-        
+        if !name.is_empty() {
+            return name;
+        }
         name = get_release_value("DISTRIB_DESCRIPTION");
-
-        if !name.is_empty() { return name; }
-
+        if !name.is_empty() {
+            return name;
+        }
         name = get_release_value("IMAGE_DESCRIPTION");
-        
-        if !name.is_empty() { return name; }
-
+        if !name.is_empty() {
+            return name;
+        }
         get_uname_mo()
     }
 
     pub fn get_release_value(ptn: &str) -> String
     {
-        let line = format!
-        (
+        let line = format!(
             "grep -i '{}' /etc/*release* 2>&1 | grep -o '=.*' | tr '\"=' ' '",
             ptn
         );
-
         let cr = now::run(&line);
         return cr.stdout.trim().to_string();
     }
@@ -37756,13 +27445,10 @@ pub mod os
     {
         let mut os_name = get_osx_codename();
         let ver = get_osx_version();
-        
-        if !ver.is_empty()
-        {
+        if !ver.is_empty() {
             os_name.push(' ');
             os_name.push_str(&ver);
         }
-
         os_name
     }
 
@@ -45198,7 +34884,7 @@ pub mod path
             {
                 collections::{ HashMap },
                 ffi::{ CStr, OsString },
-                libc::{ * },
+                libc::{ unix::{ * }, * },
                 os::unix::ffi::{ OsStringExt },
                 path::{ Path, PathBuf },
                 *,
@@ -45207,9 +34893,9 @@ pub mod path
             fn user_dir_file(home_dir: &Path) -> PathBuf 
             {
                 env::var_os("XDG_CONFIG_HOME")
-                    .and_then(is::absolute_path)
-                    .unwrap_or_else(|| home_dir.join(".config"))
-                    .join("user-dirs.dirs")
+                .and_then(is::absolute_path)
+                .unwrap_or_else(|| home_dir.join(".config"))
+                .join("user-dirs.dirs")
             }
             
             pub fn user_dir(user_dir_name: &str) -> Option<PathBuf>
@@ -45439,7 +35125,7 @@ pub mod path
             use ::
             {
                 ffi::{ OsString },
-                libc::{ * },
+                libc::windows::{ * },
                 path::{ PathBuf },
                 *,
             };
@@ -45585,173 +35271,116 @@ pub mod path
 
         s
     }
-    // pub fn find_file_in_path(filename: &str, exec: bool) -> String
-    pub fn find_file(filename: &str, exec: bool) -> String
+
+    pub fn find_file_in_path( filename: &str, exec: bool ) -> String
     {
         let env_path = match env::var("PATH")
         {
             Ok(x) => x,
-            Err(e) => {
+            Err(e) =>
+            {
                 println_stderr!("cicada: error with env PATH: {:?}", e);
                 return String::new();
             }
         };
 
         let vec_path: Vec<&str> = env_path.split(':').collect();
-        for p in &vec_path {
-            match read_dir(p) {
-                Ok(list) => {
-                    for entry in list.flatten() {
-                        if let Ok(name) = entry.file_name().into_string() {
-                            if name != filename {
-                                continue;
-                            }
 
-                            if exec {
-                                let _mode = match entry.metadata() {
+        for p in &vec_path
+        {
+            match read_dir(p)
+            {
+                Ok(list) =>
+                {
+                    for entry in list.flatten()
+                    {
+                        if let Ok( name) = entry.file_name().into_string()
+                        {
+                            if name != filename { continue; }
+
+                            if exec
+                            {
+                                let _mode = match entry.metadata()
+                                {
                                     Ok(x) => x,
-                                    Err(e) => {
+                                    Err(e) =>
+                                    {
                                         println_stderr!("cicada: metadata error: {:?}", e);
                                         continue;
                                     }
                                 };
+
                                 let mode = _mode.permissions().mode();
-                                if mode & 0o111 == 0 {
-                                    // not binary
-                                    continue;
-                                }
+
+                                if mode & 0o111 == 0 { continue; }
                             }
 
                             return entry.path().to_string_lossy().to_string();
                         }
                     }
                 }
-                Err(e) => {
-                    if e.kind() == ErrorKind::NotFound {
-                        continue;
-                    }
+
+                Err(e) =>
+                {
+                    if e.kind() == ErrorKind::NotFound { continue; }
+
                     log!("cicada: fs read_dir error: {}: {}", p, e);
                 }
             }
         }
+
         String::new()
+    }
+
+    pub fn current_dir() -> String
+    {
+        let _current_dir = match env::current_dir()
+        {
+            Ok(x) => x,
+            Err(e) => {
+                log!("cicada: PROMPT: env current_dir error: {}", e);
+                return String::new();
+            }
+        };
+
+        let current_dir = match _current_dir.to_str()
+        {
+            Some(x) => x,
+            None =>
+            {
+                log!("cicada: PROMPT: to_str error");
+                return String::new();
+            }
+        };
+
+        current_dir.to_string()
     }
 }
 
 pub mod process
 {
     pub use std::process::{ * };
+
     use ::
     {
-        error::
-        {
-            Error as ErrorTrait,
-            no::{ Errno, errno }
+        nix::
+        { 
+            unistd::{ fork as nix_fork, ForkResult },
+            Result as NixResult
         },
-        ffi::{ CString, NulError, OsStr, OsString },
-        libc::{ getpid as pid, pipe as tube, * },
-        nix::{ Error, Result, unistd::{ fork as nix_fork, ForkResult } },
-        os::fd::{ RawFd },
         shell::{ Shell },
         types::{ * },
     };
-    /*exec v.0.0.0*/
-    /// Like `try!`, but it just returns the error directly without wrapping it in `Err`.
-    macro_rules! exec_try
-    {
-        ( $ expr : expr ) =>
-        {
-            match $expr
-            {
-                Ok(val) => val,
-                Err(err) => return From::from(err),
-            }
-        };
-    }
-    /// Build a command to execute.
-    pub struct Command
-    {
-        /// The program name and arguments, in typical C `argv` style.
-        argv: Vec<OsString>,
-    }
-    
-    impl Command
-    {
-        /// Create a new command builder, specifying the program to run.
-        pub fn new<S: AsRef<OsStr>>( program:S ) -> Command
-        {
-            Command
-            {
-                argv: vec!(program.as_ref().to_owned()),
-            }
-        }
-        /// Add an argument to the command builder.  This can be chained.
-        pub fn arg<S: AsRef<OsStr>>(&mut self, arg: S) -> &mut Command
-        {
-            self.argv.push(arg.as_ref().to_owned());
-            self
-        }
-        /// Add multiple arguments to the command builder.
-        pub fn args<S: AsRef<OsStr>>(&mut self, args: &[S]) -> &mut Command
-        {
-            for arg in args
-            {
-                self.arg(arg.as_ref());
-            }
-
-            self
-        }
-
-        /// Execute the command we built.
-        pub fn exec(&mut self) -> Error
-        {
-            execvp(&self.argv[0], &self.argv)
-        }
-    }
-    /// Run `program` with `args`, completely replacing the currently running program.
-    pub fn execvp<S, I>(program: S, args: I) -> Error where
-    S:AsRef<OsStr>, 
-    I:IntoIterator,
-    I::Item:AsRef<OsStr>
-    {
-        let program_cstring = exec_try!(CString::new(program.as_ref().as_bytes()));
-        let arg_cstrings = exec_try!(args.into_iter().map(|arg|
-        {
-            CString::new(arg.as_ref().as_bytes())
-        }).collect::<Result<Vec<_>, _>>());
-        let mut arg_charptrs: Vec<_> = arg_cstrings.iter().map(|arg|
-        {
-            arg.as_ptr()
-        }).collect();
-
-        arg_charptrs.push( ptr::null() );
-        
-        let res = unsafe
-        {
-            ::execvp(program_cstring.as_ptr(), arg_charptrs.as_ptr())
-        };
-
-        // Handle our error result.
-        if res < 0
-        {
-            Error::Errno(errno())
-        } else { panic!("execvp returned unexpectedly") }
-    }
     /**/
-    pub fn getpid() -> i32 { unsafe { pid() } }
+    pub fn getpid() -> i32 { unsafe { libc::getpid() } }
 
-    pub fn fork() -> Result<ForkResult> { unsafe{ nix_fork() } }
+    pub fn close(fd: i32) { unsafe { libc::close(fd); } }
 
-    pub fn pipe() -> ::result::Result<(RawFd, RawFd), Error>
-    {
-        unsafe
-        {
-            let mut fds = ::mem::MaybeUninit::<[c_int; 2]>::uninit();
-            let res = tube(fds.as_mut_ptr() as *mut c_int);
-            Error::result(res)?;
-            Ok((fds.assume_init()[0], fds.assume_init()[1]))
-        }
-    }
+    pub fn dup(fd: i32) -> i32 { unsafe { libc::dup(fd) } }
+
+    pub fn dup2(src: i32, dst: i32) { unsafe { libc::dup2(src, dst); } }
+
+    pub fn fork() -> NixResult<ForkResult> { unsafe{ nix_fork() } }
 }
 
 pub mod ptr
@@ -45842,30 +35471,9 @@ pub mod run
 {
     use ::
     {
-        io::{ Write as _ },
-        libc::{ * },
-        path::{ Path },
-        regex::{ Regex },
-        shell::{ Shell },
-        str::{ Tokenizes },
         types::{ * },
         *,
     };
-
-    #[derive( Debug )]
-    pub enum SubCommand
-    {
-        Add
-        {
-            timestamp: Option<f64>,
-            input: String,
-        },
-        
-        Delete
-        {
-            rowid: Vec<usize>,
-        }
-    }
 
     pub fn alias(sh: &mut shell::Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
     {
@@ -45980,22 +35588,17 @@ pub mod run
 
         {
             let mut result = sh.get_job_by_id(job_id);
-            
-            if result.is_none()
-            {
+            // fall back to find job by using prcess group id
+            if result.is_none() {
                 result = sh.get_job_by_gid(job_id);
             }
 
-            match result
-            {
-                Some(job) =>
-                {
-                    unsafe
-                    {
-                        killpg(job.gid, SIGCONT);
+            match result {
+                Some(job) => {
+                    unsafe {
+                        libc::killpg(job.gid, libc::SIGCONT);
                         gid = job.gid;
-                        if job.status == "Running"
-                        {
+                        if job.status == "Running" {
                             let info = format!("cicada: bg: job {} already in background", job.id);
                             print_stderr_with_capture(&info, &mut cr, cl, cmd, capture);
                             return cr;
@@ -46030,7 +35633,7 @@ pub mod run
             return cr;
         }
 
-        let str_current_dir = get_current_dir();
+        let str_current_dir = tools::get_current_dir();
 
         let mut dir_to = if args.len() == 1 {
             let home = tools::get_user_home();
@@ -46084,73 +35687,58 @@ pub mod run
             }
         }
     }
-
-    pub fn cinfo(_sh: &mut Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
+    /*
+    pub const VERSION: &str= match option_env!("VERSION")
+    {
+        Some(v) => v,
+        None => "dev",
+    };
+    */
+    pub fn cinfo( _sh: &mut Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
     {
         let mut info = vec![];
-        //const VERSION: &str = env!("CARGO_PKG_VERSION");
-        const VERSION: &str = match option_env!("VERSION")
-        {
-            Some( variable ) => variable,
-            None => "1.89",
-        };
-        info.push(("version", VERSION));
 
-        let os_name = os::get_name();
+        pub const VERSION: &str = match option_env!("VERSION")
+        {
+            Some( version ) => version,
+            None => "1.68",
+        }; info.push(("version", VERSION));
+
+        let os_name = os::get_os_name();
         info.push(("os-name", &os_name));
 
-        let hfile = history::file();
+        let hfile = history::get_history_file();
         info.push(("history-file", &hfile));
 
         let rcf = rcfile::get_rc_file();
         info.push(("rc-file", &rcf));
-
-        /*let git_hash = env!("GIT_HASH");
-        if !git_hash.is_empty() {
-            info.push(("git-commit", env!("GIT_HASH")));
-        }*/
+        
         let git_hash = match option_env!("GIT_HASH")
         {
-            Some( variable ) => variable,
-            None => "0123456789abcdefABCDEF0123456789abcdefAB",
-        };
+            Some( hash ) => hash,
+            None => "01234567890123456789",
+        }; info.push(("git-commit", git_hash ));
         
-        info.push(("git-commit", &git_hash));
-        /*
-        let git_branch = env!("GIT_BRANCH");
-        let mut branch = String::new();
-        if !git_branch.is_empty() {
-            branch.push_str(git_branch);
-            let git_status = env!("GIT_STATUS");
-            if git_status != "0" {
-                branch.push_str(" (dirty)");
-            }
-            info.push(("git-branch", &branch));
-        } */
-        let git_branch = match option_env!("GIT_BRANCH")
+        let git_branch = match option_env!("GIT_HASH")
         {
-            Some( variable ) => variable,
+            Some( branch ) => branch,
             None => "main",
-        };
-        info.push(("git-branch", &git_branch));
-        /*
-        info.push(("built-with", env!("BUILD_RUSTC_VERSION")));
-        info.push(("built-at", env!("BUILD_DATE")));*/
+        }; info.push(("git-branch", git_branch ));
+        
         let built_with = match option_env!("BUILD_RUSTC_VERSION")
         {
-            Some( variable ) => variable,
-            None => "1.87",
-        };
-        info.push(("built-with", &built_with));
+            Some( version ) => version,
+            None => "1.86",
+        }; info.push(("built-with", built_with ));
         
         let built_at = match option_env!("BUILD_DATE")
         {
-            Some( variable ) => variable,
-            None => "1.87",
-        };
-        info.push(("built-at", &built_at));
+            Some( date ) => date,
+            None => "1.86",
+        }; info.push(("built-at", built_at ));
 
-        let mut lines = Vec::new();        
+        let mut lines = Vec::new();
+        
         for (k, v) in &info
         {
             lines.push(format!("{: >12}: {}", k, v));
@@ -46173,7 +35761,7 @@ pub mod run
             return cr;
         }
 
-        let mut _cmd = ::process::Command::new(&args[1]);
+        let mut _cmd = exec::Command::new(&args[1]);
         let err = _cmd.args(&args[2..len]).exec();
         let info = format!("cicada: exec: {}", err);
         print_stderr_with_capture(&info, &mut cr, cl, cmd, capture);
@@ -46222,17 +35810,14 @@ pub mod run
     {
         let mut cr = CommandResult::new();
         let tokens = cmd.tokens.clone();
-        let re_name_ptn = Regex::new(r"^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$").unwrap();
 
-        for (_, text) in tokens.iter()
-        {
-            if text == "export"
-            {
+        let re_name_ptn = Regex::new(r"^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$").unwrap();
+        for (_, text) in tokens.iter() {
+            if text == "export" {
                 continue;
             }
 
-            if !is::env(text)
-            {
+            if !tools::is_env(text) {
                 let mut info = String::new();
                 info.push_str("export: invalid command\n");
                 info.push_str("usage: export XXX=YYY");
@@ -46240,8 +35825,7 @@ pub mod run
                 return cr;
             }
 
-            if !re_name_ptn.is_match(text)
-            {
+            if !re_name_ptn.is_match(text) {
                 let mut info = String::new();
                 info.push_str("export: invalid command\n");
                 info.push_str("usage: export XXX=YYY ZZ=123");
@@ -46249,11 +35833,9 @@ pub mod run
                 return cr;
             }
 
-            for cap in re_name_ptn.captures_iter(text)
-            {
+            for cap in re_name_ptn.captures_iter(text) {
                 let name = cap[1].to_string();
-                //let token = parsers::line::unquote(&cap[2]);
-                let token = cap[2].tokenize();
+                let token = parsers::line::unquote(&cap[2]);
                 let value = path::expand_home(&token);
                 env::set_var(name, &value);
             }
@@ -46320,8 +35902,8 @@ pub mod run
                         if !shell::give_terminal_to(job.gid) {
                             return CommandResult::error();
                         }
-                        
-                        killpg(job.gid, SIGCONT);
+
+                        libc::killpg(job.gid, libc::SIGCONT);
                         pid_list = job.pids.clone();
                         gid = job.gid;
                     }
@@ -46339,7 +35921,7 @@ pub mod run
 
             let cr = jobc::wait_fg_job(sh, gid, &pid_list);
 
-            let gid_shell = getpgid(0);
+            let gid_shell = libc::getpgid(0);
             if !shell::give_terminal_to(gid_shell) {
                 log!("failed to give term to back to shell : {}", gid_shell);
             }
@@ -46351,7 +35933,7 @@ pub mod run
     pub fn history(sh: &mut Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
     {
         let mut cr = CommandResult::new();
-        let hfile = history::file();
+        let hfile = history::get_history_file();
         let path = Path::new(hfile.as_str());
         if !path.exists() {
             let info = "no history file";
@@ -46456,7 +36038,7 @@ pub mod run
             Ok(fd) => {
                 let info = format!("{}", fd);
                 print_stdout_with_capture(&info, &mut cr, cl, cmd, capture);
-                unsafe { close(fd); }
+                unsafe { libc::close(fd); }
             }
             Err(e) => {
                 println_stderr!("cicada: minfd: error: {}", e);
@@ -46632,15 +36214,15 @@ pub mod run
     pub fn set_limit(limit_name: &str, value: u64, for_hard: bool) -> String
     {
         let limit_id = match limit_name {
-            "open_files" => RLIMIT_NOFILE,
-            "core_file_size" => RLIMIT_CORE,
+            "open_files" => libc::RLIMIT_NOFILE,
+            "core_file_size" => libc::RLIMIT_CORE,
             _ => return String::from("invalid limit name"),
         };
 
-        let mut rlp = rlimit { rlim_cur: 0, rlim_max: 0 };
+        let mut rlp = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
 
         unsafe {
-            if getrlimit(limit_id, &mut rlp) != 0 {
+            if libc::getrlimit(limit_id, &mut rlp) != 0 {
                 return format!("cicada: ulimit: error getting limit: {}", Error::last_os_error());
             }
         }
@@ -46659,7 +36241,7 @@ pub mod run
         }
 
         unsafe {
-            if setrlimit(limit_id, &rlp) != 0 {
+            if libc::setrlimit(limit_id, &rlp) != 0 {
                 return format!("cicada: ulimit: error setting limit: {}", Error::last_os_error());
             }
         }
@@ -46670,25 +36252,25 @@ pub mod run
     pub fn get_limit(limit_name: &str, single_print: bool, for_hard: bool) -> (String, String)
     {
         let (desc, limit_id) = match limit_name {
-            "open_files" => ("open files", RLIMIT_NOFILE),
-            "core_file_size" => ("core file size", RLIMIT_CORE),
+            "open_files" => ("open files", libc::RLIMIT_NOFILE),
+            "core_file_size" => ("core file size", libc::RLIMIT_CORE),
             _ => return (String::new(), String::from("ulimit: error: invalid limit name")),
         };
 
-        let mut rlp = rlimit { rlim_cur: 0, rlim_max: 0 };
+        let mut rlp = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
 
         let mut result_stdout = String::new();
         let mut result_stderr = String::new();
 
         unsafe {
-            if getrlimit(limit_id, &mut rlp) != 0 {
+            if libc::getrlimit(limit_id, &mut rlp) != 0 {
                 result_stderr.push_str(&format!("error getting limit: {}", Error::last_os_error()));
                 return (result_stdout, result_stderr);
             }
 
             let to_print = if for_hard { rlp.rlim_max } else { rlp.rlim_cur };
 
-            let info = if to_print == RLIM_INFINITY {
+            let info = if to_print == libc::RLIM_INFINITY {
                 if single_print { "unlimited\n".to_string() } else { format!("{}\t\tunlimited\n", desc) }
             } else if single_print {
                 format!("{}\n", to_print)
@@ -46895,7 +36477,8 @@ pub mod run
         let len = args.len();
         let subcmd = if len > 1 { &args[1] } else { "" };
 
-        if len == 1 || (len == 2 && subcmd == "ls") {
+        if len == 1 || (len == 2 && subcmd == "ls")
+        {
             match get_all_venvs() {
                 Ok(venvs) => {
                     let info = venvs.join("\n");
@@ -46909,7 +36492,8 @@ pub mod run
             }
         }
 
-        if len == 3 && subcmd == "create" {
+        if len == 3 && subcmd == "create"
+        {
             let pybin = match env::var("VIRTUALENV_PYBIN") {
                 Ok(x) => x,
                 Err(_) => "python3".to_string(),
@@ -46922,19 +36506,26 @@ pub mod run
             return cr_list[0].clone();
         }
 
-        if len == 3 && subcmd == "enter" {
+        if len == 3 && subcmd == "enter"
+        {
             let _err = enter_env(sh, args[2].as_str());
             if !_err.is_empty() {
                 print_stderr_with_capture(&_err, &mut cr, cl, cmd, capture);
             }
             cr
-        } else if len == 2 && subcmd == "exit" {
+        }
+        
+        else if len == 2 && subcmd == "exit"
+        {
             let _err = exit_env(sh);
             if !_err.is_empty() {
                 print_stderr_with_capture(&_err, &mut cr, cl, cmd, capture);
             }
             cr
-        } else {
+        }
+        
+        else
+        {
             let info = "cicada: vox: invalid option";
             print_stderr_with_capture(info, &mut cr, cl, cmd, capture);
             cr
@@ -46961,16 +36552,16 @@ pub mod run
                     if let Some(fd) = _fd_err {
                         _fd_candidate = Some(fd);
                     } else {
-                        _fd_candidate = unsafe { Some( dup(2)) };
+                        _fd_candidate = unsafe { Some(libc::dup(2)) };
                     }
                 }
                 else
                 {
                     let append = item.1 == ">>";
-                    if let Ok(fd) = ::os::fd::create_raw_from_file(&item.2, append) { _fd_candidate = Some(fd); }
+                    if let Ok(fd) = tools::create_raw_fd_from_file(&item.2, append) { _fd_candidate = Some(fd); }
                 }
                 
-                if let Some(fd) = fd_out { unsafe { close(fd); } }
+                if let Some(fd) = fd_out { unsafe { libc::close(fd); } }
                 fd_out = _fd_candidate;
             }
 
@@ -46980,16 +36571,16 @@ pub mod run
 
                 if item.2 == "&1"
                 {
-                    if let Some(fd) = fd_out { _fd_candidate = unsafe { Some( dup(fd)) }; }
+                    if let Some(fd) = fd_out { _fd_candidate = unsafe { Some(libc::dup(fd)) }; }
                 }
                 
                 else
                 {
                     let append = item.1 == ">>";
-                    if let Ok(fd) = ::os::fd::create_raw_from_file(&item.2, append) { _fd_candidate = Some(fd); }
+                    if let Ok(fd) = tools::create_raw_fd_from_file(&item.2, append) { _fd_candidate = Some(fd); }
                 }
 
-                if let Some(fd) = fd_err { unsafe { close(fd); } }
+                if let Some(fd) = fd_err { unsafe { libc::close(fd); } }
 
                 fd_err = _fd_candidate;
             }
@@ -47004,12 +36595,12 @@ pub mod run
 
         let (_fd_out, _fd_err) = _get_std_fds(&cmd.redirects_to);
         
-        if let Some(fd) = _fd_err { unsafe { close(fd); } }
+        if let Some(fd) = _fd_err { unsafe { libc::close(fd); } }
 
         if let Some(fd) = _fd_out { fd }
         else
         {
-            let fd = unsafe { dup(1) };
+            let fd = unsafe { libc::dup(1) };
             if fd == -1
             {
                 let eno = errno();
@@ -47024,7 +36615,7 @@ pub mod run
         if cl.with_pipeline() { return 2; }
 
         let (_fd_out, _fd_err) = _get_std_fds(&cmd.redirects_to);
-        if let Some(fd) = _fd_out { unsafe { close(fd); } }
+        if let Some(fd) = _fd_out { unsafe { libc::close(fd); } }
 
         if let Some(fd) = _fd_err
         {
@@ -47033,7 +36624,7 @@ pub mod run
 
         else
         {
-            let fd = unsafe { dup(2) };
+            let fd = unsafe { libc::dup(2) };
             if fd == -1
             {
                 let eno = errno();
@@ -47129,156 +36720,6 @@ pub mod run
         else { print_stdout(info, cmd, cl); }
     }
 
-    /// Run a pipeline (e.g. `echo hi | wc -l`)
-    // pub fn run_pipeline
-    pub fn pipeline
-    (
-        sh: &mut shell::Shell,
-        cl: &CommandLine,
-        tty: bool,
-        capture: bool,
-        log_cmd: bool,
-    ) -> (bool, CommandResult)
-    {
-        let mut term_given = false;
-
-        if cl.background && capture
-        {
-            println_stderr!("cicada: cannot capture output of background cmd");
-            return (term_given, CommandResult::error());
-        }
-
-        if let Some(cr) = try_run_calculator(&cl.line, capture) { return (term_given, cr); }
-        
-        if let Some(cr) = try_run_func(sh, cl, capture, log_cmd) { return (term_given, cr); }
-
-        if log_cmd { log!("run: {}", cl.line); }
-
-        let length = cl.commands.len();
-        if length == 0
-        {
-            println!("cicada: invalid command: cmds with empty length");
-            return (false, CommandResult::error());
-        }
-
-        let mut pipes = Vec::new();
-        let mut errored_pipes = false;
-        
-        for _ in 0..length - 1
-        {
-            match pipe()
-            {
-                Ok(fds) => pipes.push(fds),
-                Err(e) =>
-                {
-                    errored_pipes = true;
-                    println_stderr!("cicada: pipeline1: {}", e);
-                    break;
-                }
-            }
-        }
-
-        if errored_pipes
-        {
-            for fds in pipes
-            {
-                close(fds.0);
-                close(fds.1);
-            }
-
-            return (false, CommandResult::error());
-        }
-
-        if pipes.len() + 1 != length
-        {
-            println!("cicada: invalid command: unmatched pipes count");
-            return (false, CommandResult::error());
-        }
-
-        let mut pgid: i32 = 0;
-        let mut fg_pids: Vec<i32> = Vec::new();
-        let isatty = if tty { unsafe {  isatty(1) == 1 } } else { false };
-
-        let options = CommandOptions
-        {
-            isatty,
-            capture_output: capture,
-            background: cl.background,
-            envs: cl.envs.clone(),
-        };
-
-        let mut fds_capture_stdout = None;
-        let mut fds_capture_stderr = None;
-        
-        if capture
-        {
-            match pipe()
-            {
-                Ok(fds) => fds_capture_stdout = Some(fds),
-                Err(e) =>
-                {
-                    println_stderr!("cicada: pipeline2: {}", e);
-                    return (false, CommandResult::error());
-                }
-            }
-
-            match pipe()
-            {
-                Ok(fds) => fds_capture_stderr = Some(fds),
-                Err(e) =>
-                {
-                    if let Some(fds) = fds_capture_stdout
-                    {
-                        close(fds.0);
-                        close(fds.1);
-                    }
-
-                    println_stderr!("cicada: pipeline3: {}", e);
-                    return (false, CommandResult::error());
-                }
-            }
-        }
-
-        let mut cmd_result = CommandResult::new();
-
-        for i in 0..length
-        {
-            let child_id: i32 = run_single_program
-            (
-                sh,
-                cl,
-                i,
-                &options,
-                &mut pgid,
-                &mut term_given,
-                &mut cmd_result,
-                &pipes,
-                &fds_capture_stdout,
-                &fds_capture_stderr,
-            );
-
-            if child_id > 0 && !cl.background { fg_pids.push(child_id); }
-        }
-
-        if cl.is_single_and_builtin() { return (false, cmd_result); }
-
-        if cl.background
-        {
-            if let Some(job) = sh.get_job_by_gid(pgid) { println_stderr!("[{}] {}", job.id, job.gid); }
-        }
-
-        if !fg_pids.is_empty()
-        {
-            let _cr = jobc::wait_fg_job(sh, pgid, &fg_pids);
-            
-            if !capture
-            {
-                cmd_result = _cr;
-            }
-        }
-
-        (term_given, cmd_result)
-    }
 }
 
 pub mod shell
@@ -47287,9 +36728,9 @@ pub mod shell
     {
         collections::{ HashMap, HashSet },
         error::no::{ errno },
+        fs::{ File },
         io::{ Write },
-        libc::{ * },
-        os::fd::{ RawFd },
+        nix::libc::{ * },
         regex::{ * },
         types::{ * },
         *,
@@ -47627,7 +37068,7 @@ pub mod shell
         sigaddset(&mut mask, SIGTTOU);
         sigaddset(&mut mask, SIGCHLD);
 
-        let rcode = pthread_sigmask( SIG_BLOCK, &mask, &mut old_mask );
+        let rcode = pthread_sigmask( nix::libc::SIG_BLOCK, &mask, &mut old_mask );
         
         if rcode != 0
         {
@@ -47761,7 +37202,7 @@ pub mod shell
                 result.push_str(format!("{}{}", head, sh.previous_status).as_str());
             } else if key == "$" {
                 unsafe {
-                    let val = getpid();
+                    let val = libc::getpid();
                     result.push_str(format!("{}{}", head, val).as_str());
                 }
             } else if let Ok(val) = env::var(&key) {
@@ -48144,10 +37585,10 @@ pub mod shell
                 let cmd_result = match CommandLine::from_line(&cmd, sh) {
                     Ok(c) => {
                         log!("run subcmd dollar: {:?}", &cmd);
-                        let (term_given, cr) = run::pipeline(sh, &c, true, true, false);
+                        let (term_given, cr) = core::run_pipeline(sh, &c, true, true, false);
                         if term_given {
                             unsafe {
-                                let gid = getpgid(0);
+                                let gid = libc::getpgid(0);
                                 give_terminal_to(gid);
                             }
                         }
@@ -48195,7 +37636,7 @@ pub mod shell
                 log!("run subcmd dot1: {:?}", token);
                 let cr = match CommandLine::from_line(token, sh) {
                     Ok(c) => {
-                        let (term_given, _cr) = run::pipeline(sh, &c, true, true, false);
+                        let (term_given, _cr) = core::run_pipeline(sh, &c, true, true, false);
                         if term_given {
                             unsafe {
                                 let gid = libc::getpgid(0);
@@ -48243,7 +37684,7 @@ pub mod shell
 
                         let cr = match CommandLine::from_line(&cap[2], sh) {
                             Ok(c) => {
-                                let (term_given, _cr) = run::pipeline(sh, &c, true, true, false);
+                                let (term_given, _cr) = core::run_pipeline(sh, &c, true, true, false);
                                 if term_given {
                                     unsafe {
                                         let gid = libc::getpgid(0);
@@ -48486,146 +37927,137 @@ pub mod shell
         log_cmd: bool,
     ) -> (bool, CommandResult)
     {
-        unsafe
-        {
-            let mut term_given = false;
-            
-            if cl.background && capture
-            {
-                println_stderr!("cicada: cannot capture output of background cmd");
-                return (term_given, CommandResult::error());
-            }
-
-            if let Some(cr) = try_run_calculator(&cl.line, capture) { return (term_given, cr); }
-            
-            if let Some(cr) = try_run_func(sh, cl, capture, log_cmd) { return (term_given, cr); }
-
-            if log_cmd { log!("run: {}", cl.line); }
-
-            let length = cl.commands.len();
-
-            if length == 0
-            {
-                println!("cicada: invalid command: cmds with empty length");
-                return (false, CommandResult::error());
-            }
-
-            let mut pipes = Vec::new();
-            let mut errored_pipes = false;
-
-            for _ in 0..length - 1
-            {
-                match pipe()
-                {
-                    Ok(fds) => pipes.push(fds),
-                    Err(e) =>
-                    {
-                        errored_pipes = true;
-                        println_stderr!("cicada: pipeline1: {}", e);
-                        break;
-                    }
-                }
-            }
-
-            if errored_pipes
-            {
-                for fds in pipes
-                {
-                    close(fds.0);
-                    close(fds.1);
-                }
-
-                return (false, CommandResult::error());
-            }
-
-            if pipes.len() + 1 != length 
-            {
-                println!("cicada: invalid command: unmatched pipes count");
-                return (false, CommandResult::error());
-            }
-
-            let mut pgid: i32 = 0;
-            let mut fg_pids: Vec<i32> = Vec::new();
-
-            let isatty = if tty { unsafe { libc::isatty(1) == 1 } } else { false };
-            
-            let options = CommandOptions
-            {
-                isatty,
-                capture_output: capture,
-                background: cl.background,
-                envs: cl.envs.clone(),
-            };
-
-            let mut fds_capture_stdout = None;
-            let mut fds_capture_stderr = None;
-            
-            if capture
-            {
-                match pipe()
-                {
-                    Ok(fds) => fds_capture_stdout = Some(fds),
-                    Err(e) =>
-                    {
-                        println_stderr!("cicada: pipeline2: {}", e);
-                        return (false, CommandResult::error());
-                    }
-                }
-
-                match pipe()
-                {
-                    Ok(fds) => fds_capture_stderr = Some(fds),
-                    Err(e) =>
-                    {
-                        if let Some(fds) = fds_capture_stdout
-                        {
-                            close(fds.1);
-                            close(fds.0);
-                        }
-
-                        println_stderr!("cicada: pipeline3: {}", e);
-                        return (false, CommandResult::error());
-                    }
-                }
-            }
-
-            let mut cmd_result = CommandResult::new();
-            
-            for i in 0..length
-            {
-                let child_id: i32 = run_single_program
-                (
-                    sh,
-                    cl,
-                    i,
-                    &options,
-                    &mut pgid,
-                    &mut term_given,
-                    &mut cmd_result,
-                    &pipes,
-                    &fds_capture_stdout,
-                    &fds_capture_stderr,
-                );
-
-                if child_id > 0 && !cl.background { fg_pids.push(child_id); }
-            }
-
-            if cl.is_single_and_builtin() { return (false, cmd_result); }
-
-            if cl.background
-            {
-                if let Some(job) = sh.get_job_by_gid(pgid) { println_stderr!("[{}] {}", job.id, job.gid); }
-            }
-
-            if !fg_pids.is_empty()
-            {
-                let _cr = jobc::wait_fg_job(sh, pgid, &fg_pids);
-                
-                if !capture { cmd_result = _cr; }
-            }
-
-            ( term_given, cmd_result )
+        let mut term_given = false;
+        if cl.background && capture {
+            println_stderr!("cicada: cannot capture output of background cmd");
+            return (term_given, CommandResult::error());
         }
+
+        if let Some(cr) = try_run_calculator(&cl.line, capture) {
+            return (term_given, cr);
+        }
+        
+        if let Some(cr) = try_run_func(sh, cl, capture, log_cmd) {
+            return (term_given, cr);
+        }
+
+        if log_cmd {
+            log!("run: {}", cl.line);
+        }
+
+        let length = cl.commands.len();
+        if length == 0 {
+            println!("cicada: invalid command: cmds with empty length");
+            return (false, CommandResult::error());
+        }
+
+        let mut pipes = Vec::new();
+        let mut errored_pipes = false;
+        for _ in 0..length - 1 {
+            match pipe() {
+                Ok(fds) => pipes.push(fds),
+                Err(e) => {
+                    errored_pipes = true;
+                    println_stderr!("cicada: pipeline1: {}", e);
+                    break;
+                }
+            }
+        }
+
+        if errored_pipes
+        {
+            for fds in pipes
+            {
+                process::close(fds.0);
+                process::close(fds.1);
+            }
+
+            return (false, CommandResult::error());
+        }
+
+        if pipes.len() + 1 != length {
+            println!("cicada: invalid command: unmatched pipes count");
+            return (false, CommandResult::error());
+        }
+
+        let mut pgid: i32 = 0;
+        let mut fg_pids: Vec<i32> = Vec::new();
+
+        let isatty = if tty {
+            unsafe { libc::isatty(1) == 1 }
+        } else {
+            false
+        };
+        let options = CommandOptions {
+            isatty,
+            capture_output: capture,
+            background: cl.background,
+            envs: cl.envs.clone(),
+        };
+
+        let mut fds_capture_stdout = None;
+        let mut fds_capture_stderr = None;
+        if capture {
+            match pipe() {
+                Ok(fds) => fds_capture_stdout = Some(fds),
+                Err(e) => {
+                    println_stderr!("cicada: pipeline2: {}", e);
+                    return (false, CommandResult::error());
+                }
+            }
+            match pipe() {
+                Ok(fds) => fds_capture_stderr = Some(fds),
+                Err(e) => {
+                    if let Some(fds) = fds_capture_stdout {
+                        process::close(fds.0);
+                        process::close(fds.1);
+                    }
+                    println_stderr!("cicada: pipeline3: {}", e);
+                    return (false, CommandResult::error());
+                }
+            }
+        }
+
+        let mut cmd_result = CommandResult::new();
+        for i in 0..length {
+            let child_id: i32 = run_single_program(
+                sh,
+                cl,
+                i,
+                &options,
+                &mut pgid,
+                &mut term_given,
+                &mut cmd_result,
+                &pipes,
+                &fds_capture_stdout,
+                &fds_capture_stderr,
+            );
+
+            if child_id > 0 && !cl.background {
+                fg_pids.push(child_id);
+            }
+        }
+
+        if cl.is_single_and_builtin() {
+            return (false, cmd_result);
+        }
+
+        if cl.background {
+            if let Some(job) = sh.get_job_by_gid(pgid) {
+                println_stderr!("[{}] {}", job.id, job.gid);
+            }
+        }
+
+        if !fg_pids.is_empty() {
+            let _cr = jobc::wait_fg_job(sh, pgid, &fg_pids);
+            // for capture commands, e.g. `echo foo` in `echo "hello $(echo foo)"
+            // the cmd_result is already built in loop calling run_single_program()
+            // above.
+            if !capture {
+                cmd_result = _cr;
+            }
+        }
+        (term_given, cmd_result)
     }
     /// Run a single command. | `sort -k2` part of `ps ax | sort -k2 | head`
     pub fn run_single_program
@@ -48642,358 +38074,336 @@ pub mod shell
         fds_capture_stderr: &Option<(RawFd, RawFd)>,
     ) -> i32
     {
-        unsafe
+        let capture = options.capture_output;
+        if cl.is_single_and_builtin() {
+            if let Some(cr) = try_run_builtin(sh, cl, idx_cmd, capture) {
+                *cmd_result = cr;
+                return unsafe { libc::getpid() };
+            }
+
+            println_stderr!("cicada: error when run singler builtin");
+            log!("error when run singler builtin: {:?}", cl);
+            return 1;
+        }
+
+        let pipes_count = pipes.len();
+        let mut fds_stdin = None;
+        let cmd = cl.commands.get(idx_cmd).unwrap();
+
+        if cmd.has_here_string() {
+            match pipe() {
+                Ok(fds) => fds_stdin = Some(fds),
+                Err(e) => {
+                    println_stderr!("cicada: pipeline4: {}", e);
+                    return 1;
+                }
+            }
+        }
+
+        match process::fork()
         {
-            let capture = options.capture_output;
-
-            if cl.is_single_and_builtin()
+            Ok(ForkResult::Child) =>
             {
-                if let Some(cr) = try_run_builtin(sh, cl, idx_cmd, capture)
-                {
-                    *cmd_result = cr;
-                    return getpid();
-                }
-
-                println_stderr!("cicada: error when run singler builtin");
-                log!("error when run singler builtin: {:?}", cl);
-                return 1;
-            }
-
-            let pipes_count = pipes.len();
-            let mut fds_stdin = None;
-            let cmd = cl.commands.get(idx_cmd).unwrap();
-
-            if cmd.has_here_string()
-            {
-                match pipe() {
-                    Ok(fds) => fds_stdin = Some(fds),
-                    Err(e) => {
-                        println_stderr!("cicada: pipeline4: {}", e);
-                        return 1;
-                    }
-                }
-            }
-
-            match ::process::fork()
-            {
-                Ok(ForkResult::Child) =>
+                unsafe
                 {
                     libc::signal(libc::SIGTSTP, libc::SIG_DFL);
                     libc::signal(libc::SIGQUIT, libc::SIG_DFL);
-                    
-                    if idx_cmd > 0
-                    {
-                        for i in 0..idx_cmd - 1
-                        {
-                            let fds = pipes[i];
-                            close(fds.0);
-                            close(fds.1);
-                        }
-                    }
-                    
-                    for i in idx_cmd + 1..pipes_count {
+                }
+                
+                if idx_cmd > 0 {
+                    for i in 0..idx_cmd - 1 {
                         let fds = pipes[i];
-                        close(fds.0);
-                        close(fds.1);
+                        process::close(fds.0);
+                        process::close(fds.1);
                     }
-                    
-                    if idx_cmd < pipes_count {
-                        if let Some(fds) = fds_capture_stdout {
-                            close(fds.0);
-                            close(fds.1);
-                        }
-                        if let Some(fds) = fds_capture_stderr {
-                            close(fds.0);
-                            close(fds.1);
-                        }
+                }
+                
+                for i in idx_cmd + 1..pipes_count {
+                    let fds = pipes[i];
+                    process::close(fds.0);
+                    process::close(fds.1);
+                }
+                
+                if idx_cmd < pipes_count {
+                    if let Some(fds) = fds_capture_stdout {
+                        process::close(fds.0);
+                        process::close(fds.1);
                     }
+                    if let Some(fds) = fds_capture_stderr {
+                        process::close(fds.0);
+                        process::close(fds.1);
+                    }
+                }
 
-                    if idx_cmd == 0 {
-                        unsafe
-                        {
-                            let pid = libc::getpid();
-                            libc::setpgid(0, pid);
-                        }
-                    } else {
-                        unsafe {
-                            libc::setpgid(0, *pgid);
-                        }
+                if idx_cmd == 0 {
+                    unsafe {
+                        let pid = libc::getpid();
+                        libc::setpgid(0, pid);
                     }
-                    
-                    if idx_cmd > 0 {
-                        let fds_prev = pipes[idx_cmd - 1];
-                        dup2(fds_prev.0, 0);
-                        close(fds_prev.0);
-                        close(fds_prev.1);
+                } else {
+                    unsafe {
+                        libc::setpgid(0, *pgid);
                     }
-                    if idx_cmd < pipes_count {
-                        let fds = pipes[idx_cmd];
-                        dup2(fds.1, 1);
-                        close(fds.1);
-                        close(fds.0);
-                    }
+                }
+                
+                if idx_cmd > 0 {
+                    let fds_prev = pipes[idx_cmd - 1];
+                    process::dup2(fds_prev.0, 0);
+                    process::close(fds_prev.0);
+                    process::close(fds_prev.1);
+                }
+                if idx_cmd < pipes_count {
+                    let fds = pipes[idx_cmd];
+                    process::dup2(fds.1, 1);
+                    process::close(fds.1);
+                    process::close(fds.0);
+                }
 
-                    if cmd.has_redirect_from() {
-                        if let Some(redirect_from) = &cmd.redirect_from {
-                            let fd = tools::get_fd_from_file(&redirect_from.clone().1);
+                if cmd.has_redirect_from() {
+                    if let Some(redirect_from) = &cmd.redirect_from {
+                        let fd = tools::get_fd_from_file(&redirect_from.clone().1);
+                        if fd == -1 {
+                            process::exit(1);
+                        }
+
+                        process::dup2(fd, 0);
+                        process::close(fd);
+                    }
+                }
+
+                if cmd.has_here_string() {
+                    if let Some(fds) = fds_stdin {
+                        process::close(fds.1);
+                        process::dup2(fds.0, 0);
+                        process::close(fds.0);
+                    }
+                }
+
+                let mut stdout_redirected = false;
+                let mut stderr_redirected = false;
+                for item in &cmd.redirects_to {
+                    let from_ = &item.0;
+                    let op_ = &item.1;
+                    let to_ = &item.2;
+                    if to_ == "&1" && from_ == "2" {
+                        if idx_cmd < pipes_count {
+                            process::dup2(1, 2);
+                        } else if !options.capture_output {
+                            let fd = process::dup(1);
                             if fd == -1 {
+                                println_stderr!("cicada: dup error");
                                 process::exit(1);
                             }
-
-                            dup2(fd, 0);
-                            close(fd);
-                        }
-                    }
-
-                    if cmd.has_here_string() {
-                        if let Some(fds) = fds_stdin {
-                            close(fds.1);
-                            dup2(fds.0, 0);
-                            close(fds.0);
-                        }
-                    }
-
-                    let mut stdout_redirected = false;
-                    let mut stderr_redirected = false;
-                    for item in &cmd.redirects_to {
-                        let from_ = &item.0;
-                        let op_ = &item.1;
-                        let to_ = &item.2;
-                        if to_ == "&1" && from_ == "2" {
-                            if idx_cmd < pipes_count {
-                                dup2(1, 2);
-                            } else if !options.capture_output {
-                                let fd = dup(1);
-                                if fd == -1 {
-                                    println_stderr!("cicada: dup error");
-                                    process::exit(1);
-                                }
-                                dup2(fd, 2);
-                            } else {
-                                
-                            }
-                        } else if to_ == "&2" && from_ == "1" {
-                            if idx_cmd < pipes_count || !options.capture_output {
-                                let fd = dup(2);
-                                if fd == -1 {
-                                    println_stderr!("cicada: dup error");
-                                    process::exit(1);
-                                }
-                                dup2(fd, 1);
-                            } else {
-                                
-                            }
-                        }
-                        
-                        else
-                        {
-                            let append = op_ == ">>";
+                            process::dup2(fd, 2);
+                        } else {
                             
-                            match ::os::fd::create_raw_from_file(to_, append)
-                            {
-                                Ok( fd ) =>
-                                {
-                                    if fd == -1
-                                    {
-                                        println_stderr!("cicada: fork: fd error");
-                                        process::exit(1);
-                                    }
-
-                                    if from_ == "1"
-                                    {
-                                        dup2(fd, 1);
-                                        stdout_redirected = true;
-                                    }
-                                    
-                                    else
-                                    {
-                                        dup2(fd, 2);
-                                        stderr_redirected = true;
-                                    }
-                                }
-
-                                Err(e) =>
-                                {
-                                    println_stderr!("cicada: fork: {}", e);
+                        }
+                    } else if to_ == "&2" && from_ == "1" {
+                        if idx_cmd < pipes_count || !options.capture_output {
+                            let fd = process::dup(2);
+                            if fd == -1 {
+                                println_stderr!("cicada: dup error");
+                                process::exit(1);
+                            }
+                            process::dup2(fd, 1);
+                        } else {
+                            
+                        }
+                    } else {
+                        let append = op_ == ">>";
+                        match tools::create_raw_fd_from_file(to_, append) {
+                            Ok(fd) => {
+                                if fd == -1 {
+                                    println_stderr!("cicada: fork: fd error");
                                     process::exit(1);
                                 }
-                            }
-                        }
-                    }
-                    
-                    if idx_cmd == pipes_count && options.capture_output {
-                        if !stdout_redirected {
-                            if let Some(fds) = fds_capture_stdout {
-                                close(fds.0);
-                                dup2(fds.1, 1);
-                                close(fds.1);
-                            }
-                        }
-                        if !stderr_redirected {
-                            if let Some(fds) = fds_capture_stderr {
-                                close(fds.0);
-                                dup2(fds.1, 2);
-                                close(fds.1);
-                            }
-                        }
-                    }
 
-                    if cmd.is_builtin() {
-                        if let Some(status) = try_run_builtin_in_subprocess(sh, cl, idx_cmd, capture) {
-                            process::exit(status);
+                                if from_ == "1" {
+                                    process::dup2(fd, 1);
+                                    stdout_redirected = true;
+                                } else {
+                                    process::dup2(fd, 2);
+                                    stderr_redirected = true;
+                                }
+                            }
+                            Err(e) => {
+                                println_stderr!("cicada: fork: {}", e);
+                                process::exit(1);
+                            }
                         }
                     }
-                    
-                    let mut c_envs: Vec<_> = env::vars()
-                    .map(|(k, v)|
-                    {
+                }
+                
+                if idx_cmd == pipes_count && options.capture_output {
+                    if !stdout_redirected {
+                        if let Some(fds) = fds_capture_stdout {
+                            process::close(fds.0);
+                            process::dup2(fds.1, 1);
+                            process::close(fds.1);
+                        }
+                    }
+                    if !stderr_redirected {
+                        if let Some(fds) = fds_capture_stderr {
+                            process::close(fds.0);
+                            process::dup2(fds.1, 2);
+                            process::close(fds.1);
+                        }
+                    }
+                }
+
+                if cmd.is_builtin() {
+                    if let Some(status) = try_run_builtin_in_subprocess(sh, cl, idx_cmd, capture) {
+                        process::exit(status);
+                    }
+                }
+                
+                let mut c_envs: Vec<_> = env::vars()
+                    .map(|(k, v)| {
                         CString::new(format!("{}={}", k, v).as_str()).expect("CString error")
                     })
                     .collect();
-
-                    for (key, value) in cl.envs.iter() {
-                        c_envs.push(
-                            CString::new(format!("{}={}", key, value).as_str()).expect("CString error"),
-                        );
-                    }
-
-                    let program = &cmd.tokens[0].1;
-                    
-                    let path = if program.contains('/') { program.clone() }
-                    else { ::path::find_file( program, true ) };
-
-                    if path.is_empty()
-                    {
-                        println_stderr!("cicada: {}: command not found", program);
-                        process::exit(127);
-                    }
-
-                    let c_program = CString::new(path.as_str()).expect("CString::new failed");
-                    let c_args: Vec<_> = cmd
-                        .tokens
-                        .iter()
-                        .map(|x| CString::new(x.1.as_str()).expect("CString error"))
-                        .collect();
-
-                    let c_args: Vec<&CStr> = c_args.iter().map(|x| x.as_c_str()).collect();
-                    let c_envs: Vec<&CStr> = c_envs.iter().map(|x| x.as_c_str()).collect();
-                    match execve(&c_program, &c_args, &c_envs) {
-                        Ok(_) => {}
-                        Err(e) => match e {
-                            nix::Error::ENOEXEC => {
-                                println_stderr!("cicada: {}: exec format error (ENOEXEC)", program);
-                            }
-                            nix::Error::ENOENT => {
-                                println_stderr!("cicada: {}: file does not exist", program);
-                            }
-                            nix::Error::EACCES => {
-                                println_stderr!("cicada: {}: Permission denied", program);
-                            }
-                            _ => {
-                                println_stderr!("cicada: {}: {:?}", program, e);
-                            }
-                        },
-                    }
-
-                    process::exit(1);
+                for (key, value) in cl.envs.iter() {
+                    c_envs.push(
+                        CString::new(format!("{}={}", key, value).as_str()).expect("CString error"),
+                    );
                 }
-                Ok(ForkResult::Parent { child, .. }) => {
-                    let pid: i32 = child.into();
-                    if idx_cmd == 0 {
-                        *pgid = pid;
-                        unsafe {
-                            if cfg!(target_os = "macos") {
-                                loop {
-                                    let _pgid = libc::getpgid(pid);
-                                    if _pgid == pid {
-                                        break;
-                                    }
+
+                let program = &cmd.tokens[0].1;
+                
+                let path = if program.contains('/'){ program.clone() } 
+                else { path::find_file_in_path(program, true) };
+
+                if path.is_empty()
+                {
+                    println_stderr!("cicada: {}: command not found", program);
+                    process::exit(127);
+                }
+
+                let c_program = CString::new(path.as_str()).expect("CString::new failed");
+                let c_args: Vec<_> = cmd
+                .tokens
+                .iter()
+                .map(|x| CString::new(x.1.as_str()).expect("CString error"))
+                .collect();
+
+                let c_args: Vec<&CStr> = c_args.iter().map(|x| x.as_c_str()).collect();
+                let c_envs: Vec<&CStr> = c_envs.iter().map(|x| x.as_c_str()).collect();
+                match execve(&c_program, &c_args, &c_envs) {
+                    Ok(_) => {}
+                    Err(e) => match e {
+                        nix::Error::ENOEXEC => {
+                            println_stderr!("cicada: {}: exec format error (ENOEXEC)", program);
+                        }
+                        nix::Error::ENOENT => {
+                            println_stderr!("cicada: {}: file does not exist", program);
+                        }
+                        nix::Error::EACCES => {
+                            println_stderr!("cicada: {}: Permission denied", program);
+                        }
+                        _ => {
+                            println_stderr!("cicada: {}: {:?}", program, e);
+                        }
+                    },
+                }
+
+                process::exit(1);
+            }
+            Ok(ForkResult::Parent { child, .. }) => {
+                let pid: i32 = child.into();
+                if idx_cmd == 0 {
+                    *pgid = pid;
+                    unsafe {
+                        if cfg!(target_os = "macos") {
+                            loop {
+                                let _pgid = libc::getpgid(pid);
+                                if _pgid == pid {
+                                    break;
                                 }
                             }
+                        }
 
-                            if sh.has_terminal
-                                && options.isatty
-                                && !cl.background
-                            {
-                                *term_given = shell::give_terminal_to(pid);
-                            }
+                        if sh.has_terminal
+                            && options.isatty
+                            && !cl.background
+                        {
+                            *term_given = shell::give_terminal_to(pid);
                         }
                     }
+                }
 
-                    if options.isatty && !options.capture_output {
-                        let _cmd = parsers::line::tokens_to_line(&cmd.tokens);
-                        sh.insert_job(*pgid, pid, &_cmd, "Running", cl.background);
-                    }
+                if options.isatty && !options.capture_output {
+                    let _cmd = parsers::line::tokens_to_line(&cmd.tokens);
+                    sh.insert_job(*pgid, pid, &_cmd, "Running", cl.background);
+                }
 
-                    if let Some(redirect_from) = &cmd.redirect_from {
-                        if redirect_from.0 == "<<<" {
-                            if let Some(fds) = fds_stdin {
-                                unsafe {
-                                    close(fds.0);
+                if let Some(redirect_from) = &cmd.redirect_from {
+                    if redirect_from.0 == "<<<" {
+                        if let Some(fds) = fds_stdin {
+                            unsafe {
+                                process::close(fds.0);
 
-                                    let mut f = File::from_raw_fd(fds.1);
-                                    match f.write_all(redirect_from.1.clone().as_bytes()) {
-                                        Ok(_) => {}
-                                        Err(e) => println_stderr!("cicada: write_all: {}", e),
-                                    }
-                                    match f.write_all(b"\n") {
-                                        Ok(_) => {}
-                                        Err(e) => println_stderr!("cicada: write_all: {}", e),
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    if idx_cmd < pipes_count {
-                        let fds = pipes[idx_cmd];
-                        close(fds.1);
-                    }
-                    if idx_cmd > 0 {
-                        let fds = pipes[idx_cmd - 1];
-                        close(fds.0);
-                    }
-
-                    if idx_cmd == pipes_count && options.capture_output {
-                        let mut s_out = String::new();
-                        let mut s_err = String::new();
-
-                        unsafe {
-                            if let Some(fds) = fds_capture_stdout {
-                                close(fds.1);
-
-                                let mut f = File::from_raw_fd(fds.0);
-                                match f.read_to_string(&mut s_out) {
+                                let mut f = File::from_raw_fd(fds.1);
+                                match f.write_all(redirect_from.1.clone().as_bytes()) {
                                     Ok(_) => {}
-                                    Err(e) => println_stderr!("cicada: readstr: {}", e),
+                                    Err(e) => println_stderr!("cicada: write_all: {}", e),
                                 }
-                            }
-                            if let Some(fds) = fds_capture_stderr {
-                                close(fds.1);
-                                let mut f_err = File::from_raw_fd(fds.0);
-                                match f_err.read_to_string(&mut s_err) {
+                                match f.write_all(b"\n") {
                                     Ok(_) => {}
-                                    Err(e) => println_stderr!("cicada: readstr: {}", e),
+                                    Err(e) => println_stderr!("cicada: write_all: {}", e),
                                 }
                             }
                         }
+                    }
+                }
+                
+                if idx_cmd < pipes_count {
+                    let fds = pipes[idx_cmd];
+                    process::close(fds.1);
+                }
+                if idx_cmd > 0 {
+                    let fds = pipes[idx_cmd - 1];
+                    process::close(fds.0);
+                }
 
-                        *cmd_result = CommandResult {
-                            gid: *pgid,
-                            status: 0,
-                            stdout: s_out.clone(),
-                            stderr: s_err.clone(),
-                        };
+                if idx_cmd == pipes_count && options.capture_output {
+                    let mut s_out = String::new();
+                    let mut s_err = String::new();
+
+                    unsafe {
+                        if let Some(fds) = fds_capture_stdout {
+                            process::close(fds.1);
+
+                            let mut f = File::from_raw_fd(fds.0);
+                            match f.read_to_string(&mut s_out) {
+                                Ok(_) => {}
+                                Err(e) => println_stderr!("cicada: readstr: {}", e),
+                            }
+                        }
+                        if let Some(fds) = fds_capture_stderr {
+                            process::close(fds.1);
+                            let mut f_err = File::from_raw_fd(fds.0);
+                            match f_err.read_to_string(&mut s_err) {
+                                Ok(_) => {}
+                                Err(e) => println_stderr!("cicada: readstr: {}", e),
+                            }
+                        }
                     }
 
-                    pid
+                    *cmd_result = CommandResult {
+                        gid: *pgid,
+                        status: 0,
+                        stdout: s_out.clone(),
+                        stderr: s_err.clone(),
+                    };
                 }
 
-                Err(_) => {
-                    println_stderr!("Fork failed");
-                    *cmd_result = CommandResult::error();
-                    0
-                }
+                pid
+            }
+
+            Err(_) => {
+                println_stderr!("Fork failed");
+                *cmd_result = CommandResult::error();
+                0
             }
         }
     }
@@ -49006,74 +38416,65 @@ pub mod shell
         log_cmd: bool,
     ) -> Option<CommandResult> 
     {
-        if cl.is_empty() { return None; }
+        if cl.is_empty() {
+            return None;
+        }
 
         let command = &cl.commands[0];
-        
-        if let Some(func_body) = sh.get_func(&command.tokens[0].1)
-        {
+        if let Some(func_body) = sh.get_func(&command.tokens[0].1) {
             let mut args = vec!["cicada".to_string()];
-
-            for token in &command.tokens
-            {
+            for token in &command.tokens {
                 args.push(token.1.to_string());
             }
-            
-            if log_cmd { log!("run func: {:?}", &args); }
-
+            if log_cmd {
+                log!("run func: {:?}", &args);
+            }
             let cr_list = scripting::run_lines(sh, &func_body, &args, capture);
             let mut stdout = String::new();
             let mut stderr = String::new();
-
-            for cr in cr_list
-            {
+            for cr in cr_list {
                 stdout.push_str(cr.stdout.trim());
                 stdout.push(' ');
                 stderr.push_str(cr.stderr.trim());
                 stderr.push(' ');
             }
-
             let mut cr = CommandResult::new();
             cr.stdout = stdout;
             cr.stderr = stderr;
             return Some(cr);
         }
-
         None
     }
 
     pub fn try_run_calculator(line: &str, capture: bool) -> Option<CommandResult> 
     {
-        if is::arithmetic(line)
-        {
-            match calculator(line) 
-            {
-                Ok(result) =>
-                {
+        if tools::is_arithmetic(line) {
+            match run_calculator(line) {
+                Ok(result) => {
                     let mut cr = CommandResult::new();
-
-                    if capture { cr.stdout = result.clone(); } else { println!("{}", result); }
-
+                    if capture {
+                        cr.stdout = result.clone();
+                    } else {
+                        println!("{}", result);
+                    }
                     return Some(cr);
                 }
-
-                Err(e) =>
-                {
+                Err(e) => {
                     let mut cr = CommandResult::from_status(0, 1);
-
-                    if capture { cr.stderr = e.to_string(); } else { println_stderr!("cicada: calculator: {}", e); }
-
+                    if capture {
+                        cr.stderr = e.to_string();
+                    } else {
+                        println_stderr!("cicada: calculator: {}", e);
+                    }
                     return Some(cr);
                 }
             }
         }
-
         None
     }
 
     pub fn calculator(line: &str) -> Result<String, &str>
     {
-        /*
         let parse_result = calculator::calculate(line);
         match parse_result {
             Ok(mut calc) => {
@@ -49088,8 +38489,7 @@ pub mod shell
             Err(_) => {
                 Err("syntax error")
             }
-        } */
-        Ok( String::new() )
+        }
     }
 }
 
@@ -49122,7 +38522,7 @@ pub mod str
         fn tokenize( &self ) -> String;
     }
 
-    impl Tokenizes for str
+    impl Tokenizes for &str
     {
         fn tokenize( &self ) -> String
         {
@@ -49857,6 +39257,105 @@ pub mod str
 
         Some(ch)
     }
+    /// Similar to `std::ffi::CString`, but avoids heap allocating if the string is small enough.
+    #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+    pub struct SmallCString(SmallVec<[u8; 16]>);
+
+    impl SmallCString
+    {
+        #[inline] pub fn new(s: &str) -> Result<Self, ::ffi::NulError>
+        {
+            if s.as_bytes().contains(&0_u8) {
+                return Err(Self::fabricate_nul_error(s));
+            }
+            let mut buf = SmallVec::with_capacity(s.len() + 1);
+            buf.extend_from_slice(s.as_bytes());
+            buf.push(0);
+            let res = Self(buf);
+            res.debug_checks();
+            Ok(res)
+        }
+
+        #[inline] pub fn as_str(&self) -> &str
+        {
+            unsafe
+            {
+                self.debug_checks();
+                from_utf8_unchecked(self.as_bytes_without_nul())
+            }
+        }
+        /// Get the bytes not including the NUL terminator.
+        #[inline] pub fn as_bytes_without_nul(&self) -> &[u8] 
+        {
+            self.debug_checks();
+            &self.0[..self.len()]
+        }
+        /// Get the bytes behind this str *including* the NUL terminator.
+        #[inline] pub fn as_bytes_with_nul(&self) -> &[u8]
+        {
+            self.debug_checks();
+            &self.0
+        }
+
+        #[inline] fn debug_checks(&self)
+        {
+            debug_assert_ne!(self.0.len(), 0);
+            debug_assert_eq!(self.0[self.0.len() - 1], 0);
+            let strbytes = &self.0[..(self.0.len() - 1)];
+            debug_assert!(!strbytes.contains(&0));
+            debug_assert!( from_utf8(strbytes).is_ok() );
+        }
+
+        #[inline] fn debug_checks(&self) {}
+
+        #[inline] pub fn len(&self) -> usize
+        {
+            debug_assert_ne!(self.0.len(), 0);
+            self.0.len() - 1
+        }
+
+        #[inline] pub fn is_empty(&self) -> bool
+        {
+            self.len() == 0
+        }
+
+        #[inline] pub fn as_cstr(&self) -> &::ffi::CStr
+        {
+            let bytes = self.as_bytes_with_nul();
+            debug_assert!( ::ffi::CStr::from_bytes_with_nul(bytes).is_ok() );
+            unsafe { ::ffi::CStr::from_bytes_with_nul_unchecked(bytes) }
+        }
+
+        #[cold] fn fabricate_nul_error(b: &str) -> ::ffi::NulError
+        {
+            ::ffi::CString::new(b).unwrap_err()
+        }
+    }
+
+    impl Default for SmallCString
+    {
+        #[inline] fn default() -> Self { Self(smallvec![0]) }
+    }
+
+    impl ::fmt::Debug for SmallCString
+    {
+        fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result
+        {
+            f.debug_tuple("SmallCString").field(&self.as_str()).finish()
+        }
+    }
+
+    impl ::ops::Deref for SmallCString
+    {
+        type Target = CStr;
+        #[inline] fn deref(&self) -> &CStr { self.as_cstr() }
+    }
+
+    impl ::borrow::Borrow<str> for SmallCString
+    {
+        #[inline] fn borrow(&self) -> &str { self.as_str() }
+    }
+
 }
 
 pub mod string
@@ -62695,4 +52194,4 @@ fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 50405
+// 52197
