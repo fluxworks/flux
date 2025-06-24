@@ -1442,7 +1442,6 @@ extern crate unicode_width;
 
         ($fmt:expr, $($arg:tt)*) =>
         (
-            use ::io::Write;
             match writeln!( &mut ::io::stderr(), $fmt, $($arg)*)
             {
                 Ok(_) => {}
@@ -2331,8 +2330,11 @@ pub mod database
             hash_map::{Iter, Keys, Values},
             HashMap,
         },
+        ffi::{ CStr },
         io::{ Write as _ },
         path::{ Path },
+        sync::{ Arc, Mutex },
+        str::{ SmallCString },
         *,
     };
     /// Indent step in .over files.
@@ -6170,6 +6172,33 @@ pub mod database
             }
         }
     }
+    /// Allows interrupting a long-running computation.
+    pub struct InterruptHandle
+    {
+        db_lock: Arc<Mutex<*mut Database>>,
+    }
+
+    unsafe impl Send for InterruptHandle {}
+    unsafe impl Sync for InterruptHandle {}
+
+    impl InterruptHandle
+    {
+        pub const fn new() -> Self
+        {
+            Self
+            {
+                db_lock: Arc::new( ptr::null_mut )
+            }
+        }
+        /// Interrupt the query currently executing on another thread.
+        pub fn interrupt(&self)
+        {
+            /*
+            let db_handle = self.db_lock.lock().unwrap();
+            if !db_handle.is_null() { unsafe { ffi::sqlite3_interrupt(*db_handle) } } */
+        }
+    }
+
     #[repr(C)] #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
     pub enum OpenFlags
     {
@@ -6369,7 +6398,7 @@ pub mod database
         /// Get access to a handle that can be used to interrupt long-running queries from another thread.
         #[inline] pub fn get_interrupt_handle(&self) -> InterruptHandle 
         {
-            InterruptHandle()
+            InterruptHandle::new()
         }
 
         #[inline] pub fn decode_result(&self, code: c_int) -> OverResult<()>
@@ -7071,18 +7100,23 @@ pub mod history
     {
         let hfile = get_file();
         let history_table = get_table();
-        if !Path::new(&hfile).exists() {
-            init_db(&hfile, &history_table);
+        
+        if !Path::new(&hfile).exists()
+        {
+            database::initialize(&hfile, &history_table);
         }
 
-        let conn = match Connection::open(&hfile) {
+        let conn = match Connection::open(&hfile) 
+        {
             Ok(x) => x,
             Err(e) => {
                 println_stderr!("cicada: history: conn error: {}", e);
                 return;
             }
         };
-        let sql = format!(
+        
+        let sql = format!
+        (
             "INSERT INTO \
             {} (inp, rtn, tsb, tse, sessionid, info) \
             VALUES('{}', {}, {}, {}, '{}', 'dir:{}|');",
@@ -7094,7 +7128,9 @@ pub mod history
             sh.session_id,
             sh.current_dir,
         );
-        match conn.execute(&sql, []) {
+        
+        match conn.execute(&sql, [])
+        {
             Ok(_) => {}
             Err(e) => println_stderr!("cicada: history: save error: {}", e),
         }
@@ -10714,10 +10750,8 @@ pub mod mode
     mode!(boolean XTermTitle => "XT");
     mode!(boolean BrightAttribute => "AX");
     mode!(boolean XTermMouse => "XM");
-
     // Extended capabilities from tmux.
     mode!(boolean TrueColor => "Tc");
-
     mode!(string SetClipboard => "Ms";
         selection: String,
         content:   Vec<u8>);
@@ -10726,7 +10760,6 @@ pub mod mode
         kind: u8);
 
     mode!(string ResetCursorStyle => "Se");
-
     // True color extended capabilities from vim.
     mode!(string SetTrueColorForeground => "8f";
         r: u8,
@@ -15238,9 +15271,8 @@ pub mod num
                     *,
                 };
                 
-                #[inline] fn adc(carry: u8, a: u64, b: u64, out: &mut u64) -> u8 {
-                    // Safety: There are absolutely no safety concerns with calling `_addcarry_u64`.
-                    // It's just unsafe for API consistency with other intrinsics.
+                #[inline] fn adc(carry: u8, a: u64, b: u64, out: &mut u64) -> u8 
+                {
                     unsafe { arch::_addcarry_u64(carry, a, b, out) }
                 }
                 
@@ -23634,7 +23666,6 @@ pub mod num
             /// Numbers which have upper and lower bounds
             pub trait Bounded 
             {
-                // FIXME (#5527): These should be associated constants
                 /// Returns the smallest finite number this type can represent
                 fn min_value() -> Self;
                 /// Returns the largest finite number this type can represent
@@ -25346,7 +25377,6 @@ pub mod num
                 };
             }
 
-            // prim_int_impl!(type, signed, unsigned);
             prim_int_impl!(u8, i8, u8);
             prim_int_impl!(u16, i16, u16);
             prim_int_impl!(u32, i32, u32);
@@ -27502,7 +27532,6 @@ pub mod parsers
         ///    ],
         ///    is_complete: true
         /// }
-        // #[allow(clippy::cyclomatic_complexity)]
         // pub fn parse_line(line: &str) -> LineInfo
         pub fn parse(line: &str) -> LineInfo
         {
@@ -35471,6 +35500,8 @@ pub mod run
 {
     use ::
     {
+        path::{ Path },
+        shell::{ Shell },
         types::{ * },
         *,
     };
@@ -35585,10 +35616,9 @@ pub mod run
         }
 
         let gid: i32;
-
         {
             let mut result = sh.get_job_by_id(job_id);
-            // fall back to find job by using prcess group id
+            
             if result.is_none() {
                 result = sh.get_job_by_gid(job_id);
             }
@@ -35885,10 +35915,9 @@ pub mod run
 
         let gid: i32;
         let pid_list: Vec<i32>;
-
         {
             let mut result = sh.get_job_by_id(job_id);
-            // fall back to find job by using prcess group id
+
             if result.is_none() {
                 result = sh.get_job_by_gid(job_id);
             }
@@ -35933,14 +35962,18 @@ pub mod run
     pub fn history(sh: &mut Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
     {
         let mut cr = CommandResult::new();
-        let hfile = history::get_history_file();
+        let hfile = history::get_file();
         let path = Path::new(hfile.as_str());
-        if !path.exists() {
+        
+        if !path.exists()
+        {
             let info = "no history file";
             print_stderr_with_capture(info, &mut cr, cl, cmd, capture);
             return cr;
         }
-        let conn = match Conn::open(&hfile) {
+
+        let conn = match Connection::open(&hfile)
+        {
             Ok(x) => x,
             Err(e) => {
                 let info = format!("history: sqlite error: {:?}", e);
@@ -35954,41 +35987,55 @@ pub mod run
 
         let show_usage = args.len() > 1 && (args[1] == "-h" || args[1] == "--help");
         let opt = OptMain::from_iter_safe(args);
-        match opt {
-            Ok(opt) => {
-                match opt.cmd {
-                    Some(SubCommand::Delete {rowid: rowids}) => {
+        
+        match opt
+        {
+            Ok(opt) =>
+            {
+                match opt.cmd
+                {
+                    Some(SubCommand::Delete {rowid: rowids}) =>
+                    {
                         let mut _count = 0;
-                        for rowid in rowids {
-                            let _deleted = delete_history_item(&conn, rowid);
-                            if _deleted {
-                                _count += 1;
-                            }
+
+                        for rowid in rowids
+                        
+                        {
+                            let _deleted = history::delete(&conn, rowid);
+                            if _deleted { _count += 1; }
                         }
-                        if _count > 0 {
+
+                        if _count > 0
+                        {
                             let info = format!("deleted {} items", _count);
                             print_stdout_with_capture(&info, &mut cr, cl, cmd, capture);
                         }
                         cr
                     }
-                    Some(SubCommand::Add {timestamp: ts, input}) => {
+                    
+                    Some(SubCommand::Add {timestamp: ts, input}) => 
+                    {
                         let ts = ts.unwrap_or(0 as f64);
-                        add_history(sh, ts, &input);
+                        history::insert(sh, ts, &input);
                         cr
                     }
+
                     None => {
-                        let (str_out, str_err) = list_current_history(sh, &conn, &opt);
+                        let (str_out, str_err) = list(sh, &conn, &opt);
                         if !str_out.is_empty() {
                             print_stdout_with_capture(&str_out, &mut cr, cl, cmd, capture);
                         }
                         if !str_err.is_empty() {
                             print_stderr_with_capture(&str_err, &mut cr, cl, cmd, capture);
                         }
+
                         cr
                     }
                 }
             }
-            Err(e) => {
+
+            Err(e) =>
+            {
                 let info = format!("{}", e);
                 if show_usage {
                     print_stdout_with_capture(&info, &mut cr, cl, cmd, capture);
@@ -36008,8 +36055,7 @@ pub mod run
         if sh.jobs.is_empty() {
             return cr;
         }
-
-        // update status of jobs if any
+        
         jobc::try_wait_bg_jobs(sh, false, false);
 
         let mut lines = Vec::new();
@@ -36050,8 +36096,10 @@ pub mod run
 
     pub fn _find_invalid_identifier(name_list: &Vec<String>) -> Option<String>
     {
-        for id_ in name_list {
-            if !re_contains(id_, r"^[a-zA-Z_][a-zA-Z0-9_]*$") {
+        for id_ in name_list
+        {
+            if !contains(id_, r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+            {
                 return Some(id_.to_string());
             }
         }
@@ -36226,8 +36274,7 @@ pub mod run
                 return format!("cicada: ulimit: error getting limit: {}", Error::last_os_error());
             }
         }
-
-        // to support armv7-linux-gnueabihf & 32-bit musl systems
+        
         if for_hard {
             #[cfg(all(target_pointer_width = "32", target_env = "gnu"))]
             { rlp.rlim_max = value as u32; }
@@ -36502,7 +36549,7 @@ pub mod run
             let venv_name = args[2].to_string();
             let line = format!("{} -m venv \"{}/{}\"", pybin, dir_venv, venv_name);
             print_stderr_with_capture(&line, &mut cr, cl, cmd, capture);
-            let cr_list = execute::run_command_line(sh, &line, false, false);
+            let cr_list = now::run_command_line(sh, &line, false, false);
             return cr_list[0].clone();
         }
 
@@ -36719,7 +36766,482 @@ pub mod run
         if capture { cr.stdout = info.to_string(); }
         else { print_stdout(info, cmd, cl); }
     }
+}
 
+pub mod scripts
+{
+    use ::
+    {
+        *,
+    };
+    /*
+    use std::fs::File;
+    use std::io::{Read, Write, ErrorKind};
+    use std::path::Path;
+
+    use pest::iterators::Pair;
+    use regex::{Regex, RegexBuilder};
+
+    use crate::execute;
+    use crate::libs;
+    use crate::parsers;
+    use crate::shell;
+    use crate::types;
+    use crate::types::CommandResult;
+    */
+    // pub fn run_script(sh: &mut shell::Shell, args: &Vec<String>) -> i32
+    pub fn run(sh: &mut shell::Shell, args: &Vec<String>) -> i32
+    {
+        let src_file = &args[1];
+        let full_src_file: String;
+        if src_file.contains('/') {
+            full_src_file = src_file.clone();
+        } else {
+            let full_path = libs::path::find_file_in_path(src_file, false);
+            if full_path.is_empty() {
+                // not in PATH and not in current work directory
+                if !Path::new(src_file).exists() {
+                    println_stderr!("cicada: {}: no such file", src_file);
+                    return 1;
+                }
+                full_src_file = format!("./{}", src_file);
+            } else {
+                full_src_file = full_path.clone();
+            }
+        }
+
+        if !Path::new(&full_src_file).exists() {
+            println_stderr!("cicada: {}: no such file", src_file);
+            return 1;
+        }
+        if Path::new(&full_src_file).is_dir() {
+            println_stderr!("cicada: {}: is a directory", src_file);
+            return 1;
+        }
+
+        let mut file;
+        match File::open(&full_src_file) {
+            Ok(x) => file = x,
+            Err(e) => {
+                println_stderr!("cicada: {}: failed to open file - {:?}", &full_src_file, e.kind());
+                return 1;
+            }
+        }
+        let mut text = String::new();
+        match file.read_to_string(&mut text) {
+            Ok(_) => {}
+            Err(e) => {
+                match e.kind() {
+                    ErrorKind::InvalidData => {
+                        println_stderr!("cicada: {}: not a valid script file", &full_src_file);
+                    }
+                    _ => {
+                        println_stderr!("cicada: {}: error: {:?}", &full_src_file, e);
+                    }
+                }
+                return 1;
+            }
+        }
+
+        if text.contains("\\\n") {
+            let re = RegexBuilder::new(r#"([ \t]*\\\n[ \t]+)|([ \t]+\\\n[ \t]*)"#)
+                .multi_line(true).build().unwrap();
+            text = re.replace_all(&text, " ").to_string();
+
+            let re = RegexBuilder::new(r#"\\\n"#).multi_line(true).build().unwrap();
+            text = re.replace_all(&text, "").to_string();
+        }
+
+        let re_func_head = Regex::new(r"^function ([a-zA-Z_-][a-zA-Z0-9_-]*) *(?:\(\))? *\{$").unwrap();
+        let re_func_tail = Regex::new(r"^\}$").unwrap();
+        let mut text_new = String::new();
+        let mut enter_func = false;
+        let mut func_name = String::new();
+        let mut func_body = String::new();
+        for line in text.clone().lines() {
+            if re_func_head.is_match(line.trim()) {
+                enter_func = true;
+                let cap = re_func_head.captures(line.trim()).unwrap();
+                func_name = cap[1].to_string();
+                func_body = String::new();
+                continue;
+            }
+            if re_func_tail.is_match(line.trim()) {
+                sh.set_func(&func_name, &func_body);
+                enter_func = false;
+                continue;
+            }
+            if enter_func {
+                func_body.push_str(line);
+                func_body.push('\n');
+            } else {
+                text_new.push_str(line);
+                text_new.push('\n');
+            }
+        }
+
+        let mut status = 0;
+        let cr_list = run_lines(sh, &text_new, args, false);
+        if let Some(last) = cr_list.last() {
+            status = last.status;
+        }
+
+        // FIXME: We probably need to fix the issue in the `set` builtin,
+        // which currently set `exit_on_error` at the shell session level,
+        // we should instead set in a script-level.
+        // Here is a work-around ugly fix.
+        sh.exit_on_error = false;
+
+        status
+    }
+
+    pub fn run_lines
+    (
+        sh: &mut shell::Shell,
+        lines: &str,
+        args: &Vec<String>,
+        capture: bool
+    ) -> Vec<CommandResult>
+    {
+        let mut cr_list = Vec::new();
+        match parsers::locust::parse_lines(lines) {
+            Ok(pairs_exp) => {
+                for pair in pairs_exp {
+                    let (mut _cr_list, _cont, _brk) = run_exp(sh, pair, args, false, capture);
+                    cr_list.append(&mut _cr_list);
+                }
+            }
+            Err(e) => {
+                println_stderr!("syntax error: {:?}", e);
+                return cr_list;
+            }
+        }
+        cr_list
+    }
+
+    fn expand_args(line: &str, args: &[String]) -> String {
+        let linfo = parsers::parser_line::parse_line(line);
+        let mut tokens = linfo.tokens;
+        expand_args_in_tokens(&mut tokens, args);
+        parsers::parser_line::tokens_to_line(&tokens)
+    }
+
+    fn expand_line_to_toknes(line: &str,
+                            args: &[String],
+                            sh: &mut shell::Shell) -> types::Tokens {
+        let linfo = parsers::parser_line::parse_line(line);
+        let mut tokens = linfo.tokens;
+        expand_args_in_tokens(&mut tokens, args);
+        shell::do_expansion(sh, &mut tokens);
+        tokens
+    }
+
+    fn is_args_in_token(token: &str) -> bool {
+        libs::re::re_contains(token, r"\$\{?[0-9@]+\}?")
+    }
+
+    fn expand_args_for_single_token(token: &str, args: &[String]) -> String {
+        let re = Regex::new(r"^(.*?)\$\{?([0-9]+|@)\}?(.*)$").unwrap();
+        if !re.is_match(token) {
+            return token.to_string();
+        }
+
+        let mut result = String::new();
+        let mut _token = token.to_string();
+        let mut _head = String::new();
+        let mut _output = String::new();
+        let mut _tail = String::new();
+        loop {
+            if !re.is_match(&_token) {
+                if !_token.is_empty() {
+                    result.push_str(&_token);
+                }
+                break;
+            }
+            for cap in re.captures_iter(&_token) {
+                _head = cap[1].to_string();
+                _tail = cap[3].to_string();
+                let _key = cap[2].to_string();
+                if _key == "@" {
+                    result.push_str(format!("{}{}", _head, args[1..].join(" ")).as_str());
+                } else if let Ok(arg_idx) = _key.parse::<usize>() {
+                    if arg_idx < args.len() {
+                        result.push_str(format!("{}{}", _head, args[arg_idx]).as_str());
+                    } else {
+                        result.push_str(&_head);
+                    }
+                } else {
+                    result.push_str(&_head);
+                }
+            }
+
+            if _tail.is_empty() {
+                break;
+            }
+            _token = _tail.clone();
+        }
+        result
+    }
+
+    fn expand_args_in_tokens(tokens: &mut types::Tokens, args: &[String]) {
+        let mut idx: usize = 0;
+        let mut buff = Vec::new();
+
+        for (sep, token) in tokens.iter() {
+            if sep == "`" || sep == "'" || !is_args_in_token(token) {
+                idx += 1;
+                continue;
+            }
+
+            let _token = expand_args_for_single_token(token, args);
+            buff.push((idx, _token));
+            idx += 1;
+        }
+
+        for (i, text) in buff.iter().rev() {
+            tokens[*i].1 = text.to_string();
+        }
+    }
+
+    fn run_exp_test_br(sh: &mut shell::Shell,
+                    pair_br: Pair<parsers::locust::Rule>,
+                    args: &Vec<String>,
+                    in_loop: bool,
+                    capture: bool) -> (Vec<CommandResult>, bool, bool, bool) {
+        let mut cr_list = Vec::new();
+        let pairs = pair_br.into_inner();
+        let mut test_pass = false;
+        for pair in pairs {
+            let rule = pair.as_rule();
+            if rule == parsers::locust::Rule::IF_HEAD ||
+                    rule == parsers::locust::Rule::IF_ELSEIF_HEAD ||
+                    rule == parsers::locust::Rule::WHILE_HEAD {
+                let pairs_test: Vec<Pair<parsers::locust::Rule>> =
+                    pair.into_inner().collect();
+                let pair_test = &pairs_test[0];
+                let line = pair_test.as_str().trim();
+                let line_new = expand_args(line, &args[1..]);
+                let mut _cr_list = now::run_command_line(sh, &line_new, true, capture);
+                if let Some(last) = _cr_list.last() {
+                    if last.status == 0 {
+                        test_pass = true;
+                    }
+                }
+                continue;
+            }
+
+            if rule == parsers::locust::Rule::KW_ELSE {
+                test_pass = true;
+                continue;
+            }
+
+            if rule == parsers::locust::Rule::EXP_BODY {
+                if !test_pass {
+                    return (cr_list, false, false, false);
+                }
+                let (mut _cr_list, _cont, _brk) = run_exp(sh, pair, args, in_loop, capture);
+                cr_list.append(&mut _cr_list);
+                // branch executed successfully
+                return (cr_list, true, _cont, _brk);
+            }
+
+            unreachable!();
+        }
+        (cr_list, test_pass, false, false)
+    }
+
+    fn run_exp_if(sh: &mut shell::Shell,
+                pair_if: Pair<parsers::locust::Rule>,
+                args: &Vec<String>,
+                in_loop: bool,
+                capture: bool) -> (Vec<CommandResult>, bool, bool) {
+        let mut cr_list = Vec::new();
+        let pairs = pair_if.into_inner();
+        let mut met_continue = false;
+        let mut met_break = false;
+        for pair in pairs {
+            let (mut _cr_list, passed, _cont, _brk) = run_exp_test_br(sh, pair, args, in_loop, capture);
+            met_continue = _cont;
+            met_break = _brk;
+            cr_list.append(&mut _cr_list);
+            // break at first successful branch
+            if passed {
+                break;
+            }
+        }
+        (cr_list, met_continue, met_break)
+    }
+
+    fn get_for_result_from_init(sh: &mut shell::Shell,
+                                pair_init: Pair<parsers::locust::Rule>,
+                                args: &[String]) -> Vec<String> {
+        let mut result: Vec<String> = Vec::new();
+        let pairs = pair_init.into_inner();
+        for pair in pairs {
+            let rule = pair.as_rule();
+            if rule == parsers::locust::Rule::TEST {
+                let line = pair.as_str().trim();
+                let tokens = expand_line_to_toknes(line, &args[1..], sh);
+                for (sep, token) in tokens {
+                    if sep.is_empty() {
+                        for x in token.split_whitespace() {
+                            result.push(x.to_string());
+                        }
+                    } else {
+                        result.push(token.clone());
+                    }
+                }
+            }
+        }
+        result
+    }
+
+    fn get_for_result_list(sh: &mut shell::Shell,
+                        pair_head: Pair<parsers::locust::Rule>,
+                        args: &[String]) -> Vec<String> {
+        let pairs = pair_head.into_inner();
+        for pair in pairs {
+            let rule = pair.as_rule();
+            if rule == parsers::locust::Rule::FOR_INIT {
+                return get_for_result_from_init(sh, pair, args);
+            }
+        }
+        Vec::new()
+    }
+
+    fn get_for_var_name(pair_head: Pair<parsers::locust::Rule>) -> String {
+        let pairs = pair_head.into_inner();
+        for pair in pairs {
+            let rule = pair.as_rule();
+            if rule == parsers::locust::Rule::FOR_INIT {
+                let pairs_init = pair.into_inner();
+                for pair_init in pairs_init {
+                    let rule_init = pair_init.as_rule();
+                    if rule_init == parsers::locust::Rule::FOR_VAR {
+                        let line = pair_init.as_str().trim();
+                        return line.to_string();
+                    }
+                }
+            }
+        }
+        String::new()
+    }
+
+    fn run_exp_for(sh: &mut shell::Shell,
+                pair_for: Pair<parsers::locust::Rule>,
+                args: &Vec<String>,
+                capture: bool) -> Vec<CommandResult> {
+        let mut cr_list = Vec::new();
+        let pairs = pair_for.into_inner();
+        let mut result_list: Vec<String> = Vec::new();
+        let mut var_name: String = String::new();
+        for pair in pairs {
+            let rule = pair.as_rule();
+            if rule == parsers::locust::Rule::FOR_HEAD {
+                var_name = get_for_var_name(pair.clone());
+                result_list = get_for_result_list(sh, pair.clone(), args);
+                continue;
+            }
+            if rule == parsers::locust::Rule::EXP_BODY {
+                for value in &result_list {
+                    sh.set_env(&var_name, value);
+                    let (mut _cr_list, _cont, _brk) = run_exp(
+                        sh, pair.clone(), args, true, capture);
+                    cr_list.append(&mut _cr_list);
+                    if _brk {
+                        break;
+                    }
+                }
+            }
+        }
+        cr_list
+    }
+
+    fn run_exp_while(sh: &mut shell::Shell,
+                    pair_while: Pair<parsers::locust::Rule>,
+                    args: &Vec<String>,
+                    capture: bool) -> Vec<CommandResult> {
+        let mut cr_list = Vec::new();
+        loop {
+            let (mut _cr_list, passed, _cont, _brk) = run_exp_test_br(sh, pair_while.clone(), args, true, capture);
+            cr_list.append(&mut _cr_list);
+            if !passed || _brk {
+                break;
+            }
+        }
+        cr_list
+    }
+
+    fn run_exp
+    (
+        sh: &mut shell::Shell,
+        pair_in: Pair<parsers::locust::Rule>,
+        args: &Vec<String>,
+        in_loop: bool,
+        capture: bool
+    ) -> (Vec<CommandResult>, bool, bool)
+    {
+        let mut cr_list = Vec::new();
+        let pairs = pair_in.into_inner();
+        
+        for pair in pairs
+        {
+            let line = pair.as_str().trim();
+            if line.is_empty() { continue; }
+
+            let rule = pair.as_rule();
+            
+            if rule == parsers::locust::Rule::CMD
+            {
+                if line == "continue"
+                {
+                    if in_loop { return (cr_list, true, false); }
+                    
+                    else
+                    {
+                        println_stderr!("cicada: continue: only meaningful in loops");
+                        continue;
+                    }
+                }
+                
+                if line == "break" {
+                    if in_loop {
+                        return (cr_list, false, true);
+                    } else {
+                        println_stderr!("cicada: break: only meaningful in loops");
+                        continue;
+                    }
+                }
+
+                let line_new = expand_args(line, &args[1..]);
+                let mut _cr_list = now::run_command_line(sh, &line_new, true, capture);
+                cr_list.append(&mut _cr_list);
+                if let Some(last) = cr_list.last() {
+                    let status = last.status;
+                    if status != 0 && sh.exit_on_error {
+                        return (cr_list, false, false);
+                    }
+                }
+            } else if rule == parsers::locust::Rule::EXP_IF {
+                let (mut _cr_list, _cont, _brk) = run_exp_if(sh, pair, args, in_loop, capture);
+                cr_list.append(&mut _cr_list);
+                if _cont {
+                    return (cr_list, true, false);
+                }
+                if _brk {
+                    return (cr_list, false, true);
+                }
+            } else if rule == parsers::locust::Rule::EXP_FOR {
+                let mut _cr_list = run_exp_for(sh, pair, args, capture);
+                cr_list.append(&mut _cr_list);
+            } else if rule == parsers::locust::Rule::EXP_WHILE {
+                let mut _cr_list = run_exp_while(sh, pair, args, capture);
+                cr_list.append(&mut _cr_list);
+            }
+        }
+
+        (cr_list, false, false)
+    }
 }
 
 pub mod shell
@@ -38050,9 +38572,7 @@ pub mod shell
 
         if !fg_pids.is_empty() {
             let _cr = jobc::wait_fg_job(sh, pgid, &fg_pids);
-            // for capture commands, e.g. `echo foo` in `echo "hello $(echo foo)"
-            // the cmd_result is already built in loop calling run_single_program()
-            // above.
+            
             if !capture {
                 cmd_result = _cr;
             }
@@ -38448,7 +38968,7 @@ pub mod shell
 
     pub fn try_run_calculator(line: &str, capture: bool) -> Option<CommandResult> 
     {
-        if tools::is_arithmetic(line) {
+        /* if tools::is_arithmetic(line) {
             match run_calculator(line) {
                 Ok(result) => {
                     let mut cr = CommandResult::new();
@@ -38469,13 +38989,14 @@ pub mod shell
                     return Some(cr);
                 }
             }
-        }
+        } */
         None
     }
 
     pub fn calculator(line: &str) -> Result<String, &str>
     {
-        let parse_result = calculator::calculate(line);
+        Ok( String::new() )
+        /* let parse_result = calculator::calculate(line);
         match parse_result {
             Ok(mut calc) => {
                 let expr = calc.next().unwrap().into_inner();
@@ -38489,7 +39010,7 @@ pub mod shell
             Err(_) => {
                 Err("syntax error")
             }
-        }
+        } */
     }
 }
 
@@ -38511,7 +39032,7 @@ pub mod str
         iter::{ FromIterator },
         io::{ self, Read, Write },
         string::{ String },
-        vec::{ Array, SmallVec },
+        vec::{ Array, SmallVec, smallvec },
         *,
     };
     /* smallstr v0.3.0 */
@@ -52123,6 +52644,17 @@ pub mod types
         }
         dst
     }
+
+    #[inline] pub fn encode_hyphenated<'b>(src: &[u8; 16], buffer: &'b mut [u8], upper: bool) -> &'b mut str
+    {
+        unsafe
+        {
+            let buf = &mut buffer[..Hyphenated::LENGTH];
+            let dst = buf.as_mut_ptr();
+            ptr::write(dst.cast(), format_hyphenated(src, upper));
+            str::from_utf8_unchecked_mut(buf)
+        }
+    }
 }
 
 pub mod vec
@@ -52194,4 +52726,4 @@ fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 52197
+// 52729
