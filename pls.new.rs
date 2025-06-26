@@ -6941,6 +6941,864 @@ pub mod fs
     pub use std::fs::{ * };
 }
 
+pub mod glob
+{
+    //! Support for matching file paths against Unix shell style patterns.
+    use ::
+    {
+        cmp::{ self, Ordering },
+        error::{ Error },
+        fs::{ self, DirEntry },
+        ops::{ Deref },
+        path::{ self, Component, Path, PathBuf },
+        str::{ FromStr },
+        *
+    };
+    
+
+    use self::CharSpecifier::{CharRange, SingleChar};
+    use self::MatchResult::{EntirePatternDoesntMatch, Match, SubPatternDoesntMatch};
+    use self::PatternToken::AnyExcept;
+    use self::PatternToken::{AnyChar, AnyRecursiveSequence, AnySequence, AnyWithin, Char};
+    /// An iterator that yields `Path`s from the filesystem that match a particular pattern.
+    #[derive(Debug)]
+    pub struct Paths
+    {
+        dir_patterns: Vec<Pattern>,
+        require_dir: bool,
+        options: MatchOptions,
+        todo: Vec<Result<(PathWrapper, usize), GlobError>>,
+        scope: Option<PathWrapper>,
+    }
+    /// Return an iterator that produces all the `Path`s that match the given pattern using default match options,
+    /// which may be absolute or relative to the current working directory.
+    pub fn glob(pattern: &str) -> Result<Paths, PatternError>
+    {
+        glob_with(pattern, MatchOptions::new())
+    }
+    /// Return an iterator with all the `Path`s that match the given pattern using the specified match options, 
+    /// which may be absolute or relative to the current working directory.
+    pub fn glob_with(pattern: &str, options: MatchOptions) -> Result<Paths, PatternError>
+    {
+        #[cfg(windows)]
+        fn check_windows_verbatim(p: &Path) -> bool
+        {
+            match p.components().next() {
+                Some(Component::Prefix(ref p)) => {
+                    // Allow VerbatimDisk paths. std canonicalize() generates them, and they work fine
+                    p.kind().is_verbatim()
+                        && if let std::path::Prefix::VerbatimDisk(_) = p.kind() {
+                            false
+                        } else {
+                            true
+                        }
+                }
+                _ => false,
+            }
+        }
+        #[cfg(not(windows))]
+        fn check_windows_verbatim(_: &Path) -> bool {
+            false
+        }
+
+        #[cfg(windows)]
+        fn to_scope(p: &Path) -> PathBuf {
+            // FIXME handle volume relative paths here
+            p.to_path_buf()
+        }
+        #[cfg(not(windows))]
+        fn to_scope(p: &Path) -> PathBuf {
+            p.to_path_buf()
+        }
+
+        // make sure that the pattern is valid first, else early return with error
+        let _ = Pattern::new(pattern)?;
+
+        let mut components = Path::new(pattern).components().peekable();
+        loop {
+            match components.peek() {
+                Some(&Component::Prefix(..)) | Some(&Component::RootDir) => {
+                    components.next();
+                }
+                _ => break,
+            }
+        }
+        let rest = components.map(|s| s.as_os_str()).collect::<PathBuf>();
+        let normalized_pattern = Path::new(pattern).iter().collect::<PathBuf>();
+        let root_len = normalized_pattern.to_str().unwrap().len() - rest.to_str().unwrap().len();
+        let root = if root_len > 0 {
+            Some(Path::new(&pattern[..root_len]))
+        } else {
+            None
+        };
+
+        if root_len > 0 && check_windows_verbatim(root.unwrap()) {
+            // FIXME: How do we want to handle verbatim paths? I'm inclined to
+            // return nothing, since we can't very well find all UNC shares with a
+            // 1-letter server name.
+            return Ok(Paths {
+                dir_patterns: Vec::new(),
+                require_dir: false,
+                options,
+                todo: Vec::new(),
+                scope: None,
+            });
+        }
+
+        let scope = root.map_or_else(|| PathBuf::from("."), to_scope);
+        let scope = PathWrapper::from_path(scope);
+
+        let mut dir_patterns = Vec::new();
+        let components =
+            pattern[cmp::min(root_len, pattern.len())..].split_terminator(path::is_separator);
+
+        for component in components {
+            dir_patterns.push(Pattern::new(component)?);
+        }
+
+        if root_len == pattern.len() {
+            dir_patterns.push(Pattern {
+                original: "".to_string(),
+                tokens: Vec::new(),
+                is_recursive: false,
+            });
+        }
+
+        let last_is_separator = pattern.chars().next_back().map(path::is_separator);
+        let require_dir = last_is_separator == Some(true);
+        let todo = Vec::new();
+
+        Ok(Paths {
+            dir_patterns,
+            require_dir,
+            options,
+            todo,
+            scope: Some(scope),
+        })
+    }
+    /// A glob iteration error.
+    #[derive(Debug)]
+    pub struct GlobError
+    {
+        path: PathBuf,
+        error: io::Error,
+    }
+
+    impl GlobError
+    {
+        /// The Path that the error corresponds to.
+        pub fn path(&self) -> &Path { &self.path }
+        /// The error in question.
+        pub fn error(&self) -> &io::Error { &self.error }
+        /// Consumes self, returning the _raw_ underlying `io::Error`
+        pub fn into_error(self) -> io::Error { self.error }
+    }
+
+    impl Error for GlobError
+    {
+        fn description(&self) -> &str { self.error.description() }
+        
+        fn cause(&self) -> Option<&Error> { Some(&self.error) }
+    }
+
+    impl fmt::Display for GlobError
+    {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+        {
+            write!
+            (
+                f,
+                "attempting to read `{}` resulted in an error: {}",
+                self.path.display(),
+                self.error
+            )
+        }
+    }
+
+    #[derive(Debug)]
+    struct PathWrapper
+    {
+        path: PathBuf,
+        is_directory: bool,
+    }
+
+    impl PathWrapper
+    {
+        fn from_dir_entry(path: PathBuf, e: DirEntry) -> Self
+        {
+            let is_directory = e
+            .file_type()
+            .ok()
+            .and_then(|file_type|
+            {
+                if file_type.is_symlink() { None } else { Some(file_type.is_dir()) }
+            })
+            .or_else(|| fs::metadata(&path).map(|m| m.is_dir()).ok())
+            .unwrap_or(false);
+
+            Self { path, is_directory }
+        }
+
+        fn from_path(path: PathBuf) -> Self
+        {
+            let is_directory = fs::metadata(&path).map(|m| m.is_dir()).unwrap_or(false);
+            Self { path, is_directory }
+        }
+
+        fn into_path(self) -> PathBuf { self.path }
+    }
+
+    impl Deref for PathWrapper
+    {
+        type Target = Path;
+        fn deref(&self) -> &Self::Target { self.path.deref() }
+    }
+
+    impl AsRef<Path> for PathWrapper
+    {
+        fn as_ref(&self) -> &Path { self.path.as_ref() }
+    }
+    /// An alias for a glob iteration result.
+    pub type GlobResult = Result<PathBuf, GlobError>;
+
+    impl Iterator for Paths
+    {
+        type Item = GlobResult;
+        fn next(&mut self) -> Option<GlobResult>
+        {
+            if let Some(scope) = self.scope.take()
+            {
+                if !self.dir_patterns.is_empty()
+                {
+                    assert!(self.dir_patterns.len() < std::usize::MAX);
+                    fill_todo(&mut self.todo, &self.dir_patterns, 0, &scope, self.options);
+                }
+            }
+
+            loop
+            {
+                if self.dir_patterns.is_empty() || self.todo.is_empty() { return None; }
+
+                let (path, mut idx) = match self.todo.pop().unwrap()
+                {
+                    Ok(pair) => pair,
+                    Err(e) => return Some(Err(e)),
+                };
+                
+                if idx == std::usize::MAX
+                {
+                    if self.require_dir && !path.is_directory { continue; }
+                    return Some(Ok(path.into_path()));
+                }
+
+                if self.dir_patterns[idx].is_recursive
+                {
+                    let mut next = idx;
+                    
+                    while (next + 1) < self.dir_patterns.len() && self.dir_patterns[next + 1].is_recursive
+                    { next += 1; }
+
+                    if path.is_directory
+                    {
+                        fill_todo
+                        (
+                            &mut self.todo,
+                            &self.dir_patterns,
+                            next,
+                            &path,
+                            self.options,
+                        );
+
+                        if next == self.dir_patterns.len() - 1 
+                        {
+                            return Some(Ok(path.into_path()));
+                        }
+                        
+                        else
+                        {
+                            idx = next + 1;
+                        }
+                    }
+                    
+                    else if next == self.dir_patterns.len() - 1 { continue; }
+                    else { idx = next + 1; }
+                }
+                
+                if self.dir_patterns[idx].matches_with
+                (
+                    {
+                        match path.file_name().and_then(|s| s.to_str())
+                        {
+                            None => continue,
+                            Some(x) => x,
+                        }
+                    },
+                    self.options,
+                )
+                {
+                    if idx == self.dir_patterns.len() - 1
+                    {
+                        if !self.require_dir || path.is_directory { return Some(Ok(path.into_path())); }
+                    }
+                    
+                    else
+                    {
+                        fill_todo
+                        (
+                            &mut self.todo,
+                            &self.dir_patterns,
+                            idx + 1,
+                            &path,
+                            self.options,
+                        );
+                    }
+                }
+            }
+        }
+    }
+    /// A pattern parsing error.
+    #[derive(Debug)]
+    #[allow(missing_copy_implementations)]
+    pub struct PatternError
+    {
+        /// The approximate character index of where the error occurred.
+        pub pos: usize,
+        /// A message describing the error.
+        pub msg: &'static str,
+    }
+
+    impl Error for PatternError
+    {
+        fn description(&self) -> &str { self.msg }
+    }
+
+    impl fmt::Display for PatternError
+    {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
+        {
+            write!
+            (
+                f,
+                "Pattern syntax error near position {}: {}",
+                self.pos, self.msg
+            )
+        }
+    }
+    /// A compiled Unix shell style pattern.
+    #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Debug)]
+    pub struct Pattern
+    {
+        original: String,
+        tokens: Vec<PatternToken>,
+        is_recursive: bool,
+    }
+    /// Show the original glob pattern.
+    impl fmt::Display for Pattern
+    {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { self.original.fmt(f) }
+    }
+
+    impl FromStr for Pattern
+    {
+        type Err = PatternError;
+        fn from_str(s: &str) -> Result<Self, PatternError> { Self::new(s) }
+    }
+
+    #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+    enum PatternToken
+    {
+        Char(char),
+        AnyChar,
+        AnySequence,
+        AnyRecursiveSequence,
+        AnyWithin(Vec<CharSpecifier>),
+        AnyExcept(Vec<CharSpecifier>),
+    }
+
+    #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+    enum CharSpecifier
+    {
+        SingleChar(char),
+        CharRange(char, char),
+    }
+
+    #[derive(Copy, Clone, PartialEq)]
+    enum MatchResult
+    {
+        Match,
+        SubPatternDoesntMatch,
+        EntirePatternDoesntMatch,
+    }
+
+    const ERROR_WILDCARDS: &str = "wildcards are either regular `*` or recursive `**`";
+    const ERROR_RECURSIVE_WILDCARDS: &str = "recursive wildcards must form a single path component";
+    const ERROR_INVALID_RANGE: &str = "invalid range pattern";
+
+    impl Pattern
+    {
+        /// This function compiles Unix shell style patterns.
+        pub fn new(pattern: &str) -> Result<Self, PatternError>
+        {
+            let chars = pattern.chars().collect::<Vec<_>>();
+            let mut tokens = Vec::new();
+            let mut is_recursive = false;
+            let mut i = 0;
+
+            while i < chars.len()
+            {
+                match chars[i]
+                {
+                    '?' =>
+                    {
+                        tokens.push(AnyChar);
+                        i += 1;
+                    }
+                    
+                    '*' =>
+                    {
+                        let old = i;
+
+                        while i < chars.len() && chars[i] == '*' { i += 1; }
+
+                        let count = i - old;
+
+                        match count.cmp(&2)
+                        {
+                            Ordering::Greater =>
+                            {
+                                return Err(PatternError
+                                {
+                                    pos: old + 2,
+                                    msg: ERROR_WILDCARDS,
+                                })
+                            }
+
+                            Ordering::Equal =>
+                            {
+                                let is_valid = if i == 2 || path::is_separator(chars[i - count - 1])
+                                {
+                                    if i < chars.len() && path::is_separator(chars[i])
+                                    {
+                                        i += 1;
+                                        true
+                                    }
+                                    
+                                    else if i == chars.len()
+                                    {
+                                        true
+                                    } 
+                                    
+                                    else
+                                    {
+                                        return Err(PatternError
+                                        {
+                                            pos: i,
+                                            msg: ERROR_RECURSIVE_WILDCARDS,
+                                        });
+                                    }
+                                }
+                                
+                                else
+                                {
+                                    return Err(PatternError
+                                    {
+                                        pos: old - 1,
+                                        msg: ERROR_RECURSIVE_WILDCARDS,
+                                    });
+                                };
+
+                                if is_valid
+                                {
+                                    let tokens_len = tokens.len();
+
+                                    if !(tokens_len > 1 && tokens[tokens_len - 1] == AnyRecursiveSequence)
+                                    {
+                                        is_recursive = true;
+                                        tokens.push(AnyRecursiveSequence);
+                                    }
+                                }
+                            }
+
+                            Ordering::Less => tokens.push(AnySequence),
+                        }
+                    }
+                    '[' => {
+                        if i + 4 <= chars.len() && chars[i + 1] == '!' {
+                            match chars[i + 3..].iter().position(|x| *x == ']') {
+                                None => (),
+                                Some(j) => {
+                                    let chars = &chars[i + 2..i + 3 + j];
+                                    let cs = parse_char_specifiers(chars);
+                                    tokens.push(AnyExcept(cs));
+                                    i += j + 4;
+                                    continue;
+                                }
+                            }
+                        } else if i + 3 <= chars.len() && chars[i + 1] != '!' {
+                            match chars[i + 2..].iter().position(|x| *x == ']') {
+                                None => (),
+                                Some(j) => {
+                                    let cs = parse_char_specifiers(&chars[i + 1..i + 2 + j]);
+                                    tokens.push(AnyWithin(cs));
+                                    i += j + 3;
+                                    continue;
+                                }
+                            }
+                        }
+
+                        // if we get here then this is not a valid range pattern
+                        return Err(PatternError {
+                            pos: i,
+                            msg: ERROR_INVALID_RANGE,
+                        });
+                    }
+                    c => {
+                        tokens.push(Char(c));
+                        i += 1;
+                    }
+                }
+            }
+
+            Ok(Self
+            {
+                tokens,
+                original: pattern.to_string(),
+                is_recursive,
+            })
+        }
+        /// Escape metacharacters within the given string by surrounding them in brackets.
+        pub fn escape(s: &str) -> String
+        {
+            let mut escaped = String::new();
+            for c in s.chars()
+            {
+                match c
+                {
+                    '?' | '*' | '[' | ']' =>
+                    {
+                        escaped.push('[');
+                        escaped.push(c);
+                        escaped.push(']');
+                    }
+
+                    c => { escaped.push(c); }
+                }
+            }
+            escaped
+        }
+        /// Return if the given `str` matches this `Pattern` using the default options (i.e. `MatchOptions::new()`).
+        pub fn matches(&self, str: &str) -> bool { self.matches_with(str, MatchOptions::new()) }
+        /// Return if the given `Path`, when converted to a `str`,
+        /// matches this `Pattern` using the default match options (i.e. `MatchOptions::new()`).
+        pub fn matches_path(&self, path: &Path) -> bool
+        {
+            path.to_str().map_or(false, |s| self.matches(s))
+        }
+        /// Return if the given `str` matches this `Pattern` using the specified match options.
+        pub fn matches_with(&self, str: &str, options: MatchOptions) -> bool
+        {
+            self.matches_from(true, str.chars(), 0, options) == Match
+        }
+        /// Return if the given `Path`, when converted to a `str`,
+        /// matches this `Pattern` using the specified match options.
+        pub fn matches_path_with(&self, path: &Path, options: MatchOptions) -> bool
+        {
+            path.to_str().map_or(false, |s| self.matches_with(s, options))
+        }
+        /// Access the original glob pattern.
+        pub fn as_str(&self) -> &str { &self.original }
+
+        fn matches_from
+        (
+            &self,
+            mut follows_separator: bool,
+            mut file: ::str::Chars,
+            i: usize,
+            options: MatchOptions,
+        ) -> MatchResult
+        {
+            for (ti, token) in self.tokens[i..].iter().enumerate()
+            {
+                match *token
+                {
+                    AnySequence | AnyRecursiveSequence =>
+                    {
+                        debug_assert!(match *token {
+                            AnyRecursiveSequence => follows_separator,
+                            _ => true,
+                        });
+                        
+                        match self.matches_from(follows_separator, file.clone(), i + ti + 1, options)
+                        {
+                            SubPatternDoesntMatch => (),
+                            m => return m,
+                        };
+
+                        while let Some(c) = file.next()
+                        {
+                            if follows_separator && options.require_literal_leading_dot && c == '.'
+                            { return SubPatternDoesntMatch; }
+
+                            follows_separator = path::is_separator(c);
+
+                            match *token
+                            {
+                                AnyRecursiveSequence if !follows_separator => continue,
+                                AnySequence if options.require_literal_separator && follows_separator =>
+                                { return SubPatternDoesntMatch }
+                                _ => (),
+                            }
+
+                            match self.matches_from
+                            (
+                                follows_separator,
+                                file.clone(),
+                                i + ti + 1,
+                                options,
+                            )
+                            {
+                                SubPatternDoesntMatch => (),
+                                m => return m,
+                            }
+                        }
+                    }
+                    _ => {
+                        let c = match file.next() {
+                            Some(c) => c,
+                            None => return EntirePatternDoesntMatch,
+                        };
+
+                        let is_sep = path::is_separator(c);
+
+                        if !match *token {
+                            AnyChar | AnyWithin(..) | AnyExcept(..)
+                                if (options.require_literal_separator && is_sep)
+                                    || (follows_separator
+                                        && options.require_literal_leading_dot
+                                        && c == '.') =>
+                            {
+                                false
+                            }
+                            AnyChar => true,
+                            AnyWithin(ref specifiers) => in_char_specifiers(specifiers, c, options),
+                            AnyExcept(ref specifiers) => !in_char_specifiers(specifiers, c, options),
+                            Char(c2) => chars_eq(c, c2, options.case_sensitive),
+                            AnySequence | AnyRecursiveSequence => unreachable!(),
+                        } {
+                            return SubPatternDoesntMatch;
+                        }
+                        follows_separator = is_sep;
+                    }
+                }
+            }
+            
+            if file.next().is_none() { Match } else { SubPatternDoesntMatch }
+        }
+    }
+    
+    fn fill_todo
+    (
+        todo: &mut Vec<Result<(PathWrapper, usize), GlobError>>,
+        patterns: &[Pattern],
+        idx: usize,
+        path: &PathWrapper,
+        options: MatchOptions,
+    )
+    {
+        fn pattern_as_str(pattern: &Pattern) -> Option<String>
+        {
+            let mut s = String::new();
+            
+            for token in &pattern.tokens
+            {
+                match *token
+                {
+                    Char(c) => s.push(c),
+                    _ => return None,
+                }
+            }
+
+            Some(s)
+        }
+
+        let add = |todo: &mut Vec<_>, next_path: PathWrapper|
+        {
+            if idx + 1 == patterns.len() { todo.push(Ok((next_path, std::usize::MAX))); }
+            else { fill_todo(todo, patterns, idx + 1, &next_path, options); }
+        };
+
+        let pattern = &patterns[idx];
+        let is_dir = path.is_directory;
+        let curdir = path.as_ref() == Path::new(".");
+
+        match pattern_as_str(pattern)
+        {
+            Some(s) =>
+            {
+                let special = "." == s || ".." == s;
+                let next_path = if curdir { PathBuf::from(s) } else { path.join(&s) };
+
+                let next_path = PathWrapper::from_path(next_path);
+                
+                if (special && is_dir) 
+                || (!special && (fs::metadata(&next_path).is_ok() || fs::symlink_metadata(&next_path).is_ok()))
+                { add(todo, next_path); }
+            }
+
+            None if is_dir =>
+            {
+                let dirs = fs::read_dir(path).and_then(|d|
+                {
+                    d.map(|e|
+                    {
+                        e.map(|e|
+                        {
+                            let path = if curdir { PathBuf::from(e.path().file_name().unwrap()) }
+                            else { e.path() };
+
+                            PathWrapper::from_dir_entry(path, e)
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+                });
+
+                match dirs 
+                {
+                    Ok(mut children) =>
+                    {
+                        if options.require_literal_leading_dot {
+                            children .retain
+                            (
+                                |x| !x
+                                .file_name()
+                                .unwrap()
+                                .to_str()
+                                .unwrap()
+                                .starts_with('.')
+                            );
+                        }
+
+                        children.sort_by(|p1, p2| p2.file_name().cmp(&p1.file_name()));
+                        todo.extend(children.into_iter().map(|x| Ok((x, idx))));
+                        
+                        if !pattern.tokens.is_empty() && pattern.tokens[0] == Char('.')
+                        {
+                            for &special in &[".", ".."]
+                            {
+                                if pattern.matches_with(special, options)
+                                { add(todo, PathWrapper::from_path(path.join(special))); }
+                            }
+                        }
+                    }
+
+                    Err(e) =>
+                    {
+                        todo.push(Err(GlobError
+                        {
+                            path: path.to_path_buf(),
+                            error: e,
+                        }));
+                    }
+                }
+            }
+
+            None => {}
+        }
+    }
+
+    fn parse_char_specifiers(s: &[char]) -> Vec<CharSpecifier> 
+    {
+        let mut cs = Vec::new();
+        let mut i = 0;
+
+        while i < s.len() 
+        {
+            if i + 3 <= s.len() && s[i + 1] == '-' 
+            {
+                cs.push(CharRange(s[i], s[i + 2]));
+                i += 3;
+            }
+            
+            else 
+            {
+                cs.push(SingleChar(s[i]));
+                i += 1;
+            }
+        }
+
+        cs
+    }
+
+    fn in_char_specifiers(specifiers: &[CharSpecifier], c: char, options: MatchOptions) -> bool 
+    {
+        for &specifier in specifiers.iter() 
+        {
+            match specifier 
+            {
+                SingleChar(sc) => 
+                {
+                    if chars_eq(c, sc, options.case_sensitive) { return true; }
+                }
+
+                CharRange(start, end) =>
+                {
+                    if !options.case_sensitive && c.is_ascii() && start.is_ascii() && end.is_ascii()
+                    {
+                        let start = start.to_ascii_lowercase();
+                        let end = end.to_ascii_lowercase();
+                        let start_up = start.to_uppercase().next().unwrap();
+                        let end_up = end.to_uppercase().next().unwrap();
+                        
+                        if start != start_up && end != end_up
+                        {
+                            let c = c.to_ascii_lowercase();
+                            if c >= start && c <= end { return true; }
+                        }
+                    }
+
+                    if c >= start && c <= end { return true; }
+                }
+            }
+        }
+
+        false
+    }
+    /// A helper function to determine if two chars are (possibly case-insensitively) equal.
+    fn chars_eq(a: char, b: char, case_sensitive: bool) -> bool
+    {
+        if cfg!(windows) && path::is_separator(a) && path::is_separator(b) { true }
+        else if !case_sensitive && a.is_ascii() && b.is_ascii() { a.eq_ignore_ascii_case(&b) }
+        else { a == b }
+    }
+    /// Configuration options to modify the behaviour of `Pattern::matches_with(..)`.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+    pub struct MatchOptions
+    {
+        /// Whether or not patterns should be matched in a case-sensitive manner.
+        pub case_sensitive: bool,
+        /// Whether or not path-component separator characters must be matched by a literal `/`,
+        /// rather than by `*` or `?` or `[...]`.
+        pub require_literal_separator: bool,
+        /// Whether or not paths that contain components that start with a `.` will require that `.`
+        /// appears literally in the pattern; `*`, `?`, `**`, or `[...]` will not match.
+        pub require_literal_leading_dot: bool,
+    }
+
+    impl MatchOptions
+    {
+        /// Constructs a new `MatchOptions` with default field values.
+        pub fn new() -> Self
+        {
+            Self
+            {
+                case_sensitive: true,
+                require_literal_separator: false,
+                require_literal_leading_dot: false,
+            }
+        }
+    }
+}
+
 pub mod hash
 {
     pub use std::hash::{ * };
@@ -7521,7 +8379,290 @@ pub mod libc
         pub type c_long = i32;
         pub type c_ulong = u32;
 
-    }  pub use self::primitives::{ * };
+    } pub use self::primitives::{ * };
+
+    pub mod jobs
+    {
+        use ::
+        {
+            io::
+            {
+                Write as _,
+            },
+            nix::
+            {
+                sys::
+                {
+                    signal::Signal,
+                    wait::waitpid,
+                    wait::WaitPidFlag as WF,
+                    wait::WaitStatus as WS,
+                },
+                unistd::{ Pid },
+            },
+            types::{ * },
+            *,
+        };
+        // pub fn get_job_line(job: &types::Job, trim: bool) -> String
+        pub fn get_line( job:&Job, trim:bool ) -> String
+        {
+            let mut cmd = job.cmd.clone();
+            if trim && cmd.len() > 50 {
+                cmd.truncate(50);
+                cmd.push_str(" ...");
+            }
+            let _cmd = if job.is_bg && job.status == "Running" {
+                format!("{} &", cmd)
+            } else {
+                cmd
+            };
+            format!("[{}] {}  {}   {}", job.id, job.gid, job.status, _cmd)
+        }
+        // pub fn print_job(job: &types::Job)
+        pub fn print( job:&Job )
+        {
+            let line = get_line(job, true);
+            println_stderr!("{}", line);
+        }
+        // pub fn mark_job_as_done(sh: &mut shell::Shell, gid: i32, pid: i32, reason: &str)
+        pub fn mark_as_done(sh: &mut shell::Shell, gid: i32, pid: i32, reason: &str)
+        {
+            if let Some(mut job) = sh.remove_pid_from_job(gid, pid)
+            {
+                job.status = reason.to_string();
+                if job.is_bg
+                {
+                    println_stderr!("");
+                    print( &job );
+                }
+            }
+        }
+        // pub fn mark_job_as_stopped(sh: &mut shell::Shell, gid: i32, report: bool)
+        pub fn mark_as_stopped(sh: &mut shell::Shell, gid: i32, report: bool)
+        {
+            sh.mark_job_as_stopped(gid);
+            
+            if !report { return; }
+            
+            if let Some(job) = sh.get_job_by_gid(gid)
+            {
+                println_stderr!("");
+                print(job);
+            }
+        }
+        // pub fn mark_job_member_stopped(sh: &mut shell::Shell, pid: i32, gid: i32, report: bool)
+        pub fn mark_member_stopped(sh: &mut shell::Shell, pid: i32, gid: i32, report: bool)
+        {
+            let _gid = if gid == 0 { unsafe { libc::getpgid(pid) } }
+            else { gid };
+
+            if let Some(job) = sh.mark_job_member_stopped(pid, gid)
+            {
+                if job.all_members_stopped() { mark_as_stopped(sh, gid, report); }
+            }
+        }
+        // pub fn mark_job_member_continued(sh: &mut shell::Shell, pid: i32, gid: i32)
+        pub fn mark_member_continued(sh: &mut shell::Shell, pid: i32, gid: i32)
+        {
+            let _gid = if gid == 0 {
+                unsafe { libc::getpgid(pid) }
+            } else {
+                gid
+            };
+
+            if let Some(job) = sh.mark_job_member_continued(pid, gid)
+            {
+                if job.all_members_running()
+                {
+                    mark_as_running(sh, gid, true);
+                }
+            }
+        }
+        // pub fn mark_job_as_running(sh: &mut shell::Shell, gid: i32, bg: bool)
+        pub fn mark_as_running(sh: &mut shell::Shell, gid: i32, bg: bool)
+        {
+            sh.mark_job_as_running(gid, bg);
+        }
+        
+        pub fn waitpidx(wpid: i32, block: bool) -> types::WaitStatus
+        {
+            let options = if block {
+                Some(WF::WUNTRACED | WF::WCONTINUED)
+            } else {
+                Some(WF::WUNTRACED | WF::WCONTINUED | WF::WNOHANG)
+            };
+            match waitpid(Pid::from_raw(wpid), options) {
+                Ok(WS::Exited(pid, status)) => {
+                    let pid = i32::from(pid);
+                    types::WaitStatus::from_exited(pid, status)
+                }
+                Ok(WS::Stopped(pid, sig)) => {
+                    let pid = i32::from(pid);
+                    types::WaitStatus::from_stopped(pid, sig as i32)
+                }
+                Ok(WS::Continued(pid)) => {
+                    let pid = i32::from(pid);
+                    types::WaitStatus::from_continuted(pid)
+                }
+                Ok(WS::Signaled(pid, sig, _core_dumped)) => {
+                    let pid = i32::from(pid);
+                    types::WaitStatus::from_signaled(pid, sig as i32)
+                }
+                Ok(WS::StillAlive) => {
+                    types::WaitStatus::empty()
+                }
+                Ok(_others) => {
+                    types::WaitStatus::from_others()
+                }
+                Err(e) => {
+                    types::WaitStatus::from_error(e as i32)
+                }
+            }
+        }
+        // pub fn wait_fg_job(sh: &mut shell::Shell, gid: i32, pids: &[i32]) -> CommandResult
+        pub fn wait_fg(sh: &mut shell::Shell, gid: i32, pids: &[i32]) -> CommandResult
+        {
+            let mut cmd_result = CommandResult::new();
+            let mut count_waited = 0;
+            let count_child = pids.len();
+
+            if count_child == 0 { return cmd_result; }
+            
+            let pid_last = pids.last().unwrap();
+
+            loop
+            {
+                let ws = waitpidx(-1, true);
+                
+                if ws.is_error()
+                {
+                    let err = ws.get_errno();
+
+                    if err == nix::Error::ECHILD { break; }
+
+                    log!("jobc unexpected waitpid error: {}", err);
+                    cmd_result = CommandResult::from_status(gid, err as i32);
+                    break;
+                }
+
+                let pid = ws.get_pid();
+                let is_a_fg_child = pids.contains(&pid);
+
+                if is_a_fg_child && !ws.is_continued() { count_waited += 1; }
+
+                if ws.is_exited()
+                {
+                    if is_a_fg_child
+                    {
+                        mark_as_done(sh, gid, pid, "Done");
+                    }
+
+                    else
+                    {
+                        let status = ws.get_status();
+                        signals::insert_reap_map(pid, status);
+                    }
+                }
+                
+                else if ws.is_stopped()
+                {
+                    if is_a_fg_child
+                    {
+                        mark_member_stopped(sh, pid, gid, true);
+                    }
+
+                    else
+                    {
+                        signals::insert_stopped_map(pid);
+                        mark_member_stopped(sh, pid, 0, false);
+                    }
+                }
+                
+                else if ws.is_continued()
+                {
+                    if !is_a_fg_child { signals::insert_cont_map(pid); }
+                    continue;
+                }
+
+                else if ws.is_signaled()
+                {
+                    if is_a_fg_child { mark_as_done(sh, gid, pid, "Killed"); }
+                    else
+                    {
+                        signals::killed_map_insert(pid, ws.get_signal());
+                    }
+                }
+
+                if is_a_fg_child && pid == *pid_last
+                {
+                    let status = ws.get_status();
+                    cmd_result.status = status;
+                }
+
+                if count_waited >= count_child { break; }
+            }
+
+            cmd_result
+        }
+        // pub fn try_wait_bg_jobs(sh: &mut shell::Shell, report: bool, sig_handler_enabled: bool)
+        pub fn try_wait_bg( sh: &mut shell::Shell, report: bool, sig_handler_enabled:bool )
+        {
+            if sh.jobs.is_empty() { return; }
+
+            if !sig_handler_enabled { signals::handle_sigchld(Signal::SIGCHLD as i32); }
+
+            let jobs = sh.jobs.clone();
+
+            for (_i, job) in jobs.iter()
+            {
+                for pid in job.pids.iter()
+                {
+                    if let Some(_status) = signals::pop_reap_map(*pid)
+                    {
+                        mark_as_done(sh, job.gid, *pid, "Done");
+                        continue;
+                    }
+
+                    if let Some(sig) = signals::killed_map_pop(*pid)
+                    {
+                        let reason = if sig == Signal::SIGQUIT as i32
+                        {
+                            format!("Quit: {}", sig)
+                        }
+                        
+                        else if sig == Signal::SIGINT as i32
+                        {
+                            format!("Interrupt: {}", sig)
+                        }
+                        
+                        else if sig == Signal::SIGKILL as i32
+                        {
+                            format!("Killed: {}", sig)
+                        }
+                        
+                        else if sig == Signal::SIGTERM as i32
+                        {
+                            format!("Terminated: {}", sig)
+                        }
+                        
+                        else
+                        {
+                            format!("Killed: {}", sig)
+                        };
+
+                        mark_as_done(sh, job.gid, *pid, &reason);
+                        continue;
+                    }
+
+                    if signals::pop_stopped_map(*pid) {
+                        mark_member_stopped(sh, *pid, job.gid, report);
+                    } else if signals::pop_cont_map(*pid) {
+                        mark_member_continued(sh, *pid, job.gid);
+                    }
+                }
+            }
+        }
+    }
     
     pub mod unix
     {
@@ -27401,6 +28542,49 @@ pub mod os
     {
         //! Owned and borrowed Unix-like file descriptors.
         pub use std::os::fd::{ * };
+        // pub fn create_raw_fd_from_file(file_name: &str, append: bool) -> Result<i32, String>
+        pub fn create_raw_from_file( file_name:&str, append:bool ) -> Result<i32, String>
+        {
+            let mut oos = ::fs::OpenOptions::new();
+
+            if append { oos.append(true); }
+            else
+            {
+                oos.write(true);
+                oos.truncate(true);
+            }
+            
+            match oos
+            .create(true)
+            .open(file_name)
+            {
+                Ok(x) =>
+                {
+                    let fd = x.into_raw_fd();
+                    Ok(fd)
+                }
+
+                Err(e) => Err(format!("{}", e)),
+            }
+        }
+        // pub fn get_fd_from_file(file_name: &str) -> i32
+        pub fn get_from_file( file_name:&str ) -> i32
+        {
+            let path = ::path::Path::new(file_name);
+            let display = path.display();
+            let file = match ::fs::File::open(path)
+            {
+                Err(why) =>
+                {
+                    println_stderr!("cicada: {}: {}", display, why);
+                    return -1;
+                }
+
+                Ok(file) => file,
+            };
+
+            file.into_raw_fd()
+        }
     }
 
     pub mod raw
@@ -35384,6 +36568,30 @@ pub mod path
 
         current_dir.to_string()
     }
+
+    pub fn get_current_dir() -> String
+    {
+        let mut current_dir = PathBuf::new();
+
+        match env::current_dir() 
+        {
+            Ok(x) => current_dir = x,
+            Err(e) => { println_stderr!("env current_dir() failed: {}", e); }
+        }
+
+        let mut str_current_dir = "";
+
+        match current_dir.to_str()
+        {
+            Some(x) => str_current_dir = x,
+            None => 
+            {
+                println_stderr!("current_dir to str failed.");
+            }
+        }
+
+        str_current_dir.to_string()
+    }
 }
 
 pub mod process
@@ -35500,6 +36708,10 @@ pub mod run
 {
     use ::
     {
+        os::
+        {
+            fd::{ RawFd },
+        },
         path::{ Path },
         shell::{ Shell },
         types::{ * },
@@ -35647,7 +36859,7 @@ pub mod run
             }
         }
 
-        jobc::mark_job_as_running(sh, gid, true);
+        libc::jobs::mark_job_as_running(sh, gid, true);
         cr
     }
 
@@ -35663,10 +36875,10 @@ pub mod run
             return cr;
         }
 
-        let str_current_dir = tools::get_current_dir();
+        let str_current_dir = path::get_current_dir();
 
         let mut dir_to = if args.len() == 1 {
-            let home = tools::get_user_home();
+            let home = env::get_user_home();
             home.to_string()
         } else {
             args[1..].join("")
@@ -35946,9 +37158,9 @@ pub mod run
         }
 
         unsafe {
-            jobc::mark_job_as_running(sh, gid, false);
+            libc::jobs::mark_job_as_running(sh, gid, false);
 
-            let cr = jobc::wait_fg_job(sh, gid, &pid_list);
+            let cr = libc::jobs::wait_fg_job(sh, gid, &pid_list);
 
             let gid_shell = libc::getpgid(0);
             if !shell::give_terminal_to(gid_shell) {
@@ -36056,13 +37268,13 @@ pub mod run
             return cr;
         }
         
-        jobc::try_wait_bg_jobs(sh, false, false);
+        libc::jobs::try_wait_bg_jobs(sh, false, false);
 
         let mut lines = Vec::new();
         let jobs = sh.jobs.clone();
         let no_trim = cmd.tokens.len() >= 2 && cmd.tokens[1].1 == "-f";
         for (_i, job) in jobs.iter() {
-            let line = jobc::get_job_line(job, !no_trim);
+            let line = libc::jobs::get_job_line(job, !no_trim);
             lines.push(line);
         }
         let buffer = lines.join("\n");
@@ -36213,7 +37425,7 @@ pub mod run
             return cr;
         }
 
-        let status = scripting::run_script(sh, &args);
+        let status = scripts::run_script(sh, &args);
         cr.status = status;
         cr
     }
@@ -36624,7 +37836,7 @@ pub mod run
                 else
                 {
                     let append = item.1 == ">>";
-                    if let Ok(fd) = tools::create_raw_fd_from_file(&item.2, append) { _fd_candidate = Some(fd); }
+                    if let Ok(fd) = os::fd::create_raw_from_file(&item.2, append) { _fd_candidate = Some(fd); }
                 }
 
                 if let Some(fd) = fd_err { unsafe { libc::close(fd); } }
@@ -37281,7 +38493,7 @@ pub mod shell
         pub fn new() -> Shell 
         {
             let uuid = Uuid::new_v4().as_hyphenated().to_string();
-            let current_dir = tools::get_current_dir();
+            let current_dir = path::get_current_dir();
             let has_terminal = proc_has_terminal();
             let (session_id, _) = uuid.split_at(13);
             Shell
@@ -38002,7 +39214,7 @@ pub mod shell
             let mut s: String = text.clone();
             let ptn = r"^~(?P<tail>.*)";
             let re = Regex::new(ptn).expect("invalid re ptn");
-            let home = tools::get_user_home();
+            let home = env::get_user_home();
             let ss = s.clone();
             let to = format!("{}$tail", home);
             let result = re.replace_all(ss.as_str(), to.as_str());
@@ -38571,7 +39783,7 @@ pub mod shell
         }
 
         if !fg_pids.is_empty() {
-            let _cr = jobc::wait_fg_job(sh, pgid, &fg_pids);
+            let _cr = libc::jobs::wait_fg_job(sh, pgid, &fg_pids);
             
             if !capture {
                 cmd_result = _cr;
@@ -38595,7 +39807,9 @@ pub mod shell
     ) -> i32
     {
         let capture = options.capture_output;
-        if cl.is_single_and_builtin() {
+        
+        if cl.is_single_and_builtin()
+        {
             if let Some(cr) = try_run_builtin(sh, cl, idx_cmd, capture) {
                 *cmd_result = cr;
                 return unsafe { libc::getpid() };
@@ -38610,7 +39824,8 @@ pub mod shell
         let mut fds_stdin = None;
         let cmd = cl.commands.get(idx_cmd).unwrap();
 
-        if cmd.has_here_string() {
+        if cmd.has_here_string()
+        {
             match pipe() {
                 Ok(fds) => fds_stdin = Some(fds),
                 Err(e) => {
@@ -38630,58 +39845,76 @@ pub mod shell
                     libc::signal(libc::SIGQUIT, libc::SIG_DFL);
                 }
                 
-                if idx_cmd > 0 {
-                    for i in 0..idx_cmd - 1 {
+                if idx_cmd > 0
+                {
+                    for i in 0..idx_cmd - 1
+                    {
                         let fds = pipes[i];
                         process::close(fds.0);
                         process::close(fds.1);
                     }
                 }
                 
-                for i in idx_cmd + 1..pipes_count {
+                for i in idx_cmd + 1..pipes_count
+                {
                     let fds = pipes[i];
                     process::close(fds.0);
                     process::close(fds.1);
                 }
                 
-                if idx_cmd < pipes_count {
-                    if let Some(fds) = fds_capture_stdout {
+                if idx_cmd < pipes_count
+                {
+                    if let Some(fds) = fds_capture_stdout
+                    {
                         process::close(fds.0);
                         process::close(fds.1);
                     }
-                    if let Some(fds) = fds_capture_stderr {
+                    
+                    if let Some(fds) = fds_capture_stderr
+                    {
                         process::close(fds.0);
                         process::close(fds.1);
                     }
                 }
 
-                if idx_cmd == 0 {
-                    unsafe {
+                if idx_cmd == 0
+                {
+                    unsafe
+                    {
                         let pid = libc::getpid();
                         libc::setpgid(0, pid);
                     }
-                } else {
-                    unsafe {
+                }
+
+                else
+                {
+                    unsafe
+                    {
                         libc::setpgid(0, *pgid);
                     }
                 }
                 
-                if idx_cmd > 0 {
+                if idx_cmd > 0
+                {
                     let fds_prev = pipes[idx_cmd - 1];
                     process::dup2(fds_prev.0, 0);
                     process::close(fds_prev.0);
                     process::close(fds_prev.1);
                 }
-                if idx_cmd < pipes_count {
+                
+                if idx_cmd < pipes_count
+                {
                     let fds = pipes[idx_cmd];
                     process::dup2(fds.1, 1);
                     process::close(fds.1);
                     process::close(fds.0);
                 }
 
-                if cmd.has_redirect_from() {
-                    if let Some(redirect_from) = &cmd.redirect_from {
-                        let fd = tools::get_fd_from_file(&redirect_from.clone().1);
+                if cmd.has_redirect_from()
+                {
+                    if let Some(redirect_from) = &cmd.redirect_from
+                    {
+                        let fd = os::fd::get_from_file(&redirect_from.clone().1);
                         if fd == -1 {
                             process::exit(1);
                         }
@@ -38691,8 +39924,10 @@ pub mod shell
                     }
                 }
 
-                if cmd.has_here_string() {
-                    if let Some(fds) = fds_stdin {
+                if cmd.has_here_string()
+                {
+                    if let Some(fds) = fds_stdin
+                    {
                         process::close(fds.1);
                         process::dup2(fds.0, 0);
                         process::close(fds.0);
@@ -38701,52 +39936,79 @@ pub mod shell
 
                 let mut stdout_redirected = false;
                 let mut stderr_redirected = false;
-                for item in &cmd.redirects_to {
+                for item in &cmd.redirects_to
+                {
                     let from_ = &item.0;
                     let op_ = &item.1;
                     let to_ = &item.2;
-                    if to_ == "&1" && from_ == "2" {
-                        if idx_cmd < pipes_count {
+
+                    if to_ == "&1" && from_ == "2"
+                    {
+                        if idx_cmd < pipes_count
+                        {
                             process::dup2(1, 2);
-                        } else if !options.capture_output {
+                        }
+                        
+                        else if !options.capture_output
+                        {
                             let fd = process::dup(1);
-                            if fd == -1 {
+                            
+                            if fd == -1
+                            {
                                 println_stderr!("cicada: dup error");
                                 process::exit(1);
                             }
+
                             process::dup2(fd, 2);
-                        } else {
-                            
                         }
-                    } else if to_ == "&2" && from_ == "1" {
-                        if idx_cmd < pipes_count || !options.capture_output {
+                        else { }
+                    }
+                    
+                    else if to_ == "&2" && from_ == "1"
+                    {
+                        if idx_cmd < pipes_count || !options.capture_output
+                        {
                             let fd = process::dup(2);
-                            if fd == -1 {
+                            if fd == -1
+                            {
                                 println_stderr!("cicada: dup error");
                                 process::exit(1);
                             }
+
                             process::dup2(fd, 1);
-                        } else {
-                            
                         }
-                    } else {
+                        else { }
+                    }
+
+                    else
+                    {
                         let append = op_ == ">>";
-                        match tools::create_raw_fd_from_file(to_, append) {
-                            Ok(fd) => {
-                                if fd == -1 {
+
+                        match os::fd::create_raw_from_file(to_, append)
+                        {
+                            Ok(fd) =>
+                            {
+                                if fd == -1
+                                {
                                     println_stderr!("cicada: fork: fd error");
                                     process::exit(1);
                                 }
 
-                                if from_ == "1" {
+                                if from_ == "1"
+                                {
                                     process::dup2(fd, 1);
                                     stdout_redirected = true;
-                                } else {
+                                }
+                                
+                                else
+                                {
                                     process::dup2(fd, 2);
                                     stderr_redirected = true;
                                 }
                             }
-                            Err(e) => {
+
+                            Err(e) =>
+                            {
                                 println_stderr!("cicada: fork: {}", e);
                                 process::exit(1);
                             }
@@ -38828,7 +40090,9 @@ pub mod shell
 
                 process::exit(1);
             }
-            Ok(ForkResult::Parent { child, .. }) => {
+
+            Ok(ForkResult::Parent { child, .. }) =>
+            {
                 let pid: i32 = child.into();
                 if idx_cmd == 0 {
                     *pgid = pid;
@@ -38920,7 +40184,8 @@ pub mod shell
                 pid
             }
 
-            Err(_) => {
+            Err(_) =>
+            {
                 println_stderr!("Fork failed");
                 *cmd_result = CommandResult::error();
                 0
@@ -38949,7 +40214,7 @@ pub mod shell
             if log_cmd {
                 log!("run func: {:?}", &args);
             }
-            let cr_list = scripting::run_lines(sh, &func_body, &args, capture);
+            let cr_list = scripts::run_lines(sh, &func_body, &args, capture);
             let mut stdout = String::new();
             let mut stderr = String::new();
             for cr in cr_list {
@@ -52726,4 +53991,4 @@ fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 52729
+// 53994
