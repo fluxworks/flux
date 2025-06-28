@@ -12096,7 +12096,7 @@ pub mod now
         }
     }
 
-    pub fn run_command_line(sh: &mut Shell, line: &str, tty: bool, capture: bool) -> Vec<CommandResult>
+    pub fn run_command_line(sh:&mut Shell, line: &str, tty: bool, capture: bool) -> Vec<CommandResult>
     {
         let mut cr_list = Vec::new();
         let mut status = 0;
@@ -12150,7 +12150,7 @@ pub mod now
         envs
     }
 
-    fn line_to_tokens(sh: &mut Shell, line: &str) -> (Tokens, HashMap<String, String>)
+    fn line_to_tokens(sh:&mut Shell, line: &str) -> (Tokens, HashMap<String, String>)
     {
         let linfo = parsers::line::parse(line);
         let mut tokens = linfo.tokens;
@@ -12159,7 +12159,7 @@ pub mod now
         (tokens, envs)
     }
 
-    fn set_shell_vars(sh: &mut Shell, envs: &HashMap<String, String>)
+    fn set_shell_vars(sh:&mut Shell, envs: &HashMap<String, String>)
     {
         for (name, value) in envs.iter()
         {
@@ -12167,7 +12167,7 @@ pub mod now
         }
     }
     /// Run simple command or pipeline without using `&&`, `||`, `;`.
-    fn run_proc(sh: &mut Shell, line: &str, tty: bool, capture: bool) -> CommandResult
+    fn run_proc(sh:&mut Shell, line: &str, tty: bool, capture: bool) -> CommandResult
     {
         let log_cmd = !sh.cmd.starts_with(' ');
 
@@ -12203,7 +12203,7 @@ pub mod now
         }
     }
 
-    fn run_with_shell(sh: &mut Shell, line: &str) -> CommandResult
+    fn run_with_shell(sh:&mut Shell, line: &str) -> CommandResult
     {
         let (tokens, envs) = line_to_tokens(sh, line);
         
@@ -29051,6 +29051,168 @@ pub mod parsers
 
             LineInfo { tokens: result, is_complete: is_line_complete }
         }
+
+        pub fn tokens_to_args(tokens: &Tokens) -> Vec<String>
+        {
+            let mut result = Vec::new();
+            
+            for s in tokens
+            {
+                result.push(s.1.clone());
+            }
+
+            result
+        }
+        // pub fn tokens_to_line(tokens: &Tokens) -> String
+        pub fn from_tokens(tokens: &Tokens) -> String
+        {
+            let mut result = String::new();
+            for t in tokens {
+                if t.0.is_empty() {
+                    result.push_str(&t.1);
+                } else {
+                    let s = wrap_sep_string(&t.0, &t.1);
+                    result.push_str(&s);
+                }
+                result.push(' ');
+            }
+            if result.ends_with(' ') {
+                let len = result.len();
+                result.truncate(len - 1);
+            }
+            result
+        }
+        /// Parse command line for multiple commands.
+        // pub fn line_to_cmds(line: &str) -> Vec<String>
+        pub fn to_cmds(line: &str) -> Vec<String>
+        {
+            let mut result = Vec::new();
+            let mut sep = String::new();
+            let mut token = String::new();
+            let mut has_backslash = false;
+            let len = line.chars().count();
+
+            for (i, c) in line.chars().enumerate()
+            {
+                if has_backslash
+                {
+                    token.push('\\');
+                    token.push(c);
+                    has_backslash = false;
+                    continue;
+                }
+
+                if c == '\\' && sep != "'"
+                {
+                    has_backslash = true;
+                    continue;
+                }
+
+                if c == '#'
+                {
+                    if sep.is_empty() {
+                        break;
+                    } else {
+                        token.push(c);
+                        continue;
+                    }
+                }
+
+                if c == '\'' || c == '"' || c == '`'
+                {
+                    if sep.is_empty()
+                    {
+                        sep.push(c);
+                        token.push(c);
+                        continue;
+                    }
+                    
+                    else if sep == c.to_string()
+                    {
+                        token.push(c);
+                        sep = String::new();
+                        continue;
+                    }
+                    
+                    else
+                    {
+                        token.push(c);
+                        continue;
+                    }
+                }
+
+                if c == '&' || c == '|'
+                {
+                    if sep.is_empty()
+                    {
+                        if i + 1 == len
+                        {
+                            token.push(c);
+                            continue;
+                        }
+                        
+                        else
+                        {
+                            let c_next = match line.chars().nth(i + 1)
+                            
+                            {
+                                Some(x) => x,
+                                None =>
+                                {
+                                    println!("chars nth error - should never happen");
+                                    continue;
+                                }
+                            };
+
+                            if c_next != c
+                            {
+                                token.push(c);
+                                continue;
+                            }
+                        }
+                    }
+
+                    if sep.is_empty() {
+                        sep.push(c);
+                        continue;
+                    } else if c.to_string() == sep {
+                        let _token = token.trim().to_string();
+                        if !_token.is_empty() {
+                            result.push(_token);
+                        }
+                        token = String::new();
+                        result.push(format!("{}{}", sep, sep));
+                        sep = String::new();
+                        continue;
+                    } else {
+                        token.push(c);
+                        continue;
+                    }
+                }
+                if c == ';' {
+                    if sep.is_empty() {
+                        let _token = token.trim().to_string();
+                        if !_token.is_empty() {
+                            result.push(_token);
+                        }
+                        result.push(String::from(";"));
+                        token = String::new();
+                        continue;
+                    } else {
+                        token.push(c);
+                        continue;
+                    }
+                }
+                token.push(c);
+            }
+
+            if !token.is_empty()
+            {
+                result.push(token.trim().to_string());
+            }
+
+            result
+        }
     }
     /*
     nom 7.1.3*/
@@ -36718,7 +36880,7 @@ pub mod run
         *,
     };
 
-    pub fn alias(sh: &mut shell::Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
+    pub fn alias(sh: &mut shell::Shell, cl:&CommandLine, cmd:&Command, capture: bool) -> CommandResult
     {
         let mut cr = CommandResult::new();
         let tokens = cmd.tokens.clone();
@@ -36753,7 +36915,7 @@ pub mod run
         CommandResult::new()
     }
 
-    pub fn show_alias_list(sh: &shell::Shell, cmd: &Command, cl: &CommandLine, capture: bool) -> CommandResult
+    pub fn show_alias_list(sh: &shell::Shell, cmd:&Command, cl:&CommandLine, capture: bool) -> CommandResult
     {
         let mut lines = Vec::new();
         for (name, value) in sh.get_alias_list()
@@ -36772,8 +36934,8 @@ pub mod run
     ( 
         sh:&shell::Shell,
         name_to_find: &str,
-        cmd: &Command,
-        cl: &CommandLine,
+        cmd:&Command,
+        cl:&CommandLine,
         capture: bool
     ) -> CommandResult 
     {
@@ -36788,7 +36950,7 @@ pub mod run
         cr
     }
 
-    pub fn bg(sh: &mut Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
+    pub fn bg(sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture: bool) -> CommandResult
     {
         let tokens = cmd.tokens.clone();
         let mut cr = CommandResult::new();
@@ -36863,7 +37025,7 @@ pub mod run
         cr
     }
 
-    pub fn cd(sh: &mut shell::Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
+    pub fn cd(sh: &mut shell::Shell, cl:&CommandLine, cmd:&Command, capture: bool) -> CommandResult
     {
         let tokens = cmd.tokens.clone();
         let mut cr = CommandResult::new();
@@ -36936,7 +37098,7 @@ pub mod run
         None => "dev",
     };
     */
-    pub fn cinfo( _sh: &mut Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
+    pub fn cinfo( _sh: &mut Shell, cl:&CommandLine, cmd:&Command, capture: bool) -> CommandResult
     {
         let mut info = vec![];
 
@@ -36992,7 +37154,7 @@ pub mod run
         cr
     }
     
-    pub fn exec(_sh: &Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
+    pub fn exec(_sh: &Shell, cl:&CommandLine, cmd:&Command, capture: bool) -> CommandResult
     {
         let mut cr = CommandResult::new();
         let tokens = cmd.tokens.clone();
@@ -37010,7 +37172,7 @@ pub mod run
         cr
     }
 
-    pub fn exit(sh: &Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
+    pub fn exit(sh: &Shell, cl:&CommandLine, cmd:&Command, capture: bool) -> CommandResult
     {
         let mut cr = CommandResult::new();
         let tokens = cmd.tokens.clone();
@@ -37048,7 +37210,7 @@ pub mod run
         cr
     }
     
-    pub fn export(_sh: &Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
+    pub fn export(_sh: &Shell, cl:&CommandLine, cmd:&Command, capture: bool) -> CommandResult
     {
         let mut cr = CommandResult::new();
         let tokens = cmd.tokens.clone();
@@ -37085,7 +37247,7 @@ pub mod run
         cr
     }
     
-    pub fn fg(sh: &mut Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
+    pub fn fg(sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture: bool) -> CommandResult
     {
         let tokens = cmd.tokens.clone();
         let mut cr = CommandResult::new();
@@ -37171,7 +37333,7 @@ pub mod run
         }
     }
 
-    pub fn history(sh: &mut Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
+    pub fn history(sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture: bool) -> CommandResult
     {
         let mut cr = CommandResult::new();
         let hfile = history::get_file();
@@ -37261,7 +37423,7 @@ pub mod run
         }
     }
 
-    pub fn jobs(sh: &mut Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
+    pub fn jobs(sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture: bool) -> CommandResult
     {
         let mut cr = CommandResult::new();
         if sh.jobs.is_empty() {
@@ -37283,7 +37445,7 @@ pub mod run
         cr
     }
 
-    pub fn minfd(_sh: &mut Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
+    pub fn minfd(_sh: &mut Shell, cl:&CommandLine, cmd:&Command, capture: bool) -> CommandResult
     {
         let mut cr = CommandResult::new();
 
@@ -37318,7 +37480,7 @@ pub mod run
         None
     }
 
-    pub fn read(sh: &mut Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
+    pub fn read(sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture: bool) -> CommandResult
     {
         let mut cr = CommandResult::new();
         let tokens = cmd.tokens.clone();
@@ -37380,9 +37542,10 @@ pub mod run
         cr
     }
 
-    pub fn set(sh: &mut Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
+    pub fn set(sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture: bool) -> CommandResult
     {
         let mut cr = CommandResult::new();
+        /*
         let tokens = &cmd.tokens;
         let args = parsers::line::tokens_to_args(tokens);
         let show_usage = args.len() > 1 && (args[1] == "-h" || args[1] == "--help");
@@ -37410,10 +37573,11 @@ pub mod run
                 }
                 cr
             }
-        }
+        } */
+        cr
     }
 
-    pub fn source(sh: &mut Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
+    pub fn source(sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture: bool) -> CommandResult
     {
         let mut cr = CommandResult::new();
         let tokens = &cmd.tokens;
@@ -37430,7 +37594,7 @@ pub mod run
         cr
     }
 
-    pub fn ulimit(_sh: &mut Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
+    pub fn ulimit(_sh: &mut Shell, cl:&CommandLine, cmd:&Command, capture: bool) -> CommandResult
     {
         let mut cr = CommandResult::new();
         let tokens = &cmd.tokens;
@@ -37580,7 +37744,7 @@ pub mod run
         }
     }
     
-    pub fn unalias(sh: &mut Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
+    pub fn unalias(sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture: bool) -> CommandResult
     {
         let tokens = cmd.tokens.clone();
         let mut cr = CommandResult::new();
@@ -37600,7 +37764,7 @@ pub mod run
         cr
     }
 
-    pub fn unpath(sh: &mut Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
+    pub fn unpath(sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture: bool) -> CommandResult
     {
         let tokens = cmd.tokens.clone();
         let mut cr = CommandResult::new();
@@ -37616,7 +37780,7 @@ pub mod run
         cr
     }
 
-    pub fn unset(sh: &mut Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
+    pub fn unset(sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture: bool) -> CommandResult
     {
         let tokens = cmd.tokens.clone();
         let mut cr = CommandResult::new();
@@ -37728,7 +37892,7 @@ pub mod run
         String::new()
     }
 
-    pub fn vox(sh: &mut Shell, cl: &CommandLine, cmd: &Command, capture: bool) -> CommandResult
+    pub fn vox(sh:&mut Shell, cl:&CommandLine, cmd:&Command, capture: bool) -> CommandResult
     {
         let mut cr = CommandResult::new();
         let tokens = cmd.tokens.clone();
@@ -37791,7 +37955,7 @@ pub mod run
         }
     }
     /// Helper function to get (stdout, stderr) pairs for redirections
-    pub fn _get_std_fds(redirects: &[Redirection]) -> (Option<RawFd>, Option<RawFd>)
+    pub fn _get_std_fds( redirects: &[Redirection] ) -> (Option<RawFd>, Option<RawFd>)
     {
         if redirects.is_empty() { return (None, None); }
 
@@ -37801,6 +37965,7 @@ pub mod run
         for i in 0..redirects.len()
         {
             let item = &redirects[i];
+
             if item.0 == "1"
             {
                 let mut _fd_candidate = None;
@@ -37808,19 +37973,19 @@ pub mod run
                 if item.2 == "&2"
                 {
                     let (_fd_out, _fd_err) = _get_std_fds(&redirects[i+1..]);
-                    if let Some(fd) = _fd_err {
-                        _fd_candidate = Some(fd);
-                    } else {
-                        _fd_candidate = unsafe { Some(libc::dup(2)) };
-                    }
+
+                    if let Some(fd) = _fd_err { _fd_candidate = Some(fd); }
+                    else { _fd_candidate = unsafe { Some(libc::dup(2)) }; }
                 }
+
                 else
                 {
                     let append = item.1 == ">>";
-                    if let Ok(fd) = tools::create_raw_fd_from_file(&item.2, append) { _fd_candidate = Some(fd); }
+                    if let Ok(fd) = create_raw_from_file(&item.2, append) { _fd_candidate = Some(fd); }
                 }
                 
                 if let Some(fd) = fd_out { unsafe { libc::close(fd); } }
+                
                 fd_out = _fd_candidate;
             }
 
@@ -37848,7 +38013,7 @@ pub mod run
         (fd_out, fd_err)
     }
 
-    pub fn _get_dupped_stdout_fd(cmd: &Command, cl: &CommandLine) -> RawFd
+    pub fn _get_dupped_stdout_fd( cmd:&Command, cl:&CommandLine ) -> RawFd
     {
         if cl.with_pipeline() { return 1; }
 
@@ -37869,7 +38034,7 @@ pub mod run
         }
     }
 
-    pub fn _get_dupped_stderr_fd(cmd: &Command, cl: &CommandLine) -> RawFd
+    pub fn _get_dupped_stderr_fd( cmd:&Command, cl:&CommandLine ) -> RawFd
     {
         if cl.with_pipeline() { return 2; }
 
@@ -37894,7 +38059,7 @@ pub mod run
         }
     }
 
-    pub fn print_stdout(info: &str, cmd: &Command, cl: &CommandLine)
+    pub fn print_stdout( info:&str, cmd:&Command, cl:&CommandLine )
     {
         unsafe
         {
@@ -37920,7 +38085,7 @@ pub mod run
         }
     }
 
-    pub fn print_stderr(info: &str, cmd: &Command, cl: &CommandLine)
+    pub fn print_stderr( info:&str, cmd:&Command, cl:&CommandLine )
     {
         let fd = _get_dupped_stderr_fd(cmd, cl);
         if fd == -1 {
@@ -37950,10 +38115,10 @@ pub mod run
 
     pub fn print_stderr_with_capture
     (
-        info: &str,
+        info:&str,
         cr: &mut CommandResult,
-        cl: &CommandLine,
-        cmd: &Command,
+        cl:&CommandLine,
+        cmd:&Command,
         capture: bool
     )
     {
@@ -37967,10 +38132,10 @@ pub mod run
 
     pub fn print_stdout_with_capture
     (
-        info: &str,
+        info:&str,
         cr: &mut CommandResult,
-        cl: &CommandLine,
-        cmd: &Command,
+        cl:&CommandLine,
+        cmd:&Command,
         capture: bool
     )
     {
@@ -37984,23 +38149,13 @@ pub mod scripts
 {
     use ::
     {
+        fs::{ File },
+        io::{ Read, Write, ErrorKind },
+        path::{ Path },
+        regex::{ contains, Regex, RegexBuilder },
+        types::{ * },
         *,
     };
-    /*
-    use std::fs::File;
-    use std::io::{Read, Write, ErrorKind};
-    use std::path::Path;
-
-    use pest::iterators::Pair;
-    use regex::{Regex, RegexBuilder};
-
-    use crate::execute;
-    use crate::libs;
-    use crate::parsers;
-    use crate::shell;
-    use crate::types;
-    use crate::types::CommandResult;
-    */
     // pub fn run_script(sh: &mut shell::Shell, args: &Vec<String>) -> i32
     pub fn run(sh: &mut shell::Shell, args: &Vec<String>) -> i32
     {
@@ -38097,11 +38252,7 @@ pub mod scripts
         if let Some(last) = cr_list.last() {
             status = last.status;
         }
-
-        // FIXME: We probably need to fix the issue in the `set` builtin,
-        // which currently set `exit_on_error` at the shell session level,
-        // we should instead set in a script-level.
-        // Here is a work-around ugly fix.
+        
         sh.exit_on_error = false;
 
         status
@@ -38116,14 +38267,19 @@ pub mod scripts
     ) -> Vec<CommandResult>
     {
         let mut cr_list = Vec::new();
-        match parsers::locust::parse_lines(lines) {
-            Ok(pairs_exp) => {
-                for pair in pairs_exp {
+        match parsers::locust::parse_lines(lines)
+        {
+            Ok(pairs_exp) =>
+            {
+                for pair in pairs_exp
+                {
                     let (mut _cr_list, _cont, _brk) = run_exp(sh, pair, args, false, capture);
                     cr_list.append(&mut _cr_list);
                 }
             }
-            Err(e) => {
+
+            Err(e) =>
+            {
                 println_stderr!("syntax error: {:?}", e);
                 return cr_list;
             }
@@ -38131,60 +38287,59 @@ pub mod scripts
         cr_list
     }
 
-    fn expand_args(line: &str, args: &[String]) -> String {
-        let linfo = parsers::parser_line::parse_line(line);
+    pub fn expand_args(line: &str, args: &[String]) -> String
+    {
+        let linfo = parsers::line::parse(line);
         let mut tokens = linfo.tokens;
         expand_args_in_tokens(&mut tokens, args);
-        parsers::parser_line::tokens_to_line(&tokens)
+        parsers::line::from_tokens( &tokens )
     }
 
-    fn expand_line_to_toknes(line: &str,
-                            args: &[String],
-                            sh: &mut shell::Shell) -> types::Tokens {
-        let linfo = parsers::parser_line::parse_line(line);
+    pub fn expand_line_to_toknes(line: &str, args: &[String], sh: &mut shell::Shell) -> types::Tokens
+    {
+        let linfo = parsers::line::parse(line);
         let mut tokens = linfo.tokens;
         expand_args_in_tokens(&mut tokens, args);
         shell::do_expansion(sh, &mut tokens);
         tokens
     }
 
-    fn is_args_in_token(token: &str) -> bool {
-        libs::re::re_contains(token, r"\$\{?[0-9@]+\}?")
-    }
+    pub fn is_args_in_token(token: &str) -> bool { contains(token, r"\$\{?[0-9@]+\}?") }
 
-    fn expand_args_for_single_token(token: &str, args: &[String]) -> String {
+    pub fn expand_args_for_single_token(token: &str, args: &[String]) -> String
+    {
         let re = Regex::new(r"^(.*?)\$\{?([0-9]+|@)\}?(.*)$").unwrap();
-        if !re.is_match(token) {
-            return token.to_string();
-        }
+
+        if !re.is_match(token) { return token.to_string(); }
 
         let mut result = String::new();
         let mut _token = token.to_string();
         let mut _head = String::new();
         let mut _output = String::new();
         let mut _tail = String::new();
-        loop {
-            if !re.is_match(&_token) {
-                if !_token.is_empty() {
-                    result.push_str(&_token);
-                }
+
+        loop
+        {
+            if !re.is_match(&_token)
+            {
+                if !_token.is_empty() { result.push_str(&_token); }
+
                 break;
             }
-            for cap in re.captures_iter(&_token) {
+
+            for cap in re.captures_iter(&_token)
+            {
                 _head = cap[1].to_string();
                 _tail = cap[3].to_string();
                 let _key = cap[2].to_string();
-                if _key == "@" {
-                    result.push_str(format!("{}{}", _head, args[1..].join(" ")).as_str());
-                } else if let Ok(arg_idx) = _key.parse::<usize>() {
-                    if arg_idx < args.len() {
-                        result.push_str(format!("{}{}", _head, args[arg_idx]).as_str());
-                    } else {
-                        result.push_str(&_head);
-                    }
-                } else {
-                    result.push_str(&_head);
+
+                if _key == "@" { result.push_str(format!("{}{}", _head, args[1..].join(" ")).as_str()); }
+                else if let Ok(arg_idx) = _key.parse::<usize>()
+                {
+                    if arg_idx < args.len() { result.push_str(format!("{}{}", _head, args[arg_idx]).as_str()); }
+                    else { result.push_str(&_head); }
                 }
+                else { result.push_str(&_head); }
             }
 
             if _tail.is_empty() {
@@ -38195,11 +38350,13 @@ pub mod scripts
         result
     }
 
-    fn expand_args_in_tokens(tokens: &mut types::Tokens, args: &[String]) {
+    fn expand_args_in_tokens(tokens: &mut types::Tokens, args: &[String])
+    {
         let mut idx: usize = 0;
         let mut buff = Vec::new();
 
-        for (sep, token) in tokens.iter() {
+        for (sep, token) in tokens.iter()
+        {
             if sep == "`" || sep == "'" || !is_args_in_token(token) {
                 idx += 1;
                 continue;
@@ -38210,25 +38367,30 @@ pub mod scripts
             idx += 1;
         }
 
-        for (i, text) in buff.iter().rev() {
+        for (i, text) in buff.iter().rev()
+        {
             tokens[*i].1 = text.to_string();
         }
     }
 
-    fn run_exp_test_br(sh: &mut shell::Shell,
-                    pair_br: Pair<parsers::locust::Rule>,
-                    args: &Vec<String>,
-                    in_loop: bool,
-                    capture: bool) -> (Vec<CommandResult>, bool, bool, bool) {
+    fn run_exp_test_br
+    (
+        sh: &mut shell::Shell,
+        pair_br: Pair<Rule>,
+        args: &Vec<String>,
+        in_loop: bool,
+        capture: bool
+    ) -> (Vec<CommandResult>, bool, bool, bool)
+    {
         let mut cr_list = Vec::new();
         let pairs = pair_br.into_inner();
         let mut test_pass = false;
         for pair in pairs {
             let rule = pair.as_rule();
-            if rule == parsers::locust::Rule::IF_HEAD ||
-                    rule == parsers::locust::Rule::IF_ELSEIF_HEAD ||
-                    rule == parsers::locust::Rule::WHILE_HEAD {
-                let pairs_test: Vec<Pair<parsers::locust::Rule>> =
+            if rule == Rule::IF_HEAD ||
+                    rule == Rule::IF_ELSEIF_HEAD ||
+                    rule == Rule::WHILE_HEAD {
+                let pairs_test: Vec<Pair<Rule>> =
                     pair.into_inner().collect();
                 let pair_test = &pairs_test[0];
                 let line = pair_test.as_str().trim();
@@ -38242,12 +38404,12 @@ pub mod scripts
                 continue;
             }
 
-            if rule == parsers::locust::Rule::KW_ELSE {
+            if rule == Rule::KW_ELSE {
                 test_pass = true;
                 continue;
             }
 
-            if rule == parsers::locust::Rule::EXP_BODY {
+            if rule == Rule::EXP_BODY {
                 if !test_pass {
                     return (cr_list, false, false, false);
                 }
@@ -38262,11 +38424,16 @@ pub mod scripts
         (cr_list, test_pass, false, false)
     }
 
-    fn run_exp_if(sh: &mut shell::Shell,
-                pair_if: Pair<parsers::locust::Rule>,
-                args: &Vec<String>,
-                in_loop: bool,
-                capture: bool) -> (Vec<CommandResult>, bool, bool) {
+    fn run_exp_if
+    (
+        sh: &mut shell::Shell,
+        pair_if: Pair<Rule>,
+        args: &Vec<String>,
+        in_loop: bool,
+        capture: bool
+    ) -> (Vec<CommandResult>, bool, bool
+    )
+    {
         let mut cr_list = Vec::new();
         let pairs = pair_if.into_inner();
         let mut met_continue = false;
@@ -38284,14 +38451,18 @@ pub mod scripts
         (cr_list, met_continue, met_break)
     }
 
-    fn get_for_result_from_init(sh: &mut shell::Shell,
-                                pair_init: Pair<parsers::locust::Rule>,
-                                args: &[String]) -> Vec<String> {
+    fn get_for_result_from_init
+    (
+        sh: &mut shell::Shell,
+        pair_init: Pair<Rule>,
+        args: &[String]
+    ) -> Vec<String>
+    {
         let mut result: Vec<String> = Vec::new();
         let pairs = pair_init.into_inner();
         for pair in pairs {
             let rule = pair.as_rule();
-            if rule == parsers::locust::Rule::TEST {
+            if rule == Rule::TEST {
                 let line = pair.as_str().trim();
                 let tokens = expand_line_to_toknes(line, &args[1..], sh);
                 for (sep, token) in tokens {
@@ -38308,28 +38479,33 @@ pub mod scripts
         result
     }
 
-    fn get_for_result_list(sh: &mut shell::Shell,
-                        pair_head: Pair<parsers::locust::Rule>,
-                        args: &[String]) -> Vec<String> {
+    fn get_for_result_list
+    (
+        sh: &mut shell::Shell,
+        pair_head: Pair<Rule>,
+        args: &[String]
+    ) -> Vec<String>
+    {
         let pairs = pair_head.into_inner();
         for pair in pairs {
             let rule = pair.as_rule();
-            if rule == parsers::locust::Rule::FOR_INIT {
+            if rule == Rule::FOR_INIT {
                 return get_for_result_from_init(sh, pair, args);
             }
         }
         Vec::new()
     }
 
-    fn get_for_var_name(pair_head: Pair<parsers::locust::Rule>) -> String {
+    fn get_for_var_name(pair_head: Pair<Rule>) -> String
+    {
         let pairs = pair_head.into_inner();
         for pair in pairs {
             let rule = pair.as_rule();
-            if rule == parsers::locust::Rule::FOR_INIT {
+            if rule == Rule::FOR_INIT {
                 let pairs_init = pair.into_inner();
                 for pair_init in pairs_init {
                     let rule_init = pair_init.as_rule();
-                    if rule_init == parsers::locust::Rule::FOR_VAR {
+                    if rule_init == Rule::FOR_VAR {
                         let line = pair_init.as_str().trim();
                         return line.to_string();
                     }
@@ -38339,22 +38515,26 @@ pub mod scripts
         String::new()
     }
 
-    fn run_exp_for(sh: &mut shell::Shell,
-                pair_for: Pair<parsers::locust::Rule>,
-                args: &Vec<String>,
-                capture: bool) -> Vec<CommandResult> {
+    fn run_exp_for
+    (
+        sh: &mut shell::Shell, 
+        pair_for: Pair<Rule>, 
+        args: &Vec<String>, 
+        capture: bool
+    ) -> Vec<CommandResult>
+    {
         let mut cr_list = Vec::new();
         let pairs = pair_for.into_inner();
         let mut result_list: Vec<String> = Vec::new();
         let mut var_name: String = String::new();
         for pair in pairs {
             let rule = pair.as_rule();
-            if rule == parsers::locust::Rule::FOR_HEAD {
+            if rule == Rule::FOR_HEAD {
                 var_name = get_for_var_name(pair.clone());
                 result_list = get_for_result_list(sh, pair.clone(), args);
                 continue;
             }
-            if rule == parsers::locust::Rule::EXP_BODY {
+            if rule == Rule::EXP_BODY {
                 for value in &result_list {
                     sh.set_env(&var_name, value);
                     let (mut _cr_list, _cont, _brk) = run_exp(
@@ -38369,10 +38549,14 @@ pub mod scripts
         cr_list
     }
 
-    fn run_exp_while(sh: &mut shell::Shell,
-                    pair_while: Pair<parsers::locust::Rule>,
-                    args: &Vec<String>,
-                    capture: bool) -> Vec<CommandResult> {
+    fn run_exp_while
+    (
+        sh: &mut shell::Shell, 
+        pair_while: Pair<Rule>, 
+        args: &Vec<String>, 
+        capture: bool
+    ) -> Vec<CommandResult>
+    {
         let mut cr_list = Vec::new();
         loop {
             let (mut _cr_list, passed, _cont, _brk) = run_exp_test_br(sh, pair_while.clone(), args, true, capture);
@@ -38387,7 +38571,7 @@ pub mod scripts
     fn run_exp
     (
         sh: &mut shell::Shell,
-        pair_in: Pair<parsers::locust::Rule>,
+        pair_in: Pair<Rule>,
         args: &Vec<String>,
         in_loop: bool,
         capture: bool
@@ -38403,7 +38587,7 @@ pub mod scripts
 
             let rule = pair.as_rule();
             
-            if rule == parsers::locust::Rule::CMD
+            if rule == Rule::CMD
             {
                 if line == "continue"
                 {
@@ -38434,7 +38618,7 @@ pub mod scripts
                         return (cr_list, false, false);
                     }
                 }
-            } else if rule == parsers::locust::Rule::EXP_IF {
+            } else if rule == Rule::EXP_IF {
                 let (mut _cr_list, _cont, _brk) = run_exp_if(sh, pair, args, in_loop, capture);
                 cr_list.append(&mut _cr_list);
                 if _cont {
@@ -38443,10 +38627,10 @@ pub mod scripts
                 if _brk {
                     return (cr_list, false, true);
                 }
-            } else if rule == parsers::locust::Rule::EXP_FOR {
+            } else if rule == Rule::EXP_FOR {
                 let mut _cr_list = run_exp_for(sh, pair, args, capture);
                 cr_list.append(&mut _cr_list);
-            } else if rule == parsers::locust::Rule::EXP_WHILE {
+            } else if rule == Rule::EXP_WHILE {
                 let mut _cr_list = run_exp_while(sh, pair, args, capture);
                 cr_list.append(&mut _cr_list);
             }
@@ -39289,7 +39473,7 @@ pub mod shell
         !contains(line, r"='.*\$\([^\)]+\).*'$")
     }
 
-    pub fn do_command_substitution_for_dollar(sh: &mut Shell, tokens: &mut Tokens) 
+    pub fn do_command_substitution_for_dollar(sh:&mut Shell, tokens: &mut Tokens) 
     {
         let mut idx: usize = 0;
         let mut buff: HashMap<usize, String> = HashMap::new();
@@ -39360,7 +39544,7 @@ pub mod shell
         }
     }
 
-    pub fn do_command_substitution_for_dot(sh: &mut Shell, tokens: &mut Tokens) 
+    pub fn do_command_substitution_for_dot(sh:&mut Shell, tokens: &mut Tokens) 
     {
         let mut idx: usize = 0;
         let mut buff: HashMap<usize, String> = HashMap::new();
@@ -39457,13 +39641,13 @@ pub mod shell
         }
     }
 
-    pub fn do_command_substitution(sh: &mut Shell, tokens: &mut Tokens) 
+    pub fn do_command_substitution(sh:&mut Shell, tokens: &mut Tokens) 
     {
         do_command_substitution_for_dot(sh, tokens);
         do_command_substitution_for_dollar(sh, tokens);
     }
 
-    pub fn do_expansion(sh: &mut Shell, tokens: &mut Tokens)
+    pub fn do_expansion( sh:&mut Shell, tokens: &mut Tokens )
     {
         // let line = parsers::line::tokens_to_line(tokens);
         let line = parsers::line::from_tokens( tokens );
@@ -39502,8 +39686,8 @@ pub mod shell
 
     pub fn try_run_builtin_in_subprocess
     (
-        sh: &mut Shell,
-        cl: &CommandLine,
+        sh:&mut Shell,
+        cl:&CommandLine,
         idx_cmd: usize,
         capture: bool,
     ) -> Option<i32>
@@ -39514,8 +39698,8 @@ pub mod shell
 
     pub fn try_run_builtin
     (
-        sh: &mut Shell,
-        cl: &CommandLine,
+        sh:&mut Shell,
+        cl:&CommandLine,
         idx_cmd: usize,
         capture: bool,
     ) -> Option<CommandResult>
@@ -39655,7 +39839,7 @@ pub mod shell
     pub fn pipeline
     (
         sh: &mut shell::Shell,
-        cl: &CommandLine,
+        cl:&CommandLine,
         tty: bool,
         capture: bool,
         log_cmd: bool,
@@ -39795,7 +39979,7 @@ pub mod shell
     pub fn run_single_program
     (
         sh: &mut shell::Shell,
-        cl: &CommandLine,
+        cl:&CommandLine,
         idx_cmd: usize,
         options: &CommandOptions,
         pgid: &mut i32,
@@ -40195,8 +40379,8 @@ pub mod shell
 
     pub fn try_run_func
     (
-        sh: &mut Shell,
-        cl: &CommandLine,
+        sh:&mut Shell,
+        cl:&CommandLine,
         capture: bool,
         log_cmd: bool,
     ) -> Option<CommandResult> 
@@ -53177,6 +53361,7 @@ pub mod types
     {
         collections::{ HashMap, HashSet },
         hash::{ Hash, Hasher },
+        rc::{ Rc },
         regex::{ Regex, contains, unquote },
         *,
     };
@@ -53919,6 +54104,105 @@ pub mod types
             ptr::write(dst.cast(), format_hyphenated(src, upper));
             str::from_utf8_unchecked_mut(buf)
         }
+    }
+
+    #[derive(Clone)]
+    pub enum App
+    {
+        All( bool ),
+        Open( Option<Option<u64>> ),
+        Core( Option<Option<u64>> ),
+        Soft( bool ),
+        Hard( bool ),
+    }
+
+    #[derive(Clone)]
+    pub enum Rule
+    {
+        ASCII_ALPHA,
+        ASCII_ALPHANUMERIC,
+        ANY,
+
+        CMD,
+        CMD_END,
+        CMD_NORMAL,
+
+        DUMMY_DO,
+        DUMMY_THEN,
+
+        EOI,
+        
+        EXP,
+            EXP_BODY,
+            EXP_IF,
+            EXP_FOR,
+            EXP_WHILE,
+
+        FOR,
+            FOR_HEAD,
+            FOR_INIT,
+            FOR_VAR,
+
+        IF_ELSE_BR,
+        IF_ELSEIF_BR,
+        IF_ELSEIF_HEAD,
+        IF_HEAD,
+        IF_IF_BR,
+        
+        TEST,
+        
+        KW_LIST,
+            KW_DONE,
+            KW_ELSE,
+            KW_ELSEIF,
+            KW_IF,
+            KW_FI,
+            KW_FOR,        
+            KW_WHILE,
+
+        NEWLINE,
+
+        WHILE_HEAD,
+
+        WHITESPACE,
+    }
+
+    #[derive(Clone)]
+    pub struct LineIndex
+    {
+        /// Offset (bytes) the the beginning of each line, zero-based
+        line_offsets: Vec<usize>,
+    }
+    /// This structure serves to improve performance over Token objects.
+    #[derive(Debug)]
+    pub enum QueueableToken<'i, R>
+    {
+        Start
+        {
+            /// Queue (as a vec) contains both `Start` token and `End` for the same rule.
+            end_token_index: usize,
+            /// Position from which rule was tried to parse (or successfully parsed).
+            input_pos: usize,
+        },
+        
+        End
+        {
+            /// Queue (as a vec) contains both `Start` token and `End` for the same rule.
+            start_token_index: usize,
+            rule: R,
+            tag: Option<&'i str>,
+            /// Position at which successfully parsed rule finished (ended).
+            input_pos: usize,
+        },
+    }
+    /// A matching pair of [`Token`]s and everything between them.
+    #[derive(Clone)]
+    pub struct Pair<'i, R>
+    {
+        queue: Rc<Vec<QueueableToken<'i, R>>>,
+        input: &'i str,
+        start: usize,
+        line_index: Rc<LineIndex>,
     }
 }
 
