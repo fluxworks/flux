@@ -2325,13 +2325,15 @@ pub mod database
 {
     use ::
     {
+        cell::{ RefCell },
         collections::
         {
             hash_map::{Iter, Keys, Values},
-            HashMap,
+            BTreeMap, HashMap, 
         },
         ffi::{ CStr },
         io::{ Write as _ },
+        libc::{ * },
         path::{ Path },
         sync::{ Arc, Mutex },
         str::{ SmallCString },
@@ -6198,6 +6200,17 @@ pub mod database
             if !db_handle.is_null() { unsafe { ffi::sqlite3_interrupt(*db_handle) } } */
         }
     }
+    
+    #[repr(C)] #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+    pub enum PrepFlags
+    {
+        /// A hint to the query planner that the prepared statement will be retained for a long time and probably reused many times.
+        PERSISTENT = 0x01,
+        /// Causes the SQL compiler to return an error (error code SQLITE_ERROR) if the statement uses any virtual tables.
+        NO_VTAB = 0x04,
+        /// Prevents SQL compiler errors from being sent to the error log.
+        DONT_LOG = 0x10,
+    }
 
     #[repr(C)] #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
     pub enum OpenFlags
@@ -6225,7 +6238,59 @@ pub mod database
         OPEN_NOFOLLOW = 0x0100_0000,
         /// Extended result codes. (3.37.0)
         OPEN_EXRESCODE = 0x0200_0000,
-    }    
+    }
+    
+    /// Maps parameter names to parameter indices.
+    #[derive(Default, Clone, Debug)]
+    pub(crate) struct ParamIndexCache( RefCell<BTreeMap<SmallCString, usize>> );
+
+    #[repr(C)] #[derive(Debug, Copy, Clone)]
+    pub struct StatementPointer
+    {
+        _unused: [u8; 0],
+    }
+    /// Private newtype for raw sqlite3_stmts that finalize themselves when dropped.
+    #[derive(Debug)]
+    pub struct RawStatement
+    {
+        /// Query Statement Pointer
+        ptr: *mut StatementPointer,
+        /// Cached indices of named parameters, computed on the fly.
+        cache: ParamIndexCache,
+        /// Cached SQL (trimmed) that we use as the key when we're in the statement cache.
+        statement_cache_key: Option<Arc<str>>,
+    }
+    /// A prepared statement.
+    pub struct Statement<'cx>
+    {
+        pub(crate) conn: &'cx Connection,
+        pub(crate) stmt: RawStatement,
+    }
+    /// A single result row of a query.
+    pub struct Row<'stmt>
+    {
+        pub(crate) stmt: &'stmt Statement<'stmt>,
+    }
+    /// A handle (lazy fallible streaming iterator) for the resulting rows of a query.
+    #[must_use = "Rows is lazy and will do nothing unless consumed"]
+    pub struct Rows<'stmt>
+    {
+        pub(crate) stmt: Option<&'stmt Statement<'stmt>>,
+        row: Option<Row<'stmt>>,
+    }
+    /// Trait used for sets of parameters passed into SQL statements/queries.
+    pub trait Params
+    {
+        #[doc(hidden)]
+        fn __bind_in(self, stmt: &mut Statement<'_>) -> OverResult<()>;
+    }
+
+    #[repr(C)] #[derive(Debug, Copy, Clone)]
+    pub struct Routines
+    {
+        _unused: [u8; 0],
+    }
+
     /// A connection to a SQLite database.
     pub struct Connection
     {
@@ -7894,12 +7959,12 @@ pub mod history
     {
         if let Ok(hfile) = env::var("HISTORY_FILE") { hfile }
         
-        else if let Ok(d) = env::var("XDG_DATA_HOME") { format!("{}/{}", d, "cicada/history.sqlite") }
+        else if let Ok(d) = env::var("XDG_DATA_HOME") { format!("{}/{}", d, "cicada/history.over") }
         
         else
         {
-            let home = get_user_home();
-            format!("{}/{}", home, ".local/share/cicada/history.sqlite")
+            let home = env::get_user_home();
+            format!("{}/{}", home, ".local/share/cicada/history.over")
         }
     }
     // pub fn get_history_table() -> String
@@ -12102,7 +12167,7 @@ pub mod now
         let mut status = 0;
         let mut sep = String::new();
 
-        for token in parsers::line::line_to_cmds(line)
+        for token in parsers::line::to_cmds(line)
         {
             if token == ";" || token == "&&" || token == "||"
             {
@@ -12138,7 +12203,8 @@ pub mod now
             for cap in re.captures_iter(text)
             {
                 let name = cap[1].to_string();
-                let value = parsers::line::unquote(&cap[2]);
+                //let value = parsers::line::unquote(&cap[2]);
+                let value = &cap[2].tokenize();
                 envs.insert(name, value);
             }
 
@@ -12181,7 +12247,7 @@ pub mod now
                     return CommandResult::new();
                 }
 
-                let (term_given, cr) = core::run_pipeline(sh, &cl, tty, capture, log_cmd);
+                let (term_given, cr) = run::pipeline(sh, &cl, tty, capture, log_cmd);
 
                 if term_given
                 {
@@ -12217,7 +12283,7 @@ pub mod now
         {
             Ok(c) =>
             {
-                let (term_given, cr) = core::run_pipeline(sh, &c, false, true, false);
+                let (term_given, cr) = pipeline(sh, &c, false, true, false);
                 if term_given
                 {
                     unsafe
@@ -36230,6 +36296,22 @@ pub mod parsers
             }
         }
     }
+    /*
+    */
+    pub mod locust
+    {
+        use ::
+        {
+            error::{ Error },
+            types::{ * },
+            *,
+        };
+
+        pub fn parse( lines: &str ) -> Result<Pairs<Rule>, Error<Rule>>
+        {
+            Ok( () )
+        }
+    }
 }
 
 pub mod path
@@ -38143,6 +38225,565 @@ pub mod run
         if capture { cr.stdout = info.to_string(); }
         else { print_stdout(info, cmd, cl); }
     }
+    // pub fn run_pipeline( ... ) -> (bool, CommandResult)
+    /// Run a pipeline (e.g. `echo hi | wc -l`) | returns: (is-terminal-given, command-result)
+    pub fn pipeline
+    (
+        sh: &mut shell::Shell,
+        cl: &CommandLine,
+        tty: bool,
+        capture: bool,
+        log_cmd: bool,
+    ) -> (bool, CommandResult)
+    {
+        let mut term_given = false;
+        
+        if cl.background && capture
+        {
+            println_stderr!("cicada: cannot capture output of background cmd");
+            return (term_given, CommandResult::error());
+        }
+
+        // if let Some(cr) = try_run_calculator(&cl.line, capture) { return (term_given, cr); }
+        
+        if let Some(cr) = try_run_func(sh, cl, capture, log_cmd) { return (term_given, cr); }
+
+        if log_cmd { log!("run: {}", cl.line); }
+
+        let length = cl.commands.len();
+        
+        if length == 0
+        {
+            println!("cicada: invalid command: cmds with empty length");
+            return (false, CommandResult::error());
+        }
+
+        let mut pipes = Vec::new();
+        let mut errored_pipes = false;
+        
+        for _ in 0..length - 1
+        {
+            match pipe()
+            {
+                Ok(fds) => pipes.push(fds),
+                Err(e) =>
+                {
+                    errored_pipes = true;
+                    println_stderr!("cicada: pipeline1: {}", e);
+                    break;
+                }
+            }
+        }
+
+        if errored_pipes
+        {
+            for fds in pipes
+            {
+                process::close(fds.0);
+                process::close(fds.1);
+            }
+
+            return (false, CommandResult::error());
+        }
+
+        if pipes.len() + 1 != length
+        {
+            println!("cicada: invalid command: unmatched pipes count");
+            return (false, CommandResult::error());
+        }
+
+        let mut pgid: i32 = 0;
+        let mut fg_pids: Vec<i32> = Vec::new();
+        let isatty = if tty { unsafe { libc::isatty(1) == 1 } } else { false };        
+        let options = CommandOptions
+        {
+            isatty,
+            capture_output: capture,
+            background: cl.background,
+            envs: cl.envs.clone(),
+        };
+
+        let mut fds_capture_stdout = None;
+        let mut fds_capture_stderr = None;
+        if capture
+        {
+            match pipe()
+            {
+                Ok(fds) => fds_capture_stdout = Some(fds),
+                Err(e) =>
+                {
+                    println_stderr!("cicada: pipeline2: {}", e);
+                    return (false, CommandResult::error());
+                }
+            }
+
+            match pipe()
+            {
+                Ok(fds) => fds_capture_stderr = Some(fds),
+                Err(e) =>
+                {
+                    if let Some(fds) = fds_capture_stdout
+                    {
+                        process::close(fds.0);
+                        process::close(fds.1);
+                    }
+
+                    println_stderr!("cicada: pipeline3: {}", e);
+                    return (false, CommandResult::error());
+                }
+            }
+        }
+
+        let mut cmd_result = CommandResult::new();
+        for i in 0..length
+        {
+            let child_id: i32 = single_program
+            (
+                sh,
+                cl,
+                i,
+                &options,
+                &mut pgid,
+                &mut term_given,
+                &mut cmd_result,
+                &pipes,
+                &fds_capture_stdout,
+                &fds_capture_stderr,
+            );
+
+            if child_id > 0 && !cl.background { fg_pids.push(child_id); }
+        }
+
+        if cl.is_single_and_builtin() { return (false, cmd_result); }
+
+        if cl.background
+        {
+            if let Some(job) = sh.get_job_by_gid(pgid) { println_stderr!("[{}] {}", job.id, job.gid); }
+        }
+
+        if !fg_pids.is_empty()
+        {
+            let _cr = jobc::wait_fg_job(sh, pgid, &fg_pids);
+            
+            if !capture { cmd_result = _cr; }
+        }
+
+        (term_given, cmd_result)
+    }
+    // fn run_single_program( ... ) -> i32
+    /// Run a single command.
+    fn single_program
+    (
+        sh: &mut shell::Shell,
+        cl: &CommandLine,
+        idx_cmd: usize,
+        options: &CommandOptions,
+        pgid: &mut i32,
+        term_given: &mut bool,
+        cmd_result: &mut CommandResult,
+        pipes: &[(RawFd, RawFd)],
+        fds_capture_stdout: &Option<(RawFd, RawFd)>,
+        fds_capture_stderr: &Option<(RawFd, RawFd)>,
+    ) -> i32 
+    {
+        let capture = options.capture_output;
+        
+        if cl.is_single_and_builtin()
+        {
+            if let Some(cr) = shell::try_run_builtin(sh, cl, idx_cmd, capture)
+            {
+                *cmd_result = cr;
+                return unsafe { libc::getpid() };
+            }
+
+            println_stderr!("cicada: error when run singler builtin");
+            log!("error when run singler builtin: {:?}", cl);
+            return 1;
+        }
+
+        let pipes_count = pipes.len();
+        let mut fds_stdin = None;
+        let cmd = cl.commands.get(idx_cmd).unwrap();
+
+        if cmd.has_here_string()
+        {
+            match pipe()
+            {
+                Ok(fds) => fds_stdin = Some(fds),
+                Err(e) =>
+                {
+                    println_stderr!("cicada: pipeline4: {}", e);
+                    return 1;
+                }
+            }
+        }
+
+        match fork()
+        {
+            Ok(ForkResult::Child) =>
+            {
+                unsafe
+                {
+                    libc::signal(libc::SIGTSTP, libc::SIG_DFL);
+                    libc::signal(libc::SIGQUIT, libc::SIG_DFL);
+                }
+                
+                if idx_cmd > 0
+                {
+                    for i in 0..idx_cmd - 1
+                    {
+                        let fds = pipes[i];
+                        libs::close(fds.0);
+                        libs::close(fds.1);
+                    }
+                }
+                
+                for i in idx_cmd + 1..pipes_count
+                {
+                    let fds = pipes[i];
+                    libs::close(fds.0);
+                    libs::close(fds.1);
+                }
+                
+                if idx_cmd < pipes_count
+                {
+                    if let Some(fds) = fds_capture_stdout
+                    {
+                        libs::close(fds.0);
+                        libs::close(fds.1);
+                    }
+
+                    if let Some(fds) = fds_capture_stderr
+                    {
+                        libs::close(fds.0);
+                        libs::close(fds.1);
+                    }
+                }
+
+                if idx_cmd == 0
+                {
+                    unsafe
+                    {
+                        let pid = libc::getpid();
+                        libc::setpgid(0, pid);
+                    }
+                }
+                
+                else
+                {
+                    unsafe { libc::setpgid(0, *pgid); }
+                }
+                if idx_cmd > 0
+                {
+                    let fds_prev = pipes[idx_cmd - 1];
+                    libs::dup2(fds_prev.0, 0);
+                    libs::close(fds_prev.0);
+                    libs::close(fds_prev.1);
+                }
+
+                if idx_cmd < pipes_count
+                {
+                    let fds = pipes[idx_cmd];
+                    libs::dup2(fds.1, 1);
+                    libs::close(fds.1);
+                    libs::close(fds.0);
+                }
+
+                if cmd.has_redirect_from()
+                {
+                    if let Some(redirect_from) = &cmd.redirect_from
+                    {
+                        let fd = tools::get_fd_from_file(&redirect_from.clone().1);
+
+                        if fd == -1 { process::exit(1); }
+
+                        libs::dup2(fd, 0);
+                        libs::close(fd);
+                    }
+                }
+
+                if cmd.has_here_string()
+                {
+                    if let Some(fds) = fds_stdin
+                    {
+                        libs::close(fds.1);
+                        libs::dup2(fds.0, 0);
+                        libs::close(fds.0);
+                    }
+                }
+
+                let mut stdout_redirected = false;
+                let mut stderr_redirected = false;
+
+                for item in &cmd.redirects_to
+                {
+                    let from_ = &item.0;
+                    let op_ = &item.1;
+                    let to_ = &item.2;
+                    if to_ == "&1" && from_ == "2"
+                    {
+                        if idx_cmd < pipes_count { libs::dup2(1, 2); }
+                        else if !options.capture_output
+                        {
+                            let fd = libs::dup(1);
+                            
+                            if fd == -1
+                            {
+                                println_stderr!("cicada: dup error");
+                                process::exit(1);
+                            }
+
+                            libs::dup2(fd, 2);
+                        }
+                    }
+                    
+                    else if to_ == "&2" && from_ == "1"
+                    {
+                        if idx_cmd < pipes_count || !options.capture_output
+                        {
+                            let fd = libs::dup(2);
+                            if fd == -1
+                            {
+                                println_stderr!("cicada: dup error");
+                                process::exit(1);
+                            }
+                            libs::dup2(fd, 1);
+                        }
+                    }
+
+                    else
+                    {
+                        let append = op_ == ">>";
+                        match tools::create_raw_fd_from_file(to_, append)
+                        {
+                            Ok(fd) =>
+                            {
+                                if fd == -1 {
+                                    println_stderr!("cicada: fork: fd error");
+                                    process::exit(1);
+                                }
+
+                                if from_ == "1" {
+                                    libs::dup2(fd, 1);
+                                    stdout_redirected = true;
+                                } else {
+                                    libs::dup2(fd, 2);
+                                    stderr_redirected = true;
+                                }
+                            }
+                            
+                            Err(e) =>
+                            {
+                                println_stderr!("cicada: fork: {}", e);
+                                process::exit(1);
+                            }
+                        }
+                    }
+                }
+                
+                if idx_cmd == pipes_count && options.capture_output
+                {
+                    if !stdout_redirected
+                    {
+                        if let Some(fds) = fds_capture_stdout
+                        {
+                            libs::close(fds.0);
+                            libs::dup2(fds.1, 1);
+                            libs::close(fds.1);
+                        }
+                    }
+
+                    if !stderr_redirected
+                    {
+                        if let Some(fds) = fds_capture_stderr
+                        {
+                            libs::close(fds.0);
+                            libs::dup2(fds.1, 2);
+                            libs::close(fds.1);
+                        }
+                    }
+                }
+
+                if cmd.is_builtin()
+                {
+                    if let Some(status) = try_run_builtin_in_subprocess(sh, cl, idx_cmd, capture)
+                    {
+                        process::exit(status);
+                    }
+                }
+                
+                let mut c_envs: Vec<_> = env::vars().map(|(k, v)|
+                { CString::new(format!("{}={}", k, v).as_str()).expect("CString error") }).collect();
+
+                for (key, value) in cl.envs.iter()
+                {
+                    c_envs.push
+                    (
+                        CString::new(format!("{}={}", key, value).as_str()).expect("CString error"),
+                    );
+                }
+
+                let program = &cmd.tokens[0].1;
+                let path = if program.contains('/')
+                {
+                    program.clone()
+                }
+                else { libs::path::find_file_in_path(program, true) };
+
+                if path.is_empty()
+                {
+                    println_stderr!("cicada: {}: command not found", program);
+                    process::exit(127);
+                }
+
+                let c_program = CString::new(path.as_str()).expect("CString::new failed");
+                let c_args: Vec<_> = cmd
+                .tokens
+                .iter()
+                .map(|x| CString::new(x.1.as_str()).expect("CString error"))
+                .collect();
+
+                let c_args: Vec<&CStr> = c_args.iter().map(|x| x.as_c_str()).collect();
+                let c_envs: Vec<&CStr> = c_envs.iter().map(|x| x.as_c_str()).collect();
+
+                match execve(&c_program, &c_args, &c_envs)
+                {
+                    Ok(_) => {}
+                    Err(e) => match e
+                    {
+                        nix::Error::ENOEXEC => { println_stderr!("cicada: {}: exec format error (ENOEXEC)", program); }
+
+                        nix::Error::ENOENT => { println_stderr!("cicada: {}: file does not exist", program); }
+
+                        nix::Error::EACCES => { println_stderr!("cicada: {}: Permission denied", program); }
+
+                        _ => { println_stderr!("cicada: {}: {:?}", program, e); }
+                    },
+                }
+
+                process::exit(1);
+            }
+
+            Ok(ForkResult::Parent { child, .. }) =>
+            {
+                let pid: i32 = child.into();
+
+                if idx_cmd == 0
+                {
+                    *pgid = pid;
+                    unsafe 
+                    {
+                        if cfg!(target_os = "macos")
+                        {
+                            loop
+                            {
+                                let _pgid = libc::getpgid(pid);
+                                if _pgid == pid { break; }
+                            }
+                        }
+
+                        if sh.has_terminal && options.isatty && !cl.background
+                        { *term_given = shell::give_terminal_to(pid); }
+                    }
+                }
+
+                if options.isatty && !options.capture_output
+                {
+                    let _cmd = parsers::line::tokens_to_line(&cmd.tokens);
+                    sh.insert_job(*pgid, pid, &_cmd, "Running", cl.background);
+                }
+
+                if let Some(redirect_from) = &cmd.redirect_from 
+                {
+                    if redirect_from.0 == "<<<"
+                    {
+                        if let Some(fds) = fds_stdin
+                        {
+                            unsafe
+                            {
+                                libs::close(fds.0);
+
+                                let mut f = File::from_raw_fd(fds.1);
+                                
+                                match f.write_all(redirect_from.1.clone().as_bytes()) 
+                                {
+                                    Ok(_) => {}
+                                    Err(e) => println_stderr!("cicada: write_all: {}", e),
+                                }
+
+                                match f.write_all(b"\n")
+                                {
+                                    Ok(_) => {}
+                                    Err(e) => println_stderr!("cicada: write_all: {}", e),
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if idx_cmd < pipes_count
+                {
+                    let fds = pipes[idx_cmd];
+                    libs::close(fds.1);
+                }
+
+                if idx_cmd > 0
+                {
+                    let fds = pipes[idx_cmd - 1];
+                    libs::close(fds.0);
+                }
+
+                if idx_cmd == pipes_count && options.capture_output
+                {
+                    let mut s_out = String::new();
+                    let mut s_err = String::new();
+
+                    unsafe
+                    {
+                        if let Some(fds) = fds_capture_stdout
+                        {
+                            libs::close(fds.1);
+
+                            let mut f = File::from_raw_fd(fds.0);
+                            match f.read_to_string(&mut s_out)
+                            {
+                                Ok(_) => {}
+                                Err(e) => println_stderr!("cicada: readstr: {}", e),
+                            }
+                        }
+                        
+                        if let Some(fds) = fds_capture_stderr
+                        {
+                            libs::close(fds.1);
+                            let mut f_err = File::from_raw_fd(fds.0);
+                            match f_err.read_to_string(&mut s_err)
+                            {
+                                Ok(_) => {}
+                                Err(e) => println_stderr!("cicada: readstr: {}", e),
+                            }
+                        }
+                    }
+
+                    *cmd_result = CommandResult
+                    {
+                        gid: *pgid,
+                        status: 0,
+                        stdout: s_out.clone(),
+                        stderr: s_err.clone(),
+                    };
+                }
+
+                pid
+            }
+
+            Err(_) => 
+            {
+                println_stderr!("Fork failed");
+                *cmd_result = CommandResult::error();
+                0
+            }
+        }
+    }
 }
 
 pub mod scripts
@@ -38267,7 +38908,7 @@ pub mod scripts
     ) -> Vec<CommandResult>
     {
         let mut cr_list = Vec::new();
-        match parsers::locust::parse_lines(lines)
+        match parsers::locust::parse(lines)
         {
             Ok(pairs_exp) =>
             {
@@ -39503,7 +40144,7 @@ pub mod shell
                 let cmd_result = match CommandLine::from_line(&cmd, sh) {
                     Ok(c) => {
                         log!("run subcmd dollar: {:?}", &cmd);
-                        let (term_given, cr) = core::run_pipeline(sh, &c, true, true, false);
+                        let (term_given, cr) = pipeline(sh, &c, true, true, false);
                         if term_given {
                             unsafe {
                                 let gid = libc::getpgid(0);
@@ -39554,7 +40195,7 @@ pub mod shell
                 log!("run subcmd dot1: {:?}", token);
                 let cr = match CommandLine::from_line(token, sh) {
                     Ok(c) => {
-                        let (term_given, _cr) = core::run_pipeline(sh, &c, true, true, false);
+                        let (term_given, _cr) = pipeline(sh, &c, true, true, false);
                         if term_given {
                             unsafe {
                                 let gid = libc::getpgid(0);
@@ -39602,7 +40243,7 @@ pub mod shell
 
                         let cr = match CommandLine::from_line(&cap[2], sh) {
                             Ok(c) => {
-                                let (term_given, _cr) = core::run_pipeline(sh, &c, true, true, false);
+                                let (term_given, _cr) = pipeline(sh, &c, true, true, false);
                                 if term_given {
                                     unsafe {
                                         let gid = libc::getpgid(0);
@@ -39938,7 +40579,7 @@ pub mod shell
 
         let mut cmd_result = CommandResult::new();
         for i in 0..length {
-            let child_id: i32 = run_single_program(
+            let child_id: i32 = single_program(
                 sh,
                 cl,
                 i,
@@ -41325,7 +41966,6 @@ pub mod str
     {
         #[inline] fn borrow(&self) -> &str { self.as_str() }
     }
-
 }
 
 pub mod string
@@ -54202,6 +54842,17 @@ pub mod types
         queue: Rc<Vec<QueueableToken<'i, R>>>,
         input: &'i str,
         start: usize,
+        line_index: Rc<LineIndex>,
+    }
+    /// An iterator over [`Pair`]s. It is created by [`pest::state`] and [`Pair::into_inner`].
+    #[derive(Clone)]
+    pub struct Pairs<'i, R>
+    {
+        queue: Rc<Vec<QueueableToken<'i, R>>>,
+        input: &'i str,
+        start: usize,
+        end: usize,
+        pairs_count: usize,
         line_index: Rc<LineIndex>,
     }
 }
