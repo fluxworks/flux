@@ -2,6 +2,7 @@
 (
     ambiguous_glob_reexports,
     dead_code,
+    deprecated,
     elided_named_lifetimes,
     non_camel_case_types,
     non_snake_case,
@@ -162,9 +163,9 @@ extern crate unicode_width; */
             __item! {
                 #[cfg_attr(
                     feature = "extra_traits",
-                    ::core::prelude::v1::derive(Debug, Eq, Hash, PartialEq)
+                    derive(Debug, Eq, Hash, PartialEq)
                 )]
-                #[::core::prelude::v1::derive(::core::clone::Clone, ::core::marker::Copy)]
+                #[derive(Clone, Copy)]
                 $(#[$attr])*
                 pub struct $i ( $($field)* );
             }
@@ -184,7 +185,7 @@ extern crate unicode_width; */
         (it: $(#[$attr:meta])* pub union $i:ident { $($field:tt)* }) => (
             __item! {
                 #[repr(C)]
-                #[::core::prelude::v1::derive(::core::clone::Clone, ::core::marker::Copy)]
+                #[derive(Clone, Copy)]
                 $(#[$attr])*
                 pub union $i { $($field)* }
             }
@@ -230,9 +231,9 @@ extern crate unicode_width; */
             __item! {
                 #[cfg_attr(
                     feature = "extra_traits",
-                    ::core::prelude::v1::derive(Debug, Eq, Hash, PartialEq)
+                    derive(Debug, Eq, Hash, PartialEq)
                 )]
-                #[::core::prelude::v1::derive(::core::clone::Clone, ::core::marker::Copy)]
+                #[derive(Clone, Copy)]
                 $(#[$attr])*
                 pub enum $i { $($field)* }
             }
@@ -258,21 +259,20 @@ extern crate unicode_width; */
             $variant:ident $(= $value:literal)?,
             $($tail:tt)*
         ) => {
-            pub const $variant: $ty_name = {
+            pub const $variant: $ty_name = 
+            {
                 #[allow(unused_variables)]
                 let r = $default_val;
                 $(let r = $value;)?
                 r
             };
-
-            // The next value is always one more than the previous value, unless
-            // set explicitly.
+            
             c_enum!(@one; $ty_name; $variant + 1; $($tail)*);
         };
 
         // Use a specific type if provided, otherwise default to `c_uint`
         (@ty $repr:ty) => { $repr };
-        (@ty) => { $ c_uint };
+        (@ty) => { c_uint };
     }
 
     cfg_if!
@@ -385,6 +385,11 @@ pub mod clone
     pub use std::clone::{ * };
 }
 
+pub mod fmt
+{
+    pub use std::fmt::{ * };
+}
+
 pub mod hash
 {
     pub use std::hash::{ * };
@@ -396,7 +401,7 @@ pub mod libc
     {
         //! This module contains type aliases for C's platform-specific types and fixed-width integer types.
         //pub use ::ffi::{ c_void };
-        pub use ::os::raw::{ * };
+        pub use ::os::raw::{ *, c_ulong as _c_ulong };
 
         pub type c_schar = i8;
         pub type c_uchar = u8;
@@ -409,11 +414,11 @@ pub mod libc
         pub type c_float = f32;
         pub type c_double = f64;
 
-        cfg_if!
+        /*cfg_if!
         {
-            if #[cfg(all(
+            if #[cfg(all
+            (
                 not(windows),
-                // FIXME(ctest): just use `target_vendor` = "apple"` once `ctest` supports it
                 not(any(
                     target_os = "macos",
                     target_os = "ios",
@@ -422,7 +427,8 @@ pub mod libc
                     target_os = "visionos",
                 )),
                 not(target_os = "vita"),
-                any(
+                any
+                (
                     target_arch = "aarch64",
                     target_arch = "arm",
                     target_arch = "csky",
@@ -435,43 +441,39 @@ pub mod libc
                     target_arch = "s390x",
                     target_arch = "xtensa",
                 )
-            ))] {
-                pub type c_char = u8;
-            } else {
-                // On every other target, c_char is signed.
-                pub type c_char = i8;
-            }
-        }
+            ))] { pub type c_char = u8; }
+            else { pub type c_char = i8; }
+        } */
 
-        cfg_if!
+        /* cfg_if!
         {
             if #[cfg(any(target_arch = "avr", target_arch = "msp430"))]
             {
                 pub type c_int = i16;
-                pub type c_uint = u16;
+                //pub type c_uint = u16;
             }
 
             else
             {
                 pub type c_int = i32;
-                pub type c_uint = u32;
+               // pub type c_uint = u32;
             }
-        }
+        } */
 
-        cfg_if!
+        /* cfg_if!
         {
             if #[cfg(all(target_pointer_width = "64", not(windows)))]
             {
                 pub type c_long = i64;
-                pub type c_ulong = u64;
+                //pub type c_ulong = u64;
             }
 
             else
             {
                 pub type c_long = i32;
-                pub type c_ulong = u32;
+                //pub type c_ulong = u32;
             }
-        }
+        } */
 
         pub type int8_t = i8;
         pub type int16_t = i16;
@@ -536,7 +538,6 @@ pub mod libc
         use ::
         {
             libc::{ * },
-            os::raw::{ c_void, },
             *,
         };
 
@@ -731,10 +732,18 @@ pub mod libc
                 pub p_proto: c_int,
             }
 
-            #[repr(align(4))]
+            #[repr( align( 4 ) )]
             pub struct in6_addr
             {
                 pub s6_addr: [u8; 16],
+            }
+        }
+        
+        impl ::fmt::Debug for sigval
+        {
+            fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
+            {
+                write!(f, "{:?}", self.sival_ptr)
             }
         }
 
@@ -1599,7 +1608,6 @@ pub mod libc
                     pub ai_addrlen: socklen_t,
                     pub ai_addr: *mut  sockaddr,
                     pub ai_canonname: *mut c_char,
-                    pub ai_addr: *mut  sockaddr,
                     pub ai_next: *mut addrinfo,
                 }
 
@@ -1768,13 +1776,13 @@ pub mod libc
 
             s_no_extra_traits! 
             {
-                #[repr(packed)]
+                #[repr( packed )]
                 pub struct epoll_event 
                 {
                     pub events: u32,
                     pub u64: u64,
                 }
-
+                
                 pub union __c_anonymous_sigev_un 
                 {
                     _pad: [c_int; SIGEV_PAD_SIZE],
@@ -1814,6 +1822,14 @@ pub mod libc
                     pub sigev_signo: c_int,
                     pub sigev_notify: c_int,
                     pub _sigev_un: __c_anonymous_sigev_un,
+                }
+            }
+
+            impl ::fmt::Debug for __c_anonymous_sigev_un
+            {
+                fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
+                {
+                    unsafe { write!(f, "{:?}", self._tid ) }
                 }
             }
 
@@ -3425,7 +3441,6 @@ pub mod libc
                 pub type useconds_t = u32;
                 pub type dev_t = u64;
                 pub type socklen_t = u32;
-                pub type mode_t = u32;
                 pub type ino64_t = u64;
                 pub type off64_t = i64;
                 pub type blkcnt64_t = i64;
@@ -5355,6 +5370,94 @@ pub mod libc
                     }
                 }
 
+                impl ::fmt::Debug for input_id
+                {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
+                    {
+                        write!(f, "{:?}", self.bustype )
+                    }
+                } 
+
+                impl ::fmt::Debug for __c_anonymous_ifr_ifru
+                {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
+                    {
+                        unsafe { write!(f, "{:?}", self.ifru_newname ) }
+                    }
+                }
+                
+                impl ::fmt::Debug for __c_anonymous_ifc_ifcu
+                {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
+                    {
+                        unsafe { write!(f, "{:?}", self.ifcu_buf ) }
+                    }
+                }
+                
+                impl ::fmt::Debug for tpacket_hdr_v1
+                {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
+                    {
+                        unsafe { write!(f, "{:?}", self.block_status ) }
+                    }
+                }
+                
+                impl ::fmt::Debug for tpacket_bd_header_u
+                {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
+                    {
+                        unsafe { write!(f, "{:?}", self.bh1 ) }
+                    }
+                }
+                
+                impl ::fmt::Debug for iwreq_data
+                {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
+                    {
+                        unsafe { write!(f, "{:?}", self.ifcu_buf ) }
+                    }
+                }
+                
+                impl ::fmt::Debug for __c_anonymous_iwreq
+                {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
+                    {
+                        unsafe { write!(f, "{:?}", self.ifcu_buf ) }
+                    }
+                }
+                
+                impl ::fmt::Debug for __c_anonymous_ptp_perout_request_1
+                {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
+                    {
+                        unsafe { write!(f, "{:?}", self.ifcu_buf ) }
+                    }
+                }
+                
+                impl ::fmt::Debug for ptp_clock_time
+                {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
+                    {
+                        unsafe { write!(f, "{:?}", self.ifcu_buf ) }
+                    }
+                }
+                
+                impl ::fmt::Debug for __c_anonymous_ptp_perout_request_2
+                {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
+                    {
+                        unsafe { write!(f, "{:?}", self.ifcu_buf ) }
+                    }
+                }
+                
+                impl ::fmt::Debug for __c_anonymous_xsk_tx_metadata_union
+                {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
+                    {
+                        unsafe { write!(f, "{:?}", self.ifcu_buf ) }
+                    }
+                }
+                
                 impl PartialEq for sockaddr_nl
                 {
                     fn eq(&self, other: &sockaddr_nl) -> bool
@@ -10262,8 +10365,7 @@ pub mod libc
                 mod gnu
                 {
                     use ::libc::*;
-
-                    pub type pthread_t = c_ulong;
+                    
                     pub type __priority_which_t = c_uint;
                     pub type __rlimit_resource_t = c_uint;
                     pub type Lmid_t = c_long;
@@ -11678,7 +11780,6 @@ pub mod libc
                                 {
                                     if #[cfg(gnu_time_bits64)]
                                     {
-                                        pub type time_t = i64;
                                         pub type suseconds_t = i32;
                                         type __ino_t = c_ulong;
                                         type __ino64_t = u64;
@@ -11693,7 +11794,6 @@ pub mod libc
                                     
                                     else if #[cfg(gnu_file_offset_bits64)]
                                     {
-                                        pub type time_t = i32;
                                         pub type suseconds_t = i32;
                                         type __ino_t = c_ulong;
                                         type __ino64_t = u64;
@@ -11708,7 +11808,6 @@ pub mod libc
                                     
                                     else
                                     {
-                                        pub type time_t = i32;
                                         pub type suseconds_t = i32;
                                         type __ino_t = c_ulong;
                                         type __ino64_t = u64;
@@ -13292,7 +13391,6 @@ pub mod libc
                                     if #[cfg(all(target_arch = "aarch64", target_pointer_width = "32"))]
                                     {
                                         pub type clock_t = i32;
-                                        pub type time_t = i32;
                                         pub type __fsword_t = i32;
                                     }
                                     
@@ -13300,7 +13398,6 @@ pub mod libc
                                     {
                                         pub type __fsword_t = i64;
                                         pub type clock_t = i64;
-                                        pub type time_t = i64;
                                     }
                                 }
 
@@ -15492,12 +15589,22 @@ pub mod marker
     pub use std::marker::{ * };
 }
 
+pub mod mem
+{
+    pub use std::mem::{ * };
+}
+
 pub mod os
 {
     pub mod raw
     {
         pub use std::os::raw::{ * };
     }
+}
+
+pub mod ptr
+{
+    pub use std::ptr::{ * };
 }
 
 pub mod result
@@ -15544,4 +15651,4 @@ fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 15547
+// 15654
