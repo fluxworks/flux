@@ -5414,7 +5414,7 @@ pub mod libc
                 {
                     fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
                     {
-                        unsafe { write!(f, "{:?}", self.ifcu_buf ) }
+                        unsafe { write!(f, "{:?}", self.name ) }
                     }
                 }
                 
@@ -5422,7 +5422,7 @@ pub mod libc
                 {
                     fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
                     {
-                        unsafe { write!(f, "{:?}", self.ifcu_buf ) }
+                        unsafe { write!(f, "{:?}", self.ifrn_name ) }
                     }
                 }
                 
@@ -5430,7 +5430,7 @@ pub mod libc
                 {
                     fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
                     {
-                        unsafe { write!(f, "{:?}", self.ifcu_buf ) }
+                        unsafe { write!(f, "{:?}", self.start ) }
                     }
                 }
                 
@@ -5438,7 +5438,7 @@ pub mod libc
                 {
                     fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
                     {
-                        unsafe { write!(f, "{:?}", self.ifcu_buf ) }
+                        unsafe { write!(f, "{:?}", self.sec ) }
                     }
                 }
                 
@@ -5446,7 +5446,15 @@ pub mod libc
                 {
                     fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
                     {
-                        unsafe { write!(f, "{:?}", self.ifcu_buf ) }
+                        unsafe { write!(f, "{:?}", self.on ) }
+                    }
+                }
+                
+                impl ::fmt::Debug for xsk_tx_metadata_request
+                {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
+                    {
+                        unsafe { write!(f, "{:?}", self.csum_start ) }
                     }
                 }
                 
@@ -5454,9 +5462,28 @@ pub mod libc
                 {
                     fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
                     {
-                        unsafe { write!(f, "{:?}", self.ifcu_buf ) }
+                        unsafe { write!(f, "{:?}", self.request ) }
                     }
                 }
+                
+                impl PartialEq for input_id
+                {
+                    fn eq(&self, other: &input_id) -> bool
+                    {
+                        self.bustype == other.bustype
+                    }
+                }
+
+                impl Eq for input_id {}
+
+                impl ::hash::Hash for input_id
+                {
+                    fn hash<H: ::hash::Hasher>(&self, state: &mut H)
+                    {
+                        self.bustype.hash(state);
+                    }
+                }
+
                 
                 impl PartialEq for sockaddr_nl
                 {
@@ -15651,4 +15678,4 @@ fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 15654
+// 15681
