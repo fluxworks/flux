@@ -6,6 +6,7 @@
     elided_named_lifetimes,
     non_camel_case_types,
     non_snake_case,
+    non_upper_case_globals,
     private_interfaces,
     stable_features,
     unknown_lints,
@@ -90,35 +91,6 @@ extern crate unicode_width; */
         };
         
         (@__identity $( $tokens:tt )* ) => { $( $tokens )* };
-    }
-    /// Create an internal crate prelude with `core` reexports and common types.
-    #[macro_export] macro_rules! prelude
-    {
-        () => {
-            /// Frequently-used types that are available on all platforms
-            ///
-            /// We need to reexport the core types so this works with `rust-dep-of-std`.
-            mod prelude {
-                // Exports from `core`
-                #[allow(unused_imports)]
-                pub use std::::clone::Clone;
-                #[allow(unused_imports)]
-                pub use std::::marker::{Copy, Send, Sync};
-                #[allow(unused_imports)]
-                pub use std::::option::Option;
-                #[allow(unused_imports)]
-                pub use std::::{fmt, hash, iter, mem};
-                #[allow(unused_imports)]
-                pub use mem::{align_of, align_of_val, size_of, size_of_val};
-
-                // Commonly used types defined in this crate
-                #[allow(unused_imports)]
-                pub use  {
-                    c_char, c_double, c_float, c_int, c_long, c_longlong, c_short, c_uchar, c_uint,
-                    c_ulong, c_ulonglong, c_ushort, c_void, intptr_t, size_t, ssize_t, uintptr_t,
-                };
-            }
-        };
     }
     /// Implement `Clone` and `Copy` for a struct,
     /// as well as `Debug`, `Eq`, `Hash`, and `PartialEq` if the `extra_traits` feature is enabled.
@@ -252,7 +224,6 @@ extern crate unicode_width; */
             c_enum!(@one; $ty_name; 0; $($variant $(= $value)?,)+);
         };
 
-        // Matcher for a single variant
         (@one; $_ty_name:ident; $_idx:expr;) => {};
         (
             @one; $ty_name:ident; $default_val:expr;
@@ -269,8 +240,7 @@ extern crate unicode_width; */
             
             c_enum!(@one; $ty_name; $variant + 1; $($tail)*);
         };
-
-        // Use a specific type if provided, otherwise default to `c_uint`
+        
         (@ty $repr:ty) => { $repr };
         (@ty) => { c_uint };
     }
@@ -1773,7 +1743,6 @@ pub mod libc
                 }
             }
             
-
             s_no_extra_traits! 
             {
                 #[repr( packed )]
@@ -1825,6 +1794,136 @@ pub mod libc
                 }
             }
 
+            impl ::fmt::Debug for sigset_t
+            {
+                fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
+                {
+                    unsafe { write!(f, "{:?}", self.__val ) }
+                }
+            }
+            
+            impl PartialEq for sigset_t 
+            {
+                fn eq(&self, other: &sigset_t) -> bool 
+                {
+                    self.__val == other.__val
+                }
+            }
+
+            impl Eq for sigset_t {}
+
+            impl ::hash::Hash for sigset_t 
+            {
+                fn hash<H: ::hash::Hasher>(&self, state: &mut H) 
+                {
+                    self.__val.hash(state);
+                }
+            }
+
+            impl ::fmt::Debug for mcontext_t
+            {
+                fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
+                {
+                    unsafe { write!(f, "{:?}", self.gregs ) }
+                }
+            }
+            
+            impl PartialEq for mcontext_t 
+            {
+                fn eq(&self, other: &mcontext_t) -> bool 
+                {
+                    self.gregs == other.gregs
+                }
+            }
+
+            impl Eq for mcontext_t {}
+
+            impl ::hash::Hash for mcontext_t 
+            {
+                fn hash<H: ::hash::Hasher>(&self, state: &mut H) 
+                {
+                    self.gregs.hash(state);
+                }
+            }
+
+            impl ::fmt::Debug for stack_t
+            {
+                fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
+                {
+                    unsafe { write!(f, "{:?}", self.ss_sp ) }
+                }
+            }
+            
+            impl PartialEq for stack_t 
+            {
+                fn eq(&self, other: &stack_t) -> bool 
+                {
+                    self.ss_sp == other.ss_sp
+                }
+            }
+
+            impl Eq for stack_t {}
+
+            impl ::hash::Hash for stack_t 
+            {
+                fn hash<H: ::hash::Hasher>(&self, state: &mut H) 
+                {
+                    self.ss_sp.hash(state);
+                }
+            }
+
+            impl ::fmt::Debug for __timeval
+            {
+                fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
+                {
+                    unsafe { write!(f, "{:?}", self.tv_sec ) }
+                }
+            }
+
+            impl PartialEq for __timeval 
+            {
+                fn eq( &self, other: &__timeval ) -> bool 
+                {
+                    self.tv_sec == other.tv_sec
+                }
+            }
+
+            impl Eq for __timeval {}
+
+            impl ::hash::Hash for __timeval
+            {
+                fn hash<H: ::hash::Hasher>(&self, state: &mut H) 
+                {
+                    self.tv_sec.hash(state);
+                }
+            }
+
+            impl ::fmt::Debug for __exit_status
+            {
+                fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
+                {
+                    unsafe { write!(f, "{:?}", self.e_termination ) }
+                }
+            }
+            
+            impl PartialEq for __exit_status 
+            {
+                fn eq( &self, other: &__exit_status ) -> bool 
+                {
+                    self.e_termination == other.e_termination
+                }
+            }
+
+            impl Eq for __exit_status {}
+            
+            impl ::hash::Hash for __exit_status 
+            {
+                fn hash<H: ::hash::Hasher>(&self, state: &mut H) 
+                {
+                    self.e_termination.hash(state);
+                }
+            }
+
             impl ::fmt::Debug for __c_anonymous_sigev_un
             {
                 fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
@@ -1832,7 +1931,25 @@ pub mod libc
                     unsafe { write!(f, "{:?}", self._tid ) }
                 }
             }
+            
+            impl PartialEq for __c_anonymous_sigev_un 
+            {
+                fn eq( &self, other: &__c_anonymous_sigev_un ) -> bool 
+                {
+                    unsafe { self._tid == other._tid }
+                }
+            }
 
+            impl Eq for __c_anonymous_sigev_un {}
+            
+            impl ::hash::Hash for __c_anonymous_sigev_un 
+            {
+                fn hash<H: ::hash::Hasher>(&self, state: &mut H) 
+                {
+                    unsafe { self._tid.hash(state); }
+                }
+            }
+            
             impl PartialEq for epoll_event 
             {
                 fn eq(&self, other: &epoll_event) -> bool 
@@ -1955,13 +2072,17 @@ pub mod libc
             
             cfg_if! 
             {
-                if #[cfg(target_pointer_width = "32")] {
+                if #[cfg(target_pointer_width = "32")]
+                {
                     const ULONG_SIZE: usize = 32;
-                } else if #[cfg(target_pointer_width = "64")] {
-                    const ULONG_SIZE: usize = 64;
-                } else {
-                    // Unknown target_pointer_width
                 }
+                
+                else if #[cfg(target_pointer_width = "64")]
+                {
+                    const ULONG_SIZE: usize = 64;
+                } 
+                
+                else {}
             }
 
             pub const EXIT_FAILURE: c_int = 1;
@@ -2646,7 +2767,7 @@ pub mod libc
             pub const CLONE_NEWUSER: c_int = 0x10000000;
             pub const CLONE_NEWPID: c_int = 0x20000000;
             pub const CLONE_NEWNET: c_int = 0x40000000;
-            pub const CLONE_IO: c_int = 0x80000000;
+            //pub const CLONE_IO: c_int = 0x80000000;
 
             pub const WNOHANG: c_int = 0x00000001;
             pub const WUNTRACED: c_int = 0x00000002;
@@ -2685,9 +2806,9 @@ pub mod libc
             pub const PTRACE_EVENT_EXIT: c_int = 6;
             pub const PTRACE_EVENT_SECCOMP: c_int = 7;
 
-            pub const __WNOTHREAD: c_int = 0x20000000;
-            pub const __WALL: c_int = 0x40000000;
-            pub const __WCLONE: c_int = 0x80000000;
+            pub const __WNOTHREAD: c_uint = 0x20000000;
+            pub const __WALL: c_uint = 0x40000000;
+            pub const __WCLONE: c_uint = 0x80000000;
 
             pub const SPLICE_F_MOVE: c_uint = 0x01;
             pub const SPLICE_F_NONBLOCK: c_uint = 0x02;
@@ -3501,7 +3622,7 @@ pub mod libc
                         missing! 
                         {
                             #[derive(Debug)]
-                            pub enum fpos64_t {} // FIXME(linux): fill this out with a struct
+                            pub enum fpos64_t {}
                         }
                     }
                 }
@@ -7375,7 +7496,7 @@ pub mod libc
                 pub const NF_VERDICT_MASK: c_int = 0x000000ff;
                 pub const NF_VERDICT_FLAG_QUEUE_BYPASS: c_int = 0x00008000;
 
-                pub const NF_VERDICT_QMASK: c_int = 0xffff0000;
+                pub const NF_VERDICT_QMASK: c_uint = 0xffff0000;
                 pub const NF_VERDICT_QBITS: c_int = 16;
 
                 pub const NF_VERDICT_BITS: c_int = 16;
@@ -8876,7 +8997,7 @@ pub mod libc
                 pub const FUTEX_OWNER_DIED: u32 = 0x40000000;
                 pub const FUTEX_TID_MASK: u32 = 0x3fffffff;
 
-                pub const FUTEX_BITSET_MATCH_ANY: c_int = 0xffffffff;
+                pub const FUTEX_BITSET_MATCH_ANY: c_uint = 0xffffffff;
 
                 pub const FUTEX_OP_SET: c_int = 0;
                 pub const FUTEX_OP_ADD: c_int = 1;
@@ -8897,27 +9018,27 @@ pub mod libc
                     ((op & 0xf) << 28) | ((cmp & 0xf) << 24) | ((oparg & 0xfff) << 12) | (cmparg & 0xfff)
                 }
                 
-                pub const KEXEC_ON_CRASH: c_int = 0x00000001;
-                pub const KEXEC_PRESERVE_CONTEXT: c_int = 0x00000002;
-                pub const KEXEC_ARCH_MASK: c_int = 0xffff0000;
-                pub const KEXEC_FILE_UNLOAD: c_int = 0x00000001;
-                pub const KEXEC_FILE_ON_CRASH: c_int = 0x00000002;
-                pub const KEXEC_FILE_NO_INITRAMFS: c_int = 0x00000004;
+                pub const KEXEC_ON_CRASH: c_uint = 0x00000001;
+                pub const KEXEC_PRESERVE_CONTEXT: c_uint = 0x00000002;
+                pub const KEXEC_ARCH_MASK: c_uint = 0xffff0000;
+                pub const KEXEC_FILE_UNLOAD: c_uint = 0x00000001;
+                pub const KEXEC_FILE_ON_CRASH: c_uint = 0x00000002;
+                pub const KEXEC_FILE_NO_INITRAMFS: c_uint = 0x00000004;
                 
-                pub const LINUX_REBOOT_MAGIC1: c_int = 0xfee1dead;
-                pub const LINUX_REBOOT_MAGIC2: c_int = 672274793;
-                pub const LINUX_REBOOT_MAGIC2A: c_int = 85072278;
-                pub const LINUX_REBOOT_MAGIC2B: c_int = 369367448;
-                pub const LINUX_REBOOT_MAGIC2C: c_int = 537993216;
+                pub const LINUX_REBOOT_MAGIC1: c_uint = 0xfee1dead;
+                pub const LINUX_REBOOT_MAGIC2: c_uint = 672274793;
+                pub const LINUX_REBOOT_MAGIC2A: c_uint = 85072278;
+                pub const LINUX_REBOOT_MAGIC2B: c_uint = 369367448;
+                pub const LINUX_REBOOT_MAGIC2C: c_uint = 537993216;
 
-                pub const LINUX_REBOOT_CMD_RESTART: c_int = 0x01234567;
-                pub const LINUX_REBOOT_CMD_HALT: c_int = 0xCDEF0123;
-                pub const LINUX_REBOOT_CMD_CAD_ON: c_int = 0x89ABCDEF;
-                pub const LINUX_REBOOT_CMD_CAD_OFF: c_int = 0x00000000;
-                pub const LINUX_REBOOT_CMD_POWER_OFF: c_int = 0x4321FEDC;
-                pub const LINUX_REBOOT_CMD_RESTART2: c_int = 0xA1B2C3D4;
-                pub const LINUX_REBOOT_CMD_SW_SUSPEND: c_int = 0xD000FCE2;
-                pub const LINUX_REBOOT_CMD_KEXEC: c_int = 0x45584543;
+                pub const LINUX_REBOOT_CMD_RESTART: c_uint = 0x01234567;
+                pub const LINUX_REBOOT_CMD_HALT: c_uint = 0xCDEF0123;
+                pub const LINUX_REBOOT_CMD_CAD_ON: c_uint = 0x89ABCDEF;
+                pub const LINUX_REBOOT_CMD_CAD_OFF: c_uint = 0x00000000;
+                pub const LINUX_REBOOT_CMD_POWER_OFF: c_uint = 0x4321FEDC;
+                pub const LINUX_REBOOT_CMD_RESTART2: c_uint = 0xA1B2C3D4;
+                pub const LINUX_REBOOT_CMD_SW_SUSPEND: c_uint = 0xD000FCE2;
+                pub const LINUX_REBOOT_CMD_KEXEC: c_uint = 0x45584543;
 
                 pub const REG_EXTENDED: c_int = 1;
                 pub const REG_ICASE: c_int = 2;
@@ -10963,6 +11084,54 @@ pub mod libc
                         }
                     }
 
+                    impl PartialEq for __c_anonymous_ptrace_syscall_info_entry
+                    {
+                        fn eq(&self, other: &__c_anonymous_ptrace_syscall_info_entry) -> bool
+                        {
+                            unsafe
+                            {
+                                self.nr == other.nr
+                            }
+                        }
+                    }
+
+                    impl Eq for __c_anonymous_ptrace_syscall_info_entry {}
+
+                    impl ::hash::Hash for __c_anonymous_ptrace_syscall_info_entry
+                    {
+                        fn hash<H: ::hash::Hasher>(&self, state: &mut H)
+                        {
+                            unsafe
+                            {
+                                self.nr.hash(state);
+                            }
+                        }
+                    }
+
+                    impl PartialEq for __c_anonymous_ptrace_syscall_info_exit
+                    {
+                        fn eq(&self, other: &__c_anonymous_ptrace_syscall_info_exit) -> bool
+                        {
+                            unsafe
+                            {
+                                self.sval == other.sval
+                            }
+                        }
+                    }
+
+                    impl Eq for __c_anonymous_ptrace_syscall_info_exit {}
+
+                    impl ::hash::Hash for __c_anonymous_ptrace_syscall_info_exit
+                    {
+                        fn hash<H: ::hash::Hasher>(&self, state: &mut H)
+                        {
+                            unsafe
+                            {
+                                self.sval.hash(state);
+                            }
+                        }
+                    }
+                    
                     impl PartialEq for __c_anonymous_ptrace_syscall_info_data
                     {
                         fn eq(&self, other: &__c_anonymous_ptrace_syscall_info_data) -> bool
@@ -10987,6 +11156,30 @@ pub mod libc
                                 self.entry.hash(state);
                                 self.exit.hash(state);
                                 self.seccomp.hash(state);
+                            }
+                        }
+                    }
+                    
+                    impl PartialEq for __c_anonymous_ptrace_syscall_info_seccomp
+                    {
+                        fn eq(&self, other: &__c_anonymous_ptrace_syscall_info_seccomp) -> bool
+                        {
+                            unsafe
+                            {
+                                self.nr == other.nr
+                            }
+                        }
+                    }
+
+                    impl Eq for __c_anonymous_ptrace_syscall_info_seccomp {}
+
+                    impl ::hash::Hash for __c_anonymous_ptrace_syscall_info_seccomp
+                    {
+                        fn hash<H: ::hash::Hasher>(&self, state: &mut H)
+                        {
+                            unsafe
+                            {
+                                self.nr.hash(state);
                             }
                         }
                     }
@@ -11237,8 +11430,8 @@ pub mod libc
                     pub const PTRACE_SYSCALL_INFO_ENTRY: __u8 = 1;
                     pub const PTRACE_SYSCALL_INFO_EXIT: __u8 = 2;
                     pub const PTRACE_SYSCALL_INFO_SECCOMP: __u8 = 3;
-                    pub const PTRACE_SET_SYSCALL_USER_DISPATCH_CONFIG: __u8 = 0x4210;
-                    pub const PTRACE_GET_SYSCALL_USER_DISPATCH_CONFIG: __u8 = 0x4211;
+                    pub const PTRACE_SET_SYSCALL_USER_DISPATCH_CONFIG: __u16 = 0x4210;
+                    pub const PTRACE_GET_SYSCALL_USER_DISPATCH_CONFIG: __u16 = 0x4211;
                     
                     pub const TCA_PAD: c_ushort = 9;
                     pub const TCA_DUMP_INVISIBLE: c_ushort = 10;
@@ -13433,9 +13626,9 @@ pub mod libc
                                     pub struct sigset_t
                                     {
                                         #[cfg(target_pointer_width = "32")]
-                                        __val: [u32; 32],
+                                        pub __val: [u32; 32],
                                         #[cfg(target_pointer_width = "64")]
-                                        __val: [u64; 16],
+                                        pub __val: [u64; 16],
                                     }
 
                                     pub struct sysinfo
@@ -14187,10 +14380,10 @@ pub mod libc
                                     pub const EPROTO: c_int = 71;
                                     pub const EDOTDOT: c_int = 73;
 
-                                    pub const SA_NODEFER: c_int = 0x40000000;
-                                    pub const SA_RESETHAND: c_int = 0x80000000;
-                                    pub const SA_RESTART: c_int = 0x10000000;
-                                    pub const SA_NOCLDSTOP: c_int = 0x00000001;
+                                    pub const SA_NODEFER: c_uint = 0x40000000;
+                                    pub const SA_RESETHAND: c_uint = 0x80000000;
+                                    pub const SA_RESTART: c_uint = 0x10000000;
+                                    pub const SA_NOCLDSTOP: c_uint = 0x00000001;
 
                                     pub const EPOLL_CLOEXEC: c_int = 0x80000;
 
@@ -15309,10 +15502,7 @@ pub mod libc
                             } pub use self::b64::*;
                         }
 
-                        else
-                        {
-                            // Unknown target_arch
-                        }
+                        else {}
                     }
                 } pub use self::gnu::*;
 
@@ -15429,16 +15619,14 @@ pub mod libc
                     pub const SO_DEVMEM_LINEAR: c_int = 78;
                     pub const SO_DEVMEM_DMABUF: c_int = 79;
                     pub const SO_DEVMEM_DONTNEED: c_int = 80;
-
-                    // Defined in unix/linux_like/mod.rs
+                    
                     // pub const SCM_TIMESTAMP: c_int = SO_TIMESTAMP;
                     pub const SCM_TIMESTAMPNS: c_int = SO_TIMESTAMPNS;
                     pub const SCM_TIMESTAMPING: c_int = SO_TIMESTAMPING;
 
                     pub const SCM_DEVMEM_LINEAR: c_int = SO_DEVMEM_LINEAR;
                     pub const SCM_DEVMEM_DMABUF: c_int = SO_DEVMEM_DMABUF;
-
-                    // Ioctl Constants
+                    
                     pub const TCGETS: Ioctl = 0x5401;
                     pub const TCSETS: Ioctl = 0x5402;
                     pub const TCSETSW: Ioctl = 0x5403;
@@ -15672,10 +15860,10 @@ fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
         libc::signal(libc::SIGPIPE, libc::SIG_DFL);
         libc::signal(libc::SIGTSTP, libc::SIG_IGN);
         libc::signal(libc::SIGQUIT, libc::SIG_IGN);
-        let _ = domain()?;   
+        Ok( domain()? )
     }
 }
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 15681
+// 15869
