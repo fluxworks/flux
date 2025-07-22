@@ -94,7 +94,7 @@ extern crate unicode_width; */
     }
     /// Implement `Clone` and `Copy` for a struct,
     /// as well as `Debug`, `Eq`, `Hash`, and `PartialEq` if the `extra_traits` feature is enabled.
-    macro_rules! s
+    #[macro_export] macro_rules! s
     {
         ($(
             $(#[$attr:meta])*
@@ -126,7 +126,7 @@ extern crate unicode_width; */
     }
     /// Implement `Clone` and `Copy` for a tuple struct,
     /// as well as `Debug`, `Eq`, `Hash`, and `PartialEq` if the `extra_traits` feature is enabled.
-    macro_rules! s_paren
+    #[macro_export] macro_rules! s_paren
     {
         ($(
             $(#[$attr:meta])*
@@ -145,7 +145,7 @@ extern crate unicode_width; */
     }
     /// Implement `Clone` and `Copy` for a struct with no `extra_traits` feature, 
     /// as well as `Debug` with `extra_traits` since that can always be derived.
-    macro_rules! s_no_extra_traits
+    #[macro_export] macro_rules! s_no_extra_traits
     {
         ($(
             $(#[$attr:meta])*
@@ -181,7 +181,7 @@ extern crate unicode_width; */
         );
     }
     /// Specify that an enum should have no traits that aren't specified in the macro invocation.
-    macro_rules! missing
+    #[macro_export] macro_rules! missing
     {
         ($(
             $(#[$attr:meta])*
@@ -194,7 +194,7 @@ extern crate unicode_width; */
     }
     /// Implement `Clone` and `Copy` for an enum, 
     /// as well as `Debug`, `Eq`, `Hash`, and `PartialEq` if the `extra_traits` feature is enabled.
-    macro_rules! e
+    #[macro_export] macro_rules! e
     {
         ($(
             $(#[$attr:meta])*
@@ -212,7 +212,7 @@ extern crate unicode_width; */
         )*);
     }
     /// Represent a C enum as Rust constants and a type.
-    macro_rules! c_enum
+    #[macro_export] macro_rules! c_enum
     {
         (
             $(#[repr($repr:ty)])?
@@ -339,9 +339,79 @@ extern crate unicode_width; */
         }
     }
 
-    macro_rules! __item
+    #[macro_export] macro_rules! __item
     {
         ($i:item) => { $i };
+    }
+
+    #[macro_export] macro_rules! println_stderr
+    {
+        ($fmt:expr) => 
+        (
+            match writeln!( &mut ::io::stderr(), $fmt )
+            {
+                Ok(_) => {}
+                Err(e) => println!("write to stderr failed: {:?}", e)
+            }
+        );
+
+        ($fmt:expr, $($arg:tt)*) => 
+        (
+            match writeln!( &mut ::io::stderr(), $fmt, $($arg)*) 
+            {
+                Ok(_) => {}
+                Err(e) => println!("write to stderr failed: {:?}", e)
+            }
+        );
+    } 
+
+    #[macro_export] macro_rules! log 
+    {
+        ($fmt:expr) =>
+        (
+            let log_file = if let Ok(x) = ::env::var("CICADA_LOG_FILE") { x.clone() }
+            else { String::new() };
+
+            if !log_file.is_empty()
+            {
+                use ::io::Write as _;
+
+                let msg = $fmt;
+                match ::fs::OpenOptions::new().append(true).create(true).open(&log_file)
+                {
+                    Ok(mut cfile) => 
+                    {
+                        let pid = ::process::pid();
+                        let now = ::libc::time::DateTime::now();
+                        let msg = format!("[{}][{}] {}", now, pid, msg);
+                        let msg = if msg.ends_with('\n') { msg } else { format!("{}\n", msg) };
+                        match cfile.write_all(msg.as_bytes()) 
+                        {
+                            Ok(_) => {}
+                            Err(_) => println!("tlog: write_all error")
+                        }
+                    }
+
+                    Err(_) => println!("tlog: open file error"),
+                }
+
+            }
+        );
+
+        ($fmt:expr, $($arg:tt)*) => (
+            let msg = format!($fmt, $($arg)*);
+            log!(&msg);
+        );
+    }
+    /// A macro to define a ranged integer with an automatically computed inner type.
+    #[macro_export] macro_rules! int
+    {
+        ($min:literal, $max:literal) => {};
+    }
+    /// A macro to define an optional ranged integer with an automatically computed inner type.
+    #[macro_export] macro_rules! opt_int
+    { 
+        ($min:literal, $max:literal) => {};
     }
 }
 
@@ -355,9 +425,100 @@ pub mod clone
     pub use std::clone::{ * };
 }
 
+pub mod cmp
+{
+    pub use std::cmp::{ * };
+}
+
+pub mod collections
+{
+    pub use std::collections::{ * };
+}
+
+pub mod env
+{
+    pub use std::env::{ * };
+
+    pub unsafe fn initialize_paths() -> ::result::Result<Vec<String>, Box<dyn std::error::Error>>
+    {
+        use ::path::{ * };
+        let mut paths: Vec<String> = vec![];
+
+        for x in 
+        [
+            "/usr/local/sbin",
+            "/usr/local/bin",
+            "/usr/sbin",
+            "/usr/bin",
+            "/sbin",
+            "/bin",
+        ]
+        {
+            if Path::new(x).exists() { paths.push(x.to_string()); }
+        }
+
+        if let Ok(env_path) = var("PATH") 
+        {
+            for x in env_path.split(":")
+            {
+                if !paths.contains(&x.to_string()) { paths.push(x.to_string()); }
+            }
+        }
+
+        set_var("PATH", paths.join(":"));
+        Ok( paths.clone() )
+    }
+
+    pub fn get_user_home() -> String
+    {
+        match var("HOME")
+        {
+            Ok(x) => x,
+            Err(e) =>
+            {
+                println_stderr!("cicada: env HOME error: {}", e);
+                String::new()
+            }
+        }
+    }
+
+    pub fn get_rc_file() -> String
+    {
+        use ::path::{ * };
+
+        let dir_config = ::path::get_configuration();
+        let rc_file = format!("{}/cicadarc", dir_config);
+
+        if Path::new(&rc_file).exists() { return rc_file; }
+        
+        let home = get_user_home();
+        let rc_file_home = format!("{}/{}", home, ".cicadarc");
+        
+        if Path::new(&rc_file_home).exists() { return rc_file_home; }
+        
+        rc_file
+    }
+    // pub fn load_rc_files(sh: &mut shell::Shell)
+    pub fn load_rc( this:&mut ::shell::Shell )
+    {
+        use ::path::{ * };
+        let rc_file = get_rc_file();
+        if !Path::new(&rc_file).exists()  { return; }
+
+        let args = vec!["source".to_string(), rc_file];
+        scripts::run(sh, &args);
+    }
+    
+}
+
 pub mod fmt
 {
     pub use std::fmt::{ * };
+}
+
+pub mod fs
+{
+    pub use std::fs::{ * };
 }
 
 pub mod hash
@@ -499,6 +660,689 @@ pub mod libc
             {
                 pub type __int128_t = i128;
                 pub type __uint128_t = u128;
+            }
+        }
+
+        pub mod time
+        {
+            //! The [`OffsetDateTime`] struct and its associated `impl`s.
+            use ::
+            {
+                hash::{ Hash },
+                cmp::{ Ordering },
+                ops::{ Add, AddAssign, Sub, SubAssign },
+                string::{ String },
+                time::{ Duration as StdDuration },
+                *,
+            };
+            /*
+            use deranged::RangedI64;
+            use num_conv::prelude::*;
+            use powerfmt::ext::FormatterExt as _;
+            use powerfmt::smart_display::{self, FormatterOptions, Metadata, SmartDisplay};
+            use time_core::convert::*;
+
+            use crate::date::{MAX_YEAR, MIN_YEAR};
+            #[cfg(feature = "formatting")]
+            use crate::formatting::Formattable;
+            use crate::internal_macros::{
+                cascade, const_try, const_try_opt, div_floor, ensure_ranged, expect_opt,
+            };
+            #[cfg(feature = "parsing")]
+            use crate::parsing::Parsable;
+            use crate::{
+                error, util, Date, Duration, Month, PrimitiveDateTime, Time, UtcDateTime, UtcOffset, Weekday,
+            }; */
+            /// The Julian day of the Unix epoch.
+            const UNIX_EPOCH_JULIAN_DAY: i32 = OffsetDateTime::UNIX_EPOCH.to_julian_day();
+            /// A [`PrimitiveDateTime`] with a [`UtcOffset`].
+            #[derive(Clone, Copy, Eq)]
+            pub struct OffsetDateTime
+            {
+                local_date_time: PrimitiveDateTime,
+                offset: UtcOffset,
+            }
+
+            impl PartialEq for OffsetDateTime
+            {
+                fn eq(&self, other: &Self) -> bool
+                { self.to_offset_raw(UtcOffset::UTC) == other.to_offset_raw(UtcOffset::UTC) }
+            }
+
+            impl PartialOrd for OffsetDateTime
+            { 
+                fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
+            }
+
+            impl Ord for OffsetDateTime
+            {
+                fn cmp(&self, other: &Self) -> Ordering
+                { self.to_offset_raw(UtcOffset::UTC).cmp(&other.to_offset_raw(UtcOffset::UTC)) }
+            }
+
+            impl Hash for OffsetDateTime
+            {
+                fn hash<H: ::hash::Hasher>(&self, state: &mut H)
+                { self.to_offset_raw(UtcOffset::UTC).hash(state); }
+            }
+
+            impl OffsetDateTime
+            {
+                /// Midnight, 1 January, 1970 (UTC).
+                pub const UNIX_EPOCH: Self = Self::new_in_offset(Date::UNIX_EPOCH, Time::MIDNIGHT, UtcOffset::UTC);
+                /// Create a new `OffsetDateTime` with the current date and time in UTC.
+                pub fn now_utc() -> Self
+                {
+                    ::time::SystemTime::now().into()
+                }
+                /// Attempt to create a new `OffsetDateTime` with the current date and time in the local offset.
+                pub fn now_local() -> Result<Self, error::IndeterminateOffset>
+                {
+                    let t = Self::now_utc();
+                    Ok(t.to_offset(UtcOffset::local_offset_at(t)?))
+                }
+                /// Create a new `OffsetDateTime` with the given [`Date`], [`Time`], and [`UtcOffset`].
+                pub const fn new_in_offset(date: Date, time: Time, offset: UtcOffset) -> Self 
+                {
+                    Self 
+                    {
+                        local_date_time: date.with_time(time),
+                        offset,
+                    }
+                }
+                /// Create a new `OffsetDateTime` with the given [`Date`] and [`Time`] in the UTC timezone.
+                pub const fn new_utc(date: Date, time: Time) -> Self 
+                { PrimitiveDateTime::new(date, time).assume_utc() }
+                /// Convert the `OffsetDateTime` from the current [`UtcOffset`] to the provided [`UtcOffset`].
+                pub const fn to_offset(self, offset: UtcOffset) -> Self 
+                {
+                    expect_opt!
+                    (
+                        self.checked_to_offset(offset),
+                        "local datetime out of valid range"
+                    )
+                }
+                /// Convert the `OffsetDateTime` from the current [`UtcOffset`] to the provided [`UtcOffset`],
+                /// returning `None` if the date-time in the resulting offset is invalid.
+                pub const fn checked_to_offset(self, offset: UtcOffset) -> Option<Self> 
+                {
+                    if self.offset.whole_hours() == offset.whole_hours()
+                        && self.offset.minutes_past_hour() == offset.minutes_past_hour()
+                        && self.offset.seconds_past_minute() == offset.seconds_past_minute()
+                    {
+                        return Some(self.replace_offset(offset));
+                    }
+
+                    let (year, ordinal, time) = self.to_offset_raw(offset);
+
+                    if year > MAX_YEAR || year < MIN_YEAR {
+                        return None;
+                    }
+
+                    Some(Self::new_in_offset(
+                        // Safety: `ordinal` is not zero.
+                        unsafe { Date::__from_ordinal_date_unchecked(year, ordinal) },
+                        time,
+                        offset,
+                    ))
+                }
+                /// Convert the `OffsetDateTime` from the current [`UtcOffset`] to UTC, returning a [`UtcDateTime`].
+                pub const fn to_utc(self) -> UtcDateTime { self.to_offset(UtcOffset::UTC).local_date_time.as_utc() }
+                /// Convert the `OffsetDateTime` from the current [`UtcOffset`] to UTC, returning `None` if the
+                /// UTC date-time is invalid.
+                pub const fn checked_to_utc(self) -> Option<UtcDateTime> 
+                {
+                    Some
+                    (
+                        const_try_opt!(self.checked_to_offset(UtcOffset::UTC))
+                            .local_date_time
+                            .as_utc(),
+                    )
+                }
+                /// Equivalent to `.to_offset(UtcOffset::UTC)`, but returning the year, ordinal, and time.
+                pub(crate) const fn to_offset_raw(self, offset: UtcOffset) -> (i32, u16, Time) 
+                {
+                    let from = self.offset;
+                    let to = offset;
+                    
+                    if from.whole_hours() == to.whole_hours()
+                        && from.minutes_past_hour() == to.minutes_past_hour()
+                        && from.seconds_past_minute() == to.seconds_past_minute()
+                    {
+                        return (self.year(), self.ordinal(), self.time());
+                    }
+
+                    let mut second = self.second() as i16 - from.seconds_past_minute() as i16
+                        + to.seconds_past_minute() as i16;
+                    let mut minute =
+                        self.minute() as i16 - from.minutes_past_hour() as i16 + to.minutes_past_hour() as i16;
+                    let mut hour = self.hour() as i8 - from.whole_hours() + to.whole_hours();
+                    let (mut year, ordinal) = self.to_ordinal_date();
+                    let mut ordinal = ordinal as i16;
+
+                    // Cascade the values twice. This is needed because the values are adjusted twice above.
+                    cascade!(second in 0..Second::per_t(Minute) => minute);
+                    cascade!(second in 0..Second::per_t(Minute) => minute);
+                    cascade!(minute in 0..Minute::per_t(Hour) => hour);
+                    cascade!(minute in 0..Minute::per_t(Hour) => hour);
+                    cascade!(hour in 0..Hour::per_t(Day) => ordinal);
+                    cascade!(hour in 0..Hour::per_t(Day) => ordinal);
+                    cascade!(ordinal => year);
+
+                    debug_assert!(ordinal > 0);
+                    debug_assert!(ordinal <= util::days_in_year(year) as i16);
+
+                    (
+                        year,
+                        ordinal as u16,
+                        // Safety: The cascades above ensure the values are in range.
+                        unsafe {
+                            Time::__from_hms_nanos_unchecked(
+                                hour as u8,
+                                minute as u8,
+                                second as u8,
+                                self.nanosecond(),
+                            )
+                        },
+                    )
+                }
+                /// Create an `OffsetDateTime` from the provided Unix timestamp.
+                pub const fn from_unix_timestamp(timestamp: i64) -> Result<Self, error::ComponentRange> 
+                {
+                    type Timestamp = RangedI64
+                    <
+                        {
+                            OffsetDateTime::new_in_offset(Date::MIN, Time::MIDNIGHT, UtcOffset::UTC)
+                                .unix_timestamp()
+                        },
+                        {
+                            OffsetDateTime::new_in_offset(Date::MAX, Time::MAX, UtcOffset::UTC).unix_timestamp()
+                        },
+                    >;
+
+                    ensure_ranged!(Timestamp: timestamp);
+                    
+                    let date = unsafe 
+                    {
+                        Date::from_julian_day_unchecked(
+                            UNIX_EPOCH_JULIAN_DAY + div_floor!(timestamp, Second::per_t::<i64>(Day)) as i32,
+                        )
+                    };
+
+                    let seconds_within_day = timestamp.rem_euclid(Second::per_t(Day));
+                    // Safety: All values are in range.
+                    let time = unsafe {
+                        Time::__from_hms_nanos_unchecked(
+                            (seconds_within_day / Second::per_t::<i64>(Hour)) as u8,
+                            ((seconds_within_day % Second::per_t::<i64>(Hour)) / Minute::per_t::<i64>(Hour))
+                                as u8,
+                            (seconds_within_day % Second::per_t::<i64>(Minute)) as u8,
+                            0,
+                        )
+                    };
+
+                    Ok(Self::new_in_offset(date, time, UtcOffset::UTC))
+                }
+                /// Construct an `OffsetDateTime` from the provided Unix timestamp (in nanoseconds).
+                pub const fn from_unix_timestamp_nanos(timestamp: i128) -> Result<Self, error::ComponentRange> 
+                {
+                    let datetime = const_try!(Self::from_unix_timestamp(div_floor!(
+                        timestamp,
+                        Nanosecond::per_t::<i128>(Second)
+                    ) as i64));
+
+                    Ok(Self::new_in_offset(
+                        datetime.date(),
+                        // Safety: `nanosecond` is in range due to `rem_euclid`.
+                        unsafe {
+                            Time::__from_hms_nanos_unchecked(
+                                datetime.hour(),
+                                datetime.minute(),
+                                datetime.second(),
+                                timestamp.rem_euclid(Nanosecond::per_t(Second)) as u32,
+                            )
+                        },
+                        UtcOffset::UTC,
+                    ))
+                }
+                /// Get the [`UtcOffset`].
+                pub const fn offset(self) -> UtcOffset { self.offset }
+                /// Get the [Unix timestamp](https://en.wikipedia.org/wiki/Unix_time).
+                pub const fn unix_timestamp(self) -> i64 
+                {
+                    let days = (self.to_julian_day() as i64 - UNIX_EPOCH_JULIAN_DAY as i64)
+                        * Second::per_t::<i64>(Day);
+                    let hours = self.hour() as i64 * Second::per_t::<i64>(Hour);
+                    let minutes = self.minute() as i64 * Second::per_t::<i64>(Minute);
+                    let seconds = self.second() as i64;
+                    let offset_seconds = self.offset.whole_seconds() as i64;
+                    days + hours + minutes + seconds - offset_seconds
+                }
+                /// Get the Unix timestamp in nanoseconds.
+                pub const fn unix_timestamp_nanos(self) -> i128 
+                {
+                    self.unix_timestamp() as i128 * Nanosecond::per_t::<i128>(Second)
+                        + self.nanosecond() as i128
+                }
+                /// Get the [`PrimitiveDateTime`] in the stored offset.
+                pub(crate) const fn date_time(self) -> PrimitiveDateTime { self.local_date_time }
+                /// Get the [`Date`] in the stored offset.
+                pub const fn date(self) -> Date { self.date_time().date() }
+                /// Get the [`Time`] in the stored offset.
+                pub const fn time(self) -> Time { self.date_time().time() }
+                /// Get the year of the date in the stored offset.
+                pub const fn year(self) -> i32 { self.date().year() }
+                /// Get the month of the date in the stored offset.
+                pub const fn month(self) -> Month { self.date().month() }
+                /// Get the day of the date in the stored offset.
+                pub const fn day(self) -> u8 { self.date().day() }
+                /// Get the day of the year of the date in the stored offset.
+                pub const fn ordinal(self) -> u16 { self.date().ordinal() }
+                /// Get the ISO week number of the date in the stored offset.
+                pub const fn iso_week(self) -> u8 { self.date().iso_week() }
+                /// Get the week number where week 1 begins on the first Sunday.
+                pub const fn sunday_based_week(self) -> u8 { self.date().sunday_based_week() }
+                /// Get the week number where week 1 begins on the first Monday.
+                pub const fn monday_based_week(self) -> u8 { self.date().monday_based_week() }
+                /// Get the year, month, and day.
+                pub const fn to_calendar_date(self) -> (i32, Month, u8) { self.date().to_calendar_date() }
+                /// Get the year and ordinal day number.
+                pub const fn to_ordinal_date(self) -> (i32, u16) { self.date().to_ordinal_date() }
+                /// Get the ISO 8601 year, week number, and weekday.
+                pub const fn to_iso_week_date(self) -> (i32, u8, Weekday) { self.date().to_iso_week_date() }
+                /// Get the weekday of the date in the stored offset.
+                pub const fn weekday(self) -> Weekday { self.date().weekday() }
+                /// Get the Julian day for the date.
+                pub const fn to_julian_day(self) -> i32 { self.date().to_julian_day() }
+                /// Get the clock hour, minute, and second.
+                pub const fn to_hms(self) -> (u8, u8, u8) { self.time().as_hms() }
+                /// Get the clock hour, minute, second, and millisecond.
+                pub const fn to_hms_milli(self) -> (u8, u8, u8, u16) { self.time().as_hms_milli() }
+                /// Get the clock hour, minute, second, and microsecond.
+                pub const fn to_hms_micro(self) -> (u8, u8, u8, u32) { self.time().as_hms_micro() }
+                /// Get the clock hour, minute, second, and nanosecond.
+                pub const fn to_hms_nano(self) -> (u8, u8, u8, u32) { self.time().as_hms_nano() }
+                /// Get the clock hour in the stored offset.
+                pub const fn hour(self) -> u8 { self.time().hour() }
+                /// Get the minute within the hour in the stored offset.
+                pub const fn minute(self) -> u8 { self.time().minute() }
+                /// Get the second within the minute in the stored offset.
+                pub const fn second(self) -> u8 { self.time().second() }
+                /// Get the milliseconds within the second in the stored offset.
+                pub const fn millisecond(self) -> u16 { self.time().millisecond() }
+                /// Get the microseconds within the second in the stored offset.
+                pub const fn microsecond(self) -> u32 { self.time().microsecond() }
+                /// Get the nanoseconds within the second in the stored offset.
+                pub const fn nanosecond(self) -> u32 { self.time().nanosecond() }
+                /// Computes `self + duration`, returning `None` if an overflow occurred.
+                pub const fn checked_add(self, duration: Duration) -> Option<Self>
+                { Some(const_try_opt!(self.date_time().checked_add(duration)).assume_offset(self.offset())) }
+                /// Computes `self - duration`, returning `None` if an overflow occurred.
+                pub const fn checked_sub(self, duration: Duration) -> Option<Self>
+                {
+                    Some(const_try_opt!(self.date_time().checked_sub(duration)).assume_offset(self.offset()))
+                }
+                /// Computes `self + duration`, saturating value on overflow.
+                pub const fn saturating_add(self, duration: Duration) -> Self
+                {
+                    if let Some(datetime) = self.checked_add(duration) { datetime } 
+                    else if duration.is_negative() { PrimitiveDateTime::MIN.assume_offset(self.offset()) }
+                    else { PrimitiveDateTime::MAX.assume_offset(self.offset()) }
+                }
+                /// Computes `self - duration`, saturating value on overflow.
+                pub const fn saturating_sub(self, duration: Duration) -> Self
+                {
+                    if let Some(datetime) = self.checked_sub(duration) { datetime } 
+                    else if duration.is_negative() { PrimitiveDateTime::MAX.assume_offset(self.offset()) }
+                    else { PrimitiveDateTime::MIN.assume_offset(self.offset()) }
+                }
+                /// Replace the time, which is assumed to be in the stored offset.
+                #[must_use = "This method does not mutate the original `OffsetDateTime`."]
+                pub const fn replace_time(self, time: Time) -> Self 
+                { Self::new_in_offset(self.date(), time, self.offset()) }
+                /// Replace the date, which is assumed to be in the stored offset.
+                #[must_use = "This method does not mutate the original `OffsetDateTime`."]
+                pub const fn replace_date(self, date: Date) -> Self
+                { Self::new_in_offset(date, self.time(), self.offset()) }
+                /// Replace the date and time, which are assumed to be in the stored offset.
+                #[must_use = "This method does not mutate the original `OffsetDateTime`."]
+                pub const fn replace_date_time(self, date_time: PrimitiveDateTime) -> Self
+                { date_time.assume_offset(self.offset()) }
+                /// Replace the offset.
+                #[must_use = "This method does not mutate the original `OffsetDateTime`."]
+                pub const fn replace_offset(self, offset: UtcOffset) -> Self
+                { self.date_time().assume_offset(offset) }
+                /// Replace the year.
+                #[must_use = "This method does not mutate the original `OffsetDateTime`."]
+                pub const fn replace_year(self, year: i32) -> Result<Self, error::ComponentRange>
+                { Ok(const_try!(self.date_time().replace_year(year)).assume_offset(self.offset())) }
+                /// Replace the month of the year.
+                #[must_use = "This method does not mutate the original `OffsetDateTime`."]
+                pub const fn replace_month(self, month: Month) -> Result<Self, error::ComponentRange>
+                { Ok(const_try!(self.date_time().replace_month(month)).assume_offset(self.offset())) }
+                /// Replace the day of the month.
+                #[must_use = "This method does not mutate the original `OffsetDateTime`."]
+                pub const fn replace_day(self, day: u8) -> Result<Self, error::ComponentRange>
+                { Ok(const_try!(self.date_time().replace_day(day)).assume_offset(self.offset())) }
+                /// Replace the day of the year.
+                #[must_use = "This method does not mutate the original `OffsetDateTime`."]
+                pub const fn replace_ordinal(self, ordinal: u16) -> Result<Self, error::ComponentRange>
+                { Ok(const_try!(self.date_time().replace_ordinal(ordinal)).assume_offset(self.offset())) }
+                /// Replace the clock hour.
+                #[must_use = "This method does not mutate the original `OffsetDateTime`."]
+                pub const fn replace_hour(self, hour: u8) -> Result<Self, error::ComponentRange>
+                { Ok(const_try!(self.date_time().replace_hour(hour)).assume_offset(self.offset())) }
+                /// Replace the minutes within the hour.
+                #[must_use = "This method does not mutate the original `OffsetDateTime`."]
+                pub const fn replace_minute(self, minute: u8) -> Result<Self, error::ComponentRange>
+                { Ok(const_try!(self.date_time().replace_minute(minute)).assume_offset(self.offset())) }
+                /// Replace the seconds within the minute.
+                #[must_use = "This method does not mutate the original `OffsetDateTime`."]
+                pub const fn replace_second(self, second: u8) -> Result<Self, error::ComponentRange>
+                { Ok(const_try!(self.date_time().replace_second(second)).assume_offset(self.offset())) }
+                /// Replace the milliseconds within the second.
+                #[must_use = "This method does not mutate the original `OffsetDateTime`."]
+                pub const fn replace_millisecond( self, millisecond: u16 ) -> Result<Self, error::ComponentRange>
+                { Ok( const_try!( self.date_time().replace_millisecond(millisecond)).assume_offset(self.offset()) ) }
+                /// Replace the microseconds within the second.
+                #[must_use = "This method does not mutate the original `OffsetDateTime`."]
+                pub const fn replace_microsecond( self, microsecond: u32 ) -> Result<Self, error::ComponentRange>
+                { Ok( const_try!(self.date_time().replace_microsecond(microsecond)).assume_offset(self.offset())) }
+                /// Replace the nanoseconds within the second.
+                #[must_use = "This method does not mutate the original `OffsetDateTime`."]
+                pub const fn replace_nanosecond(self, nanosecond: u32) -> Result<Self, error::ComponentRange>
+                { Ok( const_try!(self.date_time().replace_nanosecond(nanosecond)).assume_offset(self.offset()) ) }
+                /// Format the `OffsetDateTime` using the provided description](crate::format_description).
+                pub fn format_into
+                (
+                    self,
+                    output: &mut (impl io::Write + ?Sized),
+                    format: &(impl Formattable + ?Sized),
+                ) -> Result<usize, error::Format>
+                {
+                    format.format_into
+                    (
+                        output,
+                        Some(self.date()),
+                        Some(self.time()),
+                        Some(self.offset()),
+                    )
+                }
+
+                /// Format the `OffsetDateTime` using the provided [format
+                /// description](crate::format_description).
+                ///
+                /// ```rust
+                /// # use time::format_description;
+                /// # use time_macros::datetime;
+                /// let format = format_description::parse(
+                ///     "[year]-[month]-[day] [hour]:[minute]:[second] [offset_hour \
+                ///          sign:mandatory]:[offset_minute]:[offset_second]",
+                /// )?;
+                /// assert_eq!(
+                ///     datetime!(2020-01-02 03:04:05 +06:07:08).format(&format)?,
+                ///     "2020-01-02 03:04:05 +06:07:08"
+                /// );
+                /// # Ok::<_, time::Error>(())
+                /// ```
+                pub fn format(self, format: &(impl Formattable + ?Sized)) -> Result<String, error::Format> {
+                    format.format(Some(self.date()), Some(self.time()), Some(self.offset()))
+                }
+            }
+
+            #[cfg(feature = "parsing")]
+            impl OffsetDateTime {
+                /// Parse an `OffsetDateTime` from the input using the provided [format
+                /// description](crate::format_description).
+                ///
+                /// ```rust
+                /// # use time::OffsetDateTime;
+                /// # use time_macros::{datetime, format_description};
+                /// let format = format_description!(
+                ///     "[year]-[month]-[day] [hour]:[minute]:[second] [offset_hour \
+                ///          sign:mandatory]:[offset_minute]:[offset_second]"
+                /// );
+                /// assert_eq!(
+                ///     OffsetDateTime::parse("2020-01-02 03:04:05 +06:07:08", &format)?,
+                ///     datetime!(2020-01-02 03:04:05 +06:07:08)
+                /// );
+                /// # Ok::<_, time::Error>(())
+                /// ```
+                pub fn parse(
+                    input: &str,
+                    description: &(impl Parsable + ?Sized),
+                ) -> Result<Self, error::Parse> {
+                    description.parse_offset_date_time(input.as_bytes())
+                }
+
+                /// A helper method to check if the `OffsetDateTime` is a valid representation of a leap second.
+                /// Leap seconds, when parsed, are represented as the preceding nanosecond. However, leap
+                /// seconds can only occur as the last second of a month UTC.
+                #[cfg(feature = "parsing")]
+                pub(crate) const fn is_valid_leap_second_stand_in(self) -> bool {
+                    // This comparison doesn't need to be adjusted for the stored offset, so check it first for
+                    // speed.
+                    if self.nanosecond() != 999_999_999 {
+                        return false;
+                    }
+
+                    let (year, ordinal, time) = self.to_offset_raw(UtcOffset::UTC);
+                    let Ok(date) = Date::from_ordinal_date(year, ordinal) else {
+                        return false;
+                    };
+
+                    time.hour() == 23
+                        && time.minute() == 59
+                        && time.second() == 59
+                        && date.day() == date.month().length(year)
+                }
+            }
+
+            impl SmartDisplay for OffsetDateTime {
+                type Metadata = ();
+
+                fn metadata(&self, _: FormatterOptions) -> Metadata<Self> {
+                    let width =
+                        smart_display::padded_width_of!(self.date(), " ", self.time(), " ", self.offset());
+                    Metadata::new(width, self, ())
+                }
+
+                fn fmt_with_metadata(
+                    &self,
+                    f: &mut fmt::Formatter<'_>,
+                    metadata: Metadata<Self>,
+                ) -> fmt::Result {
+                    f.pad_with_width(
+                        metadata.unpadded_width(),
+                        format_args!("{} {} {}", self.date(), self.time(), self.offset()),
+                    )
+                }
+            }
+
+            impl fmt::Display for OffsetDateTime {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    SmartDisplay::fmt(self, f)
+                }
+            }
+
+            impl fmt::Debug for OffsetDateTime {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    fmt::Display::fmt(self, f)
+                }
+            }
+
+            impl Add<Duration> for OffsetDateTime {
+                type Output = Self;
+
+                /// # Panics
+                ///
+                /// This may panic if an overflow occurs.
+                fn add(self, duration: Duration) -> Self::Output {
+                    self.checked_add(duration)
+                        .expect("resulting value is out of range")
+                }
+            }
+
+            impl Add<StdDuration> for OffsetDateTime {
+                type Output = Self;
+
+                /// # Panics
+                ///
+                /// This may panic if an overflow occurs.
+                fn add(self, duration: StdDuration) -> Self::Output {
+                    let (is_next_day, time) = self.time().adjusting_add_std(duration);
+
+                    Self::new_in_offset(
+                        if is_next_day {
+                            (self.date() + duration)
+                                .next_day()
+                                .expect("resulting value is out of range")
+                        } else {
+                            self.date() + duration
+                        },
+                        time,
+                        self.offset,
+                    )
+                }
+            }
+
+            impl AddAssign<Duration> for OffsetDateTime {
+                /// # Panics
+                ///
+                /// This may panic if an overflow occurs.
+                fn add_assign(&mut self, rhs: Duration) {
+                    *self = *self + rhs;
+                }
+            }
+
+            impl AddAssign<StdDuration> for OffsetDateTime {
+                /// # Panics
+                ///
+                /// This may panic if an overflow occurs.
+                fn add_assign(&mut self, rhs: StdDuration) {
+                    *self = *self + rhs;
+                }
+            }
+
+            impl Sub<Duration> for OffsetDateTime {
+                type Output = Self;
+
+                /// # Panics
+                ///
+                /// This may panic if an overflow occurs.
+                fn sub(self, rhs: Duration) -> Self::Output {
+                    self.checked_sub(rhs)
+                        .expect("resulting value is out of range")
+                }
+            }
+
+            impl Sub<StdDuration> for OffsetDateTime {
+                type Output = Self;
+
+                /// # Panics
+                ///
+                /// This may panic if an overflow occurs.
+                fn sub(self, duration: StdDuration) -> Self::Output {
+                    let (is_previous_day, time) = self.time().adjusting_sub_std(duration);
+
+                    Self::new_in_offset(
+                        if is_previous_day {
+                            (self.date() - duration)
+                                .previous_day()
+                                .expect("resulting value is out of range")
+                        } else {
+                            self.date() - duration
+                        },
+                        time,
+                        self.offset,
+                    )
+                }
+            }
+
+            impl SubAssign<Duration> for OffsetDateTime {
+                /// # Panics
+                ///
+                /// This may panic if an overflow occurs.
+                fn sub_assign(&mut self, rhs: Duration) {
+                    *self = *self - rhs;
+                }
+            }
+
+            impl SubAssign<StdDuration> for OffsetDateTime {
+                /// # Panics
+                ///
+                /// This may panic if an overflow occurs.
+                fn sub_assign(&mut self, rhs: StdDuration) {
+                    *self = *self - rhs;
+                }
+            }
+
+            impl Sub for OffsetDateTime {
+                type Output = Duration;
+
+                /// # Panics
+                ///
+                /// This may panic if an overflow occurs.
+                fn sub(self, rhs: Self) -> Self::Output {
+                    let base = self.date_time() - rhs.date_time();
+                    let adjustment = Duration::seconds(
+                        (self.offset.whole_seconds() - rhs.offset.whole_seconds()).extend::<i64>(),
+                    );
+                    base - adjustment
+                }
+            }
+
+            #[derive(Debug, PartialEq, Eq)]
+            pub struct DateTime 
+            {
+                odt: OffsetDateTime,
+            }
+
+            impl DateTime 
+            {
+                pub fn now() -> Self 
+                {
+                    let odt: OffsetDateTime = match OffsetDateTime::now_local() 
+                    {
+                        Ok(dt) => dt,
+                        Err(_) => OffsetDateTime::now_utc(),
+                    };
+                    DateTime { odt }
+                }
+
+                pub fn from_timestamp(ts: f64) -> Self
+                {
+                    let dummy_now = Self::now();
+                    let offset_seconds = dummy_now.odt.offset().whole_minutes() * 60;
+                    let ts_nano = (ts + offset_seconds as f64) * 1000000000.0;
+                    let odt: OffsetDateTime = match OffsetDateTime::from_unix_timestamp_nanos(ts_nano as i128)
+                    {
+                        Ok(x) => x,
+                        Err(_) => OffsetDateTime::now_utc(),
+                    };                    
+                    DateTime { odt }
+                }
+
+                pub fn unix_timestamp(&self) -> f64 { self.odt.unix_timestamp_nanos() as f64 / 1000000000.0 }
+            }
+
+            impl fmt::Display for DateTime 
+            {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result 
+                {
+                    write!
+                    (
+                        f, 
+                        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:03}",
+                        self.odt.year(),
+                        self.odt.month() as u8,
+                        self.odt.day(),
+                        self.odt.hour(),
+                        self.odt.minute(),
+                        self.odt.second(),
+                        self.odt.millisecond(),
+                    )
+                }
             }
         }
     } pub use self::prelude::{ * };
@@ -15799,6 +16643,37 @@ pub mod libc
     } #[cfg( windows )] pub use self::windows::{ * };
 }
 
+pub mod io
+{
+    pub use std::io::{ * };
+}
+
+pub mod is
+{
+    use ::
+    {
+        *,
+    };
+
+    //pub fn is_login(args: &[String]) -> bool {
+    pub fn login(args: &[String]) -> bool 
+    {
+        if !args.is_empty() && args[0].starts_with("-") { return true; }
+
+        if args.len() > 1 && (args[1] == "--login" || args[1] == "-l") { return true; }
+
+        if let Ok(term_program) = ::env::var("TERM_PROGRAM") 
+        {
+            if term_program == "vscode" 
+            {
+                return true;
+            }
+        }
+
+        false
+    }
+}
+
 pub mod marker
 {
     pub use std::marker::{ * };
@@ -15809,11 +16684,152 @@ pub mod mem
     pub use std::mem::{ * };
 }
 
+pub mod num
+{
+    pub use std::num::{ * };
+}
+
+pub mod ops
+{
+    pub use std::ops::{ * };
+}
+
 pub mod os
 {
     pub mod raw
     {
         pub use std::os::raw::{ * };
+    }
+    
+    pub mod unix
+    {
+        #[cfg( unix )] pub use std::os::unix::{ * };
+    }
+    
+    pub mod windows
+    {
+        #[cfg( windows )] pub use std::os::windows::{ * };
+    }
+}
+
+pub mod path
+{
+    pub use std::path::{ * };
+    // pub fn get_current_dir() -> String
+    pub fn get_current() -> String
+    {
+        use ::io::Write as _;
+
+        let mut current_dir = PathBuf::new();
+        
+        match ::env::current_dir()
+        {
+            Ok(x) => current_dir = x,
+            Err(e) => {
+                println_stderr!("env current_dir() failed: {}", e);
+            }
+        }
+
+        let mut str_current_dir = "";
+        
+        match current_dir.to_str() 
+        {
+            Some(x) => str_current_dir = x,
+            None => { println_stderr!("current_dir to str failed."); }
+        }
+
+        str_current_dir.to_string()
+    }
+    // pub fn get_config_dir() -> String
+    pub fn get_configuration() -> String
+    {
+        if let Ok(x) = ::env::var("XDG_CONFIG_HOME")
+        {
+            format!("{}/cicada", x)
+        }
+        else
+        {
+            let home = ::env::get_user_home();
+            format!("{}/.config/cicada", home)
+        }
+    }
+    // pub fn find_file_in_path(filename: &str, exec: bool) -> String
+    pub fn find_file(filename: &str, exec: bool) -> String
+    {
+        let env_path = match ::env::var("PATH")
+        {
+            Ok(x) => x,
+            Err(e) =>
+            {
+                println_stderr!("cicada: error with env PATH: {:?}", e);
+                return String::new();
+            }
+        };
+
+        let vec_path: Vec<&str> = env_path.split(':').collect();
+
+        for p in &vec_path
+        {
+            match ::fs::read_dir(p)
+            {
+                Ok(list) =>
+                {
+                    for entry in list.flatten()
+                    {
+                        if let Ok(name) = entry.file_name().into_string()
+                        {
+                            if name != filename { continue; }
+
+                            if exec
+                            {
+                                let _mode = match entry.metadata()
+                                {
+                                    Ok(x) => x,
+                                    Err(e) =>
+                                    {
+                                        println_stderr!("cicada: metadata error: {:?}", e);
+                                        continue;
+                                    }
+                                };
+                                /*
+                                let mode = _mode.permissions().mode();
+                                
+                                if mode & 0o111 == 0 { continue; } */
+                            }
+
+                            return entry.path().to_string_lossy().to_string();
+                        }
+                    }
+                }
+                Err(e) => {
+                    if e.kind() == io::ErrorKind::NotFound {
+                        continue;
+                    }
+                    log!("cicada: fs read_dir error: {}: {}", p, e);
+                }
+            }
+        }
+        String::new()
+    }
+}
+
+pub mod process
+{
+    pub use std::process::{ * };
+    // pub fn proc_has_terminal() -> bool
+    pub fn has_terminal() -> bool
+    {
+        unsafe 
+        {
+            let tgid = ::libc::tcgetpgrp(0);
+            let pgid = ::libc::getpgid(0);
+            tgid == pgid
+        }
+    }
+    // pub fn getpid() -> i32 
+    pub fn pid() -> i32 
+    {
+        unsafe { ::libc::getpid() }
     }
 }
 
@@ -15825,6 +16841,197 @@ pub mod ptr
 pub mod result
 {
     pub use std::result::{ * };
+}
+
+pub mod scripts
+{
+    use ::
+    {
+        *,
+    };
+    // pub fn run_script(sh: &mut shell::Shell, args: &Vec<String>) -> i32
+    pub fn run( this: &mut shell::Shell, args: &Vec<String>) -> i32
+    {
+        let src_file = &args[1];
+        let full_src_file: String;
+
+        if src_file.contains('/') {
+            full_src_file = src_file.clone();
+        }
+        else
+        {
+            let full_path = libs::path::find_file_in_path(src_file, false);
+            
+            if full_path.is_empty()
+            {
+                if !Path::new(src_file).exists()
+                {
+                    println_stderr!( "::{}: No such file.", src_file );
+                    return 1;
+                }
+
+                full_src_file = format!("./{}", src_file);
+            }
+
+            else { full_src_file = full_path.clone(); }
+        }
+
+        if !Path::new(&full_src_file).exists() {
+            println_stderr!("cicada: {}: no such file", src_file);
+            return 1;
+        }
+        if Path::new(&full_src_file).is_dir() {
+            println_stderr!("cicada: {}: is a directory", src_file);
+            return 1;
+        }
+
+        let mut file;
+        match File::open(&full_src_file) {
+            Ok(x) => file = x,
+            Err(e) => {
+                println_stderr!("cicada: {}: failed to open file - {:?}", &full_src_file, e.kind());
+                return 1;
+            }
+        }
+        let mut text = String::new();
+        match file.read_to_string(&mut text) {
+            Ok(_) => {}
+            Err(e) => {
+                match e.kind() {
+                    ErrorKind::InvalidData => {
+                        println_stderr!("cicada: {}: not a valid script file", &full_src_file);
+                    }
+                    _ => {
+                        println_stderr!("cicada: {}: error: {:?}", &full_src_file, e);
+                    }
+                }
+                return 1;
+            }
+        }
+
+        if text.contains("\\\n") {
+            let re = RegexBuilder::new(r#"([ \t]*\\\n[ \t]+)|([ \t]+\\\n[ \t]*)"#)
+                .multi_line(true).build().unwrap();
+            text = re.replace_all(&text, " ").to_string();
+
+            let re = RegexBuilder::new(r#"\\\n"#).multi_line(true).build().unwrap();
+            text = re.replace_all(&text, "").to_string();
+        }
+
+        let re_func_head = Regex::new(r"^function ([a-zA-Z_-][a-zA-Z0-9_-]*) *(?:\(\))? *\{$").unwrap();
+        let re_func_tail = Regex::new(r"^\}$").unwrap();
+        let mut text_new = String::new();
+        let mut enter_func = false;
+        let mut func_name = String::new();
+        let mut func_body = String::new();
+        for line in text.clone().lines() {
+            if re_func_head.is_match(line.trim()) {
+                enter_func = true;
+                let cap = re_func_head.captures(line.trim()).unwrap();
+                func_name = cap[1].to_string();
+                func_body = String::new();
+                continue;
+            }
+            if re_func_tail.is_match(line.trim()) {
+                this.set_func(&func_name, &func_body);
+                enter_func = false;
+                continue;
+            }
+            if enter_func {
+                func_body.push_str(line);
+                func_body.push('\n');
+            } else {
+                text_new.push_str(line);
+                text_new.push('\n');
+            }
+        }
+
+        let mut status = 0;
+        let cr_list = run_lines(this, &text_new, args, false);
+        if let Some(last) = cr_list.last() {
+            status = last.status;
+        }
+        
+        this.exit_on_error = false;
+        status
+    }
+
+    
+}
+
+pub mod shell
+{
+    use ::
+    {
+        collections::{HashMap, HashSet},
+        *,
+    };
+    /*
+    use errno::errno;
+    use std::collections::{HashMap, HashSet};
+    use std::env;
+    use std::io::Write;
+    use std::mem;
+
+    use regex::Regex;
+    use uuid::Uuid;
+
+    use crate::core;
+    use crate::libs;
+    use crate::parsers;
+    use crate::tools;
+    use crate::types::{self, CommandLine};
+    */
+    #[derive(Debug, Clone)]
+    pub struct Shell
+    {
+        pub jobs: HashMap<i32, types::Job>,
+        pub aliases: HashMap<String, String>,
+        pub envs: HashMap<String, String>,
+        pub funcs: HashMap<String, String>,
+        pub cmd: String,
+        pub current_dir: String,
+        pub previous_dir: String,
+        pub previous_cmd: String,
+        pub previous_status: i32,
+        pub is_login: bool,
+        pub exit_on_error: bool,
+        pub has_terminal: bool,
+        pub paths:Vec<String>,
+        pub session_id: Option<u128>,
+    }
+
+    impl Shell
+    {
+
+        pub fn create( paths:Vec<String> ) -> Self
+        {
+            let has_terminal = process::has_terminal();
+            let current_dir = path::get_current();
+            Self
+            {
+                jobs: HashMap::new(),
+                aliases: HashMap::new(),
+                envs: HashMap::new(),
+                funcs: HashMap::new(),
+                cmd: String::new(),
+                current_dir: current_dir.clone(),
+                previous_dir: String::new(),
+                previous_cmd: String::new(),
+                previous_status: 0,
+                is_login: false,
+                exit_on_error: false,
+                has_terminal,
+                paths,
+                session_id:None,
+            }
+        }
+    }
+}
+
+pub mod string
+{
+    pub use std::string::{ * };
 }
 
 pub mod system
@@ -15848,9 +17055,61 @@ pub mod system
     } pub use self::prelude::{ * };
 }
 
+pub mod time
+{
+    pub use std::time::{ * };
+}
+
+pub mod types
+{
+    use ::
+    {
+        collections::{ HashSet },
+        *,
+    };
+    /*
+        use regex::Regex;
+        use std::collections::{HashMap, HashSet};
+        use std::fmt;
+
+        use crate::parsers;
+        use crate::parsers::parser_line::tokens_to_redirections;
+        use crate::shell;
+        use crate::libs;
+        use crate::tools;
+    */
+    #[derive(Debug, Clone, Default)]
+    pub struct Job
+    {
+        pub cmd:String,
+        pub id:i32,
+        pub gid:i32,
+        pub pids:Vec<i32>,
+        pub pids_stopped:HashSet<i32>,
+        pub status:String,
+        pub is_bg:bool,
+    }
+}
+
 unsafe fn domain() -> ::result::Result<(), Box<dyn std::error::Error>>
 {
-    Ok(())
+    unsafe
+    {
+        let mut this = shell::Shell::create( env::initialize_paths()? );
+        println!( r#"{:?}"#, this );
+
+        let args: Vec<String> = env::args().collect();
+        println!( r#"{:?}"#, args );
+
+        if is::login( &args )
+        {
+            //rcfile::load_rc_files(&mut sh);
+            env::load_rc( &mut this );
+            this.is_login = true;
+        }
+        
+        Ok(())
+    }
 }
 
 fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
@@ -15866,4 +17125,4 @@ fn main() -> ::result::Result<(), Box<dyn std::error::Error>>
 // #\[stable\(feature = ".+", since = ".+"\)\]
 // #\[unstable\(feature = ".+", issue = ".+"\)\]
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 15869
+// 17128
