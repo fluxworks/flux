@@ -1077,8 +1077,7 @@ pub mod linked_hash_map
         }
     }
 
-    impl<K, Q: ?Sized> Borrow<Qey<Q>> for KeyRef<K>
-    where
+    impl<K, Q: ?Sized> Borrow<Qey<Q>> for KeyRef<K> where
         K: Borrow<Q>,
     {
         fn borrow(&self) -> &Qey<Q> {
@@ -1502,8 +1501,7 @@ pub mod linked_hash_map
         }
     }
 
-    impl<'a, K, V, S, Q: ?Sized> Index<&'a Q> for LinkedHashMap<K, V, S>
-    where
+    impl<'a, K, V, S, Q: ?Sized> Index<&'a Q> for LinkedHashMap<K, V, S> where
         K: Hash + Eq + Borrow<Q>,
         S: BuildHasher,
         Q: Eq + Hash,
@@ -1515,8 +1513,7 @@ pub mod linked_hash_map
         }
     }
 
-    impl<'a, K, V, S, Q: ?Sized> IndexMut<&'a Q> for LinkedHashMap<K, V, S>
-    where
+    impl<'a, K, V, S, Q: ?Sized> IndexMut<&'a Q> for LinkedHashMap<K, V, S> where
         K: Hash + Eq + Borrow<Q>,
         S: BuildHasher,
         Q: Eq + Hash,
@@ -1548,8 +1545,7 @@ pub mod linked_hash_map
         }
     }
 
-    impl<'a, K, V, S> Extend<(&'a K, &'a V)> for LinkedHashMap<K, V, S>
-    where
+    impl<'a, K, V, S> Extend<(&'a K, &'a V)> for LinkedHashMap<K, V, S> where
         K: 'a + Hash + Eq + Copy,
         V: 'a + Copy,
         S: BuildHasher,
@@ -1685,71 +1681,61 @@ pub mod linked_hash_map
         marker: marker::PhantomData<(&'a K, &'a mut V, &'a S)>,
     }
 
-    unsafe impl<'a, K, V> Send for Iter<'a, K, V>
-    where
+    unsafe impl<'a, K, V> Send for Iter<'a, K, V> where
         K: Send,
         V: Send,
     {
     }
 
-    unsafe impl<'a, K, V> Send for IterMut<'a, K, V>
-    where
+    unsafe impl<'a, K, V> Send for IterMut<'a, K, V> where
         K: Send,
         V: Send,
     {
     }
 
-    unsafe impl<'a, K, V> Send for Drain<'a, K, V>
-    where
+    unsafe impl<'a, K, V> Send for Drain<'a, K, V> where
         K: Send,
         V: Send,
     {
     }
 
-    unsafe impl<K, V> Send for IntoIter<K, V>
-    where
+    unsafe impl<K, V> Send for IntoIter<K, V> where
         K: Send,
         V: Send,
     {
     }
 
-    unsafe impl<'a, K, V, S> Send for Entries<'a, K, V, S>
-    where
+    unsafe impl<'a, K, V, S> Send for Entries<'a, K, V, S> where
         K: Send,
         V: Send,
         S: Send,
     {
     }
 
-    unsafe impl<'a, K, V> Sync for Iter<'a, K, V>
-    where
+    unsafe impl<'a, K, V> Sync for Iter<'a, K, V> where
         K: Sync,
         V: Sync,
     {
     }
 
-    unsafe impl<'a, K, V> Sync for IterMut<'a, K, V>
-    where
+    unsafe impl<'a, K, V> Sync for IterMut<'a, K, V> where
         K: Sync,
         V: Sync,
     {
     }
 
-    unsafe impl<'a, K, V> Sync for Drain<'a, K, V>
-    where
+    unsafe impl<'a, K, V> Sync for Drain<'a, K, V> where
         K: Sync,
         V: Sync,
     {
     }
-    unsafe impl<K, V> Sync for IntoIter<K, V>
-    where
+    unsafe impl<K, V> Sync for IntoIter<K, V> where
         K: Sync,
         V: Sync,
     {
     }
 
-    unsafe impl<'a, K, V, S> Sync for Entries<'a, K, V, S>
-    where
+    unsafe impl<'a, K, V, S> Sync for Entries<'a, K, V, S> where
         K: Sync,
         V: Sync,
         S: Sync,
@@ -1762,8 +1748,7 @@ pub mod linked_hash_map
         }
     }
 
-    impl<K, V> Clone for IntoIter<K, V>
-    where
+    impl<K, V> Clone for IntoIter<K, V> where
         K: Clone,
         V: Clone,
     {
@@ -2317,13 +2302,5182 @@ pub mod random
     /*
     */
 }
-
+// regex v1.11.1
 pub mod regex
 {
+    //! This crate provides routines for searching strings for matches of a [regular expression] (aka "regex").
     use ::
     {
         *,
     };
+    /*
+    #![no_std]
+    #![deny(missing_docs)]
+    #![cfg_attr(feature = "pattern", feature(pattern))]
+    #![warn(missing_debug_implementations)]
+    
+    #[cfg(doctest)]
+    doc_comment::doctest!("../README.md");
+    
+    extern crate alloc;
+    #[cfg(any(test, feature = "std"))]
+    extern crate std;
+    
+    pub use crate::error::Error;
+    
+    pub use crate::{builders::string::*, regex::string::*, regexset::string::*};
+    */
+    mod automata
+    {
+        //!Exposes a variety of regex engines used by the `regex` crate.
+        use ::
+        {
+            *,
+        };
+        /*
+        #[cfg(any(test, feature = "std"))]
+        extern crate std;
+        
+        #[cfg(feature = "alloc")]
+        extern crate alloc;
+        
+        #[cfg(doctest)]
+        doc_comment::doctest!("../README.md");
+        
+        #[doc(inline)]
+        pub use crate::util::primitives::PatternID;
+        pub use crate::util::search::*;
+        */
+        
+        pub mod util
+        {
+            //! A collection of modules that provide APIs that are useful across many regex engines.
+            use ::
+            {
+                *,
+            };
+            /*
+            */
+            pub mod alphabet
+            {
+                //! This module provides APIs for dealing with the alphabets of finite state machines.
+                use ::
+                {
+                    *,
+                };
+                /*
+                use crate::util::{
+                    escape::DebugByte,
+                    wire::{self, DeserializeError, SerializeError},
+                };
+                */
+                /// Unit represents a single unit of haystack for DFA based regex engines.
+                #[derive(Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
+                pub struct Unit(UnitKind);
+                
+                #[derive(Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
+                enum UnitKind {
+                    /// Represents a byte value, or more typically, an equivalence class
+                    /// represented as a byte value.
+                    U8(u8),
+                    /// Represents the "end of input" sentinel
+                    EOI(u16),
+                }
+                
+                impl Unit {
+                    /// Create a new haystack unit from a byte value.
+                    pub fn u8(byte: u8) -> Unit {
+                        Unit(UnitKind::U8(byte))
+                    }
+                
+                    /// Create a new "end of input" haystack unit.
+                    pub fn eoi(num_byte_equiv_classes: usize) -> Unit {
+                        assert!(
+                            num_byte_equiv_classes <= 256,
+                            "max number of byte-based equivalent classes is 256, but got {}",
+                            num_byte_equiv_classes,
+                        );
+                        Unit(UnitKind::EOI(u16::try_from(num_byte_equiv_classes).unwrap()))
+                    }
+                
+                    /// If this unit is not an "end of input" sentinel, then returns its
+                    /// underlying byte value. Otherwise return `None`.
+                    pub fn as_u8(self) -> Option<u8> {
+                        match self.0 {
+                            UnitKind::U8(b) => Some(b),
+                            UnitKind::EOI(_) => None,
+                        }
+                    }
+                
+                    /// If this unit is an "end of input" sentinel, then return the underlying
+                    /// sentinel value that was given to [`Unit::eoi`].
+                    pub fn as_eoi(self) -> Option<u16> {
+                        match self.0 {
+                            UnitKind::U8(_) => None,
+                            UnitKind::EOI(sentinel) => Some(sentinel),
+                        }
+                    }
+                
+                    /// Return this unit as a `usize`, regardless of whether it is a byte value
+                    /// or an "end of input" sentinel. In the latter case, the underlying
+                    /// sentinel value given to [`Unit::eoi`] is returned.
+                    pub fn as_usize(self) -> usize {
+                        match self.0 {
+                            UnitKind::U8(b) => usize::from(b),
+                            UnitKind::EOI(eoi) => usize::from(eoi),
+                        }
+                    }
+                
+                    /// Returns true if and only of this unit is a byte value equivalent to the
+                    /// byte given.
+                    pub fn is_byte(self, byte: u8) -> bool {
+                        self.as_u8().map_or(false, |b| b == byte)
+                    }
+                
+                    /// Returns true when this unit represents an "end of input" sentinel.
+                    pub fn is_eoi(self) -> bool {
+                        self.as_eoi().is_some()
+                    }
+                
+                    /// Returns true when this unit corresponds to an ASCII word byte.
+                    pub fn is_word_byte(self) -> bool {
+                        self.as_u8().map_or(false, crate::util::utf8::is_word_byte)
+                    }
+                }
+                
+                impl core::fmt::Debug for Unit {
+                    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                        match self.0 {
+                            UnitKind::U8(b) => write!(f, "{:?}", DebugByte(b)),
+                            UnitKind::EOI(_) => write!(f, "EOI"),
+                        }
+                    }
+                }
+                
+                /// A representation of byte oriented equivalence classes.
+                #[derive(Clone, Copy)]
+                pub struct ByteClasses([u8; 256]);
+                
+                impl ByteClasses {
+                    /// Creates a new set of equivalence classes where all bytes are mapped to
+                    /// the same class.
+                    #[inline]
+                    pub fn empty() -> ByteClasses {
+                        ByteClasses([0; 256])
+                    }
+                
+                    /// Creates a new set of equivalence classes where each byte belongs to
+                    /// its own equivalence class.
+                    #[inline]
+                    pub fn singletons() -> ByteClasses {
+                        let mut classes = ByteClasses::empty();
+                        for b in 0..=255 {
+                            classes.set(b, b);
+                        }
+                        classes
+                    }
+                
+                    /// Deserializes a byte class map from the given slice.
+                    pub fn from_bytes(
+                        slice: &[u8],
+                    ) -> Result<(ByteClasses, usize), DeserializeError> {
+                        wire::check_slice_len(slice, 256, "byte class map")?;
+                        let mut classes = ByteClasses::empty();
+                        for (b, &class) in slice[..256].iter().enumerate() {
+                            classes.set(u8::try_from(b).unwrap(), class);
+                        }
+                        
+                        for &b in classes.0.iter() {
+                            if usize::from(b) >= classes.alphabet_len() {
+                                return Err(DeserializeError::generic(
+                                    "found equivalence class greater than alphabet len",
+                                ));
+                            }
+                        }
+                        Ok((classes, 256))
+                    }
+                
+                    /// Writes this byte class map to the given byte buffer.
+                    pub fn write_to(
+                        &self,
+                        mut dst: &mut [u8],
+                    ) -> Result<usize, SerializeError> {
+                        let nwrite = self.write_to_len();
+                        if dst.len() < nwrite {
+                            return Err(SerializeError::buffer_too_small("byte class map"));
+                        }
+                        for b in 0..=255 {
+                            dst[0] = self.get(b);
+                            dst = &mut dst[1..];
+                        }
+                        Ok(nwrite)
+                    }
+                
+                    /// Returns the total number of bytes written by `write_to`.
+                    pub fn write_to_len(&self) -> usize {
+                        256
+                    }
+                
+                    /// Set the equivalence class for the given byte.
+                    #[inline]
+                    pub fn set(&mut self, byte: u8, class: u8) {
+                        self.0[usize::from(byte)] = class;
+                    }
+                
+                    /// Get the equivalence class for the given byte.
+                    #[inline]
+                    pub fn get(&self, byte: u8) -> u8 {
+                        self.0[usize::from(byte)]
+                    }
+                
+                    /// Get the equivalence class for the given haystack unit and return the
+                    /// class as a `usize`.
+                    #[inline]
+                    pub fn get_by_unit(&self, unit: Unit) -> usize {
+                        match unit.0 {
+                            UnitKind::U8(b) => usize::from(self.get(b)),
+                            UnitKind::EOI(b) => usize::from(b),
+                        }
+                    }
+                
+                    /// Create a unit that represents the "end of input" sentinel based on the
+                    /// number of equivalence classes.
+                    #[inline]
+                    pub fn eoi(&self) -> Unit {
+                        Unit::eoi(self.alphabet_len().checked_sub(1).unwrap())
+                    }
+                
+                    /// Return the total number of elements in the alphabet represented by
+                    /// these equivalence classes.
+                    #[inline]
+                    pub fn alphabet_len(&self) -> usize {
+                        usize::from(self.0[255]) + 1 + 1
+                    }
+                
+                    /// Returns the stride, as a base-2 exponent, required for these
+                    /// equivalence classes.
+                    #[inline]
+                    pub fn stride2(&self) -> usize {
+                        let zeros = self.alphabet_len().next_power_of_two().trailing_zeros();
+                        usize::try_from(zeros).unwrap()
+                    }
+                
+                    /// Returns true if and only if every byte in this class maps to its own
+                    /// equivalence class.
+                    #[inline]
+                    pub fn is_singleton(&self) -> bool {
+                        self.alphabet_len() == 257
+                    }
+                
+                    /// Returns an iterator over all equivalence classes in this set.
+                    #[inline]
+                    pub fn iter(&self) -> ByteClassIter<'_> {
+                        ByteClassIter { classes: self, i: 0 }
+                    }
+                
+                    /// Returns an iterator over a sequence of representative bytes from each
+                    /// equivalence class within the range of bytes given.
+                    pub fn representatives<R: core::ops::RangeBounds<u8>>(
+                        &self,
+                        range: R,
+                    ) -> ByteClassRepresentatives<'_> {
+                        use core::ops::Bound;
+                
+                        let cur_byte = match range.start_bound() {
+                            Bound::Included(&i) => usize::from(i),
+                            Bound::Excluded(&i) => usize::from(i).checked_add(1).unwrap(),
+                            Bound::Unbounded => 0,
+                        };
+                        let end_byte = match range.end_bound() {
+                            Bound::Included(&i) => {
+                                Some(usize::from(i).checked_add(1).unwrap())
+                            }
+                            Bound::Excluded(&i) => Some(usize::from(i)),
+                            Bound::Unbounded => None,
+                        };
+                        assert_ne!(
+                            cur_byte,
+                            usize::MAX,
+                            "start range must be less than usize::MAX",
+                        );
+                        ByteClassRepresentatives {
+                            classes: self,
+                            cur_byte,
+                            end_byte,
+                            last_class: None,
+                        }
+                    }
+                
+                    /// Returns an iterator of the bytes in the given equivalence class.
+                    #[inline]
+                    pub fn elements(&self, class: Unit) -> ByteClassElements {
+                        ByteClassElements { classes: self, class, byte: 0 }
+                    }
+                
+                    /// Returns an iterator of byte ranges in the given equivalence class.
+                    fn element_ranges(&self, class: Unit) -> ByteClassElementRanges {
+                        ByteClassElementRanges { elements: self.elements(class), range: None }
+                    }
+                }
+                
+                impl Default for ByteClasses {
+                    fn default() -> ByteClasses {
+                        ByteClasses::singletons()
+                    }
+                }
+                
+                impl core::fmt::Debug for ByteClasses {
+                    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                        if self.is_singleton() {
+                            write!(f, "ByteClasses({{singletons}})")
+                        } else {
+                            write!(f, "ByteClasses(")?;
+                            for (i, class) in self.iter().enumerate() {
+                                if i > 0 {
+                                    write!(f, ", ")?;
+                                }
+                                write!(f, "{:?} => [", class.as_usize())?;
+                                for (start, end) in self.element_ranges(class) {
+                                    if start == end {
+                                        write!(f, "{:?}", start)?;
+                                    } else {
+                                        write!(f, "{:?}-{:?}", start, end)?;
+                                    }
+                                }
+                                write!(f, "]")?;
+                            }
+                            write!(f, ")")
+                        }
+                    }
+                }
+                
+                /// An iterator over each equivalence class.
+                #[derive(Debug)]
+                pub struct ByteClassIter<'a> {
+                    classes: &'a ByteClasses,
+                    i: usize,
+                }
+                
+                impl<'a> Iterator for ByteClassIter<'a> {
+                    type Item = Unit;
+                
+                    fn next(&mut self) -> Option<Unit> {
+                        if self.i + 1 == self.classes.alphabet_len() {
+                            self.i += 1;
+                            Some(self.classes.eoi())
+                        } else if self.i < self.classes.alphabet_len() {
+                            let class = u8::try_from(self.i).unwrap();
+                            self.i += 1;
+                            Some(Unit::u8(class))
+                        } else {
+                            None
+                        }
+                    }
+                }
+                
+                /// An iterator over representative bytes from each equivalence class.
+                #[derive(Debug)]
+                pub struct ByteClassRepresentatives<'a> {
+                    classes: &'a ByteClasses,
+                    cur_byte: usize,
+                    end_byte: Option<usize>,
+                    last_class: Option<u8>,
+                }
+                
+                impl<'a> Iterator for ByteClassRepresentatives<'a> {
+                    type Item = Unit;
+                
+                    fn next(&mut self) -> Option<Unit> {
+                        while self.cur_byte < self.end_byte.unwrap_or(256) {
+                            let byte = u8::try_from(self.cur_byte).unwrap();
+                            let class = self.classes.get(byte);
+                            self.cur_byte += 1;
+                
+                            if self.last_class != Some(class) {
+                                self.last_class = Some(class);
+                                return Some(Unit::u8(byte));
+                            }
+                        }
+                        if self.cur_byte != usize::MAX && self.end_byte.is_none() {
+                            self.cur_byte = usize::MAX;
+                            return Some(self.classes.eoi());
+                        }
+                        None
+                    }
+                }
+                
+                /// An iterator over all elements in an equivalence class.
+                #[derive(Debug)]
+                pub struct ByteClassElements<'a> {
+                    classes: &'a ByteClasses,
+                    class: Unit,
+                    byte: usize,
+                }
+                
+                impl<'a> Iterator for ByteClassElements<'a> {
+                    type Item = Unit;
+                
+                    fn next(&mut self) -> Option<Unit> {
+                        while self.byte < 256 {
+                            let byte = u8::try_from(self.byte).unwrap();
+                            self.byte += 1;
+                            if self.class.is_byte(self.classes.get(byte)) {
+                                return Some(Unit::u8(byte));
+                            }
+                        }
+                        if self.byte < 257 {
+                            self.byte += 1;
+                            if self.class.is_eoi() {
+                                return Some(Unit::eoi(256));
+                            }
+                        }
+                        None
+                    }
+                }
+                
+                /// An iterator over all elements in an equivalence class expressed as a
+                /// sequence of contiguous ranges.
+                #[derive(Debug)]
+                struct ByteClassElementRanges<'a> {
+                    elements: ByteClassElements<'a>,
+                    range: Option<(Unit, Unit)>,
+                }
+                
+                impl<'a> Iterator for ByteClassElementRanges<'a> {
+                    type Item = (Unit, Unit);
+                
+                    fn next(&mut self) -> Option<(Unit, Unit)> {
+                        loop {
+                            let element = match self.elements.next() {
+                                None => return self.range.take(),
+                                Some(element) => element,
+                            };
+                            match self.range.take() {
+                                None => {
+                                    self.range = Some((element, element));
+                                }
+                                Some((start, end)) => {
+                                    if end.as_usize() + 1 != element.as_usize()
+                                        || element.is_eoi()
+                                    {
+                                        self.range = Some((element, element));
+                                        return Some((start, end));
+                                    }
+                                    self.range = Some((start, element));
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                /// A partitioning of bytes into equivalence classes.
+                #[cfg(feature = "alloc")]
+                #[derive(Clone, Debug)]
+                pub struct ByteClassSet(ByteSet);
+                
+                #[cfg(feature = "alloc")]
+                impl Default for ByteClassSet {
+                    fn default() -> ByteClassSet {
+                        ByteClassSet::empty()
+                    }
+                }
+                
+                #[cfg(feature = "alloc")]
+                impl ByteClassSet {
+                    /// Create a new set of byte classes where all bytes are part of the same
+                    /// equivalence class.
+                    pub fn empty() -> Self {
+                        ByteClassSet(ByteSet::empty())
+                    }
+                
+                    /// Indicate the range of byte given (inclusive) can discriminate a
+                    /// match between it and all other bytes outside of the range.
+                    pub fn set_range(&mut self, start: u8, end: u8) {
+                        debug_assert!(start <= end);
+                        if start > 0 {
+                            self.0.add(start - 1);
+                        }
+                        self.0.add(end);
+                    }
+                
+                    /// Add the contiguous ranges in the set given to this byte class set.
+                    pub fn add_set(&mut self, set: &ByteSet) {
+                        for (start, end) in set.iter_ranges() {
+                            self.set_range(start, end);
+                        }
+                    }
+                
+                    /// Convert this boolean set to a map that maps all byte values to their
+                    /// corresponding equivalence class.
+                    pub fn byte_classes(&self) -> ByteClasses {
+                        let mut classes = ByteClasses::empty();
+                        let mut class = 0u8;
+                        let mut b = 0u8;
+                        loop {
+                            classes.set(b, class);
+                            if b == 255 {
+                                break;
+                            }
+                            if self.0.contains(b) {
+                                class = class.checked_add(1).unwrap();
+                            }
+                            b = b.checked_add(1).unwrap();
+                        }
+                        classes
+                    }
+                }
+                
+                /// A simple set of bytes that is reasonably cheap to copy and allocation free.
+                #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+                pub struct ByteSet {
+                    bits: BitSet,
+                }
+                
+                /// The representation of a byte set.
+                #[derive(Clone, Copy, Default, Eq, PartialEq)]
+                struct BitSet([u128; 2]);
+                
+                impl ByteSet {
+                    /// Create an empty set of bytes.
+                    pub fn empty() -> ByteSet {
+                        ByteSet { bits: BitSet([0; 2]) }
+                    }
+                
+                    /// Add a byte to this set.
+                    pub fn add(&mut self, byte: u8) {
+                        let bucket = byte / 128;
+                        let bit = byte % 128;
+                        self.bits.0[usize::from(bucket)] |= 1 << bit;
+                    }
+                
+                    /// Remove a byte from this set.
+                    pub fn remove(&mut self, byte: u8) {
+                        let bucket = byte / 128;
+                        let bit = byte % 128;
+                        self.bits.0[usize::from(bucket)] &= !(1 << bit);
+                    }
+                
+                    /// Return true if and only if the given byte is in this set.
+                    pub fn contains(&self, byte: u8) -> bool {
+                        let bucket = byte / 128;
+                        let bit = byte % 128;
+                        self.bits.0[usize::from(bucket)] & (1 << bit) > 0
+                    }
+                
+                    /// Return true if and only if the given inclusive range of bytes is in this set.
+                    pub fn contains_range(&self, start: u8, end: u8) -> bool {
+                        (start..=end).all(|b| self.contains(b))
+                    }
+                
+                    /// Returns an iterator over all bytes in this set.
+                    pub fn iter(&self) -> ByteSetIter {
+                        ByteSetIter { set: self, b: 0 }
+                    }
+                
+                    /// Returns an iterator over all contiguous ranges of bytes in this set.
+                    pub fn iter_ranges(&self) -> ByteSetRangeIter {
+                        ByteSetRangeIter { set: self, b: 0 }
+                    }
+                
+                    /// Return true if and only if this set is empty.
+                    #[cfg_attr(feature = "perf-inline", inline(always))]
+                    pub fn is_empty(&self) -> bool {
+                        self.bits.0 == [0, 0]
+                    }
+                
+                    /// Deserializes a byte set from the given slice.
+                    pub fn from_bytes(
+                        slice: &[u8],
+                    ) -> Result<(ByteSet, usize), DeserializeError> {
+                        use core::mem::size_of;
+                
+                        wire::check_slice_len(slice, 2 * size_of::<u128>(), "byte set")?;
+                        let mut nread = 0;
+                        let (low, nr) = wire::try_read_u128(slice, "byte set low bucket")?;
+                        nread += nr;
+                        let (high, nr) = wire::try_read_u128(slice, "byte set high bucket")?;
+                        nread += nr;
+                        Ok((ByteSet { bits: BitSet([low, high]) }, nread))
+                    }
+                
+                    /// Writes this byte set to the given byte buffer.
+                    pub fn write_to<E: crate::util::wire::Endian>(
+                        &self,
+                        dst: &mut [u8],
+                    ) -> Result<usize, SerializeError> {
+                        use core::mem::size_of;
+                
+                        let nwrite = self.write_to_len();
+                        if dst.len() < nwrite {
+                            return Err(SerializeError::buffer_too_small("byte set"));
+                        }
+                        let mut nw = 0;
+                        E::write_u128(self.bits.0[0], &mut dst[nw..]);
+                        nw += size_of::<u128>();
+                        E::write_u128(self.bits.0[1], &mut dst[nw..]);
+                        nw += size_of::<u128>();
+                        assert_eq!(nwrite, nw, "expected to write certain number of bytes",);
+                        assert_eq!(
+                            nw % 8,
+                            0,
+                            "expected to write multiple of 8 bytes for byte set",
+                        );
+                        Ok(nw)
+                    }
+                
+                    /// Returns the total number of bytes written by `write_to`.
+                    pub fn write_to_len(&self) -> usize {
+                        2 * core::mem::size_of::<u128>()
+                    }
+                }
+                
+                impl core::fmt::Debug for BitSet {
+                    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                        let mut fmtd = f.debug_set();
+                        for b in 0u8..=255 {
+                            if (ByteSet { bits: *self }).contains(b) {
+                                fmtd.entry(&b);
+                            }
+                        }
+                        fmtd.finish()
+                    }
+                }
+                
+                #[derive(Debug)]
+                pub struct ByteSetIter<'a> {
+                    set: &'a ByteSet,
+                    b: usize,
+                }
+                
+                impl<'a> Iterator for ByteSetIter<'a> {
+                    type Item = u8;
+                
+                    fn next(&mut self) -> Option<u8> {
+                        while self.b <= 255 {
+                            let b = u8::try_from(self.b).unwrap();
+                            self.b += 1;
+                            if self.set.contains(b) {
+                                return Some(b);
+                            }
+                        }
+                        None
+                    }
+                }
+                
+                #[derive(Debug)]
+                pub struct ByteSetRangeIter<'a> {
+                    set: &'a ByteSet,
+                    b: usize,
+                }
+                
+                impl<'a> Iterator for ByteSetRangeIter<'a> {
+                    type Item = (u8, u8);
+                
+                    fn next(&mut self) -> Option<(u8, u8)> {
+                        let asu8 = |n: usize| u8::try_from(n).unwrap();
+                        while self.b <= 255 {
+                            let start = asu8(self.b);
+                            self.b += 1;
+                            if !self.set.contains(start) {
+                                continue;
+                            }
+                
+                            let mut end = start;
+                            while self.b <= 255 && self.set.contains(asu8(self.b)) {
+                                end = asu8(self.b);
+                                self.b += 1;
+                            }
+                            return Some((start, end));
+                        }
+                        None
+                    }
+                }
+            }
+
+            pub mod captures
+            {
+                //! Provides types for dealing with capturing groups.
+                use ::
+                {
+                    *,
+                };
+                /*
+                use alloc::{string::String, sync::Arc, vec, vec::Vec};
+                
+                use crate::util::{
+                    interpolate,
+                    primitives::{
+                        NonMaxUsize, PatternID, PatternIDError, PatternIDIter, SmallIndex,
+                    },
+                    search::{Match, Span},
+                };
+                */
+                /// The span offsets of capturing groups after a match has been found.
+                #[derive(Clone)]
+                pub struct Captures {
+                    /// The group info that these capture groups are coupled to. This is what
+                    /// gives the "convenience" of the `Captures` API.
+                    group_info: GroupInfo,
+                    /// The ID of the pattern that matched. Regex engines must set this to
+                    /// None when no match occurs.
+                    pid: Option<PatternID>,
+                    /// The slot values, i.e., submatch offsets.
+                    slots: Vec<Option<NonMaxUsize>>,
+                }
+                
+                impl Captures {
+                    /// Create new storage for the offsets of all matching capturing groups.
+                    pub fn all(group_info: GroupInfo) -> Captures {
+                        let slots = group_info.slot_len();
+                        Captures { group_info, pid: None, slots: vec![None; slots] }
+                    }
+                
+                    /// Create new storage for only the full match spans of a pattern.
+                    pub fn matches(group_info: GroupInfo) -> Captures {
+                        let slots = group_info.pattern_len().checked_mul(2).unwrap();
+                        Captures { group_info, pid: None, slots: vec![None; slots] }
+                    }
+                
+                    /// Create new storage for only tracking which pattern matched. No offsets
+                    /// are stored at all.
+                    pub fn empty(group_info: GroupInfo) -> Captures {
+                        Captures { group_info, pid: None, slots: vec![] }
+                    }
+                
+                    /// Returns true if and only if this capturing group represents a match.
+                    #[inline]
+                    pub fn is_match(&self) -> bool {
+                        self.pid.is_some()
+                    }
+                
+                    /// Returns the identifier of the pattern that matched when this
+                    /// capturing group represents a match.
+                    #[inline]
+                    pub fn pattern(&self) -> Option<PatternID> {
+                        self.pid
+                    }
+                
+                    /// Returns the pattern ID and the span of the match, if one occurred.
+                    #[inline]
+                    pub fn get_match(&self) -> Option<Match> {
+                        Some(Match::new(self.pattern()?, self.get_group(0)?))
+                    }
+                
+                    /// Returns the span of a capturing group match corresponding to the group
+                    /// index given, only if both the overall pattern matched and the capturing
+                    /// group participated in that match.
+                    #[inline]
+                    pub fn get_group(&self, index: usize) -> Option<Span> {
+                        let pid = self.pattern()?;
+                        let (slot_start, slot_end) = if self.group_info().pattern_len() == 1 {
+                            (index.checked_mul(2)?, index.checked_mul(2)?.checked_add(1)?)
+                        } else {
+                            self.group_info().slots(pid, index)?
+                        };
+                        let start = self.slots.get(slot_start).copied()??;
+                        let end = self.slots.get(slot_end).copied()??;
+                        Some(Span { start: start.get(), end: end.get() })
+                    }
+                
+                    /// Returns the span of a capturing group match corresponding to the group
+                    /// name given, only if both the overall pattern matched and the capturing
+                    /// group participated in that match.
+                    pub fn get_group_by_name(&self, name: &str) -> Option<Span> {
+                        let index = self.group_info().to_index(self.pattern()?, name)?;
+                        self.get_group(index)
+                    }
+                
+                    /// Returns an iterator of possible spans for every capturing group in the
+                    /// matching pattern.
+                    pub fn iter(&self) -> CapturesPatternIter<'_> {
+                        let names = self
+                            .pattern()
+                            .map_or(GroupInfoPatternNames::empty().enumerate(), |pid| {
+                                self.group_info().pattern_names(pid).enumerate()
+                            });
+                        CapturesPatternIter { caps: self, names }
+                    }
+                
+                    /// Return the total number of capturing groups for the matching pattern.
+                    pub fn group_len(&self) -> usize {
+                        let pid = match self.pattern() {
+                            None => return 0,
+                            Some(pid) => pid,
+                        };
+                        self.group_info().group_len(pid)
+                    }
+                
+                    /// Returns a reference to the underlying group info on which these
+                    /// captures are based.
+                    pub fn group_info(&self) -> &GroupInfo {
+                        &self.group_info
+                    }
+                
+                    /// Interpolates the capture references in `replacement` with the
+                    /// corresponding substrings in `haystack` matched by each reference.
+                    pub fn interpolate_string(
+                        &self,
+                        haystack: &str,
+                        replacement: &str,
+                    ) -> String {
+                        let mut dst = String::new();
+                        self.interpolate_string_into(haystack, replacement, &mut dst);
+                        dst
+                    }
+                
+                    /// Interpolates the capture references in `replacement` with the
+                    /// corresponding substrings in `haystack` matched by each reference.
+                    pub fn interpolate_string_into(
+                        &self,
+                        haystack: &str,
+                        replacement: &str,
+                        dst: &mut String,
+                    ) {
+                        interpolate::string(
+                            replacement,
+                            |index, dst| {
+                                let span = match self.get_group(index) {
+                                    None => return,
+                                    Some(span) => span,
+                                };
+                                dst.push_str(&haystack[span]);
+                            },
+                            |name| self.group_info().to_index(self.pattern()?, name),
+                            dst,
+                        );
+                    }
+                
+                    /// Interpolates the capture references in `replacement` with the
+                    /// corresponding substrings in `haystack` matched by each reference.
+                    pub fn interpolate_bytes(
+                        &self,
+                        haystack: &[u8],
+                        replacement: &[u8],
+                    ) -> Vec<u8> {
+                        let mut dst = vec![];
+                        self.interpolate_bytes_into(haystack, replacement, &mut dst);
+                        dst
+                    }
+                
+                    /// Interpolates the capture references in `replacement` with the
+                    /// corresponding substrings in `haystack` matched by each reference
+                    pub fn interpolate_bytes_into(
+                        &self,
+                        haystack: &[u8],
+                        replacement: &[u8],
+                        dst: &mut Vec<u8>,
+                    ) {
+                        interpolate::bytes(
+                            replacement,
+                            |index, dst| {
+                                let span = match self.get_group(index) {
+                                    None => return,
+                                    Some(span) => span,
+                                };
+                                dst.extend_from_slice(&haystack[span]);
+                            },
+                            |name| self.group_info().to_index(self.pattern()?, name),
+                            dst,
+                        );
+                    }
+                
+                    /// This is a convenience routine for extracting the substrings
+                    /// corresponding to matching capture groups in the given `haystack`.
+                    pub fn extract<'h, const N: usize>(
+                        &self,
+                        haystack: &'h str,
+                    ) -> (&'h str, [&'h str; N]) {
+                        let mut matched = self.iter().flatten();
+                        let whole_match = &haystack[matched.next().expect("a match")];
+                        let group_matches = [0; N].map(|_| {
+                            let sp = matched.next().expect("too few matching groups");
+                            &haystack[sp]
+                        });
+                        (whole_match, group_matches)
+                    }
+                
+                    /// This is a convenience routine for extracting the substrings
+                    /// corresponding to matching capture groups in the given `haystack`
+                    pub fn extract_bytes<'h, const N: usize>(
+                        &self,
+                        haystack: &'h [u8],
+                    ) -> (&'h [u8], [&'h [u8]; N]) {
+                        let mut matched = self.iter().flatten();
+                        let whole_match = &haystack[matched.next().expect("a match")];
+                        let group_matches = [0; N].map(|_| {
+                            let sp = matched.next().expect("too few matching groups");
+                            &haystack[sp]
+                        });
+                        (whole_match, group_matches)
+                    }
+                }
+                
+                /// Lower level "slot" oriented APIs.
+                impl Captures {
+                    /// Clear this `Captures` value.
+                    #[inline]
+                    pub fn clear(&mut self) {
+                        self.pid = None;
+                        for slot in self.slots.iter_mut() {
+                            *slot = None;
+                        }
+                    }
+                
+                    /// Set the pattern on this `Captures` value.
+                    #[inline]
+                    pub fn set_pattern(&mut self, pid: Option<PatternID>) {
+                        self.pid = pid;
+                    }
+                
+                    /// Returns the underlying slots, where each slot stores a single offset.
+                    #[inline]
+                    pub fn slots(&self) -> &[Option<NonMaxUsize>] {
+                        &self.slots
+                    }
+                
+                    /// Returns the underlying slots as a mutable slice, where each slot stores
+                    /// a single offset.
+                    #[inline]
+                    pub fn slots_mut(&mut self) -> &mut [Option<NonMaxUsize>] {
+                        &mut self.slots
+                    }
+                }
+                
+                impl core::fmt::Debug for Captures {
+                    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                        let mut dstruct = f.debug_struct("Captures");
+                        dstruct.field("pid", &self.pid);
+                        if let Some(pid) = self.pid {
+                            dstruct.field("spans", &CapturesDebugMap { pid, caps: self });
+                        }
+                        dstruct.finish()
+                    }
+                }
+                
+                /// A little helper type to provide a nice map-like debug representation for
+                /// our capturing group spans.
+                struct CapturesDebugMap<'a> {
+                    pid: PatternID,
+                    caps: &'a Captures,
+                }
+                
+                impl<'a> core::fmt::Debug for CapturesDebugMap<'a> {
+                    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                        struct Key<'a>(usize, Option<&'a str>);
+                
+                        impl<'a> core::fmt::Debug for Key<'a> {
+                            fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                                write!(f, "{}", self.0)?;
+                                if let Some(name) = self.1 {
+                                    write!(f, "/{:?}", name)?;
+                                }
+                                Ok(())
+                            }
+                        }
+                
+                        let mut map = f.debug_map();
+                        let names = self.caps.group_info().pattern_names(self.pid);
+                        for (group_index, maybe_name) in names.enumerate() {
+                            let key = Key(group_index, maybe_name);
+                            match self.caps.get_group(group_index) {
+                                None => map.entry(&key, &None::<()>),
+                                Some(span) => map.entry(&key, &span),
+                            };
+                        }
+                        map.finish()
+                    }
+                }
+                
+                /// An iterator over all capturing groups in a `Captures` value.
+                #[derive(Clone, Debug)]
+                pub struct CapturesPatternIter<'a> {
+                    caps: &'a Captures,
+                    names: core::iter::Enumerate<GroupInfoPatternNames<'a>>,
+                }
+                
+                impl<'a> Iterator for CapturesPatternIter<'a> {
+                    type Item = Option<Span>;
+                
+                    fn next(&mut self) -> Option<Option<Span>> {
+                        let (group_index, _) = self.names.next()?;
+                        Some(self.caps.get_group(group_index))
+                    }
+                
+                    fn size_hint(&self) -> (usize, Option<usize>) {
+                        self.names.size_hint()
+                    }
+                
+                    fn count(self) -> usize {
+                        self.names.count()
+                    }
+                }
+                
+                impl<'a> ExactSizeIterator for CapturesPatternIter<'a> {}
+                impl<'a> core::iter::FusedIterator for CapturesPatternIter<'a> {}
+                
+                /// Represents information about capturing groups in a compiled regex.
+                #[derive(Clone, Debug, Default)]
+                pub struct GroupInfo(Arc<GroupInfoInner>);
+                
+                impl GroupInfo {
+                    /// Creates a new group info from a sequence of patterns, where each
+                    /// sequence of patterns yields a sequence of possible group names.
+                    pub fn new<P, G, N>(pattern_groups: P) -> Result<GroupInfo, GroupInfoError>
+                    where
+                        P: IntoIterator<Item = G>,
+                        G: IntoIterator<Item = Option<N>>,
+                        N: AsRef<str>,
+                    {
+                        let mut group_info = GroupInfoInner {
+                            slot_ranges: vec![],
+                            name_to_index: vec![],
+                            index_to_name: vec![],
+                            memory_extra: 0,
+                        };
+                        for (pattern_index, groups) in pattern_groups.into_iter().enumerate() {
+                            let pid = PatternID::new(pattern_index)
+                                .map_err(GroupInfoError::too_many_patterns)?;
+                
+                            let mut groups_iter = groups.into_iter().enumerate();
+                            match groups_iter.next() {
+                                None => return Err(GroupInfoError::missing_groups(pid)),
+                                Some((_, Some(_))) => {
+                                    return Err(GroupInfoError::first_must_be_unnamed(pid))
+                                }
+                                Some((_, None)) => {}
+                            }
+                            group_info.add_first_group(pid);
+                            
+                            for (group_index, maybe_name) in groups_iter {
+                                let group = SmallIndex::new(group_index).map_err(|_| {
+                                    GroupInfoError::too_many_groups(pid, group_index)
+                                })?;
+                                group_info.add_explicit_group(pid, group, maybe_name)?;
+                            }
+                        }
+                        group_info.fixup_slot_ranges()?;
+                        Ok(GroupInfo(Arc::new(group_info)))
+                    }
+                
+                    /// This creates an empty `GroupInfo`.
+                    pub fn empty() -> GroupInfo {
+                        GroupInfo::new(core::iter::empty::<[Option<&str>; 0]>())
+                            .expect("empty group info is always valid")
+                    }
+                
+                    /// Return the capture group index corresponding to the given name in the
+                    /// given pattern.
+                    #[inline]
+                    pub fn to_index(&self, pid: PatternID, name: &str) -> Option<usize> {
+                        let indices = self.0.name_to_index.get(pid.as_usize())?;
+                        indices.get(name).cloned().map(|i| i.as_usize())
+                    }
+                
+                    /// Return the capture name for the given index and given pattern
+                    #[inline]
+                    pub fn to_name(&self, pid: PatternID, group_index: usize) -> Option<&str> {
+                        let pattern_names = self.0.index_to_name.get(pid.as_usize())?;
+                        pattern_names.get(group_index)?.as_deref()
+                    }
+                
+                    /// Return an iterator of all capture groups and their names (if present)
+                    /// for a particular pattern.
+                    #[inline]
+                    pub fn pattern_names(&self, pid: PatternID) -> GroupInfoPatternNames<'_> {
+                        GroupInfoPatternNames {
+                            it: self
+                                .0
+                                .index_to_name
+                                .get(pid.as_usize())
+                                .map(|indices| indices.iter())
+                                .unwrap_or([].iter()),
+                        }
+                    }
+                
+                    /// Return an iterator of all capture groups for all patterns supported by
+                    /// this `GroupInfo`.
+                    #[inline]
+                    pub fn all_names(&self) -> GroupInfoAllNames<'_> {
+                        GroupInfoAllNames {
+                            group_info: self,
+                            pids: PatternID::iter(self.pattern_len()),
+                            current_pid: None,
+                            names: None,
+                        }
+                    }
+                
+                    /// Returns the starting and ending slot corresponding to the given
+                    /// capturing group for the given pattern.
+                    #[inline]
+                    pub fn slots(
+                        &self,
+                        pid: PatternID,
+                        group_index: usize,
+                    ) -> Option<(usize, usize)> {
+                        self.slot(pid, group_index).map(|start| (start, start + 1))
+                    }
+                
+                    /// Returns the starting slot corresponding to the given capturing group
+                    /// for the given pattern.
+                    #[inline]
+                    pub fn slot(&self, pid: PatternID, group_index: usize) -> Option<usize> {
+                        if group_index >= self.group_len(pid) {
+                            return None;
+                        }
+                        
+                        if group_index == 0 {
+                            Some(pid.as_usize() * 2)
+                        } else {
+                            let (start, _) = self.0.slot_ranges[pid];
+                            Some(start.as_usize() + ((group_index - 1) * 2))
+                        }
+                    }
+                
+                    /// Returns the total number of patterns in this `GroupInfo`.
+                    #[inline]
+                    pub fn pattern_len(&self) -> usize {
+                        self.0.pattern_len()
+                    }
+                
+                    /// Return the number of capture groups in a pattern.
+                    #[inline]
+                    pub fn group_len(&self, pid: PatternID) -> usize {
+                        self.0.group_len(pid)
+                    }
+                
+                    /// Return the total number of capture groups across all patterns.
+                    #[inline]
+                    pub fn all_group_len(&self) -> usize {
+                        self.slot_len() / 2
+                    }
+                
+                    /// Returns the total number of slots in this `GroupInfo` across all
+                    /// patterns.
+                    #[inline]
+                    pub fn slot_len(&self) -> usize {
+                        self.0.small_slot_len().as_usize()
+                    }
+                
+                    /// Returns the total number of slots for implicit capturing groups.
+                    #[inline]
+                    pub fn implicit_slot_len(&self) -> usize {
+                        self.pattern_len() * 2
+                    }
+                
+                    /// Returns the total number of slots for explicit capturing groups.
+                    #[inline]
+                    pub fn explicit_slot_len(&self) -> usize {
+                        self.slot_len().saturating_sub(self.implicit_slot_len())
+                    }
+                
+                    /// Returns the memory usage, in bytes, of this `GroupInfo`.
+                    #[inline]
+                    pub fn memory_usage(&self) -> usize {
+                        use core::mem::size_of as s;
+                
+                        s::<GroupInfoInner>()
+                            + self.0.slot_ranges.len() * s::<(SmallIndex, SmallIndex)>()
+                            + self.0.name_to_index.len() * s::<CaptureNameMap>()
+                            + self.0.index_to_name.len() * s::<Vec<Option<Arc<str>>>>()
+                            + self.0.memory_extra
+                    }
+                }
+                
+                /// A map from capture group name to its corresponding capture group index.
+                #[cfg(feature = "std")]
+                type CaptureNameMap = std::collections::HashMap<Arc<str>, SmallIndex>;
+                #[cfg(not(feature = "std"))]
+                type CaptureNameMap = alloc::collections::BTreeMap<Arc<str>, SmallIndex>;
+                
+                /// The inner guts of `GroupInfo`.
+                #[derive(Debug, Default)]
+                struct GroupInfoInner {
+                    slot_ranges: Vec<(SmallIndex, SmallIndex)>,
+                    name_to_index: Vec<CaptureNameMap>,
+                    index_to_name: Vec<Vec<Option<Arc<str>>>>,
+                    memory_extra: usize,
+                }
+                
+                impl GroupInfoInner {
+                    /// This adds the first unnamed group for the given pattern ID.
+                    fn add_first_group(&mut self, pid: PatternID) {
+                        assert_eq!(pid.as_usize(), self.slot_ranges.len());
+                        assert_eq!(pid.as_usize(), self.name_to_index.len());
+                        assert_eq!(pid.as_usize(), self.index_to_name.len());
+                        let slot_start = self.small_slot_len();
+                        self.slot_ranges.push((slot_start, slot_start));
+                        self.name_to_index.push(CaptureNameMap::new());
+                        self.index_to_name.push(vec![None]);
+                        self.memory_extra += core::mem::size_of::<Option<Arc<str>>>();
+                    }
+                
+                    /// Add an explicit capturing group for the given pattern with the given
+                    /// index.
+                    fn add_explicit_group<N: AsRef<str>>(
+                        &mut self,
+                        pid: PatternID,
+                        group: SmallIndex,
+                        maybe_name: Option<N>,
+                    ) -> Result<(), GroupInfoError> {
+                        let end = &mut self.slot_ranges[pid].1;
+                        *end = SmallIndex::new(end.as_usize() + 2).map_err(|_| {
+                            GroupInfoError::too_many_groups(pid, group.as_usize())
+                        })?;
+                        if let Some(name) = maybe_name {
+                            let name = Arc::<str>::from(name.as_ref());
+                            if self.name_to_index[pid].contains_key(&*name) {
+                                return Err(GroupInfoError::duplicate(pid, &name));
+                            }
+                            let len = name.len();
+                            self.name_to_index[pid].insert(Arc::clone(&name), group);
+                            self.index_to_name[pid].push(Some(name));
+                            self.memory_extra +=
+                                2 * (len + core::mem::size_of::<Option<Arc<str>>>());
+                            self.memory_extra += core::mem::size_of::<SmallIndex>();
+                        } else {
+                            self.index_to_name[pid].push(None);
+                            self.memory_extra += core::mem::size_of::<Option<Arc<str>>>();
+                        }
+                        assert_eq!(group.one_more(), self.group_len(pid));
+                        assert_eq!(group.one_more(), self.index_to_name[pid].len());
+                        Ok(())
+                    }
+                
+                    /// This corrects the slot ranges to account for the slots corresponding
+                    /// to the zeroth group of each pattern.
+                    fn fixup_slot_ranges(&mut self) -> Result<(), GroupInfoError> {
+                        use crate::util::primitives::IteratorIndexExt;
+                        
+                        let offset = self.pattern_len().checked_mul(2).unwrap();
+                        for (pid, &mut (ref mut start, ref mut end)) in
+                            self.slot_ranges.iter_mut().with_pattern_ids()
+                        {
+                            let group_len = 1 + ((end.as_usize() - start.as_usize()) / 2);
+                            let new_end = match end.as_usize().checked_add(offset) {
+                                Some(new_end) => new_end,
+                                None => {
+                                    return Err(GroupInfoError::too_many_groups(
+                                        pid, group_len,
+                                    ))
+                                }
+                            };
+                            *end = SmallIndex::new(new_end).map_err(|_| {
+                                GroupInfoError::too_many_groups(pid, group_len)
+                            })?;
+                            
+                            *start = SmallIndex::new(start.as_usize() + offset).unwrap();
+                        }
+                        Ok(())
+                    }
+                
+                    /// Return the total number of patterns represented by this capture slot
+                    /// info.
+                    fn pattern_len(&self) -> usize {
+                        self.slot_ranges.len()
+                    }
+                
+                    /// Return the total number of capturing groups for the given pattern.
+                    fn group_len(&self, pid: PatternID) -> usize {
+                        let (start, end) = match self.slot_ranges.get(pid.as_usize()) {
+                            None => return 0,
+                            Some(range) => range,
+                        };
+                        
+                        1 + ((end.as_usize() - start.as_usize()) / 2)
+                    }
+                
+                    /// Return the total number of slots in this capture slot info as a
+                    /// "small index."
+                    fn small_slot_len(&self) -> SmallIndex {
+                        self.slot_ranges.last().map_or(SmallIndex::ZERO, |&(_, end)| end)
+                    }
+                }
+                
+                /// An error that may occur when building a `GroupInfo`.
+                #[derive(Clone, Debug)]
+                pub struct GroupInfoError {
+                    kind: GroupInfoErrorKind,
+                }
+                
+                /// The kind of error that occurs when building a `GroupInfo` fails.
+                #[derive(Clone, Debug)]
+                enum GroupInfoErrorKind {
+                    /// This occurs when too many patterns have been added.
+                    TooManyPatterns { err: PatternIDError },
+                    /// This occurs when too many capturing groups have been added for a
+                    /// particular pattern.
+                    TooManyGroups {
+                        /// The ID of the pattern that had too many groups.
+                        pattern: PatternID,
+                        /// The minimum number of groups that the caller has tried to add for
+                        /// a pattern.
+                        minimum: usize,
+                    },
+                    /// An error that occurs when a pattern has no capture groups.
+                    MissingGroups {
+                        /// The ID of the pattern that had no capturing groups.
+                        pattern: PatternID,
+                    },
+                    /// An error that occurs when one tries to provide a name for the capture
+                    /// group at index 0. This capturing group must currently always be
+                    /// unnamed.
+                    FirstMustBeUnnamed {
+                        /// The ID of the pattern that was found to have a named first
+                        /// capturing group.
+                        pattern: PatternID,
+                    },
+                    /// An error that occurs when duplicate capture group names for the same
+                    /// pattern are added.
+                    Duplicate {
+                        /// The pattern in which the duplicate capture group name was found.
+                        pattern: PatternID,
+                        /// The duplicate name.
+                        name: String,
+                    },
+                }
+                
+                impl GroupInfoError {
+                    fn too_many_patterns(err: PatternIDError) -> GroupInfoError {
+                        GroupInfoError { kind: GroupInfoErrorKind::TooManyPatterns { err } }
+                    }
+                
+                    fn too_many_groups(pattern: PatternID, minimum: usize) -> GroupInfoError {
+                        GroupInfoError {
+                            kind: GroupInfoErrorKind::TooManyGroups { pattern, minimum },
+                        }
+                    }
+                
+                    fn missing_groups(pattern: PatternID) -> GroupInfoError {
+                        GroupInfoError { kind: GroupInfoErrorKind::MissingGroups { pattern } }
+                    }
+                
+                    fn first_must_be_unnamed(pattern: PatternID) -> GroupInfoError {
+                        GroupInfoError {
+                            kind: GroupInfoErrorKind::FirstMustBeUnnamed { pattern },
+                        }
+                    }
+                
+                    fn duplicate(pattern: PatternID, name: &str) -> GroupInfoError {
+                        GroupInfoError {
+                            kind: GroupInfoErrorKind::Duplicate {
+                                pattern,
+                                name: String::from(name),
+                            },
+                        }
+                    }
+                }
+                
+                #[cfg(feature = "std")]
+                impl std::error::Error for GroupInfoError {
+                    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+                        match self.kind {
+                            GroupInfoErrorKind::TooManyPatterns { .. }
+                            | GroupInfoErrorKind::TooManyGroups { .. }
+                            | GroupInfoErrorKind::MissingGroups { .. }
+                            | GroupInfoErrorKind::FirstMustBeUnnamed { .. }
+                            | GroupInfoErrorKind::Duplicate { .. } => None,
+                        }
+                    }
+                }
+                
+                impl core::fmt::Display for GroupInfoError {
+                    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                        use self::GroupInfoErrorKind::*;
+                
+                        match self.kind {
+                            TooManyPatterns { ref err } => {
+                                write!(f, "too many patterns to build capture info: {}", err)
+                            }
+                            TooManyGroups { pattern, minimum } => {
+                                write!(
+                                    f,
+                                    "too many capture groups (at least {}) were \
+                                     found for pattern {}",
+                                    minimum,
+                                    pattern.as_usize()
+                                )
+                            }
+                            MissingGroups { pattern } => write!(
+                                f,
+                                "no capturing groups found for pattern {} \
+                                 (either all patterns have zero groups or all patterns have \
+                                  at least one group)",
+                                pattern.as_usize(),
+                            ),
+                            FirstMustBeUnnamed { pattern } => write!(
+                                f,
+                                "first capture group (at index 0) for pattern {} has a name \
+                                 (it must be unnamed)",
+                                pattern.as_usize(),
+                            ),
+                            Duplicate { pattern, ref name } => write!(
+                                f,
+                                "duplicate capture group name '{}' found for pattern {}",
+                                name,
+                                pattern.as_usize(),
+                            ),
+                        }
+                    }
+                }
+                
+                /// An iterator over capturing groups and their names for a specific pattern.
+                #[derive(Clone, Debug)]
+                pub struct GroupInfoPatternNames<'a> {
+                    it: core::slice::Iter<'a, Option<Arc<str>>>,
+                }
+                
+                impl GroupInfoPatternNames<'static> {
+                    fn empty() -> GroupInfoPatternNames<'static> {
+                        GroupInfoPatternNames { it: [].iter() }
+                    }
+                }
+                
+                impl<'a> Iterator for GroupInfoPatternNames<'a> {
+                    type Item = Option<&'a str>;
+                
+                    fn next(&mut self) -> Option<Option<&'a str>> {
+                        self.it.next().map(|x| x.as_deref())
+                    }
+                
+                    fn size_hint(&self) -> (usize, Option<usize>) {
+                        self.it.size_hint()
+                    }
+                
+                    fn count(self) -> usize {
+                        self.it.count()
+                    }
+                }
+                
+                impl<'a> ExactSizeIterator for GroupInfoPatternNames<'a> {}
+                impl<'a> core::iter::FusedIterator for GroupInfoPatternNames<'a> {}
+                
+                /// An iterator over capturing groups and their names for a `GroupInfo`.
+                #[derive(Debug)]
+                pub struct GroupInfoAllNames<'a> {
+                    group_info: &'a GroupInfo,
+                    pids: PatternIDIter,
+                    current_pid: Option<PatternID>,
+                    names: Option<core::iter::Enumerate<GroupInfoPatternNames<'a>>>,
+                }
+                
+                impl<'a> Iterator for GroupInfoAllNames<'a> {
+                    type Item = (PatternID, usize, Option<&'a str>);
+                
+                    fn next(&mut self) -> Option<(PatternID, usize, Option<&'a str>)> {
+                        if self.group_info.0.index_to_name.is_empty() {
+                            return None;
+                        }
+                        if self.current_pid.is_none() {
+                            self.current_pid = Some(self.pids.next()?);
+                        }
+                        let pid = self.current_pid.unwrap();
+                        if self.names.is_none() {
+                            self.names = Some(self.group_info.pattern_names(pid).enumerate());
+                        }
+                        let (group_index, name) = match self.names.as_mut().unwrap().next() {
+                            Some((group_index, name)) => (group_index, name),
+                            None => {
+                                self.current_pid = None;
+                                self.names = None;
+                                return self.next();
+                            }
+                        };
+                        Some((pid, group_index, name))
+                    }
+                }
+            }
+            
+            pub mod escape
+            {
+                //! Provides convenience routines for escaping raw bytes.
+                use ::
+                {
+                    *,
+                };
+                /*
+                use crate::util::utf8;
+                */
+                /// Provides a convenient `Debug` implementation for a `u8`.
+                #[derive(Clone, Copy)]
+                pub struct DebugByte(pub u8);
+                
+                impl core::fmt::Debug for DebugByte {
+                    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                        if self.0 == b' ' {
+                            return write!(f, "' '");
+                        }
+                        
+                        let mut bytes = [0u8; 10];
+                        let mut len = 0;
+                        for (i, mut b) in core::ascii::escape_default(self.0).enumerate() {
+                            if i >= 2 && b'a' <= b && b <= b'f' {
+                                b -= 32;
+                            }
+                            bytes[len] = b;
+                            len += 1;
+                        }
+                        write!(f, "{}", core::str::from_utf8(&bytes[..len]).unwrap())
+                    }
+                }
+            }
+
+            pub mod interpolate
+            {
+                //! Provides routines for interpolating capture group references.
+                use ::
+                {
+                    *,
+                };
+                /*
+                use alloc::{string::String, vec::Vec};
+                
+                use crate::util::memchr::memchr;
+                */
+                /// Accepts a replacement string and interpolates capture references with their
+                /// corresponding values.
+                pub fn string(
+                    mut replacement: &str,
+                    mut append: impl FnMut(usize, &mut String),
+                    mut name_to_index: impl FnMut(&str) -> Option<usize>,
+                    dst: &mut String,
+                ) {
+                    while !replacement.is_empty() {
+                        match memchr(b'$', replacement.as_bytes()) {
+                            None => break,
+                            Some(i) => {
+                                dst.push_str(&replacement[..i]);
+                                replacement = &replacement[i..];
+                            }
+                        }
+                        // Handle escaping of '$'.
+                        if replacement.as_bytes().get(1).map_or(false, |&b| b == b'$') {
+                            dst.push_str("$");
+                            replacement = &replacement[2..];
+                            continue;
+                        }
+                        debug_assert!(!replacement.is_empty());
+                        let cap_ref = match find_cap_ref(replacement.as_bytes()) {
+                            Some(cap_ref) => cap_ref,
+                            None => {
+                                dst.push_str("$");
+                                replacement = &replacement[1..];
+                                continue;
+                            }
+                        };
+                        replacement = &replacement[cap_ref.end..];
+                        match cap_ref.cap {
+                            Ref::Number(i) => append(i, dst),
+                            Ref::Named(name) => {
+                                if let Some(i) = name_to_index(name) {
+                                    append(i, dst);
+                                }
+                            }
+                        }
+                    }
+                    dst.push_str(replacement);
+                }
+                
+                /// Accepts a replacement byte string and interpolates capture references with
+                /// their corresponding values.
+                pub fn bytes(
+                    mut replacement: &[u8],
+                    mut append: impl FnMut(usize, &mut Vec<u8>),
+                    mut name_to_index: impl FnMut(&str) -> Option<usize>,
+                    dst: &mut Vec<u8>,
+                ) {
+                    while !replacement.is_empty() {
+                        match memchr(b'$', replacement) {
+                            None => break,
+                            Some(i) => {
+                                dst.extend_from_slice(&replacement[..i]);
+                                replacement = &replacement[i..];
+                            }
+                        }
+                        // Handle escaping of '$'.
+                        if replacement.get(1).map_or(false, |&b| b == b'$') {
+                            dst.push(b'$');
+                            replacement = &replacement[2..];
+                            continue;
+                        }
+                        debug_assert!(!replacement.is_empty());
+                        let cap_ref = match find_cap_ref(replacement) {
+                            Some(cap_ref) => cap_ref,
+                            None => {
+                                dst.push(b'$');
+                                replacement = &replacement[1..];
+                                continue;
+                            }
+                        };
+                        replacement = &replacement[cap_ref.end..];
+                        match cap_ref.cap {
+                            Ref::Number(i) => append(i, dst),
+                            Ref::Named(name) => {
+                                if let Some(i) = name_to_index(name) {
+                                    append(i, dst);
+                                }
+                            }
+                        }
+                    }
+                    dst.extend_from_slice(replacement);
+                }
+                
+                /// `CaptureRef` represents a reference to a capture group inside some text.
+                #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+                struct CaptureRef<'a> {
+                    cap: Ref<'a>,
+                    end: usize,
+                }
+                
+                /// A reference to a capture group in some text.
+                #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+                enum Ref<'a> {
+                    Named(&'a str),
+                    Number(usize),
+                }
+                
+                impl<'a> From<&'a str> for Ref<'a> {
+                    fn from(x: &'a str) -> Ref<'a> {
+                        Ref::Named(x)
+                    }
+                }
+                
+                impl From<usize> for Ref<'static> {
+                    fn from(x: usize) -> Ref<'static> {
+                        Ref::Number(x)
+                    }
+                }
+                
+                /// Parses a possible reference to a capture group name in the given text,
+                /// starting at the beginning of `replacement`.
+                fn find_cap_ref(replacement: &[u8]) -> Option<CaptureRef<'_>> {
+                    let mut i = 0;
+                    let rep: &[u8] = replacement;
+                    if rep.len() <= 1 || rep[0] != b'$' {
+                        return None;
+                    }
+                    i += 1;
+                    if rep[i] == b'{' {
+                        return find_cap_ref_braced(rep, i + 1);
+                    }
+                    let mut cap_end = i;
+                    while rep.get(cap_end).copied().map_or(false, is_valid_cap_letter) {
+                        cap_end += 1;
+                    }
+                    if cap_end == i {
+                        return None;
+                    }
+                    
+                    let cap = core::str::from_utf8(&rep[i..cap_end])
+                        .expect("valid UTF-8 capture name");
+                    Some(CaptureRef {
+                        cap: match cap.parse::<usize>() {
+                            Ok(i) => Ref::Number(i),
+                            Err(_) => Ref::Named(cap),
+                        },
+                        end: cap_end,
+                    })
+                }
+                
+                /// Looks for a braced reference, e.g., `${foo1}`.
+                fn find_cap_ref_braced(rep: &[u8], mut i: usize) -> Option<CaptureRef<'_>> {
+                    assert_eq!(b'{', rep[i.checked_sub(1).unwrap()]);
+                    let start = i;
+                    while rep.get(i).map_or(false, |&b| b != b'}') {
+                        i += 1;
+                    }
+                    if !rep.get(i).map_or(false, |&b| b == b'}') {
+                        return None;
+                    }
+                    
+                    let cap = match core::str::from_utf8(&rep[start..i]) {
+                        Err(_) => return None,
+                        Ok(cap) => cap,
+                    };
+                    Some(CaptureRef {
+                        cap: match cap.parse::<usize>() {
+                            Ok(i) => Ref::Number(i),
+                            Err(_) => Ref::Named(cap),
+                        },
+                        end: i + 1,
+                    })
+                }
+                
+                /// Returns true if and only if the given byte is allowed in a capture name
+                /// written in non-brace form.
+                fn is_valid_cap_letter(b: u8) -> bool {
+                    match b {
+                        b'0'..=b'9' | b'a'..=b'z' | b'A'..=b'Z' | b'_' => true,
+                        _ => false,
+                    }
+                }
+            }
+
+            pub mod iter
+            {
+                //! Generic helpers for iteration of matches from a regex engine in a haystack.
+                use ::
+                {
+                    *,
+                };
+                /*
+                #[cfg(feature = "alloc")]
+                use crate::util::captures::Captures;
+                use crate::util::search::{HalfMatch, Input, Match, MatchError};
+                */
+                /// A searcher for creating iterators and performing lower level iteration.
+                #[derive(Clone, Debug)]
+                pub struct Searcher<'h> {
+                    /// The input parameters to give to each regex engine call.
+                    input: Input<'h>,
+                    /// Records the end offset of the most recent match.
+                    last_match_end: Option<usize>,
+                }
+                
+                impl<'h> Searcher<'h> {
+                    /// Create a new fallible non-overlapping matches iterator.
+                    pub fn new(input: Input<'h>) -> Searcher<'h> {
+                        Searcher { input, last_match_end: None }
+                    }
+                
+                    /// Returns the current `Input` used by this searcher.
+                    pub fn input<'s>(&'s self) -> &'s Input<'h> {
+                        &self.input
+                    }
+                
+                    /// Return the next half match for an infallible search if one exists, and
+                    /// advance to the next position.
+                    #[inline]
+                    pub fn advance_half<F>(&mut self, finder: F) -> Option<HalfMatch>
+                    where
+                        F: FnMut(&Input<'_>) -> Result<Option<HalfMatch>, MatchError>,
+                    {
+                        match self.try_advance_half(finder) {
+                            Ok(m) => m,
+                            Err(err) => panic!(
+                                "unexpected regex half find error: {}\n\
+                                 to handle find errors, use 'try' or 'search' methods",
+                                err,
+                            ),
+                        }
+                    }
+                
+                    /// Return the next match for an infallible search if one exists, and
+                    /// advance to the next position.
+                    #[inline]
+                    pub fn advance<F>(&mut self, finder: F) -> Option<Match>
+                    where
+                        F: FnMut(&Input<'_>) -> Result<Option<Match>, MatchError>,
+                    {
+                        match self.try_advance(finder) {
+                            Ok(m) => m,
+                            Err(err) => panic!(
+                                "unexpected regex find error: {}\n\
+                                 to handle find errors, use 'try' or 'search' methods",
+                                err,
+                            ),
+                        }
+                    }
+                
+                    /// Return the next half match for a fallible search if one exists, and
+                    /// advance to the next position.
+                    #[inline]
+                    pub fn try_advance_half<F>(
+                        &mut self,
+                        mut finder: F,
+                    ) -> Result<Option<HalfMatch>, MatchError>
+                    where
+                        F: FnMut(&Input<'_>) -> Result<Option<HalfMatch>, MatchError>,
+                    {
+                        let mut m = match finder(&self.input)? {
+                            None => return Ok(None),
+                            Some(m) => m,
+                        };
+                        if Some(m.offset()) == self.last_match_end {
+                            m = match self.handle_overlapping_empty_half_match(m, finder)? {
+                                None => return Ok(None),
+                                Some(m) => m,
+                            };
+                        }
+                        self.input.set_start(m.offset());
+                        self.last_match_end = Some(m.offset());
+                        Ok(Some(m))
+                    }
+                
+                    /// Return the next match for a fallible search if one exists, and advance
+                    /// to the next position.
+                    #[inline]
+                    pub fn try_advance<F>(
+                        &mut self,
+                        mut finder: F,
+                    ) -> Result<Option<Match>, MatchError>
+                    where
+                        F: FnMut(&Input<'_>) -> Result<Option<Match>, MatchError>,
+                    {
+                        let mut m = match finder(&self.input)? {
+                            None => return Ok(None),
+                            Some(m) => m,
+                        };
+                        if m.is_empty() && Some(m.end()) == self.last_match_end {
+                            m = match self.handle_overlapping_empty_match(m, finder)? {
+                                None => return Ok(None),
+                                Some(m) => m,
+                            };
+                        }
+                        self.input.set_start(m.end());
+                        self.last_match_end = Some(m.end());
+                        Ok(Some(m))
+                    }
+                
+                    /// Given a closure that executes a single search, return an iterator over
+                    /// all successive non-overlapping half matches.
+                    #[inline]
+                    pub fn into_half_matches_iter<F>(
+                        self,
+                        finder: F,
+                    ) -> TryHalfMatchesIter<'h, F>
+                    where
+                        F: FnMut(&Input<'_>) -> Result<Option<HalfMatch>, MatchError>,
+                    {
+                        TryHalfMatchesIter { it: self, finder }
+                    }
+                
+                    /// Given a closure that executes a single search, return an iterator over
+                    /// all successive non-overlapping matches.
+                    #[inline]
+                    pub fn into_matches_iter<F>(self, finder: F) -> TryMatchesIter<'h, F>
+                    where
+                        F: FnMut(&Input<'_>) -> Result<Option<Match>, MatchError>,
+                    {
+                        TryMatchesIter { it: self, finder }
+                    }
+                
+                    /// Given a closure that executes a single search, return an iterator over
+                    /// all successive non-overlapping `Captures` values.
+                    #[cfg(feature = "alloc")]
+                    #[inline]
+                    pub fn into_captures_iter<F>(
+                        self,
+                        caps: Captures,
+                        finder: F,
+                    ) -> TryCapturesIter<'h, F>
+                    where
+                        F: FnMut(&Input<'_>, &mut Captures) -> Result<(), MatchError>,
+                    {
+                        TryCapturesIter { it: self, caps, finder }
+                    }
+                
+                    /// Handles the special case of a match that begins where the previous
+                    /// match ended.
+                    #[cold]
+                    #[inline(never)]
+                    fn handle_overlapping_empty_half_match<F>(
+                        &mut self,
+                        _: HalfMatch,
+                        mut finder: F,
+                    ) -> Result<Option<HalfMatch>, MatchError>
+                    where
+                        F: FnMut(&Input<'_>) -> Result<Option<HalfMatch>, MatchError>,
+                    {
+                        self.input.set_start(self.input.start().checked_add(1).unwrap());
+                        finder(&self.input)
+                    }
+                
+                    /// Handles the special case of an empty match by ensuring that 1) the
+                    /// iterator always advances and 2) empty matches never overlap with other
+                    /// matches.
+                    #[cold]
+                    #[inline(never)]
+                    fn handle_overlapping_empty_match<F>(
+                        &mut self,
+                        m: Match,
+                        mut finder: F,
+                    ) -> Result<Option<Match>, MatchError>
+                    where
+                        F: FnMut(&Input<'_>) -> Result<Option<Match>, MatchError>,
+                    {
+                        assert!(m.is_empty());
+                        self.input.set_start(self.input.start().checked_add(1).unwrap());
+                        finder(&self.input)
+                    }
+                }
+                
+                /// An iterator over all non-overlapping half matches for a fallible search.
+                pub struct TryHalfMatchesIter<'h, F> {
+                    it: Searcher<'h>,
+                    finder: F,
+                }
+                
+                impl<'h, F> TryHalfMatchesIter<'h, F> {
+                    /// Return an infallible version of this iterator.
+                    pub fn infallible(self) -> HalfMatchesIter<'h, F> {
+                        HalfMatchesIter(self)
+                    }
+                
+                    /// Returns the current `Input` used by this iterator.
+                    pub fn input<'i>(&'i self) -> &'i Input<'h> {
+                        self.it.input()
+                    }
+                }
+                
+                impl<'h, F> Iterator for TryHalfMatchesIter<'h, F>
+                where
+                    F: FnMut(&Input<'_>) -> Result<Option<HalfMatch>, MatchError>,
+                {
+                    type Item = Result<HalfMatch, MatchError>;
+                
+                    #[inline]
+                    fn next(&mut self) -> Option<Result<HalfMatch, MatchError>> {
+                        self.it.try_advance_half(&mut self.finder).transpose()
+                    }
+                }
+                
+                impl<'h, F> core::fmt::Debug for TryHalfMatchesIter<'h, F> {
+                    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                        f.debug_struct("TryHalfMatchesIter")
+                            .field("it", &self.it)
+                            .field("finder", &"<closure>")
+                            .finish()
+                    }
+                }
+                
+                /// An iterator over all non-overlapping half matches for an infallible search.
+                #[derive(Debug)]
+                pub struct HalfMatchesIter<'h, F>(TryHalfMatchesIter<'h, F>);
+                
+                impl<'h, F> HalfMatchesIter<'h, F> {
+                    /// Returns the current `Input` used by this iterator.
+                    pub fn input<'i>(&'i self) -> &'i Input<'h> {
+                        self.0.it.input()
+                    }
+                }
+                
+                impl<'h, F> Iterator for HalfMatchesIter<'h, F>
+                where
+                    F: FnMut(&Input<'_>) -> Result<Option<HalfMatch>, MatchError>,
+                {
+                    type Item = HalfMatch;
+                
+                    #[inline]
+                    fn next(&mut self) -> Option<HalfMatch> {
+                        match self.0.next()? {
+                            Ok(m) => Some(m),
+                            Err(err) => panic!(
+                                "unexpected regex half find error: {}\n\
+                                 to handle find errors, use 'try' or 'search' methods",
+                                err,
+                            ),
+                        }
+                    }
+                }
+                
+                /// An iterator over all non-overlapping matches for a fallible search.
+                pub struct TryMatchesIter<'h, F> {
+                    it: Searcher<'h>,
+                    finder: F,
+                }
+                
+                impl<'h, F> TryMatchesIter<'h, F> {
+                    /// Return an infallible version of this iterator.
+                    pub fn infallible(self) -> MatchesIter<'h, F> {
+                        MatchesIter(self)
+                    }
+                
+                    /// Returns the current `Input` used by this iterator.
+                    pub fn input<'i>(&'i self) -> &'i Input<'h> {
+                        self.it.input()
+                    }
+                }
+                
+                impl<'h, F> Iterator for TryMatchesIter<'h, F>
+                where
+                    F: FnMut(&Input<'_>) -> Result<Option<Match>, MatchError>,
+                {
+                    type Item = Result<Match, MatchError>;
+                
+                    #[inline]
+                    fn next(&mut self) -> Option<Result<Match, MatchError>> {
+                        self.it.try_advance(&mut self.finder).transpose()
+                    }
+                }
+                
+                impl<'h, F> core::fmt::Debug for TryMatchesIter<'h, F> {
+                    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                        f.debug_struct("TryMatchesIter")
+                            .field("it", &self.it)
+                            .field("finder", &"<closure>")
+                            .finish()
+                    }
+                }
+                
+                /// An iterator over all non-overlapping matches for an infallible search.
+                #[derive(Debug)]
+                pub struct MatchesIter<'h, F>(TryMatchesIter<'h, F>);
+                
+                impl<'h, F> MatchesIter<'h, F> {
+                    /// Returns the current `Input` used by this iterator.
+                    pub fn input<'i>(&'i self) -> &'i Input<'h> {
+                        self.0.it.input()
+                    }
+                }
+                
+                impl<'h, F> Iterator for MatchesIter<'h, F>
+                where
+                    F: FnMut(&Input<'_>) -> Result<Option<Match>, MatchError>,
+                {
+                    type Item = Match;
+                
+                    #[inline]
+                    fn next(&mut self) -> Option<Match> {
+                        match self.0.next()? {
+                            Ok(m) => Some(m),
+                            Err(err) => panic!(
+                                "unexpected regex find error: {}\n\
+                                 to handle find errors, use 'try' or 'search' methods",
+                                err,
+                            ),
+                        }
+                    }
+                }
+                
+                /// An iterator over all non-overlapping captures for a fallible search.
+                #[cfg(feature = "alloc")]
+                pub struct TryCapturesIter<'h, F> {
+                    it: Searcher<'h>,
+                    caps: Captures,
+                    finder: F,
+                }
+                
+                #[cfg(feature = "alloc")]
+                impl<'h, F> TryCapturesIter<'h, F> {
+                    /// Return an infallible version of this iterator.
+                    pub fn infallible(self) -> CapturesIter<'h, F> {
+                        CapturesIter(self)
+                    }
+                }
+                
+                #[cfg(feature = "alloc")]
+                impl<'h, F> Iterator for TryCapturesIter<'h, F>
+                where
+                    F: FnMut(&Input<'_>, &mut Captures) -> Result<(), MatchError>,
+                {
+                    type Item = Result<Captures, MatchError>;
+                
+                    #[inline]
+                    fn next(&mut self) -> Option<Result<Captures, MatchError>> {
+                        let TryCapturesIter { ref mut it, ref mut caps, ref mut finder } =
+                            *self;
+                        let result = it
+                            .try_advance(|input| {
+                                (finder)(input, caps)?;
+                                Ok(caps.get_match())
+                            })
+                            .transpose()?;
+                        match result {
+                            Ok(_) => Some(Ok(caps.clone())),
+                            Err(err) => Some(Err(err)),
+                        }
+                    }
+                }
+                
+                #[cfg(feature = "alloc")]
+                impl<'h, F> core::fmt::Debug for TryCapturesIter<'h, F> {
+                    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                        f.debug_struct("TryCapturesIter")
+                            .field("it", &self.it)
+                            .field("caps", &self.caps)
+                            .field("finder", &"<closure>")
+                            .finish()
+                    }
+                }
+                
+                /// An iterator over all non-overlapping captures for an infallible search.
+                #[cfg(feature = "alloc")]
+                #[derive(Debug)]
+                pub struct CapturesIter<'h, F>(TryCapturesIter<'h, F>);
+                
+                #[cfg(feature = "alloc")]
+                impl<'h, F> Iterator for CapturesIter<'h, F>
+                where
+                    F: FnMut(&Input<'_>, &mut Captures) -> Result<(), MatchError>,
+                {
+                    type Item = Captures;
+                
+                    #[inline]
+                    fn next(&mut self) -> Option<Captures> {
+                        match self.0.next()? {
+                            Ok(m) => Some(m),
+                            Err(err) => panic!(
+                                "unexpected regex captures error: {}\n\
+                                 to handle find errors, use 'try' or 'search' methods",
+                                err,
+                            ),
+                        }
+                    }
+                }
+            }
+
+            pub mod lazy
+            {
+                use ::
+                {
+                    *,
+                };
+                /*
+                */
+            }
+
+            pub mod look
+            {
+                use ::
+                {
+                    *,
+                };
+                /*
+                */
+            }
+
+            pub mod pool
+            {
+                use ::
+                {
+                    *,
+                };
+                /*
+                */
+            }
+
+            pub mod prefilter
+            {
+                use ::
+                {
+                    *,
+                };
+                /*
+                */
+            }
+
+            pub mod primitives
+            {
+                use ::
+                {
+                    *,
+                };
+                /*
+                */
+            }
+
+            pub mod start
+            {
+                use ::
+                {
+                    *,
+                };
+                /*
+                */
+            }
+
+            pub mod wire
+            {
+                use ::
+                {
+                    *,
+                };
+                /*
+                */
+            }
+
+            pub mod empty
+            {
+                use ::
+                {
+                    *,
+                };
+                /*
+                */
+            }
+
+            pub mod int
+            {
+                use ::
+                {
+                    *,
+                };
+                /*
+                */
+            }
+
+            pub mod memchr
+            {
+                use ::
+                {
+                    *,
+                };
+                /*
+                */
+            }
+
+            pub mod search
+            {
+                use ::
+                {
+                    *,
+                };
+                /*
+                */
+            }
+
+            pub mod sparse_set
+            {
+                use ::
+                {
+                    *,
+                };
+                /*
+                */
+            }
+
+            pub mod unicode_data
+            {
+                use ::
+                {
+                    *,
+                };
+                /*
+                */
+            }
+
+            pub mod utf8
+            {
+                use ::
+                {
+                    *,
+                };
+                /*
+                */
+            }
+        }
+    }
+    
+    mod builders
+    {
+        //! This module defines an internal builder that encapsulates all interaction with 
+        //! meta::Regex construction, and then 4 public API builders that wrap around it.
+        use ::
+        {
+            *,
+        };
+        /*
+        use alloc::{
+            string::{String, ToString},
+            sync::Arc,
+            vec,
+            vec::Vec,
+        };
+        
+        use regex_automata::{
+            meta, nfa::thompson::WhichCaptures, util::syntax, MatchKind,
+        };
+        
+        use crate::error::Error;
+        */
+        /// A builder for constructing a `Regex`, `bytes::Regex`, `RegexSet` or a
+        /// `bytes::RegexSet`.
+        #[derive(Clone, Debug)]
+        struct Builder {
+            pats: Vec<String>,
+            metac: meta::Config,
+            syntaxc: syntax::Config,
+        }
+        
+        impl Default for Builder {
+            fn default() -> Builder {
+                let metac = meta::Config::new()
+                    .nfa_size_limit(Some(10 * (1 << 20)))
+                    .hybrid_cache_capacity(2 * (1 << 20));
+                Builder { pats: vec![], metac, syntaxc: syntax::Config::default() }
+            }
+        }
+        
+        impl Builder {
+            fn new<I, S>(patterns: I) -> Builder
+            where
+                S: AsRef<str>,
+                I: IntoIterator<Item = S>,
+            {
+                let mut b = Builder::default();
+                b.pats.extend(patterns.into_iter().map(|p| p.as_ref().to_string()));
+                b
+            }
+        
+            fn build_one_string(&self) -> Result<crate::Regex, Error> {
+                assert_eq!(1, self.pats.len());
+                let metac = self
+                    .metac
+                    .clone()
+                    .match_kind(MatchKind::LeftmostFirst)
+                    .utf8_empty(true);
+                let syntaxc = self.syntaxc.clone().utf8(true);
+                let pattern = Arc::from(self.pats[0].as_str());
+                meta::Builder::new()
+                    .configure(metac)
+                    .syntax(syntaxc)
+                    .build(&pattern)
+                    .map(|meta| crate::Regex { meta, pattern })
+                    .map_err(Error::from_meta_build_error)
+            }
+        
+            fn build_one_bytes(&self) -> Result<crate::bytes::Regex, Error> {
+                assert_eq!(1, self.pats.len());
+                let metac = self
+                    .metac
+                    .clone()
+                    .match_kind(MatchKind::LeftmostFirst)
+                    .utf8_empty(false);
+                let syntaxc = self.syntaxc.clone().utf8(false);
+                let pattern = Arc::from(self.pats[0].as_str());
+                meta::Builder::new()
+                    .configure(metac)
+                    .syntax(syntaxc)
+                    .build(&pattern)
+                    .map(|meta| crate::bytes::Regex { meta, pattern })
+                    .map_err(Error::from_meta_build_error)
+            }
+        
+            fn build_many_string(&self) -> Result<crate::RegexSet, Error> {
+                let metac = self
+                    .metac
+                    .clone()
+                    .match_kind(MatchKind::All)
+                    .utf8_empty(true)
+                    .which_captures(WhichCaptures::None);
+                let syntaxc = self.syntaxc.clone().utf8(true);
+                let patterns = Arc::from(self.pats.as_slice());
+                meta::Builder::new()
+                    .configure(metac)
+                    .syntax(syntaxc)
+                    .build_many(&patterns)
+                    .map(|meta| crate::RegexSet { meta, patterns })
+                    .map_err(Error::from_meta_build_error)
+            }
+        
+            fn build_many_bytes(&self) -> Result<crate::bytes::RegexSet, Error> {
+                let metac = self
+                    .metac
+                    .clone()
+                    .match_kind(MatchKind::All)
+                    .utf8_empty(false)
+                    .which_captures(WhichCaptures::None);
+                let syntaxc = self.syntaxc.clone().utf8(false);
+                let patterns = Arc::from(self.pats.as_slice());
+                meta::Builder::new()
+                    .configure(metac)
+                    .syntax(syntaxc)
+                    .build_many(&patterns)
+                    .map(|meta| crate::bytes::RegexSet { meta, patterns })
+                    .map_err(Error::from_meta_build_error)
+            }
+        
+            fn case_insensitive(&mut self, yes: bool) -> &mut Builder {
+                self.syntaxc = self.syntaxc.case_insensitive(yes);
+                self
+            }
+        
+            fn multi_line(&mut self, yes: bool) -> &mut Builder {
+                self.syntaxc = self.syntaxc.multi_line(yes);
+                self
+            }
+        
+            fn dot_matches_new_line(&mut self, yes: bool) -> &mut Builder {
+                self.syntaxc = self.syntaxc.dot_matches_new_line(yes);
+                self
+            }
+        
+            fn crlf(&mut self, yes: bool) -> &mut Builder {
+                self.syntaxc = self.syntaxc.crlf(yes);
+                self
+            }
+        
+            fn line_terminator(&mut self, byte: u8) -> &mut Builder {
+                self.metac = self.metac.clone().line_terminator(byte);
+                self.syntaxc = self.syntaxc.line_terminator(byte);
+                self
+            }
+        
+            fn swap_greed(&mut self, yes: bool) -> &mut Builder {
+                self.syntaxc = self.syntaxc.swap_greed(yes);
+                self
+            }
+        
+            fn ignore_whitespace(&mut self, yes: bool) -> &mut Builder {
+                self.syntaxc = self.syntaxc.ignore_whitespace(yes);
+                self
+            }
+        
+            fn unicode(&mut self, yes: bool) -> &mut Builder {
+                self.syntaxc = self.syntaxc.unicode(yes);
+                self
+            }
+        
+            fn octal(&mut self, yes: bool) -> &mut Builder {
+                self.syntaxc = self.syntaxc.octal(yes);
+                self
+            }
+        
+            fn size_limit(&mut self, limit: usize) -> &mut Builder {
+                self.metac = self.metac.clone().nfa_size_limit(Some(limit));
+                self
+            }
+        
+            fn dfa_size_limit(&mut self, limit: usize) -> &mut Builder {
+                self.metac = self.metac.clone().hybrid_cache_capacity(limit);
+                self
+            }
+        
+            fn nest_limit(&mut self, limit: u32) -> &mut Builder {
+                self.syntaxc = self.syntaxc.nest_limit(limit);
+                self
+            }
+        }
+        
+        pub mod string
+        {
+            use crate::{error::Error, Regex, RegexSet};
+        
+            use super::Builder;
+        
+            /// A configurable builder for a [`Regex`].
+            #[derive(Clone, Debug)]
+            pub struct RegexBuilder {
+                builder: Builder,
+            }
+        
+            impl RegexBuilder {
+                /// Create a new builder with a default configuration for the given
+                /// pattern.
+                pub fn new(pattern: &str) -> RegexBuilder {
+                    RegexBuilder { builder: Builder::new([pattern]) }
+                }
+        
+                /// Compiles the pattern given to `RegexBuilder::new` with the
+                /// configuration set on this builder.
+                pub fn build(&self) -> Result<Regex, Error> {
+                    self.builder.build_one_string()
+                }
+        
+                /// This configures Unicode mode for the entire pattern.
+                pub fn unicode(&mut self, yes: bool) -> &mut RegexBuilder {
+                    self.builder.unicode(yes);
+                    self
+                }
+        
+                /// This configures whether to enable case insensitive matching for the
+                /// entire pattern.
+                pub fn case_insensitive(&mut self, yes: bool) -> &mut RegexBuilder {
+                    self.builder.case_insensitive(yes);
+                    self
+                }
+        
+                /// This configures multi-line mode for the entire pattern.
+                pub fn multi_line(&mut self, yes: bool) -> &mut RegexBuilder {
+                    self.builder.multi_line(yes);
+                    self
+                }
+        
+                /// This configures dot-matches-new-line mode for the entire pattern.
+                pub fn dot_matches_new_line(
+                    &mut self,
+                    yes: bool,
+                ) -> &mut RegexBuilder {
+                    self.builder.dot_matches_new_line(yes);
+                    self
+                }
+        
+                /// This configures CRLF mode for the entire pattern.
+                pub fn crlf(&mut self, yes: bool) -> &mut RegexBuilder {
+                    self.builder.crlf(yes);
+                    self
+                }
+        
+                /// Configures the line terminator to be used by the regex.
+                pub fn line_terminator(&mut self, byte: u8) -> &mut RegexBuilder {
+                    self.builder.line_terminator(byte);
+                    self
+                }
+        
+                /// This configures swap-greed mode for the entire pattern.
+                pub fn swap_greed(&mut self, yes: bool) -> &mut RegexBuilder {
+                    self.builder.swap_greed(yes);
+                    self
+                }
+        
+                /// This configures verbose mode for the entire pattern.
+                pub fn ignore_whitespace(&mut self, yes: bool) -> &mut RegexBuilder {
+                    self.builder.ignore_whitespace(yes);
+                    self
+                }
+        
+                /// This configures octal mode for the entire pattern.
+                pub fn octal(&mut self, yes: bool) -> &mut RegexBuilder {
+                    self.builder.octal(yes);
+                    self
+                }
+        
+                /// Sets the approximate size limit, in bytes, of the compiled regex.
+                pub fn size_limit(&mut self, bytes: usize) -> &mut RegexBuilder {
+                    self.builder.size_limit(bytes);
+                    self
+                }
+        
+                /// Set the approximate capacity, in bytes, of the cache of transitions
+                /// used by the lazy DFA.
+                pub fn dfa_size_limit(&mut self, bytes: usize) -> &mut RegexBuilder {
+                    self.builder.dfa_size_limit(bytes);
+                    self
+                }
+        
+                /// Set the nesting limit for this parser.
+                pub fn nest_limit(&mut self, limit: u32) -> &mut RegexBuilder {
+                    self.builder.nest_limit(limit);
+                    self
+                }
+            }
+        
+            /// A configurable builder for a [`RegexSet`].
+            #[derive(Clone, Debug)]
+            pub struct RegexSetBuilder {
+                builder: Builder,
+            }
+        
+            impl RegexSetBuilder {
+                /// Create a new builder with a default configuration for the given
+                /// patterns.
+                pub fn new<I, S>(patterns: I) -> RegexSetBuilder
+                where
+                    I: IntoIterator<Item = S>,
+                    S: AsRef<str>,
+                {
+                    RegexSetBuilder { builder: Builder::new(patterns) }
+                }
+        
+                /// Compiles the patterns given to `RegexSetBuilder::new` with the
+                /// configuration set on this builder.
+                pub fn build(&self) -> Result<RegexSet, Error> {
+                    self.builder.build_many_string()
+                }
+        
+                /// This configures Unicode mode for the all of the patterns.
+                pub fn unicode(&mut self, yes: bool) -> &mut RegexSetBuilder {
+                    self.builder.unicode(yes);
+                    self
+                }
+        
+                /// This configures whether to enable case insensitive matching for all
+                /// of the patterns.
+                pub fn case_insensitive(&mut self, yes: bool) -> &mut RegexSetBuilder {
+                    self.builder.case_insensitive(yes);
+                    self
+                }
+        
+                /// This configures multi-line mode for all of the patterns.
+                pub fn multi_line(&mut self, yes: bool) -> &mut RegexSetBuilder {
+                    self.builder.multi_line(yes);
+                    self
+                }
+        
+                /// This configures dot-matches-new-line mode for the entire pattern.
+                pub fn dot_matches_new_line(
+                    &mut self,
+                    yes: bool,
+                ) -> &mut RegexSetBuilder {
+                    self.builder.dot_matches_new_line(yes);
+                    self
+                }
+        
+                /// This configures CRLF mode for all of the patterns.
+                pub fn crlf(&mut self, yes: bool) -> &mut RegexSetBuilder {
+                    self.builder.crlf(yes);
+                    self
+                }
+        
+                /// Configures the line terminator to be used by the regex.
+                pub fn line_terminator(&mut self, byte: u8) -> &mut RegexSetBuilder {
+                    self.builder.line_terminator(byte);
+                    self
+                }
+        
+                /// This configures swap-greed mode for all of the patterns.
+                pub fn swap_greed(&mut self, yes: bool) -> &mut RegexSetBuilder {
+                    self.builder.swap_greed(yes);
+                    self
+                }
+        
+                /// This configures verbose mode for all of the patterns.
+                pub fn ignore_whitespace(
+                    &mut self,
+                    yes: bool,
+                ) -> &mut RegexSetBuilder {
+                    self.builder.ignore_whitespace(yes);
+                    self
+                }
+        
+                /// This configures octal mode for all of the patterns.
+                pub fn octal(&mut self, yes: bool) -> &mut RegexSetBuilder {
+                    self.builder.octal(yes);
+                    self
+                }
+        
+                /// Sets the approximate size limit, in bytes, of the compiled regex.
+                pub fn size_limit(&mut self, bytes: usize) -> &mut RegexSetBuilder {
+                    self.builder.size_limit(bytes);
+                    self
+                }
+        
+                /// Set the approximate capacity, in bytes, of the cache of transitions
+                /// used by the lazy DFA.
+                pub fn dfa_size_limit(
+                    &mut self,
+                    bytes: usize,
+                ) -> &mut RegexSetBuilder {
+                    self.builder.dfa_size_limit(bytes);
+                    self
+                }
+        
+                /// Set the nesting limit for this parser.
+                pub fn nest_limit(&mut self, limit: u32) -> &mut RegexSetBuilder {
+                    self.builder.nest_limit(limit);
+                    self
+                }
+            }
+        }
+        
+        pub mod bytes 
+        {
+            use crate::{
+                bytes::{Regex, RegexSet},
+                error::Error,
+            };
+        
+            use super::Builder;
+        
+            /// A configurable builder for a [`Regex`].
+            #[derive(Clone, Debug)]
+            pub struct RegexBuilder {
+                builder: Builder,
+            }
+        
+            impl RegexBuilder {
+                /// Create a new builder with a default configuration for the given
+                /// pattern.
+                pub fn new(pattern: &str) -> RegexBuilder {
+                    RegexBuilder { builder: Builder::new([pattern]) }
+                }
+        
+                /// Compiles the pattern given to `RegexBuilder::new` with the
+                /// configuration set on this builder.
+                pub fn build(&self) -> Result<Regex, Error> {
+                    self.builder.build_one_bytes()
+                }
+        
+                /// This configures Unicode mode for the entire pattern.
+                pub fn unicode(&mut self, yes: bool) -> &mut RegexBuilder {
+                    self.builder.unicode(yes);
+                    self
+                }
+        
+                /// This configures whether to enable case insensitive matching for the
+                /// entire pattern.
+                pub fn case_insensitive(&mut self, yes: bool) -> &mut RegexBuilder {
+                    self.builder.case_insensitive(yes);
+                    self
+                }
+        
+                /// This configures multi-line mode for the entire pattern.
+                pub fn multi_line(&mut self, yes: bool) -> &mut RegexBuilder {
+                    self.builder.multi_line(yes);
+                    self
+                }
+        
+                /// This configures dot-matches-new-line mode for the entire pattern.
+                pub fn dot_matches_new_line(
+                    &mut self,
+                    yes: bool,
+                ) -> &mut RegexBuilder {
+                    self.builder.dot_matches_new_line(yes);
+                    self
+                }
+        
+                /// This configures CRLF mode for the entire pattern.
+                pub fn crlf(&mut self, yes: bool) -> &mut RegexBuilder {
+                    self.builder.crlf(yes);
+                    self
+                }
+        
+                /// Configures the line terminator to be used by the regex.
+                pub fn line_terminator(&mut self, byte: u8) -> &mut RegexBuilder {
+                    self.builder.line_terminator(byte);
+                    self
+                }
+        
+                /// This configures swap-greed mode for the entire pattern.
+                pub fn swap_greed(&mut self, yes: bool) -> &mut RegexBuilder {
+                    self.builder.swap_greed(yes);
+                    self
+                }
+        
+                /// This configures verbose mode for the entire pattern.
+                pub fn ignore_whitespace(&mut self, yes: bool) -> &mut RegexBuilder {
+                    self.builder.ignore_whitespace(yes);
+                    self
+                }
+        
+                /// This configures octal mode for the entire pattern.
+                pub fn octal(&mut self, yes: bool) -> &mut RegexBuilder {
+                    self.builder.octal(yes);
+                    self
+                }
+        
+                /// Sets the approximate size limit, in bytes, of the compiled regex.
+                pub fn size_limit(&mut self, bytes: usize) -> &mut RegexBuilder {
+                    self.builder.size_limit(bytes);
+                    self
+                }
+        
+                /// Set the approximate capacity, in bytes, of the cache of transitions
+                /// used by the lazy DFA.
+                pub fn dfa_size_limit(&mut self, bytes: usize) -> &mut RegexBuilder {
+                    self.builder.dfa_size_limit(bytes);
+                    self
+                }
+        
+                /// Set the nesting limit for this parser.
+                pub fn nest_limit(&mut self, limit: u32) -> &mut RegexBuilder {
+                    self.builder.nest_limit(limit);
+                    self
+                }
+            }
+        
+            /// A configurable builder for a [`RegexSet`].
+            #[derive(Clone, Debug)]
+            pub struct RegexSetBuilder {
+                builder: Builder,
+            }
+        
+            impl RegexSetBuilder {
+                /// Create a new builder with a default configuration for the given
+                /// patterns.
+                pub fn new<I, S>(patterns: I) -> RegexSetBuilder
+                where
+                    I: IntoIterator<Item = S>,
+                    S: AsRef<str>,
+                {
+                    RegexSetBuilder { builder: Builder::new(patterns) }
+                }
+        
+                /// Compiles the patterns given to `RegexSetBuilder::new` with the
+                /// configuration set on this builder.
+                pub fn build(&self) -> Result<RegexSet, Error> {
+                    self.builder.build_many_bytes()
+                }
+        
+                /// This configures Unicode mode for the all of the patterns.
+                pub fn unicode(&mut self, yes: bool) -> &mut RegexSetBuilder {
+                    self.builder.unicode(yes);
+                    self
+                }
+        
+                /// This configures whether to enable case insensitive matching for all
+                /// of the patterns.
+                pub fn case_insensitive(&mut self, yes: bool) -> &mut RegexSetBuilder {
+                    self.builder.case_insensitive(yes);
+                    self
+                }
+        
+                /// This configures multi-line mode for all of the patterns.
+                pub fn multi_line(&mut self, yes: bool) -> &mut RegexSetBuilder {
+                    self.builder.multi_line(yes);
+                    self
+                }
+        
+                /// This configures dot-matches-new-line mode for the entire pattern.
+                pub fn dot_matches_new_line(
+                    &mut self,
+                    yes: bool,
+                ) -> &mut RegexSetBuilder {
+                    self.builder.dot_matches_new_line(yes);
+                    self
+                }
+        
+                /// This configures CRLF mode for all of the patterns.
+                pub fn crlf(&mut self, yes: bool) -> &mut RegexSetBuilder {
+                    self.builder.crlf(yes);
+                    self
+                }
+        
+                /// Configures the line terminator to be used by the regex.
+                pub fn dfa_size_limit(
+                    &mut self,
+                    bytes: usize,
+                ) -> &mut RegexSetBuilder {
+                    self.builder.dfa_size_limit(bytes);
+                    self
+                }
+        
+                /// Set the nesting limit for this parser.
+                pub fn nest_limit(&mut self, limit: u32) -> &mut RegexSetBuilder {
+                    self.builder.nest_limit(limit);
+                    self
+                }
+            }
+        }
+    }
+    
+    pub mod bytes
+    {
+        //! Search for regex matches in `&[u8]` haystacks.
+        use ::
+        {
+            *,
+        };
+        /*
+        pub use crate::{builders::bytes::*, regex::bytes::*, regexset::bytes::*};
+        */
+    }
+    
+    mod error
+    {
+        use ::
+        {
+            *,
+        };
+        /*
+        use alloc::string::{String, ToString};
+        
+        use regex_automata::meta;
+        */
+        /// An error that occurred during parsing or compiling a regular expression.
+        #[non_exhaustive]
+        #[derive(Clone, PartialEq)]
+        pub enum Error {
+            /// A syntax error.
+            Syntax(String),
+            /// The compiled program exceeded the set size
+            /// limit.
+            CompiledTooBig(usize),
+        }
+        
+        impl Error {
+            pub fn from_meta_build_error(err: meta::BuildError) -> Error {
+                if let Some(size_limit) = err.size_limit() {
+                    Error::CompiledTooBig(size_limit)
+                } else if let Some(ref err) = err.syntax_error() {
+                    Error::Syntax(err.to_string())
+                } else {
+                    Error::Syntax(err.to_string())
+                }
+            }
+        }
+        
+        impl ::error::Error for Error {
+            #[allow(deprecated)]
+            fn description(&self) -> &str {
+                match *self {
+                    Error::Syntax(ref err) => err,
+                    Error::CompiledTooBig(_) => "compiled program too big",
+                }
+            }
+        }
+        
+        impl ::fmt::Display for Error {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                match *self {
+                    Error::Syntax(ref err) => err.fmt(f),
+                    Error::CompiledTooBig(limit) => write!(
+                        f,
+                        "Compiled regex exceeds size limit of {} bytes.",
+                        limit
+                    ),
+                }
+            }
+        }
+        
+        impl ::fmt::Debug for Error {
+            fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result {
+                match *self {
+                    Error::Syntax(ref err) => {
+                        let hr: String = ::iter::repeat('~').take(79).collect();
+                        writeln!(f, "Syntax(")?;
+                        writeln!(f, "{}", hr)?;
+                        writeln!(f, "{}", err)?;
+                        writeln!(f, "{}", hr)?;
+                        write!(f, ")")?;
+                        Ok(())
+                    }
+                    Error::CompiledTooBig(limit) => {
+                        f.debug_tuple("CompiledTooBig").field(&limit).finish()
+                    }
+                }
+            }
+        }
+    }
+    
+    mod find_byte
+    {
+        use ::
+        {
+            *,
+        };
+        /*
+        */
+        /// Searches for the given needle in the given haystack.
+        pub fn find_byte(needle: u8, haystack: &[u8]) -> Option<usize>
+        {
+            fn imp(needle: u8, haystack: &[u8]) -> Option<usize> {
+                haystack.iter().position(|&b| b == needle)
+            }
+        
+            imp(needle, haystack)
+        }
+
+    }
+    
+    mod regex
+    {
+        use ::
+        {
+            *,
+        };
+        /*
+        */
+        pub mod bytes
+        {
+            use ::
+            {
+                *,
+            };
+            /*
+            use alloc::{borrow::Cow, string::String, sync::Arc, vec::Vec};
+            
+            use regex_automata::{meta, util::captures, Input, PatternID};
+            
+            use crate::{bytes::RegexBuilder, error::Error};
+            */
+            /// A compiled regular expression for searching Unicode haystacks.
+            #[derive(Clone)]
+            pub struct Regex {
+                pub meta: meta::Regex,
+                pub pattern: Arc<str>,
+            }
+            
+            impl core::fmt::Display for Regex {
+                /// Shows the original regular expression.
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    write!(f, "{}", self.as_str())
+                }
+            }
+            
+            impl core::fmt::Debug for Regex {
+                /// Shows the original regular expression.
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    f.debug_tuple("Regex").field(&self.as_str()).finish()
+                }
+            }
+            
+            impl core::str::FromStr for Regex {
+                type Err = Error;
+            
+                /// Attempts to parse a string into a regular expression
+                fn from_str(s: &str) -> Result<Regex, Error> {
+                    Regex::new(s)
+                }
+            }
+            
+            impl TryFrom<&str> for Regex {
+                type Error = Error;
+            
+                /// Attempts to parse a string into a regular expression
+                fn try_from(s: &str) -> Result<Regex, Error> {
+                    Regex::new(s)
+                }
+            }
+            
+            impl TryFrom<String> for Regex {
+                type Error = Error;
+            
+                /// Attempts to parse a string into a regular expression
+                fn try_from(s: String) -> Result<Regex, Error> {
+                    Regex::new(&s)
+                }
+            }
+            
+            /// Core regular expression methods.
+            impl Regex {
+                /// Compiles a regular expression. Once compiled, it can be used repeatedly
+                /// to search, split or replace substrings in a haystack.
+                pub fn new(re: &str) -> Result<Regex, Error> {
+                    RegexBuilder::new(re).build()
+                }
+            
+                /// Returns true if and only if there is a match for the regex anywhere
+                /// in the haystack given.
+                #[inline]
+                pub fn is_match(&self, haystack: &[u8]) -> bool {
+                    self.is_match_at(haystack, 0)
+                }
+            
+                /// This routine searches for the first match of this regex in the
+                /// haystack given, and if found, returns a [`Match`].
+                #[inline]
+                pub fn find<'h>(&self, haystack: &'h [u8]) -> Option<Match<'h>> {
+                    self.find_at(haystack, 0)
+                }
+            
+                /// Returns an iterator that yields successive non-overlapping matches in
+                /// the given haystack.
+                #[inline]
+                pub fn find_iter<'r, 'h>(&'r self, haystack: &'h [u8]) -> Matches<'r, 'h> {
+                    Matches { haystack, it: self.meta.find_iter(haystack) }
+                }
+            
+                /// This routine searches for the first match of this regex in the haystack
+                /// given, and if found, returns not only the overall match but also the
+                /// matches of each capture group in the regex.
+                #[inline]
+                pub fn captures<'h>(&self, haystack: &'h [u8]) -> Option<Captures<'h>> {
+                    self.captures_at(haystack, 0)
+                }
+            
+                /// Returns an iterator that yields successive non-overlapping matches in
+                /// the given haystack.
+                #[inline]
+                pub fn captures_iter<'r, 'h>(
+                    &'r self,
+                    haystack: &'h [u8],
+                ) -> CaptureMatches<'r, 'h> {
+                    CaptureMatches { haystack, it: self.meta.captures_iter(haystack) }
+                }
+            
+                /// Returns an iterator of substrings of the haystack given, delimited by a
+                /// match of the regex.
+                #[inline]
+                pub fn split<'r, 'h>(&'r self, haystack: &'h [u8]) -> Split<'r, 'h> {
+                    Split { haystack, it: self.meta.split(haystack) }
+                }
+            
+                /// Returns an iterator of at most `limit` substrings of the haystack
+                /// given, delimited by a match of the regex.
+                #[inline]
+                pub fn splitn<'r, 'h>(
+                    &'r self,
+                    haystack: &'h [u8],
+                    limit: usize,
+                ) -> SplitN<'r, 'h> {
+                    SplitN { haystack, it: self.meta.splitn(haystack, limit) }
+                }
+            
+                /// Replaces the leftmost-first match in the given haystack with the
+                /// replacement provided.
+                #[inline]
+                pub fn replace<'h, R: Replacer>(
+                    &self,
+                    haystack: &'h [u8],
+                    rep: R,
+                ) -> Cow<'h, [u8]> {
+                    self.replacen(haystack, 1, rep)
+                }
+            
+                /// Replaces all non-overlapping matches in the haystack with the
+                /// replacement provided.
+                #[inline]
+                pub fn replace_all<'h, R: Replacer>(
+                    &self,
+                    haystack: &'h [u8],
+                    rep: R,
+                ) -> Cow<'h, [u8]> {
+                    self.replacen(haystack, 0, rep)
+                }
+            
+                /// Replaces at most `limit` non-overlapping matches in the haystack with
+                /// the replacement provided.
+                #[inline]
+                pub fn replacen<'h, R: Replacer>(
+                    &self,
+                    haystack: &'h [u8],
+                    limit: usize,
+                    mut rep: R,
+                ) -> Cow<'h, [u8]> {
+                    if let Some(rep) = rep.no_expansion() {
+                        let mut it = self.find_iter(haystack).enumerate().peekable();
+                        if it.peek().is_none() {
+                            return Cow::Borrowed(haystack);
+                        }
+                        let mut new = Vec::with_capacity(haystack.len());
+                        let mut last_match = 0;
+                        for (i, m) in it {
+                            new.extend_from_slice(&haystack[last_match..m.start()]);
+                            new.extend_from_slice(&rep);
+                            last_match = m.end();
+                            if limit > 0 && i >= limit - 1 {
+                                break;
+                            }
+                        }
+                        new.extend_from_slice(&haystack[last_match..]);
+                        return Cow::Owned(new);
+                    }
+                    
+                    let mut it = self.captures_iter(haystack).enumerate().peekable();
+                    if it.peek().is_none() {
+                        return Cow::Borrowed(haystack);
+                    }
+                    let mut new = Vec::with_capacity(haystack.len());
+                    let mut last_match = 0;
+                    for (i, cap) in it {
+                        // unwrap on 0 is OK because captures only reports matches
+                        let m = cap.get(0).unwrap();
+                        new.extend_from_slice(&haystack[last_match..m.start()]);
+                        rep.replace_append(&cap, &mut new);
+                        last_match = m.end();
+                        if limit > 0 && i >= limit - 1 {
+                            break;
+                        }
+                    }
+                    new.extend_from_slice(&haystack[last_match..]);
+                    Cow::Owned(new)
+                }
+            }
+            
+            /// A group of advanced or "lower level" search methods.
+            impl Regex {
+                /// Returns the end byte offset of the first match in the haystack given.
+                #[inline]
+                pub fn shortest_match(&self, haystack: &[u8]) -> Option<usize> {
+                    self.shortest_match_at(haystack, 0)
+                }
+            
+                /// Returns the same as `shortest_match`, but starts the search at the
+                /// given offset.
+                #[inline]
+                pub fn shortest_match_at(
+                    &self,
+                    haystack: &[u8],
+                    start: usize,
+                ) -> Option<usize> {
+                    let input =
+                        Input::new(haystack).earliest(true).span(start..haystack.len());
+                    self.meta.search_half(&input).map(|hm| hm.offset())
+                }
+            
+                /// Returns the same as [`Regex::is_match`], but starts the search at the
+                /// given offset.
+                #[inline]
+                pub fn is_match_at(&self, haystack: &[u8], start: usize) -> bool {
+                    self.meta.is_match(Input::new(haystack).span(start..haystack.len()))
+                }
+            
+                /// Returns the same as [`Regex::find`], but starts the search at the given
+                /// offset.
+                #[inline]
+                pub fn find_at<'h>(
+                    &self,
+                    haystack: &'h [u8],
+                    start: usize,
+                ) -> Option<Match<'h>> {
+                    let input = Input::new(haystack).span(start..haystack.len());
+                    self.meta.find(input).map(|m| Match::new(haystack, m.start(), m.end()))
+                }
+            
+                /// Returns the same as [`Regex::captures`], but starts the search at the
+                /// given offset.
+                #[inline]
+                pub fn captures_at<'h>(
+                    &self,
+                    haystack: &'h [u8],
+                    start: usize,
+                ) -> Option<Captures<'h>> {
+                    let input = Input::new(haystack).span(start..haystack.len());
+                    let mut caps = self.meta.create_captures();
+                    self.meta.captures(input, &mut caps);
+                    if caps.is_match() {
+                        let static_captures_len = self.static_captures_len();
+                        Some(Captures { haystack, caps, static_captures_len })
+                    } else {
+                        None
+                    }
+                }
+            
+                /// This is like [`Regex::captures`], but writes the byte offsets of each
+                /// capture group match into the locations given.
+                #[inline]
+                pub fn captures_read<'h>(
+                    &self,
+                    locs: &mut CaptureLocations,
+                    haystack: &'h [u8],
+                ) -> Option<Match<'h>> {
+                    self.captures_read_at(locs, haystack, 0)
+                }
+            
+                /// Returns the same as [`Regex::captures_read`], but starts the search at
+                /// the given offset.
+                #[inline]
+                pub fn captures_read_at<'h>(
+                    &self,
+                    locs: &mut CaptureLocations,
+                    haystack: &'h [u8],
+                    start: usize,
+                ) -> Option<Match<'h>> {
+                    let input = Input::new(haystack).span(start..haystack.len());
+                    self.meta.search_captures(&input, &mut locs.0);
+                    locs.0.get_match().map(|m| Match::new(haystack, m.start(), m.end()))
+                }
+            
+                /// An undocumented alias for `captures_read_at`.
+                #[doc(hidden)]
+                #[inline]
+                pub fn read_captures_at<'h>(
+                    &self,
+                    locs: &mut CaptureLocations,
+                    haystack: &'h [u8],
+                    start: usize,
+                ) -> Option<Match<'h>> {
+                    self.captures_read_at(locs, haystack, start)
+                }
+            }
+            
+            /// Auxiliary methods.
+            impl Regex {
+                /// Returns the original string of this regex.
+                #[inline]
+                pub fn as_str(&self) -> &str {
+                    &self.pattern
+                }
+            
+                /// Returns an iterator over the capture names in this regex.
+                #[inline]
+                pub fn capture_names(&self) -> CaptureNames<'_> {
+                    CaptureNames(self.meta.group_info().pattern_names(PatternID::ZERO))
+                }
+            
+                /// Returns the number of captures groups in this regex.
+                #[inline]
+                pub fn captures_len(&self) -> usize {
+                    self.meta.group_info().group_len(PatternID::ZERO)
+                }
+            
+                /// Returns the total number of capturing groups that appear in every
+                /// possible match.
+                #[inline]
+                pub fn static_captures_len(&self) -> Option<usize> {
+                    self.meta.static_captures_len()
+                }
+            
+                /// Returns a fresh allocated set of capture locations that can
+                /// be reused in multiple calls to [`Regex::captures_read`] or
+                /// [`Regex::captures_read_at`].
+                #[inline]
+                pub fn capture_locations(&self) -> CaptureLocations {
+                    CaptureLocations(self.meta.create_captures())
+                }
+            
+                /// An alias for `capture_locations` to preserve backward compatibility.
+                #[doc(hidden)]
+                #[inline]
+                pub fn locations(&self) -> CaptureLocations {
+                    self.capture_locations()
+                }
+            }
+            
+            /// Represents a single match of a regex in a haystack.
+            #[derive(Copy, Clone, Eq, PartialEq)]
+            pub struct Match<'h> {
+                haystack: &'h [u8],
+                start: usize,
+                end: usize,
+            }
+            
+            impl<'h> Match<'h> {
+                /// Returns the byte offset of the start of the match in the haystack.
+                #[inline]
+                pub fn start(&self) -> usize {
+                    self.start
+                }
+            
+                /// Returns the byte offset of the end of the match in the haystack.
+                #[inline]
+                pub fn end(&self) -> usize {
+                    self.end
+                }
+            
+                /// Returns true if and only if this match has a length of zero.
+                #[inline]
+                pub fn is_empty(&self) -> bool {
+                    self.start == self.end
+                }
+            
+                /// Returns the length, in bytes, of this match.
+                #[inline]
+                pub fn len(&self) -> usize {
+                    self.end - self.start
+                }
+            
+                /// Returns the range over the starting and ending byte offsets of the
+                /// match in the haystack.
+                #[inline]
+                pub fn range(&self) -> core::ops::Range<usize> {
+                    self.start..self.end
+                }
+            
+                /// Returns the substring of the haystack that matched.
+                #[inline]
+                pub fn as_bytes(&self) -> &'h [u8] {
+                    &self.haystack[self.range()]
+                }
+            
+                /// Creates a new match from the given haystack and byte offsets.
+                #[inline]
+                fn new(haystack: &'h [u8], start: usize, end: usize) -> Match<'h> {
+                    Match { haystack, start, end }
+                }
+            }
+            
+            impl<'h> core::fmt::Debug for Match<'h> {
+                fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                    use regex_automata::util::escape::DebugHaystack;
+            
+                    let mut fmt = f.debug_struct("Match");
+                    fmt.field("start", &self.start)
+                        .field("end", &self.end)
+                        .field("bytes", &DebugHaystack(&self.as_bytes()));
+            
+                    fmt.finish()
+                }
+            }
+            
+            impl<'h> From<Match<'h>> for &'h [u8] {
+                fn from(m: Match<'h>) -> &'h [u8] {
+                    m.as_bytes()
+                }
+            }
+            
+            impl<'h> From<Match<'h>> for core::ops::Range<usize> {
+                fn from(m: Match<'h>) -> core::ops::Range<usize> {
+                    m.range()
+                }
+            }
+            
+            /// Represents the capture groups for a single match.
+            pub struct Captures<'h> {
+                haystack: &'h [u8],
+                caps: captures::Captures,
+                static_captures_len: Option<usize>,
+            }
+            
+            impl<'h> Captures<'h> {
+                /// Returns the `Match` associated with the capture group at index `i`.
+                #[inline]
+                pub fn get(&self, i: usize) -> Option<Match<'h>> {
+                    self.caps
+                        .get_group(i)
+                        .map(|sp| Match::new(self.haystack, sp.start, sp.end))
+                }
+            
+                /// Returns the `Match` associated with the capture group named `name`.
+                #[inline]
+                pub fn name(&self, name: &str) -> Option<Match<'h>> {
+                    self.caps
+                        .get_group_by_name(name)
+                        .map(|sp| Match::new(self.haystack, sp.start, sp.end))
+                }
+            
+                /// This is a convenience routine for extracting the substrings
+                /// corresponding to matching capture groups.
+                pub fn extract<const N: usize>(&self) -> (&'h [u8], [&'h [u8]; N]) {
+                    let len = self
+                        .static_captures_len
+                        .expect("number of capture groups can vary in a match")
+                        .checked_sub(1)
+                        .expect("number of groups is always greater than zero");
+                    assert_eq!(N, len, "asked for {} groups, but must ask for {}", N, len);
+                    self.caps.extract_bytes(self.haystack)
+                }
+            
+                /// Expands all instances of `$ref` in `replacement` to the corresponding
+                /// capture group, and writes them to the `dst` buffer given.
+                #[inline]
+                pub fn expand(&self, replacement: &[u8], dst: &mut Vec<u8>) {
+                    self.caps.interpolate_bytes_into(self.haystack, replacement, dst);
+                }
+            
+                /// Returns an iterator over all capture groups. This includes both
+                /// matching and non-matching groups.
+                #[inline]
+                pub fn iter<'c>(&'c self) -> SubCaptureMatches<'c, 'h> {
+                    SubCaptureMatches { haystack: self.haystack, it: self.caps.iter() }
+                }
+            
+                /// Returns the total number of capture groups. This includes both
+                /// matching and non-matching groups.
+                #[inline]
+                pub fn len(&self) -> usize {
+                    self.caps.group_len()
+                }
+            }
+            
+            impl<'h> core::fmt::Debug for Captures<'h> {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    /// A little helper type to provide a nice map-like debug
+                    /// representation for our capturing group spans.
+                    struct CapturesDebugMap<'a> {
+                        caps: &'a Captures<'a>,
+                    }
+            
+                    impl<'a> core::fmt::Debug for CapturesDebugMap<'a> {
+                        fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                            let mut map = f.debug_map();
+                            let names =
+                                self.caps.caps.group_info().pattern_names(PatternID::ZERO);
+                            for (group_index, maybe_name) in names.enumerate() {
+                                let key = Key(group_index, maybe_name);
+                                match self.caps.get(group_index) {
+                                    None => map.entry(&key, &None::<()>),
+                                    Some(mat) => map.entry(&key, &Value(mat)),
+                                };
+                            }
+                            map.finish()
+                        }
+                    }
+            
+                    struct Key<'a>(usize, Option<&'a str>);
+            
+                    impl<'a> core::fmt::Debug for Key<'a> {
+                        fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                            write!(f, "{}", self.0)?;
+                            if let Some(name) = self.1 {
+                                write!(f, "/{:?}", name)?;
+                            }
+                            Ok(())
+                        }
+                    }
+            
+                    struct Value<'a>(Match<'a>);
+            
+                    impl<'a> core::fmt::Debug for Value<'a> {
+                        fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                            use regex_automata::util::escape::DebugHaystack;
+            
+                            write!(
+                                f,
+                                "{}..{}/{:?}",
+                                self.0.start(),
+                                self.0.end(),
+                                DebugHaystack(self.0.as_bytes())
+                            )
+                        }
+                    }
+            
+                    f.debug_tuple("Captures")
+                        .field(&CapturesDebugMap { caps: self })
+                        .finish()
+                }
+            }
+            
+            /// Get a matching capture group's haystack substring by index.
+            impl<'h> core::ops::Index<usize> for Captures<'h> {
+                type Output = [u8];
+                fn index<'a>(&'a self, i: usize) -> &'a [u8] {
+                    self.get(i)
+                        .map(|m| m.as_bytes())
+                        .unwrap_or_else(|| panic!("no group at index '{}'", i))
+                }
+            }
+            
+            /// Get a matching capture group's haystack substring by name.
+            impl<'h, 'n> core::ops::Index<&'n str> for Captures<'h> {
+                type Output = [u8];
+            
+                fn index<'a>(&'a self, name: &'n str) -> &'a [u8] {
+                    self.name(name)
+                        .map(|m| m.as_bytes())
+                        .unwrap_or_else(|| panic!("no group named '{}'", name))
+                }
+            }
+            
+            /// A low level representation of the byte offsets of each capture group.
+            #[derive(Clone, Debug)]
+            pub struct CaptureLocations(captures::Captures);
+            
+            /// A type alias for `CaptureLocations` for backwards compatibility.
+            #[doc(hidden)]
+            pub type Locations = CaptureLocations;
+            
+            impl CaptureLocations {
+                /// Returns the start and end byte offsets of the capture group at index
+                /// `i`.
+                #[inline]
+                pub fn get(&self, i: usize) -> Option<(usize, usize)> {
+                    self.0.get_group(i).map(|sp| (sp.start, sp.end))
+                }
+            
+                /// Returns the total number of capture groups (even if they didn't match).
+                /// That is, the length returned is unaffected by the result of a search.
+                #[inline]
+                pub fn len(&self) -> usize {
+                    self.0.group_info().group_len(PatternID::ZERO)
+                }
+            
+                /// An alias for the `get` method for backwards compatibility.
+                #[doc(hidden)]
+                #[inline]
+                pub fn pos(&self, i: usize) -> Option<(usize, usize)> {
+                    self.get(i)
+                }
+            }
+            
+            /// An iterator over all non-overlapping matches in a haystack.
+            #[derive(Debug)]
+            pub struct Matches<'r, 'h> {
+                haystack: &'h [u8],
+                it: meta::FindMatches<'r, 'h>,
+            }
+            
+            impl<'r, 'h> Iterator for Matches<'r, 'h> {
+                type Item = Match<'h>;
+            
+                #[inline]
+                fn next(&mut self) -> Option<Match<'h>> {
+                    self.it
+                        .next()
+                        .map(|sp| Match::new(self.haystack, sp.start(), sp.end()))
+                }
+            
+                #[inline]
+                fn count(self) -> usize {
+                    self.it.count()
+                }
+            }
+            
+            impl<'r, 'h> core::iter::FusedIterator for Matches<'r, 'h> {}
+            
+            /// An iterator over all non-overlapping capture matches in a haystack.
+            #[derive(Debug)]
+            pub struct CaptureMatches<'r, 'h> {
+                haystack: &'h [u8],
+                it: meta::CapturesMatches<'r, 'h>,
+            }
+            
+            impl<'r, 'h> Iterator for CaptureMatches<'r, 'h> {
+                type Item = Captures<'h>;
+            
+                #[inline]
+                fn next(&mut self) -> Option<Captures<'h>> {
+                    let static_captures_len = self.it.regex().static_captures_len();
+                    self.it.next().map(|caps| Captures {
+                        haystack: self.haystack,
+                        caps,
+                        static_captures_len,
+                    })
+                }
+            
+                #[inline]
+                fn count(self) -> usize {
+                    self.it.count()
+                }
+            }
+            
+            impl<'r, 'h> core::iter::FusedIterator for CaptureMatches<'r, 'h> {}
+            
+            /// An iterator over all substrings delimited by a regex match.
+            #[derive(Debug)]
+            pub struct Split<'r, 'h> {
+                haystack: &'h [u8],
+                it: meta::Split<'r, 'h>,
+            }
+            
+            impl<'r, 'h> Iterator for Split<'r, 'h> {
+                type Item = &'h [u8];
+            
+                #[inline]
+                fn next(&mut self) -> Option<&'h [u8]> {
+                    self.it.next().map(|span| &self.haystack[span])
+                }
+            }
+            
+            impl<'r, 'h> core::iter::FusedIterator for Split<'r, 'h> {}
+            
+            /// An iterator over at most `N` substrings delimited by a regex match.
+            #[derive(Debug)]
+            pub struct SplitN<'r, 'h> {
+                haystack: &'h [u8],
+                it: meta::SplitN<'r, 'h>,
+            }
+            
+            impl<'r, 'h> Iterator for SplitN<'r, 'h> {
+                type Item = &'h [u8];
+            
+                #[inline]
+                fn next(&mut self) -> Option<&'h [u8]> {
+                    self.it.next().map(|span| &self.haystack[span])
+                }
+            
+                #[inline]
+                fn size_hint(&self) -> (usize, Option<usize>) {
+                    self.it.size_hint()
+                }
+            }
+            
+            impl<'r, 'h> core::iter::FusedIterator for SplitN<'r, 'h> {}
+            
+            /// An iterator over the names of all capture groups in a regex.
+            #[derive(Clone, Debug)]
+            pub struct CaptureNames<'r>(captures::GroupInfoPatternNames<'r>);
+            
+            impl<'r> Iterator for CaptureNames<'r> {
+                type Item = Option<&'r str>;
+            
+                #[inline]
+                fn next(&mut self) -> Option<Option<&'r str>> {
+                    self.0.next()
+                }
+            
+                #[inline]
+                fn size_hint(&self) -> (usize, Option<usize>) {
+                    self.0.size_hint()
+                }
+            
+                #[inline]
+                fn count(self) -> usize {
+                    self.0.count()
+                }
+            }
+            
+            impl<'r> ExactSizeIterator for CaptureNames<'r> {}
+            
+            impl<'r> core::iter::FusedIterator for CaptureNames<'r> {}
+            
+            /// An iterator over all group matches in a [`Captures`] value.
+            #[derive(Clone, Debug)]
+            pub struct SubCaptureMatches<'c, 'h> {
+                haystack: &'h [u8],
+                it: captures::CapturesPatternIter<'c>,
+            }
+            
+            impl<'c, 'h> Iterator for SubCaptureMatches<'c, 'h> {
+                type Item = Option<Match<'h>>;
+            
+                #[inline]
+                fn next(&mut self) -> Option<Option<Match<'h>>> {
+                    self.it.next().map(|group| {
+                        group.map(|sp| Match::new(self.haystack, sp.start, sp.end))
+                    })
+                }
+            
+                #[inline]
+                fn size_hint(&self) -> (usize, Option<usize>) {
+                    self.it.size_hint()
+                }
+            
+                #[inline]
+                fn count(self) -> usize {
+                    self.it.count()
+                }
+            }
+            
+            impl<'c, 'h> ExactSizeIterator for SubCaptureMatches<'c, 'h> {}
+            
+            impl<'c, 'h> core::iter::FusedIterator for SubCaptureMatches<'c, 'h> {}
+            
+            /// A trait for types that can be used to replace matches in a haystack.
+            pub trait Replacer {
+                /// Appends possibly empty data to `dst` to replace the current match.
+                fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut Vec<u8>);
+            
+                /// Return a fixed unchanging replacement byte string.
+                fn no_expansion<'r>(&'r mut self) -> Option<Cow<'r, [u8]>> {
+                    None
+                }
+            
+                /// Returns a type that implements `Replacer`, but that borrows and wraps
+                /// this `Replacer`.
+                fn by_ref<'r>(&'r mut self) -> ReplacerRef<'r, Self> {
+                    ReplacerRef(self)
+                }
+            }
+            
+            impl<'a, const N: usize> Replacer for &'a [u8; N] {
+                fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut Vec<u8>) {
+                    caps.expand(&**self, dst);
+                }
+            
+                fn no_expansion(&mut self) -> Option<Cow<'_, [u8]>> {
+                    no_expansion(self)
+                }
+            }
+            
+            impl<const N: usize> Replacer for [u8; N] {
+                fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut Vec<u8>) {
+                    caps.expand(&*self, dst);
+                }
+            
+                fn no_expansion(&mut self) -> Option<Cow<'_, [u8]>> {
+                    no_expansion(self)
+                }
+            }
+            
+            impl<'a> Replacer for &'a [u8] {
+                fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut Vec<u8>) {
+                    caps.expand(*self, dst);
+                }
+            
+                fn no_expansion(&mut self) -> Option<Cow<'_, [u8]>> {
+                    no_expansion(self)
+                }
+            }
+            
+            impl<'a> Replacer for &'a Vec<u8> {
+                fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut Vec<u8>) {
+                    caps.expand(*self, dst);
+                }
+            
+                fn no_expansion(&mut self) -> Option<Cow<'_, [u8]>> {
+                    no_expansion(self)
+                }
+            }
+            
+            impl Replacer for Vec<u8> {
+                fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut Vec<u8>) {
+                    caps.expand(self, dst);
+                }
+            
+                fn no_expansion(&mut self) -> Option<Cow<'_, [u8]>> {
+                    no_expansion(self)
+                }
+            }
+            
+            impl<'a> Replacer for Cow<'a, [u8]> {
+                fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut Vec<u8>) {
+                    caps.expand(self.as_ref(), dst);
+                }
+            
+                fn no_expansion(&mut self) -> Option<Cow<'_, [u8]>> {
+                    no_expansion(self)
+                }
+            }
+            
+            impl<'a> Replacer for &'a Cow<'a, [u8]> {
+                fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut Vec<u8>) {
+                    caps.expand(self.as_ref(), dst);
+                }
+            
+                fn no_expansion(&mut self) -> Option<Cow<'_, [u8]>> {
+                    no_expansion(self)
+                }
+            }
+            
+            impl<F, T> Replacer for F
+            where
+                F: FnMut(&Captures<'_>) -> T,
+                T: AsRef<[u8]>,
+            {
+                fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut Vec<u8>) {
+                    dst.extend_from_slice((*self)(caps).as_ref());
+                }
+            }
+            
+            /// A by-reference adaptor for a [`Replacer`].
+            #[derive(Debug)]
+            pub struct ReplacerRef<'a, R: ?Sized>(&'a mut R);
+            
+            impl<'a, R: Replacer + ?Sized + 'a> Replacer for ReplacerRef<'a, R> {
+                fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut Vec<u8>) {
+                    self.0.replace_append(caps, dst)
+                }
+            
+                fn no_expansion<'r>(&'r mut self) -> Option<Cow<'r, [u8]>> {
+                    self.0.no_expansion()
+                }
+            }
+            
+            /// A helper type for forcing literal string replacement.
+            #[derive(Clone, Debug)]
+            pub struct NoExpand<'s>(pub &'s [u8]);
+            
+            impl<'s> Replacer for NoExpand<'s> {
+                fn replace_append(&mut self, _: &Captures<'_>, dst: &mut Vec<u8>) {
+                    dst.extend_from_slice(self.0);
+                }
+            
+                fn no_expansion(&mut self) -> Option<Cow<'_, [u8]>> {
+                    Some(Cow::Borrowed(self.0))
+                }
+            }
+            
+            /// Quickly checks the given replacement string for whether interpolation
+            /// should be done on it.
+            fn no_expansion<T: AsRef<[u8]>>(replacement: &T) -> Option<Cow<'_, [u8]>> {
+                let replacement = replacement.as_ref();
+                match crate::find_byte::find_byte(b'$', replacement) {
+                    Some(_) => None,
+                    None => Some(Cow::Borrowed(replacement)),
+                }
+            }
+        }
+        
+        pub mod string
+        {
+            use ::
+            {
+                *,
+            };
+            /*
+            use alloc::{borrow::Cow, string::String, sync::Arc};
+            
+            use regex_automata::{meta, util::captures, Input, PatternID};
+            
+            use crate::{error::Error, RegexBuilder};
+            */
+            /// A compiled regular expression for searching Unicode haystacks.
+            #[derive(Clone)]
+            pub struct Regex {
+                pub meta: meta::Regex,
+                pub pattern: Arc<str>,
+            }
+            
+            impl core::fmt::Display for Regex {
+                /// Shows the original regular expression.
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    write!(f, "{}", self.as_str())
+                }
+            }
+            
+            impl core::fmt::Debug for Regex {
+                /// Shows the original regular expression.
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    f.debug_tuple("Regex").field(&self.as_str()).finish()
+                }
+            }
+            
+            impl core::str::FromStr for Regex {
+                type Err = Error;
+            
+                /// Attempts to parse a string into a regular expression
+                fn from_str(s: &str) -> Result<Regex, Error> {
+                    Regex::new(s)
+                }
+            }
+            
+            impl TryFrom<&str> for Regex {
+                type Error = Error;
+            
+                /// Attempts to parse a string into a regular expression
+                fn try_from(s: &str) -> Result<Regex, Error> {
+                    Regex::new(s)
+                }
+            }
+            
+            impl TryFrom<String> for Regex {
+                type Error = Error;
+            
+                /// Attempts to parse a string into a regular expression
+                fn try_from(s: String) -> Result<Regex, Error> {
+                    Regex::new(&s)
+                }
+            }
+            
+            /// Core regular expression methods.
+            impl Regex {
+                /// Compiles a regular expression. Once compiled, it can be used repeatedly
+                /// to search, split or replace substrings in a haystack.
+                pub fn new(re: &str) -> Result<Regex, Error> {
+                    RegexBuilder::new(re).build()
+                }
+            
+                /// Returns true if and only if there is a match for the regex anywhere
+                /// in the haystack given.
+                #[inline]
+                pub fn is_match(&self, haystack: &str) -> bool {
+                    self.is_match_at(haystack, 0)
+                }
+            
+                /// This routine searches for the first match of this regex in the
+                /// haystack given, and if found, returns a [`Match`].
+                #[inline]
+                pub fn find<'h>(&self, haystack: &'h str) -> Option<Match<'h>> {
+                    self.find_at(haystack, 0)
+                }
+            
+                /// Returns an iterator that yields successive non-overlapping matches in
+                /// the given haystack.
+                #[inline]
+                pub fn find_iter<'r, 'h>(&'r self, haystack: &'h str) -> Matches<'r, 'h> {
+                    Matches { haystack, it: self.meta.find_iter(haystack) }
+                }
+            
+                /// This routine searches for the first match of this regex in the haystack
+                /// given, and if found, returns not only the overall match but also the
+                /// matches of each capture group in the regex.
+                #[inline]
+                pub fn captures<'h>(&self, haystack: &'h str) -> Option<Captures<'h>> {
+                    self.captures_at(haystack, 0)
+                }
+            
+                /// Returns an iterator that yields successive non-overlapping matches in
+                /// the given haystack.
+                #[inline]
+                pub fn captures_iter<'r, 'h>(
+                    &'r self,
+                    haystack: &'h str,
+                ) -> CaptureMatches<'r, 'h> {
+                    CaptureMatches { haystack, it: self.meta.captures_iter(haystack) }
+                }
+            
+                /// Returns an iterator of substrings of the haystack given, delimited by a
+                /// match of the regex.
+                #[inline]
+                pub fn split<'r, 'h>(&'r self, haystack: &'h str) -> Split<'r, 'h> {
+                    Split { haystack, it: self.meta.split(haystack) }
+                }
+            
+                /// Returns an iterator of at most `limit` substrings of the haystack
+                /// given, delimited by a match of the regex.
+                #[inline]
+                pub fn splitn<'r, 'h>(
+                    &'r self,
+                    haystack: &'h str,
+                    limit: usize,
+                ) -> SplitN<'r, 'h> {
+                    SplitN { haystack, it: self.meta.splitn(haystack, limit) }
+                }
+            
+                /// Replaces the leftmost-first match in the given haystack with the
+                /// replacement provided.
+                #[inline]
+                pub fn replace<'h, R: Replacer>(
+                    &self,
+                    haystack: &'h str,
+                    rep: R,
+                ) -> Cow<'h, str> {
+                    self.replacen(haystack, 1, rep)
+                }
+            
+                /// Replaces all non-overlapping matches in the haystack with the
+                /// replacement provided.
+                #[inline]
+                pub fn replace_all<'h, R: Replacer>(
+                    &self,
+                    haystack: &'h str,
+                    rep: R,
+                ) -> Cow<'h, str> {
+                    self.replacen(haystack, 0, rep)
+                }
+            
+                /// Replaces at most `limit` non-overlapping matches in the haystack with
+                /// the replacement provided.
+                #[inline]
+                pub fn replacen<'h, R: Replacer>(
+                    &self,
+                    haystack: &'h str,
+                    limit: usize,
+                    mut rep: R,
+                ) -> Cow<'h, str> {
+                    if let Some(rep) = rep.no_expansion() {
+                        let mut it = self.find_iter(haystack).enumerate().peekable();
+                        if it.peek().is_none() {
+                            return Cow::Borrowed(haystack);
+                        }
+                        let mut new = String::with_capacity(haystack.len());
+                        let mut last_match = 0;
+                        for (i, m) in it {
+                            new.push_str(&haystack[last_match..m.start()]);
+                            new.push_str(&rep);
+                            last_match = m.end();
+                            if limit > 0 && i >= limit - 1 {
+                                break;
+                            }
+                        }
+                        new.push_str(&haystack[last_match..]);
+                        return Cow::Owned(new);
+                    }
+                    
+                    let mut it = self.captures_iter(haystack).enumerate().peekable();
+                    if it.peek().is_none() {
+                        return Cow::Borrowed(haystack);
+                    }
+                    let mut new = String::with_capacity(haystack.len());
+                    let mut last_match = 0;
+                    for (i, cap) in it {
+                        let m = cap.get(0).unwrap();
+                        new.push_str(&haystack[last_match..m.start()]);
+                        rep.replace_append(&cap, &mut new);
+                        last_match = m.end();
+                        if limit > 0 && i >= limit - 1 {
+                            break;
+                        }
+                    }
+                    new.push_str(&haystack[last_match..]);
+                    Cow::Owned(new)
+                }
+            }
+            
+            /// A group of advanced or "lower level" search methods.
+            impl Regex {
+                /// Returns the end byte offset of the first match in the haystack given.
+                #[inline]
+                pub fn shortest_match(&self, haystack: &str) -> Option<usize> {
+                    self.shortest_match_at(haystack, 0)
+                }
+            
+                /// Returns the same as [`Regex::shortest_match`], but starts the search at
+                /// the given offset.
+                #[inline]
+                pub fn shortest_match_at(
+                    &self,
+                    haystack: &str,
+                    start: usize,
+                ) -> Option<usize> {
+                    let input =
+                        Input::new(haystack).earliest(true).span(start..haystack.len());
+                    self.meta.search_half(&input).map(|hm| hm.offset())
+                }
+            
+                /// Returns the same as [`Regex::is_match`], but starts the search at the
+                /// given offset.
+                #[inline]
+                pub fn is_match_at(&self, haystack: &str, start: usize) -> bool {
+                    let input =
+                        Input::new(haystack).earliest(true).span(start..haystack.len());
+                    self.meta.search_half(&input).is_some()
+                }
+            
+                /// Returns the same as [`Regex::find`], but starts the search at the given
+                /// offset.
+                #[inline]
+                pub fn find_at<'h>(
+                    &self,
+                    haystack: &'h str,
+                    start: usize,
+                ) -> Option<Match<'h>> {
+                    let input = Input::new(haystack).span(start..haystack.len());
+                    self.meta
+                        .search(&input)
+                        .map(|m| Match::new(haystack, m.start(), m.end()))
+                }
+            
+                /// Returns the same as [`Regex::captures`], but starts the search at the
+                /// given offset.
+                #[inline]
+                pub fn captures_at<'h>(
+                    &self,
+                    haystack: &'h str,
+                    start: usize,
+                ) -> Option<Captures<'h>> {
+                    let input = Input::new(haystack).span(start..haystack.len());
+                    let mut caps = self.meta.create_captures();
+                    self.meta.search_captures(&input, &mut caps);
+                    if caps.is_match() {
+                        let static_captures_len = self.static_captures_len();
+                        Some(Captures { haystack, caps, static_captures_len })
+                    } else {
+                        None
+                    }
+                }
+            
+                /// This is like [`Regex::captures`], but writes the byte offsets of each
+                /// capture group match into the locations given.
+                #[inline]
+                pub fn captures_read<'h>(
+                    &self,
+                    locs: &mut CaptureLocations,
+                    haystack: &'h str,
+                ) -> Option<Match<'h>> {
+                    self.captures_read_at(locs, haystack, 0)
+                }
+            
+                /// Returns the same as [`Regex::captures_read`], but starts the search at
+                /// the given offset.
+                #[inline]
+                pub fn captures_read_at<'h>(
+                    &self,
+                    locs: &mut CaptureLocations,
+                    haystack: &'h str,
+                    start: usize,
+                ) -> Option<Match<'h>> {
+                    let input = Input::new(haystack).span(start..haystack.len());
+                    self.meta.search_captures(&input, &mut locs.0);
+                    locs.0.get_match().map(|m| Match::new(haystack, m.start(), m.end()))
+                }
+            
+                /// An undocumented alias for `captures_read_at`.
+                #[doc(hidden)]
+                #[inline]
+                pub fn read_captures_at<'h>(
+                    &self,
+                    locs: &mut CaptureLocations,
+                    haystack: &'h str,
+                    start: usize,
+                ) -> Option<Match<'h>> {
+                    self.captures_read_at(locs, haystack, start)
+                }
+            }
+            
+            /// Auxiliary methods.
+            impl Regex {
+                /// Returns the original string of this regex.
+                #[inline]
+                pub fn as_str(&self) -> &str {
+                    &self.pattern
+                }
+            
+                /// Returns an iterator over the capture names in this regex.
+                #[inline]
+                pub fn capture_names(&self) -> CaptureNames<'_> {
+                    CaptureNames(self.meta.group_info().pattern_names(PatternID::ZERO))
+                }
+            
+                /// Returns the number of captures groups in this regex.
+                #[inline]
+                pub fn captures_len(&self) -> usize {
+                    self.meta.group_info().group_len(PatternID::ZERO)
+                }
+            
+                /// Returns the total number of capturing groups that appear in every
+                /// possible match.
+                #[inline]
+                pub fn static_captures_len(&self) -> Option<usize> {
+                    self.meta.static_captures_len()
+                }
+            
+                /// Returns a fresh allocated set of capture locations that can
+                /// be reused in multiple calls to [`Regex::captures_read`] or
+                /// [`Regex::captures_read_at`].
+                #[inline]
+                pub fn capture_locations(&self) -> CaptureLocations {
+                    CaptureLocations(self.meta.create_captures())
+                }
+            
+                /// An alias for `capture_locations` to preserve backward compatibility.
+                #[doc(hidden)]
+                #[inline]
+                pub fn locations(&self) -> CaptureLocations {
+                    self.capture_locations()
+                }
+            }
+            
+            /// Represents a single match of a regex in a haystack.
+            #[derive(Copy, Clone, Eq, PartialEq)]
+            pub struct Match<'h> {
+                haystack: &'h str,
+                start: usize,
+                end: usize,
+            }
+            
+            impl<'h> Match<'h> {
+                /// Returns the byte offset of the start of the match in the haystack.
+                #[inline]
+                pub fn start(&self) -> usize {
+                    self.start
+                }
+            
+                /// Returns the byte offset of the end of the match in the haystack.
+                #[inline]
+                pub fn end(&self) -> usize {
+                    self.end
+                }
+            
+                /// Returns true if and only if this match has a length of zero.
+                #[inline]
+                pub fn is_empty(&self) -> bool {
+                    self.start == self.end
+                }
+            
+                /// Returns the length, in bytes, of this match.
+                #[inline]
+                pub fn len(&self) -> usize {
+                    self.end - self.start
+                }
+            
+                /// Returns the range over the starting and ending byte offsets of the
+                /// match in the haystack.
+                #[inline]
+                pub fn range(&self) -> core::ops::Range<usize> {
+                    self.start..self.end
+                }
+            
+                /// Returns the substring of the haystack that matched.
+                #[inline]
+                pub fn as_str(&self) -> &'h str {
+                    &self.haystack[self.range()]
+                }
+            
+                /// Creates a new match from the given haystack and byte offsets.
+                #[inline]
+                fn new(haystack: &'h str, start: usize, end: usize) -> Match<'h> {
+                    Match { haystack, start, end }
+                }
+            }
+            
+            impl<'h> core::fmt::Debug for Match<'h> {
+                fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                    f.debug_struct("Match")
+                        .field("start", &self.start)
+                        .field("end", &self.end)
+                        .field("string", &self.as_str())
+                        .finish()
+                }
+            }
+            
+            impl<'h> From<Match<'h>> for &'h str {
+                fn from(m: Match<'h>) -> &'h str {
+                    m.as_str()
+                }
+            }
+            
+            impl<'h> From<Match<'h>> for core::ops::Range<usize> {
+                fn from(m: Match<'h>) -> core::ops::Range<usize> {
+                    m.range()
+                }
+            }
+            
+            /// Represents the capture groups for a single match.
+            pub struct Captures<'h> {
+                haystack: &'h str,
+                caps: captures::Captures,
+                static_captures_len: Option<usize>,
+            }
+            
+            impl<'h> Captures<'h> {
+                /// Returns the `Match` associated with the capture group at index `i`.
+                #[inline]
+                pub fn get(&self, i: usize) -> Option<Match<'h>> {
+                    self.caps
+                        .get_group(i)
+                        .map(|sp| Match::new(self.haystack, sp.start, sp.end))
+                }
+            
+                /// Returns the `Match` associated with the capture group named `name`.
+                #[inline]
+                pub fn name(&self, name: &str) -> Option<Match<'h>> {
+                    self.caps
+                        .get_group_by_name(name)
+                        .map(|sp| Match::new(self.haystack, sp.start, sp.end))
+                }
+            
+                /// This is a convenience routine for extracting the substrings
+                /// corresponding to matching capture groups.
+                pub fn extract<const N: usize>(&self) -> (&'h str, [&'h str; N]) {
+                    let len = self
+                        .static_captures_len
+                        .expect("number of capture groups can vary in a match")
+                        .checked_sub(1)
+                        .expect("number of groups is always greater than zero");
+                    assert_eq!(N, len, "asked for {} groups, but must ask for {}", N, len);
+                    self.caps.extract(self.haystack)
+                }
+            
+                /// Expands all instances of `$ref` in `replacement` to the corresponding
+                /// capture group, and writes them to the `dst` buffer given.
+                #[inline]
+                pub fn expand(&self, replacement: &str, dst: &mut String) {
+                    self.caps.interpolate_string_into(self.haystack, replacement, dst);
+                }
+            
+                /// Returns an iterator over all capture groups. This includes both
+                /// matching and non-matching groups.
+                #[inline]
+                pub fn iter<'c>(&'c self) -> SubCaptureMatches<'c, 'h> {
+                    SubCaptureMatches { haystack: self.haystack, it: self.caps.iter() }
+                }
+            
+                /// Returns the total number of capture groups. This includes both
+                /// matching and non-matching groups.
+                #[inline]
+                pub fn len(&self) -> usize {
+                    self.caps.group_len()
+                }
+            }
+            
+            impl<'h> core::fmt::Debug for Captures<'h> {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    /// A little helper type to provide a nice map-like debug
+                    /// representation for our capturing group spans.
+                    struct CapturesDebugMap<'a> {
+                        caps: &'a Captures<'a>,
+                    }
+            
+                    impl<'a> core::fmt::Debug for CapturesDebugMap<'a> {
+                        fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                            let mut map = f.debug_map();
+                            let names =
+                                self.caps.caps.group_info().pattern_names(PatternID::ZERO);
+                            for (group_index, maybe_name) in names.enumerate() {
+                                let key = Key(group_index, maybe_name);
+                                match self.caps.get(group_index) {
+                                    None => map.entry(&key, &None::<()>),
+                                    Some(mat) => map.entry(&key, &Value(mat)),
+                                };
+                            }
+                            map.finish()
+                        }
+                    }
+            
+                    struct Key<'a>(usize, Option<&'a str>);
+            
+                    impl<'a> core::fmt::Debug for Key<'a> {
+                        fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                            write!(f, "{}", self.0)?;
+                            if let Some(name) = self.1 {
+                                write!(f, "/{:?}", name)?;
+                            }
+                            Ok(())
+                        }
+                    }
+            
+                    struct Value<'a>(Match<'a>);
+            
+                    impl<'a> core::fmt::Debug for Value<'a> {
+                        fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                            write!(
+                                f,
+                                "{}..{}/{:?}",
+                                self.0.start(),
+                                self.0.end(),
+                                self.0.as_str()
+                            )
+                        }
+                    }
+            
+                    f.debug_tuple("Captures")
+                        .field(&CapturesDebugMap { caps: self })
+                        .finish()
+                }
+            }
+            
+            /// Get a matching capture group's haystack substring by index.
+            impl<'h> core::ops::Index<usize> for Captures<'h> {
+                type Output = str;
+                fn index<'a>(&'a self, i: usize) -> &'a str {
+                    self.get(i)
+                        .map(|m| m.as_str())
+                        .unwrap_or_else(|| panic!("no group at index '{}'", i))
+                }
+            }
+            
+            /// Get a matching capture group's haystack substring by name.
+            impl<'h, 'n> core::ops::Index<&'n str> for Captures<'h> {
+                type Output = str;
+            
+                fn index<'a>(&'a self, name: &'n str) -> &'a str {
+                    self.name(name)
+                        .map(|m| m.as_str())
+                        .unwrap_or_else(|| panic!("no group named '{}'", name))
+                }
+            }
+            
+            /// A low level representation of the byte offsets of each capture group.
+            #[derive(Clone, Debug)]
+            pub struct CaptureLocations(captures::Captures);
+            
+            /// A type alias for `CaptureLocations` for backwards compatibility.
+            #[doc(hidden)]
+            pub type Locations = CaptureLocations;
+            
+            impl CaptureLocations {
+                /// Returns the start and end byte offsets of the capture group at index
+                /// `i`.
+                #[inline]
+                pub fn get(&self, i: usize) -> Option<(usize, usize)> {
+                    self.0.get_group(i).map(|sp| (sp.start, sp.end))
+                }
+            
+                /// Returns the total number of capture groups (even if they didn't match).
+                #[inline]
+                pub fn len(&self) -> usize {
+                    self.0.group_info().group_len(PatternID::ZERO)
+                }
+            
+                /// An alias for the `get` method for backwards compatibility.
+                #[doc(hidden)]
+                #[inline]
+                pub fn pos(&self, i: usize) -> Option<(usize, usize)> {
+                    self.get(i)
+                }
+            }
+            
+            /// An iterator over all non-overlapping matches in a haystack.
+            #[derive(Debug)]
+            pub struct Matches<'r, 'h> {
+                haystack: &'h str,
+                it: meta::FindMatches<'r, 'h>,
+            }
+            
+            impl<'r, 'h> Iterator for Matches<'r, 'h> {
+                type Item = Match<'h>;
+            
+                #[inline]
+                fn next(&mut self) -> Option<Match<'h>> {
+                    self.it
+                        .next()
+                        .map(|sp| Match::new(self.haystack, sp.start(), sp.end()))
+                }
+            
+                #[inline]
+                fn count(self) -> usize {
+                    self.it.count()
+                }
+            }
+            
+            impl<'r, 'h> core::iter::FusedIterator for Matches<'r, 'h> {}
+            
+            /// An iterator over all non-overlapping capture matches in a haystack.
+            #[derive(Debug)]
+            pub struct CaptureMatches<'r, 'h> {
+                haystack: &'h str,
+                it: meta::CapturesMatches<'r, 'h>,
+            }
+            
+            impl<'r, 'h> Iterator for CaptureMatches<'r, 'h> {
+                type Item = Captures<'h>;
+            
+                #[inline]
+                fn next(&mut self) -> Option<Captures<'h>> {
+                    let static_captures_len = self.it.regex().static_captures_len();
+                    self.it.next().map(|caps| Captures {
+                        haystack: self.haystack,
+                        caps,
+                        static_captures_len,
+                    })
+                }
+            
+                #[inline]
+                fn count(self) -> usize {
+                    self.it.count()
+                }
+            }
+            
+            impl<'r, 'h> core::iter::FusedIterator for CaptureMatches<'r, 'h> {}
+            
+            /// An iterator over all substrings delimited by a regex match.
+            #[derive(Debug)]
+            pub struct Split<'r, 'h> {
+                haystack: &'h str,
+                it: meta::Split<'r, 'h>,
+            }
+            
+            impl<'r, 'h> Iterator for Split<'r, 'h> {
+                type Item = &'h str;
+            
+                #[inline]
+                fn next(&mut self) -> Option<&'h str> {
+                    self.it.next().map(|span| &self.haystack[span])
+                }
+            }
+            
+            impl<'r, 'h> core::iter::FusedIterator for Split<'r, 'h> {}
+            
+            /// An iterator over at most `N` substrings delimited by a regex match.
+            #[derive(Debug)]
+            pub struct SplitN<'r, 'h> {
+                haystack: &'h str,
+                it: meta::SplitN<'r, 'h>,
+            }
+            
+            impl<'r, 'h> Iterator for SplitN<'r, 'h> {
+                type Item = &'h str;
+            
+                #[inline]
+                fn next(&mut self) -> Option<&'h str> {
+                    self.it.next().map(|span| &self.haystack[span])
+                }
+            
+                #[inline]
+                fn size_hint(&self) -> (usize, Option<usize>) {
+                    self.it.size_hint()
+                }
+            }
+            
+            impl<'r, 'h> core::iter::FusedIterator for SplitN<'r, 'h> {}
+            
+            /// An iterator over the names of all capture groups in a regex.
+            #[derive(Clone, Debug)]
+            pub struct CaptureNames<'r>(captures::GroupInfoPatternNames<'r>);
+            
+            impl<'r> Iterator for CaptureNames<'r> {
+                type Item = Option<&'r str>;
+            
+                #[inline]
+                fn next(&mut self) -> Option<Option<&'r str>> {
+                    self.0.next()
+                }
+            
+                #[inline]
+                fn size_hint(&self) -> (usize, Option<usize>) {
+                    self.0.size_hint()
+                }
+            
+                #[inline]
+                fn count(self) -> usize {
+                    self.0.count()
+                }
+            }
+            
+            impl<'r> ExactSizeIterator for CaptureNames<'r> {}
+            
+            impl<'r> core::iter::FusedIterator for CaptureNames<'r> {}
+            
+            /// An iterator over all group matches in a [`Captures`] value.
+            #[derive(Clone, Debug)]
+            pub struct SubCaptureMatches<'c, 'h> {
+                haystack: &'h str,
+                it: captures::CapturesPatternIter<'c>,
+            }
+            
+            impl<'c, 'h> Iterator for SubCaptureMatches<'c, 'h> {
+                type Item = Option<Match<'h>>;
+            
+                #[inline]
+                fn next(&mut self) -> Option<Option<Match<'h>>> {
+                    self.it.next().map(|group| {
+                        group.map(|sp| Match::new(self.haystack, sp.start, sp.end))
+                    })
+                }
+            
+                #[inline]
+                fn size_hint(&self) -> (usize, Option<usize>) {
+                    self.it.size_hint()
+                }
+            
+                #[inline]
+                fn count(self) -> usize {
+                    self.it.count()
+                }
+            }
+            
+            impl<'c, 'h> ExactSizeIterator for SubCaptureMatches<'c, 'h> {}
+            
+            impl<'c, 'h> core::iter::FusedIterator for SubCaptureMatches<'c, 'h> {}
+            
+            /// A trait for types that can be used to replace matches in a haystack.
+            pub trait Replacer {
+                /// Appends possibly empty data to `dst` to replace the current match.
+                fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String);
+            
+                /// Return a fixed unchanging replacement string.
+                fn no_expansion<'r>(&'r mut self) -> Option<Cow<'r, str>> {
+                    None
+                }
+            
+                /// Returns a type that implements `Replacer`, but that borrows and wraps
+                /// this `Replacer`.
+                fn by_ref<'r>(&'r mut self) -> ReplacerRef<'r, Self> {
+                    ReplacerRef(self)
+                }
+            }
+            
+            impl<'a> Replacer for &'a str {
+                fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
+                    caps.expand(*self, dst);
+                }
+            
+                fn no_expansion(&mut self) -> Option<Cow<'_, str>> {
+                    no_expansion(self)
+                }
+            }
+            
+            impl<'a> Replacer for &'a String {
+                fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
+                    self.as_str().replace_append(caps, dst)
+                }
+            
+                fn no_expansion(&mut self) -> Option<Cow<'_, str>> {
+                    no_expansion(self)
+                }
+            }
+            
+            impl Replacer for String {
+                fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
+                    self.as_str().replace_append(caps, dst)
+                }
+            
+                fn no_expansion(&mut self) -> Option<Cow<'_, str>> {
+                    no_expansion(self)
+                }
+            }
+            
+            impl<'a> Replacer for Cow<'a, str> {
+                fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
+                    self.as_ref().replace_append(caps, dst)
+                }
+            
+                fn no_expansion(&mut self) -> Option<Cow<'_, str>> {
+                    no_expansion(self)
+                }
+            }
+            
+            impl<'a> Replacer for &'a Cow<'a, str> {
+                fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
+                    self.as_ref().replace_append(caps, dst)
+                }
+            
+                fn no_expansion(&mut self) -> Option<Cow<'_, str>> {
+                    no_expansion(self)
+                }
+            }
+            
+            impl<F, T> Replacer for F
+            where
+                F: FnMut(&Captures<'_>) -> T,
+                T: AsRef<str>,
+            {
+                fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
+                    dst.push_str((*self)(caps).as_ref());
+                }
+            }
+            
+            /// A by-reference adaptor for a [`Replacer`].
+            #[derive(Debug)]
+            pub struct ReplacerRef<'a, R: ?Sized>(&'a mut R);
+            
+            impl<'a, R: Replacer + ?Sized + 'a> Replacer for ReplacerRef<'a, R> {
+                fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
+                    self.0.replace_append(caps, dst)
+                }
+            
+                fn no_expansion(&mut self) -> Option<Cow<'_, str>> {
+                    self.0.no_expansion()
+                }
+            }
+            
+            /// A helper type for forcing literal string replacement.
+            #[derive(Clone, Debug)]
+            pub struct NoExpand<'s>(pub &'s str);
+            
+            impl<'s> Replacer for NoExpand<'s> {
+                fn replace_append(&mut self, _: &Captures<'_>, dst: &mut String) {
+                    dst.push_str(self.0);
+                }
+            
+                fn no_expansion(&mut self) -> Option<Cow<'_, str>> {
+                    Some(Cow::Borrowed(self.0))
+                }
+            }
+            
+            /// Quickly checks the given replacement string for whether interpolation
+            /// should be done on it.
+            fn no_expansion<T: AsRef<str>>(replacement: &T) -> Option<Cow<'_, str>> {
+                let replacement = replacement.as_ref();
+                match crate::find_byte::find_byte(b'$', replacement.as_bytes()) {
+                    Some(_) => None,
+                    None => Some(Cow::Borrowed(replacement)),
+                }
+            }
+        }
+    }
+    
+    mod regexset
+    {
+        use ::
+        {
+            *,
+        };
+        /*
+        */
+        pub mod bytes
+        {
+            use ::
+            {
+                *,
+            };
+            /*
+            use alloc::string::String;
+            
+            use regex_automata::{meta, Input, PatternID, PatternSet, PatternSetIter};
+            
+            use crate::{bytes::RegexSetBuilder, Error};
+            */
+            /// A regex set corresponds to the union of zero or more regular expressions.
+            #[derive(Clone)]
+            pub struct RegexSet {
+                pub meta: meta::Regex,
+                pub patterns: alloc::sync::Arc<[String]>,
+            }
+            
+            impl RegexSet {
+                /// Create a new regex set with the given regular expressions.
+                pub fn new<I, S>(exprs: I) -> Result<RegexSet, Error>
+                where
+                    S: AsRef<str>,
+                    I: IntoIterator<Item = S>,
+                {
+                    RegexSetBuilder::new(exprs).build()
+                }
+            
+                /// Create a new empty regex set.
+                pub fn empty() -> RegexSet {
+                    let empty: [&str; 0] = [];
+                    RegexSetBuilder::new(empty).build().unwrap()
+                }
+            
+                /// Returns true if and only if one of the regexes in this set matches
+                /// the haystack given.
+                #[inline]
+                pub fn is_match(&self, haystack: &[u8]) -> bool {
+                    self.is_match_at(haystack, 0)
+                }
+            
+                /// Returns true if and only if one of the regexes in this set matches the
+                /// haystack given, with the search starting at the offset given.
+                #[inline]
+                pub fn is_match_at(&self, haystack: &[u8], start: usize) -> bool {
+                    self.meta.is_match(Input::new(haystack).span(start..haystack.len()))
+                }
+            
+                /// Returns the set of regexes that match in the given haystack.
+                #[inline]
+                pub fn matches(&self, haystack: &[u8]) -> SetMatches {
+                    self.matches_at(haystack, 0)
+                }
+            
+                /// Returns the set of regexes that match in the given haystack.
+                #[inline]
+                pub fn matches_at(&self, haystack: &[u8], start: usize) -> SetMatches {
+                    let input = Input::new(haystack).span(start..haystack.len());
+                    let mut patset = PatternSet::new(self.meta.pattern_len());
+                    self.meta.which_overlapping_matches(&input, &mut patset);
+                    SetMatches(patset)
+                }
+            
+                /// Returns the same as matches, but starts the search at the given
+                /// offset and stores the matches into the slice given.
+                #[doc(hidden)]
+                #[inline]
+                pub fn matches_read_at(
+                    &self,
+                    matches: &mut [bool],
+                    haystack: &[u8],
+                    start: usize,
+                ) -> bool {
+                    let mut patset = PatternSet::new(self.meta.pattern_len());
+                    let mut input = Input::new(haystack);
+                    input.set_start(start);
+                    self.meta.which_overlapping_matches(&input, &mut patset);
+                    for pid in patset.iter() {
+                        matches[pid] = true;
+                    }
+                    !patset.is_empty()
+                }
+            
+                /// An alias for `matches_read_at` to preserve backward compatibility.
+                #[doc(hidden)]
+                #[inline]
+                pub fn read_matches_at(
+                    &self,
+                    matches: &mut [bool],
+                    haystack: &[u8],
+                    start: usize,
+                ) -> bool {
+                    self.matches_read_at(matches, haystack, start)
+                }
+            
+                /// Returns the total number of regexes in this set.
+                #[inline]
+                pub fn len(&self) -> usize {
+                    self.meta.pattern_len()
+                }
+            
+                /// Returns `true` if this set contains no regexes.
+                #[inline]
+                pub fn is_empty(&self) -> bool {
+                    self.meta.pattern_len() == 0
+                }
+            
+                /// Returns the regex patterns that this regex set was constructed from.
+                #[inline]
+                pub fn patterns(&self) -> &[String] {
+                    &self.patterns
+                }
+            }
+            
+            impl Default for RegexSet {
+                fn default() -> Self {
+                    RegexSet::empty()
+                }
+            }
+            
+            /// A set of matches returned by a regex set.
+            #[derive(Clone, Debug)]
+            pub struct SetMatches(PatternSet);
+            
+            impl SetMatches {
+                /// Whether this set contains any matches.
+                #[inline]
+                pub fn matched_any(&self) -> bool {
+                    !self.0.is_empty()
+                }
+            
+                /// Whether all patterns in this set matched.
+                pub fn matched_all(&self) -> bool {
+                    self.0.is_full()
+                }
+            
+                /// Whether the regex at the given index matched.
+                #[inline]
+                pub fn matched(&self, index: usize) -> bool {
+                    self.0.contains(PatternID::new_unchecked(index))
+                }
+            
+                /// The total number of regexes in the set that created these matches.
+                #[inline]
+                pub fn len(&self) -> usize {
+                    self.0.capacity()
+                }
+            
+                /// Returns an iterator over the indices of the regexes that matched.
+                #[inline]
+                pub fn iter(&self) -> SetMatchesIter<'_> {
+                    SetMatchesIter(self.0.iter())
+                }
+            }
+            
+            impl IntoIterator for SetMatches {
+                type IntoIter = SetMatchesIntoIter;
+                type Item = usize;
+            
+                fn into_iter(self) -> Self::IntoIter {
+                    let it = 0..self.0.capacity();
+                    SetMatchesIntoIter { patset: self.0, it }
+                }
+            }
+            
+            impl<'a> IntoIterator for &'a SetMatches {
+                type IntoIter = SetMatchesIter<'a>;
+                type Item = usize;
+            
+                fn into_iter(self) -> Self::IntoIter {
+                    self.iter()
+                }
+            }
+            
+            /// An owned iterator over the set of matches from a regex set.
+            #[derive(Debug)]
+            pub struct SetMatchesIntoIter {
+                patset: PatternSet,
+                it: core::ops::Range<usize>,
+            }
+            
+            impl Iterator for SetMatchesIntoIter {
+                type Item = usize;
+            
+                fn next(&mut self) -> Option<usize> {
+                    loop {
+                        let id = self.it.next()?;
+                        if self.patset.contains(PatternID::new_unchecked(id)) {
+                            return Some(id);
+                        }
+                    }
+                }
+            
+                fn size_hint(&self) -> (usize, Option<usize>) {
+                    self.it.size_hint()
+                }
+            }
+            
+            impl DoubleEndedIterator for SetMatchesIntoIter {
+                fn next_back(&mut self) -> Option<usize> {
+                    loop {
+                        let id = self.it.next_back()?;
+                        if self.patset.contains(PatternID::new_unchecked(id)) {
+                            return Some(id);
+                        }
+                    }
+                }
+            }
+            
+            impl core::iter::FusedIterator for SetMatchesIntoIter {}
+            
+            /// A borrowed iterator over the set of matches from a regex set.
+            ///
+            /// The lifetime `'a` refers to the lifetime of the [`SetMatches`] value that
+            /// created this iterator.
+            ///
+            /// This will always produces matches in ascending order, where the index
+            /// corresponds to the index of the regex that matched with respect to its
+            /// position when initially building the set.
+            ///
+            /// This iterator is created by the [`SetMatches::iter`] method.
+            #[derive(Clone, Debug)]
+            pub struct SetMatchesIter<'a>(PatternSetIter<'a>);
+            
+            impl<'a> Iterator for SetMatchesIter<'a> {
+                type Item = usize;
+            
+                fn next(&mut self) -> Option<usize> {
+                    self.0.next().map(|pid| pid.as_usize())
+                }
+            
+                fn size_hint(&self) -> (usize, Option<usize>) {
+                    self.0.size_hint()
+                }
+            }
+            
+            impl<'a> DoubleEndedIterator for SetMatchesIter<'a> {
+                fn next_back(&mut self) -> Option<usize> {
+                    self.0.next_back().map(|pid| pid.as_usize())
+                }
+            }
+            
+            impl<'a> core::iter::FusedIterator for SetMatchesIter<'a> {}
+            
+            impl core::fmt::Debug for RegexSet {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    write!(f, "RegexSet({:?})", self.patterns())
+                }
+            }
+        }
+        
+        pub mod string
+        {
+            use ::
+            {
+                *,
+            };
+            /*
+            use alloc::string::String;
+            
+            use regex_automata::{meta, Input, PatternID, PatternSet, PatternSetIter};
+            
+            use crate::{Error, RegexSetBuilder};
+            */
+            /// Match multiple, possibly overlapping, regexes in a single search.
+            #[derive(Clone)]
+            pub struct RegexSet {
+                pub meta: meta::Regex,
+                pub patterns: alloc::sync::Arc<[String]>,
+            }
+            
+            impl RegexSet {
+                /// Create a new regex set with the given regular expressions.
+                pub fn new<I, S>(exprs: I) -> Result<RegexSet, Error>
+                where
+                    S: AsRef<str>,
+                    I: IntoIterator<Item = S>,
+                {
+                    RegexSetBuilder::new(exprs).build()
+                }
+            
+                /// Create a new empty regex set.
+                pub fn empty() -> RegexSet {
+                    let empty: [&str; 0] = [];
+                    RegexSetBuilder::new(empty).build().unwrap()
+                }
+            
+                /// Returns true if and only if one of the regexes in this set matches
+                /// the haystack given.
+                #[inline]
+                pub fn is_match(&self, haystack: &str) -> bool {
+                    self.is_match_at(haystack, 0)
+                }
+            
+                /// Returns true if and only if one of the regexes in this set matches the
+                /// haystack given, with the search starting at the offset given.
+                #[inline]
+                pub fn is_match_at(&self, haystack: &str, start: usize) -> bool {
+                    self.meta.is_match(Input::new(haystack).span(start..haystack.len()))
+                }
+            
+                /// Returns the set of regexes that match in the given haystack.
+                #[inline]
+                pub fn matches(&self, haystack: &str) -> SetMatches {
+                    self.matches_at(haystack, 0)
+                }
+            
+                /// Returns the set of regexes that match in the given haystack.
+                #[inline]
+                pub fn matches_at(&self, haystack: &str, start: usize) -> SetMatches {
+                    let input = Input::new(haystack).span(start..haystack.len());
+                    let mut patset = PatternSet::new(self.meta.pattern_len());
+                    self.meta.which_overlapping_matches(&input, &mut patset);
+                    SetMatches(patset)
+                }
+            
+                /// Returns the same as matches, but starts the search at the given
+                /// offset and stores the matches into the slice given.
+                #[doc(hidden)]
+                #[inline]
+                pub fn matches_read_at(
+                    &self,
+                    matches: &mut [bool],
+                    haystack: &str,
+                    start: usize,
+                ) -> bool {
+                    let mut patset = PatternSet::new(self.meta.pattern_len());
+                    let mut input = Input::new(haystack);
+                    input.set_start(start);
+                    self.meta.which_overlapping_matches(&input, &mut patset);
+                    for pid in patset.iter() {
+                        matches[pid] = true;
+                    }
+                    !patset.is_empty()
+                }
+            
+                /// An alias for `matches_read_at` to preserve backward compatibility.
+                #[doc(hidden)]
+                #[inline]
+                pub fn read_matches_at(
+                    &self,
+                    matches: &mut [bool],
+                    haystack: &str,
+                    start: usize,
+                ) -> bool {
+                    self.matches_read_at(matches, haystack, start)
+                }
+            
+                /// Returns the total number of regexes in this set.
+                #[inline]
+                pub fn len(&self) -> usize {
+                    self.meta.pattern_len()
+                }
+            
+                /// Returns `true` if this set contains no regexes.
+                #[inline]
+                pub fn is_empty(&self) -> bool {
+                    self.meta.pattern_len() == 0
+                }
+            
+                /// Returns the regex patterns that this regex set was constructed from.
+                #[inline]
+                pub fn patterns(&self) -> &[String] {
+                    &self.patterns
+                }
+            }
+            
+            impl Default for RegexSet {
+                fn default() -> Self {
+                    RegexSet::empty()
+                }
+            }
+            
+            /// A set of matches returned by a regex set.
+            #[derive(Clone, Debug)]
+            pub struct SetMatches(PatternSet);
+            
+            impl SetMatches {
+                /// Whether this set contains any matches.
+                #[inline]
+                pub fn matched_any(&self) -> bool {
+                    !self.0.is_empty()
+                }
+            
+                /// Whether all patterns in this set matched.
+                pub fn matched_all(&self) -> bool {
+                    self.0.is_full()
+                }
+            
+                /// Whether the regex at the given index matched.
+                #[inline]
+                pub fn matched(&self, index: usize) -> bool {
+                    self.0.contains(PatternID::new_unchecked(index))
+                }
+            
+                /// The total number of regexes in the set that created these matches.
+                #[inline]
+                pub fn len(&self) -> usize {
+                    self.0.capacity()
+                }
+            
+                /// Returns an iterator over the indices of the regexes that matched.
+                #[inline]
+                pub fn iter(&self) -> SetMatchesIter<'_> {
+                    SetMatchesIter(self.0.iter())
+                }
+            }
+            
+            impl IntoIterator for SetMatches {
+                type IntoIter = SetMatchesIntoIter;
+                type Item = usize;
+            
+                fn into_iter(self) -> Self::IntoIter {
+                    let it = 0..self.0.capacity();
+                    SetMatchesIntoIter { patset: self.0, it }
+                }
+            }
+            
+            impl<'a> IntoIterator for &'a SetMatches {
+                type IntoIter = SetMatchesIter<'a>;
+                type Item = usize;
+            
+                fn into_iter(self) -> Self::IntoIter {
+                    self.iter()
+                }
+            }
+            
+            /// An owned iterator over the set of matches from a regex set.
+            #[derive(Debug)]
+            pub struct SetMatchesIntoIter {
+                patset: PatternSet,
+                it: core::ops::Range<usize>,
+            }
+            
+            impl Iterator for SetMatchesIntoIter {
+                type Item = usize;
+            
+                fn next(&mut self) -> Option<usize> {
+                    loop {
+                        let id = self.it.next()?;
+                        if self.patset.contains(PatternID::new_unchecked(id)) {
+                            return Some(id);
+                        }
+                    }
+                }
+            
+                fn size_hint(&self) -> (usize, Option<usize>) {
+                    self.it.size_hint()
+                }
+            }
+            
+            impl DoubleEndedIterator for SetMatchesIntoIter {
+                fn next_back(&mut self) -> Option<usize> {
+                    loop {
+                        let id = self.it.next_back()?;
+                        if self.patset.contains(PatternID::new_unchecked(id)) {
+                            return Some(id);
+                        }
+                    }
+                }
+            }
+            
+            impl core::iter::FusedIterator for SetMatchesIntoIter {}
+            
+            /// A borrowed iterator over the set of matches from a regex set.
+            #[derive(Clone, Debug)]
+            pub struct SetMatchesIter<'a>(PatternSetIter<'a>);
+            
+            impl<'a> Iterator for SetMatchesIter<'a> {
+                type Item = usize;
+            
+                fn next(&mut self) -> Option<usize> {
+                    self.0.next().map(|pid| pid.as_usize())
+                }
+            
+                fn size_hint(&self) -> (usize, Option<usize>) {
+                    self.0.size_hint()
+                }
+            }
+            
+            impl<'a> DoubleEndedIterator for SetMatchesIter<'a> {
+                fn next_back(&mut self) -> Option<usize> {
+                    self.0.next_back().map(|pid| pid.as_usize())
+                }
+            }
+            
+            impl<'a> core::iter::FusedIterator for SetMatchesIter<'a> {}
+            
+            impl core::fmt::Debug for RegexSet {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    write!(f, "RegexSet({:?})", self.patterns())
+                }
+            }
+        }
+    }
+    /// Escapes all regular expression meta characters in `pattern`.
+    pub fn escape(pattern: &str) -> ::string::String { regex_syntax::escape(pattern) }
+
 }
 
 pub mod rusqlite
@@ -2506,14 +7660,6 @@ pub mod rusqlite
                 }
             }
             
-            // Result codes.
-            // Note: These are not public because our bindgen bindings export whichever
-            // constants are present in the current version of SQLite. We repeat them here,
-            // so we don't have to worry about which version of SQLite added which
-            // constants, and we only use them to implement code_to_str below.
-            
-            // Extended result codes.
-            
             const SQLITE_ERROR_MISSING_COLLSEQ: c_int = super::SQLITE_ERROR | (1 << 8);
             const SQLITE_ERROR_RETRY: c_int = super::SQLITE_ERROR | (2 << 8);
             const SQLITE_ERROR_SNAPSHOT: c_int = super::SQLITE_ERROR | (3 << 8);
@@ -2665,7 +7811,6 @@ pub mod rusqlite
             }
             
             /// Loadable extension initialization error
-            #[cfg(feature = "loadable_extension")]
             #[derive(Clone, Copy, Debug, PartialEq, Eq)]
             #[non_exhaustive]
             pub enum InitError {
@@ -2674,7 +7819,7 @@ pub mod rusqlite
                 /// Invalid function pointer in one of sqlite3_api_routines fields
                 NullFunctionPointer,
             }
-            #[cfg(feature = "loadable_extension")]
+            
             impl ::std::fmt::Display for InitError {
                 fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
                     match *self {
@@ -2690,7 +7835,7 @@ pub mod rusqlite
                     }
                 }
             }
-            #[cfg(feature = "loadable_extension")]
+            
             impl error::Error for InitError {}
         } pub use self::error::*;
         
@@ -6235,25 +11380,6 @@ pub mod rusqlite
             /// any or insert many.
             StatementChangedRows(usize),
         
-            /// Error returned by
-            /// [`functions::Context::get`](crate::functions::Context::get) when the
-            /// function argument cannot be converted to the requested type.
-            #[cfg(feature = "functions")]
-            #[cfg_attr(docsrs, doc(cfg(feature = "functions")))]
-            InvalidFunctionParameterType(usize, Type),
-            /// Error returned by [`vtab::Values::get`](crate::vtab::Values::get) when
-            /// the filter argument cannot be converted to the requested type.
-            #[cfg(feature = "vtab")]
-            #[cfg_attr(docsrs, doc(cfg(feature = "vtab")))]
-            InvalidFilterParameterType(usize, Type),
-        
-            /// An error case available for implementors of custom user functions (e.g.,
-            /// [`create_scalar_function`](crate::Connection::create_scalar_function)).
-            #[cfg(feature = "functions")]
-            #[cfg_attr(docsrs, doc(cfg(feature = "functions")))]
-            #[allow(dead_code)]
-            UserFunctionError(Box<dyn error::Error + Send + Sync + 'static>),
-        
             /// Error available for the implementors of the
             /// [`ToSql`](crate::types::ToSql) trait.
             ToSqlConversionFailure(Box<dyn error::Error + Send + Sync + 'static>),
@@ -6261,23 +11387,8 @@ pub mod rusqlite
             /// Error when the SQL is not a `SELECT`, is not read-only.
             InvalidQuery,
         
-            /// An error case available for implementors of custom modules (e.g.,
-            /// [`create_module`](crate::Connection::create_module)).
-            #[cfg(feature = "vtab")]
-            #[cfg_attr(docsrs, doc(cfg(feature = "vtab")))]
-            #[allow(dead_code)]
-            ModuleError(String),
-        
             /// An unwinding panic occurs in a UDF (user-defined function).
             UnwindingPanic,
-        
-            /// An error returned when
-            /// [`Context::get_aux`](crate::functions::Context::get_aux) attempts to
-            /// retrieve data of a different type than what had been stored using
-            /// [`Context::set_aux`](crate::functions::Context::set_aux).
-            #[cfg(feature = "functions")]
-            #[cfg_attr(docsrs, doc(cfg(feature = "functions")))]
-            GetAuxWrongType,
         
             /// Error when the SQL contains multiple statements.
             MultipleStatement,
@@ -6285,36 +11396,6 @@ pub mod rusqlite
             /// parameters in the query. The first `usize` is how many parameters were
             /// given, the 2nd is how many were expected.
             InvalidParameterCount(usize, usize),
-        
-            /// Returned from various functions in the Blob IO positional API. For
-            /// example,
-            /// [`Blob::raw_read_at_exact`](crate::blob::Blob::raw_read_at_exact) will
-            /// return it if the blob has insufficient data.
-            #[cfg(feature = "blob")]
-            #[cfg_attr(docsrs, doc(cfg(feature = "blob")))]
-            BlobSizeError,
-            /// Error referencing a specific token in the input SQL
-            #[cfg(feature = "modern_sqlite")] // 3.38.0
-            #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
-            SqlInputError {
-                /// error code
-                error: ffi::Error,
-                /// error message
-                msg: String,
-                /// SQL input
-                sql: String,
-                /// byte offset of the start of invalid token
-                offset: c_int,
-            },
-            /// Loadable extension initialization error
-            #[cfg(feature = "loadable_extension")]
-            #[cfg_attr(docsrs, doc(cfg(feature = "loadable_extension")))]
-            InitError(ffi::InitError),
-            /// Error when the schema of a particular database is requested, but the index
-            /// is out of range.
-            #[cfg(feature = "modern_sqlite")] // 3.39.0
-            #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
-            InvalidDatabaseIndex(usize),
         }
         
         impl PartialEq for Error {
@@ -6337,47 +11418,6 @@ pub mod rusqlite
                         i1 == i2 && t1 == t2 && n1 == n2
                     }
                     (Error::StatementChangedRows(n1), Error::StatementChangedRows(n2)) => n1 == n2,
-                    #[cfg(feature = "functions")]
-                    (
-                        Error::InvalidFunctionParameterType(i1, t1),
-                        Error::InvalidFunctionParameterType(i2, t2),
-                    ) => i1 == i2 && t1 == t2,
-                    #[cfg(feature = "vtab")]
-                    (
-                        Error::InvalidFilterParameterType(i1, t1),
-                        Error::InvalidFilterParameterType(i2, t2),
-                    ) => i1 == i2 && t1 == t2,
-                    (Error::InvalidQuery, Error::InvalidQuery) => true,
-                    #[cfg(feature = "vtab")]
-                    (Error::ModuleError(s1), Error::ModuleError(s2)) => s1 == s2,
-                    (Error::UnwindingPanic, Error::UnwindingPanic) => true,
-                    #[cfg(feature = "functions")]
-                    (Error::GetAuxWrongType, Error::GetAuxWrongType) => true,
-                    (Error::InvalidParameterCount(i1, n1), Error::InvalidParameterCount(i2, n2)) => {
-                        i1 == i2 && n1 == n2
-                    }
-                    #[cfg(feature = "blob")]
-                    (Error::BlobSizeError, Error::BlobSizeError) => true,
-                    #[cfg(feature = "modern_sqlite")]
-                    (
-                        Error::SqlInputError {
-                            error: e1,
-                            msg: m1,
-                            sql: s1,
-                            offset: o1,
-                        },
-                        Error::SqlInputError {
-                            error: e2,
-                            msg: m2,
-                            sql: s2,
-                            offset: o2,
-                        },
-                    ) => e1 == e2 && m1 == m2 && s1 == s2 && o1 == o2,
-                    #[cfg(feature = "loadable_extension")]
-                    (Error::InitError(e1), Error::InitError(e2)) => e1 == e2,
-                    #[cfg(feature = "modern_sqlite")]
-                    (Error::InvalidDatabaseIndex(i1), Error::InvalidDatabaseIndex(i2)) => i1 == i2,
-                    (..) => false,
                 }
             }
         }
@@ -6418,7 +11458,6 @@ pub mod rusqlite
             }
         }
         
-        #[cfg(feature = "loadable_extension")]
         impl From<ffi::InitError> for Error {
             #[cold]
             fn from(err: ffi::InitError) -> Error {
@@ -6467,38 +11506,6 @@ pub mod rusqlite
                         "Wrong number of parameters passed to query. Got {i1}, needed {n1}"
                     ),
                     Error::StatementChangedRows(i) => write!(f, "Query changed {i} rows"),
-        
-                    #[cfg(feature = "functions")]
-                    Error::InvalidFunctionParameterType(i, ref t) => {
-                        write!(f, "Invalid function parameter type {t} at index {i}")
-                    }
-                    #[cfg(feature = "vtab")]
-                    Error::InvalidFilterParameterType(i, ref t) => {
-                        write!(f, "Invalid filter parameter type {t} at index {i}")
-                    }
-                    #[cfg(feature = "functions")]
-                    Error::UserFunctionError(ref err) => err.fmt(f),
-                    Error::ToSqlConversionFailure(ref err) => err.fmt(f),
-                    Error::InvalidQuery => write!(f, "Query is not read-only"),
-                    #[cfg(feature = "vtab")]
-                    Error::ModuleError(ref desc) => write!(f, "{desc}"),
-                    Error::UnwindingPanic => write!(f, "unwinding panic"),
-                    #[cfg(feature = "functions")]
-                    Error::GetAuxWrongType => write!(f, "get_aux called with wrong type"),
-                    Error::MultipleStatement => write!(f, "Multiple statements provided"),
-                    #[cfg(feature = "blob")]
-                    Error::BlobSizeError => "Blob size is insufficient".fmt(f),
-                    #[cfg(feature = "modern_sqlite")]
-                    Error::SqlInputError {
-                        ref msg,
-                        offset,
-                        ref sql,
-                        ..
-                    } => write!(f, "{msg} in {sql} at offset {offset}"),
-                    #[cfg(feature = "loadable_extension")]
-                    Error::InitError(ref err) => err.fmt(f),
-                    #[cfg(feature = "modern_sqlite")]
-                    Error::InvalidDatabaseIndex(i) => write!(f, "Invalid database index: {i}"),
                 }
             }
         }
@@ -6524,33 +11531,10 @@ pub mod rusqlite
                     | Error::InvalidQuery
                     | Error::MultipleStatement => None,
         
-                    #[cfg(feature = "functions")]
-                    Error::InvalidFunctionParameterType(..) => None,
-                    #[cfg(feature = "vtab")]
-                    Error::InvalidFilterParameterType(..) => None,
-        
-                    #[cfg(feature = "functions")]
-                    Error::UserFunctionError(ref err) => Some(&**err),
-        
                     Error::FromSqlConversionFailure(_, _, ref err)
                     | Error::ToSqlConversionFailure(ref err) => Some(&**err),
         
-                    #[cfg(feature = "vtab")]
-                    Error::ModuleError(_) => None,
-        
                     Error::UnwindingPanic => None,
-        
-                    #[cfg(feature = "functions")]
-                    Error::GetAuxWrongType => None,
-        
-                    #[cfg(feature = "blob")]
-                    Error::BlobSizeError => None,
-                    #[cfg(feature = "modern_sqlite")]
-                    Error::SqlInputError { ref error, .. } => Some(error),
-                    #[cfg(feature = "loadable_extension")]
-                    Error::InitError(ref err) => Some(err),
-                    #[cfg(feature = "modern_sqlite")]
-                    Error::InvalidDatabaseIndex(_) => None,
                 }
             }
         }
@@ -6575,8 +11559,6 @@ pub mod rusqlite
             }
         }
         
-        // These are public but not re-exported by lib.rs, so only visible within crate.
-        
         #[cold]
         pub fn error_from_sqlite_code(code: c_int, message: Option<String>) -> Error {
             Error::SqliteFailure(ffi::Error::new(code), message)
@@ -6591,36 +11573,7 @@ pub mod rusqlite
             };
             error_from_sqlite_code(code, message)
         }
-        
-        #[cold]
-        #[cfg(not(feature = "modern_sqlite"))] // SQLite >= 3.38.0
-        pub unsafe fn error_with_offset(db: *mut ffi::sqlite3, code: c_int, _sql: &str) -> Error {
-            error_from_handle(db, code)
-        }
-        
-        #[cold]
-        #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
-        pub unsafe fn error_with_offset(db: *mut ffi::sqlite3, code: c_int, sql: &str) -> Error {
-            if db.is_null() {
-                error_from_sqlite_code(code, None)
-            } else {
-                let error = ffi::Error::new(code);
-                let msg = errmsg_to_string(ffi::sqlite3_errmsg(db));
-                if ffi::ErrorCode::Unknown == error.code {
-                    let offset = ffi::sqlite3_error_offset(db);
-                    if offset >= 0 {
-                        return Error::SqlInputError {
-                            error,
-                            msg,
-                            sql: sql.to_owned(),
-                            offset,
-                        };
-                    }
-                }
-                Error::SqliteFailure(error, Some(msg))
-            }
-        }
-        
+
         pub fn check(code: c_int) -> Result<()> {
             if code != crate::ffi::SQLITE_OK {
                 Err(error_from_sqlite_code(code, None))
@@ -7050,16 +12003,12 @@ pub mod rusqlite
         */
         
         /// Information about a column of a SQLite query.
-        #[cfg(feature = "column_decltype")]
-        #[cfg_attr(docsrs, doc(cfg(feature = "column_decltype")))]
         #[derive(Debug)]
         pub struct Column<'stmt> {
             name: &'stmt str,
             decl_type: Option<&'stmt str>,
         }
         
-        #[cfg(feature = "column_decltype")]
-        #[cfg_attr(docsrs, doc(cfg(feature = "column_decltype")))]
         impl Column<'_> {
             /// Returns the name of the column.
             #[inline]
@@ -7185,12 +12134,6 @@ pub mod rusqlite
             }
         
             /// Returns a slice describing the columns of the result of the query.
-            ///
-            /// If associated DB schema can be altered concurrently, you should make
-            /// sure that current statement has already been stepped once before
-            /// calling this method.
-            #[cfg(feature = "column_decltype")]
-            #[cfg_attr(docsrs, doc(cfg(feature = "column_decltype")))]
             pub fn columns(&self) -> Vec<Column> {
                 let n = self.column_count();
                 let mut cols = Vec::with_capacity(n);
@@ -7254,38 +12197,6 @@ pub mod rusqlite
             SQLITE_DBCONFIG_RESET_DATABASE = 1009, // 3.24.0
             /// Activates or deactivates the "defensive" flag for a database connection.
             SQLITE_DBCONFIG_DEFENSIVE = 1010, // 3.26.0
-            /// Activates or deactivates the "writable_schema" flag.
-            #[cfg(feature = "modern_sqlite")]
-            SQLITE_DBCONFIG_WRITABLE_SCHEMA = 1011, // 3.28.0
-            /// Activates or deactivates the legacy behavior of the ALTER TABLE RENAME
-            /// command.
-            #[cfg(feature = "modern_sqlite")]
-            SQLITE_DBCONFIG_LEGACY_ALTER_TABLE = 1012, // 3.29
-            /// Activates or deactivates the legacy double-quoted string literal
-            /// misfeature for DML statements only.
-            #[cfg(feature = "modern_sqlite")]
-            SQLITE_DBCONFIG_DQS_DML = 1013, // 3.29.0
-            /// Activates or deactivates the legacy double-quoted string literal
-            /// misfeature for DDL statements.
-            #[cfg(feature = "modern_sqlite")]
-            SQLITE_DBCONFIG_DQS_DDL = 1014, // 3.29.0
-            /// Enable or disable views.
-            #[cfg(feature = "modern_sqlite")]
-            SQLITE_DBCONFIG_ENABLE_VIEW = 1015, // 3.30.0
-            /// Activates or deactivates the legacy file format flag.
-            #[cfg(feature = "modern_sqlite")]
-            SQLITE_DBCONFIG_LEGACY_FILE_FORMAT = 1016, // 3.31.0
-            /// Tells SQLite to assume that database schemas (the contents of the
-            /// sqlite_master tables) are untainted by malicious content.
-            #[cfg(feature = "modern_sqlite")]
-            SQLITE_DBCONFIG_TRUSTED_SCHEMA = 1017, // 3.31.0
-            /// Sets or clears a flag that enables collection of the
-            /// sqlite3_stmt_scanstatus_v2() statistics
-            #[cfg(feature = "modern_sqlite")]
-            SQLITE_DBCONFIG_STMT_SCANSTATUS = 1018, // 3.42.0
-            /// Changes the default order in which tables and indexes are scanned
-            #[cfg(feature = "modern_sqlite")]
-            SQLITE_DBCONFIG_REVERSE_SCANORDER = 1019, // 3.42.0
         }
         
         impl Connection {
@@ -7349,26 +12260,7 @@ pub mod rusqlite
         
         pub struct InnerConnection {
             pub db: *mut ffi::sqlite3,
-            // It's unsafe to call `sqlite3_close` while another thread is performing
-            // a `sqlite3_interrupt`, and vice versa, so we take this mutex during
-            // those functions. This protects a copy of the `db` pointer (which is
-            // cleared on closing), however the main copy, `db`, is unprotected.
-            // Otherwise, a long-running query would prevent calling interrupt, as
-            // interrupt would only acquire the lock after the query's completion.
             interrupt_lock: Arc<Mutex<*mut ffi::sqlite3>>,
-            #[cfg(feature = "hooks")]
-            pub free_commit_hook: Option<unsafe fn(*mut std::os::raw::c_void)>,
-            #[cfg(feature = "hooks")]
-            pub free_rollback_hook: Option<unsafe fn(*mut std::os::raw::c_void)>,
-            #[cfg(feature = "hooks")]
-            pub free_update_hook: Option<unsafe fn(*mut std::os::raw::c_void)>,
-            #[cfg(feature = "hooks")]
-            pub progress_handler: Option<Box<dyn FnMut() -> bool + Send>>,
-            #[cfg(feature = "hooks")]
-            pub authorizer: Option<crate::hooks::BoxedAuthorizer>,
-            #[cfg(feature = "preupdate_hook")]
-            pub free_preupdate_hook: Option<unsafe fn(*mut ::std::os::raw::c_void)>,
-            owned: bool,
         }
         
         unsafe impl Send for InnerConnection {}
@@ -7380,19 +12272,6 @@ pub mod rusqlite
                 InnerConnection {
                     db,
                     interrupt_lock: Arc::new(Mutex::new(db)),
-                    #[cfg(feature = "hooks")]
-                    free_commit_hook: None,
-                    #[cfg(feature = "hooks")]
-                    free_rollback_hook: None,
-                    #[cfg(feature = "hooks")]
-                    free_update_hook: None,
-                    #[cfg(feature = "hooks")]
-                    progress_handler: None,
-                    #[cfg(feature = "hooks")]
-                    authorizer: None,
-                    #[cfg(feature = "preupdate_hook")]
-                    free_preupdate_hook: None,
-                    owned,
                 }
             }
         
@@ -7516,36 +12395,6 @@ pub mod rusqlite
             }
         
             #[inline]
-            #[cfg(feature = "load_extension")]
-            pub unsafe fn enable_load_extension(&mut self, onoff: c_int) -> Result<()> {
-                let r = ffi::sqlite3_enable_load_extension(self.db, onoff);
-                self.decode_result(r)
-            }
-        
-            #[cfg(feature = "load_extension")]
-            pub unsafe fn load_extension(
-                &self,
-                dylib_path: &Path,
-                entry_point: Option<&str>,
-            ) -> Result<()> {
-                let dylib_str = super::path_to_cstring(dylib_path)?;
-                let mut errmsg: *mut c_char = ptr::null_mut();
-                let r = if let Some(entry_point) = entry_point {
-                    let c_entry = crate::str_to_cstring(entry_point)?;
-                    ffi::sqlite3_load_extension(self.db, dylib_str.as_ptr(), c_entry.as_ptr(), &mut errmsg)
-                } else {
-                    ffi::sqlite3_load_extension(self.db, dylib_str.as_ptr(), ptr::null(), &mut errmsg)
-                };
-                if r == ffi::SQLITE_OK {
-                    Ok(())
-                } else {
-                    let message = super::errmsg_to_string(errmsg);
-                    ffi::sqlite3_free(errmsg.cast::<std::os::raw::c_void>());
-                    Err(error_from_sqlite_code(r, Some(message)))
-                }
-            }
-        
-            #[inline]
             pub fn last_insert_rowid(&self) -> i64 {
                 unsafe { ffi::sqlite3_last_insert_rowid(self.db()) }
             }
@@ -7559,24 +12408,8 @@ pub mod rusqlite
                 let mut c_stmt: *mut ffi::sqlite3_stmt = ptr::null_mut();
                 let (c_sql, len, _) = str_for_sqlite(sql.as_bytes())?;
                 let mut c_tail: *const c_char = ptr::null();
-                #[cfg(not(feature = "unlock_notify"))]
                 let r = unsafe { self.prepare_(c_sql, len, flags, &mut c_stmt, &mut c_tail) };
-                #[cfg(feature = "unlock_notify")]
-                let r = unsafe {
-                    use crate::unlock_notify;
-                    let mut rc;
-                    loop {
-                        rc = self.prepare_(c_sql, len, flags, &mut c_stmt, &mut c_tail);
-                        if !unlock_notify::is_locked(self.db, rc) {
-                            break;
-                        }
-                        rc = unlock_notify::wait_for_unlock_notify(self.db);
-                        if rc != ffi::SQLITE_OK {
-                            break;
-                        }
-                    }
-                    rc
-                };
+
                 // If there is an error, *ppStmt is set to NULL.
                 if r != ffi::SQLITE_OK {
                     return Err(unsafe { error_with_offset(self.db, r, sql) });
@@ -7597,54 +12430,18 @@ pub mod rusqlite
                     RawStatement::new(c_stmt, tail)
                 }))
             }
-        
-            #[inline]
-            #[cfg(not(feature = "modern_sqlite"))]
-            unsafe fn prepare_(
-                &self,
-                z_sql: *const c_char,
-                n_byte: c_int,
-                _: PrepFlags,
-                pp_stmt: *mut *mut ffi::sqlite3_stmt,
-                pz_tail: *mut *const c_char,
-            ) -> c_int {
-                ffi::sqlite3_prepare_v2(self.db(), z_sql, n_byte, pp_stmt, pz_tail)
-            }
-        
-            #[inline]
-            #[cfg(feature = "modern_sqlite")]
-            unsafe fn prepare_(
-                &self,
-                z_sql: *const c_char,
-                n_byte: c_int,
-                flags: PrepFlags,
-                pp_stmt: *mut *mut ffi::sqlite3_stmt,
-                pz_tail: *mut *const c_char,
-            ) -> c_int {
-                ffi::sqlite3_prepare_v3(self.db(), z_sql, n_byte, flags.bits(), pp_stmt, pz_tail)
-            }
-        
+                    
             #[inline]
             pub fn changes(&self) -> u64 {
-                #[cfg(not(feature = "modern_sqlite"))]
                 unsafe {
                     ffi::sqlite3_changes(self.db()) as u64
-                }
-                #[cfg(feature = "modern_sqlite")] // 3.37.0
-                unsafe {
-                    ffi::sqlite3_changes64(self.db()) as u64
                 }
             }
         
             #[inline]
             pub fn total_changes(&self) -> u64 {
-                #[cfg(not(feature = "modern_sqlite"))]
                 unsafe {
                     ffi::sqlite3_total_changes(self.db()) as u64
-                }
-                #[cfg(feature = "modern_sqlite")] // 3.37.0
-                unsafe {
-                    ffi::sqlite3_total_changes64(self.db()) as u64
                 }
             }
         
@@ -7670,15 +12467,7 @@ pub mod rusqlite
             pub fn cache_flush(&mut self) -> Result<()> {
                 crate::error::check(unsafe { ffi::sqlite3_db_cacheflush(self.db()) })
             }
-        
-            #[cfg(not(feature = "hooks"))]
-            #[inline]
-            fn remove_hooks(&mut self) {}
-        
-            #[cfg(not(feature = "preupdate_hook"))]
-            #[inline]
-            fn remove_preupdate_hook(&mut self) {}
-        
+                    
             pub fn db_readonly(&self, db_name: super::DatabaseName<'_>) -> Result<bool> {
                 let name = db_name.as_cstring()?;
                 let r = unsafe { ffi::sqlite3_db_readonly(self.db, name.as_ptr()) };
@@ -7695,43 +12484,6 @@ pub mod rusqlite
                     )),
                 }
             }
-        
-            #[cfg(feature = "modern_sqlite")] // 3.37.0
-            pub fn txn_state(
-                &self,
-                db_name: Option<super::DatabaseName<'_>>,
-            ) -> Result<super::transaction::TransactionState> {
-                let r = if let Some(ref name) = db_name {
-                    let name = name.as_cstring()?;
-                    unsafe { ffi::sqlite3_txn_state(self.db, name.as_ptr()) }
-                } else {
-                    unsafe { ffi::sqlite3_txn_state(self.db, ptr::null()) }
-                };
-                match r {
-                    0 => Ok(super::transaction::TransactionState::None),
-                    1 => Ok(super::transaction::TransactionState::Read),
-                    2 => Ok(super::transaction::TransactionState::Write),
-                    -1 => Err(Error::SqliteFailure(
-                        ffi::Error::new(ffi::SQLITE_MISUSE),
-                        Some(format!("{db_name:?} is not the name of a valid schema")),
-                    )),
-                    _ => Err(error_from_sqlite_code(
-                        r,
-                        Some("Unexpected result".to_owned()),
-                    )),
-                }
-            }
-        
-            #[inline]
-            #[cfg(feature = "release_memory")]
-            pub fn release_memory(&self) -> Result<()> {
-                self.decode_result(unsafe { ffi::sqlite3_db_release_memory(self.db) })
-            }
-        
-            #[cfg(feature = "modern_sqlite")] // 3.41.0
-            pub fn is_interrupted(&self) -> bool {
-                unsafe { ffi::sqlite3_is_interrupted(self.db) == 1 }
-            }
         }
         
         impl Drop for InnerConnection {
@@ -7739,42 +12491,6 @@ pub mod rusqlite
             #[inline]
             fn drop(&mut self) {
                 self.close();
-            }
-        }
-        
-        // threading mode checks are not necessary (and do not work) on target
-        // platforms that do not have threading (such as webassembly)
-        #[cfg(target_arch = "wasm32")]
-        fn ensure_safe_sqlite_threading_mode() -> Result<()> {
-            Ok(())
-        }
-        
-        #[cfg(not(any(target_arch = "wasm32")))]
-        fn ensure_safe_sqlite_threading_mode() -> Result<()> {
-            // Ensure SQLite was compiled in threadsafe mode.
-            if unsafe { ffi::sqlite3_threadsafe() == 0 } {
-                return Err(Error::SqliteSingleThreadedMode);
-            }
-        
-            // Now we know SQLite is _capable_ of being in Multi-thread of Serialized mode,
-            // but it's possible someone configured it to be in Single-thread mode
-            // before calling into us. That would mean we're exposing an unsafe API via
-            // a safe one (in Rust terminology).
-            //
-            // We can ask SQLite for a mutex and check for
-            // the magic value 8. This isn't documented, but it's what SQLite
-            // returns for its mutex allocation function in Single-thread mode.
-            const SQLITE_SINGLETHREADED_MUTEX_MAGIC: usize = 8;
-            let is_singlethreaded = unsafe {
-                let mutex_ptr = ffi::sqlite3_mutex_alloc(0);
-                let is_singlethreaded = mutex_ptr as usize == SQLITE_SINGLETHREADED_MUTEX_MAGIC;
-                ffi::sqlite3_mutex_free(mutex_ptr);
-                is_singlethreaded
-            };
-            if is_singlethreaded {
-                Err(Error::SqliteSingleThreadedMode)
-            } else {
-                Ok(())
             }
         }
     }
@@ -7841,8 +12557,10 @@ pub mod rusqlite
             }
         }
         
-        macro_rules! single_tuple_impl {
-            ($count:literal : $(($field:tt $ftype:ident)),* $(,)?) => {
+        macro_rules! single_tuple_impl 
+        {
+            ($count:literal : $(($field:tt $ftype:ident)),* $(,)?) =>
+            {
                 impl<$($ftype,)*> Sealed for ($($ftype,)*) where $($ftype: ToSql,)* {}
                 impl<$($ftype,)*> Params for ($($ftype,)*) where $($ftype: ToSql,)* {
                     fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
@@ -7873,7 +12591,8 @@ pub mod rusqlite
         single_tuple_impl!(15: (0 A), (1 B), (2 C), (3 D), (4 E), (5 F), (6 G), (7 H), (8 I), (9 J), (10 K), (11 L), (12 M), (13 N), (14 O));
         single_tuple_impl!(16: (0 A), (1 B), (2 C), (3 D), (4 E), (5 F), (6 G), (7 H), (8 I), (9 J), (10 K), (11 L), (12 M), (13 N), (14 O), (15 P));
         
-        macro_rules! impl_for_array_ref {
+        macro_rules! impl_for_array_ref
+        {
             ($($N:literal)+) => {$(
                 // These are already generic, and there's a shedload of them, so lets
                 // avoid the compile time hit from making them all inline for now.
@@ -7902,33 +12621,26 @@ pub mod rusqlite
         impl_for_array_ref!(
             1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17
             18 19 20 21 22 23 24 25 26 27 28 29 30 31 32
-        );
-        
-        /// Adapter type which allows any iterator over [`ToSql`] values to implement
-        /// [`Params`].
+        );        
+        /// Adapter type which allows any iterator over [`ToSql`] values to implement [`Params`].
         #[derive(Clone, Debug)]
-        pub struct ParamsFromIter<I>(I);
-        
-        /// Constructor function for a [`ParamsFromIter`]. See its documentation for
-        /// more.
+        pub struct ParamsFromIter<I>(I);        
+        /// Constructor function for a [`ParamsFromIter`].
         #[inline]
-        pub fn params_from_iter<I>(iter: I) -> ParamsFromIter<I>
-        where
+        pub fn params_from_iter<I>(iter: I) -> ParamsFromIter<I> where
             I: IntoIterator,
             I::Item: ToSql,
         {
             ParamsFromIter(iter)
         }
         
-        impl<I> Sealed for ParamsFromIter<I>
-        where
+        impl<I> Sealed for ParamsFromIter<I> where
             I: IntoIterator,
             I::Item: ToSql,
         {
         }
         
-        impl<I> Params for ParamsFromIter<I>
-        where
+        impl<I> Params for ParamsFromIter<I> where
             I: IntoIterator,
             I::Item: ToSql,
         {
@@ -7941,12 +12653,268 @@ pub mod rusqlite
     
     pub mod pragma
     {
+        //! Pragma helpers
         use ::
         {
             *,
         };
         /*
+        use std::ops::Deref;
+
+        use crate::ffi;
+        use crate::types::{ToSql, ToSqlOutput, ValueRef};
+        use crate::{Connection, Result, Row};
         */
+        pub struct Sql {
+            buf: String,
+        }
+
+        impl Sql
+        {
+            pub fn new() -> Self {
+                Self { buf: String::new() }
+            }
+
+            pub fn push_pragma(&mut self, schema_name: Option<&str>, pragma_name: &str) -> Result<()> {
+                self.push_keyword("PRAGMA")?;
+                self.push_space();
+                if let Some(schema_name) = schema_name {
+                    self.push_schema_name(schema_name);
+                    self.push_dot();
+                }
+                self.push_keyword(pragma_name)
+            }
+
+            pub fn push_keyword(&mut self, keyword: &str) -> Result<()> {
+                if !keyword.is_empty() && is_identifier(keyword) {
+                    self.buf.push_str(keyword);
+                    Ok(())
+                } else {
+                    Err(err!(ffi::SQLITE_MISUSE, "Invalid keyword \"{keyword}\""))
+                }
+            }
+
+            pub fn push_schema_name(&mut self, schema_name: &str) {
+                self.push_identifier(schema_name);
+            }
+
+            pub fn push_identifier(&mut self, s: &str) {
+                if is_identifier(s) {
+                    self.buf.push_str(s);
+                } else {
+                    self.wrap_and_escape(s, '"');
+                }
+            }
+
+            pub fn push_value(&mut self, value: &dyn ToSql) -> Result<()> {
+                let value = value.to_sql()?;
+                let value = match value {
+                    ToSqlOutput::Borrowed(v) => v,
+                    ToSqlOutput::Owned(ref v) => ValueRef::from(v),
+                };
+                match value {
+                    ValueRef::Integer(i) => {
+                        self.push_int(i);
+                    }
+                    ValueRef::Real(r) => {
+                        self.push_real(r);
+                    }
+                    ValueRef::Text(s) => {
+                        let s = std::str::from_utf8(s)?;
+                        self.push_string_literal(s);
+                    }
+                    _ => {
+                        return Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"{value:?}\""));
+                    }
+                };
+                Ok(())
+            }
+
+            pub fn push_string_literal(&mut self, s: &str) {
+                self.wrap_and_escape(s, '\'');
+            }
+
+            pub fn push_int(&mut self, i: i64) {
+                self.buf.push_str(&i.to_string());
+            }
+
+            pub fn push_real(&mut self, f: f64) {
+                self.buf.push_str(&f.to_string());
+            }
+
+            pub fn push_space(&mut self) {
+                self.buf.push(' ');
+            }
+
+            pub fn push_dot(&mut self) {
+                self.buf.push('.');
+            }
+
+            pub fn push_equal_sign(&mut self) {
+                self.buf.push('=');
+            }
+
+            pub fn open_brace(&mut self) {
+                self.buf.push('(');
+            }
+
+            pub fn close_brace(&mut self) {
+                self.buf.push(')');
+            }
+
+            pub fn as_str(&self) -> &str {
+                &self.buf
+            }
+
+            fn wrap_and_escape(&mut self, s: &str, quote: char) {
+                self.buf.push(quote);
+                let chars = s.chars();
+                for ch in chars {
+                    // escape `quote` by doubling it
+                    if ch == quote {
+                        self.buf.push(ch);
+                    }
+                    self.buf.push(ch);
+                }
+                self.buf.push(quote);
+            }
+        }
+
+        impl Deref for Sql {
+            type Target = str;
+
+            fn deref(&self) -> &str {
+                self.as_str()
+            }
+        }
+
+        impl Connection {
+            /// Query the current value of `pragma_name`.
+            pub fn pragma_query_value<T, F>(
+                &self,
+                schema_name: Option<&str>,
+                pragma_name: &str,
+                f: F,
+            ) -> Result<T>
+            where
+                F: FnOnce(&Row<'_>) -> Result<T>,
+            {
+                let mut query = Sql::new();
+                query.push_pragma(schema_name, pragma_name)?;
+                self.query_row(&query, [], f)
+            }
+
+            /// Query the current rows/values of `pragma_name`.
+            pub fn pragma_query<F>(
+                &self,
+                schema_name: Option<&str>,
+                pragma_name: &str,
+                mut f: F,
+            ) -> Result<()>
+            where
+                F: FnMut(&Row<'_>) -> Result<()>,
+            {
+                let mut query = Sql::new();
+                query.push_pragma(schema_name, pragma_name)?;
+                let mut stmt = self.prepare(&query)?;
+                let mut rows = stmt.query([])?;
+                while let Some(result_row) = rows.next()? {
+                    let row = result_row;
+                    f(row)?;
+                }
+                Ok(())
+            }
+
+            /// Query the current value(s) of `pragma_name` associated to
+            /// `pragma_value`.
+            pub fn pragma<F, V>(
+                &self,
+                schema_name: Option<&str>,
+                pragma_name: &str,
+                pragma_value: V,
+                mut f: F,
+            ) -> Result<()>
+            where
+                F: FnMut(&Row<'_>) -> Result<()>,
+                V: ToSql,
+            {
+                let mut sql = Sql::new();
+                sql.push_pragma(schema_name, pragma_name)?;
+                sql.open_brace();
+                sql.push_value(&pragma_value)?;
+                sql.close_brace();
+                let mut stmt = self.prepare(&sql)?;
+                let mut rows = stmt.query([])?;
+                while let Some(result_row) = rows.next()? {
+                    let row = result_row;
+                    f(row)?;
+                }
+                Ok(())
+            }
+
+            /// Set a new value to `pragma_name`.
+            pub fn pragma_update<V>(
+                &self,
+                schema_name: Option<&str>,
+                pragma_name: &str,
+                pragma_value: V,
+            ) -> Result<()>
+            where
+                V: ToSql,
+            {
+                let mut sql = Sql::new();
+                sql.push_pragma(schema_name, pragma_name)?;
+                sql.push_equal_sign();
+                sql.push_value(&pragma_value)?;
+                self.execute_batch(&sql)
+            }
+
+            /// Set a new value to `pragma_name` and return the updated value.
+            pub fn pragma_update_and_check<F, T, V>(
+                &self,
+                schema_name: Option<&str>,
+                pragma_name: &str,
+                pragma_value: V,
+                f: F,
+            ) -> Result<T>
+            where
+                F: FnOnce(&Row<'_>) -> Result<T>,
+                V: ToSql,
+            {
+                let mut sql = Sql::new();
+                sql.push_pragma(schema_name, pragma_name)?;
+                sql.push_equal_sign();
+                sql.push_value(&pragma_value)?;
+                self.query_row(&sql, [], f)
+            }
+        }
+
+        fn is_identifier(s: &str) -> bool {
+            let chars = s.char_indices();
+            for (i, ch) in chars {
+                if i == 0 {
+                    if !is_identifier_start(ch) {
+                        return false;
+                    }
+                } else if !is_identifier_continue(ch) {
+                    return false;
+                }
+            }
+            true
+        }
+
+        fn is_identifier_start(c: char) -> bool {
+            c.is_ascii_uppercase() || c == '_' || c.is_ascii_lowercase() || c > '\x7F'
+        }
+
+        fn is_identifier_continue(c: char) -> bool {
+            c == '$'
+                || c.is_ascii_digit()
+                || c.is_ascii_uppercase()
+                || c == '_'
+                || c.is_ascii_lowercase()
+                || c > '\x7F'
+        }
     }
     
     pub mod raw_statement
@@ -7956,7 +12924,176 @@ pub mod rusqlite
             *,
         };
         /*
+        use super::ffi;
+        use super::StatementStatus;
+        use crate::util::ParamIndexCache;
+        use crate::util::SqliteMallocString;
+        use std::ffi::{c_int, CStr};
+        use std::ptr;
+        use std::sync::Arc;
         */
+        #[derive(Debug)]
+        pub struct RawStatement 
+        {
+            ptr: *mut ffi::sqlite3_stmt,
+            /// Cached indices of named parameters, computed on the fly.
+            cache: ParamIndexCache,
+            /// Cached SQL (trimmed) that we use as the key when we're in the statement cache.
+            statement_cache_key: Option<Arc<str>>,
+        }
+
+        impl RawStatement {
+            #[inline]
+            pub unsafe fn new(stmt: *mut ffi::sqlite3_stmt) -> Self {
+                Self {
+                    ptr: stmt,
+                    cache: ParamIndexCache::default(),
+                    statement_cache_key: None,
+                }
+            }
+
+            #[inline]
+            pub fn is_null(&self) -> bool {
+                self.ptr.is_null()
+            }
+
+            #[inline]
+            pub fn set_statement_cache_key(&mut self, p: impl Into<Arc<str>>) {
+                self.statement_cache_key = Some(p.into());
+            }
+
+            #[inline]
+            pub fn statement_cache_key(&self) -> Option<Arc<str>> {
+                self.statement_cache_key.clone()
+            }
+
+            #[inline]
+            pub unsafe fn ptr(&self) -> *mut ffi::sqlite3_stmt {
+                self.ptr
+            }
+
+            #[inline]
+            pub fn column_count(&self) -> usize {
+                unsafe { ffi::sqlite3_column_count(self.ptr) as usize }
+            }
+
+            #[inline]
+            pub fn column_type(&self, idx: usize) -> c_int {
+                unsafe { ffi::sqlite3_column_type(self.ptr, idx as c_int) }
+            }
+
+            #[inline]
+            pub fn column_name(&self, idx: usize) -> Option<&CStr> {
+                let idx = idx as c_int;
+                if idx < 0 || idx >= self.column_count() as c_int {
+                    return None;
+                }
+                unsafe {
+                    let ptr = ffi::sqlite3_column_name(self.ptr, idx);
+                    assert!(
+                        !ptr.is_null(),
+                        "Null pointer from sqlite3_column_name: Out of memory?"
+                    );
+                    Some(CStr::from_ptr(ptr))
+                }
+            }
+
+            #[inline]
+            pub fn reset(&self) -> c_int {
+                unsafe { ffi::sqlite3_reset(self.ptr) }
+            }
+
+            #[inline]
+            pub fn bind_parameter_count(&self) -> usize {
+                unsafe { ffi::sqlite3_bind_parameter_count(self.ptr) as usize }
+            }
+
+            #[inline]
+            pub fn bind_parameter_index(&self, name: &str) -> Option<usize> {
+                self.cache.get_or_insert_with(name, |param_cstr| {
+                    let r = unsafe { ffi::sqlite3_bind_parameter_index(self.ptr, param_cstr.as_ptr()) };
+                    match r {
+                        0 => None,
+                        i => Some(i as usize),
+                    }
+                })
+            }
+
+            #[inline]
+            pub fn bind_parameter_name(&self, index: i32) -> Option<&CStr> {
+                unsafe {
+                    let name = ffi::sqlite3_bind_parameter_name(self.ptr, index);
+                    if name.is_null() {
+                        None
+                    } else {
+                        Some(CStr::from_ptr(name))
+                    }
+                }
+            }
+
+            #[inline]
+            pub fn clear_bindings(&mut self) {
+                unsafe {
+                    ffi::sqlite3_clear_bindings(self.ptr);
+                } // rc is always SQLITE_OK
+            }
+
+            #[inline]
+            pub fn sql(&self) -> Option<&CStr> {
+                if self.ptr.is_null() {
+                    None
+                } else {
+                    Some(unsafe { CStr::from_ptr(ffi::sqlite3_sql(self.ptr)) })
+                }
+            }
+
+            #[inline]
+            pub fn finalize(mut self) -> c_int {
+                self.finalize_()
+            }
+
+            #[inline]
+            fn finalize_(&mut self) -> c_int {
+                let r = unsafe { ffi::sqlite3_finalize(self.ptr) };
+                self.ptr = ptr::null_mut();
+                r
+            }
+            
+            #[inline]
+            pub fn readonly(&self) -> bool {
+                unsafe { ffi::sqlite3_stmt_readonly(self.ptr) != 0 }
+            }
+
+            #[inline]
+            pub fn expanded_sql(&self) -> Option<SqliteMallocString> {
+                unsafe { expanded_sql(self.ptr) }
+            }
+
+            #[inline]
+            pub fn get_status(&self, status: StatementStatus, reset: bool) -> i32 {
+                unsafe { stmt_status(self.ptr, status, reset) }
+            }
+        }
+
+        #[inline]
+        pub unsafe fn expanded_sql(ptr: *mut ffi::sqlite3_stmt) -> Option<SqliteMallocString> {
+            SqliteMallocString::from_raw(ffi::sqlite3_expanded_sql(ptr))
+        }
+        #[inline]
+        pub unsafe fn stmt_status(
+            ptr: *mut ffi::sqlite3_stmt,
+            status: StatementStatus,
+            reset: bool,
+        ) -> i32 {
+            assert!(!ptr.is_null());
+            ffi::sqlite3_stmt_status(ptr, status as i32, reset as i32)
+        }
+
+        impl Drop for RawStatement {
+            fn drop(&mut self) {
+                self.finalize_();
+            }
+        }
     }
     
     pub mod row
@@ -7966,7 +13103,372 @@ pub mod rusqlite
             *,
         };
         /*
+        use fallible_iterator::FallibleIterator;
+        use fallible_streaming_iterator::FallibleStreamingIterator;
+        use std::convert;
+
+        use super::{Error, Result, Statement};
+        use crate::types::{FromSql, FromSqlError, ValueRef};
         */
+        /// A handle (lazy fallible streaming iterator) for the resulting rows of a query.
+        #[must_use = "Rows is lazy and will do nothing unless consumed"]
+        pub struct Rows<'stmt> {
+            pub stmt: Option<&'stmt Statement<'stmt>>,
+            row: Option<Row<'stmt>>,
+        }
+
+        impl<'stmt> Rows<'stmt> {
+            #[inline]
+            fn reset(&mut self) -> Result<()> {
+                if let Some(stmt) = self.stmt.take() {
+                    stmt.reset()
+                } else {
+                    Ok(())
+                }
+            }
+
+            /// Attempt to get the next row from the query.
+            #[expect(clippy::should_implement_trait)]
+            #[inline]
+            pub fn next(&mut self) -> Result<Option<&Row<'stmt>>> {
+                self.advance()?;
+                Ok((*self).get())
+            }
+
+            /// Map over this `Rows`, converting it to a [`Map`], which
+            /// implements `FallibleIterator`.
+            #[inline]
+            pub fn map<F, B>(self, f: F) -> Map<'stmt, F>
+            where
+                F: FnMut(&Row<'_>) -> Result<B>,
+            {
+                Map { rows: self, f }
+            }
+
+            /// Map over this `Rows`, converting it to a [`MappedRows`], which
+            /// implements `Iterator`.
+            #[inline]
+            pub fn mapped<F, B>(self, f: F) -> MappedRows<'stmt, F>
+            where
+                F: FnMut(&Row<'_>) -> Result<B>,
+            {
+                MappedRows { rows: self, map: f }
+            }
+
+            /// Map over this `Rows` with a fallible function, converting it to a
+            /// [`AndThenRows`], which implements `Iterator` (instead of
+            /// `FallibleStreamingIterator`).
+            #[inline]
+            pub fn and_then<F, T, E>(self, f: F) -> AndThenRows<'stmt, F>
+            where
+                F: FnMut(&Row<'_>) -> Result<T, E>,
+            {
+                AndThenRows { rows: self, map: f }
+            }
+
+            /// Give access to the underlying statement
+            #[must_use]
+            pub fn as_ref(&self) -> Option<&Statement<'stmt>> {
+                self.stmt
+            }
+        }
+
+        impl<'stmt> Rows<'stmt> {
+            #[inline]
+            pub fn new(stmt: &'stmt Statement<'stmt>) -> Self {
+                Rows {
+                    stmt: Some(stmt),
+                    row: None,
+                }
+            }
+
+            #[inline]
+            pub fn get_expected_row(&mut self) -> Result<&Row<'stmt>> {
+                match self.next()? {
+                    Some(row) => Ok(row),
+                    None => Err(Error::QueryReturnedNoRows),
+                }
+            }
+        }
+
+        impl Drop for Rows<'_> {
+            #[expect(unused_must_use)]
+            #[inline]
+            fn drop(&mut self) {
+                self.reset();
+            }
+        }
+
+        /// `F` is used to transform the _streaming_ iterator into a _fallible_
+        /// iterator.
+        #[must_use = "iterators are lazy and do nothing unless consumed"]
+        pub struct Map<'stmt, F> {
+            rows: Rows<'stmt>,
+            f: F,
+        }
+
+        impl<F, B> FallibleIterator for Map<'_, F>
+        where
+            F: FnMut(&Row<'_>) -> Result<B>,
+        {
+            type Error = Error;
+            type Item = B;
+
+            #[inline]
+            fn next(&mut self) -> Result<Option<B>> {
+                match self.rows.next()? {
+                    Some(v) => Ok(Some((self.f)(v)?)),
+                    None => Ok(None),
+                }
+            }
+        }
+
+        /// An iterator over the mapped resulting rows of a query.
+        #[must_use = "iterators are lazy and do nothing unless consumed"]
+        pub struct MappedRows<'stmt, F> {
+            rows: Rows<'stmt>,
+            map: F,
+        }
+
+        impl<T, F> Iterator for MappedRows<'_, F>
+        where
+            F: FnMut(&Row<'_>) -> Result<T>,
+        {
+            type Item = Result<T>;
+
+            #[inline]
+            fn next(&mut self) -> Option<Result<T>> {
+                let map = &mut self.map;
+                self.rows
+                    .next()
+                    .transpose()
+                    .map(|row_result| row_result.and_then(map))
+            }
+        }
+
+        /// An iterator over the mapped resulting rows of a query, with an Error type
+        /// unifying with Error.
+        #[must_use = "iterators are lazy and do nothing unless consumed"]
+        pub struct AndThenRows<'stmt, F> {
+            rows: Rows<'stmt>,
+            map: F,
+        }
+
+        impl<T, E, F> Iterator for AndThenRows<'_, F>
+        where
+            E: From<Error>,
+            F: FnMut(&Row<'_>) -> Result<T, E>,
+        {
+            type Item = Result<T, E>;
+
+            #[inline]
+            fn next(&mut self) -> Option<Self::Item> {
+                let map = &mut self.map;
+                self.rows
+                    .next()
+                    .transpose()
+                    .map(|row_result| row_result.map_err(E::from).and_then(map))
+            }
+        }
+
+        /// `FallibleStreamingIterator` differs from the standard library's `Iterator`
+        /// in two ways:
+        /// * each call to `next` (`sqlite3_step`) can fail.
+        /// * returned `Row` is valid until `next` is called again or `Statement` is
+        ///   reset or finalized.
+        impl<'stmt> FallibleStreamingIterator for Rows<'stmt> {
+            type Error = Error;
+            type Item = Row<'stmt>;
+
+            #[inline]
+            fn advance(&mut self) -> Result<()> {
+                if let Some(stmt) = self.stmt {
+                    match stmt.step() {
+                        Ok(true) => {
+                            self.row = Some(Row { stmt });
+                            Ok(())
+                        }
+                        Ok(false) => {
+                            let r = self.reset();
+                            self.row = None;
+                            r
+                        }
+                        Err(e) => {
+                            let _ = self.reset();
+                            self.row = None;
+                            Err(e)
+                        }
+                    }
+                } else {
+                    self.row = None;
+                    Ok(())
+                }
+            }
+
+            #[inline]
+            fn get(&self) -> Option<&Row<'stmt>> {
+                self.row.as_ref()
+            }
+        }
+
+        /// A single result row of a query.
+        pub struct Row<'stmt> {
+            pub stmt: &'stmt Statement<'stmt>,
+        }
+
+        impl Row<'_> {
+            /// Get the value of a particular column of the result row.
+            #[track_caller]
+            pub fn get_unwrap<I: RowIndex, T: FromSql>(&self, idx: I) -> T {
+                self.get(idx).unwrap()
+            }
+
+            /// Get the value of a particular column of the result row.
+            #[track_caller]
+            pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
+                let idx = idx.idx(self.stmt)?;
+                let value = self.stmt.value_ref(idx);
+                FromSql::column_result(value).map_err(|err| match err {
+                    FromSqlError::InvalidType => Error::InvalidColumnType(
+                        idx,
+                        self.stmt.column_name_unwrap(idx).into(),
+                        value.data_type(),
+                    ),
+                    FromSqlError::OutOfRange(i) => Error::IntegralValueOutOfRange(idx, i),
+                    FromSqlError::Other(err) => {
+                        Error::FromSqlConversionFailure(idx, value.data_type(), err)
+                    }
+                    FromSqlError::InvalidBlobSize { .. } => {
+                        Error::FromSqlConversionFailure(idx, value.data_type(), Box::new(err))
+                    }
+                })
+            }
+
+            /// Get the value of a particular column of the result row as a `ValueRef`,
+            /// allowing data to be read out of a row without copying.
+            pub fn get_ref<I: RowIndex>(&self, idx: I) -> Result<ValueRef<'_>> {
+                let idx = idx.idx(self.stmt)?;
+                let val_ref = self.stmt.value_ref(idx);
+                Ok(val_ref)
+            }
+
+            /// Get the value of a particular column of the result row as a `ValueRef`,
+            /// allowing data to be read out of a row without copying.
+            #[track_caller]
+            pub fn get_ref_unwrap<I: RowIndex>(&self, idx: I) -> ValueRef<'_> {
+                self.get_ref(idx).unwrap()
+            }
+        }
+
+        impl<'stmt> AsRef<Statement<'stmt>> for Row<'stmt> {
+            fn as_ref(&self) -> &Statement<'stmt> {
+                self.stmt
+            }
+        }
+
+        /// Debug `Row` like an ordered `Map<Result<&str>, Result<(Type, ValueRef)>>`
+        /// with column name as key except that for `Type::Blob` only its size is
+        /// printed (not its content).
+        impl std::fmt::Debug for Row<'_> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                let mut dm = f.debug_map();
+                for c in 0..self.stmt.column_count() {
+                    let name = self.stmt.column_name(c).expect("valid column index");
+                    dm.key(&name);
+                    let value = self.get_ref(c);
+                    match value {
+                        Ok(value) => {
+                            let dt = value.data_type();
+                            match value {
+                                ValueRef::Null => {
+                                    dm.value(&(dt, ()));
+                                }
+                                ValueRef::Integer(i) => {
+                                    dm.value(&(dt, i));
+                                }
+                                ValueRef::Real(f) => {
+                                    dm.value(&(dt, f));
+                                }
+                                ValueRef::Text(s) => {
+                                    dm.value(&(dt, String::from_utf8_lossy(s)));
+                                }
+                                ValueRef::Blob(b) => {
+                                    dm.value(&(dt, b.len()));
+                                }
+                            }
+                        }
+                        Err(ref _err) => {
+                            dm.value(&value);
+                        }
+                    }
+                }
+                dm.finish()
+            }
+        }
+
+        mod sealed {
+            /// This trait exists just to ensure that the only impls of `trait RowIndex`
+            /// that are allowed are ones in this crate.
+            pub trait Sealed {}
+            impl Sealed for usize {}
+            impl Sealed for &str {}
+        }
+
+        /// A trait implemented by types that can index into columns of a row.
+        pub trait RowIndex: sealed::Sealed {
+            /// Returns the index of the appropriate column, or `Error` if no such
+            /// column exists.
+            fn idx(&self, stmt: &Statement<'_>) -> Result<usize>;
+        }
+
+        impl RowIndex for usize {
+            #[inline]
+            fn idx(&self, stmt: &Statement<'_>) -> Result<usize> {
+                if *self >= stmt.column_count() {
+                    Err(Error::InvalidColumnIndex(*self))
+                } else {
+                    Ok(*self)
+                }
+            }
+        }
+
+        impl RowIndex for &'_ str {
+            #[inline]
+            fn idx(&self, stmt: &Statement<'_>) -> Result<usize> {
+                stmt.column_index(self)
+            }
+        }
+
+        macro_rules! tuple_try_from_row {
+            ($($field:ident),*) => {
+                impl<'a, $($field,)*> convert::TryFrom<&'a Row<'a>> for ($($field,)*) where $($field: FromSql,)* {
+                    type Error = crate::Error;
+                    
+                    #[allow(unused_assignments, unused_variables, unused_mut)]
+                    fn try_from(row: &'a Row<'a>) -> Result<Self> {
+                        let mut index = 0;
+                        $(
+                            #[expect(non_snake_case)]
+                            let $field = row.get::<_, $field>(index)?;
+                            index += 1;
+                        )*
+                        Ok(($($field,)*))
+                    }
+                }
+            }
+        }
+
+        macro_rules! tuples_try_from_row {
+            () => {
+                tuple_try_from_row!();
+            };
+            ($first:ident $(, $remaining:ident)*) => {
+                tuple_try_from_row!($first $(, $remaining)*);
+                tuples_try_from_row!($($remaining),*);
+            };
+        }
+
+        tuples_try_from_row!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P);
     }
     
     pub mod statement
@@ -7976,7 +13478,445 @@ pub mod rusqlite
             *,
         };
         /*
+        use std::ffi::{c_int, c_void};
+        #[cfg(feature = "array")]
+        use std::rc::Rc;
+        use std::slice::from_raw_parts;
+        use std::{fmt, mem, ptr, str};
+
+        use super::ffi;
+        use super::{len_as_c_int, str_for_sqlite};
+        use super::{
+            AndThenRows, Connection, Error, MappedRows, Params, RawStatement, Result, Row, Rows, ValueRef,
+        };
+        use crate::bind::BindIndex;
+        use crate::types::{ToSql, ToSqlOutput};
+        #[cfg(feature = "array")]
+        use crate::vtab::array::{free_array, ARRAY_TYPE};
         */
+        /// A prepared statement.
+        pub struct Statement<'conn> {
+            pub conn: &'conn Connection,
+            pub stmt: RawStatement,
+        }
+
+        impl Statement<'_> {
+            /// Execute the prepared statement.
+            #[inline]
+            pub fn execute<P: Params>(&mut self, params: P) -> Result<usize> {
+                params.__bind_in(self)?;
+                self.execute_with_bound_parameters()
+            }
+
+            /// Execute an INSERT and return the ROWID.
+            #[inline]
+            pub fn insert<P: Params>(&mut self, params: P) -> Result<i64> {
+                let changes = self.execute(params)?;
+                match changes {
+                    1 => Ok(self.conn.last_insert_rowid()),
+                    _ => Err(Error::StatementChangedRows(changes)),
+                }
+            }
+
+            /// Execute the prepared statement, returning a handle to the resulting
+            /// rows.
+            #[inline]
+            pub fn query<P: Params>(&mut self, params: P) -> Result<Rows<'_>> {
+                params.__bind_in(self)?;
+                Ok(Rows::new(self))
+            }
+
+            /// Executes the prepared statement and maps a function over the resulting
+            /// rows, returning an iterator over the mapped function results.
+            pub fn query_map<T, P, F>(&mut self, params: P, f: F) -> Result<MappedRows<'_, F>>
+            where
+                P: Params,
+                F: FnMut(&Row<'_>) -> Result<T>,
+            {
+                self.query(params).map(|rows| rows.mapped(f))
+            }
+
+            /// Executes the prepared statement and maps a function over the resulting
+            /// rows, where the function returns a `Result` with `Error` type
+            /// implementing `std::convert::From<Error>` (so errors can be unified).
+            #[inline]
+            pub fn query_and_then<T, E, P, F>(&mut self, params: P, f: F) -> Result<AndThenRows<'_, F>>
+            where
+                P: Params,
+                E: From<Error>,
+                F: FnMut(&Row<'_>) -> Result<T, E>,
+            {
+                self.query(params).map(|rows| rows.and_then(f))
+            }
+
+            /// Return `true` if a query in the SQL statement it executes returns one
+            /// or more rows and `false` if the SQL returns an empty set.
+            #[inline]
+            pub fn exists<P: Params>(&mut self, params: P) -> Result<bool> {
+                let mut rows = self.query(params)?;
+                let exists = rows.next()?.is_some();
+                Ok(exists)
+            }
+
+            /// Convenience method to execute a query that is expected to return a
+            /// single row.
+            pub fn query_row<T, P, F>(&mut self, params: P, f: F) -> Result<T>
+            where
+                P: Params,
+                F: FnOnce(&Row<'_>) -> Result<T>,
+            {
+                let mut rows = self.query(params)?;
+
+                rows.get_expected_row().and_then(f)
+            }
+
+            /// Convenience method to execute a query that is expected to return exactly
+            /// one row.
+            pub fn query_one<T, P, F>(&mut self, params: P, f: F) -> Result<T>
+            where
+                P: Params,
+                F: FnOnce(&Row<'_>) -> Result<T>,
+            {
+                let mut rows = self.query(params)?;
+                let row = rows.get_expected_row().and_then(f)?;
+                if rows.next()?.is_some() {
+                    return Err(Error::QueryReturnedMoreThanOneRow);
+                }
+                Ok(row)
+            }
+
+            /// Consumes the statement.
+            #[inline]
+            pub fn finalize(mut self) -> Result<()> {
+                self.finalize_()
+            }
+
+            /// Return the (one-based) index of an SQL parameter given its name.
+            #[inline]
+            pub fn parameter_index(&self, name: &str) -> Result<Option<usize>> {
+                Ok(self.stmt.bind_parameter_index(name))
+            }
+
+            /// Return the SQL parameter name given its (one-based) index (the inverse
+            /// of [`Statement::parameter_index`]).
+            #[inline]
+            pub fn parameter_name(&self, index: usize) -> Option<&'_ str> {
+                self.stmt.bind_parameter_name(index as i32).map(|name| {
+                    name.to_str()
+                        .expect("Invalid UTF-8 sequence in parameter name")
+                })
+            }
+
+            #[inline]
+            pub fn bind_parameters<P>(&mut self, params: P) -> Result<()>
+            where
+                P: IntoIterator,
+                P::Item: ToSql,
+            {
+                let expected = self.stmt.bind_parameter_count();
+                let mut index = 0;
+                for p in params {
+                    index += 1; // The leftmost SQL parameter has an index of 1.
+                    if index > expected {
+                        break;
+                    }
+                    self.bind_parameter(&p, index)?;
+                }
+                if index != expected {
+                    Err(Error::InvalidParameterCount(index, expected))
+                } else {
+                    Ok(())
+                }
+            }
+
+            #[inline]
+            pub fn ensure_parameter_count(&self, n: usize) -> Result<()> {
+                let count = self.parameter_count();
+                if count != n {
+                    Err(Error::InvalidParameterCount(n, count))
+                } else {
+                    Ok(())
+                }
+            }
+
+            #[inline]
+            pub fn bind_parameters_named<S: BindIndex, T: ToSql>(
+                &mut self,
+                params: &[(S, T)],
+            ) -> Result<()> {
+                for (name, value) in params {
+                    let i = name.idx(self)?;
+                    let ts: &dyn ToSql = &value;
+                    self.bind_parameter(ts, i)?;
+                }
+                Ok(())
+            }
+
+            /// Return the number of parameters that can be bound to this statement.
+            #[inline]
+            pub fn parameter_count(&self) -> usize {
+                self.stmt.bind_parameter_count()
+            }
+
+            /// Low level API to directly bind a parameter to a given index.
+            #[inline]
+            pub fn raw_bind_parameter<I: BindIndex, T: ToSql>(
+                &mut self,
+                one_based_index: I,
+                param: T,
+            ) -> Result<()> {
+                self.bind_parameter(&param, one_based_index.idx(self)?)
+            }
+
+            /// Low level API to execute a statement given that all parameters were
+            /// bound explicitly with the [`Statement::raw_bind_parameter`] API.
+            #[inline]
+            pub fn raw_execute(&mut self) -> Result<usize> {
+                self.execute_with_bound_parameters()
+            }
+
+            /// Low level API to get `Rows` for this query given that all parameters
+            /// were bound explicitly with the [`Statement::raw_bind_parameter`] API.
+            #[inline]
+            pub fn raw_query(&mut self) -> Rows<'_> {
+                Rows::new(self)
+            }
+            
+            fn bind_parameter<P: ?Sized + ToSql>(&self, param: &P, ndx: usize) -> Result<()> {
+                let value = param.to_sql()?;
+
+                let ptr = unsafe { self.stmt.ptr() };
+                let value = match value {
+                    ToSqlOutput::Borrowed(v) => v,
+                    ToSqlOutput::Owned(ref v) => ValueRef::from(v),
+                };
+                self.conn.decode_result(match value {
+                    ValueRef::Null => unsafe { ffi::sqlite3_bind_null(ptr, ndx as c_int) },
+                    ValueRef::Integer(i) => unsafe { ffi::sqlite3_bind_int64(ptr, ndx as c_int, i) },
+                    ValueRef::Real(r) => unsafe { ffi::sqlite3_bind_double(ptr, ndx as c_int, r) },
+                    ValueRef::Text(s) => unsafe {
+                        let (c_str, len, destructor) = str_for_sqlite(s)?;
+                        ffi::sqlite3_bind_text(ptr, ndx as c_int, c_str, len, destructor)
+                    },
+                    ValueRef::Blob(b) => unsafe {
+                        let length = len_as_c_int(b.len())?;
+                        if length == 0 {
+                            ffi::sqlite3_bind_zeroblob(ptr, ndx as c_int, 0)
+                        } else {
+                            // TODO sqlite3_bind_blob64 // 3.8.7
+                            ffi::sqlite3_bind_blob(
+                                ptr,
+                                ndx as c_int,
+                                b.as_ptr().cast::<c_void>(),
+                                length,
+                                ffi::SQLITE_TRANSIENT(),
+                            )
+                        }
+                    },
+                })
+            }
+
+            #[inline]
+            fn execute_with_bound_parameters(&mut self) -> Result<usize> {
+                self.check_update()?;
+                let r = self.stmt.step();
+                let rr = self.stmt.reset();
+                match r {
+                    ffi::SQLITE_DONE => match rr {
+                        ffi::SQLITE_OK => Ok(self.conn.changes() as usize),
+                        _ => Err(self.conn.decode_result(rr).unwrap_err()),
+                    },
+                    ffi::SQLITE_ROW => Err(Error::ExecuteReturnedResults),
+                    _ => Err(self.conn.decode_result(r).unwrap_err()),
+                }
+            }
+
+            #[inline]
+            fn finalize_(&mut self) -> Result<()> {
+                let mut stmt = unsafe { RawStatement::new(ptr::null_mut()) };
+                mem::swap(&mut stmt, &mut self.stmt);
+                self.conn.decode_result(stmt.finalize())
+            }
+
+            /// Returns a string containing the SQL text of prepared statement with
+            /// bound parameters expanded.
+            pub fn expanded_sql(&self) -> Option<String> {
+                self.stmt
+                    .expanded_sql()
+                    .map(|s| s.to_string_lossy().to_string())
+            }
+
+            /// Get the value for one of the status counters for this statement.
+            #[inline]
+            pub fn get_status(&self, status: StatementStatus) -> i32 {
+                self.stmt.get_status(status, false)
+            }
+
+            /// Reset the value of one of the status counters for this statement,
+            #[inline]
+            /// returning the value it had before resetting.
+            pub fn reset_status(&self, status: StatementStatus) -> i32 {
+                self.stmt.get_status(status, true)
+            }
+            /// Returns true if the statement is read only.
+            #[inline]
+            pub fn readonly(&self) -> bool {
+                self.stmt.readonly()
+            }
+
+            /// Safety: This is unsafe, because using `sqlite3_stmt` after the
+            /// connection has closed is illegal, but `RawStatement` does not enforce
+            /// this, as it loses our protective `'conn` lifetime bound.
+            #[inline]
+            pub unsafe fn into_raw(mut self) -> RawStatement {
+                let mut stmt = RawStatement::new(ptr::null_mut());
+                mem::swap(&mut stmt, &mut self.stmt);
+                stmt
+            }
+
+            /// Reset all bindings
+            pub fn clear_bindings(&mut self) {
+                self.stmt.clear_bindings();
+            }
+
+            pub unsafe fn ptr(&self) -> *mut ffi::sqlite3_stmt {
+                self.stmt.ptr()
+            }
+        }
+
+        impl fmt::Debug for Statement<'_> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                let sql = if self.stmt.is_null() {
+                    Ok("")
+                } else {
+                    self.stmt.sql().unwrap().to_str()
+                };
+                f.debug_struct("Statement")
+                    .field("conn", self.conn)
+                    .field("stmt", &self.stmt)
+                    .field("sql", &sql)
+                    .finish()
+            }
+        }
+
+        impl Drop for Statement<'_> {
+            #[expect(unused_must_use)]
+            #[inline]
+            fn drop(&mut self) {
+                self.finalize_();
+            }
+        }
+
+        impl Statement<'_> {
+            #[inline]
+            pub(super) fn new(conn: &Connection, stmt: RawStatement) -> Statement<'_> {
+                Statement { conn, stmt }
+            }
+
+            pub(super) fn value_ref(&self, col: usize) -> ValueRef<'_> {
+                let raw = unsafe { self.stmt.ptr() };
+
+                match self.stmt.column_type(col) {
+                    ffi::SQLITE_NULL => ValueRef::Null,
+                    ffi::SQLITE_INTEGER => {
+                        ValueRef::Integer(unsafe { ffi::sqlite3_column_int64(raw, col as c_int) })
+                    }
+                    ffi::SQLITE_FLOAT => {
+                        ValueRef::Real(unsafe { ffi::sqlite3_column_double(raw, col as c_int) })
+                    }
+                    ffi::SQLITE_TEXT => {
+                        let s = unsafe {
+                            // Quoting from "Using SQLite" book:
+                            // To avoid problems, an application should first extract the desired type using
+                            // a sqlite3_column_xxx() function, and then call the
+                            // appropriate sqlite3_column_bytes() function.
+                            let text = ffi::sqlite3_column_text(raw, col as c_int);
+                            let len = ffi::sqlite3_column_bytes(raw, col as c_int);
+                            assert!(
+                                !text.is_null(),
+                                "unexpected SQLITE_TEXT column type with NULL data"
+                            );
+                            from_raw_parts(text.cast::<u8>(), len as usize)
+                        };
+
+                        ValueRef::Text(s)
+                    }
+                    ffi::SQLITE_BLOB => {
+                        let (blob, len) = unsafe {
+                            (
+                                ffi::sqlite3_column_blob(raw, col as c_int),
+                                ffi::sqlite3_column_bytes(raw, col as c_int),
+                            )
+                        };
+
+                        assert!(
+                            len >= 0,
+                            "unexpected negative return from sqlite3_column_bytes"
+                        );
+                        if len > 0 {
+                            assert!(
+                                !blob.is_null(),
+                                "unexpected SQLITE_BLOB column type with NULL data"
+                            );
+                            ValueRef::Blob(unsafe { from_raw_parts(blob.cast::<u8>(), len as usize) })
+                        } else {
+                            // The return value from sqlite3_column_blob() for a zero-length BLOB
+                            // is a NULL pointer.
+                            ValueRef::Blob(&[])
+                        }
+                    }
+                    _ => unreachable!("sqlite3_column_type returned invalid value"),
+                }
+            }
+
+            #[inline]
+            pub(super) fn step(&self) -> Result<bool> {
+                match self.stmt.step() {
+                    ffi::SQLITE_ROW => Ok(true),
+                    ffi::SQLITE_DONE => Ok(false),
+                    code => Err(self.conn.decode_result(code).unwrap_err()),
+                }
+            }
+
+            #[inline]
+            pub(super) fn reset(&self) -> Result<()> {
+                match self.stmt.reset() {
+                    ffi::SQLITE_OK => Ok(()),
+                    code => Err(self.conn.decode_result(code).unwrap_err()),
+                }
+            }
+        }
+
+        /// Prepared statement status counters.
+        ///
+        /// See `https://www.sqlite.org/c3ref/c_stmtstatus_counter.html`
+        /// for explanations of each.
+        ///
+        /// Note that depending on your version of SQLite, all of these
+        /// may not be available.
+        #[repr(i32)]
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        #[non_exhaustive]
+        pub enum StatementStatus {
+            /// Equivalent to `SQLITE_STMTSTATUS_FULLSCAN_STEP`
+            FullscanStep = 1,
+            /// Equivalent to `SQLITE_STMTSTATUS_SORT`
+            Sort = 2,
+            /// Equivalent to `SQLITE_STMTSTATUS_AUTOINDEX`
+            AutoIndex = 3,
+            /// Equivalent to `SQLITE_STMTSTATUS_VM_STEP`
+            VmStep = 4,
+            /// Equivalent to `SQLITE_STMTSTATUS_REPREPARE` (3.20.0)
+            RePrepare = 5,
+            /// Equivalent to `SQLITE_STMTSTATUS_RUN` (3.20.0)
+            Run = 6,
+            /// Equivalent to `SQLITE_STMTSTATUS_FILTER_MISS`
+            FilterMiss = 7,
+            /// Equivalent to `SQLITE_STMTSTATUS_FILTER_HIT`
+            FilterHit = 8,
+            /// Equivalent to `SQLITE_STMTSTATUS_MEMUSED` (3.20.0)
+            MemUsed = 99,
+        }
     }
     
     pub mod transaction
@@ -7986,17 +13926,1276 @@ pub mod rusqlite
             *,
         };
         /*
+        use crate::{Connection, Result};
+        use std::ops::Deref;
         */
+        /// Options for transaction behavior.
+        #[derive(Copy, Clone)]
+        #[non_exhaustive]
+        pub enum TransactionBehavior {
+            /// DEFERRED means that the transaction does not actually start until the
+            /// database is first accessed.
+            Deferred,
+            /// IMMEDIATE cause the database connection to start a new write
+            /// immediately, without waiting for a writes statement.
+            Immediate,
+            /// EXCLUSIVE prevents other database connections from reading the database
+            /// while the transaction is underway.
+            Exclusive,
+        }
+
+        /// Options for how a Transaction or Savepoint should behave when it is dropped.
+        #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+        #[non_exhaustive]
+        pub enum DropBehavior {
+            /// Roll back the changes. This is the default.
+            Rollback,
+
+            /// Commit the changes.
+            Commit,
+
+            /// Do not commit or roll back changes - this will leave the transaction or
+            /// savepoint open, so should be used with care.
+            Ignore,
+
+            /// Panic. Used to enforce intentional behavior during development.
+            Panic,
+        }
+
+        /// Represents a transaction on a database connection.
+        #[derive(Debug)]
+        pub struct Transaction<'conn> {
+            conn: &'conn Connection,
+            drop_behavior: DropBehavior,
+        }
+
+        /// Represents a savepoint on a database connection.
+        #[derive(Debug)]
+        pub struct Savepoint<'conn> {
+            conn: &'conn Connection,
+            name: String,
+            drop_behavior: DropBehavior,
+            committed: bool,
+        }
+
+        impl Transaction<'_> {
+            /// Begin a new transaction. Cannot be nested; see `savepoint` for nested
+            /// transactions.
+            #[inline]
+            pub fn new(conn: &mut Connection, behavior: TransactionBehavior) -> Result<Transaction<'_>> {
+                Self::new_unchecked(conn, behavior)
+            }
+
+            /// Begin a new transaction, failing if a transaction is open.
+            #[inline]
+            pub fn new_unchecked(
+                conn: &Connection,
+                behavior: TransactionBehavior,
+            ) -> Result<Transaction<'_>> {
+                let query = match behavior {
+                    TransactionBehavior::Deferred => "BEGIN DEFERRED",
+                    TransactionBehavior::Immediate => "BEGIN IMMEDIATE",
+                    TransactionBehavior::Exclusive => "BEGIN EXCLUSIVE",
+                };
+                conn.execute_batch(query).map(move |()| Transaction {
+                    conn,
+                    drop_behavior: DropBehavior::Rollback,
+                })
+            }
+
+            /// Starts a new [savepoint](http://www.sqlite.org/lang_savepoint.html), allowing nested
+            /// transactions.
+            #[inline]
+            pub fn savepoint(&mut self) -> Result<Savepoint<'_>> {
+                Savepoint::new_(self.conn)
+            }
+
+            /// Create a new savepoint with a custom savepoint name. See `savepoint()`.
+            #[inline]
+            pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint<'_>> {
+                Savepoint::with_name_(self.conn, name)
+            }
+
+            /// Get the current setting for what happens to the transaction when it is
+            /// dropped.
+            #[inline]
+            #[must_use]
+            pub fn drop_behavior(&self) -> DropBehavior {
+                self.drop_behavior
+            }
+
+            /// Configure the transaction to perform the specified action when it is
+            /// dropped.
+            #[inline]
+            pub fn set_drop_behavior(&mut self, drop_behavior: DropBehavior) {
+                self.drop_behavior = drop_behavior;
+            }
+
+            /// A convenience method which consumes and commits a transaction.
+            #[inline]
+            pub fn commit(mut self) -> Result<()> {
+                self.commit_()
+            }
+
+            #[inline]
+            fn commit_(&mut self) -> Result<()> {
+                self.conn.execute_batch("COMMIT")?;
+                Ok(())
+            }
+
+            /// A convenience method which consumes and rolls back a transaction.
+            #[inline]
+            pub fn rollback(mut self) -> Result<()> {
+                self.rollback_()
+            }
+
+            #[inline]
+            fn rollback_(&mut self) -> Result<()> {
+                self.conn.execute_batch("ROLLBACK")?;
+                Ok(())
+            }
+
+            /// Consumes the transaction, committing or rolling back according to the
+            /// current setting (see `drop_behavior`).
+            #[inline]
+            pub fn finish(mut self) -> Result<()> {
+                self.finish_()
+            }
+
+            #[inline]
+            fn finish_(&mut self) -> Result<()> {
+                if self.conn.is_autocommit() {
+                    return Ok(());
+                }
+                match self.drop_behavior() {
+                    DropBehavior::Commit => self.commit_().or_else(|_| self.rollback_()),
+                    DropBehavior::Rollback => self.rollback_(),
+                    DropBehavior::Ignore => Ok(()),
+                    DropBehavior::Panic => panic!("Transaction dropped unexpectedly."),
+                }
+            }
+        }
+
+        impl Deref for Transaction<'_> {
+            type Target = Connection;
+
+            #[inline]
+            fn deref(&self) -> &Connection {
+                self.conn
+            }
+        }
+
+        #[expect(unused_must_use)]
+        impl Drop for Transaction<'_> {
+            #[inline]
+            fn drop(&mut self) {
+                self.finish_();
+            }
+        }
+
+        impl Savepoint<'_> {
+            #[inline]
+            fn with_name_<T: Into<String>>(conn: &Connection, name: T) -> Result<Savepoint<'_>> {
+                let name = name.into();
+                conn.execute_batch(&format!("SAVEPOINT {name}"))
+                    .map(|()| Savepoint {
+                        conn,
+                        name,
+                        drop_behavior: DropBehavior::Rollback,
+                        committed: false,
+                    })
+            }
+
+            #[inline]
+            fn new_(conn: &Connection) -> Result<Savepoint<'_>> {
+                Savepoint::with_name_(conn, "_rusqlite_sp")
+            }
+
+            /// Begin a new savepoint. Can be nested.
+            #[inline]
+            pub fn new(conn: &mut Connection) -> Result<Savepoint<'_>> {
+                Savepoint::new_(conn)
+            }
+
+            /// Begin a new savepoint with a user-provided savepoint name.
+            #[inline]
+            pub fn with_name<T: Into<String>>(conn: &mut Connection, name: T) -> Result<Savepoint<'_>> {
+                Savepoint::with_name_(conn, name)
+            }
+
+            /// Begin a nested savepoint.
+            #[inline]
+            pub fn savepoint(&mut self) -> Result<Savepoint<'_>> {
+                Savepoint::new_(self.conn)
+            }
+
+            /// Begin a nested savepoint with a user-provided savepoint name.
+            #[inline]
+            pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint<'_>> {
+                Savepoint::with_name_(self.conn, name)
+            }
+
+            /// Get the current setting for what happens to the savepoint when it is
+            /// dropped.
+            #[inline]
+            #[must_use]
+            pub fn drop_behavior(&self) -> DropBehavior {
+                self.drop_behavior
+            }
+
+            /// Configure the savepoint to perform the specified action when it is
+            /// dropped.
+            #[inline]
+            pub fn set_drop_behavior(&mut self, drop_behavior: DropBehavior) {
+                self.drop_behavior = drop_behavior;
+            }
+
+            /// A convenience method which consumes and commits a savepoint.
+            #[inline]
+            pub fn commit(mut self) -> Result<()> {
+                self.commit_()
+            }
+
+            #[inline]
+            fn commit_(&mut self) -> Result<()> {
+                self.conn.execute_batch(&format!("RELEASE {}", self.name))?;
+                self.committed = true;
+                Ok(())
+            }
+
+            /// A convenience method which rolls back a savepoint.
+            #[inline]
+            pub fn rollback(&mut self) -> Result<()> {
+                self.conn
+                    .execute_batch(&format!("ROLLBACK TO {}", self.name))
+            }
+
+            /// Consumes the savepoint, committing or rolling back according to the
+            /// current setting (see `drop_behavior`).
+            #[inline]
+            pub fn finish(mut self) -> Result<()> {
+                self.finish_()
+            }
+
+            #[inline]
+            fn finish_(&mut self) -> Result<()> {
+                if self.committed {
+                    return Ok(());
+                }
+                match self.drop_behavior() {
+                    DropBehavior::Commit => self
+                        .commit_()
+                        .or_else(|_| self.rollback().and_then(|()| self.commit_())),
+                    DropBehavior::Rollback => self.rollback().and_then(|()| self.commit_()),
+                    DropBehavior::Ignore => Ok(()),
+                    DropBehavior::Panic => panic!("Savepoint dropped unexpectedly."),
+                }
+            }
+        }
+
+        impl Deref for Savepoint<'_> {
+            type Target = Connection;
+
+            #[inline]
+            fn deref(&self) -> &Connection {
+                self.conn
+            }
+        }
+
+        #[expect(unused_must_use)]
+        impl Drop for Savepoint<'_> {
+            #[inline]
+            fn drop(&mut self) {
+                self.finish_();
+            }
+        }
+
+        /// Transaction state of a database
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        #[non_exhaustive]
+        pub enum TransactionState {
+            /// Equivalent to `SQLITE_TXN_NONE`
+            None,
+            /// Equivalent to `SQLITE_TXN_READ`
+            Read,
+            /// Equivalent to `SQLITE_TXN_WRITE`
+            Write,
+        }
+
+        impl Connection {
+            /// Begin a new transaction with the default behavior (DEFERRED).
+            #[inline]
+            pub fn transaction(&mut self) -> Result<Transaction<'_>> {
+                Transaction::new(self, self.transaction_behavior)
+            }
+
+            /// Begin a new transaction with a specified behavior.
+            #[inline]
+            pub fn transaction_with_behavior(
+                &mut self,
+                behavior: TransactionBehavior,
+            ) -> Result<Transaction<'_>> {
+                Transaction::new(self, behavior)
+            }
+
+            /// Begin a new transaction with the default behavior (DEFERRED).
+            pub fn unchecked_transaction(&self) -> Result<Transaction<'_>> {
+                Transaction::new_unchecked(self, self.transaction_behavior)
+            }
+
+            /// Begin a new savepoint with the default behavior (DEFERRED).
+            #[inline]
+            pub fn savepoint(&mut self) -> Result<Savepoint<'_>> {
+                Savepoint::new(self)
+            }
+
+            /// Begin a new savepoint with a specified name.
+            #[inline]
+            pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint<'_>> {
+                Savepoint::with_name(self, name)
+            }
+
+            /// Determine the transaction state of a database
+            pub fn transaction_state(
+                &self,
+                db_name: Option<crate::DatabaseName<'_>>,
+            ) -> Result<TransactionState> {
+                self.db.borrow().txn_state(db_name)
+            }
+
+            /// Set the default transaction behavior for the connection.
+            pub fn set_transaction_behavior(&mut self, behavior: TransactionBehavior) {
+                self.transaction_behavior = behavior;
+            }
+        }
     }
     
     pub mod types
     {
+        //! Traits dealing with SQLite data types.
         use ::
         {
             *,
         };
         /*
+        pub use self::from_sql::{FromSql, FromSqlError, FromSqlResult};
+        pub use self::to_sql::{ToSql, ToSqlOutput};
+        pub use self::value::Value;
+        pub use self::value_ref::ValueRef;
+
+        use std::fmt;
         */
+        mod from_sql
+        {
+            use ::
+            {
+                *,
+            };
+            /*
+            use super::{Value, ValueRef};
+            use std::borrow::Cow;
+            use std::error::Error;
+            use std::fmt;
+            */
+            /// Enum listing possible errors from [`FromSql`] trait.
+            #[derive(Debug)]
+            #[non_exhaustive]
+            pub enum FromSqlError 
+            {
+                /// Error when an SQLite value is requested, but the type of the result
+                /// cannot be converted to the requested Rust type.
+                InvalidType,
+
+                /// Error when the i64 value returned by SQLite cannot be stored into the
+                /// requested type.
+                OutOfRange(i64),
+
+                /// Error when the blob result returned by SQLite cannot be stored into the
+                /// requested type due to a size mismatch.
+                InvalidBlobSize {
+                    /// The expected size of the blob.
+                    expected_size: usize,
+                    /// The actual size of the blob that was returned.
+                    blob_size: usize,
+                },
+
+                /// An error case available for implementors of the [`FromSql`] trait.
+                Other(Box<dyn Error + Send + Sync + 'static>),
+            }
+
+            impl PartialEq for FromSqlError {
+                fn eq(&self, other: &Self) -> bool {
+                    match (self, other) {
+                        (Self::InvalidType, Self::InvalidType) => true,
+                        (Self::OutOfRange(n1), Self::OutOfRange(n2)) => n1 == n2,
+                        (
+                            Self::InvalidBlobSize {
+                                expected_size: es1,
+                                blob_size: bs1,
+                            },
+                            Self::InvalidBlobSize {
+                                expected_size: es2,
+                                blob_size: bs2,
+                            },
+                        ) => es1 == es2 && bs1 == bs2,
+                        (..) => false,
+                    }
+                }
+            }
+
+            impl fmt::Display for FromSqlError {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    match *self {
+                        Self::InvalidType => write!(f, "Invalid type"),
+                        Self::OutOfRange(i) => write!(f, "Value {i} out of range"),
+                        Self::InvalidBlobSize {
+                            expected_size,
+                            blob_size,
+                        } => {
+                            write!(
+                                f,
+                                "Cannot read {expected_size} byte value out of {blob_size} byte blob"
+                            )
+                        }
+                        Self::Other(ref err) => err.fmt(f),
+                    }
+                }
+            }
+
+            impl Error for FromSqlError {
+                fn source(&self) -> Option<&(dyn Error + 'static)> {
+                    if let Self::Other(ref err) = self {
+                        Some(&**err)
+                    } else {
+                        None
+                    }
+                }
+            }
+
+            /// Result type for implementors of the [`FromSql`] trait.
+            pub type FromSqlResult<T> = Result<T, FromSqlError>;
+
+            /// A trait for types that can be created from a SQLite value.
+            pub trait FromSql: Sized {
+                /// Converts SQLite value into Rust value.
+                fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self>;
+            }
+
+            macro_rules! from_sql_integral(
+                ($t:ident) => (
+                    impl FromSql for $t {
+                        #[inline]
+                        fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                            let i = i64::column_result(value)?;
+                            i.try_into().map_err(|_| FromSqlError::OutOfRange(i))
+                        }
+                    }
+                );
+                (non_zero $nz:ty, $z:ty) => (
+                    impl FromSql for $nz {
+                        #[inline]
+                        fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                            let i = <$z>::column_result(value)?;
+                            <$nz>::new(i).ok_or(FromSqlError::OutOfRange(0))
+                        }
+                    }
+                )
+            );
+
+            from_sql_integral!(i8);
+            from_sql_integral!(i16);
+            from_sql_integral!(i32);
+            from_sql_integral!(isize);
+            from_sql_integral!(u8);
+            from_sql_integral!(u16);
+            from_sql_integral!(u32);
+            from_sql_integral!(u64);
+            from_sql_integral!(usize);
+
+            from_sql_integral!(non_zero std::num::NonZeroIsize, isize);
+            from_sql_integral!(non_zero std::num::NonZeroI8, i8);
+            from_sql_integral!(non_zero std::num::NonZeroI16, i16);
+            from_sql_integral!(non_zero std::num::NonZeroI32, i32);
+            from_sql_integral!(non_zero std::num::NonZeroI64, i64);
+
+            from_sql_integral!(non_zero std::num::NonZeroUsize, usize);
+            from_sql_integral!(non_zero std::num::NonZeroU8, u8);
+            from_sql_integral!(non_zero std::num::NonZeroU16, u16);
+            from_sql_integral!(non_zero std::num::NonZeroU32, u32);
+            from_sql_integral!(non_zero std::num::NonZeroU64, u64);
+
+            impl FromSql for i64 {
+                #[inline]
+                fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    value.as_i64()
+                }
+            }
+
+            impl FromSql for f32 {
+                #[inline]
+                fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    match value {
+                        ValueRef::Integer(i) => Ok(i as Self),
+                        ValueRef::Real(f) => Ok(f as Self),
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+            }
+
+            impl FromSql for f64 {
+                #[inline]
+                fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    match value {
+                        ValueRef::Integer(i) => Ok(i as Self),
+                        ValueRef::Real(f) => Ok(f),
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+            }
+
+            impl FromSql for bool {
+                #[inline]
+                fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    i64::column_result(value).map(|i| i != 0)
+                }
+            }
+
+            impl FromSql for String {
+                #[inline]
+                fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    value.as_str().map(ToString::to_string)
+                }
+            }
+
+            impl FromSql for Box<str> {
+                #[inline]
+                fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    value.as_str().map(Into::into)
+                }
+            }
+
+            impl FromSql for std::rc::Rc<str> {
+                #[inline]
+                fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    value.as_str().map(Into::into)
+                }
+            }
+
+            impl FromSql for std::sync::Arc<str> {
+                #[inline]
+                fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    value.as_str().map(Into::into)
+                }
+            }
+
+            impl FromSql for Vec<u8> {
+                #[inline]
+                fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    value.as_blob().map(<[u8]>::to_vec)
+                }
+            }
+
+            impl FromSql for Box<[u8]> {
+                #[inline]
+                fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    value.as_blob().map(Box::<[u8]>::from)
+                }
+            }
+
+            impl FromSql for std::rc::Rc<[u8]> {
+                #[inline]
+                fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    value.as_blob().map(std::rc::Rc::<[u8]>::from)
+                }
+            }
+
+            impl FromSql for std::sync::Arc<[u8]> {
+                #[inline]
+                fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    value.as_blob().map(std::sync::Arc::<[u8]>::from)
+                }
+            }
+
+            impl<const N: usize> FromSql for [u8; N] {
+                #[inline]
+                fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    let slice = value.as_blob()?;
+                    slice.try_into().map_err(|_| FromSqlError::InvalidBlobSize {
+                        expected_size: N,
+                        blob_size: slice.len(),
+                    })
+                }
+            }
+            
+            impl FromSql for uuid::Uuid {
+                #[inline]
+                fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    let bytes = <[u8; 16]>::column_result(value)?;
+                    Ok(Self::from_u128(u128::from_be_bytes(bytes)))
+                }
+            }
+
+            impl<T: FromSql> FromSql for Option<T> {
+                #[inline]
+                fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    match value {
+                        ValueRef::Null => Ok(None),
+                        _ => FromSql::column_result(value).map(Some),
+                    }
+                }
+            }
+
+            impl<T: ?Sized> FromSql for Cow<'_, T>
+            where
+                T: ToOwned,
+                T::Owned: FromSql,
+            {
+                #[inline]
+                fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    <T::Owned>::column_result(value).map(Cow::Owned)
+                }
+            }
+
+            impl FromSql for Value {
+                #[inline]
+                fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                    Ok(value.into())
+                }
+            }
+        }
+        
+        mod to_sql
+        {
+            use ::
+            {
+                *,
+            };
+            /*
+            use super::{Null, Value, ValueRef};
+            #[cfg(feature = "array")]
+            use crate::vtab::array::Array;
+            use crate::{Error, Result};
+            use std::borrow::Cow;
+            */
+            /// `ToSqlOutput` represents the possible output types for implementers of the
+            /// [`ToSql`] trait.
+            #[derive(Clone, Debug, PartialEq)]
+            #[non_exhaustive]
+            pub enum ToSqlOutput<'a> {
+                /// A borrowed SQLite-representable value.
+                Borrowed(ValueRef<'a>),
+
+                /// An owned SQLite-representable value.
+                Owned(Value),
+            }
+
+            // Generically allow any type that can be converted into a ValueRef
+            // to be converted into a ToSqlOutput as well.
+            impl<'a, T: ?Sized> From<&'a T> for ToSqlOutput<'a>
+            where
+                &'a T: Into<ValueRef<'a>>,
+            {
+                #[inline]
+                fn from(t: &'a T) -> Self {
+                    ToSqlOutput::Borrowed(t.into())
+                }
+            }
+            
+            macro_rules! from_value(
+                ($t:ty) => (
+                    impl From<$t> for ToSqlOutput<'_> {
+                        #[inline]
+                        fn from(t: $t) -> Self { ToSqlOutput::Owned(t.into())}
+                    }
+                );
+                (non_zero $t:ty) => (
+                    impl From<$t> for ToSqlOutput<'_> {
+                        #[inline]
+                        fn from(t: $t) -> Self { ToSqlOutput::Owned(t.get().into())}
+                    }
+                )
+            );
+            from_value!(String);
+            from_value!(Null);
+            from_value!(bool);
+            from_value!(i8);
+            from_value!(i16);
+            from_value!(i32);
+            from_value!(i64);
+            from_value!(isize);
+            from_value!(u8);
+            from_value!(u16);
+            from_value!(u32);
+            from_value!(f32);
+            from_value!(f64);
+            from_value!(Vec<u8>);
+
+            from_value!(non_zero std::num::NonZeroI8);
+            from_value!(non_zero std::num::NonZeroI16);
+            from_value!(non_zero std::num::NonZeroI32);
+            from_value!(non_zero std::num::NonZeroI64);
+            from_value!(non_zero std::num::NonZeroIsize);
+            from_value!(non_zero std::num::NonZeroU8);
+            from_value!(non_zero std::num::NonZeroU16);
+            from_value!(non_zero std::num::NonZeroU32);
+            
+            from_value!(uuid::Uuid);
+
+            impl ToSql for ToSqlOutput<'_> {
+                #[inline]
+                fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                    Ok(match *self {
+                        ToSqlOutput::Borrowed(v) => ToSqlOutput::Borrowed(v),
+                        ToSqlOutput::Owned(ref v) => ToSqlOutput::Borrowed(ValueRef::from(v)),
+                    })
+                }
+            }
+
+            /// A trait for types that can be converted into SQLite values. Returns
+            /// [`Error::ToSqlConversionFailure`] if the conversion fails.
+            pub trait ToSql {
+                /// Converts Rust value to SQLite value
+                fn to_sql(&self) -> Result<ToSqlOutput<'_>>;
+            }
+
+            impl<T: ToSql + ToOwned + ?Sized> ToSql for Cow<'_, T> {
+                #[inline]
+                fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                    self.as_ref().to_sql()
+                }
+            }
+
+            impl<T: ToSql + ?Sized> ToSql for Box<T> {
+                #[inline]
+                fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                    self.as_ref().to_sql()
+                }
+            }
+
+            impl<T: ToSql + ?Sized> ToSql for std::rc::Rc<T> {
+                #[inline]
+                fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                    self.as_ref().to_sql()
+                }
+            }
+
+            impl<T: ToSql + ?Sized> ToSql for std::sync::Arc<T> {
+                #[inline]
+                fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                    self.as_ref().to_sql()
+                }
+            }
+            
+            macro_rules! to_sql_self(
+                ($t:ty) => (
+                    impl ToSql for $t {
+                        #[inline]
+                        fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                            Ok(ToSqlOutput::from(*self))
+                        }
+                    }
+                )
+            );
+
+            to_sql_self!(Null);
+            to_sql_self!(bool);
+            to_sql_self!(i8);
+            to_sql_self!(i16);
+            to_sql_self!(i32);
+            to_sql_self!(i64);
+            to_sql_self!(isize);
+            to_sql_self!(u8);
+            to_sql_self!(u16);
+            to_sql_self!(u32);
+            to_sql_self!(f32);
+            to_sql_self!(f64);
+
+            to_sql_self!(std::num::NonZeroI8);
+            to_sql_self!(std::num::NonZeroI16);
+            to_sql_self!(std::num::NonZeroI32);
+            to_sql_self!(std::num::NonZeroI64);
+            to_sql_self!(std::num::NonZeroIsize);
+            to_sql_self!(std::num::NonZeroU8);
+            to_sql_self!(std::num::NonZeroU16);
+            to_sql_self!(std::num::NonZeroU32);
+            to_sql_self!(uuid::Uuid);
+
+            macro_rules! to_sql_self_fallible(
+                ($t:ty) => (
+                    impl ToSql for $t {
+                        #[inline]
+                        fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                            Ok(ToSqlOutput::Owned(Value::Integer(
+                                i64::try_from(*self).map_err(
+                                    // TODO: Include the values in the error message.
+                                    |err| Error::ToSqlConversionFailure(err.into())
+                                )?
+                            )))
+                        }
+                    }
+                );
+                (non_zero $t:ty) => (
+                    impl ToSql for $t {
+                        #[inline]
+                        fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                            Ok(ToSqlOutput::Owned(Value::Integer(
+                                i64::try_from(self.get()).map_err(
+                                    // TODO: Include the values in the error message.
+                                    |err| Error::ToSqlConversionFailure(err.into())
+                                )?
+                            )))
+                        }
+                    }
+                )
+            );
+            
+            to_sql_self_fallible!(u64);
+            to_sql_self_fallible!(usize);
+            to_sql_self_fallible!(non_zero std::num::NonZeroU64);
+            to_sql_self_fallible!(non_zero std::num::NonZeroUsize);
+
+            impl<T: ?Sized> ToSql for &'_ T
+            where
+                T: ToSql,
+            {
+                #[inline]
+                fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                    (*self).to_sql()
+                }
+            }
+
+            impl ToSql for String {
+                #[inline]
+                fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                    Ok(ToSqlOutput::from(self.as_str()))
+                }
+            }
+
+            impl ToSql for str {
+                #[inline]
+                fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                    Ok(ToSqlOutput::from(self))
+                }
+            }
+
+            impl ToSql for Vec<u8> {
+                #[inline]
+                fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                    Ok(ToSqlOutput::from(self.as_slice()))
+                }
+            }
+
+            impl<const N: usize> ToSql for [u8; N] {
+                #[inline]
+                fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                    Ok(ToSqlOutput::from(&self[..]))
+                }
+            }
+
+            impl ToSql for [u8] {
+                #[inline]
+                fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                    Ok(ToSqlOutput::from(self))
+                }
+            }
+
+            impl ToSql for Value {
+                #[inline]
+                fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                    Ok(ToSqlOutput::from(self))
+                }
+            }
+
+            impl<T: ToSql> ToSql for Option<T> {
+                #[inline]
+                fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                    match *self {
+                        None => Ok(ToSqlOutput::from(Null)),
+                        Some(ref t) => t.to_sql(),
+                    }
+                }
+            }
+        }
+        
+        mod value
+        {
+            use ::
+            {
+                *,
+            };
+            /*
+            use super::{Null, Type};
+            */
+            /// Owning [dynamic type value](http://sqlite.org/datatype3.html).
+            #[derive(Clone, Debug, PartialEq)]
+            pub enum Value {
+                /// The value is a `NULL` value.
+                Null,
+                /// The value is a signed integer.
+                Integer(i64),
+                /// The value is a floating point number.
+                Real(f64),
+                /// The value is a text string.
+                Text(String),
+                /// The value is a blob of data
+                Blob(Vec<u8>),
+            }
+
+            impl From<Null> for Value {
+                #[inline]
+                fn from(_: Null) -> Self {
+                    Self::Null
+                }
+            }
+
+            impl From<bool> for Value {
+                #[inline]
+                fn from(i: bool) -> Self {
+                    Self::Integer(i as i64)
+                }
+            }
+
+            impl From<isize> for Value {
+                #[inline]
+                fn from(i: isize) -> Self {
+                    Self::Integer(i as i64)
+                }
+            }
+            
+            impl From<uuid::Uuid> for Value {
+                #[inline]
+                fn from(id: uuid::Uuid) -> Self {
+                    Self::Blob(id.as_bytes().to_vec())
+                }
+            }
+
+            macro_rules! from_i64(
+                ($t:ty) => (
+                    impl From<$t> for Value {
+                        #[inline]
+                        fn from(i: $t) -> Value {
+                            Value::Integer(i64::from(i))
+                        }
+                    }
+                )
+            );
+
+            from_i64!(i8);
+            from_i64!(i16);
+            from_i64!(i32);
+            from_i64!(u8);
+            from_i64!(u16);
+            from_i64!(u32);
+
+            impl From<i64> for Value {
+                #[inline]
+                fn from(i: i64) -> Self {
+                    Self::Integer(i)
+                }
+            }
+
+            impl From<f32> for Value {
+                #[inline]
+                fn from(f: f32) -> Self {
+                    Self::Real(f.into())
+                }
+            }
+
+            impl From<f64> for Value {
+                #[inline]
+                fn from(f: f64) -> Self {
+                    Self::Real(f)
+                }
+            }
+
+            impl From<String> for Value {
+                #[inline]
+                fn from(s: String) -> Self {
+                    Self::Text(s)
+                }
+            }
+
+            impl From<Vec<u8>> for Value {
+                #[inline]
+                fn from(v: Vec<u8>) -> Self {
+                    Self::Blob(v)
+                }
+            }
+
+            impl<T> From<Option<T>> for Value
+            where
+                T: Into<Self>,
+            {
+                #[inline]
+                fn from(v: Option<T>) -> Self {
+                    match v {
+                        Some(x) => x.into(),
+                        None => Self::Null,
+                    }
+                }
+            }
+
+            impl Value {
+                /// Returns SQLite fundamental datatype.
+                #[inline]
+                #[must_use]
+                pub fn data_type(&self) -> Type {
+                    match *self {
+                        Self::Null => Type::Null,
+                        Self::Integer(_) => Type::Integer,
+                        Self::Real(_) => Type::Real,
+                        Self::Text(_) => Type::Text,
+                        Self::Blob(_) => Type::Blob,
+                    }
+                }
+            }
+        }
+        
+        mod value_ref
+        {
+            use ::
+            {
+                *,
+            };
+            /*
+            use super::{Type, Value};
+            use crate::types::{FromSqlError, FromSqlResult};
+            */
+            /// A non-owning [dynamic type value](http://sqlite.org/datatype3.html).
+            #[derive(Copy, Clone, Debug, PartialEq)]
+            pub enum ValueRef<'a> {
+                /// The value is a `NULL` value.
+                Null,
+                /// The value is a signed integer.
+                Integer(i64),
+                /// The value is a floating point number.
+                Real(f64),
+                /// The value is a text string.
+                Text(&'a [u8]),
+                /// The value is a blob of data
+                Blob(&'a [u8]),
+            }
+
+            impl ValueRef<'_> {
+                /// Returns SQLite fundamental datatype.
+                #[inline]
+                #[must_use]
+                pub fn data_type(&self) -> Type {
+                    match *self {
+                        ValueRef::Null => Type::Null,
+                        ValueRef::Integer(_) => Type::Integer,
+                        ValueRef::Real(_) => Type::Real,
+                        ValueRef::Text(_) => Type::Text,
+                        ValueRef::Blob(_) => Type::Blob,
+                    }
+                }
+            }
+
+            impl<'a> ValueRef<'a> {
+                /// If `self` is case `Integer`, returns the integral value. Otherwise,
+                /// returns [`Err(FromSqlError::InvalidType)`](crate::types::from_sql::FromSqlError::InvalidType).
+                #[inline]
+                pub fn as_i64(&self) -> FromSqlResult<i64> {
+                    match *self {
+                        ValueRef::Integer(i) => Ok(i),
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+
+                /// If `self` is case `Null` returns None.
+                /// If `self` is case `Integer`, returns the integral value.
+                /// Otherwise, returns [`Err(FromSqlError::InvalidType)`](crate::types::from_sql::FromSqlError::InvalidType).
+                #[inline]
+                pub fn as_i64_or_null(&self) -> FromSqlResult<Option<i64>> {
+                    match *self {
+                        ValueRef::Null => Ok(None),
+                        ValueRef::Integer(i) => Ok(Some(i)),
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+
+                /// If `self` is case `Real`, returns the floating point value. Otherwise,
+                /// returns [`Err(FromSqlError::InvalidType)`](crate::types::from_sql::FromSqlError::InvalidType).
+                #[inline]
+                pub fn as_f64(&self) -> FromSqlResult<f64> {
+                    match *self {
+                        ValueRef::Real(f) => Ok(f),
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+
+                /// If `self` is case `Null` returns None.
+                /// If `self` is case `Real`, returns the floating point value.
+                /// Otherwise, returns [`Err(FromSqlError::InvalidType)`](crate::types::from_sql::FromSqlError::InvalidType).
+                #[inline]
+                pub fn as_f64_or_null(&self) -> FromSqlResult<Option<f64>> {
+                    match *self {
+                        ValueRef::Null => Ok(None),
+                        ValueRef::Real(f) => Ok(Some(f)),
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+
+                /// If `self` is case `Text`, returns the string value. Otherwise, returns
+                /// [`Err(FromSqlError::InvalidType)`](crate::types::from_sql::FromSqlError::InvalidType).
+                #[inline]
+                pub fn as_str(&self) -> FromSqlResult<&'a str> {
+                    match *self {
+                        ValueRef::Text(t) => {
+                            std::str::from_utf8(t).map_err(|e| FromSqlError::Other(Box::new(e)))
+                        }
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+
+                /// If `self` is case `Null` returns None.
+                /// If `self` is case `Text`, returns the string value.
+                /// Otherwise, returns [`Err(FromSqlError::InvalidType)`](crate::types::from_sql::FromSqlError::InvalidType).
+                #[inline]
+                pub fn as_str_or_null(&self) -> FromSqlResult<Option<&'a str>> {
+                    match *self {
+                        ValueRef::Null => Ok(None),
+                        ValueRef::Text(t) => std::str::from_utf8(t)
+                            .map_err(|e| FromSqlError::Other(Box::new(e)))
+                            .map(Some),
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+
+                /// If `self` is case `Blob`, returns the byte slice. Otherwise, returns
+                /// [`Err(FromSqlError::InvalidType)`](crate::types::from_sql::FromSqlError::InvalidType).
+                #[inline]
+                pub fn as_blob(&self) -> FromSqlResult<&'a [u8]> {
+                    match *self {
+                        ValueRef::Blob(b) => Ok(b),
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+
+                /// If `self` is case `Null` returns None.
+                /// If `self` is case `Blob`, returns the byte slice.
+                /// Otherwise, returns [`Err(FromSqlError::InvalidType)`](crate::types::from_sql::FromSqlError::InvalidType).
+                #[inline]
+                pub fn as_blob_or_null(&self) -> FromSqlResult<Option<&'a [u8]>> {
+                    match *self {
+                        ValueRef::Null => Ok(None),
+                        ValueRef::Blob(b) => Ok(Some(b)),
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+
+                /// Returns the byte slice that makes up this `ValueRef` if it's either
+                /// [`ValueRef::Blob`] or [`ValueRef::Text`].
+                #[inline]
+                pub fn as_bytes(&self) -> FromSqlResult<&'a [u8]> {
+                    match self {
+                        ValueRef::Text(s) | ValueRef::Blob(s) => Ok(s),
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+
+                /// If `self` is case `Null` returns None.
+                /// If `self` is [`ValueRef::Blob`] or [`ValueRef::Text`] returns the byte
+                /// slice that makes up this value
+                #[inline]
+                pub fn as_bytes_or_null(&self) -> FromSqlResult<Option<&'a [u8]>> {
+                    match *self {
+                        ValueRef::Null => Ok(None),
+                        ValueRef::Text(s) | ValueRef::Blob(s) => Ok(Some(s)),
+                        _ => Err(FromSqlError::InvalidType),
+                    }
+                }
+            }
+
+            impl From<ValueRef<'_>> for Value {
+                #[inline]
+                #[track_caller]
+                fn from(borrowed: ValueRef<'_>) -> Self {
+                    match borrowed {
+                        ValueRef::Null => Self::Null,
+                        ValueRef::Integer(i) => Self::Integer(i),
+                        ValueRef::Real(r) => Self::Real(r),
+                        ValueRef::Text(s) => {
+                            let s = std::str::from_utf8(s).expect("invalid UTF-8");
+                            Self::Text(s.to_string())
+                        }
+                        ValueRef::Blob(b) => Self::Blob(b.to_vec()),
+                    }
+                }
+            }
+
+            impl<'a> From<&'a str> for ValueRef<'a> {
+                #[inline]
+                fn from(s: &str) -> ValueRef<'_> {
+                    ValueRef::Text(s.as_bytes())
+                }
+            }
+
+            impl<'a> From<&'a [u8]> for ValueRef<'a> {
+                #[inline]
+                fn from(s: &[u8]) -> ValueRef<'_> {
+                    ValueRef::Blob(s)
+                }
+            }
+
+            impl<'a> From<&'a Value> for ValueRef<'a> {
+                #[inline]
+                fn from(value: &'a Value) -> Self {
+                    match *value {
+                        Value::Null => ValueRef::Null,
+                        Value::Integer(i) => ValueRef::Integer(i),
+                        Value::Real(r) => ValueRef::Real(r),
+                        Value::Text(ref s) => ValueRef::Text(s.as_bytes()),
+                        Value::Blob(ref b) => ValueRef::Blob(b),
+                    }
+                }
+            }
+
+            impl<T> From<Option<T>> for ValueRef<'_>
+            where
+                T: Into<Self>,
+            {
+                #[inline]
+                fn from(s: Option<T>) -> Self {
+                    match s {
+                        Some(x) => x.into(),
+                        None => ValueRef::Null,
+                    }
+                }
+            }
+        }
+        
+        /// Empty struct that can be used to fill in a query parameter as `NULL`.
+        #[derive(Copy, Clone)]
+        pub struct Null;
+
+        /// SQLite data types.
+        #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+        pub enum Type {
+            /// NULL
+            Null,
+            /// 64-bit signed integer
+            Integer,
+            /// 64-bit IEEE floating point number
+            Real,
+            /// String
+            Text,
+            /// BLOB
+            Blob,
+        }
+
+        impl fmt::Display for Type {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                match *self {
+                    Self::Null => f.pad("Null"),
+                    Self::Integer => f.pad("Integer"),
+                    Self::Real => f.pad("Real"),
+                    Self::Text => f.pad("Text"),
+                    Self::Blob => f.pad("Blob"),
+                }
+            }
+        }
+
     }
     
     pub mod version
@@ -8019,7 +15218,7 @@ pub mod rusqlite
         */
     } pub use util::SmallCString;
     
-    // Number of cached prepared statements we'll hold on to.
+    /// Number of cached prepared statements we'll hold on to.
     const STATEMENT_CACHE_DEFAULT_CAPACITY: usize = 16;
     
     /// A macro making it more convenient to longer lists of
@@ -8045,31 +15244,7 @@ pub mod rusqlite
             &[$(($param_name, &$param_val as &dyn $crate::ToSql)),+] as &[(&str, &dyn $crate::ToSql)]
         };
     }
-    
-    /// Captured identifiers in SQL
-    #[cfg(feature = "rusqlite-macros")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "rusqlite-macros")))]
-    #[macro_export]
-    macro_rules! prepare_and_bind {
-        ($conn:expr, $sql:literal) => {{
-            let mut stmt = $conn.prepare($sql)?;
-            $crate::__bind!(stmt $sql);
-            stmt
-        }};
-    }
-    
-    /// Captured identifiers in SQL
-    #[cfg(feature = "rusqlite-macros")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "rusqlite-macros")))]
-    #[macro_export]
-    macro_rules! prepare_cached_and_bind {
-        ($conn:expr, $sql:literal) => {{
-            let mut stmt = $conn.prepare_cached($sql)?;
-            $crate::__bind!(stmt $sql);
-            stmt
-        }};
-    }
-    
+        
     /// A typedef of the result returned by many methods.
     pub type Result<T, E = Error> = result::Result<T, E>;
     
@@ -8109,8 +15284,6 @@ pub mod rusqlite
         Ok((ptr, len, dtor_info))
     }
     
-    // Helper to cast to c_int safely, returning the correct error type if the cast
-    // failed.
     fn len_as_c_int(len: usize) -> Result<c_int> {
         if len >= (c_int::MAX as usize) {
             Err(Error::SqliteFailure(
@@ -8153,8 +15326,6 @@ pub mod rusqlite
     /// Shorthand for [`DatabaseName::Temp`].
     pub const TEMP_DB: DatabaseName<'static> = DatabaseName::Temp;
     
-    // Currently DatabaseName is only used by the backup and blob mods, so hide
-    // this (private) impl to avoid dead code warnings.
     impl DatabaseName<'_> {
         #[inline]
         fn as_cstring(&self) -> Result<SmallCString> {
@@ -8258,41 +15429,7 @@ pub mod rusqlite
             }
             Ok(())
         }
-    
-        /// Convenience method to prepare and execute a single SQL statement.
-        #[cfg(feature = "load_extension")]
-        #[cfg_attr(docsrs, doc(cfg(feature = "load_extension")))]
-        #[inline]
-        pub unsafe fn load_extension_enable(&self) -> Result<()> {
-            self.db.borrow_mut().enable_load_extension(1)
-        }
-    
-        /// Disable loading of SQLite extensions.
-        #[cfg(feature = "load_extension")]
-        #[cfg_attr(docsrs, doc(cfg(feature = "load_extension")))]
-        #[inline]
-        pub fn load_extension_disable(&self) -> Result<()> {
-            // It's always safe to turn off extension loading.
-            unsafe { self.db.borrow_mut().enable_load_extension(0) }
-        }
-    
-        /// Load the SQLite extension at `dylib_path`. `dylib_path` is passed
-        /// through to `sqlite3_load_extension`, which may attempt OS-specific
-        /// modifications if the file cannot be loaded directly (for example
-        /// converting `"some/ext"` to `"some/ext.so"`, `"some\\ext.dll"`, ...).
-        #[cfg(feature = "load_extension")]
-        #[cfg_attr(docsrs, doc(cfg(feature = "load_extension")))]
-        #[inline]
-        pub unsafe fn load_extension<P: AsRef<Path>>(
-            &self,
-            dylib_path: P,
-            entry_point: Option<&str>,
-        ) -> Result<()> {
-            self.db
-                .borrow_mut()
-                .load_extension(dylib_path.as_ref(), entry_point)
-        }
-    
+            
         /// Get access to the underlying SQLite database connection handle.
         #[inline]
         pub unsafe fn handle(&self) -> *mut ffi::sqlite3 {
@@ -8309,30 +15446,7 @@ pub mod rusqlite
                 transaction_behavior: TransactionBehavior::Deferred,
             })
         }
-    
-        /// Helper to register an SQLite extension written in Rust.
-        #[cfg(feature = "loadable_extension")]
-        #[cfg_attr(docsrs, doc(cfg(feature = "loadable_extension")))]
-        pub unsafe fn extension_init2(
-            db: *mut ffi::sqlite3,
-            pz_err_msg: *mut *mut c_char,
-            p_api: *mut ffi::sqlite3_api_routines,
-            init: fn(Connection) -> Result<bool>,
-        ) -> c_int {
-            if p_api.is_null() {
-                return ffi::SQLITE_ERROR;
-            }
-            match ffi::rusqlite_extension_init2(p_api)
-                .map_err(Error::from)
-                .and(Connection::from_handle(db))
-                .and_then(init)
-            {
-                Err(err) => to_sqlite_error(&err, pz_err_msg),
-                Ok(true) => ffi::SQLITE_OK_LOAD_PERMANENTLY,
-                _ => ffi::SQLITE_OK,
-            }
-        }
-    
+            
         /// Create a `Connection` from a raw owned handle.
         #[inline]
         pub unsafe fn from_handle_owned(db: *mut ffi::sqlite3) -> Result<Connection> {
@@ -8393,28 +15507,6 @@ pub mod rusqlite
         /// Determine if a database is read-only
         pub fn is_readonly(&self, db_name: DatabaseName<'_>) -> Result<bool> {
             self.db.borrow().db_readonly(db_name)
-        }
-    
-        /// Return the schema name for a database connection
-        #[cfg(feature = "modern_sqlite")] // 3.39.0
-        #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
-        pub fn db_name(&self, index: usize) -> Result<String> {
-            unsafe {
-                let db = self.handle();
-                let name = ffi::sqlite3_db_name(db, index as c_int);
-                if name.is_null() {
-                    Err(Error::InvalidDatabaseIndex(index))
-                } else {
-                    Ok(CStr::from_ptr(name).to_str()?.to_owned())
-                }
-            }
-        }
-    
-        /// Determine whether an interrupt is currently in effect
-        #[cfg(feature = "modern_sqlite")] // 3.41.0
-        #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
-        pub fn is_interrupted(&self) -> bool {
-            self.db.borrow().is_interrupted()
         }
     }
     
@@ -10425,10 +17517,10 @@ pub mod uuid
         */
         /// A general error that can occur when working with UUIDs.
         #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-        pub struct Error(pub(crate) ErrorKind);
+        pub struct Error(pub ErrorKind);
         
         #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-        pub(crate) enum ErrorKind {
+        pub enum ErrorKind {
             /// Invalid character in the [`Uuid`] string.
             Char { character: char, index: usize },
             /// A simple [`Uuid`] didn't contain 32 characters.
@@ -10451,7 +17543,7 @@ pub mod uuid
         
         /// A string that is guaranteed to fail to parse to a [`Uuid`].
         #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-        pub struct InvalidUuid<'a>(pub(crate) &'a [u8]);
+        pub struct InvalidUuid<'a>(pub &'a [u8]);
         
         impl<'a> InvalidUuid<'a> {
             /// Converts the lightweight error type into detailed diagnostics.
@@ -11215,7 +18307,7 @@ pub mod uuid
         };
         /*
         */
-        pub(crate) fn bytes() -> [u8; 16] {
+        pub fn bytes() -> [u8; 16] {
             rand::random()
         }
     }
@@ -11236,13 +18328,12 @@ pub mod uuid
         /// A timestamp that can be encoded into a UUID.
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         pub struct Timestamp {
-            pub(crate) seconds: u64,
-            pub(crate) nanos: u32,
+            pub seconds: u64,
+            pub nanos: u32,
         }
         
         impl Timestamp {
             /// Get a timestamp representing the current system time.
-            #[cfg(feature = "std")]
             pub fn now(context: impl ClockSequence<Output = u16>) -> Self {
                 
                     let _ = context;
@@ -11294,7 +18385,7 @@ pub mod uuid
             }
         }
         
-        pub(crate) const fn encode_rfc4122_timestamp(ticks: u64, counter: u16, node_id: &[u8; 6]) -> Uuid {
+        pub const fn encode_rfc4122_timestamp(ticks: u64, counter: u16, node_id: &[u8; 6]) -> Uuid {
             let time_low = (ticks & 0xFFFF_FFFF) as u32;
             let time_mid = ((ticks >> 32) & 0xFFFF) as u16;
             let time_high_and_version = (((ticks >> 48) & 0x0FFF) as u16) | (1 << 12);
@@ -11313,7 +18404,7 @@ pub mod uuid
             Uuid::from_fields(time_low, time_mid, time_high_and_version, &d4)
         }
         
-        pub(crate) const fn decode_rfc4122_timestamp(uuid: &Uuid) -> (u64, u16) {
+        pub const fn decode_rfc4122_timestamp(uuid: &Uuid) -> (u64, u16) {
             let bytes = uuid.as_bytes();
         
             let ticks: u64 = ((bytes[6] & 0x0F) as u64) << 56
@@ -11359,9 +18450,6 @@ pub mod uuid
         pub mod context {
             use super::ClockSequence;
         
-            #[cfg(any(feature = "v1", feature = "v6"))]
-            use atomic::{Atomic, Ordering};
-        
             /// An empty counter that will always return the value `0`.
             #[derive(Debug, Clone, Copy, Default)]
             pub struct NoContext;
@@ -11371,60 +18459,6 @@ pub mod uuid
         
                 fn generate_sequence(&self, _seconds: u64, _nanos: u32) -> Self::Output {
                     0
-                }
-            }
-        
-            #[cfg(all(any(feature = "v1", feature = "v6"), feature = "std", feature = "rng"))]
-            static CONTEXT: Context = Context {
-                count: Atomic::new(0),
-            };
-        
-            #[cfg(all(any(feature = "v1", feature = "v6"), feature = "std", feature = "rng"))]
-            static CONTEXT_INITIALIZED: Atomic<bool> = Atomic::new(false);
-        
-            #[cfg(all(any(feature = "v1", feature = "v6"), feature = "std", feature = "rng"))]
-            pub(crate) fn shared_context() -> &'static Context {
-                if CONTEXT_INITIALIZED
-                    .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
-                    .is_ok()
-                {
-                    CONTEXT.count.store(crate::rng::u16(), Ordering::Release);
-                }
-        
-                &CONTEXT
-            }
-        
-            /// A thread-safe, wrapping counter that produces 14-bit numbers.
-            #[derive(Debug)]
-            #[cfg(any(feature = "v1", feature = "v6"))]
-            pub struct Context {
-                count: Atomic<u16>,
-            }
-        
-            #[cfg(any(feature = "v1", feature = "v6"))]
-            impl Context {
-                /// Construct a new context that's initialized with the given value.
-                pub const fn new(count: u16) -> Self {
-                    Self {
-                        count: Atomic::<u16>::new(count),
-                    }
-                }
-        
-                /// Construct a new context that's initialized with a random value.
-                #[cfg(feature = "rng")]
-                pub fn new_random() -> Self {
-                    Self {
-                        count: Atomic::<u16>::new(crate::rng::u16()),
-                    }
-                }
-            }
-        
-            #[cfg(any(feature = "v1", feature = "v6"))]
-            impl ClockSequence for Context {
-                type Output = u16;
-        
-                fn generate_sequence(&self, _seconds: u64, _nanos: u32) -> Self::Output {
-                    self.count.fetch_add(1, Ordering::AcqRel) % (u16::MAX >> 2)
                 }
             }
         }
@@ -11659,8 +18693,6 @@ pub mod uuid
                     Some(Timestamp {
                         seconds,
                         nanos,
-                        #[cfg(any(feature = "v1", feature = "v6"))]
-                        counter: 0,
                     })
                 }
                 _ => None,
@@ -11976,39 +19008,7 @@ pub mod yaml_rust
                 }
             }
         }
-        
-        #[cfg_attr(feature = "cargo-clippy", allow(should_implement_trait))]
-        impl Yaml {
-            // Not implementing FromStr because there is no possibility of Error.
-            // This function falls back to Yaml::String if nothing else matches.
-            pub fn from_str(v: &str) -> Yaml {
-                if v.starts_with("0x") {
-                    let n = i64::from_str_radix(&v[2..], 16);
-                    if n.is_ok() {
-                        return Yaml::Integer(n.unwrap());
-                    }
-                }
-                if v.starts_with("0o") {
-                    let n = i64::from_str_radix(&v[2..], 8);
-                    if n.is_ok() {
-                        return Yaml::Integer(n.unwrap());
-                    }
-                }
-                if v.starts_with('+') && v[1..].parse::<i64>().is_ok() {
-                    return Yaml::Integer(v[1..].parse::<i64>().unwrap());
-                }
-                match v {
-                    "~" | "null" => Yaml::Null,
-                    "true" => Yaml::Boolean(true),
-                    "false" => Yaml::Boolean(false),
-                    _ if v.parse::<i64>().is_ok() => Yaml::Integer(v.parse::<i64>().unwrap()),
-                    // try parsing as f64
-                    _ if parse_f64(v).is_some() => Yaml::Real(v.to_owned()),
-                    _ => Yaml::String(v.to_owned())
-                }
-            }
-        }
-        
+                
         static BAD_VALUE: Yaml = Yaml::BadValue;
         impl<'a> Index<&'a str> for Yaml {
             type Output = Yaml;
@@ -22835,4 +29835,4 @@ fn main() {
     }
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// 22838
+// 29838
