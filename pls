@@ -23,132 +23,141 @@ extern crate pest_derive; */
 
 pub mod borrow
 {
-    pub use std::borrow::{ * };
+    pub use ::borrow::{ * };
 }
 
 pub mod collections
 {
-    pub use std::collections::{ * };
+    pub use ::collections::{ * };
 }
 
 pub mod convert
 {
-    pub use std::convert::{ * };
+    pub use ::convert::{ * };
 }
 
 pub mod env
 {
-    pub use std::env::{ * };
+    pub use ::env::{ * };
 }
 
 pub mod error
 {
-    pub use std::error::{ * };
+    pub use ::error::{ * };
 }
 
 pub mod ffi
 {
-    pub use std::ffi::{ * };
+    pub use ::ffi::{ * };
 }
 
 pub mod fs
 {
-    pub use std::fs::{ * };
+    pub use ::fs::{ * };
 }
 
 pub mod hash
 {
-    pub use std::hash::{ * };
+    pub use ::hash::{ * };
 }
 
 pub mod io
 {
-    pub use std::io::{ * };
+    pub use ::io::{ * };
 }
 
 pub mod iter
 {
-    pub use std::iter::{ * };
+    pub use ::iter::{ * };
 }
 
 pub mod marker
 {
-    pub use std::marker::{ * };
+    pub use ::marker::{ * };
 }
 
 pub mod mem
 {
-    pub use std::mem::{ * };
+    pub use ::mem::{ * };
+    /* memchr v2.6.0 */
+    pub mod chr
+    {
+        //! For skipping along search text quickly when a leading byte is known.
+        use ::
+        {
+            *,
+        };
+    }
 }
 
 pub mod num
 {
-    pub use std::num::{ * };
+    pub use ::num::{ * };
 }
 
 pub mod ops
 {
-    pub use std::ops::{ * };
+    pub use ::ops::{ * };
 }
 
 pub mod os
 {
     pub mod unix
     {
-        #[cfg(unix)] pub use std::os::unix::{ * };    
+        #[cfg(unix)] pub use ::os::unix::{ * };    
     }
 
     pub mod windows
     {
-        #[cfg(windows)] pub use std::os::windows::{ * };    
+        #[cfg(windows)] pub use ::os::windows::{ * };    
     }
 
-    pub use std::os::{ * };   
+    pub use ::os::{ * };   
 }
 
 pub mod path
 {
-    pub use std::path::{ * };
+    pub use ::path::{ * };
 }
 
 pub mod process
 {
-    pub use std::process::{ * };
+    pub use ::process::{ * };
 }
 
 pub mod ptr
 {
-    pub use std::ptr::{ * };
+    pub use ::ptr::{ * };
 }
 
 pub mod result
 {
-    pub use std::result::{ * };
+    pub use ::result::{ * };
 }
 
 pub mod str
 {
-    pub use std::str::{ * };
+    pub use ::str::{ * };
 }
 
 pub mod string
 {
-    pub use std::string::{ * };
+    pub use ::string::{ * };
 }
 
 pub mod sync
 {
-    pub use std::sync::{ * };
+    pub use ::sync::{ * };
 }
 
 pub mod time
 {
-    pub use std::time::{ * };
+    pub use ::time::{ * };
 }
 
 pub mod vec
 {
-    pub use std::vec::{ * };
+    pub use ::vec::{ * };
     /* smallvec = "1.6.1" */
     pub mod small
     {
@@ -178,6 +187,14 @@ extern crate pest;
 extern crate pest_derive;
 */
 pub mod _
+{
+    use ::
+    {
+        *,
+    };
+}
+// aho_corasick v1.0.0
+pub mod aho_corasick
 {
     use ::
     {
@@ -222,17 +239,17 @@ pub mod _
     #[macro_export]
     macro_rules! log {
         ($fmt:expr) => (
-            let log_file = if let Ok(x) = std::env::var("CICADA_LOG_FILE") {
+            let log_file = if let Ok(x) = ::env::var("CICADA_LOG_FILE") {
                 x.clone()
             } else {
                 String::new()
             };
     
             if !log_file.is_empty() {
-                use std::io::Write as _;
+                use ::io::Write as _;
     
                 let msg = $fmt;
-                match std::fs::OpenOptions::new().append(true).create(true).open(&log_file) {
+                match ::fs::OpenOptions::new().append(true).create(true).open(&log_file) {
                     Ok(mut cfile) => {
                         let pid = $crate::tlog::getpid();
                         let now = $crate::ctime::DateTime::now();
@@ -263,13 +280,13 @@ pub mod _
         *,
     };
     /*
-    use std::collections::HashMap;
-    use std::env;
-    use std::fs::File;
-    use std::fs::OpenOptions;
-    use std::io::Write;
-    use std::os::unix::io::IntoRawFd;
-    use std::path::{Path, PathBuf};
+    use ::collections::HashMap;
+    use ::env;
+    use ::fs::File;
+    use ::fs::OpenOptions;
+    use ::io::Write;
+    use ::os::unix::io::IntoRawFd;
+    use ::path::{Path, PathBuf};
     
     use regex::Regex;
     
@@ -281,13 +298,13 @@ pub mod _
     macro_rules! println_stderr 
     {
         ($fmt:expr) => (
-            match writeln!(&mut ::std::io::stderr(), $fmt) {
+            match writeln!(&mut ::io::stderr(), $fmt) {
                 Ok(_) => {}
                 Err(e) => println!("write to stderr failed: {:?}", e)
             }
         );
         ($fmt:expr, $($arg:tt)*) => (
-            match writeln!(&mut ::std::io::stderr(), $fmt, $($arg)*) {
+            match writeln!(&mut ::io::stderr(), $fmt, $($arg)*) {
                 Ok(_) => {}
                 Err(e) => println!("write to stderr failed: {:?}", e)
             }
@@ -710,13 +727,13 @@ pub mod libc
             *,
         };
         /*
-        use std::io::Write;
+        use ::io::Write;
         
         use nix::sys::signal::Signal;
         use nix::sys::wait::waitpid;
         use nix::sys::wait::WaitPidFlag as WF;
         use nix::sys::wait::WaitStatus as WS;
-        use nix::unistd::Pid;
+        use nix::uni ::Pid;
         
         use crate::shell;
         use crate::signals;
@@ -957,7 +974,7 @@ pub mod libc
             *,
         };
         /*
-        use std::fmt;
+        use ::fmt;
         use time::OffsetDateTime;
         */
         #[derive(Debug, PartialEq, Eq)]
@@ -1024,16 +1041,16 @@ pub mod linked_hash_map
         *,
     };
     /*
-    use std::borrow::Borrow;
-    use std::cmp::Ordering;
-    use std::collections::hash_map::{self, HashMap};
-    use std::fmt;
-    use std::hash::{BuildHasher, Hash, Hasher};
-    use std::iter;
-    use std::marker;
-    use std::mem;
-    use std::ops::{Index, IndexMut};
-    use std::ptr::{self, addr_of_mut};
+    use ::borrow::Borrow;
+    use ::cmp::Ordering;
+    use ::collections::hash_map::{self, HashMap};
+    use ::fmt;
+    use ::hash::{BuildHasher, Hash, Hasher};
+    use ::iter;
+    use ::marker;
+    use ::mem;
+    use ::ops::{Index, IndexMut};
+    use ::ptr::{self, addr_of_mut};
     */
     struct KeyRef<K> {
         k: *const K,
@@ -1098,8 +1115,8 @@ pub mod linked_hash_map
 
     // drop empty node without dropping its key and value
     unsafe fn drop_empty_node<K, V>(the_box: *mut Node<K, V>) {
-        let layout = std::alloc::Layout::new::<Node<K, V>>();
-        std::alloc::dealloc(the_box as *mut u8, layout);
+        let layout = ::::Layout::new::<Node<K, V>>();
+        ::::dealloc(the_box as *mut u8, layout);
     }
 
     impl<K: Hash + Eq, V> LinkedHashMap<K, V> {
@@ -1158,8 +1175,8 @@ pub mod linked_hash_map
             if self.head.is_null() {
                 // allocate the guard node if not present
                 unsafe {
-                    let node_layout = std::alloc::Layout::new::<Node<K, V>>();
-                    self.head = std::alloc::alloc(node_layout) as *mut Node<K, V>;
+                    let node_layout = ::::Layout::new::<Node<K, V>>();
+                    self.head = ::::alloc(node_layout) as *mut Node<K, V>;
                     (*self.head).next = self.head;
                     (*self.head).prev = self.head;
                 }
@@ -1266,8 +1283,7 @@ pub mod linked_hash_map
         }
 
         /// Checks if the map contains the given key.
-        pub fn contains_key<Q: ?Sized>(&self, k: &Q) -> bool
-        where
+        pub fn contains_key<Q: ?Sized>(&self, k: &Q) -> bool where 
             K: Borrow<Q>,
             Q: Eq + Hash,
         {
@@ -1275,8 +1291,7 @@ pub mod linked_hash_map
         }
 
         /// Returns the value corresponding to the key in the map.
-        pub fn get<Q: ?Sized>(&self, k: &Q) -> Option<&V>
-        where
+        pub fn get<Q: ?Sized>(&self, k: &Q) -> Option<&V> where 
             K: Borrow<Q>,
             Q: Eq + Hash,
         {
@@ -1286,8 +1301,7 @@ pub mod linked_hash_map
         }
 
         /// Returns the mutable reference corresponding to the key in the map.
-        pub fn get_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut V>
-        where
+        pub fn get_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut V> where 
             K: Borrow<Q>,
             Q: Eq + Hash,
         {
@@ -1297,8 +1311,7 @@ pub mod linked_hash_map
         }
 
         /// Returns the value corresponding to the key in the map.
-        pub fn get_refresh<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut V>
-        where
+        pub fn get_refresh<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut V> where 
             K: Borrow<Q>,
             Q: Eq + Hash,
         {
@@ -1314,8 +1327,7 @@ pub mod linked_hash_map
         }
 
         /// Removes and returns the value corresponding to the key from the map.
-        pub fn remove<Q: ?Sized>(&mut self, k: &Q) -> Option<V>
-        where
+        pub fn remove<Q: ?Sized>(&mut self, k: &Q) -> Option<V> where 
             K: Borrow<Q>,
             Q: Eq + Hash,
         {
@@ -2174,8 +2186,7 @@ pub mod linked_hash_map
 
         /// Provides in-place mutable access to an occupied entry before any
         /// potential inserts into the map.
-        pub fn and_modify<F>(self, f: F) -> Self
-        where
+        pub fn and_modify<F>(self, f: F) -> Self where 
             F: FnOnce(&mut V),
         {
             match self {
@@ -2189,8 +2200,7 @@ pub mod linked_hash_map
 
         /// Ensures a value is in the entry by inserting the default value if empty,
         /// and returns a mutable reference to the value in the entry.
-        pub fn or_default(self) -> &'a mut V
-        where
+        pub fn or_default(self) -> &'a mut V where 
             V: Default,
         {
             match self {
@@ -2348,6 +2358,2845 @@ pub mod regex
         pub use crate::util::primitives::PatternID;
         pub use crate::util::search::*;
         */
+
+        pub mod nfa
+        {
+            //! Provides non-deterministic finite automata (NFA) and regex engines that use them.
+            use ::
+            {
+                *,
+            };
+            /*
+            */
+            pub mod thompson
+            {
+                /*!
+                Defines a Thompson NFA and provides the [`PikeVM`](pikevm::PikeVM) 
+                and [`BoundedBacktracker`](backtrack::BoundedBacktracker) regex engines.
+                */
+                use ::
+                {
+                    *,
+                };
+                /*
+                #[cfg(feature = "nfa-backtrack")]
+                pub mod backtrack;
+                mod builder;
+                    mod compiler;
+                mod error;
+                    mod literal_trie;
+                    mod map;
+                mod nfa;
+                #[cfg(feature = "nfa-pikevm")]
+                pub mod pikevm;
+                    mod range_trie;
+                
+                pub use self::{
+                    builder::Builder,
+                    error::BuildError,
+                    nfa::{
+                        DenseTransitions, PatternIter, SparseTransitions, State, Transition,
+                        NFA,
+                    },
+                };
+                    pub use compiler::{Compiler, Config, WhichCaptures};
+                */
+                pub mod backtrack
+                {
+                    //! An NFA backed bounded backtracker for executing regex searches with capturing groups.
+                    use ::
+                    {
+                        *,
+                    };
+                    /*
+                    use alloc::{vec, vec::Vec};
+                    
+                    use crate::{
+                        nfa::thompson::{self, BuildError, State, NFA},
+                        util::{
+                            captures::Captures,
+                            empty, iter,
+                            prefilter::Prefilter,
+                            primitives::{NonMaxUsize, PatternID, SmallIndex, StateID},
+                            search::{Anchored, HalfMatch, Input, Match, MatchError, Span},
+                        },
+                    };
+                    */
+                    /// Returns the minimum visited capacity for the given haystack.
+                    pub fn min_visited_capacity(nfa: &NFA, input: &Input<'_>) -> usize {
+                        div_ceil(nfa.states().len() * (input.get_span().len() + 1), 8)
+                    }
+                    
+                    /// The configuration used for building a bounded backtracker.
+                    #[derive(Clone, Debug, Default)]
+                    pub struct Config {
+                        pre: Option<Option<Prefilter>>,
+                        visited_capacity: Option<usize>,
+                    }
+                    
+                    impl Config {
+                        /// Return a new default regex configuration.
+                        pub fn new() -> Config {
+                            Config::default()
+                        }
+                    
+                        /// Set a prefilter to be used whenever a start state is entered.
+                        pub fn prefilter(mut self, pre: Option<Prefilter>) -> Config {
+                            self.pre = Some(pre);
+                            self
+                        }
+                    
+                        /// Set the visited capacity used to bound backtracking.
+                        pub fn visited_capacity(mut self, capacity: usize) -> Config {
+                            self.visited_capacity = Some(capacity);
+                            self
+                        }
+                    
+                        /// Returns the prefilter set in this configuration, if one at all.
+                        pub fn get_prefilter(&self) -> Option<&Prefilter> {
+                            self.pre.as_ref().unwrap_or(&None).as_ref()
+                        }
+                    
+                        /// Returns the configured visited capacity.
+                        pub fn get_visited_capacity(&self) -> usize {
+                            const DEFAULT: usize = 256 * (1 << 10); // 256 KB
+                            self.visited_capacity.unwrap_or(DEFAULT)
+                        }
+                    
+                        /// Overwrite the default configuration such that the options in `o` are
+                        /// always used.
+                        pub(crate) fn overwrite(&self, o: Config) -> Config {
+                            Config {
+                                pre: o.pre.or_else(|| self.pre.clone()),
+                                visited_capacity: o.visited_capacity.or(self.visited_capacity),
+                            }
+                        }
+                    }
+                    
+                    /// A builder for a bounded backtracker.
+                    #[derive(Clone, Debug)]
+                    pub struct Builder {
+                        config: Config,
+                                    thompson: thompson::Compiler,
+                    }
+                    
+                    impl Builder 
+                    {
+                        /// Create a new BoundedBacktracker builder with its default configuration.
+                        pub fn new() -> Builder {
+                            Builder {
+                                config: Config::default(),
+                                                    thompson: thompson::Compiler::new(),
+                            }
+                        }
+                    
+                        /// Build a `BoundedBacktracker` from the given pattern.
+                        ///
+                        /// If there was a problem parsing or compiling the pattern, then an error
+                        /// is returned.
+                        pub fn build(
+                            &self,
+                            pattern: &str,
+                        ) -> Result<BoundedBacktracker, BuildError> {
+                            self.build_many(&[pattern])
+                        }
+                    
+                        /// Build a `BoundedBacktracker` from the given patterns.
+                        pub fn build_many<P: AsRef<str>>(
+                            &self,
+                            patterns: &[P],
+                        ) -> Result<BoundedBacktracker, BuildError> {
+                            let nfa = self.thompson.build_many(patterns)?;
+                            self.build_from_nfa(nfa)
+                        }
+                    
+                        /// Build a `BoundedBacktracker` directly from its NFA.
+                        pub fn build_from_nfa(
+                            &self,
+                            nfa: NFA,
+                        ) -> Result<BoundedBacktracker, BuildError> {
+                            nfa.look_set_any().available().map_err(BuildError::word)?;
+                            Ok(BoundedBacktracker { config: self.config.clone(), nfa })
+                        }
+                    
+                        /// Apply the given `BoundedBacktracker` configuration options to this
+                        /// builder.
+                        pub fn configure(&mut self, config: Config) -> &mut Builder {
+                            self.config = self.config.overwrite(config);
+                            self
+                        }
+                    
+                        /// Set the syntax configuration for this builder using
+                        /// [`syntax::Config`](crate::util::syntax::Config).
+                        pub fn syntax(
+                            &mut self,
+                            config: crate::util::syntax::Config,
+                        ) -> &mut Builder {
+                            self.thompson.syntax(config);
+                            self
+                        }
+                    
+                        /// Set the Thompson NFA configuration for this builder using
+                        /// [`nfa::thompson::Config`](crate::nfa::thompson::Config).
+                        pub fn thompson(&mut self, config: thompson::Config) -> &mut Builder {
+                            self.thompson.configure(config);
+                            self
+                        }
+                    }
+                    
+                    /// A backtracking regex engine that bounds its execution to avoid exponential
+                    /// blow-up.
+                    #[derive(Clone, Debug)]
+                    pub struct BoundedBacktracker {
+                        config: Config,
+                        nfa: NFA,
+                    }
+                    
+                    impl BoundedBacktracker {
+                        /// Parse the given regular expression using the default configuration and
+                        /// return the corresponding `BoundedBacktracker`.
+                        pub fn new(pattern: &str) -> Result<BoundedBacktracker, BuildError> {
+                            BoundedBacktracker::builder().build(pattern)
+                        }
+                    
+                        /// Like `new`, but parses multiple patterns into a single "multi regex."
+                        /// This similarly uses the default regex configuration.
+                        pub fn new_many<P: AsRef<str>>(
+                            patterns: &[P],
+                        ) -> Result<BoundedBacktracker, BuildError> {
+                            BoundedBacktracker::builder().build_many(patterns)
+                        }
+                        
+                        /// This shows how to hand assemble a regular expression via its HIR,
+                        /// compile an NFA from it and build a BoundedBacktracker from the NFA.
+                        pub fn new_from_nfa(nfa: NFA) -> Result<BoundedBacktracker, BuildError> {
+                            BoundedBacktracker::builder().build_from_nfa(nfa)
+                        }
+                    
+                        /// Create a new `BoundedBacktracker` that matches every input.
+                        pub fn always_match() -> Result<BoundedBacktracker, BuildError> {
+                            let nfa = thompson::NFA::always_match();
+                            BoundedBacktracker::new_from_nfa(nfa)
+                        }
+                    
+                        /// Create a new `BoundedBacktracker` that never matches any input.
+                        pub fn never_match() -> Result<BoundedBacktracker, BuildError> {
+                            let nfa = thompson::NFA::never_match();
+                            BoundedBacktracker::new_from_nfa(nfa)
+                        }
+                    
+                        /// Return a default configuration for a `BoundedBacktracker`.
+                        pub fn config() -> Config {
+                            Config::new()
+                        }
+                    
+                        /// Return a builder for configuring the construction of a
+                        /// `BoundedBacktracker`.
+                        pub fn builder() -> Builder {
+                            Builder::new()
+                        }
+                    
+                        /// Create a new cache for this regex.
+                        pub fn create_cache(&self) -> Cache {
+                            Cache::new(self)
+                        }
+                    
+                        /// Create a new empty set of capturing groups that is guaranteed to be
+                        /// valid for the search APIs on this `BoundedBacktracker`.
+                        pub fn create_captures(&self) -> Captures {
+                            Captures::all(self.get_nfa().group_info().clone())
+                        }
+                    
+                        /// Reset the given cache such that it can be used for searching with the
+                        /// this `BoundedBacktracker` (and only this `BoundedBacktracker`).
+                        pub fn reset_cache(&self, cache: &mut Cache) {
+                            cache.reset(self);
+                        }
+                    
+                        /// Returns the total number of patterns compiled into this
+                        /// `BoundedBacktracker`.
+                        pub fn pattern_len(&self) -> usize {
+                            self.nfa.pattern_len()
+                        }
+                    
+                        /// Return the config for this `BoundedBacktracker`.
+                        #[inline]
+                        pub fn get_config(&self) -> &Config {
+                            &self.config
+                        }
+                    
+                        /// Returns a reference to the underlying NFA.
+                        #[inline]
+                        pub fn get_nfa(&self) -> &NFA {
+                            &self.nfa
+                        }
+                    
+                        /// Returns the maximum haystack length supported by this backtracker.
+                        #[inline]
+                        pub fn max_haystack_len(&self) -> usize {
+                            let capacity = 8 * self.get_config().get_visited_capacity();
+                            let blocks = div_ceil(capacity, Visited::BLOCK_SIZE);
+                            let real_capacity = blocks.saturating_mul(Visited::BLOCK_SIZE);
+                            (real_capacity / self.nfa.states().len()).saturating_sub(1)
+                        }
+                    }
+                    
+                    impl BoundedBacktracker {
+                        /// Returns true if and only if this regex matches the given haystack.
+                        #[inline]
+                        pub fn try_is_match<'h, I: Into<Input<'h>>>(
+                            &self,
+                            cache: &mut Cache,
+                            input: I,
+                        ) -> Result<bool, MatchError> {
+                            let input = input.into().earliest(true);
+                            self.try_search_slots(cache, &input, &mut []).map(|pid| pid.is_some())
+                        }
+                    
+                        /// Executes a leftmost forward search and returns a `Match` if one exists.
+                        #[inline]
+                        pub fn try_find<'h, I: Into<Input<'h>>>(
+                            &self,
+                            cache: &mut Cache,
+                            input: I,
+                        ) -> Result<Option<Match>, MatchError> {
+                            let input = input.into();
+                            if self.get_nfa().pattern_len() == 1 {
+                                let mut slots = [None, None];
+                                let pid = match self.try_search_slots(cache, &input, &mut slots)? {
+                                    None => return Ok(None),
+                                    Some(pid) => pid,
+                                };
+                                let start = match slots[0] {
+                                    None => return Ok(None),
+                                    Some(s) => s.get(),
+                                };
+                                let end = match slots[1] {
+                                    None => return Ok(None),
+                                    Some(s) => s.get(),
+                                };
+                                return Ok(Some(Match::new(pid, Span { start, end })));
+                            }
+                            let ginfo = self.get_nfa().group_info();
+                            let slots_len = ginfo.implicit_slot_len();
+                            let mut slots = vec![None; slots_len];
+                            let pid = match self.try_search_slots(cache, &input, &mut slots)? {
+                                None => return Ok(None),
+                                Some(pid) => pid,
+                            };
+                            let start = match slots[pid.as_usize() * 2] {
+                                None => return Ok(None),
+                                Some(s) => s.get(),
+                            };
+                            let end = match slots[pid.as_usize() * 2 + 1] {
+                                None => return Ok(None),
+                                Some(s) => s.get(),
+                            };
+                            Ok(Some(Match::new(pid, Span { start, end })))
+                        }
+                    
+                        /// Executes a leftmost forward search and writes the spans of capturing
+                        /// groups that participated in a match into the provided [`Captures`]
+                        /// value.
+                        #[inline]
+                        pub fn try_captures<'h, I: Into<Input<'h>>>(
+                            &self,
+                            cache: &mut Cache,
+                            input: I,
+                            caps: &mut Captures,
+                        ) -> Result<(), MatchError> {
+                            self.try_search(cache, &input.into(), caps)
+                        }
+                    
+                        /// Returns an iterator over all non-overlapping leftmost matches in the
+                        /// given bytes.
+                        #[inline]
+                        pub fn try_find_iter<'r, 'c, 'h, I: Into<Input<'h>>>(
+                            &'r self,
+                            cache: &'c mut Cache,
+                            input: I,
+                        ) -> TryFindMatches<'r, 'c, 'h> {
+                            let caps = Captures::matches(self.get_nfa().group_info().clone());
+                            let it = iter::Searcher::new(input.into());
+                            TryFindMatches { re: self, cache, caps, it }
+                        }
+                    
+                        /// Returns an iterator over all non-overlapping `Captures` values.
+                        #[inline] pub fn try_captures_iter<'r, 'c, 'h, I: Into<Input<'h>>>(
+                            &'r self,
+                            cache: &'c mut Cache,
+                            input: I,
+                        ) -> TryCapturesMatches<'r, 'c, 'h> {
+                            let caps = self.create_captures();
+                            let it = iter::Searcher::new(input.into());
+                            TryCapturesMatches { re: self, cache, caps, it }
+                        }
+                    }
+                    
+                    impl BoundedBacktracker {
+                        /// Executes a leftmost forward search and writes the spans of capturing
+                        /// groups that participated in a match into the provided [`Captures`]
+                        /// value.
+                        #[inline] pub fn try_search(
+                            &self,
+                            cache: &mut Cache,
+                            input: &Input<'_>,
+                            caps: &mut Captures,
+                        ) -> Result<(), MatchError> {
+                            caps.set_pattern(None);
+                            let pid = self.try_search_slots(cache, input, caps.slots_mut())?;
+                            caps.set_pattern(pid);
+                            Ok(())
+                        }
+                        /// Executes a leftmost forward search and writes the spans of capturing
+                        /// groups that participated in a match into the provided `slots`, and
+                        /// returns the matching pattern ID.
+                        #[inline] pub fn try_search_slots(
+                            &self,
+                            cache: &mut Cache,
+                            input: &Input<'_>,
+                            slots: &mut [Option<NonMaxUsize>],
+                        ) -> Result<Option<PatternID>, MatchError>
+                        {
+                            let utf8empty = self.get_nfa().has_empty() && self.get_nfa().is_utf8();
+                            if !utf8empty {
+                                let maybe_hm = self.try_search_slots_imp(cache, input, slots)?;
+                                return Ok(maybe_hm.map(|hm| hm.pattern()));
+                            }
+                            
+                            let min = self.get_nfa().group_info().implicit_slot_len();
+                            if slots.len() >= min {
+                                let maybe_hm = self.try_search_slots_imp(cache, input, slots)?;
+                                return Ok(maybe_hm.map(|hm| hm.pattern()));
+                            }
+                            if self.get_nfa().pattern_len() == 1 {
+                                let mut enough = [None, None];
+                                let got = self.try_search_slots_imp(cache, input, &mut enough)?;
+                                slots.copy_from_slice(&enough[..slots.len()]);
+                                return Ok(got.map(|hm| hm.pattern()));
+                            }
+                            let mut enough = vec![None; min];
+                            let got = self.try_search_slots_imp(cache, input, &mut enough)?;
+                            slots.copy_from_slice(&enough[..slots.len()]);
+                            Ok(got.map(|hm| hm.pattern()))
+                        }
+                        /// This is the actual implementation of `try_search_slots_imp` that
+                        /// doesn't account for the special case when 1) the NFA has UTF-8 mode
+                        /// enabled, 2) the NFA can match the empty string and 3) the caller has
+                        /// provided an insufficient number of slots to record match offsets.
+                        #[inline(never)]
+                        fn try_search_slots_imp(
+                            &self,
+                            cache: &mut Cache,
+                            input: &Input<'_>,
+                            slots: &mut [Option<NonMaxUsize>],
+                        ) -> Result<Option<HalfMatch>, MatchError> {
+                            let utf8empty = self.get_nfa().has_empty() && self.get_nfa().is_utf8();
+                            let hm = match self.search_imp(cache, input, slots)? {
+                                None => return Ok(None),
+                                Some(hm) if !utf8empty => return Ok(Some(hm)),
+                                Some(hm) => hm,
+                            };
+                            empty::skip_splits_fwd(input, hm, hm.offset(), |input| {
+                                Ok(self
+                                    .search_imp(cache, input, slots)?
+                                    .map(|hm| (hm, hm.offset())))
+                            })
+                        }
+                    
+                        /// The implementation of standard leftmost backtracking search.
+                        fn search_imp(
+                            &self,
+                            cache: &mut Cache,
+                            input: &Input<'_>,
+                            slots: &mut [Option<NonMaxUsize>],
+                        ) -> Result<Option<HalfMatch>, MatchError> {
+                            for slot in slots.iter_mut() {
+                                *slot = None;
+                            }
+                            cache.setup_search(&self, input)?;
+                            if input.is_done() {
+                                return Ok(None);
+                            }
+                            let (anchored, start_id) = match input.get_anchored() {
+                                Anchored::No => (
+                                    self.nfa.is_always_start_anchored(),
+                                    self.nfa.start_anchored(),
+                                ),
+                                Anchored::Yes => (true, self.nfa.start_anchored()),
+                                Anchored::Pattern(pid) => match self.nfa.start_pattern(pid) {
+                                    None => return Ok(None),
+                                    Some(sid) => (true, sid),
+                                },
+                            };
+                            if anchored {
+                                let at = input.start();
+                                return Ok(self.backtrack(cache, input, at, start_id, slots));
+                            }
+                            let pre = self.get_config().get_prefilter();
+                            let mut at = input.start();
+                            while at <= input.end() {
+                                if let Some(ref pre) = pre {
+                                    let span = Span::from(at..input.end());
+                                    match pre.find(input.haystack(), span) {
+                                        None => break,
+                                        Some(ref span) => at = span.start,
+                                    }
+                                }
+                                if let Some(hm) = self.backtrack(cache, input, at, start_id, slots)
+                                {
+                                    return Ok(Some(hm));
+                                }
+                                at += 1;
+                            }
+                            Ok(None)
+                        }
+                    
+                        /// Look for a match starting at `at` in `input` and write the matching
+                        /// pattern ID and group spans to `caps`.
+                        fn backtrack
+                        (
+                            &self,
+                            cache: &mut Cache,
+                            input: &Input<'_>,
+                            at: usize,
+                            start_id: StateID,
+                            slots: &mut [Option<NonMaxUsize>],
+                        ) -> Option<HalfMatch> {
+                            cache.stack.push(Frame::Step { sid: start_id, at });
+                            while let Some(frame) = cache.stack.pop() {
+                                match frame {
+                                    Frame::Step { sid, at } => {
+                                        if let Some(hm) = self.step(cache, input, sid, at, slots) {
+                                            return Some(hm);
+                                        }
+                                    }
+                                    Frame::RestoreCapture { slot, offset } => {
+                                        slots[slot] = offset;
+                                    }
+                                }
+                            }
+                            None
+                        }
+                        /// Execute a "step" in the backtracing algorithm.
+                        fn step(
+                            &self,
+                            cache: &mut Cache,
+                            input: &Input<'_>,
+                            mut sid: StateID,
+                            mut at: usize,
+                            slots: &mut [Option<NonMaxUsize>],
+                        ) -> Option<HalfMatch> {
+                            loop {
+                                if !cache.visited.insert(sid, at - input.start()) {
+                                    return None;
+                                }
+                                match *self.nfa.state(sid) {
+                                    State::ByteRange { ref trans } => {
+                                        if at >= input.end() {
+                                            return None;
+                                        }
+                                        if !trans.matches(input.haystack(), at) {
+                                            return None;
+                                        }
+                                        sid = trans.next;
+                                        at += 1;
+                                    }
+                                    State::Sparse(ref sparse) => {
+                                        if at >= input.end() {
+                                            return None;
+                                        }
+                                        sid = sparse.matches(input.haystack(), at)?;
+                                        at += 1;
+                                    }
+                                    State::Dense(ref dense) => {
+                                        if at >= input.end() {
+                                            return None;
+                                        }
+                                        sid = dense.matches(input.haystack(), at)?;
+                                        at += 1;
+                                    }
+                                    State::Look { look, next } => {
+                                        if !self.nfa.look_matcher().matches_inline(
+                                            look,
+                                            input.haystack(),
+                                            at,
+                                        ) {
+                                            return None;
+                                        }
+                                        sid = next;
+                                    }
+                                    State::Union { ref alternates } => {
+                                        sid = match alternates.get(0) {
+                                            None => return None,
+                                            Some(&sid) => sid,
+                                        };
+                                        cache.stack.extend(
+                                            alternates[1..]
+                                                .iter()
+                                                .copied()
+                                                .rev()
+                                                .map(|sid| Frame::Step { sid, at }),
+                                        );
+                                    }
+                                    State::BinaryUnion { alt1, alt2 } => {
+                                        sid = alt1;
+                                        cache.stack.push(Frame::Step { sid: alt2, at });
+                                    }
+                                    State::Capture { next, slot, .. } => {
+                                        if slot.as_usize() < slots.len() {
+                                            cache.stack.push(Frame::RestoreCapture {
+                                                slot,
+                                                offset: slots[slot],
+                                            });
+                                            slots[slot] = NonMaxUsize::new(at);
+                                        }
+                                        sid = next;
+                                    }
+                                    State::Fail => return None,
+                                    State::Match { pattern_id } => {
+                                        return Some(HalfMatch::new(pattern_id, at));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    /// An iterator over all non-overlapping matches for a fallible search.
+                    #[derive(Debug)]
+                    pub struct TryFindMatches<'r, 'c, 'h> {
+                        re: &'r BoundedBacktracker,
+                        cache: &'c mut Cache,
+                        caps: Captures,
+                        it: iter::Searcher<'h>,
+                    }
+                    
+                    impl<'r, 'c, 'h> Iterator for TryFindMatches<'r, 'c, 'h> {
+                        type Item = Result<Match, MatchError>;
+                    
+                        #[inline]
+                        fn next(&mut self) -> Option<Result<Match, MatchError>> {
+                            // Splitting 'self' apart seems necessary to appease borrowck.
+                            let TryFindMatches { re, ref mut cache, ref mut caps, ref mut it } =
+                                *self;
+                            it.try_advance(|input| {
+                                re.try_search(cache, input, caps)?;
+                                Ok(caps.get_match())
+                            })
+                            .transpose()
+                        }
+                    }
+                    
+                    /// An iterator over all non-overlapping leftmost matches, with their capturing
+                    /// groups, for a fallible search.
+                    #[derive(Debug)]
+                    pub struct TryCapturesMatches<'r, 'c, 'h> {
+                        re: &'r BoundedBacktracker,
+                        cache: &'c mut Cache,
+                        caps: Captures,
+                        it: iter::Searcher<'h>,
+                    }
+                    
+                    impl<'r, 'c, 'h> Iterator for TryCapturesMatches<'r, 'c, 'h> {
+                        type Item = Result<Captures, MatchError>;
+                    
+                        #[inline]
+                        fn next(&mut self) -> Option<Result<Captures, MatchError>> {
+                            // Splitting 'self' apart seems necessary to appease borrowck.
+                            let TryCapturesMatches { re, ref mut cache, ref mut caps, ref mut it } =
+                                *self;
+                            let _ = it
+                                .try_advance(|input| {
+                                    re.try_search(cache, input, caps)?;
+                                    Ok(caps.get_match())
+                                })
+                                .transpose()?;
+                            if caps.is_match() {
+                                Some(Ok(caps.clone()))
+                            } else {
+                                None
+                            }
+                        }
+                    }
+                    /// A cache represents mutable state that a [`BoundedBacktracker`] requires
+                    /// during a search.
+                    #[derive(Clone, Debug)]
+                    pub struct Cache {
+                        /// Stack used on the heap for doing backtracking instead of the
+                        /// traditional recursive approach.
+                        stack: Vec<Frame>,
+                        /// The set of (StateID, HaystackOffset) pairs that have been visited
+                        /// by the backtracker within a single search.
+                        visited: Visited,
+                    }
+                    
+                    impl Cache
+                    {
+                        /// Create a new [`BoundedBacktracker`] cache.
+                        pub fn new(re: &BoundedBacktracker) -> Cache {
+                            Cache { stack: vec![], visited: Visited::new(re) }
+                        }
+                        /// Reset this cache such that it can be used for searching with different
+                        /// [`BoundedBacktracker`].
+                        pub fn reset(&mut self, re: &BoundedBacktracker) { self.visited.reset(re); }
+                        /// Returns the heap memory usage, in bytes, of this cache.
+                        pub fn memory_usage(&self) -> usize
+                        {
+                            self.stack.len() * ::mem::size_of::<Frame>()
+                                + self.visited.memory_usage()
+                        }
+                        /// Clears this cache. 
+                        fn setup_search(
+                            &mut self,
+                            re: &BoundedBacktracker,
+                            input: &Input<'_>,
+                        ) -> Result<(), MatchError> {
+                            self.stack.clear();
+                            self.visited.setup_search(re, input)?;
+                            Ok(())
+                        }
+                    }
+                    /// Represents a stack frame on the heap while doing backtracking.
+                    #[derive(Clone, Debug)]
+                    enum Frame
+                    {
+                        /// Look for a match starting at `sid` and the given position in the
+                        /// haystack.
+                        Step { sid: StateID, at: usize },
+                        /// Reset the given `slot` to the given `offset` (which might be `None`).
+                        RestoreCapture { slot: SmallIndex, offset: Option<NonMaxUsize> },
+                    }
+                    /// A bitset that keeps track of whether a particular (StateID, offset) has
+                    /// been considered during backtracking.
+                    #[derive(Clone, Debug)]
+                    struct Visited {
+                        /// The actual underlying bitset.
+                        bitset: Vec<usize>,
+                        /// The stride represents one plus length of the haystack we're searching
+                        /// (as described above).
+                        stride: usize,
+                    }
+                    
+                    impl Visited
+                    {
+                        /// The size of each block, in bits.
+                        const BLOCK_SIZE: usize = 8 * ::mem::size_of::<usize>();
+                        /// Create a new visited set for the given backtracker.
+                        fn new(re: &BoundedBacktracker) -> Visited
+                        {
+                            let mut visited = Visited { bitset: vec![], stride: 0 };
+                            visited.reset(re);
+                            visited
+                        }
+                        /// Insert the given (StateID, offset) pair into this set. 
+                        fn insert(&mut self, sid: StateID, at: usize) -> bool
+                        {
+                            let table_index = sid.as_usize() * self.stride + at;
+                            let block_index = table_index / Visited::BLOCK_SIZE;
+                            let bit = table_index % Visited::BLOCK_SIZE;
+                            let block_with_bit = 1 << bit;
+
+                            if self.bitset[block_index] & block_with_bit != 0 { return false; }
+                            
+                            self.bitset[block_index] |= block_with_bit;
+                            true
+                        }
+                        /// Reset this visited set to work with the given bounded backtracker.
+                        fn reset(&mut self, _: &BoundedBacktracker) { self.bitset.truncate(0); }
+                        /// Setup this visited set to work for a search using the given NFA
+                        /// and input configuration.
+                        fn setup_search
+                        (
+                            &mut self,
+                            re: &BoundedBacktracker,
+                            input: &Input<'_>,
+                        ) -> Result<(), MatchError>
+                        {
+                            let haylen = input.get_span().len();
+                            let err = || MatchError::haystack_too_long(haylen);
+                            
+                            self.stride = haylen + 1;
+                            let needed_capacity =
+                            match re.get_nfa().states().len().checked_mul(self.stride)
+                            {
+                                None => return Err(err()),
+                                Some(capacity) => capacity,
+                            };
+                                
+                            let max_capacity = 8 * re.get_config().get_visited_capacity();
+
+                            if needed_capacity > max_capacity {  return Err(err()); }
+
+                            let needed_blocks = div_ceil(needed_capacity, Visited::BLOCK_SIZE);
+
+                            self.bitset.truncate(needed_blocks);
+
+                            for block in self.bitset.iter_mut()
+                            {
+                                *block = 0;
+                            }
+
+                            if needed_blocks > self.bitset.len() { self.bitset.resize(needed_blocks, 0); }
+                            
+                            Ok(())
+                        }
+                        /// Return the heap memory usage, in bytes, of this visited set.
+                        fn memory_usage(&self) -> usize
+                        { self.bitset.len() * ::mem::size_of::<usize>() }
+                    }
+                    /// Integer division, but rounds up instead of down.
+                    fn div_ceil(lhs: usize, rhs: usize) -> usize
+                    {
+                        if lhs % rhs == 0 {
+                            lhs / rhs
+                        } else {
+                            (lhs / rhs) + 1
+                        }
+                    }
+                }
+                
+                pub mod builder
+                {
+                    use ::
+                    {
+                        *,
+                    };
+                    /*
+                    use core::mem;
+                    
+                    use alloc::{sync::Arc, vec, vec::Vec};
+                    
+                    use crate::{
+                        nfa::thompson::{
+                            error::BuildError,
+                            nfa::{self, SparseTransitions, Transition, NFA},
+                        },
+                        util::{
+                            look::{Look, LookMatcher},
+                            primitives::{IteratorIndexExt, PatternID, SmallIndex, StateID},
+                        },
+                    };
+                    */
+                    /// An intermediate NFA state used during construction.
+                    #[derive(Clone, Debug, Eq, PartialEq)]
+                    enum State {
+                        /// An empty state whose only purpose is to forward the automaton to
+                        /// another state via an unconditional epsilon transition.
+                        Empty {
+                            /// The next state that this state should transition to.
+                            next: StateID,
+                        },
+                        /// A state that only transitions to another state if the current input
+                        /// byte is in a particular range of bytes.
+                        ByteRange { trans: Transition },
+                        /// A state with possibly many transitions, represented in a sparse
+                        /// fashion.
+                        Sparse { transitions: Vec<Transition> },
+                        /// A conditional epsilon transition satisfied via some sort of
+                        /// look-around.
+                        Look { look: Look, next: StateID },
+                        /// An empty state that records the start of a capture location.
+                        CaptureStart {
+                            /// The ID of the pattern that this capture was defined.
+                            pattern_id: PatternID,
+                            /// The capture group index that this capture state corresponds to.
+                            group_index: SmallIndex,
+                            /// The next state that this state should transition to.
+                            next: StateID,
+                        },
+                        /// An empty state that records the end of a capture location.
+                        CaptureEnd {
+                            /// The ID of the pattern that this capture was defined.
+                            pattern_id: PatternID,
+                            /// The capture group index that this capture state corresponds to.
+                            group_index: SmallIndex,
+                            /// The next state that this state should transition to.
+                            next: StateID,
+                        },
+                        /// An alternation such that there exists an epsilon transition to all
+                        /// states in `alternates`, where matches found via earlier transitions
+                        /// are preferred over later transitions.
+                        Union { alternates: Vec<StateID> },
+                        /// An alternation such that there exists an epsilon transition to all
+                        /// states in `alternates`, where matches found via later transitions are
+                        /// preferred over earlier transitions.
+                        UnionReverse { alternates: Vec<StateID> },
+                        /// A state that cannot be transitioned out of.
+                        Fail,
+                        /// A match state.
+                        Match { pattern_id: PatternID },
+                    }
+                    
+                    impl State {
+                        /// If this state is an unconditional epsilon transition, then this returns
+                        /// the target of the transition.
+                        fn goto(&self) -> Option<StateID> {
+                            match *self {
+                                State::Empty { next } => Some(next),
+                                State::Union { ref alternates } if alternates.len() == 1 => {
+                                    Some(alternates[0])
+                                }
+                                State::UnionReverse { ref alternates }
+                                    if alternates.len() == 1 =>
+                                {
+                                    Some(alternates[0])
+                                }
+                                _ => None,
+                            }
+                        }
+                    
+                        /// Returns the heap memory usage, in bytes, of this state.
+                        fn memory_usage(&self) -> usize {
+                            match *self {
+                                State::Empty { .. }
+                                | State::ByteRange { .. }
+                                | State::Look { .. }
+                                | State::CaptureStart { .. }
+                                | State::CaptureEnd { .. }
+                                | State::Fail
+                                | State::Match { .. } => 0,
+                                State::Sparse { ref transitions } => {
+                                    transitions.len() * mem::size_of::<Transition>()
+                                }
+                                State::Union { ref alternates } => {
+                                    alternates.len() * mem::size_of::<StateID>()
+                                }
+                                State::UnionReverse { ref alternates } => {
+                                    alternates.len() * mem::size_of::<StateID>()
+                                }
+                            }
+                        }
+                    }
+                    
+                    /// An abstraction for building Thompson NFAs by hand.
+                    #[derive(Clone, Debug, Default)]
+                    pub struct Builder {
+                        /// The ID of the pattern that we're currently building.
+                        pattern_id: Option<PatternID>,
+                        /// A sequence of intermediate NFA states.
+                        states: Vec<State>,
+                        /// The starting states for each individual pattern.
+                        start_pattern: Vec<StateID>,
+                        /// A map from pattern ID to capture group index to name.
+                        captures: Vec<Vec<Option<Arc<str>>>>,
+                        /// The combined memory used by each of the 'State's in 'states'.
+                        memory_states: usize,
+                        /// Whether this NFA only matches UTF-8 and whether regex engines using
+                        /// this NFA for searching should report empty matches that split a
+                        /// codepoint.
+                        utf8: bool,
+                        /// Whether this NFA should be matched in reverse or not.
+                        reverse: bool,
+                        /// The matcher to use for look-around assertions.
+                        look_matcher: LookMatcher,
+                        /// A size limit to respect when building an NFA.
+                        size_limit: Option<usize>,
+                    }
+                    
+                    impl Builder {
+                        /// Create a new builder for hand-assembling NFAs.
+                        pub fn new() -> Builder {
+                            Builder::default()
+                        }
+                    
+                        /// Clear this builder.
+                        pub fn clear(&mut self) {
+                            self.pattern_id = None;
+                            self.states.clear();
+                            self.start_pattern.clear();
+                            self.captures.clear();
+                            self.memory_states = 0;
+                        }
+                    
+                        /// Assemble a [`NFA`] from the states added so far.
+                        pub fn build(
+                            &self,
+                            start_anchored: StateID,
+                            start_unanchored: StateID,
+                        ) -> Result<NFA, BuildError> {
+                            assert!(self.pattern_id.is_none(), "must call 'finish_pattern' first");
+                            debug!(
+                                "intermediate NFA compilation via builder is complete, \
+                                 intermediate NFA size: {} states, {} bytes on heap",
+                                self.states.len(),
+                                self.memory_usage(),
+                            );
+                    
+                            let mut nfa = nfa::Inner::default();
+                            nfa.set_utf8(self.utf8);
+                            nfa.set_reverse(self.reverse);
+                            nfa.set_look_matcher(self.look_matcher.clone());
+                            let mut empties = vec![];
+                            let mut remap = vec![];
+                            remap.resize(self.states.len(), StateID::ZERO);
+                    
+                            nfa.set_starts(start_anchored, start_unanchored, &self.start_pattern);
+                            nfa.set_captures(&self.captures).map_err(BuildError::captures)?;
+                            
+                            for (sid, state) in self.states.iter().with_state_ids() {
+                                match *state {
+                                    State::Empty { next } => {
+                                        empties.push((sid, next));
+                                    }
+                                    State::ByteRange { trans } => {
+                                        remap[sid] = nfa.add(nfa::State::ByteRange { trans });
+                                    }
+                                    State::Sparse { ref transitions } => {
+                                        remap[sid] = match transitions.len() {
+                                            0 => nfa.add(nfa::State::Fail),
+                                            1 => nfa.add(nfa::State::ByteRange {
+                                                trans: transitions[0],
+                                            }),
+                                            _ => {
+                                                let transitions =
+                                                    transitions.to_vec().into_boxed_slice();
+                                                let sparse = SparseTransitions { transitions };
+                                                nfa.add(nfa::State::Sparse(sparse))
+                                            }
+                                        }
+                                    }
+                                    State::Look { look, next } => {
+                                        remap[sid] = nfa.add(nfa::State::Look { look, next });
+                                    }
+                                    State::CaptureStart { pattern_id, group_index, next } => {
+                                        let slot = nfa
+                                            .group_info()
+                                            .slot(pattern_id, group_index.as_usize())
+                                            .expect("invalid capture index");
+                                        let slot =
+                                            SmallIndex::new(slot).expect("a small enough slot");
+                                        remap[sid] = nfa.add(nfa::State::Capture {
+                                            next,
+                                            pattern_id,
+                                            group_index,
+                                            slot,
+                                        });
+                                    }
+                                    State::CaptureEnd { pattern_id, group_index, next } => {
+                                        let slot = nfa
+                                            .group_info()
+                                            .slot(pattern_id, group_index.as_usize())
+                                            .expect("invalid capture index")
+                                            .checked_add(1)
+                                            .unwrap();
+                                        let slot =
+                                            SmallIndex::new(slot).expect("a small enough slot");
+                                        remap[sid] = nfa.add(nfa::State::Capture {
+                                            next,
+                                            pattern_id,
+                                            group_index,
+                                            slot,
+                                        });
+                                    }
+                                    State::Union { ref alternates } => {
+                                        if alternates.is_empty() {
+                                            remap[sid] = nfa.add(nfa::State::Fail);
+                                        } else if alternates.len() == 1 {
+                                            empties.push((sid, alternates[0]));
+                                            remap[sid] = alternates[0];
+                                        } else if alternates.len() == 2 {
+                                            remap[sid] = nfa.add(nfa::State::BinaryUnion {
+                                                alt1: alternates[0],
+                                                alt2: alternates[1],
+                                            });
+                                        } else {
+                                            let alternates =
+                                                alternates.to_vec().into_boxed_slice();
+                                            remap[sid] = nfa.add(nfa::State::Union { alternates });
+                                        }
+                                    }
+                                    State::UnionReverse { ref alternates } => {
+                                        if alternates.is_empty() {
+                                            remap[sid] = nfa.add(nfa::State::Fail);
+                                        } else if alternates.len() == 1 {
+                                            empties.push((sid, alternates[0]));
+                                            remap[sid] = alternates[0];
+                                        } else if alternates.len() == 2 {
+                                            remap[sid] = nfa.add(nfa::State::BinaryUnion {
+                                                alt1: alternates[1],
+                                                alt2: alternates[0],
+                                            });
+                                        } else {
+                                            let mut alternates =
+                                                alternates.to_vec().into_boxed_slice();
+                                            alternates.reverse();
+                                            remap[sid] = nfa.add(nfa::State::Union { alternates });
+                                        }
+                                    }
+                                    State::Fail => {
+                                        remap[sid] = nfa.add(nfa::State::Fail);
+                                    }
+                                    State::Match { pattern_id } => {
+                                        remap[sid] = nfa.add(nfa::State::Match { pattern_id });
+                                    }
+                                }
+                            }
+                            
+                            let mut remapped = vec![false; self.states.len()];
+                            for &(empty_id, empty_next) in empties.iter() {
+                                if remapped[empty_id] {
+                                    continue;
+                                }
+                                
+                                let mut new_next = empty_next;
+                                while let Some(next) = self.states[new_next].goto() {
+                                    new_next = next;
+                                }
+                                remap[empty_id] = remap[new_next];
+                                remapped[empty_id] = true;
+                                
+                                let mut next2 = empty_next;
+                                while let Some(next) = self.states[next2].goto() {
+                                    remap[next2] = remap[new_next];
+                                    remapped[next2] = true;
+                                    next2 = next;
+                                }
+                            }
+                            
+                            nfa.remap(&remap);
+                            let final_nfa = nfa.into_nfa();
+                            debug!(
+                                "NFA compilation via builder complete, \
+                                 final NFA size: {} states, {} bytes on heap, \
+                                 has empty? {:?}, utf8? {:?}",
+                                final_nfa.states().len(),
+                                final_nfa.memory_usage(),
+                                final_nfa.has_empty(),
+                                final_nfa.is_utf8(),
+                            );
+                            Ok(final_nfa)
+                        }
+                    
+                        /// Start the assembly of a pattern in this NFA.
+                        pub fn start_pattern(&mut self) -> Result<PatternID, BuildError> {
+                            assert!(self.pattern_id.is_none(), "must call 'finish_pattern' first");
+                    
+                            let proposed = self.start_pattern.len();
+                            let pid = PatternID::new(proposed)
+                                .map_err(|_| BuildError::too_many_patterns(proposed))?;
+                            self.pattern_id = Some(pid);
+                            self.start_pattern.push(StateID::ZERO);
+                            Ok(pid)
+                        }
+                    
+                        /// Finish the assembly of a pattern in this NFA.
+                        pub fn finish_pattern(
+                            &mut self,
+                            start_id: StateID,
+                        ) -> Result<PatternID, BuildError> {
+                            let pid = self.current_pattern_id();
+                            self.start_pattern[pid] = start_id;
+                            self.pattern_id = None;
+                            Ok(pid)
+                        }
+                    
+                        /// Returns the pattern identifier of the current pattern.
+                        pub fn current_pattern_id(&self) -> PatternID {
+                            self.pattern_id.expect("must call 'start_pattern' first")
+                        }
+                    
+                        /// Returns the number of patterns added to this builder so far.
+                        pub fn pattern_len(&self) -> usize {
+                            self.start_pattern.len()
+                        }
+                    
+                        /// Add an "empty" NFA state.
+                        pub fn add_empty(&mut self) -> Result<StateID, BuildError> {
+                            self.add(State::Empty { next: StateID::ZERO })
+                        }
+                    
+                        /// Add a "union" NFA state.
+                        pub fn add_union(
+                            &mut self,
+                            alternates: Vec<StateID>,
+                        ) -> Result<StateID, BuildError> {
+                            self.add(State::Union { alternates })
+                        }
+                    
+                        /// Add a "reverse union" NFA state.
+                        pub fn add_union_reverse(
+                            &mut self,
+                            alternates: Vec<StateID>,
+                        ) -> Result<StateID, BuildError> {
+                            self.add(State::UnionReverse { alternates })
+                        }
+                    
+                        /// Add a "range" NFA state.
+                        pub fn add_range(
+                            &mut self,
+                            trans: Transition,
+                        ) -> Result<StateID, BuildError> {
+                            self.add(State::ByteRange { trans })
+                        }
+                    
+                        /// Add a "sparse" NFA state.
+                        pub fn add_sparse(
+                            &mut self,
+                            transitions: Vec<Transition>,
+                        ) -> Result<StateID, BuildError> {
+                            self.add(State::Sparse { transitions })
+                        }
+                    
+                        /// Add a "look" NFA state.
+                        pub fn add_look(
+                            &mut self,
+                            next: StateID,
+                            look: Look,
+                        ) -> Result<StateID, BuildError> {
+                            self.add(State::Look { look, next })
+                        }
+                    
+                        /// Add a "start capture" NFA state.
+                        pub fn add_capture_start(
+                            &mut self,
+                            next: StateID,
+                            group_index: u32,
+                            name: Option<Arc<str>>,
+                        ) -> Result<StateID, BuildError> {
+                            let pid = self.current_pattern_id();
+                            let group_index = match SmallIndex::try_from(group_index) {
+                                Err(_) => {
+                                    return Err(BuildError::invalid_capture_index(group_index))
+                                }
+                                Ok(group_index) => group_index,
+                            };
+                            
+                            if pid.as_usize() >= self.captures.len() {
+                                for _ in 0..=(pid.as_usize() - self.captures.len()) {
+                                    self.captures.push(vec![]);
+                                }
+                            }
+                            
+                            if group_index.as_usize() >= self.captures[pid].len() {
+                                for _ in 0..(group_index.as_usize() - self.captures[pid].len()) {
+                                    self.captures[pid].push(None);
+                                }
+                                self.captures[pid].push(name);
+                            }
+                            self.add(State::CaptureStart { pattern_id: pid, group_index, next })
+                        }
+                    
+                        /// Add a "end capture" NFA state.
+                        pub fn add_capture_end(
+                            &mut self,
+                            next: StateID,
+                            group_index: u32,
+                        ) -> Result<StateID, BuildError> {
+                            let pid = self.current_pattern_id();
+                            let group_index = match SmallIndex::try_from(group_index) {
+                                Err(_) => {
+                                    return Err(BuildError::invalid_capture_index(group_index))
+                                }
+                                Ok(group_index) => group_index,
+                            };
+                            self.add(State::CaptureEnd { pattern_id: pid, group_index, next })
+                        }
+                    
+                        /// Adds a "fail" NFA state.
+                        pub fn add_fail(&mut self) -> Result<StateID, BuildError> {
+                            self.add(State::Fail)
+                        }
+                    
+                        /// Adds a "match" NFA state.
+                        pub fn add_match(&mut self) -> Result<StateID, BuildError> {
+                            let pattern_id = self.current_pattern_id();
+                            let sid = self.add(State::Match { pattern_id })?;
+                            Ok(sid)
+                        }
+                    
+                        /// The common implementation of "add a state."
+                        fn add(&mut self, state: State) -> Result<StateID, BuildError> {
+                            let id = StateID::new(self.states.len())
+                                .map_err(|_| BuildError::too_many_states(self.states.len()))?;
+                            self.memory_states += state.memory_usage();
+                            self.states.push(state);
+                            self.check_size_limit()?;
+                            Ok(id)
+                        }
+                    
+                        /// Add a transition from one state to another.
+                        pub fn patch(
+                            &mut self,
+                            from: StateID,
+                            to: StateID,
+                        ) -> Result<(), BuildError> {
+                            let old_memory_states = self.memory_states;
+                            match self.states[from] {
+                                State::Empty { ref mut next } => {
+                                    *next = to;
+                                }
+                                State::ByteRange { ref mut trans } => {
+                                    trans.next = to;
+                                }
+                                State::Sparse { .. } => {
+                                    panic!("cannot patch from a sparse NFA state")
+                                }
+                                State::Look { ref mut next, .. } => {
+                                    *next = to;
+                                }
+                                State::Union { ref mut alternates } => {
+                                    alternates.push(to);
+                                    self.memory_states += mem::size_of::<StateID>();
+                                }
+                                State::UnionReverse { ref mut alternates } => {
+                                    alternates.push(to);
+                                    self.memory_states += mem::size_of::<StateID>();
+                                }
+                                State::CaptureStart { ref mut next, .. } => {
+                                    *next = to;
+                                }
+                                State::CaptureEnd { ref mut next, .. } => {
+                                    *next = to;
+                                }
+                                State::Fail => {}
+                                State::Match { .. } => {}
+                            }
+                            if old_memory_states != self.memory_states {
+                                self.check_size_limit()?;
+                            }
+                            Ok(())
+                        }
+                    
+                        /// Set whether the NFA produced by this builder should only match UTF-8.
+                        pub fn set_utf8(&mut self, yes: bool) {
+                            self.utf8 = yes;
+                        }
+                    
+                        /// Returns whether UTF-8 mode is enabled for this builder.
+                        pub fn get_utf8(&self) -> bool {
+                            self.utf8
+                        }
+                    
+                        /// Sets whether the NFA produced by this builder should be matched in
+                        /// reverse or not.
+                        pub fn set_reverse(&mut self, yes: bool) {
+                            self.reverse = yes;
+                        }
+                    
+                        /// Returns whether reverse mode is enabled for this builder.
+                        pub fn get_reverse(&self) -> bool {
+                            self.reverse
+                        }
+                    
+                        /// Sets the look-around matcher that should be used for the resulting NFA.
+                        pub fn set_look_matcher(&mut self, m: LookMatcher) {
+                            self.look_matcher = m;
+                        }
+                    
+                        /// Returns the look-around matcher used for this builder.
+                        pub fn get_look_matcher(&self) -> &LookMatcher {
+                            &self.look_matcher
+                        }
+                    
+                        /// Set the size limit on this builder.
+                        pub fn set_size_limit(
+                            &mut self,
+                            limit: Option<usize>,
+                        ) -> Result<(), BuildError> {
+                            self.size_limit = limit;
+                            self.check_size_limit()
+                        }
+                    
+                        /// Return the currently configured size limit.
+                        pub fn get_size_limit(&self) -> Option<usize> {
+                            self.size_limit
+                        }
+                    
+                        /// Returns the heap memory usage, in bytes, used by the NFA states added
+                        /// so far.
+                        pub fn memory_usage(&self) -> usize {
+                            self.states.len() * mem::size_of::<State>() + self.memory_states
+                        }
+                    
+                        fn check_size_limit(&self) -> Result<(), BuildError> {
+                            if let Some(limit) = self.size_limit {
+                                if self.memory_usage() > limit {
+                                    return Err(BuildError::exceeded_size_limit(limit));
+                                }
+                            }
+                            Ok(())
+                        }
+                    }
+                }
+                
+                pub mod compiler
+                {
+                    use ::
+                    {
+                        *,
+                    };
+                    /*
+                    use core::{borrow::Borrow, cell::RefCell};
+                    
+                    use alloc::{sync::Arc, vec, vec::Vec};
+                    
+                    use regex_syntax::{
+                        hir::{self, Hir},
+                        utf8::{Utf8Range, Utf8Sequences},
+                        ParserBuilder,
+                    };
+                    
+                    use crate::{
+                        nfa::thompson::{
+                            builder::Builder,
+                            error::BuildError,
+                            literal_trie::LiteralTrie,
+                            map::{Utf8BoundedMap, Utf8SuffixKey, Utf8SuffixMap},
+                            nfa::{Transition, NFA},
+                            range_trie::RangeTrie,
+                        },
+                        util::{
+                            look::{Look, LookMatcher},
+                            primitives::{PatternID, StateID},
+                        },
+                    };
+                    */
+                    
+                    /// The configuration used for a Thompson NFA compiler.
+                    #[derive(Clone, Debug, Default)]
+                    pub struct Config {
+                        utf8: Option<bool>,
+                        reverse: Option<bool>,
+                        nfa_size_limit: Option<Option<usize>>,
+                        shrink: Option<bool>,
+                        which_captures: Option<WhichCaptures>,
+                        look_matcher: Option<LookMatcher>,
+                        #[cfg(test)]
+                        unanchored_prefix: Option<bool>,
+                    }
+                    
+                    impl Config {
+                        /// Return a new default Thompson NFA compiler configuration.
+                        pub fn new() -> Config {
+                            Config::default()
+                        }
+                    
+                        /// Whether to enable UTF-8 mode during search or not.
+                        ///
+                        /// A regex engine is said to be in UTF-8 mode when it guarantees that
+                        /// all matches returned by it have spans consisting of only valid UTF-8.
+                        /// That is, it is impossible for a match span to be returned that
+                        /// contains any invalid UTF-8.
+                        ///
+                        /// UTF-8 mode generally consists of two things:
+                        ///
+                        /// 1. Whether the NFA's states are constructed such that all paths to a
+                        /// match state that consume at least one byte always correspond to valid
+                        /// UTF-8.
+                        /// 2. Whether all paths to a match state that do _not_ consume any bytes
+                        /// should always correspond to valid UTF-8 boundaries.
+                        ///
+                        /// (1) is a guarantee made by whoever constructs the NFA.
+                        /// If you're parsing a regex from its concrete syntax, then
+                        /// [`syntax::Config::utf8`](crate::util::syntax::Config::utf8) can make
+                        /// this guarantee for you. It does it by returning an error if the regex
+                        /// pattern could every report a non-empty match span that contains invalid
+                        /// UTF-8. So long as `syntax::Config::utf8` mode is enabled and your regex
+                        /// successfully parses, then you're guaranteed that the corresponding NFA
+                        /// will only ever report non-empty match spans containing valid UTF-8.
+                        ///
+                        /// (2) is a trickier guarantee because it cannot be enforced by the NFA
+                        /// state graph itself. Consider, for example, the regex `a*`. It matches
+                        /// the empty strings in `☃` at positions `0`, `1`, `2` and `3`, where
+                        /// positions `1` and `2` occur within the UTF-8 encoding of a codepoint,
+                        /// and thus correspond to invalid UTF-8 boundaries. Therefore, this
+                        /// guarantee must be made at a higher level than the NFA state graph
+                        /// itself. This crate deals with this case in each regex engine. Namely,
+                        /// when a zero-width match that splits a codepoint is found and UTF-8
+                        /// mode enabled, then it is ignored and the engine moves on looking for
+                        /// the next match.
+                        ///
+                        /// Thus, UTF-8 mode is both a promise that the NFA built only reports
+                        /// non-empty matches that are valid UTF-8, and an *instruction* to regex
+                        /// engines that empty matches that split codepoints should be banned.
+                        ///
+                        /// Because UTF-8 mode is fundamentally about avoiding invalid UTF-8 spans,
+                        /// it only makes sense to enable this option when you *know* your haystack
+                        /// is valid UTF-8. (For example, a `&str`.) Enabling UTF-8 mode and
+                        /// searching a haystack that contains invalid UTF-8 leads to **unspecified
+                        /// behavior**.
+                        ///
+                        /// Therefore, it may make sense to enable `syntax::Config::utf8` while
+                        /// simultaneously *disabling* this option. That would ensure all non-empty
+                        /// match spans are valid UTF-8, but that empty match spans may still split
+                        /// a codepoint or match at other places that aren't valid UTF-8.
+                        ///
+                        /// In general, this mode is only relevant if your regex can match the
+                        /// empty string. Most regexes don't.
+                        ///
+                        /// This is enabled by default.
+                        ///
+                        /// # Example
+                        ///
+                        /// This example shows how UTF-8 mode can impact the match spans that may
+                        /// be reported in certain cases.
+                        ///
+                        /// ```
+                        /// use regex_automata::{
+                        ///     nfa::thompson::{self, pikevm::PikeVM},
+                        ///     Match, Input,
+                        /// };
+                        ///
+                        /// let re = PikeVM::new("")?;
+                        /// let (mut cache, mut caps) = (re.create_cache(), re.create_captures());
+                        ///
+                        /// // UTF-8 mode is enabled by default.
+                        /// let mut input = Input::new("☃");
+                        /// re.search(&mut cache, &input, &mut caps);
+                        /// assert_eq!(Some(Match::must(0, 0..0)), caps.get_match());
+                        ///
+                        /// // Even though an empty regex matches at 1..1, our next match is
+                        /// // 3..3 because 1..1 and 2..2 split the snowman codepoint (which is
+                        /// // three bytes long).
+                        /// input.set_start(1);
+                        /// re.search(&mut cache, &input, &mut caps);
+                        /// assert_eq!(Some(Match::must(0, 3..3)), caps.get_match());
+                        ///
+                        /// // But if we disable UTF-8, then we'll get matches at 1..1 and 2..2:
+                        /// let re = PikeVM::builder()
+                        ///     .thompson(thompson::Config::new().utf8(false))
+                        ///     .build("")?;
+                        /// re.search(&mut cache, &input, &mut caps);
+                        /// assert_eq!(Some(Match::must(0, 1..1)), caps.get_match());
+                        ///
+                        /// input.set_start(2);
+                        /// re.search(&mut cache, &input, &mut caps);
+                        /// assert_eq!(Some(Match::must(0, 2..2)), caps.get_match());
+                        ///
+                        /// input.set_start(3);
+                        /// re.search(&mut cache, &input, &mut caps);
+                        /// assert_eq!(Some(Match::must(0, 3..3)), caps.get_match());
+                        ///
+                        /// input.set_start(4);
+                        /// re.search(&mut cache, &input, &mut caps);
+                        /// assert_eq!(None, caps.get_match());
+                        ///
+                        /// # Ok::<(), Box<dyn std::error::Error>>(())
+                        /// ```
+                        pub fn utf8(mut self, yes: bool) -> Config {
+                            self.utf8 = Some(yes);
+                            self
+                        }
+                    
+                        /// Reverse the NFA.
+                        ///
+                        /// A NFA reversal is performed by reversing all of the concatenated
+                        /// sub-expressions in the original pattern, recursively. (Look around
+                        /// operators are also inverted.) The resulting NFA can be used to match
+                        /// the pattern starting from the end of a string instead of the beginning
+                        /// of a string.
+                        ///
+                        /// Reversing the NFA is useful for building a reverse DFA, which is most
+                        /// useful for finding the start of a match after its ending position has
+                        /// been found. NFA execution engines typically do not work on reverse
+                        /// NFAs. For example, currently, the Pike VM reports the starting location
+                        /// of matches without a reverse NFA.
+                        ///
+                        /// Currently, enabling this setting requires disabling the
+                        /// [`captures`](Config::captures) setting. If both are enabled, then the
+                        /// compiler will return an error. It is expected that this limitation will
+                        /// be lifted in the future.
+                        ///
+                        /// This is disabled by default.
+                        ///
+                        /// # Example
+                        ///
+                        /// This example shows how to build a DFA from a reverse NFA, and then use
+                        /// the DFA to search backwards.
+                        ///
+                        /// ```
+                        /// use regex_automata::{
+                        ///     dfa::{self, Automaton},
+                        ///     nfa::thompson::{NFA, WhichCaptures},
+                        ///     HalfMatch, Input,
+                        /// };
+                        ///
+                        /// let dfa = dfa::dense::Builder::new()
+                        ///     .thompson(NFA::config()
+                        ///         .which_captures(WhichCaptures::None)
+                        ///         .reverse(true)
+                        ///     )
+                        ///     .build("baz[0-9]+")?;
+                        /// let expected = Some(HalfMatch::must(0, 3));
+                        /// assert_eq!(
+                        ///     expected,
+                        ///     dfa.try_search_rev(&Input::new("foobaz12345bar"))?,
+                        /// );
+                        ///
+                        /// # Ok::<(), Box<dyn std::error::Error>>(())
+                        /// ```
+                        pub fn reverse(mut self, yes: bool) -> Config {
+                            self.reverse = Some(yes);
+                            self
+                        }
+                    
+                        /// Sets an approximate size limit on the total heap used by the NFA being
+                        /// compiled.
+                        ///
+                        /// This permits imposing constraints on the size of a compiled NFA. This
+                        /// may be useful in contexts where the regex pattern is untrusted and one
+                        /// wants to avoid using too much memory.
+                        ///
+                        /// This size limit does not apply to auxiliary heap used during
+                        /// compilation that is not part of the built NFA.
+                        ///
+                        /// Note that this size limit is applied during compilation in order for
+                        /// the limit to prevent too much heap from being used. However, the
+                        /// implementation may use an intermediate NFA representation that is
+                        /// otherwise slightly bigger than the final public form. Since the size
+                        /// limit may be applied to an intermediate representation, there is not
+                        /// necessarily a precise correspondence between the configured size limit
+                        /// and the heap usage of the final NFA.
+                        ///
+                        /// There is no size limit by default.
+                        ///
+                        /// # Example
+                        ///
+                        /// This example demonstrates how Unicode mode can greatly increase the
+                        /// size of the NFA.
+                        ///
+                        /// ```
+                        /// # if cfg!(miri) { return Ok(()); } // miri takes too long
+                        /// use regex_automata::nfa::thompson::NFA;
+                        ///
+                        /// // 400KB isn't enough!
+                        /// NFA::compiler()
+                        ///     .configure(NFA::config().nfa_size_limit(Some(400_000)))
+                        ///     .build(r"\w{20}")
+                        ///     .unwrap_err();
+                        ///
+                        /// // ... but 500KB probably is.
+                        /// let nfa = NFA::compiler()
+                        ///     .configure(NFA::config().nfa_size_limit(Some(500_000)))
+                        ///     .build(r"\w{20}")?;
+                        ///
+                        /// assert_eq!(nfa.pattern_len(), 1);
+                        ///
+                        /// # Ok::<(), Box<dyn std::error::Error>>(())
+                        /// ```
+                        pub fn nfa_size_limit(mut self, bytes: Option<usize>) -> Config {
+                            self.nfa_size_limit = Some(bytes);
+                            self
+                        }
+                    
+                        /// Apply best effort heuristics to shrink the NFA at the expense of more
+                        /// time/memory.
+                        ///
+                        /// Generally speaking, if one is using an NFA to compile a DFA, then the
+                        /// extra time used to shrink the NFA will be more than made up for during
+                        /// DFA construction (potentially by a lot). In other words, enabling this
+                        /// can substantially decrease the overall amount of time it takes to build
+                        /// a DFA.
+                        ///
+                        /// A reason to keep this disabled is if you want to compile an NFA and
+                        /// start using it as quickly as possible without needing to build a DFA,
+                        /// and you don't mind using a bit of extra memory for the NFA. e.g., for
+                        /// an NFA simulation or for a lazy DFA.
+                        ///
+                        /// NFA shrinking is currently most useful when compiling a reverse
+                        /// NFA with large Unicode character classes. In particular, it trades
+                        /// additional CPU time during NFA compilation in favor of generating fewer
+                        /// NFA states.
+                        ///
+                        /// This is disabled by default because it can increase compile times
+                        /// quite a bit if you aren't building a full DFA.
+                        ///
+                        /// # Example
+                        ///
+                        /// This example shows that NFA shrinking can lead to substantial space
+                        /// savings in some cases. Notice that, as noted above, we build a reverse
+                        /// DFA and use a pattern with a large Unicode character class.
+                        ///
+                        /// ```
+                        /// # if cfg!(miri) { return Ok(()); } // miri takes too long
+                        /// use regex_automata::nfa::thompson::{NFA, WhichCaptures};
+                        ///
+                        /// // Currently we have to disable captures when enabling reverse NFA.
+                        /// let config = NFA::config()
+                        ///     .which_captures(WhichCaptures::None)
+                        ///     .reverse(true);
+                        /// let not_shrunk = NFA::compiler()
+                        ///     .configure(config.clone().shrink(false))
+                        ///     .build(r"\w")?;
+                        /// let shrunk = NFA::compiler()
+                        ///     .configure(config.clone().shrink(true))
+                        ///     .build(r"\w")?;
+                        ///
+                        /// // While a specific shrink factor is not guaranteed, the savings can be
+                        /// // considerable in some cases.
+                        /// assert!(shrunk.states().len() * 2 < not_shrunk.states().len());
+                        ///
+                        /// # Ok::<(), Box<dyn std::error::Error>>(())
+                        /// ```
+                        pub fn shrink(mut self, yes: bool) -> Config {
+                            self.shrink = Some(yes);
+                            self
+                        }
+                    
+                        /// Whether to include 'Capture' states in the NFA.
+                        ///
+                        /// Currently, enabling this setting requires disabling the
+                        /// [`reverse`](Config::reverse) setting. If both are enabled, then the
+                        /// compiler will return an error. It is expected that this limitation will
+                        /// be lifted in the future.
+                        ///
+                        /// This is enabled by default.
+                        ///
+                        /// # Example
+                        ///
+                        /// This example demonstrates that some regex engines, like the Pike VM,
+                        /// require capturing states to be present in the NFA to report match
+                        /// offsets.
+                        ///
+                        /// (Note that since this method is deprecated, the example below uses
+                        /// [`Config::which_captures`] to disable capture states.)
+                        ///
+                        /// ```
+                        /// use regex_automata::nfa::thompson::{
+                        ///     pikevm::PikeVM,
+                        ///     NFA,
+                        ///     WhichCaptures,
+                        /// };
+                        ///
+                        /// let re = PikeVM::builder()
+                        ///     .thompson(NFA::config().which_captures(WhichCaptures::None))
+                        ///     .build(r"[a-z]+")?;
+                        /// let mut cache = re.create_cache();
+                        ///
+                        /// assert!(re.is_match(&mut cache, "abc"));
+                        /// assert_eq!(None, re.find(&mut cache, "abc"));
+                        ///
+                        /// # Ok::<(), Box<dyn std::error::Error>>(())
+                        /// ```
+                        #[deprecated(since = "0.3.5", note = "use which_captures instead")]
+                        pub fn captures(self, yes: bool) -> Config {
+                            self.which_captures(if yes {
+                                WhichCaptures::All
+                            } else {
+                                WhichCaptures::None
+                            })
+                        }
+                    
+                        /// Configures what kinds of capture groups are compiled into
+                        /// [`State::Capture`](crate::nfa::thompson::State::Capture) states in a
+                        /// Thompson NFA.
+                        ///
+                        /// Currently, using any option except for [`WhichCaptures::None`] requires
+                        /// disabling the [`reverse`](Config::reverse) setting. If both are
+                        /// enabled, then the compiler will return an error. It is expected that
+                        /// this limitation will be lifted in the future.
+                        ///
+                        /// This is set to [`WhichCaptures::All`] by default. Callers may wish to
+                        /// use [`WhichCaptures::Implicit`] in cases where one wants avoid the
+                        /// overhead of capture states for explicit groups. Usually this occurs
+                        /// when one wants to use the `PikeVM` only for determining the overall
+                        /// match. Otherwise, the `PikeVM` could use much more memory than is
+                        /// necessary.
+                        ///
+                        /// # Example
+                        ///
+                        /// This example demonstrates that some regex engines, like the Pike VM,
+                        /// require capturing states to be present in the NFA to report match
+                        /// offsets.
+                        ///
+                        /// ```
+                        /// use regex_automata::nfa::thompson::{
+                        ///     pikevm::PikeVM,
+                        ///     NFA,
+                        ///     WhichCaptures,
+                        /// };
+                        ///
+                        /// let re = PikeVM::builder()
+                        ///     .thompson(NFA::config().which_captures(WhichCaptures::None))
+                        ///     .build(r"[a-z]+")?;
+                        /// let mut cache = re.create_cache();
+                        ///
+                        /// assert!(re.is_match(&mut cache, "abc"));
+                        /// assert_eq!(None, re.find(&mut cache, "abc"));
+                        ///
+                        /// # Ok::<(), Box<dyn std::error::Error>>(())
+                        /// ```
+                        ///
+                        /// The same applies to the bounded backtracker:
+                        ///
+                        /// ```
+                        /// use regex_automata::nfa::thompson::{
+                        ///     backtrack::BoundedBacktracker,
+                        ///     NFA,
+                        ///     WhichCaptures,
+                        /// };
+                        ///
+                        /// let re = BoundedBacktracker::builder()
+                        ///     .thompson(NFA::config().which_captures(WhichCaptures::None))
+                        ///     .build(r"[a-z]+")?;
+                        /// let mut cache = re.create_cache();
+                        ///
+                        /// assert!(re.try_is_match(&mut cache, "abc")?);
+                        /// assert_eq!(None, re.try_find(&mut cache, "abc")?);
+                        ///
+                        /// # Ok::<(), Box<dyn std::error::Error>>(())
+                        /// ```
+                        pub fn which_captures(mut self, which_captures: WhichCaptures) -> Config {
+                            self.which_captures = Some(which_captures);
+                            self
+                        }
+                    
+                        /// Sets the look-around matcher that should be used with this NFA.
+                        ///
+                        /// A look-around matcher determines how to match look-around assertions.
+                        /// In particular, some assertions are configurable. For example, the
+                        /// `(?m:^)` and `(?m:$)` assertions can have their line terminator changed
+                        /// from the default of `\n` to any other byte.
+                        ///
+                        /// # Example
+                        ///
+                        /// This shows how to change the line terminator for multi-line assertions.
+                        ///
+                        /// ```
+                        /// use regex_automata::{
+                        ///     nfa::thompson::{self, pikevm::PikeVM},
+                        ///     util::look::LookMatcher,
+                        ///     Match, Input,
+                        /// };
+                        ///
+                        /// let mut lookm = LookMatcher::new();
+                        /// lookm.set_line_terminator(b'\x00');
+                        ///
+                        /// let re = PikeVM::builder()
+                        ///     .thompson(thompson::Config::new().look_matcher(lookm))
+                        ///     .build(r"(?m)^[a-z]+$")?;
+                        /// let mut cache = re.create_cache();
+                        ///
+                        /// // Multi-line assertions now use NUL as a terminator.
+                        /// assert_eq!(
+                        ///     Some(Match::must(0, 1..4)),
+                        ///     re.find(&mut cache, b"\x00abc\x00"),
+                        /// );
+                        /// // ... and \n is no longer recognized as a terminator.
+                        /// assert_eq!(
+                        ///     None,
+                        ///     re.find(&mut cache, b"\nabc\n"),
+                        /// );
+                        ///
+                        /// # Ok::<(), Box<dyn std::error::Error>>(())
+                        /// ```
+                        pub fn look_matcher(mut self, m: LookMatcher) -> Config {
+                            self.look_matcher = Some(m);
+                            self
+                        }
+                    
+                        /// Whether to compile an unanchored prefix into this NFA.
+                        ///
+                        /// This is enabled by default. It is made available for tests only to make
+                        /// it easier to unit test the output of the compiler.
+                        #[cfg(test)]
+                        fn unanchored_prefix(mut self, yes: bool) -> Config {
+                            self.unanchored_prefix = Some(yes);
+                            self
+                        }
+                    
+                        /// Returns whether this configuration has enabled UTF-8 mode.
+                        pub fn get_utf8(&self) -> bool {
+                            self.utf8.unwrap_or(true)
+                        }
+                    
+                        /// Returns whether this configuration has enabled reverse NFA compilation.
+                        pub fn get_reverse(&self) -> bool {
+                            self.reverse.unwrap_or(false)
+                        }
+                    
+                        /// Return the configured NFA size limit, if it exists, in the number of
+                        /// bytes of heap used.
+                        pub fn get_nfa_size_limit(&self) -> Option<usize> {
+                            self.nfa_size_limit.unwrap_or(None)
+                        }
+                    
+                        /// Return whether NFA shrinking is enabled.
+                        pub fn get_shrink(&self) -> bool {
+                            self.shrink.unwrap_or(false)
+                        }
+                    
+                        /// Return whether NFA compilation is configured to produce capture states.
+                        #[deprecated(since = "0.3.5", note = "use get_which_captures instead")]
+                        pub fn get_captures(&self) -> bool {
+                            self.get_which_captures().is_any()
+                        }
+                    
+                        /// Return what kinds of capture states will be compiled into an NFA.
+                        pub fn get_which_captures(&self) -> WhichCaptures {
+                            self.which_captures.unwrap_or(WhichCaptures::All)
+                        }
+                    
+                        /// Return the look-around matcher for this NFA.
+                        pub fn get_look_matcher(&self) -> LookMatcher {
+                            self.look_matcher.clone().unwrap_or(LookMatcher::default())
+                        }
+                    
+                        /// Return whether NFA compilation is configured to include an unanchored
+                        /// prefix.
+                        ///
+                        /// This is always false when not in test mode.
+                        fn get_unanchored_prefix(&self) -> bool {
+                            #[cfg(test)]
+                            {
+                                self.unanchored_prefix.unwrap_or(true)
+                            }
+                            #[cfg(not(test))]
+                            {
+                                true
+                            }
+                        }
+                    
+                        /// Overwrite the default configuration such that the options in `o` are
+                        /// always used. If an option in `o` is not set, then the corresponding
+                        /// option in `self` is used. If it's not set in `self` either, then it
+                        /// remains not set.
+                        pub(crate) fn overwrite(&self, o: Config) -> Config {
+                            Config {
+                                utf8: o.utf8.or(self.utf8),
+                                reverse: o.reverse.or(self.reverse),
+                                nfa_size_limit: o.nfa_size_limit.or(self.nfa_size_limit),
+                                shrink: o.shrink.or(self.shrink),
+                                which_captures: o.which_captures.or(self.which_captures),
+                                look_matcher: o.look_matcher.or_else(|| self.look_matcher.clone()),
+                                #[cfg(test)]
+                                unanchored_prefix: o.unanchored_prefix.or(self.unanchored_prefix),
+                            }
+                        }
+                    }
+                    
+                    /// A configuration indicating which kinds of
+                    /// [`State::Capture`](crate::nfa::thompson::State::Capture) states to include.
+                    ///
+                    /// This configuration can be used with [`Config::which_captures`] to control
+                    /// which capture states are compiled into a Thompson NFA.
+                    ///
+                    /// The default configuration is [`WhichCaptures::All`].
+                    #[derive(Clone, Copy, Debug)]
+                    pub enum WhichCaptures {
+                        /// All capture states, including those corresponding to both implicit and
+                        /// explicit capture groups, are included in the Thompson NFA.
+                        All,
+                        /// Only capture states corresponding to implicit capture groups are
+                        /// included.
+                        Implicit,
+                        /// No capture states are compiled into the Thompson NFA.
+                        None,
+                    }
+                    
+                    impl Default for WhichCaptures {
+                        fn default() -> WhichCaptures {
+                            WhichCaptures::All
+                        }
+                    }
+                    
+                    impl WhichCaptures {
+                        /// Returns true if this configuration indicates that no capture states
+                        /// should be produced in an NFA.
+                        pub fn is_none(&self) -> bool {
+                            matches!(*self, WhichCaptures::None)
+                        }
+                    
+                        /// Returns true if this configuration indicates that some capture states
+                        /// should be added to an NFA.
+                        pub fn is_any(&self) -> bool {
+                            !self.is_none()
+                        }
+                    }
+                    
+                    #[derive(Clone, Debug)]
+                    pub struct Compiler {
+                        /// A regex parser, used when compiling an NFA directly from a pattern
+                        /// string.
+                        parser: ParserBuilder,
+                        /// The compiler configuration.
+                        config: Config,
+                        /// The builder for actually constructing an NFA. This provides a
+                        /// convenient abstraction for writing a compiler.
+                        builder: RefCell<Builder>,
+                        /// State used for compiling character classes to UTF-8 byte automata.
+                        /// State is not retained between character class compilations. This just
+                        /// serves to amortize allocation to the extent possible.
+                        utf8_state: RefCell<Utf8State>,
+                        /// State used for arranging character classes in reverse into a trie.
+                        trie_state: RefCell<RangeTrie>,
+                        /// State used for caching common suffixes when compiling reverse UTF-8
+                        /// automata (for Unicode character classes).
+                        utf8_suffix: RefCell<Utf8SuffixMap>,
+                    }
+                    
+                    impl Compiler {
+                        /// Create a new NFA builder with its default configuration.
+                        pub fn new() -> Compiler {
+                            Compiler {
+                                parser: ParserBuilder::new(),
+                                config: Config::default(),
+                                builder: RefCell::new(Builder::new()),
+                                utf8_state: RefCell::new(Utf8State::new()),
+                                trie_state: RefCell::new(RangeTrie::new()),
+                                utf8_suffix: RefCell::new(Utf8SuffixMap::new(1000)),
+                            }
+                        }
+                    
+                        /// Compile the given regular expression pattern into an NFA.
+                        pub fn build(&self, pattern: &str) -> Result<NFA, BuildError> {
+                            self.build_many(&[pattern])
+                        }
+                    
+                        /// Compile the given regular expression patterns into a single NFA.
+                        pub fn build_many<P: AsRef<str>>(
+                            &self,
+                            patterns: &[P],
+                        ) -> Result<NFA, BuildError> {
+                            let mut hirs = vec![];
+                            for p in patterns {
+                                hirs.push(
+                                    self.parser
+                                        .build()
+                                        .parse(p.as_ref())
+                                        .map_err(BuildError::syntax)?,
+                                );
+                                debug!("parsed: {:?}", p.as_ref());
+                            }
+                            self.build_many_from_hir(&hirs)
+                        }
+                    
+                        /// Compile the given high level intermediate representation of a regular
+                        /// expression into an NFA.
+                        pub fn build_from_hir(&self, expr: &Hir) -> Result<NFA, BuildError> {
+                            self.build_many_from_hir(&[expr])
+                        }
+                    
+                        /// Compile the given high level intermediate representations of regular
+                        /// expressions into a single NFA.
+                        pub fn build_many_from_hir<H: Borrow<Hir>>(
+                            &self,
+                            exprs: &[H],
+                        ) -> Result<NFA, BuildError> {
+                            self.compile(exprs)
+                        }
+                    
+                        /// Apply the given NFA configuration options to this builder.
+                        pub fn configure(&mut self, config: Config) -> &mut Compiler {
+                            self.config = self.config.overwrite(config);
+                            self
+                        }
+                    
+                        /// Set the syntax configuration for this builder using
+                        /// [`syntax::Config`](crate::util::syntax::Config).
+                        pub fn syntax(
+                            &mut self,
+                            config: crate::util::syntax::Config,
+                        ) -> &mut Compiler {
+                            config.apply(&mut self.parser);
+                            self
+                        }
+                    }
+                    
+                    impl Compiler {
+                        /// Compile the sequence of HIR expressions given. Pattern IDs are
+                        /// allocated starting from 0, in correspondence with the slice given.
+                        fn compile<H: Borrow<Hir>>(&self, exprs: &[H]) -> Result<NFA, BuildError> {
+                            if exprs.len() > PatternID::LIMIT {
+                                return Err(BuildError::too_many_patterns(exprs.len()));
+                            }
+                            if self.config.get_reverse()
+                                && self.config.get_which_captures().is_any()
+                            {
+                                return Err(BuildError::unsupported_captures());
+                            }
+                    
+                            self.builder.borrow_mut().clear();
+                            self.builder.borrow_mut().set_utf8(self.config.get_utf8());
+                            self.builder.borrow_mut().set_reverse(self.config.get_reverse());
+                            self.builder
+                                .borrow_mut()
+                                .set_look_matcher(self.config.get_look_matcher());
+                            self.builder
+                                .borrow_mut()
+                                .set_size_limit(self.config.get_nfa_size_limit())?;
+                                
+                            let all_anchored = exprs.iter().all(|e| {
+                                let props = e.borrow().properties();
+                                if self.config.get_reverse() {
+                                    props.look_set_suffix().contains(hir::Look::End)
+                                } else {
+                                    props.look_set_prefix().contains(hir::Look::Start)
+                                }
+                            });
+                            let anchored = !self.config.get_unanchored_prefix() || all_anchored;
+                            let unanchored_prefix = if anchored {
+                                self.c_empty()?
+                            } else {
+                                self.c_at_least(&Hir::dot(hir::Dot::AnyByte), false, 0)?
+                            };
+                    
+                            let compiled = self.c_alt_iter(exprs.iter().map(|e| {
+                                let _ = self.start_pattern()?;
+                                let one = self.c_cap(0, None, e.borrow())?;
+                                let match_state_id = self.add_match()?;
+                                self.patch(one.end, match_state_id)?;
+                                let _ = self.finish_pattern(one.start)?;
+                                Ok(ThompsonRef { start: one.start, end: match_state_id })
+                            }))?;
+                            self.patch(unanchored_prefix.end, compiled.start)?;
+                            let nfa = self
+                                .builder
+                                .borrow_mut()
+                                .build(compiled.start, unanchored_prefix.start)?;
+                    
+                            debug!("HIR-to-NFA compilation complete, config: {:?}", self.config);
+                            Ok(nfa)
+                        }
+                    
+                        /// Compile an arbitrary HIR expression.
+                        fn c(&self, expr: &Hir) -> Result<ThompsonRef, BuildError> {
+                            use regex_syntax::hir::{Class, HirKind::*};
+                    
+                            match *expr.kind() {
+                                Empty => self.c_empty(),
+                                Literal(hir::Literal(ref bytes)) => self.c_literal(bytes),
+                                Class(Class::Bytes(ref c)) => self.c_byte_class(c),
+                                Class(Class::Unicode(ref c)) => self.c_unicode_class(c),
+                                Look(ref look) => self.c_look(look),
+                                Repetition(ref rep) => self.c_repetition(rep),
+                                Capture(ref c) => self.c_cap(c.index, c.name.as_deref(), &c.sub),
+                                Concat(ref es) => self.c_concat(es.iter().map(|e| self.c(e))),
+                                Alternation(ref es) => self.c_alt_slice(es),
+                            }
+                        }
+                    
+                        /// Compile a concatenation of the sub-expressions yielded by the given
+                        /// iterator.
+                        fn c_concat<I>(&self, mut it: I) -> Result<ThompsonRef, BuildError>
+                        where
+                            I: DoubleEndedIterator<Item = Result<ThompsonRef, BuildError>>,
+                        {
+                            let first = if self.is_reverse() { it.next_back() } else { it.next() };
+                            let ThompsonRef { start, mut end } = match first {
+                                Some(result) => result?,
+                                None => return self.c_empty(),
+                            };
+                            loop {
+                                let next =
+                                    if self.is_reverse() { it.next_back() } else { it.next() };
+                                let compiled = match next {
+                                    Some(result) => result?,
+                                    None => break,
+                                };
+                                self.patch(end, compiled.start)?;
+                                end = compiled.end;
+                            }
+                            Ok(ThompsonRef { start, end })
+                        }
+                    
+                        /// Compile an alternation of the given HIR values.
+                        fn c_alt_slice(&self, exprs: &[Hir]) -> Result<ThompsonRef, BuildError> {
+                            // self.c_alt_iter(exprs.iter().map(|e| self.c(e)))
+                            let literal_count = exprs
+                                .iter()
+                                .filter(|e| {
+                                    matches!(*e.kind(), hir::HirKind::Literal(hir::Literal(_)))
+                                })
+                                .count();
+                            if literal_count <= 1 || literal_count < exprs.len() {
+                                return self.c_alt_iter(exprs.iter().map(|e| self.c(e)));
+                            }
+                    
+                            let mut trie = if self.is_reverse() {
+                                LiteralTrie::reverse()
+                            } else {
+                                LiteralTrie::forward()
+                            };
+                            for expr in exprs.iter() {
+                                let literal = match *expr.kind() {
+                                    hir::HirKind::Literal(hir::Literal(ref bytes)) => bytes,
+                                    _ => unreachable!(),
+                                };
+                                trie.add(literal)?;
+                            }
+                            trie.compile(&mut self.builder.borrow_mut())
+                        }
+                    
+                        /// Compile an alternation, where each element yielded by the given
+                        /// iterator represents an item in the alternation.
+                        fn c_alt_iter<I>(&self, mut it: I) -> Result<ThompsonRef, BuildError>
+                        where
+                            I: Iterator<Item = Result<ThompsonRef, BuildError>>,
+                        {
+                            let first = match it.next() {
+                                None => return self.c_fail(),
+                                Some(result) => result?,
+                            };
+                            let second = match it.next() {
+                                None => return Ok(first),
+                                Some(result) => result?,
+                            };
+                    
+                            let union = self.add_union()?;
+                            let end = self.add_empty()?;
+                            self.patch(union, first.start)?;
+                            self.patch(first.end, end)?;
+                            self.patch(union, second.start)?;
+                            self.patch(second.end, end)?;
+                            for result in it {
+                                let compiled = result?;
+                                self.patch(union, compiled.start)?;
+                                self.patch(compiled.end, end)?;
+                            }
+                            Ok(ThompsonRef { start: union, end })
+                        }
+                    
+                        /// Compile the given capture sub-expression. `expr` should be the
+                        /// sub-expression contained inside the capture.
+                        fn c_cap(
+                            &self,
+                            index: u32,
+                            name: Option<&str>,
+                            expr: &Hir,
+                        ) -> Result<ThompsonRef, BuildError> {
+                            match self.config.get_which_captures() {
+                                // No capture states means we always skip them.
+                                WhichCaptures::None => return self.c(expr),
+                                // Implicit captures states means we only add when index==0 since
+                                // index==0 implies the group is implicit.
+                                WhichCaptures::Implicit if index > 0 => return self.c(expr),
+                                _ => {}
+                            }
+                    
+                            let start = self.add_capture_start(index, name)?;
+                            let inner = self.c(expr)?;
+                            let end = self.add_capture_end(index)?;
+                            self.patch(start, inner.start)?;
+                            self.patch(inner.end, end)?;
+                            Ok(ThompsonRef { start, end })
+                        }
+                    
+                        /// Compile the given repetition expression. This handles all types of
+                        /// repetitions and greediness.
+                        fn c_repetition(
+                            &self,
+                            rep: &hir::Repetition,
+                        ) -> Result<ThompsonRef, BuildError> {
+                            match (rep.min, rep.max) {
+                                (0, Some(1)) => self.c_zero_or_one(&rep.sub, rep.greedy),
+                                (min, None) => self.c_at_least(&rep.sub, rep.greedy, min),
+                                (min, Some(max)) if min == max => self.c_exactly(&rep.sub, min),
+                                (min, Some(max)) => self.c_bounded(&rep.sub, rep.greedy, min, max),
+                            }
+                        }
+                    
+                        /// Compile the given expression such that it matches at least `min` times,
+                        /// but no more than `max` times.
+                        fn c_bounded(
+                            &self,
+                            expr: &Hir,
+                            greedy: bool,
+                            min: u32,
+                            max: u32,
+                        ) -> Result<ThompsonRef, BuildError> {
+                            let prefix = self.c_exactly(expr, min)?;
+                            if min == max {
+                                return Ok(prefix);
+                            }
+                            
+                            let empty = self.add_empty()?;
+                            let mut prev_end = prefix.end;
+                            for _ in min..max {
+                                let union = if greedy {
+                                    self.add_union()
+                                } else {
+                                    self.add_union_reverse()
+                                }?;
+                                let compiled = self.c(expr)?;
+                                self.patch(prev_end, union)?;
+                                self.patch(union, compiled.start)?;
+                                self.patch(union, empty)?;
+                                prev_end = compiled.end;
+                            }
+                            self.patch(prev_end, empty)?;
+                            Ok(ThompsonRef { start: prefix.start, end: empty })
+                        }
+                    
+                        /// Compile the given expression such that it may be matched `n` or more
+                        /// times, where `n` can be any integer.
+                        fn c_at_least(
+                            &self,
+                            expr: &Hir,
+                            greedy: bool,
+                            n: u32,
+                        ) -> Result<ThompsonRef, BuildError> {
+                            if n == 0 {
+                                if expr.properties().minimum_len().map_or(false, |len| len > 0) {
+                                    let union = if greedy {
+                                        self.add_union()
+                                    } else {
+                                        self.add_union_reverse()
+                                    }?;
+                                    let compiled = self.c(expr)?;
+                                    self.patch(union, compiled.start)?;
+                                    self.patch(compiled.end, union)?;
+                                    return Ok(ThompsonRef { start: union, end: union });
+                                }
+                                
+                                let compiled = self.c(expr)?;
+                                let plus = if greedy {
+                                    self.add_union()
+                                } else {
+                                    self.add_union_reverse()
+                                }?;
+                                self.patch(compiled.end, plus)?;
+                                self.patch(plus, compiled.start)?;
+                    
+                                let question = if greedy {
+                                    self.add_union()
+                                } else {
+                                    self.add_union_reverse()
+                                }?;
+                                let empty = self.add_empty()?;
+                                self.patch(question, compiled.start)?;
+                                self.patch(question, empty)?;
+                                self.patch(plus, empty)?;
+                                Ok(ThompsonRef { start: question, end: empty })
+                            } else if n == 1 {
+                                let compiled = self.c(expr)?;
+                                let union = if greedy {
+                                    self.add_union()
+                                } else {
+                                    self.add_union_reverse()
+                                }?;
+                                self.patch(compiled.end, union)?;
+                                self.patch(union, compiled.start)?;
+                                Ok(ThompsonRef { start: compiled.start, end: union })
+                            } else {
+                                let prefix = self.c_exactly(expr, n - 1)?;
+                                let last = self.c(expr)?;
+                                let union = if greedy {
+                                    self.add_union()
+                                } else {
+                                    self.add_union_reverse()
+                                }?;
+                                self.patch(prefix.end, last.start)?;
+                                self.patch(last.end, union)?;
+                                self.patch(union, last.start)?;
+                                Ok(ThompsonRef { start: prefix.start, end: union })
+                            }
+                        }
+                    
+                        /// Compile the given expression such that it may be matched zero or one
+                        /// times.
+                        fn c_zero_or_one(
+                            &self,
+                            expr: &Hir,
+                            greedy: bool,
+                        ) -> Result<ThompsonRef, BuildError> {
+                            let union =
+                                if greedy { self.add_union() } else { self.add_union_reverse() }?;
+                            let compiled = self.c(expr)?;
+                            let empty = self.add_empty()?;
+                            self.patch(union, compiled.start)?;
+                            self.patch(union, empty)?;
+                            self.patch(compiled.end, empty)?;
+                            Ok(ThompsonRef { start: union, end: empty })
+                        }
+                    
+                        /// Compile the given HIR expression exactly `n` times.
+                        fn c_exactly(
+                            &self,
+                            expr: &Hir,
+                            n: u32,
+                        ) -> Result<ThompsonRef, BuildError> {
+                            let it = (0..n).map(|_| self.c(expr));
+                            self.c_concat(it)
+                        }
+                    
+                        /// Compile the given byte oriented character class.
+                        fn c_byte_class(
+                            &self,
+                            cls: &hir::ClassBytes,
+                        ) -> Result<ThompsonRef, BuildError> {
+                            let end = self.add_empty()?;
+                            let mut trans = Vec::with_capacity(cls.ranges().len());
+                            for r in cls.iter() {
+                                trans.push(Transition {
+                                    start: r.start(),
+                                    end: r.end(),
+                                    next: end,
+                                });
+                            }
+                            Ok(ThompsonRef { start: self.add_sparse(trans)?, end })
+                        }
+                    
+                        /// Compile the given Unicode character class.
+                        fn c_unicode_class(
+                            &self,
+                            cls: &hir::ClassUnicode,
+                        ) -> Result<ThompsonRef, BuildError> {
+                            if cls.is_ascii() {
+                                let end = self.add_empty()?;
+                                let mut trans = Vec::with_capacity(cls.ranges().len());
+                                for r in cls.iter() {
+                                    trans.push(Transition {
+                                        start: u8::try_from(u32::from(r.start())).unwrap(),
+                                        end: u8::try_from(u32::from(r.end())).unwrap(),
+                                        next: end,
+                                    });
+                                }
+                                Ok(ThompsonRef { start: self.add_sparse(trans)?, end })
+                            } else if self.is_reverse() {
+                                if !self.config.get_shrink() {
+                                    self.c_unicode_class_reverse_with_suffix(cls)
+                                } else {
+                                    let mut trie = self.trie_state.borrow_mut();
+                                    trie.clear();
+                    
+                                    for rng in cls.iter() {
+                                        for mut seq in Utf8Sequences::new(rng.start(), rng.end()) {
+                                            seq.reverse();
+                                            trie.insert(seq.as_slice());
+                                        }
+                                    }
+                                    let mut builder = self.builder.borrow_mut();
+                                    let mut utf8_state = self.utf8_state.borrow_mut();
+                                    let mut utf8c =
+                                        Utf8Compiler::new(&mut *builder, &mut *utf8_state)?;
+                                    trie.iter(|seq| {
+                                        utf8c.add(&seq)?;
+                                        Ok(())
+                                    })?;
+                                    utf8c.finish()
+                                }
+                            } else {
+                                let mut builder = self.builder.borrow_mut();
+                                let mut utf8_state = self.utf8_state.borrow_mut();
+                                let mut utf8c =
+                                    Utf8Compiler::new(&mut *builder, &mut *utf8_state)?;
+                                for rng in cls.iter() {
+                                    for seq in Utf8Sequences::new(rng.start(), rng.end()) {
+                                        utf8c.add(seq.as_slice())?;
+                                    }
+                                }
+                                utf8c.finish()
+                            }
+                        }
+                    
+                        /// Compile the given Unicode character class in reverse with suffix
+                        /// caching.
+                        fn c_unicode_class_reverse_with_suffix(
+                            &self,
+                            cls: &hir::ClassUnicode,
+                        ) -> Result<ThompsonRef, BuildError> {
+                            let mut cache = self.utf8_suffix.borrow_mut();
+                            cache.clear();
+                    
+                            let union = self.add_union()?;
+                            let alt_end = self.add_empty()?;
+                            for urng in cls.iter() {
+                                for seq in Utf8Sequences::new(urng.start(), urng.end()) {
+                                    let mut end = alt_end;
+                                    for brng in seq.as_slice() {
+                                        let key = Utf8SuffixKey {
+                                            from: end,
+                                            start: brng.start,
+                                            end: brng.end,
+                                        };
+                                        let hash = cache.hash(&key);
+                                        if let Some(id) = cache.get(&key, hash) {
+                                            end = id;
+                                            continue;
+                                        }
+                    
+                                        let compiled = self.c_range(brng.start, brng.end)?;
+                                        self.patch(compiled.end, end)?;
+                                        end = compiled.start;
+                                        cache.set(key, hash, end);
+                                    }
+                                    self.patch(union, end)?;
+                                }
+                            }
+                            Ok(ThompsonRef { start: union, end: alt_end })
+                        }
+                    
+                        /// Compile the given HIR look-around assertion to an NFA look-around
+                        /// assertion.
+                        fn c_look(&self, anchor: &hir::Look) -> Result<ThompsonRef, BuildError> {
+                            let look = match *anchor {
+                                hir::Look::Start => Look::Start,
+                                hir::Look::End => Look::End,
+                                hir::Look::StartLF => Look::StartLF,
+                                hir::Look::EndLF => Look::EndLF,
+                                hir::Look::StartCRLF => Look::StartCRLF,
+                                hir::Look::EndCRLF => Look::EndCRLF,
+                                hir::Look::WordAscii => Look::WordAscii,
+                                hir::Look::WordAsciiNegate => Look::WordAsciiNegate,
+                                hir::Look::WordUnicode => Look::WordUnicode,
+                                hir::Look::WordUnicodeNegate => Look::WordUnicodeNegate,
+                                hir::Look::WordStartAscii => Look::WordStartAscii,
+                                hir::Look::WordEndAscii => Look::WordEndAscii,
+                                hir::Look::WordStartUnicode => Look::WordStartUnicode,
+                                hir::Look::WordEndUnicode => Look::WordEndUnicode,
+                                hir::Look::WordStartHalfAscii => Look::WordStartHalfAscii,
+                                hir::Look::WordEndHalfAscii => Look::WordEndHalfAscii,
+                                hir::Look::WordStartHalfUnicode => Look::WordStartHalfUnicode,
+                                hir::Look::WordEndHalfUnicode => Look::WordEndHalfUnicode,
+                            };
+                            let id = self.add_look(look)?;
+                            Ok(ThompsonRef { start: id, end: id })
+                        }
+                    
+                        /// Compile the given byte string to a concatenation of bytes.
+                        fn c_literal(&self, bytes: &[u8]) -> Result<ThompsonRef, BuildError> {
+                            self.c_concat(bytes.iter().copied().map(|b| self.c_range(b, b)))
+                        }
+                    
+                        /// Compile a "range" state with one transition that may only be followed
+                        /// if the input byte is in the (inclusive) range given.
+                        fn c_range(&self, start: u8, end: u8) -> Result<ThompsonRef, BuildError> {
+                            let id = self.add_range(start, end)?;
+                            Ok(ThompsonRef { start: id, end: id })
+                        }
+                    
+                        /// Compile an "empty" state with one unconditional epsilon transition.
+                        fn c_empty(&self) -> Result<ThompsonRef, BuildError> {
+                            let id = self.add_empty()?;
+                            Ok(ThompsonRef { start: id, end: id })
+                        }
+                    
+                        /// Compile a "fail" state that can never have any outgoing transitions.
+                        fn c_fail(&self) -> Result<ThompsonRef, BuildError> {
+                            let id = self.add_fail()?;
+                            Ok(ThompsonRef { start: id, end: id })
+                        }
+                    
+                        fn patch(&self, from: StateID, to: StateID) -> Result<(), BuildError> {
+                            self.builder.borrow_mut().patch(from, to)
+                        }
+                    
+                        fn start_pattern(&self) -> Result<PatternID, BuildError> {
+                            self.builder.borrow_mut().start_pattern()
+                        }
+                    
+                        fn finish_pattern(
+                            &self,
+                            start_id: StateID,
+                        ) -> Result<PatternID, BuildError> {
+                            self.builder.borrow_mut().finish_pattern(start_id)
+                        }
+                    
+                        fn add_empty(&self) -> Result<StateID, BuildError> {
+                            self.builder.borrow_mut().add_empty()
+                        }
+                    
+                        fn add_range(&self, start: u8, end: u8) -> Result<StateID, BuildError> {
+                            self.builder.borrow_mut().add_range(Transition {
+                                start,
+                                end,
+                                next: StateID::ZERO,
+                            })
+                        }
+                    
+                        fn add_sparse(
+                            &self,
+                            ranges: Vec<Transition>,
+                        ) -> Result<StateID, BuildError> {
+                            self.builder.borrow_mut().add_sparse(ranges)
+                        }
+                    
+                        fn add_look(&self, mut look: Look) -> Result<StateID, BuildError> {
+                            if self.is_reverse() {
+                                look = look.reversed();
+                            }
+                            self.builder.borrow_mut().add_look(StateID::ZERO, look)
+                        }
+                    
+                        fn add_union(&self) -> Result<StateID, BuildError> {
+                            self.builder.borrow_mut().add_union(vec![])
+                        }
+                    
+                        fn add_union_reverse(&self) -> Result<StateID, BuildError> {
+                            self.builder.borrow_mut().add_union_reverse(vec![])
+                        }
+                    
+                        fn add_capture_start(
+                            &self,
+                            capture_index: u32,
+                            name: Option<&str>,
+                        ) -> Result<StateID, BuildError> {
+                            let name = name.map(|n| Arc::from(n));
+                            self.builder.borrow_mut().add_capture_start(
+                                StateID::ZERO,
+                                capture_index,
+                                name,
+                            )
+                        }
+                    
+                        fn add_capture_end(
+                            &self,
+                            capture_index: u32,
+                        ) -> Result<StateID, BuildError> {
+                            self.builder.borrow_mut().add_capture_end(StateID::ZERO, capture_index)
+                        }
+                    
+                        fn add_fail(&self) -> Result<StateID, BuildError> {
+                            self.builder.borrow_mut().add_fail()
+                        }
+                    
+                        fn add_match(&self) -> Result<StateID, BuildError> {
+                            self.builder.borrow_mut().add_match()
+                        }
+                    
+                        fn is_reverse(&self) -> bool {
+                            self.config.get_reverse()
+                        }
+                    }
+                    
+                    /// A value that represents the result of compiling a sub-expression of a
+                    /// regex's HIR.
+                    pub(crate) struct ThompsonRef {
+                        pub(crate) start: StateID,
+                        pub(crate) end: StateID,
+                    }
+                    
+                    /// A UTF-8 compiler based on Daciuk's algorithm for compilining minimal DFAs
+                    /// from a lexicographically sorted sequence of strings in linear time.
+                    #[derive(Debug)]
+                    struct Utf8Compiler<'a> {
+                        builder: &'a mut Builder,
+                        state: &'a mut Utf8State,
+                        target: StateID,
+                    }
+                    
+                    #[derive(Clone, Debug)]
+                    struct Utf8State {
+                        compiled: Utf8BoundedMap,
+                        uncompiled: Vec<Utf8Node>,
+                    }
+                    
+                    #[derive(Clone, Debug)]
+                    struct Utf8Node {
+                        trans: Vec<Transition>,
+                        last: Option<Utf8LastTransition>,
+                    }
+                    
+                    #[derive(Clone, Debug)]
+                    struct Utf8LastTransition {
+                        start: u8,
+                        end: u8,
+                    }
+                    
+                    impl Utf8State {
+                        fn new() -> Utf8State {
+                            Utf8State { compiled: Utf8BoundedMap::new(10_000), uncompiled: vec![] }
+                        }
+                    
+                        fn clear(&mut self) {
+                            self.compiled.clear();
+                            self.uncompiled.clear();
+                        }
+                    }
+                    
+                    impl<'a> Utf8Compiler<'a> {
+                        fn new(
+                            builder: &'a mut Builder,
+                            state: &'a mut Utf8State,
+                        ) -> Result<Utf8Compiler<'a>, BuildError> {
+                            let target = builder.add_empty()?;
+                            state.clear();
+                            let mut utf8c = Utf8Compiler { builder, state, target };
+                            utf8c.add_empty();
+                            Ok(utf8c)
+                        }
+                    
+                        fn finish(&mut self) -> Result<ThompsonRef, BuildError> {
+                            self.compile_from(0)?;
+                            let node = self.pop_root();
+                            let start = self.compile(node)?;
+                            Ok(ThompsonRef { start, end: self.target })
+                        }
+                    
+                        fn add(&mut self, ranges: &[Utf8Range]) -> Result<(), BuildError> {
+                            let prefix_len = ranges
+                                .iter()
+                                .zip(&self.state.uncompiled)
+                                .take_while(|&(range, node)| {
+                                    node.last.as_ref().map_or(false, |t| {
+                                        (t.start, t.end) == (range.start, range.end)
+                                    })
+                                })
+                                .count();
+                            assert!(prefix_len < ranges.len());
+                            self.compile_from(prefix_len)?;
+                            self.add_suffix(&ranges[prefix_len..]);
+                            Ok(())
+                        }
+                    
+                        fn compile_from(&mut self, from: usize) -> Result<(), BuildError> {
+                            let mut next = self.target;
+                            while from + 1 < self.state.uncompiled.len() {
+                                let node = self.pop_freeze(next);
+                                next = self.compile(node)?;
+                            }
+                            self.top_last_freeze(next);
+                            Ok(())
+                        }
+                    
+                        fn compile(
+                            &mut self,
+                            node: Vec<Transition>,
+                        ) -> Result<StateID, BuildError> {
+                            let hash = self.state.compiled.hash(&node);
+                            if let Some(id) = self.state.compiled.get(&node, hash) {
+                                return Ok(id);
+                            }
+                            let id = self.builder.add_sparse(node.clone())?;
+                            self.state.compiled.set(node, hash, id);
+                            Ok(id)
+                        }
+                    
+                        fn add_suffix(&mut self, ranges: &[Utf8Range])
+                        {
+                            assert!(!ranges.is_empty());
+                            let last = self
+                            .state
+                            .uncompiled
+                            .len()
+                            .checked_sub(1)
+                            .expect("non-empty nodes");
+                                
+                            assert!(self.state.uncompiled[last].last.is_none());
+                            
+                            self.state.uncompiled[last].last = Some(Utf8LastTransition
+                            {
+                                start: ranges[0].start,
+                                end: ranges[0].end,
+                            });
+                            
+                            for r in &ranges[1..]
+                            {
+                                self.state.uncompiled.push(Utf8Node
+                                {
+                                    trans: vec![],
+                                    last: Some(Utf8LastTransition { start: r.start, end: r.end }),
+                                });
+                            }
+                        }
+                    
+                        fn add_empty(&mut self)
+                        { self.state.uncompiled.push(Utf8Node { trans: vec![], last: None }); }
+                    
+                        fn pop_freeze(&mut self, next: StateID) -> Vec<Transition>
+                        {
+                            let mut uncompiled = self.state.uncompiled.pop().unwrap();
+                            uncompiled.set_last_transition(next);
+                            uncompiled.trans
+                        }
+                    
+                        fn pop_root(&mut self) -> Vec<Transition>
+                        {
+                            assert_eq!(self.state.uncompiled.len(), 1);
+                            assert!(self.state.uncompiled[0].last.is_none());
+                            self.state.uncompiled.pop().expect("non-empty nodes").trans
+                        }
+                    
+                        fn top_last_freeze(&mut self, next: StateID)
+                        {
+                            let last = self
+                                .state
+                                .uncompiled
+                                .len()
+                                .checked_sub(1)
+                                .expect("non-empty nodes");
+                            self.state.uncompiled[last].set_last_transition(next);
+                        }
+                    }
+                    
+                    impl Utf8Node
+                    {
+                        fn set_last_transition(&mut self, next: StateID)
+                        {
+                            if let Some(last) = self.last.take() {
+                                self.trans.push(Transition {
+                                    start: last.start,
+                                    end: last.end,
+                                    next,
+                                });
+                            }
+                        }
+                    }
+                }
+                
+                pub mod error
+                {
+                    use ::
+                    {
+                        *,
+                    };
+                    /*
+                    */
+                }
+                
+                pub mod literal_trie
+                {
+                    use ::
+                    {
+                        *,
+                    };
+                    /*
+                    */
+                }
+                
+                pub mod map
+                {
+                    use ::
+                    {
+                        *,
+                    };
+                    /*
+                    */
+                }
+                
+                pub mod nfa
+                {
+                    use ::
+                    {
+                        *,
+                    };
+                    /*
+                    */
+                }
+                
+                pub mod pikevm
+                {
+                    use ::
+                    {
+                        *,
+                    };
+                    /*
+                    */
+                }
+                
+                pub mod range_trie
+                {
+                    use ::
+                    {
+                        *,
+                    };
+                    /*
+                    */
+                }
+
+                pub use self::{
+                    builder::Builder,
+                    error::BuildError,
+                    nfa::{
+                        DenseTransitions, PatternIter, SparseTransitions, State, Transition,
+                        NFA,
+                    },
+                };
+                
+                pub use compiler::{Compiler, Config, WhichCaptures};
+            }
+        }
         
         pub mod util
         {
@@ -2402,85 +5251,82 @@ pub mod regex
                 
                     /// If this unit is not an "end of input" sentinel, then returns its
                     /// underlying byte value. Otherwise return `None`.
-                    pub fn as_u8(self) -> Option<u8> {
+                    pub fn as_u8(self) -> Option<u8>
+                    {
                         match self.0 {
                             UnitKind::U8(b) => Some(b),
                             UnitKind::EOI(_) => None,
                         }
                     }
-                
                     /// If this unit is an "end of input" sentinel, then return the underlying
                     /// sentinel value that was given to [`Unit::eoi`].
-                    pub fn as_eoi(self) -> Option<u16> {
+                    pub fn as_eoi(self) -> Option<u16>
+                    {
                         match self.0 {
                             UnitKind::U8(_) => None,
                             UnitKind::EOI(sentinel) => Some(sentinel),
                         }
                     }
-                
-                    /// Return this unit as a `usize`, regardless of whether it is a byte value
-                    /// or an "end of input" sentinel. In the latter case, the underlying
-                    /// sentinel value given to [`Unit::eoi`] is returned.
-                    pub fn as_usize(self) -> usize {
+                    /// Return this unit as a `usize`, regardless of whether it is a byte value or an "end of input" sentinel.
+                    pub fn as_usize(self) -> usize
+                    {
                         match self.0 {
                             UnitKind::U8(b) => usize::from(b),
                             UnitKind::EOI(eoi) => usize::from(eoi),
                         }
                     }
-                
-                    /// Returns true if and only of this unit is a byte value equivalent to the
-                    /// byte given.
-                    pub fn is_byte(self, byte: u8) -> bool {
+                    /// Returns true if and only of this unit is a byte value equivalent to the byte given.
+                    pub fn is_byte(self, byte: u8) -> bool
+                    {
                         self.as_u8().map_or(false, |b| b == byte)
                     }
-                
                     /// Returns true when this unit represents an "end of input" sentinel.
-                    pub fn is_eoi(self) -> bool {
+                    pub fn is_eoi(self) -> bool
+                    {
                         self.as_eoi().is_some()
                     }
-                
                     /// Returns true when this unit corresponds to an ASCII word byte.
-                    pub fn is_word_byte(self) -> bool {
+                    pub fn is_word_byte(self) -> bool
+                    {
                         self.as_u8().map_or(false, crate::util::utf8::is_word_byte)
                     }
                 }
                 
-                impl core::fmt::Debug for Unit {
-                    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                impl ::fmt::Debug for Unit
+                {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
                         match self.0 {
                             UnitKind::U8(b) => write!(f, "{:?}", DebugByte(b)),
                             UnitKind::EOI(_) => write!(f, "EOI"),
                         }
                     }
-                }
-                
+                }                
                 /// A representation of byte oriented equivalence classes.
                 #[derive(Clone, Copy)]
                 pub struct ByteClasses([u8; 256]);
                 
-                impl ByteClasses {
-                    /// Creates a new set of equivalence classes where all bytes are mapped to
-                    /// the same class.
-                    #[inline]
-                    pub fn empty() -> ByteClasses {
+                impl ByteClasses 
+                {
+                    /// Creates a new set of equivalence classes where all bytes are mapped to the same class.
+                    #[inline] pub fn empty() -> ByteClasses
+                    {
                         ByteClasses([0; 256])
                     }
-                
-                    /// Creates a new set of equivalence classes where each byte belongs to
-                    /// its own equivalence class.
-                    #[inline]
-                    pub fn singletons() -> ByteClasses {
+                    /// Creates a new set of equivalence classes where each byte belongs to its own equivalence class.
+                    #[inline] pub fn singletons() -> ByteClasses
+                    {
                         let mut classes = ByteClasses::empty();
                         for b in 0..=255 {
                             classes.set(b, b);
                         }
                         classes
                     }
-                
                     /// Deserializes a byte class map from the given slice.
-                    pub fn from_bytes(
+                    pub fn from_bytes
+                    (
                         slice: &[u8],
-                    ) -> Result<(ByteClasses, usize), DeserializeError> {
+                    ) -> Result<(ByteClasses, usize), DeserializeError>
+                    {
                         wire::check_slice_len(slice, 256, "byte class map")?;
                         let mut classes = ByteClasses::empty();
                         for (b, &class) in slice[..256].iter().enumerate() {
@@ -2495,13 +5341,14 @@ pub mod regex
                             }
                         }
                         Ok((classes, 256))
-                    }
-                
+                    }                
                     /// Writes this byte class map to the given byte buffer.
-                    pub fn write_to(
+                    pub fn write_to
+                    (
                         &self,
                         mut dst: &mut [u8],
-                    ) -> Result<usize, SerializeError> {
+                    ) -> Result<usize, SerializeError>
+                    {
                         let nwrite = self.write_to_len();
                         if dst.len() < nwrite {
                             return Err(SerializeError::buffer_too_small("byte class map"));
@@ -2512,76 +5359,63 @@ pub mod regex
                         }
                         Ok(nwrite)
                     }
-                
                     /// Returns the total number of bytes written by `write_to`.
-                    pub fn write_to_len(&self) -> usize {
+                    pub fn write_to_len(&self) -> usize
+                    {
                         256
-                    }
-                
+                    }                
                     /// Set the equivalence class for the given byte.
-                    #[inline]
-                    pub fn set(&mut self, byte: u8, class: u8) {
+                    #[inline] pub fn set(&mut self, byte: u8, class: u8)
+                    {
                         self.0[usize::from(byte)] = class;
                     }
-                
                     /// Get the equivalence class for the given byte.
-                    #[inline]
-                    pub fn get(&self, byte: u8) -> u8 {
+                    #[inline] pub fn get(&self, byte: u8) -> u8
+                    {
                         self.0[usize::from(byte)]
-                    }
-                
-                    /// Get the equivalence class for the given haystack unit and return the
-                    /// class as a `usize`.
-                    #[inline]
-                    pub fn get_by_unit(&self, unit: Unit) -> usize {
+                    } 
+                    /// Get the equivalence class for the given haystack unit and return the class as a `usize`.
+                    #[inline] pub fn get_by_unit(&self, unit: Unit) -> usize
+                    {
                         match unit.0 {
                             UnitKind::U8(b) => usize::from(self.get(b)),
                             UnitKind::EOI(b) => usize::from(b),
                         }
                     }
-                
-                    /// Create a unit that represents the "end of input" sentinel based on the
-                    /// number of equivalence classes.
-                    #[inline]
-                    pub fn eoi(&self) -> Unit {
+                    /// Create a unit that represents the "end of input" sentinel based on the number of equivalence classes.
+                    #[inline] pub fn eoi(&self) -> Unit
+                    {
                         Unit::eoi(self.alphabet_len().checked_sub(1).unwrap())
                     }
-                
-                    /// Return the total number of elements in the alphabet represented by
-                    /// these equivalence classes.
-                    #[inline]
-                    pub fn alphabet_len(&self) -> usize {
+                    /// Return the total number of elements in the alphabet represented by these equivalence classes.
+                    #[inline] pub fn alphabet_len(&self) -> usize
+                    {
                         usize::from(self.0[255]) + 1 + 1
                     }
-                
-                    /// Returns the stride, as a base-2 exponent, required for these
-                    /// equivalence classes.
-                    #[inline]
-                    pub fn stride2(&self) -> usize {
+                    /// Returns the stride, as a base-2 exponent, required for these equivalence classes.
+                    #[inline] pub fn stride2(&self) -> usize
+                    {
                         let zeros = self.alphabet_len().next_power_of_two().trailing_zeros();
                         usize::try_from(zeros).unwrap()
                     }
-                
-                    /// Returns true if and only if every byte in this class maps to its own
-                    /// equivalence class.
-                    #[inline]
-                    pub fn is_singleton(&self) -> bool {
+                    /// Returns true if and only if every byte in this class maps to its own equivalence class.
+                    #[inline] pub fn is_singleton(&self) -> bool
+                    {
                         self.alphabet_len() == 257
                     }
-                
                     /// Returns an iterator over all equivalence classes in this set.
-                    #[inline]
-                    pub fn iter(&self) -> ByteClassIter<'_> {
+                    #[inline] pub fn iter(&self) -> ByteClassIter<'_>
+                    {
                         ByteClassIter { classes: self, i: 0 }
                     }
-                
-                    /// Returns an iterator over a sequence of representative bytes from each
-                    /// equivalence class within the range of bytes given.
-                    pub fn representatives<R: core::ops::RangeBounds<u8>>(
+                    /// Returns an iterator over a sequence of representative bytes from each equivalence class within the range of bytes given.
+                    pub fn representatives<R: ::ops::RangeBounds<u8>>
+                    (
                         &self,
                         range: R,
-                    ) -> ByteClassRepresentatives<'_> {
-                        use core::ops::Bound;
+                    ) -> ByteClassRepresentatives<'_>
+                    {
+                        use ::ops::Bound;
                 
                         let cur_byte = match range.start_bound() {
                             Bound::Included(&i) => usize::from(i),
@@ -2607,15 +5441,14 @@ pub mod regex
                             last_class: None,
                         }
                     }
-                
                     /// Returns an iterator of the bytes in the given equivalence class.
-                    #[inline]
-                    pub fn elements(&self, class: Unit) -> ByteClassElements {
+                    #[inline] pub fn elements(&self, class: Unit) -> ByteClassElements
+                    {
                         ByteClassElements { classes: self, class, byte: 0 }
                     }
-                
                     /// Returns an iterator of byte ranges in the given equivalence class.
-                    fn element_ranges(&self, class: Unit) -> ByteClassElementRanges {
+                    fn element_ranges(&self, class: Unit) -> ByteClassElementRanges
+                    {
                         ByteClassElementRanges { elements: self.elements(class), range: None }
                     }
                 }
@@ -2626,8 +5459,8 @@ pub mod regex
                     }
                 }
                 
-                impl core::fmt::Debug for ByteClasses {
-                    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                impl ::fmt::Debug for ByteClasses {
+                    fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result {
                         if self.is_singleton() {
                             write!(f, "ByteClasses({{singletons}})")
                         } else {
@@ -2714,7 +5547,8 @@ pub mod regex
                     byte: usize,
                 }
                 
-                impl<'a> Iterator for ByteClassElements<'a> {
+                impl<'a> Iterator for ByteClassElements<'a>
+                {
                     type Item = Unit;
                 
                     fn next(&mut self) -> Option<Unit> {
@@ -2734,16 +5568,15 @@ pub mod regex
                         None
                     }
                 }
-                
-                /// An iterator over all elements in an equivalence class expressed as a
-                /// sequence of contiguous ranges.
-                #[derive(Debug)]
-                struct ByteClassElementRanges<'a> {
+                /// An iterator over all elements in an equivalence class expressed as a sequence of contiguous ranges.
+                #[derive(Debug)] struct ByteClassElementRanges<'a>
+                {
                     elements: ByteClassElements<'a>,
                     range: Option<(Unit, Unit)>,
                 }
                 
-                impl<'a> Iterator for ByteClassElementRanges<'a> {
+                impl<'a> Iterator for ByteClassElementRanges<'a>
+                {
                     type Item = (Unit, Unit);
                 
                     fn next(&mut self) -> Option<(Unit, Unit)> {
@@ -2768,48 +5601,44 @@ pub mod regex
                             }
                         }
                     }
-                }
-                
+                }                
                 /// A partitioning of bytes into equivalence classes.
-                #[cfg(feature = "alloc")]
                 #[derive(Clone, Debug)]
                 pub struct ByteClassSet(ByteSet);
                 
-                #[cfg(feature = "alloc")]
-                impl Default for ByteClassSet {
+                impl Default for ByteClassSet
+                {
                     fn default() -> ByteClassSet {
                         ByteClassSet::empty()
                     }
                 }
                 
-                #[cfg(feature = "alloc")]
-                impl ByteClassSet {
-                    /// Create a new set of byte classes where all bytes are part of the same
-                    /// equivalence class.
-                    pub fn empty() -> Self {
+                impl ByteClassSet
+                {
+                    /// Create a new set of byte classes where all bytes are part of the same equivalence class.
+                    pub fn empty() -> Self
+                    {
                         ByteClassSet(ByteSet::empty())
                     }
-                
-                    /// Indicate the range of byte given (inclusive) can discriminate a
-                    /// match between it and all other bytes outside of the range.
-                    pub fn set_range(&mut self, start: u8, end: u8) {
+                    /// Indicate the range of byte given (inclusive) can discriminate a match between it and all other bytes outside of the range.
+                    pub fn set_range(&mut self, start: u8, end: u8)
+                    {
                         debug_assert!(start <= end);
                         if start > 0 {
                             self.0.add(start - 1);
                         }
                         self.0.add(end);
                     }
-                
                     /// Add the contiguous ranges in the set given to this byte class set.
-                    pub fn add_set(&mut self, set: &ByteSet) {
+                    pub fn add_set(&mut self, set: &ByteSet)
+                    {
                         for (start, end) in set.iter_ranges() {
                             self.set_range(start, end);
                         }
                     }
-                
-                    /// Convert this boolean set to a map that maps all byte values to their
-                    /// corresponding equivalence class.
-                    pub fn byte_classes(&self) -> ByteClasses {
+                    /// Convert this boolean set to a map that maps all byte values to their corresponding equivalence class.
+                    pub fn byte_classes(&self) -> ByteClasses
+                    {
                         let mut classes = ByteClasses::empty();
                         let mut class = 0u8;
                         let mut b = 0u8;
@@ -2826,70 +5655,71 @@ pub mod regex
                         classes
                     }
                 }
-                
                 /// A simple set of bytes that is reasonably cheap to copy and allocation free.
                 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-                pub struct ByteSet {
+                pub struct ByteSet
+                {
                     bits: BitSet,
                 }
-                
                 /// The representation of a byte set.
                 #[derive(Clone, Copy, Default, Eq, PartialEq)]
-                struct BitSet([u128; 2]);
+                struct BitSet( [ u128; 2 ] );
                 
-                impl ByteSet {
+                impl ByteSet
+                {
                     /// Create an empty set of bytes.
-                    pub fn empty() -> ByteSet {
+                    pub fn empty() -> ByteSet
+                    {
                         ByteSet { bits: BitSet([0; 2]) }
                     }
-                
                     /// Add a byte to this set.
-                    pub fn add(&mut self, byte: u8) {
+                    pub fn add(&mut self, byte: u8)
+                    {
                         let bucket = byte / 128;
                         let bit = byte % 128;
                         self.bits.0[usize::from(bucket)] |= 1 << bit;
                     }
-                
                     /// Remove a byte from this set.
-                    pub fn remove(&mut self, byte: u8) {
+                    pub fn remove(&mut self, byte: u8)
+                    {
                         let bucket = byte / 128;
                         let bit = byte % 128;
                         self.bits.0[usize::from(bucket)] &= !(1 << bit);
                     }
-                
                     /// Return true if and only if the given byte is in this set.
-                    pub fn contains(&self, byte: u8) -> bool {
+                    pub fn contains(&self, byte: u8) -> bool
+                    {
                         let bucket = byte / 128;
                         let bit = byte % 128;
                         self.bits.0[usize::from(bucket)] & (1 << bit) > 0
                     }
-                
                     /// Return true if and only if the given inclusive range of bytes is in this set.
-                    pub fn contains_range(&self, start: u8, end: u8) -> bool {
+                    pub fn contains_range(&self, start: u8, end: u8) -> bool
+                    {
                         (start..=end).all(|b| self.contains(b))
                     }
-                
                     /// Returns an iterator over all bytes in this set.
-                    pub fn iter(&self) -> ByteSetIter {
+                    pub fn iter(&self) -> ByteSetIter
+                    {
                         ByteSetIter { set: self, b: 0 }
                     }
-                
                     /// Returns an iterator over all contiguous ranges of bytes in this set.
-                    pub fn iter_ranges(&self) -> ByteSetRangeIter {
+                    pub fn iter_ranges(&self) -> ByteSetRangeIter
+                    {
                         ByteSetRangeIter { set: self, b: 0 }
                     }
-                
                     /// Return true if and only if this set is empty.
-                    #[cfg_attr(feature = "perf-inline", inline(always))]
-                    pub fn is_empty(&self) -> bool {
+                    #[inline( always )] pub fn is_empty(&self) -> bool
+                    {
                         self.bits.0 == [0, 0]
                     }
-                
                     /// Deserializes a byte set from the given slice.
-                    pub fn from_bytes(
+                    pub fn from_bytes
+                    (
                         slice: &[u8],
-                    ) -> Result<(ByteSet, usize), DeserializeError> {
-                        use core::mem::size_of;
+                    ) -> Result<(ByteSet, usize), DeserializeError>
+                    {
+                        use ::mem::size_of;
                 
                         wire::check_slice_len(slice, 2 * size_of::<u128>(), "byte set")?;
                         let mut nread = 0;
@@ -2899,13 +5729,13 @@ pub mod regex
                         nread += nr;
                         Ok((ByteSet { bits: BitSet([low, high]) }, nread))
                     }
-                
                     /// Writes this byte set to the given byte buffer.
-                    pub fn write_to<E: crate::util::wire::Endian>(
+                    pub fn write_to<E: crate::util::wire::Endian>( 
                         &self,
-                        dst: &mut [u8],
-                    ) -> Result<usize, SerializeError> {
-                        use core::mem::size_of;
+                        dst: &mut [u8], ) -> 
+                    Result<usize, SerializeError>
+                    {
+                        use ::mem::size_of;
                 
                         let nwrite = self.write_to_len();
                         if dst.len() < nwrite {
@@ -2924,15 +5754,16 @@ pub mod regex
                         );
                         Ok(nw)
                     }
-                
                     /// Returns the total number of bytes written by `write_to`.
-                    pub fn write_to_len(&self) -> usize {
-                        2 * core::mem::size_of::<u128>()
+                    pub fn write_to_len(&self) -> usize
+                    {
+                        2 * ::mem::size_of::<u128>()
                     }
                 }
                 
-                impl core::fmt::Debug for BitSet {
-                    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                impl ::fmt::Debug for BitSet
+                {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
                         let mut fmtd = f.debug_set();
                         for b in 0u8..=255 {
                             if (ByteSet { bits: *self }).contains(b) {
@@ -2944,12 +5775,14 @@ pub mod regex
                 }
                 
                 #[derive(Debug)]
-                pub struct ByteSetIter<'a> {
+                pub struct ByteSetIter<'a>
+                {
                     set: &'a ByteSet,
                     b: usize,
                 }
                 
-                impl<'a> Iterator for ByteSetIter<'a> {
+                impl<'a> Iterator for ByteSetIter<'a>
+                {
                     type Item = u8;
                 
                     fn next(&mut self) -> Option<u8> {
@@ -2965,12 +5798,14 @@ pub mod regex
                 }
                 
                 #[derive(Debug)]
-                pub struct ByteSetRangeIter<'a> {
+                pub struct ByteSetRangeIter<'a>
+                {
                     set: &'a ByteSet,
                     b: usize,
                 }
                 
-                impl<'a> Iterator for ByteSetRangeIter<'a> {
+                impl<'a> Iterator for ByteSetRangeIter<'a>
+                {
                     type Item = (u8, u8);
                 
                     fn next(&mut self) -> Option<(u8, u8)> {
@@ -3002,7 +5837,7 @@ pub mod regex
                     *,
                 };
                 /*
-                use alloc::{string::String, sync::Arc, vec, vec::Vec};
+                use ::{string::String, sync::Arc, vec, vec::Vec};
                 
                 use crate::util::{
                     interpolate,
@@ -3243,8 +6078,8 @@ pub mod regex
                     }
                 }
                 
-                impl core::fmt::Debug for Captures {
-                    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                impl ::fmt::Debug for Captures {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
                         let mut dstruct = f.debug_struct("Captures");
                         dstruct.field("pid", &self.pid);
                         if let Some(pid) = self.pid {
@@ -3261,12 +6096,12 @@ pub mod regex
                     caps: &'a Captures,
                 }
                 
-                impl<'a> core::fmt::Debug for CapturesDebugMap<'a> {
-                    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                impl<'a> ::fmt::Debug for CapturesDebugMap<'a> {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
                         struct Key<'a>(usize, Option<&'a str>);
                 
-                        impl<'a> core::fmt::Debug for Key<'a> {
-                            fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                        impl<'a> ::fmt::Debug for Key<'a> {
+                            fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
                                 write!(f, "{}", self.0)?;
                                 if let Some(name) = self.1 {
                                     write!(f, "/{:?}", name)?;
@@ -3292,7 +6127,7 @@ pub mod regex
                 #[derive(Clone, Debug)]
                 pub struct CapturesPatternIter<'a> {
                     caps: &'a Captures,
-                    names: core::iter::Enumerate<GroupInfoPatternNames<'a>>,
+                    names: ::iter::Enumerate<GroupInfoPatternNames<'a>>,
                 }
                 
                 impl<'a> Iterator for CapturesPatternIter<'a> {
@@ -3313,7 +6148,7 @@ pub mod regex
                 }
                 
                 impl<'a> ExactSizeIterator for CapturesPatternIter<'a> {}
-                impl<'a> core::iter::FusedIterator for CapturesPatternIter<'a> {}
+                impl<'a> ::iter::FusedIterator for CapturesPatternIter<'a> {}
                 
                 /// Represents information about capturing groups in a compiled regex.
                 #[derive(Clone, Debug, Default)]
@@ -3361,7 +6196,7 @@ pub mod regex
                 
                     /// This creates an empty `GroupInfo`.
                     pub fn empty() -> GroupInfo {
-                        GroupInfo::new(core::iter::empty::<[Option<&str>; 0]>())
+                        GroupInfo::new(::iter::empty::<[Option<&str>; 0]>())
                             .expect("empty group info is always valid")
                     }
                 
@@ -3473,7 +6308,7 @@ pub mod regex
                     /// Returns the memory usage, in bytes, of this `GroupInfo`.
                     #[inline]
                     pub fn memory_usage(&self) -> usize {
-                        use core::mem::size_of as s;
+                        use ::mem::size_of as s;
                 
                         s::<GroupInfoInner>()
                             + self.0.slot_ranges.len() * s::<(SmallIndex, SmallIndex)>()
@@ -3484,10 +6319,10 @@ pub mod regex
                 }
                 
                 /// A map from capture group name to its corresponding capture group index.
-                #[cfg(feature = "std")]
-                type CaptureNameMap = std::collections::HashMap<Arc<str>, SmallIndex>;
+                
+                type CaptureNameMap = ::collections::HashMap<Arc<str>, SmallIndex>;
                 #[cfg(not(feature = "std"))]
-                type CaptureNameMap = alloc::collections::BTreeMap<Arc<str>, SmallIndex>;
+                type CaptureNameMap = ::collections::BTreeMap<Arc<str>, SmallIndex>;
                 
                 /// The inner guts of `GroupInfo`.
                 #[derive(Debug, Default)]
@@ -3508,7 +6343,7 @@ pub mod regex
                         self.slot_ranges.push((slot_start, slot_start));
                         self.name_to_index.push(CaptureNameMap::new());
                         self.index_to_name.push(vec![None]);
-                        self.memory_extra += core::mem::size_of::<Option<Arc<str>>>();
+                        self.memory_extra += ::mem::size_of::<Option<Arc<str>>>();
                     }
                 
                     /// Add an explicit capturing group for the given pattern with the given
@@ -3532,11 +6367,11 @@ pub mod regex
                             self.name_to_index[pid].insert(Arc::clone(&name), group);
                             self.index_to_name[pid].push(Some(name));
                             self.memory_extra +=
-                                2 * (len + core::mem::size_of::<Option<Arc<str>>>());
-                            self.memory_extra += core::mem::size_of::<SmallIndex>();
+                                2 * (len + ::mem::size_of::<Option<Arc<str>>>());
+                            self.memory_extra += ::mem::size_of::<SmallIndex>();
                         } else {
                             self.index_to_name[pid].push(None);
-                            self.memory_extra += core::mem::size_of::<Option<Arc<str>>>();
+                            self.memory_extra += ::mem::size_of::<Option<Arc<str>>>();
                         }
                         assert_eq!(group.one_more(), self.group_len(pid));
                         assert_eq!(group.one_more(), self.index_to_name[pid].len());
@@ -3667,9 +6502,9 @@ pub mod regex
                     }
                 }
                 
-                #[cfg(feature = "std")]
-                impl std::error::Error for GroupInfoError {
-                    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+                
+                impl ::error::Error for GroupInfoError {
+                    fn source(&self) -> Option<&(dyn ::error::Error + 'static)> {
                         match self.kind {
                             GroupInfoErrorKind::TooManyPatterns { .. }
                             | GroupInfoErrorKind::TooManyGroups { .. }
@@ -3680,8 +6515,8 @@ pub mod regex
                     }
                 }
                 
-                impl core::fmt::Display for GroupInfoError {
-                    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                impl ::fmt::Display for GroupInfoError {
+                    fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result {
                         use self::GroupInfoErrorKind::*;
                 
                         match self.kind {
@@ -3723,7 +6558,7 @@ pub mod regex
                 /// An iterator over capturing groups and their names for a specific pattern.
                 #[derive(Clone, Debug)]
                 pub struct GroupInfoPatternNames<'a> {
-                    it: core::slice::Iter<'a, Option<Arc<str>>>,
+                    it: ::slice::Iter<'a, Option<Arc<str>>>,
                 }
                 
                 impl GroupInfoPatternNames<'static> {
@@ -3749,7 +6584,7 @@ pub mod regex
                 }
                 
                 impl<'a> ExactSizeIterator for GroupInfoPatternNames<'a> {}
-                impl<'a> core::iter::FusedIterator for GroupInfoPatternNames<'a> {}
+                impl<'a> ::iter::FusedIterator for GroupInfoPatternNames<'a> {}
                 
                 /// An iterator over capturing groups and their names for a `GroupInfo`.
                 #[derive(Debug)]
@@ -3757,7 +6592,7 @@ pub mod regex
                     group_info: &'a GroupInfo,
                     pids: PatternIDIter,
                     current_pid: Option<PatternID>,
-                    names: Option<core::iter::Enumerate<GroupInfoPatternNames<'a>>>,
+                    names: Option<::iter::Enumerate<GroupInfoPatternNames<'a>>>,
                 }
                 
                 impl<'a> Iterator for GroupInfoAllNames<'a> {
@@ -3801,22 +6636,22 @@ pub mod regex
                 #[derive(Clone, Copy)]
                 pub struct DebugByte(pub u8);
                 
-                impl core::fmt::Debug for DebugByte {
-                    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                impl ::fmt::Debug for DebugByte {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
                         if self.0 == b' ' {
                             return write!(f, "' '");
                         }
                         
                         let mut bytes = [0u8; 10];
                         let mut len = 0;
-                        for (i, mut b) in core::ascii::escape_default(self.0).enumerate() {
+                        for (i, mut b) in ::ascii::escape_default(self.0).enumerate() {
                             if i >= 2 && b'a' <= b && b <= b'f' {
                                 b -= 32;
                             }
                             bytes[len] = b;
                             len += 1;
                         }
-                        write!(f, "{}", core::str::from_utf8(&bytes[..len]).unwrap())
+                        write!(f, "{}", ::str::from_utf8(&bytes[..len]).unwrap())
                     }
                 }
             }
@@ -3829,9 +6664,9 @@ pub mod regex
                     *,
                 };
                 /*
-                use alloc::{string::String, vec::Vec};
+                use ::{string::String, vec::Vec};
                 
-                use crate::util::memchr::memchr;
+                use crate::util::mem::chr::memchr;
                 */
                 /// Accepts a replacement string and interpolates capture references with their
                 /// corresponding values.
@@ -3967,7 +6802,7 @@ pub mod regex
                         return None;
                     }
                     
-                    let cap = core::str::from_utf8(&rep[i..cap_end])
+                    let cap = ::str::from_utf8(&rep[i..cap_end])
                         .expect("valid UTF-8 capture name");
                     Some(CaptureRef {
                         cap: match cap.parse::<usize>() {
@@ -3989,7 +6824,7 @@ pub mod regex
                         return None;
                     }
                     
-                    let cap = match core::str::from_utf8(&rep[start..i]) {
+                    let cap = match ::str::from_utf8(&rep[start..i]) {
                         Err(_) => return None,
                         Ok(cap) => cap,
                     };
@@ -4026,31 +6861,29 @@ pub mod regex
                 */
                 /// A searcher for creating iterators and performing lower level iteration.
                 #[derive(Clone, Debug)]
-                pub struct Searcher<'h> {
+                pub struct Searcher<'h>
+                {
                     /// The input parameters to give to each regex engine call.
                     input: Input<'h>,
                     /// Records the end offset of the most recent match.
                     last_match_end: Option<usize>,
                 }
                 
-                impl<'h> Searcher<'h> {
+                impl<'h> Searcher<'h>
+                {
                     /// Create a new fallible non-overlapping matches iterator.
-                    pub fn new(input: Input<'h>) -> Searcher<'h> {
+                    pub fn new(input: Input<'h>) -> Searcher<'h>
+                    {
                         Searcher { input, last_match_end: None }
                     }
-                
                     /// Returns the current `Input` used by this searcher.
-                    pub fn input<'s>(&'s self) -> &'s Input<'h> {
+                    pub fn input<'s>(&'s self) -> &'s Input<'h>
+                    {
                         &self.input
                     }
-                
-                    /// Return the next half match for an infallible search if one exists, and
-                    /// advance to the next position.
-                    #[inline]
-                    pub fn advance_half<F>(&mut self, finder: F) -> Option<HalfMatch>
-                    where
-                        F: FnMut(&Input<'_>) -> Result<Option<HalfMatch>, MatchError>,
-                    {
+                    /// Return the next half match for an infallible search if one exists, and advance to the next position.
+                    #[inline] pub fn advance_half<F>(&mut self, finder: F) -> Option<HalfMatch> where
+                    F: FnMut(&Input<'_>) -> Result<Option<HalfMatch>, MatchError>                    {
                         match self.try_advance_half(finder) {
                             Ok(m) => m,
                             Err(err) => panic!(
@@ -4060,13 +6893,9 @@ pub mod regex
                             ),
                         }
                     }
-                
-                    /// Return the next match for an infallible search if one exists, and
-                    /// advance to the next position.
-                    #[inline]
-                    pub fn advance<F>(&mut self, finder: F) -> Option<Match>
-                    where
-                        F: FnMut(&Input<'_>) -> Result<Option<Match>, MatchError>,
+                    /// Return the next match for an infallible search if one exists, and advance to the next position.
+                    #[inline] pub fn advance<F>(&mut self, finder: F) -> Option<Match> where
+                    F: FnMut(&Input<'_>) -> Result<Option<Match>, MatchError>
                     {
                         match self.try_advance(finder) {
                             Ok(m) => m,
@@ -4077,16 +6906,14 @@ pub mod regex
                             ),
                         }
                     }
-                
-                    /// Return the next half match for a fallible search if one exists, and
-                    /// advance to the next position.
-                    #[inline]
-                    pub fn try_advance_half<F>(
+                    /// Return the next half match for a fallible search if one exists, and advance to the next position.
+                    #[inline] pub fn try_advance_half<F>
+                    (
+                        
                         &mut self,
                         mut finder: F,
-                    ) -> Result<Option<HalfMatch>, MatchError>
-                    where
-                        F: FnMut(&Input<'_>) -> Result<Option<HalfMatch>, MatchError>,
+                    ) -> Result<Option<HalfMatch>, MatchError> where
+                    F: FnMut(&Input<'_>) -> Result<Option<HalfMatch>, MatchError>
                     {
                         let mut m = match finder(&self.input)? {
                             None => return Ok(None),
@@ -4102,16 +6929,14 @@ pub mod regex
                         self.last_match_end = Some(m.offset());
                         Ok(Some(m))
                     }
-                
-                    /// Return the next match for a fallible search if one exists, and advance
-                    /// to the next position.
-                    #[inline]
-                    pub fn try_advance<F>(
+                    /// Return the next match for a fallible search if one exists, and advance to the next position.
+                    #[inline] pub fn try_advance<F>
+                    (
+                        
                         &mut self,
                         mut finder: F,
-                    ) -> Result<Option<Match>, MatchError>
-                    where
-                        F: FnMut(&Input<'_>) -> Result<Option<Match>, MatchError>,
+                    ) -> Result<Option<Match>, MatchError> where
+                    F: FnMut(&Input<'_>) -> Result<Option<Match>, MatchError>
                     {
                         let mut m = match finder(&self.input)? {
                             None => return Ok(None),
@@ -4127,101 +6952,89 @@ pub mod regex
                         self.last_match_end = Some(m.end());
                         Ok(Some(m))
                     }
-                
-                    /// Given a closure that executes a single search, return an iterator over
-                    /// all successive non-overlapping half matches.
-                    #[inline]
-                    pub fn into_half_matches_iter<F>(
+                    /// Given a closure that executes a single search, return an iterator over all successive non-overlapping half matches.
+                    #[inline] pub fn into_half_matches_iter<F>
+                    (
+                        
                         self,
                         finder: F,
-                    ) -> TryHalfMatchesIter<'h, F>
-                    where
-                        F: FnMut(&Input<'_>) -> Result<Option<HalfMatch>, MatchError>,
+                    ) -> TryHalfMatchesIter<'h, F> where
+                    F: FnMut(&Input<'_>) -> Result<Option<HalfMatch>, MatchError>
                     {
                         TryHalfMatchesIter { it: self, finder }
                     }
-                
-                    /// Given a closure that executes a single search, return an iterator over
-                    /// all successive non-overlapping matches.
-                    #[inline]
-                    pub fn into_matches_iter<F>(self, finder: F) -> TryMatchesIter<'h, F>
-                    where
-                        F: FnMut(&Input<'_>) -> Result<Option<Match>, MatchError>,
+                    /// Given a closure that executes a single search, return an iterator over all successive non-overlapping matches.
+                    #[inline] pub fn into_matches_iter<F>(self, finder: F) -> TryMatchesIter<'h, F> where
+                    F: FnMut(&Input<'_>) -> Result<Option<Match>, MatchError>,
                     {
                         TryMatchesIter { it: self, finder }
                     }
-                
                     /// Given a closure that executes a single search, return an iterator over
                     /// all successive non-overlapping `Captures` values.
-                    #[cfg(feature = "alloc")]
-                    #[inline]
-                    pub fn into_captures_iter<F>(
+                    #[inline]pub fn into_captures_iter<F>
+                    (
+                        
                         self,
                         caps: Captures,
                         finder: F,
-                    ) -> TryCapturesIter<'h, F>
-                    where
-                        F: FnMut(&Input<'_>, &mut Captures) -> Result<(), MatchError>,
+                    ) -> TryCapturesIter<'h, F> where
+                    F: FnMut(&Input<'_>, &mut Captures) -> Result<(), MatchError>
                     {
                         TryCapturesIter { it: self, caps, finder }
                     }
-                
-                    /// Handles the special case of a match that begins where the previous
-                    /// match ended.
-                    #[cold]
-                    #[inline(never)]
-                    fn handle_overlapping_empty_half_match<F>(
+                    /// Handles the special case of a match that begins where the previous match ended.
+                    #[cold] #[inline( never )] fn handle_overlapping_empty_half_match<F>
+                    (
+                        
                         &mut self,
                         _: HalfMatch,
                         mut finder: F,
-                    ) -> Result<Option<HalfMatch>, MatchError>
-                    where
-                        F: FnMut(&Input<'_>) -> Result<Option<HalfMatch>, MatchError>,
+                    ) -> Result<Option<HalfMatch>, MatchError> where
+                    F: FnMut(&Input<'_>) -> Result<Option<HalfMatch>, MatchError>
                     {
                         self.input.set_start(self.input.start().checked_add(1).unwrap());
                         finder(&self.input)
                     }
-                
                     /// Handles the special case of an empty match by ensuring that 1) the
                     /// iterator always advances and 2) empty matches never overlap with other
                     /// matches.
-                    #[cold]
-                    #[inline(never)]
-                    fn handle_overlapping_empty_match<F>(
+                    #[cold] #[inline( never )] fn handle_overlapping_empty_match<F>
+                    (
+                        
                         &mut self,
                         m: Match,
                         mut finder: F,
-                    ) -> Result<Option<Match>, MatchError>
-                    where
-                        F: FnMut(&Input<'_>) -> Result<Option<Match>, MatchError>,
+                    ) -> Result<Option<Match>, MatchError> where
+                    F: FnMut(&Input<'_>) -> Result<Option<Match>, MatchError>
                     {
                         assert!(m.is_empty());
                         self.input.set_start(self.input.start().checked_add(1).unwrap());
                         finder(&self.input)
                     }
                 }
-                
                 /// An iterator over all non-overlapping half matches for a fallible search.
-                pub struct TryHalfMatchesIter<'h, F> {
+                pub struct TryHalfMatchesIter<'h, F>
+                {
                     it: Searcher<'h>,
                     finder: F,
                 }
                 
-                impl<'h, F> TryHalfMatchesIter<'h, F> {
+                impl<'h, F> TryHalfMatchesIter<'h, F> 
+                {
                     /// Return an infallible version of this iterator.
-                    pub fn infallible(self) -> HalfMatchesIter<'h, F> {
+                    pub fn infallible(self) -> HalfMatchesIter<'h, F>
+                    {
                         HalfMatchesIter(self)
-                    }
-                
+                    }                
                     /// Returns the current `Input` used by this iterator.
-                    pub fn input<'i>(&'i self) -> &'i Input<'h> {
+                    pub fn input<'i>(&'i self) -> &'i Input<'h>
+                    {
                         self.it.input()
                     }
                 }
                 
-                impl<'h, F> Iterator for TryHalfMatchesIter<'h, F>
-                where
-                    F: FnMut(&Input<'_>) -> Result<Option<HalfMatch>, MatchError>,
+                impl<'h, F> Iterator for TryHalfMatchesIter<'h, F> where
+                F: FnMut(&Input<'_>) -> Result<Option<HalfMatch>, MatchError>
                 {
                     type Item = Result<HalfMatch, MatchError>;
                 
@@ -4231,29 +7044,29 @@ pub mod regex
                     }
                 }
                 
-                impl<'h, F> core::fmt::Debug for TryHalfMatchesIter<'h, F> {
-                    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                impl<'h, F> ::fmt::Debug for TryHalfMatchesIter<'h, F>
+                {
+                    fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result {
                         f.debug_struct("TryHalfMatchesIter")
                             .field("it", &self.it)
                             .field("finder", &"<closure>")
                             .finish()
                     }
                 }
-                
                 /// An iterator over all non-overlapping half matches for an infallible search.
                 #[derive(Debug)]
                 pub struct HalfMatchesIter<'h, F>(TryHalfMatchesIter<'h, F>);
                 
-                impl<'h, F> HalfMatchesIter<'h, F> {
+                impl<'h, F> HalfMatchesIter<'h, F>
+                {
                     /// Returns the current `Input` used by this iterator.
                     pub fn input<'i>(&'i self) -> &'i Input<'h> {
                         self.0.it.input()
                     }
                 }
                 
-                impl<'h, F> Iterator for HalfMatchesIter<'h, F>
-                where
-                    F: FnMut(&Input<'_>) -> Result<Option<HalfMatch>, MatchError>,
+                impl<'h, F> Iterator for HalfMatchesIter<'h, F> where
+                F: FnMut(&Input<'_>) -> Result<Option<HalfMatch>, MatchError>
                 {
                     type Item = HalfMatch;
                 
@@ -4269,28 +7082,29 @@ pub mod regex
                         }
                     }
                 }
-                
                 /// An iterator over all non-overlapping matches for a fallible search.
-                pub struct TryMatchesIter<'h, F> {
+                pub struct TryMatchesIter<'h, F>
+                {
                     it: Searcher<'h>,
                     finder: F,
                 }
                 
-                impl<'h, F> TryMatchesIter<'h, F> {
+                impl<'h, F> TryMatchesIter<'h, F>
+                {
                     /// Return an infallible version of this iterator.
-                    pub fn infallible(self) -> MatchesIter<'h, F> {
+                    pub fn infallible(self) -> MatchesIter<'h, F>
+                    {
                         MatchesIter(self)
                     }
-                
                     /// Returns the current `Input` used by this iterator.
-                    pub fn input<'i>(&'i self) -> &'i Input<'h> {
+                    pub fn input<'i>(&'i self) -> &'i Input<'h>
+                    {
                         self.it.input()
                     }
                 }
                 
-                impl<'h, F> Iterator for TryMatchesIter<'h, F>
-                where
-                    F: FnMut(&Input<'_>) -> Result<Option<Match>, MatchError>,
+                impl<'h, F> Iterator for TryMatchesIter<'h, F> where
+                F: FnMut(&Input<'_>) -> Result<Option<Match>, MatchError>
                 {
                     type Item = Result<Match, MatchError>;
                 
@@ -4300,29 +7114,30 @@ pub mod regex
                     }
                 }
                 
-                impl<'h, F> core::fmt::Debug for TryMatchesIter<'h, F> {
-                    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                impl<'h, F> ::fmt::Debug for TryMatchesIter<'h, F>
+                {
+                    fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result {
                         f.debug_struct("TryMatchesIter")
                             .field("it", &self.it)
                             .field("finder", &"<closure>")
                             .finish()
                     }
                 }
-                
                 /// An iterator over all non-overlapping matches for an infallible search.
                 #[derive(Debug)]
                 pub struct MatchesIter<'h, F>(TryMatchesIter<'h, F>);
                 
-                impl<'h, F> MatchesIter<'h, F> {
+                impl<'h, F> MatchesIter<'h, F>
+                {
                     /// Returns the current `Input` used by this iterator.
-                    pub fn input<'i>(&'i self) -> &'i Input<'h> {
+                    pub fn input<'i>(&'i self) -> &'i Input<'h>
+                    {
                         self.0.it.input()
                     }
                 }
                 
-                impl<'h, F> Iterator for MatchesIter<'h, F>
-                where
-                    F: FnMut(&Input<'_>) -> Result<Option<Match>, MatchError>,
+                impl<'h, F> Iterator for MatchesIter<'h, F> where
+                F: FnMut(&Input<'_>) -> Result<Option<Match>, MatchError>,
                 {
                     type Item = Match;
                 
@@ -4340,25 +7155,22 @@ pub mod regex
                 }
                 
                 /// An iterator over all non-overlapping captures for a fallible search.
-                #[cfg(feature = "alloc")]
                 pub struct TryCapturesIter<'h, F> {
                     it: Searcher<'h>,
                     caps: Captures,
                     finder: F,
                 }
                 
-                #[cfg(feature = "alloc")]
-                impl<'h, F> TryCapturesIter<'h, F> {
+                impl<'h, F> TryCapturesIter<'h, F>
+                {
                     /// Return an infallible version of this iterator.
                     pub fn infallible(self) -> CapturesIter<'h, F> {
                         CapturesIter(self)
                     }
                 }
                 
-                #[cfg(feature = "alloc")]
-                impl<'h, F> Iterator for TryCapturesIter<'h, F>
-                where
-                    F: FnMut(&Input<'_>, &mut Captures) -> Result<(), MatchError>,
+                impl<'h, F> Iterator for TryCapturesIter<'h, F> where
+                F: FnMut(&Input<'_>, &mut Captures) -> Result<(), MatchError>,
                 {
                     type Item = Result<Captures, MatchError>;
                 
@@ -4379,26 +7191,22 @@ pub mod regex
                     }
                 }
                 
-                #[cfg(feature = "alloc")]
-                impl<'h, F> core::fmt::Debug for TryCapturesIter<'h, F> {
-                    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                impl<'h, F> ::fmt::Debug for TryCapturesIter<'h, F>
+                {
+                    fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result {
                         f.debug_struct("TryCapturesIter")
                             .field("it", &self.it)
                             .field("caps", &self.caps)
                             .field("finder", &"<closure>")
                             .finish()
                     }
-                }
-                
+                }                
                 /// An iterator over all non-overlapping captures for an infallible search.
-                #[cfg(feature = "alloc")]
                 #[derive(Debug)]
                 pub struct CapturesIter<'h, F>(TryCapturesIter<'h, F>);
                 
-                #[cfg(feature = "alloc")]
-                impl<'h, F> Iterator for CapturesIter<'h, F>
-                where
-                    F: FnMut(&Input<'_>, &mut Captures) -> Result<(), MatchError>,
+                impl<'h, F> Iterator for CapturesIter<'h, F> where
+                F: FnMut(&Input<'_>, &mut Captures) -> Result<(), MatchError>,
                 {
                     type Item = Captures;
                 
@@ -4418,142 +7226,4639 @@ pub mod regex
 
             pub mod lazy
             {
+                //! A lazily initialized value for safe sharing between threads.
                 use ::
                 {
                     *,
                 };
                 /*
                 */
+                ///
+                /// A `Lazy` takes an initialization function and permits callers from any
+                /// thread to access the result of that initialization function in a safe
+                /// manner.
+                pub struct Lazy<T, F = fn() -> T>(lazy::Lazy<T, F>);
+                
+                impl<T, F> Lazy<T, F> {
+                    /// Create a new `Lazy` value that is initialized via the given function.
+                    pub const fn new(create: F) -> Lazy<T, F> {
+                        Lazy(lazy::Lazy::new(create))
+                    }
+                }
+                
+                impl<T, F: Fn() -> T> Lazy<T, F> {
+                    /// Return a reference to the lazily initialized value.
+                    pub fn get(this: &Lazy<T, F>) -> &T {
+                        this.0.get()
+                    }
+                }
+                
+                impl<T, F: Fn() -> T> ::ops::Deref for Lazy<T, F> {
+                    type Target = T;
+                
+                    fn deref(&self) -> &T {
+                        Lazy::get(self)
+                    }
+                }
+                
+                impl<T: fmt::Debug, F: Fn() -> T> fmt::Debug for Lazy<T, F> {
+                    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                        self.0.fmt(f)
+                    }
+                }
+                
+                #[cfg(feature = "alloc")]
+                mod lazy {
+                    use ::{
+                        fmt,
+                        marker::PhantomData,
+                        sync::atomic::{AtomicPtr, Ordering},
+                    };
+                
+                    use ::boxed::Box;
+                
+                    /// A non-std lazy initialized value.
+                    pub(super) struct Lazy<T, F> {
+                        data: AtomicPtr<T>,
+                        create: F,
+                        owned: PhantomData<Box<T>>,
+                    }
+                
+                    // SAFETY: So long as T and &T (and F and &F) can themselves be safely
+                    // shared among threads, so to can a Lazy<T, _>.
+                    unsafe impl<T: Send + Sync, F: Send + Sync> Sync for Lazy<T, F> {}
+                
+                    impl<T, F> Lazy<T, F> {
+                        /// Create a new alloc but non-std lazy value that is racily
+                        /// initialized.
+                        pub(super) const fn new(create: F) -> Lazy<T, F> {
+                            Lazy {
+                                data: AtomicPtr::new(::ptr::null_mut()),
+                                create,
+                                owned: PhantomData,
+                            }
+                        }
+                    }
+                
+                    impl<T, F: Fn() -> T> Lazy<T, F> {
+                        /// Get the underlying lazy value.
+                        pub fn get(&self) -> &T {
+                            if let Some(data) = self.poll() {
+                                return data;
+                            }
+                            let data = (self.create)();
+                            let mut ptr = Box::into_raw(Box::new(data));
+                            
+                            let result = self.data.compare_exchange(
+                                ::ptr::null_mut(),
+                                ptr,
+                                Ordering::AcqRel,
+                                Ordering::Acquire,
+                            );
+                            if let Err(old) = result {
+                                drop(unsafe { Box::from_raw(ptr) });
+                                ptr = old;
+                            }
+                            
+                            unsafe { &*ptr }
+                        }
+                
+                        /// If this lazy value has been initialized successfully, then return
+                        /// that value.
+                        fn poll(&self) -> Option<&T> {
+                            let ptr = self.data.load(Ordering::Acquire);
+                            if ptr.is_null() {
+                                return None;
+                            }
+                            Some(unsafe { &*ptr })
+                        }
+                    }
+                
+                    impl<T: fmt::Debug, F: Fn() -> T> fmt::Debug for Lazy<T, F> {
+                        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                            f.debug_struct("Lazy").field("data", &self.poll()).finish()
+                        }
+                    }
+                
+                    impl<T, F> Drop for Lazy<T, F> {
+                        fn drop(&mut self) {
+                            let ptr = *self.data.get_mut();
+                            if !ptr.is_null() {
+                                drop(unsafe { Box::from_raw(ptr) });
+                            }
+                        }
+                    }
+                }
             }
 
             pub mod look
             {
+                //! Types and routines for working with look-around assertions.
                 use ::
                 {
                     *,
                 };
                 /*
+                use crate::util::{escape::DebugByte, utf8};
                 */
+                /// An assertion matches at a position between characters in a haystack.
+                #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+                pub enum Look
+                {
+                    /// Match the beginning of text.
+                    Start = 1 << 0,
+                    /// Match the end of text.
+                    End = 1 << 1,
+                    /// Match the beginning of a line or the beginning of text.
+                    StartLF = 1 << 2,
+                    /// Match the end of a line or the end of text.
+                    EndLF = 1 << 3,
+                    /// Match the beginning of a line or the beginning of text.
+                    StartCRLF = 1 << 4,
+                    /// Match the end of a line or the end of text.
+                    EndCRLF = 1 << 5,
+                    /// Match an ASCII-only word boundary.
+                    WordAscii = 1 << 6,
+                    /// Match an ASCII-only negation of a word boundary.
+                    WordAsciiNegate = 1 << 7,
+                    /// Match a Unicode-aware word boundary.
+                    WordUnicode = 1 << 8,
+                    /// Match a Unicode-aware negation of a word boundary.
+                    WordUnicodeNegate = 1 << 9,
+                    /// Match the start of an ASCII-only word boundary.
+                    WordStartAscii = 1 << 10,
+                    /// Match the end of an ASCII-only word boundary.
+                    WordEndAscii = 1 << 11,
+                    /// Match the start of a Unicode word boundary.
+                    WordStartUnicode = 1 << 12,
+                    /// Match the end of a Unicode word boundary.
+                    WordEndUnicode = 1 << 13,
+                    /// Match the start half of an ASCII-only word boundary.
+                    WordStartHalfAscii = 1 << 14,
+                    /// Match the end half of an ASCII-only word boundary.
+                    WordEndHalfAscii = 1 << 15,
+                    /// Match the start half of a Unicode word boundary.
+                    WordStartHalfUnicode = 1 << 16,
+                    /// Match the end half of a Unicode word boundary.
+                    WordEndHalfUnicode = 1 << 17,
+                }
+                
+                impl Look {
+                    /// Flip the look-around assertion to its equivalent for reverse searches.
+                    #[inline]
+                    pub const fn reversed(self) -> Look {
+                        match self {
+                            Look::Start => Look::End,
+                            Look::End => Look::Start,
+                            Look::StartLF => Look::EndLF,
+                            Look::EndLF => Look::StartLF,
+                            Look::StartCRLF => Look::EndCRLF,
+                            Look::EndCRLF => Look::StartCRLF,
+                            Look::WordAscii => Look::WordAscii,
+                            Look::WordAsciiNegate => Look::WordAsciiNegate,
+                            Look::WordUnicode => Look::WordUnicode,
+                            Look::WordUnicodeNegate => Look::WordUnicodeNegate,
+                            Look::WordStartAscii => Look::WordEndAscii,
+                            Look::WordEndAscii => Look::WordStartAscii,
+                            Look::WordStartUnicode => Look::WordEndUnicode,
+                            Look::WordEndUnicode => Look::WordStartUnicode,
+                            Look::WordStartHalfAscii => Look::WordEndHalfAscii,
+                            Look::WordEndHalfAscii => Look::WordStartHalfAscii,
+                            Look::WordStartHalfUnicode => Look::WordEndHalfUnicode,
+                            Look::WordEndHalfUnicode => Look::WordStartHalfUnicode,
+                        }
+                    }
+                
+                    /// Return the underlying representation of this look-around enumeration
+                    /// as an integer.
+                    #[inline]
+                    pub const fn as_repr(self) -> u32 {
+                        self as u32
+                    }
+                
+                    /// Given the underlying representation of a `Look` value, return the
+                    /// corresponding `Look` value if the representation is valid.
+                    #[inline]
+                    pub const fn from_repr(repr: u32) -> Option<Look> {
+                        match repr {
+                            0b00_0000_0000_0000_0001 => Some(Look::Start),
+                            0b00_0000_0000_0000_0010 => Some(Look::End),
+                            0b00_0000_0000_0000_0100 => Some(Look::StartLF),
+                            0b00_0000_0000_0000_1000 => Some(Look::EndLF),
+                            0b00_0000_0000_0001_0000 => Some(Look::StartCRLF),
+                            0b00_0000_0000_0010_0000 => Some(Look::EndCRLF),
+                            0b00_0000_0000_0100_0000 => Some(Look::WordAscii),
+                            0b00_0000_0000_1000_0000 => Some(Look::WordAsciiNegate),
+                            0b00_0000_0001_0000_0000 => Some(Look::WordUnicode),
+                            0b00_0000_0010_0000_0000 => Some(Look::WordUnicodeNegate),
+                            0b00_0000_0100_0000_0000 => Some(Look::WordStartAscii),
+                            0b00_0000_1000_0000_0000 => Some(Look::WordEndAscii),
+                            0b00_0001_0000_0000_0000 => Some(Look::WordStartUnicode),
+                            0b00_0010_0000_0000_0000 => Some(Look::WordEndUnicode),
+                            0b00_0100_0000_0000_0000 => Some(Look::WordStartHalfAscii),
+                            0b00_1000_0000_0000_0000 => Some(Look::WordEndHalfAscii),
+                            0b01_0000_0000_0000_0000 => Some(Look::WordStartHalfUnicode),
+                            0b10_0000_0000_0000_0000 => Some(Look::WordEndHalfUnicode),
+                            _ => None,
+                        }
+                    }
+                
+                    /// Returns a convenient single codepoint representation of this
+                    /// look-around assertion.
+                    #[inline]
+                    pub const fn as_char(self) -> char {
+                        match self {
+                            Look::Start => 'A',
+                            Look::End => 'z',
+                            Look::StartLF => '^',
+                            Look::EndLF => '$',
+                            Look::StartCRLF => 'r',
+                            Look::EndCRLF => 'R',
+                            Look::WordAscii => 'b',
+                            Look::WordAsciiNegate => 'B',
+                            Look::WordUnicode => '𝛃',
+                            Look::WordUnicodeNegate => '𝚩',
+                            Look::WordStartAscii => '<',
+                            Look::WordEndAscii => '>',
+                            Look::WordStartUnicode => '〈',
+                            Look::WordEndUnicode => '〉',
+                            Look::WordStartHalfAscii => '◁',
+                            Look::WordEndHalfAscii => '▷',
+                            Look::WordStartHalfUnicode => '◀',
+                            Look::WordEndHalfUnicode => '▶',
+                        }
+                    }
+                }
+                
+                /// LookSet is a memory-efficient set of look-around assertions.
+                #[derive(Clone, Copy, Default, Eq, PartialEq)]
+                pub struct LookSet {
+                    /// The underlying representation this set is exposed to make it possible
+                    /// to store it somewhere efficiently.
+                    pub bits: u32,
+                }
+                
+                impl LookSet {
+                    /// Create an empty set of look-around assertions.
+                    #[inline]
+                    pub fn empty() -> LookSet {
+                        LookSet { bits: 0 }
+                    }
+                
+                    /// Create a full set of look-around assertions.
+                    #[inline]
+                    pub fn full() -> LookSet {
+                        LookSet { bits: !0 }
+                    }
+                
+                    /// Create a look-around set containing the look-around assertion given.
+                    #[inline]
+                    pub fn singleton(look: Look) -> LookSet {
+                        LookSet::empty().insert(look)
+                    }
+                
+                    /// Returns the total number of look-around assertions in this set.
+                    #[inline]
+                    pub fn len(self) -> usize {
+                        usize::try_from(self.bits.count_ones()).unwrap()
+                    }
+                
+                    /// Returns true if and only if this set is empty.
+                    #[inline]
+                    pub fn is_empty(self) -> bool {
+                        self.len() == 0
+                    }
+                
+                    /// Returns true if and only if the given look-around assertion is in this
+                    /// set.
+                    #[inline]
+                    pub fn contains(self, look: Look) -> bool {
+                        self.bits & look.as_repr() != 0
+                    }
+                
+                    /// Returns true if and only if this set contains any anchor assertions.
+                    #[inline]
+                    pub fn contains_anchor(&self) -> bool {
+                        self.contains_anchor_haystack() || self.contains_anchor_line()
+                    }
+                
+                    /// Returns true if and only if this set contains any "start/end of
+                    /// haystack" anchors.
+                    #[inline]
+                    pub fn contains_anchor_haystack(&self) -> bool {
+                        self.contains(Look::Start) || self.contains(Look::End)
+                    }
+                
+                    /// Returns true if and only if this set contains any "start/end of line"
+                    /// anchors.
+                    #[inline]
+                    pub fn contains_anchor_line(&self) -> bool {
+                        self.contains(Look::StartLF)
+                            || self.contains(Look::EndLF)
+                            || self.contains(Look::StartCRLF)
+                            || self.contains(Look::EndCRLF)
+                    }
+                
+                    /// Returns true if and only if this set contains any "start/end of line"
+                    /// anchors that only treat `\n` as line terminators.
+                    #[inline]
+                    pub fn contains_anchor_lf(&self) -> bool {
+                        self.contains(Look::StartLF) || self.contains(Look::EndLF)
+                    }
+                
+                    /// Returns true if and only if this set contains any "start/end of line"
+                    /// anchors that are CRLF-aware.
+                    #[inline]
+                    pub fn contains_anchor_crlf(&self) -> bool {
+                        self.contains(Look::StartCRLF) || self.contains(Look::EndCRLF)
+                    }
+                
+                    /// Returns true if and only if this set contains any word boundary or
+                    /// negated word boundary assertions.
+                    #[inline]
+                    pub fn contains_word(self) -> bool {
+                        self.contains_word_unicode() || self.contains_word_ascii()
+                    }
+                
+                    /// Returns true if and only if this set contains any Unicode word boundary
+                    /// or negated Unicode word boundary assertions.
+                    #[inline]
+                    pub fn contains_word_unicode(self) -> bool {
+                        self.contains(Look::WordUnicode)
+                            || self.contains(Look::WordUnicodeNegate)
+                            || self.contains(Look::WordStartUnicode)
+                            || self.contains(Look::WordEndUnicode)
+                            || self.contains(Look::WordStartHalfUnicode)
+                            || self.contains(Look::WordEndHalfUnicode)
+                    }
+                
+                    /// Returns true if and only if this set contains any ASCII word boundary
+                    /// or negated ASCII word boundary assertions.
+                    #[inline]
+                    pub fn contains_word_ascii(self) -> bool {
+                        self.contains(Look::WordAscii)
+                            || self.contains(Look::WordAsciiNegate)
+                            || self.contains(Look::WordStartAscii)
+                            || self.contains(Look::WordEndAscii)
+                            || self.contains(Look::WordStartHalfAscii)
+                            || self.contains(Look::WordEndHalfAscii)
+                    }
+                
+                    /// Returns an iterator over all of the look-around assertions in this set.
+                    #[inline]
+                    pub fn iter(self) -> LookSetIter {
+                        LookSetIter { set: self }
+                    }
+                
+                    /// Return a new set that is equivalent to the original, but with the given
+                    /// assertion added to it.
+                    #[inline]
+                    pub fn insert(self, look: Look) -> LookSet {
+                        LookSet { bits: self.bits | look.as_repr() }
+                    }
+                
+                    /// Updates this set in place with the result of inserting the given
+                    /// assertion into this set.
+                    #[inline]
+                    pub fn set_insert(&mut self, look: Look) {
+                        *self = self.insert(look);
+                    }
+                
+                    /// Return a new set that is equivalent to the original, but with the given
+                    /// assertion removed from it. 
+                    #[inline]
+                    pub fn remove(self, look: Look) -> LookSet {
+                        LookSet { bits: self.bits & !look.as_repr() }
+                    }
+                
+                    /// Updates this set in place with the result of removing the given
+                    /// assertion from this set.
+                    #[inline]
+                    pub fn set_remove(&mut self, look: Look) {
+                        *self = self.remove(look);
+                    }
+                
+                    /// Returns a new set that is the result of subtracting the given set from
+                    /// this set.
+                    #[inline]
+                    pub fn subtract(self, other: LookSet) -> LookSet {
+                        LookSet { bits: self.bits & !other.bits }
+                    }
+                
+                    /// Updates this set in place with the result of subtracting the given set
+                    /// from this set.
+                    #[inline]
+                    pub fn set_subtract(&mut self, other: LookSet) {
+                        *self = self.subtract(other);
+                    }
+                
+                    /// Returns a new set that is the union of this and the one given.
+                    #[inline]
+                    pub fn union(self, other: LookSet) -> LookSet {
+                        LookSet { bits: self.bits | other.bits }
+                    }
+                
+                    /// Updates this set in place with the result of unioning it with the one
+                    /// given.
+                    #[inline]
+                    pub fn set_union(&mut self, other: LookSet) {
+                        *self = self.union(other);
+                    }
+                
+                    /// Returns a new set that is the intersection of this and the one given.
+                    #[inline]
+                    pub fn intersect(self, other: LookSet) -> LookSet {
+                        LookSet { bits: self.bits & other.bits }
+                    }
+                
+                    /// Updates this set in place with the result of intersecting it with the
+                    /// one given.
+                    #[inline]
+                    pub fn set_intersect(&mut self, other: LookSet) {
+                        *self = self.intersect(other);
+                    }
+                
+                    /// Return a `LookSet` from the slice given as a native endian 32-bit
+                    /// integer.
+                    #[inline]
+                    pub fn read_repr(slice: &[u8]) -> LookSet {
+                        let bits = u32::from_ne_bytes(slice[..4].try_into().unwrap());
+                        LookSet { bits }
+                    }
+                
+                    /// Write a `LookSet` as a native endian 32-bit integer to the beginning
+                    /// of the slice given.
+                    #[inline]
+                    pub fn write_repr(self, slice: &mut [u8]) {
+                        let raw = self.bits.to_ne_bytes();
+                        slice[0] = raw[0];
+                        slice[1] = raw[1];
+                        slice[2] = raw[2];
+                        slice[3] = raw[3];
+                    }
+                
+                    /// Checks that all assertions in this set can be matched.
+                    pub fn available(self) -> Result<(), UnicodeWordBoundaryError> {
+                        if self.contains_word_unicode() {
+                            UnicodeWordBoundaryError::check()?;
+                        }
+                        Ok(())
+                    }
+                }
+                
+                impl ::fmt::Debug for LookSet {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
+                        if self.is_empty() {
+                            return write!(f, "∅");
+                        }
+                        for look in self.iter() {
+                            write!(f, "{}", look.as_char())?;
+                        }
+                        Ok(())
+                    }
+                }
+                
+                /// An iterator over all look-around assertions in a [`LookSet`].
+                #[derive(Clone, Debug)]
+                pub struct LookSetIter {
+                    set: LookSet,
+                }
+                
+                impl Iterator for LookSetIter {
+                    type Item = Look;
+                
+                    #[inline]
+                    fn next(&mut self) -> Option<Look> {
+                        if self.set.is_empty() {
+                            return None;
+                        }
+                        
+                        let bit = u16::try_from(self.set.bits.trailing_zeros()).unwrap();
+                        let look = Look::from_repr(1 << bit)?;
+                        self.set = self.set.remove(look);
+                        Some(look)
+                    }
+                }
+                
+                /// A matcher for look-around assertions.
+                #[derive(Clone, Debug)]
+                pub struct LookMatcher {
+                    lineterm: DebugByte,
+                }
+                
+                impl LookMatcher {
+                    /// Creates a new default matcher for look-around assertions.
+                    pub fn new() -> LookMatcher {
+                        LookMatcher { lineterm: DebugByte(b'\n') }
+                    }
+                
+                    /// Sets the line terminator for use with `(?m:^)` and `(?m:$)`.
+                    pub fn set_line_terminator(&mut self, byte: u8) -> &mut LookMatcher {
+                        self.lineterm.0 = byte;
+                        self
+                    }
+                
+                    /// Returns the line terminator that was configured for this matcher.
+                    pub fn get_line_terminator(&self) -> u8 {
+                        self.lineterm.0
+                    }
+                
+                    /// Returns true when the position `at` in `haystack` satisfies the given
+                    /// look-around assertion.
+                    #[inline]
+                    pub fn matches(&self, look: Look, haystack: &[u8], at: usize) -> bool {
+                        self.matches_inline(look, haystack, at)
+                    }
+                
+                    /// Like `matches`, but forcefully inlined.
+                    #[inline( always )]
+                    pub fn matches_inline(
+                        &self,
+                        look: Look,
+                        haystack: &[u8],
+                        at: usize,
+                    ) -> bool {
+                        match look {
+                            Look::Start => self.is_start(haystack, at),
+                            Look::End => self.is_end(haystack, at),
+                            Look::StartLF => self.is_start_lf(haystack, at),
+                            Look::EndLF => self.is_end_lf(haystack, at),
+                            Look::StartCRLF => self.is_start_crlf(haystack, at),
+                            Look::EndCRLF => self.is_end_crlf(haystack, at),
+                            Look::WordAscii => self.is_word_ascii(haystack, at),
+                            Look::WordAsciiNegate => self.is_word_ascii_negate(haystack, at),
+                            Look::WordUnicode => self.is_word_unicode(haystack, at).unwrap(),
+                            Look::WordUnicodeNegate => {
+                                self.is_word_unicode_negate(haystack, at).unwrap()
+                            }
+                            Look::WordStartAscii => self.is_word_start_ascii(haystack, at),
+                            Look::WordEndAscii => self.is_word_end_ascii(haystack, at),
+                            Look::WordStartUnicode => {
+                                self.is_word_start_unicode(haystack, at).unwrap()
+                            }
+                            Look::WordEndUnicode => {
+                                self.is_word_end_unicode(haystack, at).unwrap()
+                            }
+                            Look::WordStartHalfAscii => {
+                                self.is_word_start_half_ascii(haystack, at)
+                            }
+                            Look::WordEndHalfAscii => {
+                                self.is_word_end_half_ascii(haystack, at)
+                            }
+                            Look::WordStartHalfUnicode => {
+                                self.is_word_start_half_unicode(haystack, at).unwrap()
+                            }
+                            Look::WordEndHalfUnicode => {
+                                self.is_word_end_half_unicode(haystack, at).unwrap()
+                            }
+                        }
+                    }
+                
+                    /// Returns true when _all_ of the assertions in the given set match at the
+                    /// given position in the haystack.
+                    #[inline]
+                    pub fn matches_set(
+                        &self,
+                        set: LookSet,
+                        haystack: &[u8],
+                        at: usize,
+                    ) -> bool {
+                        self.matches_set_inline(set, haystack, at)
+                    }
+                
+                    /// Like `LookSet::matches`, but forcefully inlined for perf.
+                    #[inline( always )]
+                    pub fn matches_set_inline(
+                        &self,
+                        set: LookSet,
+                        haystack: &[u8],
+                        at: usize,
+                    ) -> bool {
+                        if set.contains(Look::Start) {
+                            if !self.is_start(haystack, at) {
+                                return false;
+                            }
+                        }
+                        if set.contains(Look::End) {
+                            if !self.is_end(haystack, at) {
+                                return false;
+                            }
+                        }
+                        if set.contains(Look::StartLF) {
+                            if !self.is_start_lf(haystack, at) {
+                                return false;
+                            }
+                        }
+                        if set.contains(Look::EndLF) {
+                            if !self.is_end_lf(haystack, at) {
+                                return false;
+                            }
+                        }
+                        if set.contains(Look::StartCRLF) {
+                            if !self.is_start_crlf(haystack, at) {
+                                return false;
+                            }
+                        }
+                        if set.contains(Look::EndCRLF) {
+                            if !self.is_end_crlf(haystack, at) {
+                                return false;
+                            }
+                        }
+                        if set.contains(Look::WordAscii) {
+                            if !self.is_word_ascii(haystack, at) {
+                                return false;
+                            }
+                        }
+                        if set.contains(Look::WordAsciiNegate) {
+                            if !self.is_word_ascii_negate(haystack, at) {
+                                return false;
+                            }
+                        }
+                        if set.contains(Look::WordUnicode) {
+                            if !self.is_word_unicode(haystack, at).unwrap() {
+                                return false;
+                            }
+                        }
+                        if set.contains(Look::WordUnicodeNegate) {
+                            if !self.is_word_unicode_negate(haystack, at).unwrap() {
+                                return false;
+                            }
+                        }
+                        if set.contains(Look::WordStartAscii) {
+                            if !self.is_word_start_ascii(haystack, at) {
+                                return false;
+                            }
+                        }
+                        if set.contains(Look::WordEndAscii) {
+                            if !self.is_word_end_ascii(haystack, at) {
+                                return false;
+                            }
+                        }
+                        if set.contains(Look::WordStartUnicode) {
+                            if !self.is_word_start_unicode(haystack, at).unwrap() {
+                                return false;
+                            }
+                        }
+                        if set.contains(Look::WordEndUnicode) {
+                            if !self.is_word_end_unicode(haystack, at).unwrap() {
+                                return false;
+                            }
+                        }
+                        if set.contains(Look::WordStartHalfAscii) {
+                            if !self.is_word_start_half_ascii(haystack, at) {
+                                return false;
+                            }
+                        }
+                        if set.contains(Look::WordEndHalfAscii) {
+                            if !self.is_word_end_half_ascii(haystack, at) {
+                                return false;
+                            }
+                        }
+                        if set.contains(Look::WordStartHalfUnicode) {
+                            if !self.is_word_start_half_unicode(haystack, at).unwrap() {
+                                return false;
+                            }
+                        }
+                        if set.contains(Look::WordEndHalfUnicode) {
+                            if !self.is_word_end_half_unicode(haystack, at).unwrap() {
+                                return false;
+                            }
+                        }
+                        true
+                    }
+                
+                    /// Split up the given byte classes into equivalence classes in a way that
+                    /// is consistent with this look-around assertion.
+                    #[cfg(feature = "alloc")]
+                    pub fn add_to_byteset(
+                        &self,
+                        look: Look,
+                        set: &mut crate::util::alphabet::ByteClassSet,
+                    ) {
+                        match look {
+                            Look::Start | Look::End => {}
+                            Look::StartLF | Look::EndLF => {
+                                set.set_range(self.lineterm.0, self.lineterm.0);
+                            }
+                            Look::StartCRLF | Look::EndCRLF => {
+                                set.set_range(b'\r', b'\r');
+                                set.set_range(b'\n', b'\n');
+                            }
+                            Look::WordAscii
+                            | Look::WordAsciiNegate
+                            | Look::WordUnicode
+                            | Look::WordUnicodeNegate
+                            | Look::WordStartAscii
+                            | Look::WordEndAscii
+                            | Look::WordStartUnicode
+                            | Look::WordEndUnicode
+                            | Look::WordStartHalfAscii
+                            | Look::WordEndHalfAscii
+                            | Look::WordStartHalfUnicode
+                            | Look::WordEndHalfUnicode => {
+                                let iswb = utf8::is_word_byte;
+                                let asu8 = |b: u16| u8::try_from(b).unwrap();
+                                let mut b1: u16 = 0;
+                                let mut b2: u16;
+                                while b1 <= 255 {
+                                    b2 = b1 + 1;
+                                    while b2 <= 255 && iswb(asu8(b1)) == iswb(asu8(b2)) {
+                                        b2 += 1;
+                                    }
+                                    assert!(b2 <= 256);
+                                    set.set_range(asu8(b1), asu8(b2.checked_sub(1).unwrap()));
+                                    b1 = b2;
+                                }
+                            }
+                        }
+                    }
+                
+                    /// Returns true when [`Look::Start`] is satisfied `at` the given position
+                    /// in `haystack`.
+                    #[inline]
+                    pub fn is_start(&self, _haystack: &[u8], at: usize) -> bool {
+                        at == 0
+                    }
+                
+                    /// Returns true when [`Look::End`] is satisfied `at` the given position in
+                    /// `haystack`.
+                    #[inline]
+                    pub fn is_end(&self, haystack: &[u8], at: usize) -> bool {
+                        at == haystack.len()
+                    }
+                
+                    /// Returns true when [`Look::StartLF`] is satisfied `at` the given
+                    /// position in `haystack`.
+                    #[inline]
+                    pub fn is_start_lf(&self, haystack: &[u8], at: usize) -> bool {
+                        self.is_start(haystack, at) || haystack[at - 1] == self.lineterm.0
+                    }
+                
+                    /// Returns true when [`Look::EndLF`] is satisfied `at` the given position
+                    /// in `haystack`.
+                    #[inline]
+                    pub fn is_end_lf(&self, haystack: &[u8], at: usize) -> bool {
+                        self.is_end(haystack, at) || haystack[at] == self.lineterm.0
+                    }
+                
+                    /// Returns true when [`Look::StartCRLF`] is satisfied `at` the given
+                    /// position in `haystack`.
+                    #[inline]
+                    pub fn is_start_crlf(&self, haystack: &[u8], at: usize) -> bool {
+                        self.is_start(haystack, at)
+                            || haystack[at - 1] == b'\n'
+                            || (haystack[at - 1] == b'\r'
+                                && (at >= haystack.len() || haystack[at] != b'\n'))
+                    }
+                
+                    /// Returns true when [`Look::EndCRLF`] is satisfied `at` the given
+                    /// position in `haystack`.
+                    #[inline]
+                    pub fn is_end_crlf(&self, haystack: &[u8], at: usize) -> bool {
+                        self.is_end(haystack, at)
+                            || haystack[at] == b'\r'
+                            || (haystack[at] == b'\n'
+                                && (at == 0 || haystack[at - 1] != b'\r'))
+                    }
+                
+                    /// Returns true when [`Look::WordAscii`] is satisfied `at` the given
+                    /// position in `haystack`.
+                    #[inline]
+                    pub fn is_word_ascii(&self, haystack: &[u8], at: usize) -> bool {
+                        let word_before = at > 0 && utf8::is_word_byte(haystack[at - 1]);
+                        let word_after =
+                            at < haystack.len() && utf8::is_word_byte(haystack[at]);
+                        word_before != word_after
+                    }
+                
+                    /// Returns true when [`Look::WordAsciiNegate`] is satisfied `at` the given
+                    /// position in `haystack`.
+                    #[inline]
+                    pub fn is_word_ascii_negate(&self, haystack: &[u8], at: usize) -> bool {
+                        !self.is_word_ascii(haystack, at)
+                    }
+                
+                    /// Returns true when [`Look::WordUnicode`] is satisfied `at` the given
+                    /// position in `haystack`.
+                    #[inline]
+                    pub fn is_word_unicode(
+                        &self,
+                        haystack: &[u8],
+                        at: usize,
+                    ) -> Result<bool, UnicodeWordBoundaryError> {
+                        let word_before = is_word_char::rev(haystack, at)?;
+                        let word_after = is_word_char::fwd(haystack, at)?;
+                        Ok(word_before != word_after)
+                    }
+                
+                    /// Returns true when [`Look::WordUnicodeNegate`] is satisfied `at` the
+                    /// given position in `haystack`.
+                    #[inline]
+                    pub fn is_word_unicode_negate(
+                        &self,
+                        haystack: &[u8],
+                        at: usize,
+                    ) -> Result<bool, UnicodeWordBoundaryError> {
+                        let word_before = at > 0
+                            && match utf8::decode_last(&haystack[..at]) {
+                                None | Some(Err(_)) => return Ok(false),
+                                Some(Ok(_)) => is_word_char::rev(haystack, at)?,
+                            };
+                        let word_after = at < haystack.len()
+                            && match utf8::decode(&haystack[at..]) {
+                                None | Some(Err(_)) => return Ok(false),
+                                Some(Ok(_)) => is_word_char::fwd(haystack, at)?,
+                            };
+                        Ok(word_before == word_after)
+                    }
+                
+                    /// Returns true when [`Look::WordStartAscii`] is satisfied `at` the given
+                    /// position in `haystack`.
+                    #[inline]
+                    pub fn is_word_start_ascii(&self, haystack: &[u8], at: usize) -> bool {
+                        let word_before = at > 0 && utf8::is_word_byte(haystack[at - 1]);
+                        let word_after =
+                            at < haystack.len() && utf8::is_word_byte(haystack[at]);
+                        !word_before && word_after
+                    }
+                
+                    /// Returns true when [`Look::WordEndAscii`] is satisfied `at` the given
+                    /// position in `haystack`.
+                    #[inline]
+                    pub fn is_word_end_ascii(&self, haystack: &[u8], at: usize) -> bool {
+                        let word_before = at > 0 && utf8::is_word_byte(haystack[at - 1]);
+                        let word_after =
+                            at < haystack.len() && utf8::is_word_byte(haystack[at]);
+                        word_before && !word_after
+                    }
+                
+                    /// Returns true when [`Look::WordStartUnicode`] is satisfied `at` the
+                    /// given position in `haystack`.
+                    #[inline]
+                    pub fn is_word_start_unicode(
+                        &self,
+                        haystack: &[u8],
+                        at: usize,
+                    ) -> Result<bool, UnicodeWordBoundaryError> {
+                        let word_before = is_word_char::rev(haystack, at)?;
+                        let word_after = is_word_char::fwd(haystack, at)?;
+                        Ok(!word_before && word_after)
+                    }
+                
+                    /// Returns true when [`Look::WordEndUnicode`] is satisfied `at` the
+                    /// given position in `haystack`.
+                    #[inline]
+                    pub fn is_word_end_unicode(
+                        &self,
+                        haystack: &[u8],
+                        at: usize,
+                    ) -> Result<bool, UnicodeWordBoundaryError> {
+                        let word_before = is_word_char::rev(haystack, at)?;
+                        let word_after = is_word_char::fwd(haystack, at)?;
+                        Ok(word_before && !word_after)
+                    }
+                
+                    /// Returns true when [`Look::WordStartHalfAscii`] is satisfied `at` the
+                    /// given position in `haystack`.
+                    #[inline]
+                    pub fn is_word_start_half_ascii(
+                        &self,
+                        haystack: &[u8],
+                        at: usize,
+                    ) -> bool {
+                        let word_before = at > 0 && utf8::is_word_byte(haystack[at - 1]);
+                        !word_before
+                    }
+                
+                    /// Returns true when [`Look::WordEndHalfAscii`] is satisfied `at` the
+                    /// given position in `haystack`.
+                    #[inline]
+                    pub fn is_word_end_half_ascii(&self, haystack: &[u8], at: usize) -> bool {
+                        let word_after =
+                            at < haystack.len() && utf8::is_word_byte(haystack[at]);
+                        !word_after
+                    }
+                
+                    /// Returns true when [`Look::WordStartHalfUnicode`] is satisfied `at` the
+                    /// given position in `haystack`.
+                    #[inline]
+                    pub fn is_word_start_half_unicode(
+                        &self,
+                        haystack: &[u8],
+                        at: usize,
+                    ) -> Result<bool, UnicodeWordBoundaryError> {
+                        let word_before = at > 0
+                            && match utf8::decode_last(&haystack[..at]) {
+                                None | Some(Err(_)) => return Ok(false),
+                                Some(Ok(_)) => is_word_char::rev(haystack, at)?,
+                            };
+                        Ok(!word_before)
+                    }
+                
+                    /// Returns true when [`Look::WordEndHalfUnicode`] is satisfied `at` the
+                    /// given position in `haystack`.
+                    #[inline]
+                    pub fn is_word_end_half_unicode(
+                        &self,
+                        haystack: &[u8],
+                        at: usize,
+                    ) -> Result<bool, UnicodeWordBoundaryError> {
+                        let word_after = at < haystack.len()
+                            && match utf8::decode(&haystack[at..]) {
+                                None | Some(Err(_)) => return Ok(false),
+                                Some(Ok(_)) => is_word_char::fwd(haystack, at)?,
+                            };
+                        Ok(!word_after)
+                    }
+                }
+                
+                impl Default for LookMatcher {
+                    fn default() -> LookMatcher {
+                        LookMatcher::new()
+                    }
+                }
+                
+                /// An error that occurs when the Unicode-aware `\w` class is unavailable.
+                #[derive(Clone, Debug)]
+                pub struct UnicodeWordBoundaryError(());
+                
+                impl UnicodeWordBoundaryError 
+                {
+                    pub fn new() -> UnicodeWordBoundaryError 
+                    {
+                        UnicodeWordBoundaryError(())
+                    }
+                }
+                
+                impl ::error::Error for UnicodeWordBoundaryError {}
+                
+                impl ::fmt::Display for UnicodeWordBoundaryError {
+                    fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result {
+                        write!(
+                            f,
+                            "Unicode-aware \\b and \\B are unavailable because the \
+                             requisite data tables are missing, please enable the \
+                             unicode-word-boundary feature"
+                        )
+                    }
+                }                
+                /// A module that looks for word codepoints using regex-automata's data tables.
+                mod is_word_char 
+                {
+                    use super::utf8;
+                
+                    pub fn check() -> Result<(), super::UnicodeWordBoundaryError> {
+                        Ok(())
+                    }
+                
+                    #[inline( always )]
+                    pub fn fwd(
+                        haystack: &[u8],
+                        at: usize,
+                    ) -> Result<bool, super::UnicodeWordBoundaryError> {
+                        Ok(match utf8::decode(&haystack[at..]) {
+                            None | Some(Err(_)) => false,
+                            Some(Ok(ch)) => is_word_character(ch),
+                        })
+                    }
+                
+                    #[inline( always )]
+                    pub fn rev(
+                        haystack: &[u8],
+                        at: usize,
+                    ) -> Result<bool, super::UnicodeWordBoundaryError> {
+                        Ok(match utf8::decode_last(&haystack[..at]) {
+                            None | Some(Err(_)) => false,
+                            Some(Ok(ch)) => is_word_character(ch),
+                        })
+                    }
+                
+                    #[inline( always )]
+                    fn is_word_character(c: char) -> bool {
+                        use super::{unicode_data::perl_word::PERL_WORD, utf8};
+                
+                        if u8::try_from(c).map_or(false, utf8::is_word_byte) {
+                            return true;
+                        }
+                        PERL_WORD
+                            .binary_search_by(|&(start, end)| {
+                                use ::cmp::Ordering;
+                
+                                if start <= c && c <= end {
+                                    Ordering::Equal
+                                } else if start > c {
+                                    Ordering::Greater
+                                } else {
+                                    Ordering::Less
+                                }
+                            })
+                            .is_ok()
+                    }
+                }
             }
 
             pub mod pool
             {
+                //! A thread safe memory pool.
                 use ::
                 {
                     *,
                 };
-                /*
-                */
+                /// Getting a value out comes with a guard.
+                pub struct Pool<T, F = fn() -> T>(::boxed::Box<inner::Pool<T, F>>);
+                
+                impl<T, F> Pool<T, F> {
+                    /// Create a new pool.
+                    pub fn new(create: F) -> Pool<T, F> {
+                        Pool(::boxed::Box::new(inner::Pool::new(create)))
+                    }
+                }
+                
+                impl<T: Send, F: Fn() -> T> Pool<T, F> {
+                    /// Get a value from the pool.
+                    #[inline]
+                    pub fn get(&self) -> PoolGuard<'_, T, F> {
+                        PoolGuard(self.0.get())
+                    }
+                }
+                
+                impl<T: ::fmt::Debug, F> ::fmt::Debug for Pool<T, F> {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
+                        f.debug_tuple("Pool").field(&self.0).finish()
+                    }
+                }
+                
+                /// A guard that is returned when a caller requests a value from the pool.
+                pub struct PoolGuard<'a, T: Send, F: Fn() -> T>(inner::PoolGuard<'a, T, F>);
+                
+                impl<'a, T: Send, F: Fn() -> T> PoolGuard<'a, T, F> {
+                    /// Consumes this guard and puts it back into the pool.
+                    #[inline]
+                    pub fn put(this: PoolGuard<'_, T, F>) {
+                        inner::PoolGuard::put(this.0);
+                    }
+                }
+                
+                impl<'a, T: Send, F: Fn() -> T> ::ops::Deref for PoolGuard<'a, T, F> {
+                    type Target = T;
+                
+                    #[inline]
+                    fn deref(&self) -> &T {
+                        self.0.value()
+                    }
+                }
+                
+                impl<'a, T: Send, F: Fn() -> T> ::ops::DerefMut for PoolGuard<'a, T, F> {
+                    #[inline]
+                    fn deref_mut(&mut self) -> &mut T {
+                        self.0.value_mut()
+                    }
+                }
+                
+                impl<'a, T: Send + ::fmt::Debug, F: Fn() -> T> ::fmt::Debug
+                    for PoolGuard<'a, T, F>
+                {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
+                        f.debug_tuple("PoolGuard").field(&self.0).finish()
+                    }
+                }
+                
+                mod inner {
+                    use ::{
+                        cell::UnsafeCell,
+                        panic::{RefUnwindSafe, UnwindSafe},
+                        sync::atomic::{AtomicUsize, Ordering},
+                    };
+                
+                    use ::{boxed::Box, vec, vec::Vec};
+                
+                    use  ::{sync::Mutex, thread_local};
+                
+                    /// An atomic counter used to allocate thread IDs.
+                    static COUNTER: AtomicUsize = AtomicUsize::new(3);
+                
+                    /// A thread ID indicating that there is no owner.
+                    static THREAD_ID_UNOWNED: usize = 0;
+                
+                    /// A thread ID indicating that the special owner value is in use and not
+                    /// available.
+                    static THREAD_ID_INUSE: usize = 1;
+                
+                    /// This sentinel is used to indicate that a guard has already been dropped
+                    /// and should not be re-dropped.
+                    static THREAD_ID_DROPPED: usize = 2;
+                
+                    /// The number of stacks we use inside of the pool.
+                    const MAX_POOL_STACKS: usize = 8;
+                
+                    thread_local!(
+                        /// A thread local used to assign an ID to a thread.
+                        static THREAD_ID: usize = {
+                            let next = COUNTER.fetch_add(1, Ordering::Relaxed);
+                            if next == 0 {
+                                panic!("regex: thread ID allocation space exhausted");
+                            }
+                            next
+                        };
+                    );
+                
+                    /// This puts each stack in the pool below into its own cache line. This is
+                    /// an absolutely critical optimization that tends to have the most impact
+                    /// in high contention workloads.
+                    #[derive(Debug)]
+                    #[repr(C, align(64))]
+                    struct CacheLine<T>(T);
+                
+                    /// A thread safe pool utilizing std-only features.
+                    pub(super) struct Pool<T, F> {
+                        /// A function to create more T values when stack is empty and a caller
+                        /// has requested a T.
+                        create: F,
+                        /// Multiple stacks of T values to hand out.
+                        stacks: Vec<CacheLine<Mutex<Vec<Box<T>>>>>,
+                        /// The ID of the thread that owns this pool.
+                        owner: AtomicUsize,
+                        /// A value to return when the caller is in the same thread that
+                        /// first called `Pool::get`.
+                        owner_val: UnsafeCell<Option<T>>,
+                    }
+                    
+                    unsafe impl<T: Send, F: Send + Sync> Sync for Pool<T, F> {}
+                    
+                    impl<T: UnwindSafe, F: UnwindSafe + RefUnwindSafe> UnwindSafe for Pool<T, F> {}
+                    
+                    impl<T: UnwindSafe, F: UnwindSafe + RefUnwindSafe> RefUnwindSafe for Pool<T, F> {}
+                
+                    impl<T, F> Pool<T, F> {
+                        /// Create a new pool. The given closure is used to create values in
+                        /// the pool when necessary.
+                        pub fn new(create: F) -> Pool<T, F> {
+                            let mut stacks = Vec::with_capacity(MAX_POOL_STACKS);
+                            for _ in 0..stacks.capacity() {
+                                stacks.push(CacheLine(Mutex::new(vec![])));
+                            }
+                            let owner = AtomicUsize::new(THREAD_ID_UNOWNED);
+                            let owner_val = UnsafeCell::new(None); // init'd on first access
+                            Pool { create, stacks, owner, owner_val }
+                        }
+                    }
+                
+                    impl<T: Send, F: Fn() -> T> Pool<T, F> {
+                        /// Get a value from the pool.
+                        #[inline]
+                        pub fn get(&self) -> PoolGuard<'_, T, F> {
+                            let caller = THREAD_ID.with(|id| *id);
+                            let owner = self.owner.load(Ordering::Acquire);
+                            if caller == owner {
+                                self.owner.store(THREAD_ID_INUSE, Ordering::Release);
+                                return self.guard_owned(caller);
+                            }
+                            self.get_slow(caller, owner)
+                        }
+                
+                        /// This is the "slow" version that goes through a mutex to pop an
+                        /// allocated value off a stack to return to the caller.
+                        #[cold]
+                        fn get_slow(
+                            &self,
+                            caller: usize,
+                            owner: usize,
+                        ) -> PoolGuard<'_, T, F> {
+                            if owner == THREAD_ID_UNOWNED {
+                                // This sentinel means this pool is not yet owned.
+                                let res = self.owner.compare_exchange(
+                                    THREAD_ID_UNOWNED,
+                                    THREAD_ID_INUSE,
+                                    Ordering::AcqRel,
+                                    Ordering::Acquire,
+                                );
+                                if res.is_ok() {
+                                    unsafe {
+                                        *self.owner_val.get() = Some((self.create)());
+                                    }
+                                    return self.guard_owned(caller);
+                                }
+                            }
+                            let stack_id = caller % self.stacks.len();
+                            
+                            for _ in 0..1 {
+                                let mut stack = match self.stacks[stack_id].0.try_lock() {
+                                    Err(_) => continue,
+                                    Ok(stack) => stack,
+                                };
+                                if let Some(value) = stack.pop() {
+                                    return self.guard_stack(value);
+                                }
+                                
+                                drop(stack);
+                                let value = Box::new((self.create)());
+                                return self.guard_stack(value);
+                            }
+                            self.guard_stack_transient(Box::new((self.create)()))
+                        }
+                
+                        /// Puts a value back into the pool.
+                        #[inline]
+                        fn put_value(&self, value: Box<T>) {
+                            let caller = THREAD_ID.with(|id| *id);
+                            let stack_id = caller % self.stacks.len();
+                            
+                            for _ in 0..10 {
+                                let mut stack = match self.stacks[stack_id].0.try_lock() {
+                                    Err(_) => continue,
+                                    Ok(stack) => stack,
+                                };
+                                stack.push(value);
+                                return;
+                            }
+                        }
+                        /// Create a guard that represents the special owned T.
+                        #[inline] fn guard_owned(&self, caller: usize) -> PoolGuard<'_, T, F> {
+                            PoolGuard { pool: self, value: Err(caller), discard: false }
+                        }
+                        /// Create a guard that contains a value from the pool's stack.
+                        #[inline]
+                        fn guard_stack(&self, value: Box<T>) -> PoolGuard<'_, T, F> {
+                            PoolGuard { pool: self, value: Ok(value), discard: false }
+                        }
+                
+                        /// Create a guard that contains a value from the pool's stack with an
+                        /// instruction to throw away the value instead of putting it back
+                        /// into the pool.
+                        #[inline]
+                        fn guard_stack_transient(&self, value: Box<T>) -> PoolGuard<'_, T, F> {
+                            PoolGuard { pool: self, value: Ok(value), discard: true }
+                        }
+                    }
+                
+                    impl<T: ::fmt::Debug, F> ::fmt::Debug for Pool<T, F> {
+                        fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result {
+                            f.debug_struct("Pool")
+                                .field("stacks", &self.stacks)
+                                .field("owner", &self.owner)
+                                .field("owner_val", &self.owner_val)
+                                .finish()
+                        }
+                    }
+                
+                    /// A guard that is returned when a caller requests a value from the pool.
+                    pub(super) struct PoolGuard<'a, T: Send, F: Fn() -> T> {
+                        /// The pool that this guard is attached to.
+                        pool: &'a Pool<T, F>,
+                        /// This is Err when the guard represents the special "owned" value.
+                        value: Result<Box<T>, usize>,
+                        /// When true, the value should be discarded instead of being pushed
+                        /// back into the pool.
+                        discard: bool,
+                    }
+                
+                    impl<'a, T: Send, F: Fn() -> T> PoolGuard<'a, T, F> {
+                        /// Return the underlying value.
+                        #[inline]
+                        pub fn value(&self) -> &T {
+                            match self.value {
+                                Ok(ref v) => &**v,
+                                Err(id) => unsafe {
+                                    debug_assert_ne!(THREAD_ID_DROPPED, id);
+                                    (*self.pool.owner_val.get()).as_ref().unwrap_unchecked()
+                                },
+                            }
+                        }
+                        /// Return the underlying value as a mutable borrow.
+                        #[inline]
+                        pub fn value_mut(&mut self) -> &mut T {
+                            match self.value {
+                                Ok(ref mut v) => &mut **v,
+                                Err(id) => unsafe {
+                                    debug_assert_ne!(THREAD_ID_DROPPED, id);
+                                    (*self.pool.owner_val.get()).as_mut().unwrap_unchecked()
+                                },
+                            }
+                        }
+                
+                        /// Consumes this guard and puts it back into the pool.
+                        #[inline]
+                        pub fn put(this: PoolGuard<'_, T, F>) {
+                            let mut this = ::mem::ManuallyDrop::new(this);
+                            this.put_imp();
+                        }
+                
+                        /// Puts this guard back into the pool by only borrowing the guard as
+                        /// mutable.
+                        #[inline(always)]
+                        fn put_imp(&mut self) {
+                            match ::mem::replace(&mut self.value, Err(THREAD_ID_DROPPED)) {
+                                Ok(value) => {
+                                    if self.discard {
+                                        return;
+                                    }
+                                    self.pool.put_value(value);
+                                }
+                                
+                                Err(owner) => {
+                                    assert_ne!(THREAD_ID_DROPPED, owner);
+                                    self.pool.owner.store(owner, Ordering::Release);
+                                }
+                            }
+                        }
+                    }
+                
+                    impl<'a, T: Send, F: Fn() -> T> Drop for PoolGuard<'a, T, F> {
+                        #[inline]
+                        fn drop(&mut self) {
+                            self.put_imp();
+                        }
+                    }
+                
+                    impl<'a, T: Send + ::fmt::Debug, F: Fn() -> T> ::fmt::Debug
+                        for PoolGuard<'a, T, F>
+                    {
+                        fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
+                            f.debug_struct("PoolGuard")
+                                .field("pool", &self.pool)
+                                .field("value", &self.value)
+                                .finish()
+                        }
+                    }
+                }
             }
 
             pub mod prefilter
             {
+                //! Defines a prefilter for accelerating regex searches.
                 use ::
                 {
+                    borrow::Borrow,
+                    fmt::Debug,
+                    panic::{RefUnwindSafe, UnwindSafe},
+                    sync::Arc,
                     *,
                 };
                 /*
-                */
+                    use regex_syntax::hir::{literal, Hir};
+                
+                use regex_automata::util::search::{MatchKind, Span};
+                
+                pub use regex_automata::util::prefilter::{
+                    aho_corasick::AhoCorasick,
+                    byteset::ByteSet,
+                    mem::chr::{Memchr, Memchr2, Memchr3},
+                    memmem::Memmem,
+                    teddy::Teddy,
+                };
+                */                
+                /// A prefilter for accelerating regex searches.
+                #[derive(Clone, Debug)]
+                pub struct Prefilter 
+                {
+                    pre: Arc<dyn PrefilterI>,
+                    is_fast: bool,
+                    max_needle_len: usize,
+                }
+                
+                impl Prefilter 
+                {
+                    /// Create a new prefilter from a sequence of needles and a corresponding
+                    /// match semantics.
+                    pub fn new<B: AsRef<[u8]>>(
+                        kind: MatchKind,
+                        needles: &[B],
+                    ) -> Option<Prefilter> {
+                        Choice::new(kind, needles).and_then(|choice| {
+                            let max_needle_len =
+                                needles.iter().map(|b| b.as_ref().len()).max().unwrap_or(0);
+                            Prefilter::from_choice(choice, max_needle_len)
+                        })
+                    }
+                
+                    /// This turns a prefilter selection into a `Prefilter`. That is, in turns
+                    /// the enum given into a trait object.
+                    fn from_choice(
+                        choice: Choice,
+                        max_needle_len: usize,
+                    ) -> Option<Prefilter> {
+                        let pre: Arc<dyn PrefilterI> = match choice {
+                            Choice::Memchr(p) => Arc::new(p),
+                            Choice::Memchr2(p) => Arc::new(p),
+                            Choice::Memchr3(p) => Arc::new(p),
+                            Choice::Memmem(p) => Arc::new(p),
+                            Choice::Teddy(p) => Arc::new(p),
+                            Choice::ByteSet(p) => Arc::new(p),
+                            Choice::AhoCorasick(p) => Arc::new(p),
+                        };
+                        let is_fast = pre.is_fast();
+                        Some(Prefilter { pre, is_fast, max_needle_len })
+                    }
+                
+                    /// This attempts to extract prefixes from the given `Hir` expression for
+                    /// the given match semantics, and if possible, builds a prefilter for
+                    /// them.
+                    pub fn from_hir_prefix(kind: MatchKind, hir: &Hir) -> Option<Prefilter> {
+                        Prefilter::from_hirs_prefix(kind, &[hir])
+                    }
+                
+                    /// This attempts to extract prefixes from the given `Hir` expressions for
+                    /// the given match semantics, and if possible, builds a prefilter for
+                    /// them.
+                    pub fn from_hirs_prefix<H: Borrow<Hir>>(
+                        kind: MatchKind,
+                        hirs: &[H],
+                    ) -> Option<Prefilter> {
+                        prefixes(kind, hirs)
+                            .literals()
+                            .and_then(|lits| Prefilter::new(kind, lits))
+                    }
+                
+                    /// Run this prefilter on `haystack[span.start..end]` and return a matching
+                    /// span if one exists.
+                    #[inline]
+                    pub fn find(&self, haystack: &[u8], span: Span) -> Option<Span> {
+                        self.pre.find(haystack, span)
+                    }
+                
+                    /// Returns the span of a prefix of `haystack[span.start..span.end]` if
+                    /// the prefilter matches.
+                    #[inline]
+                    pub fn prefix(&self, haystack: &[u8], span: Span) -> Option<Span> {
+                        self.pre.prefix(haystack, span)
+                    }
+                
+                    /// Returns the heap memory, in bytes, used by the underlying prefilter.
+                    #[inline]
+                    pub fn memory_usage(&self) -> usize { self.pre.memory_usage() }
+                
+                    /// Return the length of the longest needle
+                    /// in this Prefilter
+                    #[inline]
+                    pub fn max_needle_len(&self) -> usize { self.max_needle_len }
+                
+                    /// Implementations might return true here if they believe themselves to
+                    /// be "fast."
+                    #[inline]
+                    pub fn is_fast(&self) -> bool { self.is_fast }
+                }
+                
+                /// A trait for abstracting over prefilters.
+                pub trait PrefilterI:
+                    Debug + Send + Sync + RefUnwindSafe + UnwindSafe + 'static
+                {
+                    /// Run this prefilter on `haystack[span.start..end]` and return a matching
+                    /// span if one exists.
+                    fn find(&self, haystack: &[u8], span: Span) -> Option<Span>;
+                
+                    /// Returns the span of a prefix of `haystack[span.start..span.end]` if
+                    /// the prefilter matches.
+                    fn prefix(&self, haystack: &[u8], span: Span) -> Option<Span>;
+                
+                    /// Returns the heap memory, in bytes, used by the underlying prefilter.
+                    fn memory_usage(&self) -> usize;
+                
+                    /// Implementations might return true here if they believe themselves to
+                    /// be "fast."
+                    fn is_fast(&self) -> bool;
+                }
+                
+                /// A type that encapsulates the selection of a prefilter algorithm from a
+                /// sequence of needles.
+                #[derive(Clone, Debug)]
+                pub enum Choice {
+                    Memchr(Memchr),
+                    Memchr2(Memchr2),
+                    Memchr3(Memchr3),
+                    Memmem(Memmem),
+                    Teddy(Teddy),
+                    ByteSet(ByteSet),
+                    AhoCorasick(AhoCorasick),
+                }
+                
+                impl Choice 
+                {
+                    /// Select what is believed to be the best prefilter algorithm for the
+                    /// match semantics and sequence of needles given.
+                    pub fn new<B: AsRef<[u8]>>(
+                        kind: MatchKind,
+                        needles: &[B],
+                    ) -> Option<Choice> {
+                        if needles.len() == 0 {
+                            debug!("prefilter building failed: found empty set of literals");
+                            return None;
+                        }
+                        
+                        if needles.iter().any(|n| n.as_ref().is_empty()) {
+                            debug!("prefilter building failed: literals match empty string");
+                            return None;
+                        }
+                        
+                        if let Some(pre) = mem::chr::new(kind, needles) {
+                            debug!("prefilter built: memchr");
+                            return Some(Choice::Memchr(pre));
+                        }
+                        if let Some(pre) = Memchr2::new(kind, needles) {
+                            debug!("prefilter built: memchr2");
+                            return Some(Choice::Memchr2(pre));
+                        }
+                        if let Some(pre) = Memchr3::new(kind, needles) {
+                            debug!("prefilter built: memchr3");
+                            return Some(Choice::Memchr3(pre));
+                        }
+                        if let Some(pre) = Memmem::new(kind, needles) {
+                            debug!("prefilter built: memmem");
+                            return Some(Choice::Memmem(pre));
+                        }
+                        if let Some(pre) = Teddy::new(kind, needles) {
+                            debug!("prefilter built: teddy");
+                            return Some(Choice::Teddy(pre));
+                        }
+                        if let Some(pre) = ByteSet::new(kind, needles) {
+                            debug!("prefilter built: byteset");
+                            return Some(Choice::ByteSet(pre));
+                        }
+                        if let Some(pre) = AhoCorasick::new(kind, needles) {
+                            debug!("prefilter built: aho-corasick");
+                            return Some(Choice::AhoCorasick(pre));
+                        }
+                        debug!("prefilter building failed: no strategy could be found");
+                        None
+                    }
+                }
+                
+                /// Extracts all of the prefix literals from the given HIR expressions into a
+                /// single `Seq`.
+                pub fn prefixes<H>(kind: MatchKind, hirs: &[H]) -> literal::Seq
+                where
+                    H: ::borrow::Borrow<Hir>,
+                {
+                    let mut extractor = literal::Extractor::new();
+                    extractor.kind(literal::ExtractKind::Prefix);
+                
+                    let mut prefixes = literal::Seq::empty();
+                    for hir in hirs {
+                        prefixes.union(&mut extractor.extract(hir.borrow()));
+                    }
+                    debug!(
+                        "prefixes (len={:?}, exact={:?}) extracted before optimization: {:?}",
+                        prefixes.len(),
+                        prefixes.is_exact(),
+                        prefixes
+                    );
+                    match kind {
+                        MatchKind::All => {
+                            prefixes.sort();
+                            prefixes.dedup();
+                        }
+                        MatchKind::LeftmostFirst => {
+                            prefixes.optimize_for_prefix_by_preference();
+                        }
+                    }
+                    debug!(
+                        "prefixes (len={:?}, exact={:?}) extracted after optimization: {:?}",
+                        prefixes.len(),
+                        prefixes.is_exact(),
+                        prefixes
+                    );
+                    prefixes
+                }
+                
+                /// Like `prefixes`, but for all suffixes of all matches for the given HIRs.
+                pub fn suffixes<H>(kind: MatchKind, hirs: &[H]) -> literal::Seq
+                where
+                    H: ::borrow::Borrow<Hir>,
+                {
+                    let mut extractor = literal::Extractor::new();
+                    extractor.kind(literal::ExtractKind::Suffix);
+                
+                    let mut suffixes = literal::Seq::empty();
+                    for hir in hirs {
+                        suffixes.union(&mut extractor.extract(hir.borrow()));
+                    }
+                    debug!(
+                        "suffixes (len={:?}, exact={:?}) extracted before optimization: {:?}",
+                        suffixes.len(),
+                        suffixes.is_exact(),
+                        suffixes
+                    );
+                    match kind {
+                        MatchKind::All => {
+                            suffixes.sort();
+                            suffixes.dedup();
+                        }
+                        MatchKind::LeftmostFirst => {
+                            suffixes.optimize_for_suffix_by_preference();
+                        }
+                    }
+                    debug!(
+                        "suffixes (len={:?}, exact={:?}) extracted after optimization: {:?}",
+                        suffixes.len(),
+                        suffixes.is_exact(),
+                        suffixes
+                    );
+                    suffixes
+                }
+
+                mod aho_corasick
+                {
+                    use ::
+                    {
+                        *,
+                    };
+                    /*
+                    use crate::util::{
+                        prefilter::PrefilterI,
+                        search::{MatchKind, Span},
+                    };
+                    */                    
+                    #[derive(Clone, Debug)]
+                    pub struct AhoCorasick 
+                    {
+                        ac: aho_corasick::AhoCorasick,
+                    }
+                    
+                    impl AhoCorasick {
+                        pub fn new<B: AsRef<[u8]>>(
+                            kind: MatchKind,
+                            needles: &[B],
+                        ) -> Option<AhoCorasick>
+                        {
+                            let ac_match_kind = match kind {
+                                MatchKind::LeftmostFirst | MatchKind::All => {
+                                    aho_corasick::MatchKind::LeftmostFirst
+                                }
+                            };
+                            
+                            let ac_kind = if needles.len() <= 500 {
+                                aho_corasick::AhoCorasickKind::DFA
+                            } else {
+                                aho_corasick::AhoCorasickKind::ContiguousNFA
+                            };
+                            let result = aho_corasick::AhoCorasick::builder()
+                                .kind(Some(ac_kind))
+                                .match_kind(ac_match_kind)
+                                .start_kind(aho_corasick::StartKind::Both)
+                                .prefilter(false)
+                                .build(needles);
+                            let ac = match result {
+                                Ok(ac) => ac,
+                                Err(_err) => {
+                                    debug!("aho-corasick prefilter failed to build: {}", _err);
+                                    return None;
+                                }
+                            };
+                            Some(AhoCorasick { ac })
+                        }
+                    }
+                    
+                    impl PrefilterI for AhoCorasick {
+                        fn find(&self, haystack: &[u8], span: Span) -> Option<Span> {
+                            let input =
+                                aho_corasick::Input::new(haystack).span(span.start..span.end);
+                            self.ac
+                                .find(input)
+                                .map(|m| Span { start: m.start(), end: m.end() })
+                        }
+                    
+                        fn prefix(&self, haystack: &[u8], span: Span) -> Option<Span> {
+                            let input = aho_corasick::Input::new(haystack)
+                                .anchored(aho_corasick::Anchored::Yes)
+                                .span(span.start..span.end);
+                            self.ac
+                                .find(input)
+                                .map(|m| Span { start: m.start(), end: m.end() })
+                        }
+                    
+                        fn memory_usage(&self) -> usize {
+                            self.ac.memory_usage()
+                        }
+                    
+                        fn is_fast(&self) -> bool {
+                            false
+                        }
+                    }
+                }
+                
+                mod byteset
+                {
+                    use ::
+                    {
+                        *,
+                    };
+                    /*
+                    use crate::util::{
+                        prefilter::PrefilterI,
+                        search::{MatchKind, Span},
+                    };
+                    */
+                    #[derive(Clone, Debug)]
+                    pub struct ByteSet([bool; 256]);
+                    
+                    impl ByteSet {
+                        pub fn new<B: AsRef<[u8]>>(
+                            _kind: MatchKind,
+                            needles: &[B],
+                        ) -> Option<ByteSet> {
+                            let mut set = [false; 256];
+                            for needle in needles.iter() {
+                                let needle = needle.as_ref();
+                                if needle.len() != 1 {
+                                    return None;
+                                }
+                                set[usize::from(needle[0])] = true;
+                            }
+                            Some(ByteSet(set))
+                        }
+                    }
+                    
+                    impl PrefilterI for ByteSet {
+                        fn find(&self, haystack: &[u8], span: Span) -> Option<Span> {
+                            haystack[span].iter().position(|&b| self.0[usize::from(b)]).map(|i| {
+                                let start = span.start + i;
+                                let end = start + 1;
+                                Span { start, end }
+                            })
+                        }
+                    
+                        fn prefix(&self, haystack: &[u8], span: Span) -> Option<Span> {
+                            let b = *haystack.get(span.start)?;
+                            if self.0[usize::from(b)] {
+                                Some(Span { start: span.start, end: span.start + 1 })
+                            } else {
+                                None
+                            }
+                        }
+                    
+                        fn memory_usage(&self) -> usize {
+                            0
+                        }
+                    
+                        fn is_fast(&self) -> bool {
+                            false
+                        }
+                    }
+                }
+                
+                mod memchr
+                {
+                    use ::
+                    {
+                        *,
+                    };
+                    /*
+                    use crate::util::{
+                        prefilter::PrefilterI,
+                        search::{MatchKind, Span},
+                    };
+
+                    */
+                    pub struct Memchr(u8);
+                    
+                    impl Memchr {
+                        pub fn new<B: AsRef<[u8]>>(
+                            _kind: MatchKind,
+                            needles: &[B],
+                        ) -> Option<Memchr> {
+                            if needles.len() != 1 {
+                                return None;
+                            }
+                            if needles[0].as_ref().len() != 1 {
+                                return None;
+                            }
+                            Some(Memchr(needles[0].as_ref()[0]))
+                        }
+                    }
+                    
+                    impl PrefilterI for Memchr {
+                        fn find(&self, haystack: &[u8], span: Span) -> Option<Span> {
+                            mem::chr::memchr(self.0, &haystack[span]).map(|i| {
+                                let start = span.start + i;
+                                let end = start + 1;
+                                Span { start, end }
+                            })
+                        }
+                    
+                        fn prefix(&self, haystack: &[u8], span: Span) -> Option<Span> {
+                            let b = *haystack.get(span.start)?;
+                            if self.0 == b {
+                                Some(Span { start: span.start, end: span.start + 1 })
+                            } else {
+                                None
+                            }
+                        }
+                    
+                        fn memory_usage(&self) -> usize {
+                            0
+                        }
+                    
+                        fn is_fast(&self) -> bool {
+                            true
+                        }
+                    }
+                    
+                    #[derive(Clone, Debug)]
+                    pub struct Memchr2(u8, u8);
+                    
+                    impl Memchr2 {
+                        pub fn new<B: AsRef<[u8]>>(
+                            _kind: MatchKind,
+                            needles: &[B],
+                        ) -> Option<Memchr2> {
+                            if needles.len() != 2 {
+                                return None;
+                            }
+                            if !needles.iter().all(|n| n.as_ref().len() == 1) {
+                                return None;
+                            }
+                            let b1 = needles[0].as_ref()[0];
+                            let b2 = needles[1].as_ref()[0];
+                            Some(Memchr2(b1, b2))
+                        }
+                    }
+                    
+                    impl PrefilterI for Memchr2 {
+                        fn find(&self, haystack: &[u8], span: Span) -> Option<Span> {
+                            mem::chr::memchr2(self.0, self.1, &haystack[span]).map(|i| {
+                                let start = span.start + i;
+                                let end = start + 1;
+                                Span { start, end }
+                            })
+                        }
+                    
+                        fn prefix(&self, haystack: &[u8], span: Span) -> Option<Span> {
+                            let b = *haystack.get(span.start)?;
+                            if self.0 == b || self.1 == b {
+                                Some(Span { start: span.start, end: span.start + 1 })
+                            } else {
+                                None
+                            }
+                        }
+                    
+                        fn memory_usage(&self) -> usize {
+                            0
+                        }
+                    
+                        fn is_fast(&self) -> bool {
+                            true
+                        }
+                    }
+                    
+                    #[derive(Clone, Debug)]
+                    pub struct Memchr3(u8, u8, u8);
+                    
+                    impl Memchr3 {
+                        pub fn new<B: AsRef<[u8]>>(
+                            _kind: MatchKind,
+                            needles: &[B],
+                        ) -> Option<Memchr3> {
+                            if needles.len() != 3 {
+                                return None;
+                            }
+                            if !needles.iter().all(|n| n.as_ref().len() == 1) {
+                                return None;
+                            }
+                            let b1 = needles[0].as_ref()[0];
+                            let b2 = needles[1].as_ref()[0];
+                            let b3 = needles[2].as_ref()[0];
+                            Some(Memchr3(b1, b2, b3))
+                        }
+                    }
+                    
+                    impl PrefilterI for Memchr3 {
+                        fn find(&self, haystack: &[u8], span: Span) -> Option<Span> {
+                            mem::chr::memchr3(self.0, self.1, self.2, &haystack[span]).map(|i| {
+                                let start = span.start + i;
+                                let end = start + 1;
+                                Span { start, end }
+                            })
+                        }
+                    
+                        fn prefix(&self, haystack: &[u8], span: Span) -> Option<Span> {
+                            let b = *haystack.get(span.start)?;
+                            if self.0 == b || self.1 == b || self.2 == b {
+                                Some(Span { start: span.start, end: span.start + 1 })
+                            } else {
+                                None
+                            }
+                        }
+                    
+                        fn memory_usage(&self) -> usize {
+                            0
+                        }
+                    
+                        fn is_fast(&self) -> bool {
+                            true
+                        }
+                    }
+                }
+                
+                mod memmem
+                {
+                    use ::
+                    {
+                        *,
+                    };
+                    /*
+                    use crate::util::{
+                        prefilter::PrefilterI,
+                        search::{MatchKind, Span},
+                    };
+                    */
+                    #[derive(Clone, Debug)]
+                    pub struct Memmem {
+                        finder: mem::chr::memmem::Finder<'static>,
+                    }
+                    
+                    impl Memmem {
+                        pub fn new<B: AsRef<[u8]>>(
+                            _kind: MatchKind,
+                            needles: &[B],
+                        ) -> Option<Memmem> {
+                            if needles.len() != 1 {
+                                return None;
+                            }
+                            let needle = needles[0].as_ref();
+                            let finder = mem::chr::memmem::Finder::new(needle).into_owned();
+                            Some(Memmem { finder })
+                        }
+                    }
+                    
+                    impl PrefilterI for Memmem {
+                        fn find(&self, haystack: &[u8], span: Span) -> Option<Span> {
+                            self.finder.find(&haystack[span]).map(|i| {
+                                let start = span.start + i;
+                                let end = start + self.finder.needle().len();
+                                Span { start, end }
+                            })
+                        }
+                    
+                        fn prefix(&self, haystack: &[u8], span: Span) -> Option<Span> {
+                            let needle = self.finder.needle();
+                            if haystack[span].starts_with(needle) {
+                                Some(Span { end: span.start + needle.len(), ..span })
+                            } else {
+                                None
+                            }
+                        }
+                    
+                        fn memory_usage(&self) -> usize {
+                            self.finder.needle().len()
+                        }
+                    
+                        fn is_fast(&self) -> bool {
+                            true
+                        }
+                    }
+                }
+                
+                mod teddy
+                {
+                    use ::
+                    {
+                        *,
+                    };
+                    /*
+                    use crate::util::{
+                        prefilter::PrefilterI,
+                        search::{MatchKind, Span},
+                    };
+                    */
+                    #[derive(Clone, Debug)]
+                    pub struct Teddy 
+                    {
+                        searcher: aho_corasick::packed::Searcher,
+                        /// When running an anchored search, the packed searcher can't handle it so
+                        /// we defer to Aho-Corasick itself.
+                        anchored_ac: aho_corasick::dfa::DFA,
+                        /// The length of the smallest literal we look for.
+                        minimum_len: usize,
+                    }
+                    
+                    impl Teddy 
+                    {
+                        pub fn new<B: AsRef<[u8]>>
+                        (
+                            kind: MatchKind,
+                            needles: &[B],
+                        ) -> Option<Teddy>
+                        {
+                            let (packed_match_kind, ac_match_kind) = match kind
+                            {
+                                MatchKind::LeftmostFirst | MatchKind::All =>
+                                (
+                                    aho_corasick::packed::MatchKind::LeftmostFirst,
+                                    aho_corasick::MatchKind::LeftmostFirst,
+                                ),
+                            };
+                            
+                            let minimum_len = needles
+                            .iter()
+                            .map
+                            ( 
+                                |n| 
+                                n.as_ref().len()
+                            )
+                            .min()
+                            .unwrap_or( 0 );
+
+                            let packed = aho_corasick::packed::Config::
+                            new()
+                            .match_kind(packed_match_kind)
+                            .builder()
+                            .extend(needles)
+                            .build()?;
+
+                            let anchored_ac = aho_corasick::dfa::DFA::
+                            builder()
+                            .match_kind(ac_match_kind)
+                            .start_kind(aho_corasick::StartKind::Anchored)
+                            .prefilter(false)
+                            .build(needles)
+                            .ok()?;
+                                
+                            Some(Teddy { searcher: packed, anchored_ac, minimum_len })
+                        }
+                    }
+                    
+                    impl PrefilterI for Teddy
+                    {
+                        fn find(&self, haystack: &[u8], span: Span) -> Option<Span>
+                        {
+                            let ac_span = aho_corasick::Span { start: span.start, end: span.end };
+                            self.searcher
+                            .find_in(haystack, ac_span)
+                            .map(|m| Span { start: m.start(), end: m.end() })
+                        }
+                    
+                        fn prefix(&self, haystack: &[u8], span: Span) -> Option<Span>
+                        {
+                            use aho_corasick::automaton::Automaton;
+
+                            let input = aho_corasick::Input::new(haystack)
+                            .anchored(aho_corasick::Anchored::Yes)
+                            .span(span.start..span.end);
+
+                            self.anchored_ac
+                            .try_find(&input)
+                            .expect("aho-corasick DFA should never fail")
+                            .map(|m| Span { start: m.start(), end: m.end() })
+                        }
+                    
+                        fn memory_usage(&self) -> usize 
+                        {
+                            use aho_corasick::automaton::Automaton;
+                            self.searcher.memory_usage() + self.anchored_ac.memory_usage()
+                        }
+                    
+                        fn is_fast(&self) -> bool  { self.minimum_len >= 3 }
+                    }
+                }
             }
 
             pub mod primitives
             {
+                //! Lower level primitive types that are useful in a variety of circumstances.
                 use ::
                 {
+                    num::{ NonZeroUsize },
+                    vec::{ Vec },
                     *,
                 };
                 /*
+                use  ::num::NonZeroUsize;
+                
+                #[cfg(feature = "alloc")]
+                use alloc::vec::Vec;
+                
+                use crate::util::int::{Usize, U16, U32, U64};
                 */
+                /// A `usize` that can never be `usize::MAX`.
+                #[repr( transparent )] #[derive(Clone, Copy, Eq, Hash, PartialEq, PartialOrd, Ord)]
+                pub struct NonMaxUsize(NonZeroUsize);
+                
+                impl NonMaxUsize
+                {
+                    /// Create a new `NonMaxUsize` from the given value.
+                    #[inline] pub fn new(value: usize) -> Option<NonMaxUsize>
+                    { NonZeroUsize::new(value.wrapping_add(1)).map(NonMaxUsize) }
+                    /// Return the underlying `usize` value.
+                    #[inline] pub fn get(self) -> usize { self.0.get().wrapping_sub(1) }
+                }
+                
+                impl ::fmt::Debug for NonMaxUsize 
+                {
+                    fn fmt(&self, f: &mut  ::fmt::Formatter) ->  ::fmt::Result 
+                    { write!(f, "{:?}", self.get()) }
+                }
+                /// A type that represents a "small" index.
+                #[repr( transparent )] 
+                #[derive( Clone, Copy, Debug, Default, Eq, Hash, PartialEq, PartialOrd, Ord )]
+                pub struct SmallIndex(u32);
+                
+                impl SmallIndex
+                {
+                    /// The maximum index value.
+                    #[cfg(any(target_pointer_width = "32", target_pointer_width = "64"))]
+                    pub const MAX: SmallIndex = SmallIndex::new_unchecked( ::i32::MAX as usize - 1);
+                    /// The maximum index value.
+                    #[cfg(target_pointer_width = "16")]
+                    pub const MAX: SmallIndex = SmallIndex::new_unchecked( ::isize::MAX - 1);
+                    /// The total number of values that can be represented as a small index.
+                    pub const LIMIT: usize = SmallIndex::MAX.as_usize() + 1;
+                    /// The zero index value.
+                    pub const ZERO: SmallIndex = SmallIndex::new_unchecked(0);
+                    /// The number of bytes that a single small index uses in memory.
+                    pub const SIZE: usize =  ::mem::size_of::<SmallIndex>();
+                    /// Create a new small index.
+                    #[inline] pub fn new(index: usize) -> Result<SmallIndex, SmallIndexError> { SmallIndex::try_from(index) }
+                    /// Create a new small index without checking whether the given value exceeds [`SmallIndex::MAX`].
+                    #[inline] pub const fn new_unchecked(index: usize) -> SmallIndex 
+                    { SmallIndex(index as u32) }
+                    /// Like [`SmallIndex::new`], but panics if the given index is not valid.
+                    #[inline] pub fn must(index: usize) -> SmallIndex 
+                    { SmallIndex::new(index).expect("invalid small index") }
+                    /// Return this small index as a `usize`.
+                    #[inline] pub const fn as_usize(&self) -> usize { self.0 as usize }
+                    /// Return this small index as a `u64`.
+                    #[inline] pub const fn as_u64(&self) -> u64 { self.0 as u64 }
+                    /// Return the internal `u32` of this small index.
+                    #[inline] pub const fn as_u32(&self) -> u32 { self.0 }
+                    /// Return the internal `u32` of this small index represented as an `i32`.
+                    #[inline] pub const fn as_i32(&self) -> i32 { self.0 as i32 }
+                    /// Returns one more than this small index as a usize.
+                    #[inline] pub fn one_more(&self) -> usize { self.as_usize() + 1 }
+                    /// Decode this small index from the bytes given using the native endian byte order for the current target.
+                    #[inline] pub fn from_ne_bytes
+                    (
+                        bytes: [u8; 4],
+                    ) -> Result<SmallIndex, SmallIndexError> 
+                    {
+                        let id = u32::from_ne_bytes(bytes);
+
+                        if id > SmallIndex::MAX.as_u32()
+                        { return Err(SmallIndexError { attempted: u64::from(id) }); }
+                        
+                        Ok(SmallIndex::new_unchecked(id.as_usize()))
+                    }
+                    /// Decode this small index from the bytes given using the native endian byte order for the current target
+                    #[inline] pub fn from_ne_bytes_unchecked(bytes: [u8; 4]) -> SmallIndex 
+                    { SmallIndex::new_unchecked(u32::from_ne_bytes(bytes).as_usize()) }
+                    /// Return the underlying small index integer as raw bytes in native endian format.
+                    #[inline] pub fn to_ne_bytes(&self) -> [u8; 4] { self.0.to_ne_bytes() }
+                }
+                
+                impl<T>  ::ops::Index<SmallIndex> for [T]
+                {
+                    type Output = T;                
+                    #[inline] fn index(&self, index: SmallIndex) -> &T { &self[index.as_usize()] }
+                }
+                
+                impl<T>  ::ops::IndexMut<SmallIndex> for [T]
+                {
+                    #[inline] fn index_mut(&mut self, index: SmallIndex) -> &mut T
+                    { &mut self[index.as_usize()] }
+                }
+                
+                impl<T>  ::ops::Index<SmallIndex> for Vec<T>
+                {
+                    type Output = T;                
+                    #[inline] fn index(&self, index: SmallIndex) -> &T { &self[index.as_usize()] }
+                }
+                
+                impl<T>  ::ops::IndexMut<SmallIndex> for Vec<T>
+                {
+                    #[inline] fn index_mut(&mut self, index: SmallIndex) -> &mut T {  &mut self[index.as_usize()] }
+                }
+                
+                impl From<u8> for SmallIndex
+                {
+                    fn from(index: u8) -> SmallIndex { SmallIndex::new_unchecked(usize::from(index)) }
+                }
+                
+                impl TryFrom<u16> for SmallIndex
+                {
+                    type Error = SmallIndexError;                
+                    fn try_from(index: u16) -> Result<SmallIndex, SmallIndexError>
+                    {
+                        if u32::from(index) > SmallIndex::MAX.as_u32()
+                        { return Err(SmallIndexError { attempted: u64::from(index) }); }
+                        
+                        Ok(SmallIndex::new_unchecked(index.as_usize()))
+                    }
+                }
+                
+                impl TryFrom<u32> for SmallIndex
+                {
+                    type Error = SmallIndexError;                
+                    fn try_from(index: u32) -> Result<SmallIndex, SmallIndexError>
+                    {
+                        if index > SmallIndex::MAX.as_u32()
+                        { return Err(SmallIndexError { attempted: u64::from(index) }); }
+                        
+                        Ok(SmallIndex::new_unchecked(index.as_usize()))
+                    }
+                }
+                
+                impl TryFrom<u64> for SmallIndex
+                {
+                    type Error = SmallIndexError;                
+                    fn try_from(index: u64) -> Result<SmallIndex, SmallIndexError>
+                    {
+                        if index > SmallIndex::MAX.as_u64() 
+                        { return Err(SmallIndexError { attempted: index }); }
+                        
+                        Ok(SmallIndex::new_unchecked(index.as_usize()))
+                    }
+                }
+                
+                impl TryFrom<usize> for SmallIndex
+                {
+                    type Error = SmallIndexError;                
+                    fn try_from(index: usize) -> Result<SmallIndex, SmallIndexError>
+                    {
+                        if index > SmallIndex::MAX.as_usize() 
+                        { return Err( SmallIndexError { attempted: index.as_u64() } ); }
+                        
+                        Ok(SmallIndex::new_unchecked(index))
+                    }
+                }
+                /// This error occurs when a small index could not be constructed.
+                #[derive(Clone, Debug, Eq, PartialEq)]
+                pub struct SmallIndexError
+                {
+                    attempted: u64,
+                }
+                
+                impl SmallIndexError 
+                {
+                    /// Returns the value that could not be converted to a small index.
+                    pub fn attempted(&self) -> u64 { self.attempted }
+                }
+                
+                impl ::error::Error for SmallIndexError {}
+                
+                impl ::fmt::Display for SmallIndexError
+                {
+                    fn fmt(&self, f: &mut  ::fmt::Formatter) ->  ::fmt::Result
+                    {
+                        write!
+                        (
+                            f,
+                            "failed to create small index from {:?}, which exceeds {:?}",
+                            self.attempted(),
+                            SmallIndex::MAX,
+                        )
+                    }
+                }
+                
+                #[derive(Clone, Debug)]
+                pub struct SmallIndexIter
+                {
+                    rng:  ::ops::Range<usize>,
+                }
+                
+                impl Iterator for SmallIndexIter
+                {
+                    type Item = SmallIndex;                
+                    fn next(&mut self) -> Option<SmallIndex>
+                    {
+                        if self.rng.start >= self.rng.end { return None; }
+                        
+                        let next_id = self.rng.start + 1;
+                        let id =  ::mem::replace(&mut self.rng.start, next_id);
+                        Some(SmallIndex::new_unchecked(id))
+                    }
+                }
+                
+                macro_rules! index_type_impls 
+                {
+                    ($name:ident, $err:ident, $iter:ident, $withiter:ident) => 
+                    {
+                        impl $name 
+                        {
+                            /// The maximum value.
+                            pub const MAX: $name = $name(SmallIndex::MAX);
+                
+                            /// The total number of values that can be represented.
+                            pub const LIMIT: usize = SmallIndex::LIMIT;
+                
+                            /// The zero value.
+                            pub const ZERO: $name = $name(SmallIndex::ZERO);
+                
+                            /// The number of bytes that a single value uses in memory.
+                            pub const SIZE: usize = SmallIndex::SIZE;
+                
+                            /// Create a new value that is represented by a "small index."
+                            ///
+                            /// If the given index exceeds the maximum allowed value, then this
+                            /// returns an error.
+                            #[inline] pub fn new(value: usize) -> Result<$name, $err> 
+                            { SmallIndex::new(value).map($name).map_err($err) }
+                            /// Create a new value without checking whether the given argument
+                            /// exceeds the maximum.
+                            #[inline] pub const fn new_unchecked(value: usize) -> $name 
+                            { $name(SmallIndex::new_unchecked(value)) }
+                            /// Like `new`, but panics if the given value is not valid.
+                            #[inline] pub fn must(value: usize) -> $name
+                            {
+                                $name::new(value).expect(concat!
+                                (
+                                    "invalid ",
+                                    stringify!($name),
+                                    " value"
+                                ))
+                            }
+                            /// Return the internal value as a `usize`.
+                            #[inline]
+                            pub const fn as_usize(&self) -> usize { self.0.as_usize() }
+                            /// Return the internal value as a `u64`. This is guaranteed to never overflow.
+                            #[inline]
+                            pub const fn as_u64(&self) -> u64 { self.0.as_u64() }                
+                            /// Return the internal value as a `u32`.
+                            #[inline] pub const fn as_u32(&self) -> u32 { self.0.as_u32() }
+                            /// Return the internal value as a i32`.
+                            #[inline] pub const fn as_i32(&self) -> i32 { self.0.as_i32() }
+                            /// Returns one more than this value as a usize.
+                            #[inline] pub fn one_more(&self) -> usize { self.0.one_more() }
+                            /// Decode this value from the bytes given using the native endian byte order for the current target.
+                            #[inline] pub fn from_ne_bytes(bytes: [u8; 4]) -> Result<$name, $err> 
+                            { SmallIndex::from_ne_bytes(bytes).map($name).map_err($err) }
+                            /// Decode this value from the bytes given using the native endian byte order for the current target.
+                            #[inline] pub fn from_ne_bytes_unchecked(bytes: [u8; 4]) -> $name 
+                            { $name(SmallIndex::from_ne_bytes_unchecked(bytes)) }
+                            /// Return the underlying integer as raw bytes in native endian format.
+                            #[inline] pub fn to_ne_bytes(&self) -> [u8; 4] { self.0.to_ne_bytes() }
+                            /// Returns an iterator over all values from 0 up to and not including the given length.
+                            pub fn iter(len: usize) -> $iter { $iter::new(len) }
+                        }
+                        
+                        impl ::fmt::Debug for $name
+                        {
+                            fn fmt(&self, f: &mut  ::fmt::Formatter) ->  ::fmt::Result
+                            { f.debug_tuple(stringify!($name)).field(&self.as_u32()).finish() }
+                        }
+                
+                        impl<T>  ::ops::Index<$name> for [T]
+                        {
+                            type Output = T;
+                            #[inline] fn index(&self, index: $name) -> &T { &self[index.as_usize()] }
+                        }
+                
+                        impl<T>  ::ops::IndexMut<$name> for [T]
+                        {
+                            #[inline] fn index_mut(&mut self, index: $name) -> &mut T { &mut self[index.as_usize()] }
+                        }
+                        
+                        impl<T>  ::ops::Index<$name> for Vec<T>
+                        {
+                            type Output = T;                
+                            #[inline] fn index(&self, index: $name) -> &T { &self[index.as_usize()] }
+                        }
+
+                        impl<T>  ::ops::IndexMut<$name> for Vec<T>
+                        {
+                            #[inline] fn index_mut(&mut self, index: $name) -> &mut T { &mut self[index.as_usize()] }
+                        }
+                
+                        impl From<u8> for $name 
+                        {
+                            fn from(value: u8) -> $name { $name(SmallIndex::from(value)) }
+                        }
+                
+                        impl TryFrom<u16> for $name
+                        {
+                            type Error = $err;                
+                            fn try_from(value: u16) -> Result<$name, $err> { SmallIndex::try_from(value).map($name).map_err($err) }
+                        }
+                
+                        impl TryFrom<u32> for $name
+                        {
+                            type Error = $err;                
+                            fn try_from(value: u32) -> Result<$name, $err> { SmallIndex::try_from(value).map($name).map_err($err) }
+                        }
+                
+                        impl TryFrom<u64> for $name
+                        {
+                            type Error = $err;                
+                            fn try_from(value: u64) -> Result<$name, $err> { SmallIndex::try_from(value).map($name).map_err($err) }
+                        }
+                
+                        impl TryFrom<usize> for $name 
+                        {
+                            type Error = $err;                
+                            fn try_from(value: usize) -> Result<$name, $err> { SmallIndex::try_from(value).map($name).map_err($err) }
+                        }
+                        /// This error occurs when a value could not be constructed.
+                        #[derive(Clone, Debug, Eq, PartialEq)]
+                        pub struct $err(SmallIndexError);
+                
+                        impl $err 
+                        {
+                            /// Returns the value that could not be converted to an ID.
+                            pub fn attempted(&self) -> u64 { self.0.attempted() }
+                        }
+                        
+                        impl ::error::Error for $err {}
+                
+                        impl ::fmt::Display for $err
+                        {
+                            fn fmt(&self, f: &mut  ::fmt::Formatter) ->  ::fmt::Result
+                            {
+                                write!
+                                (
+                                    f,
+                                    "failed to create {} from {:?}, which exceeds {:?}",
+                                    stringify!($name),
+                                    self.attempted(),
+                                    $name::MAX,
+                                )
+                            }
+                        }
+                
+                        #[derive(Clone, Debug)]
+                        pub struct $iter(SmallIndexIter);
+                
+                        impl $iter
+                        {
+                            fn new(len: usize) -> $iter
+                            {
+                                assert!
+                                (
+                                    len <= $name::LIMIT,
+                                    "cannot create iterator for {} when number of \
+                                     elements exceed {:?}",
+                                    stringify!($name),
+                                    $name::LIMIT,
+                                );
+                                
+                                $iter(SmallIndexIter { rng: 0..len })
+                            }
+                        }
+                
+                        impl Iterator for $iter 
+                        {
+                            type Item = $name;                
+                            fn next(&mut self) -> Option<$name> { self.0.next().map($name) }
+                        }                
+                        /// An iterator adapter that is like  ::iter::Enumerate, but attaches
+                        /// small index values instead.
+                        #[derive(Clone, Debug)]
+                        pub struct $withiter<I>
+                        {
+                            it: I,
+                            ids: $iter,
+                        }
+                
+                        impl<I: Iterator + ExactSizeIterator> $withiter<I>
+                        {
+                            fn new(it: I) -> $withiter<I>
+                            {
+                                let ids = $name::iter(it.len());
+                                $withiter { it, ids }
+                            }
+                        }
+                
+                        impl<I: Iterator + ExactSizeIterator> Iterator for $withiter<I>
+                        {
+                            type Item = ($name, I::Item);                
+                            fn next(&mut self) -> Option<($name, I::Item)> 
+                            {
+                                let item = self.it.next()?;
+                                let id = self.ids.next().unwrap();
+                                Some((id, item))
+                            }
+                        }
+                    };
+                }
+                /// The identifier of a regex pattern, represented by a [`SmallIndex`].
+                #[repr( transparent )] #[derive( Clone, Copy, Default, Eq, Hash, PartialEq, PartialOrd, Ord )]
+                pub struct PatternID(SmallIndex);
+                /// The identifier of a finite automaton state, represented by a [`SmallIndex`].
+                #[repr( transparent )] #[derive( Clone, Copy, Default, Eq, Hash, PartialEq, PartialOrd, Ord )]
+                pub struct StateID(SmallIndex);
+                
+                index_type_impls!(PatternID, PatternIDError, PatternIDIter, WithPatternIDIter);
+                index_type_impls!(StateID, StateIDError, StateIDIter, WithStateIDIter);
+                
+                /// A utility trait that defines a couple of adapters for making it convenient to access indices as "small index" types.
+                pub trait IteratorIndexExt: Iterator
+                {
+                    fn with_pattern_ids(self) -> WithPatternIDIter<Self> where
+                    Self: Sized + ExactSizeIterator
+                    { WithPatternIDIter::new(self) }
+                
+                    fn with_state_ids(self) -> WithStateIDIter<Self> where
+                    Self: Sized + ExactSizeIterator
+                    { WithStateIDIter::new(self) }
+                }
+                
+                impl<I: Iterator> IteratorIndexExt for I {}
             }
 
             pub mod start
             {
+                //! Provides helpers for dealing with start state configurations in DFAs.
                 use ::
                 {
                     *,
                 };
                 /*
+                use crate::util::{
+                    look::LookMatcher,
+                    search::{Anchored, Input},
+                    wire::{self, DeserializeError, SerializeError},
+                };
                 */
+                /// A DFA has a single starting state in the typical textbook description.
+                #[derive(Clone, Debug)]
+                pub struct Config 
+                {
+                    look_behind: Option<u8>,
+                    anchored: Anchored,
+                }
+                
+                impl Config 
+                {
+                    /// Create a new default start configuration.
+                    pub fn new() -> Config 
+                    {
+                        Config { anchored: Anchored::No, look_behind: None }
+                    }
+                    /// A convenience routine for building a start configuration from an [`Input`] for a forward search.
+                    pub fn from_input_forward(input: &Input<'_>) -> Config 
+                    {
+                        let look_behind = input
+                        .start()
+                        .checked_sub(1)
+                        .and_then(|i| input.haystack().get(i).copied());
+                            
+                        Config { look_behind, anchored: input.get_anchored() }
+                    }
+                    /// A convenience routine for building a start configuration from an [`Input`] for a reverse search.
+                    pub fn from_input_reverse(input: &Input<'_>) -> Config 
+                    {
+                        let look_behind = input.haystack().get(input.end()).copied();
+                        Config { look_behind, anchored: input.get_anchored() }
+                    }
+                    /// Set the look-behind byte at the start of a search.
+                    pub fn look_behind(mut self, byte: Option<u8>) -> Config 
+                    {
+                        self.look_behind = byte;
+                        self
+                    }
+                    /// Set the anchored mode of a search.
+                    pub fn anchored(mut self, mode: Anchored) -> Config 
+                    {
+                        self.anchored = mode;
+                        self
+                    }
+                    /// Return the look-behind byte in this configuration, if one exists.
+                    pub fn get_look_behind(&self) -> Option<u8> { self.look_behind }
+                    /// Return the anchored mode in this configuration.
+                    pub fn get_anchored(&self) -> Anchored { self.anchored }
+                }
+                /// A map from every possible byte value to its corresponding starting configuration.
+                #[derive(Clone)] 
+                pub struct StartByteMap 
+                {
+                    map: [Start; 256],
+                }
+                
+                impl StartByteMap 
+                {
+                    /// Create a new map from byte values to their corresponding starting
+                    /// configurations.
+                    pub fn new(lookm: &LookMatcher) -> StartByteMap 
+                    {
+                        let mut map = [Start::NonWordByte; 256];
+                        map[usize::from(b'\n')] = Start::LineLF;
+                        map[usize::from(b'\r')] = Start::LineCR;
+                        map[usize::from(b'_')] = Start::WordByte;
+                
+                        let mut byte = b'0';
+
+                        while byte <= b'9' 
+                        {
+                            map[usize::from(byte)] = Start::WordByte;
+                            byte += 1;
+                        }
+
+                        byte = b'A';
+
+                        while byte <= b'Z' 
+                        {
+                            map[usize::from(byte)] = Start::WordByte;
+                            byte += 1;
+                        }
+
+                        byte = b'a';
+
+                        while byte <= b'z' 
+                        {
+                            map[usize::from(byte)] = Start::WordByte;
+                            byte += 1;
+                        }
+                
+                        let lineterm = lookm.get_line_terminator();
+                        
+                        if lineterm != b'\r' && lineterm != b'\n'
+                        { map[usize::from(lineterm)] = Start::CustomLineTerminator; }
+                        
+                        StartByteMap { map }
+                    }
+                    /// Return the starting configuration for the given look-behind byte.
+                    #[inline(always)] pub fn get(&self, byte: u8) -> Start { self.map[usize::from(byte)] }
+                    /// Deserializes a byte class map from the given slice.
+                    pub fn from_bytes
+                    (
+                        slice: &[u8],
+                    ) -> Result<(StartByteMap, usize), DeserializeError> 
+                    {
+                        wire::check_slice_len(slice, 256, "start byte map")?;
+                        let mut map = [Start::NonWordByte; 256];
+
+                        for (i, &repr) in slice[..256].iter().enumerate() 
+                        {
+                            map[i] = match Start::from_usize(usize::from(repr)) 
+                            {
+                                Some(start) => start,
+                                None => 
+                                {
+                                    return Err(DeserializeError::generic( "found invalid starting configuration" ))
+                                }
+                            };
+                        }
+                        Ok((StartByteMap { map }, 256))
+                    }
+                    /// Writes this map to the given byte buffer.
+                    pub fn write_to( &self, dst: &mut [u8] ) -> Result<usize, SerializeError> 
+                    {
+                        let nwrite = self.write_to_len();
+
+                        if dst.len() < nwrite { return Err(SerializeError::buffer_too_small("start byte map")); }
+
+                        for (i, &start) in self.map.iter().enumerate() 
+                        {
+                            dst[i] = start.as_u8();
+                        }
+                        
+                        Ok(nwrite)
+                    }
+                    /// Returns the total number of bytes written by `write_to`.
+                    pub fn write_to_len(&self) -> usize { 256 }
+                }
+                
+                impl ::fmt::Debug for StartByteMap 
+                {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result
+                    {
+                        use ::util::escape::DebugByte;
+                
+                        write!(f, "StartByteMap{{")?;
+
+                        for byte in 0..=255 
+                        {
+                            if byte > 0 { write!(f, ", ")?; }
+
+                            let start = self.map[usize::from(byte)];
+                            write!(f, "{:?} => {:?}", DebugByte(byte), start)?;
+                        }
+                        
+                        write!(f, "}}")?;
+                        Ok(())
+                    }
+                }
+                /// Represents the six possible starting configurations of a DFA search.
+                #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+                pub enum Start 
+                {
+                    /// This occurs when the starting position is not any of the ones below.
+                    NonWordByte = 0,
+                    /// This occurs when the byte immediately preceding the start of the search is an ASCII word byte.
+                    WordByte = 1,
+                    /// This occurs when the starting position of the search corresponds to the beginning of the haystack.
+                    Text = 2,
+                    /// This occurs when the byte immediately preceding the start of the search is a line terminator.
+                    LineLF = 3,
+                    /// This occurs when the byte immediately preceding the start of the search is a line terminator.
+                    LineCR = 4,
+                    /// This occurs when a custom line terminator has been set via a `LookMatcher`,
+                    /// and when that line terminator is neither a `\r` or a `\n`.
+                    CustomLineTerminator = 5,
+                }
+                
+                impl Start 
+                {
+                    /// Return the starting state corresponding to the given integer.
+                    pub fn from_usize(n: usize) -> Option<Start>
+                    {
+                        match n 
+                        {
+                            0 => Some(Start::NonWordByte),
+                            1 => Some(Start::WordByte),
+                            2 => Some(Start::Text),
+                            3 => Some(Start::LineLF),
+                            4 => Some(Start::LineCR),
+                            5 => Some(Start::CustomLineTerminator),
+                            _ => None,
+                        }
+                    }
+                    /// Returns the total number of starting state configurations.
+                    pub fn len() -> usize { 6 }
+                    /// Return this starting configuration as `u8` integer.
+                    pub fn as_u8(&self) -> u8 { *self as u8 }                
+                    /// Return this starting configuration as a `usize` integer.guaranteed to be less than `Start::len()`.
+                    pub fn as_usize(&self) -> usize { usize::from(self.as_u8()) }
+                }
             }
 
             pub mod wire
             {
+                //! Types and routines that support the wire format of finite automata.
                 use ::
                 {
+                    mem::size_of,
+                    vec::{ self, Vec },
                     *,
                 };
-                /*
+                /*                
+                use crate::util::{
+                    int::Pointer,
+                    primitives::{PatternID, PatternIDError, StateID, StateIDError},
+                };
                 */
+                /// A hack to align a smaller type `B` with a bigger type `T`.
+                #[repr(C)] #[derive(Debug)]
+                pub struct AlignAs<B: ?Sized, T> 
+                {
+                    /// A zero-sized field indicating the alignment we want.
+                    pub _align: [T; 0],
+                    /// A possibly non-sized field containing a sequence of bytes.
+                    pub bytes: B,
+                }
+                /// An error that occurs when serializing an object from this crate.
+                #[derive(Debug)]
+                pub struct SerializeError 
+                {
+                    /// The name of the thing that a buffer is too small for.
+                    what: &'static str,
+                }
+                
+                impl SerializeError 
+                {
+                    pub fn buffer_too_small(what: &'static str) -> SerializeError { SerializeError { what } }
+                }
+                
+                impl ::fmt::Display for SerializeError {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
+                        write!(f, "destination buffer is too small to write {}", self.what)
+                    }
+                }
+                
+                impl ::error::Error for SerializeError {}
+                /// An error that occurs when deserializing an object defined in this crate.
+                #[derive(Debug)]
+                pub struct DeserializeError(DeserializeErrorKind);
+                
+                #[derive(Debug)]
+                enum DeserializeErrorKind 
+                {
+                    Generic { msg: &'static str },
+                    BufferTooSmall { what: &'static str },
+                    InvalidUsize { what: &'static str },
+                    VersionMismatch { expected: u32, found: u32 },
+                    EndianMismatch { expected: u32, found: u32 },
+                    AlignmentMismatch { alignment: usize, address: usize },
+                    LabelMismatch { expected: &'static str },
+                    ArithmeticOverflow { what: &'static str },
+                    PatternID { err: PatternIDError, what: &'static str },
+                    StateID { err: StateIDError, what: &'static str },
+                }
+                
+                impl DeserializeError 
+                {
+                    pub fn generic(msg: &'static str) -> DeserializeError {
+                        DeserializeError(DeserializeErrorKind::Generic { msg })
+                    }
+                
+                    pub fn buffer_too_small(what: &'static str) -> DeserializeError {
+                        DeserializeError(DeserializeErrorKind::BufferTooSmall { what })
+                    }
+                
+                    fn invalid_usize(what: &'static str) -> DeserializeError {
+                        DeserializeError(DeserializeErrorKind::InvalidUsize { what })
+                    }
+                
+                    fn version_mismatch(expected: u32, found: u32) -> DeserializeError {
+                        DeserializeError(DeserializeErrorKind::VersionMismatch {
+                            expected,
+                            found,
+                        })
+                    }
+                
+                    fn endian_mismatch(expected: u32, found: u32) -> DeserializeError {
+                        DeserializeError(DeserializeErrorKind::EndianMismatch {
+                            expected,
+                            found,
+                        })
+                    }
+                
+                    fn alignment_mismatch(
+                        alignment: usize,
+                        address: usize,
+                    ) -> DeserializeError {
+                        DeserializeError(DeserializeErrorKind::AlignmentMismatch {
+                            alignment,
+                            address,
+                        })
+                    }
+                
+                    fn label_mismatch(expected: &'static str) -> DeserializeError {
+                        DeserializeError(DeserializeErrorKind::LabelMismatch { expected })
+                    }
+                
+                    fn arithmetic_overflow(what: &'static str) -> DeserializeError {
+                        DeserializeError(DeserializeErrorKind::ArithmeticOverflow { what })
+                    }
+                
+                    fn pattern_id_error(
+                        err: PatternIDError,
+                        what: &'static str,
+                    ) -> DeserializeError {
+                        DeserializeError(DeserializeErrorKind::PatternID { err, what })
+                    }
+                
+                    pub fn state_id_error(
+                        err: StateIDError,
+                        what: &'static str,
+                    ) -> DeserializeError {
+                        DeserializeError(DeserializeErrorKind::StateID { err, what })
+                    }
+                }
+                
+                impl ::error::Error for DeserializeError {}
+                
+                impl ::fmt::Display for DeserializeError 
+                {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
+                        use self::DeserializeErrorKind::*;
+                
+                        match self.0 {
+                            Generic { msg } => write!(f, "{}", msg),
+                            BufferTooSmall { what } => {
+                                write!(f, "buffer is too small to read {}", what)
+                            }
+                            InvalidUsize { what } => {
+                                write!(f, "{} is too big to fit in a usize", what)
+                            }
+                            VersionMismatch { expected, found } => write!(
+                                f,
+                                "unsupported version: \
+                                 expected version {} but found version {}",
+                                expected, found,
+                            ),
+                            EndianMismatch { expected, found } => write!(
+                                f,
+                                "endianness mismatch: expected 0x{:X} but got 0x{:X}. \
+                                 (Are you trying to load an object serialized with a \
+                                 different endianness?)",
+                                expected, found,
+                            ),
+                            AlignmentMismatch { alignment, address } => write!(
+                                f,
+                                "alignment mismatch: slice starts at address \
+                                 0x{:X}, which is not aligned to a {} byte boundary",
+                                address, alignment,
+                            ),
+                            LabelMismatch { expected } => write!(
+                                f,
+                                "label mismatch: start of serialized object should \
+                                 contain a NUL terminated {:?} label, but a different \
+                                 label was found",
+                                expected,
+                            ),
+                            ArithmeticOverflow { what } => {
+                                write!(f, "arithmetic overflow for {}", what)
+                            }
+                            PatternID { ref err, what } => {
+                                write!(f, "failed to read pattern ID for {}: {}", what, err)
+                            }
+                            StateID { ref err, what } => {
+                                write!(f, "failed to read state ID for {}: {}", what, err)
+                            }
+                        }
+                    }
+                }
+                /// Safely converts a `&[u32]` to `&[StateID]` with zero cost.
+                pub fn u32s_to_state_ids(slice: &[u32]) -> &[StateID] 
+                {
+                    unsafe {
+                        ::slice::from_raw_parts(
+                            slice.as_ptr().cast::<StateID>(),
+                            slice.len(),
+                        )
+                    }
+                }
+                /// Safely converts a `&mut [u32]` to `&mut [StateID]` with zero cost.
+                pub fn u32s_to_state_ids_mut(slice: &mut [u32]) -> &mut [StateID] 
+                {
+                    unsafe {
+                        ::slice::from_raw_parts_mut(
+                            slice.as_mut_ptr().cast::<StateID>(),
+                            slice.len(),
+                        )
+                    }
+                }
+                
+                /// Safely converts a `&[u32]` to `&[PatternID]` with zero cost.
+                pub fn u32s_to_pattern_ids(slice: &[u32]) -> &[PatternID] 
+                {
+                    unsafe {
+                        ::slice::from_raw_parts(
+                            slice.as_ptr().cast::<PatternID>(),
+                            slice.len(),
+                        )
+                    }
+                }
+                
+                /// Checks that the given slice has an alignment that matches `T`.
+                pub fn check_alignment<T>(
+                    slice: &[u8],
+                ) -> Result<(), DeserializeError> {
+                    let alignment = ::mem::align_of::<T>();
+                    let address = slice.as_ptr().as_usize();
+                    if address % alignment == 0 {
+                        return Ok(());
+                    }
+                    Err(DeserializeError::alignment_mismatch(alignment, address))
+                }                
+                /// Reads a possibly empty amount of padding, up to 7 bytes, from the beginning
+                /// of the given slice.
+                pub fn skip_initial_padding(slice: &[u8]) -> usize {
+                    let mut nread = 0;
+                    while nread < 7 && nread < slice.len() && slice[nread] == 0 {
+                        nread += 1;
+                    }
+                    nread
+                }                
+                /// Allocate a byte buffer of the given size, along with some initial padding
+                /// such that `buf[padding..]` has the same alignment as `T`, where the
+                /// alignment of `T` must be at most `8`.
+                pub fn alloc_aligned_buffer<T>(size: usize) -> (Vec<u8>, usize) 
+                {
+                    let buf = vec![0; size];
+                    let align = ::mem::align_of::<T>();
+                    let address = buf.as_ptr().as_usize();
+                    if address % align == 0 {
+                        return (buf, 0);
+                    }
+                    
+                    let extra = align - 1;
+                    let mut buf = vec![0; size + extra];
+                    let address = buf.as_ptr().as_usize();
+                    
+                    if address % align == 0 {
+                        buf.truncate(size);
+                        return (buf, 0);
+                    }
+                    let padding = ((address & !(align - 1)).checked_add(align).unwrap())
+                        .checked_sub(address)
+                        .unwrap();
+                    assert!(padding <= 7, "padding of {} is bigger than 7", padding);
+                    assert!(
+                        padding <= extra,
+                        "padding of {} is bigger than extra {} bytes",
+                        padding,
+                        extra
+                    );
+                    buf.truncate(size + padding);
+                    assert_eq!(size + padding, buf.len());
+                    assert_eq!(
+                        0,
+                        buf[padding..].as_ptr().as_usize() % align,
+                        "expected end of initial padding to be aligned to {}",
+                        align,
+                    );
+                    (buf, padding)
+                }                
+                /// Reads a NUL terminated label starting at the beginning of the given slice.
+                pub fn read_label(
+                    slice: &[u8],
+                    expected_label: &'static str,
+                ) -> Result<usize, DeserializeError> 
+                {
+                    let first_nul =
+                        slice[..cmp::min(slice.len(), 256)].iter().position(|&b| b == 0);
+                    let first_nul = match first_nul {
+                        Some(first_nul) => first_nul,
+                        None => {
+                            return Err(DeserializeError::generic(
+                                "could not find NUL terminated label \
+                                 at start of serialized object",
+                            ));
+                        }
+                    };
+                    let len = first_nul + padding_len(first_nul);
+                    if slice.len() < len {
+                        return Err(DeserializeError::generic(
+                            "could not find properly sized label at start of serialized object"
+                        ));
+                    }
+                    if expected_label.as_bytes() != &slice[..first_nul] {
+                        return Err(DeserializeError::label_mismatch(expected_label));
+                    }
+                    Ok(len)
+                }                
+                /// Writes the given label to the buffer as a NUL terminated string.
+                pub fn write_label(
+                    label: &str,
+                    dst: &mut [u8],
+                ) -> Result<usize, SerializeError> {
+                    let nwrite = write_label_len(label);
+                    if dst.len() < nwrite {
+                        return Err(SerializeError::buffer_too_small("label"));
+                    }
+                    dst[..label.len()].copy_from_slice(label.as_bytes());
+                    for i in 0..(nwrite - label.len()) {
+                        dst[label.len() + i] = 0;
+                    }
+                    assert_eq!(nwrite % 4, 0);
+                    Ok(nwrite)
+                }                
+                /// Returns the total number of bytes (including padding) that would be written
+                /// for the given label
+                pub fn write_label_len(label: &str) -> usize {
+                    if label.len() > 255 {
+                        panic!("label must not be longer than 255 bytes");
+                    }
+                    if label.as_bytes().iter().position(|&b| b == 0).is_some() {
+                        panic!("label must not contain NUL bytes");
+                    }
+                    let label_len = label.len() + 1; // +1 for the NUL terminator
+                    label_len + padding_len(label_len)
+                }
+                
+                /// Reads the endianness check from the beginning of the given slice and
+                /// confirms that the endianness of the serialized object matches the expected
+                /// endianness.
+                pub fn read_endianness_check(
+                    slice: &[u8],
+                ) -> Result<usize, DeserializeError> {
+                    let (n, nr) = try_read_u32(slice, "endianness check")?;
+                    assert_eq!(nr, write_endianness_check_len());
+                    if n != 0xFEFF {
+                        return Err(DeserializeError::endian_mismatch(0xFEFF, n));
+                    }
+                    Ok(nr)
+                }                
+                /// Writes 0xFEFF as an integer using the given endianness.
+                pub fn write_endianness_check<E: Endian>(
+                    dst: &mut [u8],
+                ) -> Result<usize, SerializeError> {
+                    let nwrite = write_endianness_check_len();
+                    if dst.len() < nwrite {
+                        return Err(SerializeError::buffer_too_small("endianness check"));
+                    }
+                    E::write_u32(0xFEFF, dst);
+                    Ok(nwrite)
+                }                
+                /// Returns the number of bytes written by the endianness check.
+                pub fn write_endianness_check_len() -> usize {
+                    size_of::<u32>()
+                }                
+                /// Reads a version number from the beginning of the given slice and confirms
+                /// that is matches the expected version number given.
+                pub fn read_version(
+                    slice: &[u8],
+                    expected_version: u32,
+                ) -> Result<usize, DeserializeError> {
+                    let (n, nr) = try_read_u32(slice, "version")?;
+                    assert_eq!(nr, write_version_len());
+                    if n != expected_version {
+                        return Err(DeserializeError::version_mismatch(expected_version, n));
+                    }
+                    Ok(nr)
+                }                
+                /// Writes the given version number to the beginning of the given slice.
+                pub fn write_version<E: Endian>(
+                    version: u32,
+                    dst: &mut [u8],
+                ) -> Result<usize, SerializeError> {
+                    let nwrite = write_version_len();
+                    if dst.len() < nwrite {
+                        return Err(SerializeError::buffer_too_small("version number"));
+                    }
+                    E::write_u32(version, dst);
+                    Ok(nwrite)
+                }                
+                /// Returns the number of bytes written by writing the version number.
+                pub fn write_version_len() -> usize {
+                    size_of::<u32>()
+                }                
+                /// Reads a pattern ID from the given slice. If the slice has insufficient
+                /// length, then this panics.
+                pub fn read_pattern_id(
+                    slice: &[u8],
+                    what: &'static str,
+                ) -> Result<(PatternID, usize), DeserializeError> {
+                    let bytes: [u8; PatternID::SIZE] =
+                        slice[..PatternID::SIZE].try_into().unwrap();
+                    let pid = PatternID::from_ne_bytes(bytes)
+                        .map_err(|err| DeserializeError::pattern_id_error(err, what))?;
+                    Ok((pid, PatternID::SIZE))
+                }                
+                /// Reads a pattern ID from the given slice.
+                pub fn read_pattern_id_unchecked(slice: &[u8]) -> (PatternID, usize) {
+                    let pid = PatternID::from_ne_bytes_unchecked(
+                        slice[..PatternID::SIZE].try_into().unwrap(),
+                    );
+                    (pid, PatternID::SIZE)
+                }                
+                /// Write the given pattern ID to the beginning of the given slice of bytes
+                /// using the specified endianness.
+                pub fn write_pattern_id<E: Endian>(
+                    pid: PatternID,
+                    dst: &mut [u8],
+                ) -> usize {
+                    E::write_u32(pid.as_u32(), dst);
+                    PatternID::SIZE
+                }                
+                /// Attempts to read a state ID from the given slice.
+                pub fn try_read_state_id(
+                    slice: &[u8],
+                    what: &'static str,
+                ) -> Result<(StateID, usize), DeserializeError> {
+                    if slice.len() < StateID::SIZE {
+                        return Err(DeserializeError::buffer_too_small(what));
+                    }
+                    read_state_id(slice, what)
+                }                
+                /// Reads a state ID from the given slice.
+                pub fn read_state_id(
+                    slice: &[u8],
+                    what: &'static str,
+                ) -> Result<(StateID, usize), DeserializeError> {
+                    let bytes: [u8; StateID::SIZE] =
+                        slice[..StateID::SIZE].try_into().unwrap();
+                    let sid = StateID::from_ne_bytes(bytes)
+                        .map_err(|err| DeserializeError::state_id_error(err, what))?;
+                    Ok((sid, StateID::SIZE))
+                }                
+                /// Reads a state ID from the given slice.
+                pub fn read_state_id_unchecked(slice: &[u8]) -> (StateID, usize) {
+                    let sid = StateID::from_ne_bytes_unchecked(
+                        slice[..StateID::SIZE].try_into().unwrap(),
+                    );
+                    (sid, StateID::SIZE)
+                }
+                /// Write the given state ID to the beginning of the given slice of bytes
+                /// using the specified endianness.
+                pub fn write_state_id<E: Endian>(
+                    sid: StateID,
+                    dst: &mut [u8],
+                ) -> usize {
+                    E::write_u32(sid.as_u32(), dst);
+                    StateID::SIZE
+                }                
+                /// Try to read a u16 as a usize from the beginning of the given slice in
+                /// native endian format.
+                pub fn try_read_u16_as_usize(
+                    slice: &[u8],
+                    what: &'static str,
+                ) -> Result<(usize, usize), DeserializeError> {
+                    try_read_u16(slice, what).and_then(|(n, nr)| {
+                        usize::try_from(n)
+                            .map(|n| (n, nr))
+                            .map_err(|_| DeserializeError::invalid_usize(what))
+                    })
+                }                
+                /// Try to read a u32 as a usize from the beginning of the given slice in
+                /// native endian format.
+                pub fn try_read_u32_as_usize(
+                    slice: &[u8],
+                    what: &'static str,
+                ) -> Result<(usize, usize), DeserializeError> {
+                    try_read_u32(slice, what).and_then(|(n, nr)| {
+                        usize::try_from(n)
+                            .map(|n| (n, nr))
+                            .map_err(|_| DeserializeError::invalid_usize(what))
+                    })
+                }                
+                /// Try to read a u16 from the beginning of the given slice in native endian
+                /// format.
+                pub fn try_read_u16(
+                    slice: &[u8],
+                    what: &'static str,
+                ) -> Result<(u16, usize), DeserializeError> {
+                    check_slice_len(slice, size_of::<u16>(), what)?;
+                    Ok((read_u16(slice), size_of::<u16>()))
+                }
+                
+                /// Try to read a u32 from the beginning of the given slice in native endian
+                /// format.
+                pub fn try_read_u32(
+                    slice: &[u8],
+                    what: &'static str,
+                ) -> Result<(u32, usize), DeserializeError> {
+                    check_slice_len(slice, size_of::<u32>(), what)?;
+                    Ok((read_u32(slice), size_of::<u32>()))
+                }                
+                /// Try to read a u128 from the beginning of the given slice in native endian
+                /// format.
+                pub fn try_read_u128(
+                    slice: &[u8],
+                    what: &'static str,
+                ) -> Result<(u128, usize), DeserializeError> {
+                    check_slice_len(slice, size_of::<u128>(), what)?;
+                    Ok((read_u128(slice), size_of::<u128>()))
+                }                
+                /// Read a u16 from the beginning of the given slice in native endian format.
+                pub fn read_u16(slice: &[u8]) -> u16 {
+                    let bytes: [u8; 2] = slice[..size_of::<u16>()].try_into().unwrap();
+                    u16::from_ne_bytes(bytes)
+                }                
+                /// Read a u32 from the beginning of the given slice in native endian format.
+                pub fn read_u32(slice: &[u8]) -> u32 {
+                    let bytes: [u8; 4] = slice[..size_of::<u32>()].try_into().unwrap();
+                    u32::from_ne_bytes(bytes)
+                }                
+                /// Read a u128 from the beginning of the given slice in native endian format.
+                pub fn read_u128(slice: &[u8]) -> u128 {
+                    let bytes: [u8; 16] = slice[..size_of::<u128>()].try_into().unwrap();
+                    u128::from_ne_bytes(bytes)
+                }                
+                /// Checks that the given slice has some minimal length.
+                pub fn check_slice_len<T>(
+                    slice: &[T],
+                    at_least_len: usize,
+                    what: &'static str,
+                ) -> Result<(), DeserializeError> {
+                    if slice.len() < at_least_len {
+                        return Err(DeserializeError::buffer_too_small(what));
+                    }
+                    Ok(())
+                }                
+                /// Multiply the given numbers, and on overflow, return an error that includes 'what' in the error message.
+                pub fn mul(
+                    a: usize,
+                    b: usize,
+                    what: &'static str,
+                ) -> Result<usize, DeserializeError> 
+                {
+                    match a.checked_mul(b) {
+                        Some(c) => Ok(c),
+                        None => Err(DeserializeError::arithmetic_overflow(what)),
+                    }
+                }                
+                /// Add the given numbers, and on overflow, return an error that includes 'what' in the error message.
+                pub fn add(
+                    a: usize,
+                    b: usize,
+                    what: &'static str,
+                ) -> Result<usize, DeserializeError> {
+                    match a.checked_add(b) {
+                        Some(c) => Ok(c),
+                        None => Err(DeserializeError::arithmetic_overflow(what)),
+                    }
+                }                
+                /// Shift `a` left by `b`, and on overflow, return an error that includes
+                /// 'what' in the error message.
+                pub fn shl(
+                    a: usize,
+                    b: usize,
+                    what: &'static str,
+                ) -> Result<usize, DeserializeError> {
+                    let amount = u32::try_from(b)
+                        .map_err(|_| DeserializeError::arithmetic_overflow(what))?;
+                    match a.checked_shl(amount) {
+                        Some(c) => Ok(c),
+                        None => Err(DeserializeError::arithmetic_overflow(what)),
+                    }
+                }                
+                /// Returns the number of additional bytes required to add to the given length
+                /// in order to make the total length a multiple of 4.
+                pub fn padding_len(non_padding_len: usize) -> usize {
+                    (4 - (non_padding_len & 0b11)) & 0b11
+                }                
+                /// A simple trait for writing code generic over endianness.
+                pub trait Endian {
+                    /// Writes a u16 to the given destination buffer in a particular
+                    /// endianness.
+                    fn write_u16(n: u16, dst: &mut [u8]);
+                
+                    /// Writes a u32 to the given destination buffer in a particular
+                    /// endianness.
+                    fn write_u32(n: u32, dst: &mut [u8]);
+                
+                    /// Writes a u128 to the given destination buffer in a particular
+                    /// endianness.
+                    fn write_u128(n: u128, dst: &mut [u8]);
+                }
+                
+                /// Little endian writing.
+                pub enum LE {}
+                /// Big endian writing.
+                pub enum BE {}
+                
+                #[cfg(target_endian = "little")]
+                pub type NE = LE;
+                #[cfg(target_endian = "big")]
+                pub type NE = BE;
+                
+                impl Endian for LE {
+                    fn write_u16(n: u16, dst: &mut [u8]) {
+                        dst[..2].copy_from_slice(&n.to_le_bytes());
+                    }
+                
+                    fn write_u32(n: u32, dst: &mut [u8]) {
+                        dst[..4].copy_from_slice(&n.to_le_bytes());
+                    }
+                
+                    fn write_u128(n: u128, dst: &mut [u8]) {
+                        dst[..16].copy_from_slice(&n.to_le_bytes());
+                    }
+                }
+                
+                impl Endian for BE {
+                    fn write_u16(n: u16, dst: &mut [u8]) {
+                        dst[..2].copy_from_slice(&n.to_be_bytes());
+                    }
+                
+                    fn write_u32(n: u32, dst: &mut [u8]) {
+                        dst[..4].copy_from_slice(&n.to_be_bytes());
+                    }
+                
+                    fn write_u128(n: u128, dst: &mut [u8]) {
+                        dst[..16].copy_from_slice(&n.to_be_bytes());
+                    }
+                }
             }
 
             pub mod empty
             {
+                //! This module provides helper routines for dealing with zero-width matches.
                 use ::
                 {
                     *,
                 };
                 /*
+                use crate::util::search::{Input, MatchError};
                 */
+                #[cold]
+                #[inline(never)]
+                pub fn skip_splits_fwd<T, F>(
+                    input: &Input<'_>,
+                    init_value: T,
+                    match_offset: usize,
+                    find: F,
+                ) -> Result<Option<T>, MatchError>
+                where
+                    F: FnMut(&Input<'_>) -> Result<Option<(T, usize)>, MatchError>,
+                {
+                    skip_splits(true, input, init_value, match_offset, find)
+                }
+                
+                #[cold]
+                #[inline(never)]
+                pub fn skip_splits_rev<T, F>(
+                    input: &Input<'_>,
+                    init_value: T,
+                    match_offset: usize,
+                    find: F,
+                ) -> Result<Option<T>, MatchError>
+                where
+                    F: FnMut(&Input<'_>) -> Result<Option<(T, usize)>, MatchError>,
+                {
+                    skip_splits(false, input, init_value, match_offset, find)
+                }
+                
+                fn skip_splits<T, F>(
+                    forward: bool,
+                    input: &Input<'_>,
+                    init_value: T,
+                    mut match_offset: usize,
+                    mut find: F,
+                ) -> Result<Option<T>, MatchError>
+                where
+                    F: FnMut(&Input<'_>) -> Result<Option<(T, usize)>, MatchError>,
+                {
+                    if input.get_anchored().is_anchored() {
+                        return Ok(if input.is_char_boundary(match_offset) {
+                            Some(init_value)
+                        } else {
+                            None
+                        });
+                    }
+                    
+                    let mut value = init_value;
+                    let mut input = input.clone();
+                    while !input.is_char_boundary(match_offset) {
+                        if forward {
+                            input.set_start(input.start().checked_add(1).unwrap());
+                        } else {
+                            input.set_end(match input.end().checked_sub(1) {
+                                None => return Ok(None),
+                                Some(end) => end,
+                            });
+                        }
+                        match find(&input)? {
+                            None => return Ok(None),
+                            Some((new_value, new_match_end)) => {
+                                value = new_value;
+                                match_offset = new_match_end;
+                            }
+                        }
+                    }
+                    Ok(Some(value))
+                }
             }
 
             pub mod int
             {
+                //! This module provides several integer oriented traits for converting between both 
+                //! fixed size integers and integers whose size varies based on the target.
                 use ::
                 {
                     *,
                 };
                 /*
                 */
+                pub trait U8 {
+                    fn as_usize(self) -> usize;
+                }
+                
+                impl U8 for u8 {
+                    fn as_usize(self) -> usize {
+                        usize::from(self)
+                    }
+                }
+                
+                pub trait U16 {
+                    fn as_usize(self) -> usize;
+                    fn low_u8(self) -> u8;
+                    fn high_u8(self) -> u8;
+                }
+                
+                impl U16 for u16 {
+                    fn as_usize(self) -> usize {
+                        usize::from(self)
+                    }
+                
+                    fn low_u8(self) -> u8 {
+                        self as u8
+                    }
+                
+                    fn high_u8(self) -> u8 {
+                        (self >> 8) as u8
+                    }
+                }
+                
+                pub trait U32 {
+                    fn as_usize(self) -> usize;
+                    fn low_u8(self) -> u8;
+                    fn low_u16(self) -> u16;
+                    fn high_u16(self) -> u16;
+                }
+                
+                impl U32 for u32 {
+                    fn as_usize(self) -> usize {
+                        self as usize
+                    }
+                
+                    fn low_u8(self) -> u8 {
+                        self as u8
+                    }
+                
+                    fn low_u16(self) -> u16 {
+                        self as u16
+                    }
+                
+                    fn high_u16(self) -> u16 {
+                        (self >> 16) as u16
+                    }
+                }
+                
+                pub trait U64 {
+                    fn as_usize(self) -> usize;
+                    fn low_u8(self) -> u8;
+                    fn low_u16(self) -> u16;
+                    fn low_u32(self) -> u32;
+                    fn high_u32(self) -> u32;
+                }
+                
+                impl U64 for u64 {
+                    fn as_usize(self) -> usize {
+                        self as usize
+                    }
+                
+                    fn low_u8(self) -> u8 {
+                        self as u8
+                    }
+                
+                    fn low_u16(self) -> u16 {
+                        self as u16
+                    }
+                
+                    fn low_u32(self) -> u32 {
+                        self as u32
+                    }
+                
+                    fn high_u32(self) -> u32 {
+                        (self >> 32) as u32
+                    }
+                }
+                
+                pub trait I32 {
+                    fn as_usize(self) -> usize;
+                    fn to_bits(self) -> u32;
+                    fn from_bits(n: u32) -> i32;
+                }
+                
+                impl I32 for i32 {
+                    fn as_usize(self) -> usize {
+                        self as usize
+                    }
+                
+                    fn to_bits(self) -> u32 {
+                        self as u32
+                    }
+                
+                    fn from_bits(n: u32) -> i32 {
+                        n as i32
+                    }
+                }
+                
+                pub trait Usize {
+                    fn as_u8(self) -> u8;
+                    fn as_u16(self) -> u16;
+                    fn as_u32(self) -> u32;
+                    fn as_u64(self) -> u64;
+                }
+                
+                impl Usize for usize {
+                    fn as_u8(self) -> u8 {
+                        self as u8
+                    }
+                
+                    fn as_u16(self) -> u16 {
+                        self as u16
+                    }
+                
+                    fn as_u32(self) -> u32 {
+                        self as u32
+                    }
+                
+                    fn as_u64(self) -> u64 {
+                        self as u64
+                    }
+                }
+                
+                pub trait Pointer {
+                    fn as_usize(self) -> usize;
+                }
+                
+                impl<T> Pointer for *const T {
+                    fn as_usize(self) -> usize {
+                        self as usize
+                    }
+                }
             }
 
             pub mod memchr
             {
+                //! This module defines simple wrapper routines for the memchr functions from the `memchr` crate.
                 use ::
                 {
                     *,
                 };
                 /*
                 */
+                pub use self::inner::*;
+                
+                pub mod inner 
+                {
+                    #[inline(always)]
+                    pub fn memchr(n1: u8, haystack: &[u8]) -> Option<usize> {
+                        ::mem::chr::memchr(n1, haystack)
+                    }
+                
+                    #[inline(always)]
+                    pub fn memchr2(n1: u8, n2: u8, haystack: &[u8]) -> Option<usize> {
+                        ::mem::chr::memchr2(n1, n2, haystack)
+                    }
+                
+                    #[inline(always)]
+                    pub fn memchr3(
+                        n1: u8,
+                        n2: u8,
+                        n3: u8,
+                        haystack: &[u8],
+                    ) -> Option<usize> {
+                        ::mem::chr::memchr3(n1, n2, n3, haystack)
+                    }
+                
+                    #[inline(always)]
+                    pub fn memrchr(n1: u8, haystack: &[u8]) -> Option<usize> {
+                        ::mem::chr::memrchr(n1, haystack)
+                    }
+                
+                    #[inline(always)]
+                    pub fn memrchr2(n1: u8, n2: u8, haystack: &[u8]) -> Option<usize> {
+                        ::mem::chr::memrchr2(n1, n2, haystack)
+                    }
+                
+                    #[inline(always)]
+                    pub fn memrchr3(
+                        n1: u8,
+                        n2: u8,
+                        n3: u8,
+                        haystack: &[u8],
+                    ) -> Option<usize> {
+                        ::mem::chr::memrchr3(n1, n2, n3, haystack)
+                    }
+                }
             }
 
             pub mod search
             {
+                //! Types and routines that support the search APIs of most regex engines.
                 use ::
                 {
+                    ops::{Range, RangeBounds},
                     *,
                 };
                 /*
+                use crate::util::{escape::DebugByte, primitives::PatternID, utf8};
                 */
+                /// The parameters for a regex search including the haystack to search.
+                #[derive(Clone)]
+                pub struct Input<'h> {
+                    haystack: &'h [u8],
+                    span: Span,
+                    anchored: Anchored,
+                    earliest: bool,
+                }
+                
+                impl<'h> Input<'h> {
+                    /// Create a new search configuration for the given haystack.
+                    #[inline]
+                    pub fn new<H: ?Sized + AsRef<[u8]>>(haystack: &'h H) -> Input<'h> {
+                        let haystack = haystack.as_ref();
+                        Input {
+                            haystack,
+                            span: Span { start: 0, end: haystack.len() },
+                            anchored: Anchored::No,
+                            earliest: false,
+                        }
+                    }
+                
+                    /// Set the span for this search.
+                    #[inline]
+                    pub fn span<S: Into<Span>>(mut self, span: S) -> Input<'h> {
+                        self.set_span(span);
+                        self
+                    }
+                
+                    /// Like `Input::span`, but accepts any range instead.
+                    #[inline]
+                    pub fn range<R: RangeBounds<usize>>(mut self, range: R) -> Input<'h> {
+                        self.set_range(range);
+                        self
+                    }
+                
+                    /// Sets the anchor mode of a search.
+                    #[inline]
+                    pub fn anchored(mut self, mode: Anchored) -> Input<'h> {
+                        self.set_anchored(mode);
+                        self
+                    }
+                
+                    /// Whether to execute an "earliest" search or not.
+                    #[inline]
+                    pub fn earliest(mut self, yes: bool) -> Input<'h> {
+                        self.set_earliest(yes);
+                        self
+                    }
+                
+                    /// Set the span for this search configuration.
+                    #[inline]
+                    pub fn set_span<S: Into<Span>>(&mut self, span: S) {
+                        let span = span.into();
+                        assert!(
+                            span.end <= self.haystack.len()
+                                && span.start <= span.end.wrapping_add(1),
+                            "invalid span {:?} for haystack of length {}",
+                            span,
+                            self.haystack.len(),
+                        );
+                        self.span = span;
+                    }
+                
+                    /// Set the span for this search configuration given any range.
+                    #[inline]
+                    pub fn set_range<R: RangeBounds<usize>>(&mut self, range: R) {
+                        use ::ops::Bound;
+                        
+                        let start = match range.start_bound() {
+                            Bound::Included(&i) => i,
+                            Bound::Excluded(&i) => i.checked_add(1).unwrap(),
+                            Bound::Unbounded => 0,
+                        };
+                        let end = match range.end_bound() {
+                            Bound::Included(&i) => i.checked_add(1).unwrap(),
+                            Bound::Excluded(&i) => i,
+                            Bound::Unbounded => self.haystack().len(),
+                        };
+                        self.set_span(Span { start, end });
+                    }
+                
+                    /// Set the starting offset for the span for this search configuration.
+                    #[inline]
+                    pub fn set_start(&mut self, start: usize) {
+                        self.set_span(Span { start, ..self.get_span() });
+                    }
+                
+                    /// Set the ending offset for the span for this search configuration.
+                    #[inline]
+                    pub fn set_end(&mut self, end: usize) {
+                        self.set_span(Span { end, ..self.get_span() });
+                    }
+                
+                    /// Set the anchor mode of a search.
+                    #[inline]
+                    pub fn set_anchored(&mut self, mode: Anchored) {
+                        self.anchored = mode;
+                    }
+                
+                    /// Set whether the search should execute in "earliest" mode or not.
+                    #[inline]
+                    pub fn set_earliest(&mut self, yes: bool) {
+                        self.earliest = yes;
+                    }
+                
+                    /// Return a borrow of the underlying haystack as a slice of bytes.
+                    #[inline]
+                    pub fn haystack(&self) -> &[u8] {
+                        self.haystack
+                    }
+                
+                    /// Return the start position of this search.
+                    #[inline]
+                    pub fn start(&self) -> usize {
+                        self.get_span().start
+                    }
+                
+                    /// Return the end position of this search.
+                    #[inline]
+                    pub fn end(&self) -> usize {
+                        self.get_span().end
+                    }
+                
+                    /// Return the span for this search configuration.
+                    #[inline]
+                    pub fn get_span(&self) -> Span {
+                        self.span
+                    }
+                
+                    /// Return the span as a range for this search configuration.
+                    #[inline]
+                    pub fn get_range(&self) -> Range<usize> {
+                        self.get_span().range()
+                    }
+                
+                    /// Return the anchored mode for this search configuration.
+                    #[inline]
+                    pub fn get_anchored(&self) -> Anchored {
+                        self.anchored
+                    }
+                
+                    /// Return whether this search should execute in "earliest" mode.
+                    #[inline]
+                    pub fn get_earliest(&self) -> bool {
+                        self.earliest
+                    }
+                
+                    /// Return true if and only if this search can never return any other
+                    /// matches.
+                    #[inline]
+                    pub fn is_done(&self) -> bool {
+                        self.get_span().start > self.get_span().end
+                    }
+                
+                    /// Returns true if and only if the given offset in this search's haystack
+                    /// falls on a valid UTF-8 encoded codepoint boundary.
+                    #[inline]
+                    pub fn is_char_boundary(&self, offset: usize) -> bool {
+                        utf8::is_boundary(self.haystack(), offset)
+                    }
+                }
+                
+                impl<'h> ::fmt::Debug for Input<'h> {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
+                        use ::util::escape::DebugHaystack;
+                
+                        f.debug_struct("Input")
+                            .field("haystack", &DebugHaystack(self.haystack()))
+                            .field("span", &self.span)
+                            .field("anchored", &self.anchored)
+                            .field("earliest", &self.earliest)
+                            .finish()
+                    }
+                }
+                
+                impl<'h, H: ?Sized + AsRef<[u8]>> From<&'h H> for Input<'h> {
+                    fn from(haystack: &'h H) -> Input<'h> {
+                        Input::new(haystack)
+                    }
+                }
+                
+                /// A representation of a span reported by a regex engine.
+                #[derive(Clone, Copy, Eq, Hash, PartialEq)]
+                pub struct Span {
+                    /// The start offset of the span, inclusive.
+                    pub start: usize,
+                    /// The end offset of the span, exclusive.
+                    pub end: usize,
+                }
+                
+                impl Span {
+                    /// Returns this span as a range.
+                    #[inline]
+                    pub fn range(&self) -> Range<usize> {
+                        Range::from(*self)
+                    }
+                
+                    /// Returns true when this span is empty. That is, when `start >= end`.
+                    #[inline]
+                    pub fn is_empty(&self) -> bool {
+                        self.start >= self.end
+                    }
+                
+                    /// Returns the length of this span.
+                    #[inline]
+                    pub fn len(&self) -> usize {
+                        self.end.saturating_sub(self.start)
+                    }
+                
+                    /// Returns true when the given offset is contained within this span.
+                    #[inline]
+                    pub fn contains(&self, offset: usize) -> bool {
+                        !self.is_empty() && self.start <= offset && offset <= self.end
+                    }
+                
+                    /// Returns a new span with `offset` added to this span's `start` and `end`
+                    /// values.
+                    #[inline]
+                    pub fn offset(&self, offset: usize) -> Span {
+                        Span { start: self.start + offset, end: self.end + offset }
+                    }
+                }
+                
+                impl ::fmt::Debug for Span {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
+                        write!(f, "{}..{}", self.start, self.end)
+                    }
+                }
+                
+                impl ::ops::Index<Span> for [u8] {
+                    type Output = [u8];
+                
+                    #[inline]
+                    fn index(&self, index: Span) -> &[u8] {
+                        &self[index.range()]
+                    }
+                }
+                
+                impl ::ops::IndexMut<Span> for [u8] {
+                    #[inline]
+                    fn index_mut(&mut self, index: Span) -> &mut [u8] {
+                        &mut self[index.range()]
+                    }
+                }
+                
+                impl ::ops::Index<Span> for str {
+                    type Output = str;
+                
+                    #[inline]
+                    fn index(&self, index: Span) -> &str {
+                        &self[index.range()]
+                    }
+                }
+                
+                impl From<Range<usize>> for Span {
+                    #[inline]
+                    fn from(range: Range<usize>) -> Span {
+                        Span { start: range.start, end: range.end }
+                    }
+                }
+                
+                impl From<Span> for Range<usize> {
+                    #[inline]
+                    fn from(span: Span) -> Range<usize> {
+                        Range { start: span.start, end: span.end }
+                    }
+                }
+                
+                impl PartialEq<Range<usize>> for Span {
+                    #[inline]
+                    fn eq(&self, range: &Range<usize>) -> bool {
+                        self.start == range.start && self.end == range.end
+                    }
+                }
+                
+                impl PartialEq<Span> for Range<usize> {
+                    #[inline]
+                    fn eq(&self, span: &Span) -> bool {
+                        self.start == span.start && self.end == span.end
+                    }
+                }
+                
+                /// A representation of "half" of a match reported by a DFA.
+                #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+                pub struct HalfMatch {
+                    /// The pattern ID.
+                    pattern: PatternID,
+                    /// The offset of the match.
+                    offset: usize,
+                }
+                
+                impl HalfMatch {
+                    /// Create a new half match from a pattern ID and a byte offset.
+                    #[inline]
+                    pub fn new(pattern: PatternID, offset: usize) -> HalfMatch {
+                        HalfMatch { pattern, offset }
+                    }
+                
+                    /// Create a new half match from a pattern ID and a byte offset.
+                    #[inline]
+                    pub fn must(pattern: usize, offset: usize) -> HalfMatch {
+                        HalfMatch::new(PatternID::new(pattern).unwrap(), offset)
+                    }
+                
+                    /// Returns the ID of the pattern that matched.
+                    #[inline]
+                    pub fn pattern(&self) -> PatternID {
+                        self.pattern
+                    }
+                
+                    /// The position of the match.
+                    #[inline]
+                    pub fn offset(&self) -> usize {
+                        self.offset
+                    }
+                }
+                
+                /// A representation of a match reported by a regex engine.
+                #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+                pub struct Match {
+                    /// The pattern ID.
+                    pattern: PatternID,
+                    /// The underlying match span.
+                    span: Span,
+                }
+                
+                impl Match {
+                    /// Create a new match from a pattern ID and a span.
+                    #[inline]
+                    pub fn new<S: Into<Span>>(pattern: PatternID, span: S) -> Match {
+                        let span: Span = span.into();
+                        assert!(span.start <= span.end, "invalid match span");
+                        Match { pattern, span }
+                    }
+                
+                    /// Create a new match from a pattern ID and a byte offset span.
+                    #[inline]
+                    pub fn must<S: Into<Span>>(pattern: usize, span: S) -> Match {
+                        Match::new(PatternID::must(pattern), span)
+                    }
+                
+                    /// Returns the ID of the pattern that matched.
+                    #[inline]
+                    pub fn pattern(&self) -> PatternID {
+                        self.pattern
+                    }
+                
+                    /// The starting position of the match.
+                    #[inline]
+                    pub fn start(&self) -> usize {
+                        self.span().start
+                    }
+                
+                    /// The ending position of the match.
+                    #[inline]
+                    pub fn end(&self) -> usize {
+                        self.span().end
+                    }
+                
+                    /// Returns the match span as a range.
+                    #[inline]
+                    pub fn range(&self) -> ::ops::Range<usize> {
+                        self.span().range()
+                    }
+                
+                    /// Returns the span for this match.
+                    #[inline]
+                    pub fn span(&self) -> Span {
+                        self.span
+                    }
+                
+                    /// Returns true when the span in this match is empty.
+                    #[inline]
+                    pub fn is_empty(&self) -> bool {
+                        self.span().is_empty()
+                    }
+                
+                    /// Returns the length of this match.
+                    #[inline]
+                    pub fn len(&self) -> usize {
+                        self.span().len()
+                    }
+                }                
+                /// A set of `PatternID`s.
+                #[derive(Clone, Debug, Eq, PartialEq)]
+                pub struct PatternSet 
+                {
+                    /// The number of patterns set to 'true' in this set.
+                    len: usize,
+                    /// A map from PatternID to boolean of whether a pattern matches or not.
+                    which: ::boxed::Box<[bool]>,
+                }
+                
+                impl PatternSet {
+                    /// Create a new set of pattern identifiers with the given capacity.
+                    pub fn new(capacity: usize) -> PatternSet {
+                        assert!(
+                            capacity <= PatternID::LIMIT,
+                            "pattern set capacity exceeds limit of {}",
+                            PatternID::LIMIT,
+                        );
+                        PatternSet {
+                            len: 0,
+                            which: vec![false; capacity].into_boxed_slice(),
+                        }
+                    }
+                
+                    /// Clear this set such that it contains no pattern IDs.
+                    pub fn clear(&mut self) {
+                        self.len = 0;
+                        for matched in self.which.iter_mut() {
+                            *matched = false;
+                        }
+                    }
+                
+                    /// Return true if and only if the given pattern identifier is in this set.
+                    pub fn contains(&self, pid: PatternID) -> bool {
+                        pid.as_usize() < self.capacity() && self.which[pid]
+                    }
+                
+                    /// Insert the given pattern identifier into this set and return `true` if
+                    /// the given pattern ID was not previously in this set.
+                    pub fn insert(&mut self, pid: PatternID) -> bool {
+                        self.try_insert(pid)
+                            .expect("PatternSet should have sufficient capacity")
+                    }
+                
+                    /// Insert the given pattern identifier into this set and return `true` if
+                    /// the given pattern ID was not previously in this set.
+                    pub fn try_insert(
+                        &mut self,
+                        pid: PatternID,
+                    ) -> Result<bool, PatternSetInsertError> {
+                        if pid.as_usize() >= self.capacity() {
+                            return Err(PatternSetInsertError {
+                                attempted: pid,
+                                capacity: self.capacity(),
+                            });
+                        }
+                        if self.which[pid] {
+                            return Ok(false);
+                        }
+                        self.len += 1;
+                        self.which[pid] = true;
+                        Ok(true)
+                    }
+                
+                    /// Return true if and only if this set has no pattern identifiers in it.
+                    pub fn is_empty(&self) -> bool {
+                        self.len() == 0
+                    }
+                
+                    /// Return true if and only if this set has the maximum number of pattern
+                    /// identifiers in the set.
+                    pub fn is_full(&self) -> bool {
+                        self.len() == self.capacity()
+                    }
+                
+                    /// Returns the total number of pattern identifiers in this set.
+                    pub fn len(&self) -> usize {
+                        self.len
+                    }
+                
+                    /// Returns the total number of pattern identifiers that may be stored
+                    /// in this set.
+                    pub fn capacity(&self) -> usize {
+                        self.which.len()
+                    }
+                
+                    /// Returns an iterator over all pattern identifiers in this set.
+                    pub fn iter(&self) -> PatternSetIter<'_> {
+                        PatternSetIter { it: self.which.iter().enumerate() }
+                    }
+                }
+                
+                /// An error that occurs when a `PatternID` failed to insert into a
+                /// `PatternSet`.
+                #[derive(Clone, Debug)]
+                pub struct PatternSetInsertError {
+                    attempted: PatternID,
+                    capacity: usize,
+                }
+                
+                impl ::error::Error for PatternSetInsertError {}
+                
+                impl ::fmt::Display for PatternSetInsertError {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
+                        write!(
+                            f,
+                            "failed to insert pattern ID {} into pattern set \
+                             with insufficiet capacity of {}",
+                            self.attempted.as_usize(),
+                            self.capacity,
+                        )
+                    }
+                }
+                
+                /// An iterator over all pattern identifiers in a [`PatternSet`].
+                #[derive(Clone, Debug)]
+                pub struct PatternSetIter<'a> {
+                    it: ::iter::Enumerate<::slice::Iter<'a, bool>>,
+                }
+                
+                impl<'a> Iterator for PatternSetIter<'a> {
+                    type Item = PatternID;
+                
+                    fn next(&mut self) -> Option<PatternID> {
+                        while let Some((index, &yes)) = self.it.next() {
+                            if yes {
+                                return Some(PatternID::new_unchecked(index));
+                            }
+                        }
+                        None
+                    }
+                
+                    fn size_hint(&self) -> (usize, Option<usize>) {
+                        self.it.size_hint()
+                    }
+                }
+                
+                impl<'a> DoubleEndedIterator for PatternSetIter<'a> {
+                    fn next_back(&mut self) -> Option<PatternID> {
+                        while let Some((index, &yes)) = self.it.next_back() {
+                            if yes {
+                                return Some(PatternID::new_unchecked(index));
+                            }
+                        }
+                        None
+                    }
+                }
+                /// The type of anchored search to perform.
+                #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+                pub enum Anchored 
+                {
+                    /// Run an unanchored search.
+                    ///
+                    /// This search can return a match for any pattern in the regex.
+                    No,
+                    /// Run an anchored search.
+                    ///
+                    /// This search can return a match for any pattern in the regex.
+                    Yes,
+                    /// Run an anchored search for a specific pattern.
+                    Pattern(PatternID),
+                }
+                
+                impl Anchored 
+                {
+                    /// Returns true if and only if this anchor mode corresponds to any kind of anchored search.
+                    #[inline] pub fn is_anchored(&self) -> bool 
+                    {
+                        matches!(*self, Anchored::Yes | Anchored::Pattern(_))
+                    }
+                    /// Returns the pattern ID associated with this configuration if it is an anchored search for a specific pattern.
+                    #[inline]
+                    pub fn pattern(&self) -> Option<PatternID>
+                    {
+                        match *self {
+                            Anchored::Pattern(pid) => Some(pid),
+                            _ => None,
+                        }
+                    }
+                }
+                /// The kind of match semantics to use for a regex pattern.
+                #[non_exhaustive] #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+                pub enum MatchKind 
+                {
+                    /// Report all possible matches.
+                    All,
+                    /// Report only the leftmost matches.
+                    LeftmostFirst,
+                }
+                
+                impl MatchKind {
+                    pub fn continue_past_first_match(&self) -> bool {
+                        *self == MatchKind::All
+                    }
+                }
+                
+                impl Default for MatchKind {
+                    fn default() -> MatchKind {
+                        MatchKind::LeftmostFirst
+                    }
+                }
+                /// An error indicating that a search stopped before reporting whether a match exists or not.
+                #[derive(Clone, Debug, Eq, PartialEq)]
+                pub struct MatchError( ::boxed::Box<MatchErrorKind> );
+                
+                impl MatchError {
+                    /// Create a new error value with the given kind.
+                    pub fn new(kind: MatchErrorKind) -> MatchError {
+                        MatchError( ::boxed::Box::new(kind) )
+                    }
+                
+                    /// Returns a reference to the underlying error kind.
+                    pub fn kind(&self) -> &MatchErrorKind {
+                        &self.0
+                    }
+                
+                    /// Create a new "quit" error.
+                    pub fn quit(byte: u8, offset: usize) -> MatchError {
+                        MatchError::new(MatchErrorKind::Quit { byte, offset })
+                    }
+                
+                    /// Create a new "gave up" error.
+                    pub fn gave_up(offset: usize) -> MatchError {
+                        MatchError::new(MatchErrorKind::GaveUp { offset })
+                    }
+                
+                    /// Create a new "haystack too long" error.
+                    pub fn haystack_too_long(len: usize) -> MatchError {
+                        MatchError::new(MatchErrorKind::HaystackTooLong { len })
+                    }
+                
+                    /// Create a new "unsupported anchored" error.
+                    pub fn unsupported_anchored(mode: Anchored) -> MatchError {
+                        MatchError::new(MatchErrorKind::UnsupportedAnchored { mode })
+                    }
+                }
+                
+                /// The underlying kind of a [`MatchError`].
+                #[non_exhaustive]
+                #[derive(Clone, Debug, Eq, PartialEq)]
+                pub enum MatchErrorKind {
+                    /// The search saw a "quit" byte at which it was instructed to stop
+                    /// searching.
+                    Quit {
+                        /// The "quit" byte that was observed that caused the search to stop.
+                        byte: u8,
+                        /// The offset at which the quit byte was observed.
+                        offset: usize,
+                    },
+                    /// The search, based on heuristics, determined that it would be better
+                    /// to stop, typically to provide the caller an opportunity to use an
+                    /// alternative regex engine.
+                    GaveUp {
+                        /// The offset at which the search stopped.
+                        offset: usize,
+                    },
+                    /// This error occurs if the haystack given to the regex engine was too
+                    /// long to be searched.
+                    HaystackTooLong {
+                        /// The length of the haystack that exceeded the limit.
+                        len: usize,
+                    },
+                    /// An error indicating that a particular type of anchored search was
+                    /// requested, but that the regex engine does not support it.
+                    UnsupportedAnchored {
+                        /// The anchored mode given that is unsupported.
+                        mode: Anchored,
+                    },
+                }
+                
+                impl ::error::Error for MatchError {}
+                
+                impl ::fmt::Display for MatchError 
+                {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
+                        match *self.kind() 
+                        {
+                            MatchErrorKind::Quit { byte, offset } => write!
+                            (
+                                f,
+                                "quit search after observing byte {:?} at offset {}",
+                                DebugByte(byte),
+                                offset,
+                            ),
+                            MatchErrorKind::GaveUp { offset } => {
+                                write!(f, "gave up searching at offset {}", offset)
+                            }
+                            MatchErrorKind::HaystackTooLong { len } => {
+                                write!(f, "haystack of length {} is too long", len)
+                            }
+                            MatchErrorKind::UnsupportedAnchored { mode: Anchored::Yes } => {
+                                write!(f, "anchored searches are not supported or enabled")
+                            }
+                            MatchErrorKind::UnsupportedAnchored { mode: Anchored::No } => {
+                                write!(f, "unanchored searches are not supported or enabled")
+                            }
+                            MatchErrorKind::UnsupportedAnchored {
+                                mode: Anchored::Pattern(pid),
+                            } => 
+                            {
+                                write!
+                                (
+                                    f,
+                                    "anchored searches for a specific pattern ({}) are not supported or enabled",
+                                    pid.as_usize(),
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             pub mod sparse_set
             {
+                //1 This module defines a sparse set data structure.
                 use ::
                 {
                     *,
                 };
                 /*
+                use alloc::{vec, vec::Vec};
+                
+                use crate::util::primitives::StateID;
                 */
-            }
-
-            pub mod unicode_data
-            {
-                use ::
-                {
-                    *,
-                };
-                /*
-                */
+                /// A pairse of sparse sets.
+                #[derive(Clone, Debug)]
+                pub struct SparseSets {
+                    pub set1: SparseSet,
+                    pub set2: SparseSet,
+                }
+                
+                impl SparseSets {
+                    /// Create a new pair of sparse sets where each set has the given capacity.
+                    pub fn new(capacity: usize) -> SparseSets {
+                        SparseSets {
+                            set1: SparseSet::new(capacity),
+                            set2: SparseSet::new(capacity),
+                        }
+                    }
+                
+                    /// Resizes these sparse sets to have the new capacity given.
+                    #[inline]
+                    pub fn resize(&mut self, new_capacity: usize) {
+                        self.set1.resize(new_capacity);
+                        self.set2.resize(new_capacity);
+                    }
+                
+                    /// Clear both sparse sets.
+                    pub fn clear(&mut self) {
+                        self.set1.clear();
+                        self.set2.clear();
+                    }
+                
+                    /// Swap set1 with set2.
+                    pub fn swap(&mut self) {
+                        ::mem::swap(&mut self.set1, &mut self.set2);
+                    }
+                
+                    /// Returns the memory usage, in bytes, used by this pair of sparse sets.
+                    pub fn memory_usage(&self) -> usize {
+                        self.set1.memory_usage() + self.set2.memory_usage()
+                    }
+                }
+                
+                /// A sparse set used for representing ordered NFA states.
+                #[derive(Clone)]
+                pub struct SparseSet {
+                    /// The number of elements currently in this set.
+                    len: usize,
+                    /// Dense contains the ids in the order in which they were inserted.
+                    dense: Vec<StateID>,
+                    /// Sparse maps ids to their location in dense.
+                    sparse: Vec<StateID>,
+                }
+                
+                impl SparseSet {
+                    /// Create a new sparse set with the given capacity.
+                    #[inline]
+                    pub fn new(capacity: usize) -> SparseSet {
+                        let mut set = SparseSet { len: 0, dense: vec![], sparse: vec![] };
+                        set.resize(capacity);
+                        set
+                    }
+                
+                    /// Resizes this sparse set to have the new capacity given.
+                    #[inline]
+                    pub fn resize(&mut self, new_capacity: usize) {
+                        assert!(
+                            new_capacity <= StateID::LIMIT,
+                            "sparse set capacity cannot excced {:?}",
+                            StateID::LIMIT
+                        );
+                        self.clear();
+                        self.dense.resize(new_capacity, StateID::ZERO);
+                        self.sparse.resize(new_capacity, StateID::ZERO);
+                    }
+                
+                    /// Returns the capacity of this set.
+                    #[inline]
+                    pub fn capacity(&self) -> usize {
+                        self.dense.len()
+                    }
+                
+                    /// Returns the number of elements in this set.
+                    #[inline]
+                    pub fn len(&self) -> usize {
+                        self.len
+                    }
+                
+                    /// Returns true if and only if this set is empty.
+                    #[inline]
+                    pub fn is_empty(&self) -> bool {
+                        self.len() == 0
+                    }
+                
+                    /// Insert the state ID value into this set and return true if the given
+                    /// state ID was not previously in this set.
+                    #[inline( always )]
+                    pub fn insert(&mut self, id: StateID) -> bool {
+                        if self.contains(id) {
+                            return false;
+                        }
+                
+                        let i = self.len();
+                        assert!(
+                            i < self.capacity(),
+                            "{:?} exceeds capacity of {:?} when inserting {:?}",
+                            i,
+                            self.capacity(),
+                            id,
+                        );
+                        // OK since i < self.capacity() and self.capacity() is guaranteed to
+                        // be <= StateID::LIMIT.
+                        let index = StateID::new_unchecked(i);
+                        self.dense[index] = id;
+                        self.sparse[id] = index;
+                        self.len += 1;
+                        true
+                    }
+                
+                    /// Returns true if and only if this set contains the given value.
+                    #[inline]
+                    pub fn contains(&self, id: StateID) -> bool {
+                        let index = self.sparse[id];
+                        index.as_usize() < self.len() && self.dense[index] == id
+                    }
+                
+                    /// Clear this set such that it has no members.
+                    #[inline]
+                    pub fn clear(&mut self) {
+                        self.len = 0;
+                    }
+                
+                    #[inline]
+                    pub fn iter(&self) -> SparseSetIter<'_> {
+                        SparseSetIter(self.dense[..self.len()].iter())
+                    }
+                
+                    /// Returns the heap memory usage, in bytes, used by this sparse set.
+                    #[inline]
+                    pub fn memory_usage(&self) -> usize {
+                        self.dense.len() * StateID::SIZE + self.sparse.len() * StateID::SIZE
+                    }
+                }
+                
+                impl ::fmt::Debug for SparseSet {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
+                        let elements: Vec<StateID> = self.iter().collect();
+                        f.debug_tuple("SparseSet").field(&elements).finish()
+                    }
+                }
+                
+                /// An iterator over all elements in a sparse set.
+                #[derive(Debug)]
+                pub struct SparseSetIter<'a>(::slice::Iter<'a, StateID>);
+                
+                impl<'a> Iterator for SparseSetIter<'a> {
+                    type Item = StateID;
+                
+                    #[inline( always )]
+                    fn next(&mut self) -> Option<StateID> {
+                        self.0.next().map(|&id| id)
+                    }
+                }
             }
 
             pub mod utf8
             {
+                //! Utilities for dealing with UTF-8.
                 use ::
                 {
                     *,
                 };
                 /*
                 */
+                /// Returns true if and only if the given byte is considered a word character.
+                pub fn is_word_byte(b: u8) -> bool {
+                    const fn mkwordset() -> [bool; 256] {
+                        let mut set = [false; 256];
+                        set[b'_' as usize] = true;
+                
+                        let mut byte = b'0';
+                        while byte <= b'9' {
+                            set[byte as usize] = true;
+                            byte += 1;
+                        }
+                        byte = b'A';
+                        while byte <= b'Z' {
+                            set[byte as usize] = true;
+                            byte += 1;
+                        }
+                        byte = b'a';
+                        while byte <= b'z' {
+                            set[byte as usize] = true;
+                            byte += 1;
+                        }
+                        set
+                    }
+                    const WORD: [bool; 256] = mkwordset();
+                    WORD[b as usize]
+                }
+                
+                /// Decodes the next UTF-8 encoded codepoint from the given byte slice.
+                pub fn decode(bytes: &[u8]) -> Option<Result<char, u8>> {
+                    if bytes.is_empty() {
+                        return None;
+                    }
+                    let len = match len(bytes[0]) {
+                        None => return Some(Err(bytes[0])),
+                        Some(len) if len > bytes.len() => return Some(Err(bytes[0])),
+                        Some(1) => return Some(Ok(char::from(bytes[0]))),
+                        Some(len) => len,
+                    };
+                    match ::str::from_utf8(&bytes[..len]) {
+                        Ok(s) => Some(Ok(s.chars().next().unwrap())),
+                        Err(_) => Some(Err(bytes[0])),
+                    }
+                }
+                
+                /// Decodes the last UTF-8 encoded codepoint from the given byte slice.
+                pub fn decode_last(bytes: &[u8]) -> Option<Result<char, u8>> {
+                    if bytes.is_empty() {
+                        return None;
+                    }
+                    let mut start = bytes.len() - 1;
+                    let limit = bytes.len().saturating_sub(4);
+                    while start > limit && !is_leading_or_invalid_byte(bytes[start]) {
+                        start -= 1;
+                    }
+                    match decode(&bytes[start..]) {
+                        None => None,
+                        Some(Ok(ch)) => Some(Ok(ch)),
+                        Some(Err(_)) => Some(Err(bytes[bytes.len() - 1])),
+                    }
+                }
+                
+                /// Given a UTF-8 leading byte, this returns the total number of code units
+                /// in the following encoded codepoint.
+                fn len(byte: u8) -> Option<usize> {
+                    if byte <= 0x7F {
+                        return Some(1);
+                    } else if byte & 0b1100_0000 == 0b1000_0000 {
+                        return None;
+                    } else if byte <= 0b1101_1111 {
+                        Some(2)
+                    } else if byte <= 0b1110_1111 {
+                        Some(3)
+                    } else if byte <= 0b1111_0111 {
+                        Some(4)
+                    } else {
+                        None
+                    }
+                }
+                
+                /// Returns true if and only if the given offset in the given bytes falls on a
+                /// valid UTF-8 encoded codepoint boundary.
+                pub fn is_boundary(bytes: &[u8], i: usize) -> bool {
+                    match bytes.get(i) {
+                        None => i == bytes.len(),
+                        Some(&b) => b <= 0b0111_1111 || b >= 0b1100_0000,
+                    }
+                }
+                
+                /// Returns true if and only if the given byte is either a valid leading UTF-8
+                /// byte, or is otherwise an invalid byte that can never appear anywhere in a
+                /// valid UTF-8 sequence.
+                fn is_leading_or_invalid_byte(b: u8) -> bool {
+                    (b & 0b1100_0000) != 0b1000_0000
+                }
             }
         }
     }
@@ -4567,7 +11872,7 @@ pub mod regex
             *,
         };
         /*
-        use alloc::{
+        use ::{
             string::{String, ToString},
             sync::Arc,
             vec,
@@ -5150,7 +12455,7 @@ pub mod regex
             *,
         };
         /*
-        use alloc::string::{String, ToString};
+        use ::string::{String, ToString};
         
         use regex_automata::meta;
         */
@@ -5188,7 +12493,7 @@ pub mod regex
         }
         
         impl ::fmt::Display for Error {
-            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result {
                 match *self {
                     Error::Syntax(ref err) => err.fmt(f),
                     Error::CompiledTooBig(limit) => write!(
@@ -5255,7 +12560,7 @@ pub mod regex
                 *,
             };
             /*
-            use alloc::{borrow::Cow, string::String, sync::Arc, vec::Vec};
+            use ::{borrow::Cow, string::String, sync::Arc, vec::Vec};
             
             use regex_automata::{meta, util::captures, Input, PatternID};
             
@@ -5268,21 +12573,21 @@ pub mod regex
                 pub pattern: Arc<str>,
             }
             
-            impl core::fmt::Display for Regex {
+            impl ::fmt::Display for Regex {
                 /// Shows the original regular expression.
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result {
                     write!(f, "{}", self.as_str())
                 }
             }
             
-            impl core::fmt::Debug for Regex {
+            impl ::fmt::Debug for Regex {
                 /// Shows the original regular expression.
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result {
                     f.debug_tuple("Regex").field(&self.as_str()).finish()
                 }
             }
             
-            impl core::str::FromStr for Regex {
+            impl ::str::FromStr for Regex {
                 type Err = Error;
             
                 /// Attempts to parse a string into a regular expression
@@ -5311,8 +12616,7 @@ pub mod regex
             
             /// Core regular expression methods.
             impl Regex {
-                /// Compiles a regular expression. Once compiled, it can be used repeatedly
-                /// to search, split or replace substrings in a haystack.
+                /// Compiles a regular expression.
                 pub fn new(re: &str) -> Result<Regex, Error> {
                     RegexBuilder::new(re).build()
                 }
@@ -5621,7 +12925,7 @@ pub mod regex
                 /// Returns the range over the starting and ending byte offsets of the
                 /// match in the haystack.
                 #[inline]
-                pub fn range(&self) -> core::ops::Range<usize> {
+                pub fn range(&self) -> ::ops::Range<usize> {
                     self.start..self.end
                 }
             
@@ -5638,8 +12942,8 @@ pub mod regex
                 }
             }
             
-            impl<'h> core::fmt::Debug for Match<'h> {
-                fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+            impl<'h> ::fmt::Debug for Match<'h> {
+                fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
                     use regex_automata::util::escape::DebugHaystack;
             
                     let mut fmt = f.debug_struct("Match");
@@ -5657,8 +12961,8 @@ pub mod regex
                 }
             }
             
-            impl<'h> From<Match<'h>> for core::ops::Range<usize> {
-                fn from(m: Match<'h>) -> core::ops::Range<usize> {
+            impl<'h> From<Match<'h>> for ::ops::Range<usize> {
+                fn from(m: Match<'h>) -> ::ops::Range<usize> {
                     m.range()
                 }
             }
@@ -5721,16 +13025,16 @@ pub mod regex
                 }
             }
             
-            impl<'h> core::fmt::Debug for Captures<'h> {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl<'h> ::fmt::Debug for Captures<'h> {
+                fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result {
                     /// A little helper type to provide a nice map-like debug
                     /// representation for our capturing group spans.
                     struct CapturesDebugMap<'a> {
                         caps: &'a Captures<'a>,
                     }
             
-                    impl<'a> core::fmt::Debug for CapturesDebugMap<'a> {
-                        fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                    impl<'a> ::fmt::Debug for CapturesDebugMap<'a> {
+                        fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
                             let mut map = f.debug_map();
                             let names =
                                 self.caps.caps.group_info().pattern_names(PatternID::ZERO);
@@ -5747,8 +13051,8 @@ pub mod regex
             
                     struct Key<'a>(usize, Option<&'a str>);
             
-                    impl<'a> core::fmt::Debug for Key<'a> {
-                        fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                    impl<'a> ::fmt::Debug for Key<'a> {
+                        fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
                             write!(f, "{}", self.0)?;
                             if let Some(name) = self.1 {
                                 write!(f, "/{:?}", name)?;
@@ -5759,8 +13063,8 @@ pub mod regex
             
                     struct Value<'a>(Match<'a>);
             
-                    impl<'a> core::fmt::Debug for Value<'a> {
-                        fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                    impl<'a> ::fmt::Debug for Value<'a> {
+                        fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
                             use regex_automata::util::escape::DebugHaystack;
             
                             write!(
@@ -5780,7 +13084,7 @@ pub mod regex
             }
             
             /// Get a matching capture group's haystack substring by index.
-            impl<'h> core::ops::Index<usize> for Captures<'h> {
+            impl<'h> ::ops::Index<usize> for Captures<'h> {
                 type Output = [u8];
                 fn index<'a>(&'a self, i: usize) -> &'a [u8] {
                     self.get(i)
@@ -5790,7 +13094,7 @@ pub mod regex
             }
             
             /// Get a matching capture group's haystack substring by name.
-            impl<'h, 'n> core::ops::Index<&'n str> for Captures<'h> {
+            impl<'h, 'n> ::ops::Index<&'n str> for Captures<'h> {
                 type Output = [u8];
             
                 fn index<'a>(&'a self, name: &'n str) -> &'a [u8] {
@@ -5817,7 +13121,6 @@ pub mod regex
                 }
             
                 /// Returns the total number of capture groups (even if they didn't match).
-                /// That is, the length returned is unaffected by the result of a search.
                 #[inline]
                 pub fn len(&self) -> usize {
                     self.0.group_info().group_len(PatternID::ZERO)
@@ -5854,7 +13157,7 @@ pub mod regex
                 }
             }
             
-            impl<'r, 'h> core::iter::FusedIterator for Matches<'r, 'h> {}
+            impl<'r, 'h> ::iter::FusedIterator for Matches<'r, 'h> {}
             
             /// An iterator over all non-overlapping capture matches in a haystack.
             #[derive(Debug)]
@@ -5882,7 +13185,7 @@ pub mod regex
                 }
             }
             
-            impl<'r, 'h> core::iter::FusedIterator for CaptureMatches<'r, 'h> {}
+            impl<'r, 'h> ::iter::FusedIterator for CaptureMatches<'r, 'h> {}
             
             /// An iterator over all substrings delimited by a regex match.
             #[derive(Debug)]
@@ -5900,7 +13203,7 @@ pub mod regex
                 }
             }
             
-            impl<'r, 'h> core::iter::FusedIterator for Split<'r, 'h> {}
+            impl<'r, 'h> ::iter::FusedIterator for Split<'r, 'h> {}
             
             /// An iterator over at most `N` substrings delimited by a regex match.
             #[derive(Debug)]
@@ -5923,7 +13226,7 @@ pub mod regex
                 }
             }
             
-            impl<'r, 'h> core::iter::FusedIterator for SplitN<'r, 'h> {}
+            impl<'r, 'h> ::iter::FusedIterator for SplitN<'r, 'h> {}
             
             /// An iterator over the names of all capture groups in a regex.
             #[derive(Clone, Debug)]
@@ -5950,7 +13253,7 @@ pub mod regex
             
             impl<'r> ExactSizeIterator for CaptureNames<'r> {}
             
-            impl<'r> core::iter::FusedIterator for CaptureNames<'r> {}
+            impl<'r> ::iter::FusedIterator for CaptureNames<'r> {}
             
             /// An iterator over all group matches in a [`Captures`] value.
             #[derive(Clone, Debug)]
@@ -5982,7 +13285,7 @@ pub mod regex
             
             impl<'c, 'h> ExactSizeIterator for SubCaptureMatches<'c, 'h> {}
             
-            impl<'c, 'h> core::iter::FusedIterator for SubCaptureMatches<'c, 'h> {}
+            impl<'c, 'h> ::iter::FusedIterator for SubCaptureMatches<'c, 'h> {}
             
             /// A trait for types that can be used to replace matches in a haystack.
             pub trait Replacer {
@@ -6127,7 +13430,7 @@ pub mod regex
                 *,
             };
             /*
-            use alloc::{borrow::Cow, string::String, sync::Arc};
+            use ::{borrow::Cow, string::String, sync::Arc};
             
             use regex_automata::{meta, util::captures, Input, PatternID};
             
@@ -6140,21 +13443,21 @@ pub mod regex
                 pub pattern: Arc<str>,
             }
             
-            impl core::fmt::Display for Regex {
+            impl ::fmt::Display for Regex {
                 /// Shows the original regular expression.
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result {
                     write!(f, "{}", self.as_str())
                 }
             }
             
-            impl core::fmt::Debug for Regex {
+            impl ::fmt::Debug for Regex {
                 /// Shows the original regular expression.
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result {
                     f.debug_tuple("Regex").field(&self.as_str()).finish()
                 }
             }
             
-            impl core::str::FromStr for Regex {
+            impl ::str::FromStr for Regex {
                 type Err = Error;
             
                 /// Attempts to parse a string into a regular expression
@@ -6183,8 +13486,7 @@ pub mod regex
             
             /// Core regular expression methods.
             impl Regex {
-                /// Compiles a regular expression. Once compiled, it can be used repeatedly
-                /// to search, split or replace substrings in a haystack.
+                /// Compiles a regular expression.
                 pub fn new(re: &str) -> Result<Regex, Error> {
                     RegexBuilder::new(re).build()
                 }
@@ -6496,7 +13798,7 @@ pub mod regex
                 /// Returns the range over the starting and ending byte offsets of the
                 /// match in the haystack.
                 #[inline]
-                pub fn range(&self) -> core::ops::Range<usize> {
+                pub fn range(&self) -> ::ops::Range<usize> {
                     self.start..self.end
                 }
             
@@ -6513,8 +13815,8 @@ pub mod regex
                 }
             }
             
-            impl<'h> core::fmt::Debug for Match<'h> {
-                fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+            impl<'h> ::fmt::Debug for Match<'h> {
+                fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
                     f.debug_struct("Match")
                         .field("start", &self.start)
                         .field("end", &self.end)
@@ -6529,8 +13831,8 @@ pub mod regex
                 }
             }
             
-            impl<'h> From<Match<'h>> for core::ops::Range<usize> {
-                fn from(m: Match<'h>) -> core::ops::Range<usize> {
+            impl<'h> From<Match<'h>> for ::ops::Range<usize> {
+                fn from(m: Match<'h>) -> ::ops::Range<usize> {
                     m.range()
                 }
             }
@@ -6593,16 +13895,16 @@ pub mod regex
                 }
             }
             
-            impl<'h> core::fmt::Debug for Captures<'h> {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl<'h> ::fmt::Debug for Captures<'h> {
+                fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result {
                     /// A little helper type to provide a nice map-like debug
                     /// representation for our capturing group spans.
                     struct CapturesDebugMap<'a> {
                         caps: &'a Captures<'a>,
                     }
             
-                    impl<'a> core::fmt::Debug for CapturesDebugMap<'a> {
-                        fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                    impl<'a> ::fmt::Debug for CapturesDebugMap<'a> {
+                        fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
                             let mut map = f.debug_map();
                             let names =
                                 self.caps.caps.group_info().pattern_names(PatternID::ZERO);
@@ -6619,8 +13921,8 @@ pub mod regex
             
                     struct Key<'a>(usize, Option<&'a str>);
             
-                    impl<'a> core::fmt::Debug for Key<'a> {
-                        fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                    impl<'a> ::fmt::Debug for Key<'a> {
+                        fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
                             write!(f, "{}", self.0)?;
                             if let Some(name) = self.1 {
                                 write!(f, "/{:?}", name)?;
@@ -6631,8 +13933,8 @@ pub mod regex
             
                     struct Value<'a>(Match<'a>);
             
-                    impl<'a> core::fmt::Debug for Value<'a> {
-                        fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                    impl<'a> ::fmt::Debug for Value<'a> {
+                        fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
                             write!(
                                 f,
                                 "{}..{}/{:?}",
@@ -6650,7 +13952,7 @@ pub mod regex
             }
             
             /// Get a matching capture group's haystack substring by index.
-            impl<'h> core::ops::Index<usize> for Captures<'h> {
+            impl<'h> ::ops::Index<usize> for Captures<'h> {
                 type Output = str;
                 fn index<'a>(&'a self, i: usize) -> &'a str {
                     self.get(i)
@@ -6660,7 +13962,7 @@ pub mod regex
             }
             
             /// Get a matching capture group's haystack substring by name.
-            impl<'h, 'n> core::ops::Index<&'n str> for Captures<'h> {
+            impl<'h, 'n> ::ops::Index<&'n str> for Captures<'h> {
                 type Output = str;
             
                 fn index<'a>(&'a self, name: &'n str) -> &'a str {
@@ -6723,7 +14025,7 @@ pub mod regex
                 }
             }
             
-            impl<'r, 'h> core::iter::FusedIterator for Matches<'r, 'h> {}
+            impl<'r, 'h> ::iter::FusedIterator for Matches<'r, 'h> {}
             
             /// An iterator over all non-overlapping capture matches in a haystack.
             #[derive(Debug)]
@@ -6751,7 +14053,7 @@ pub mod regex
                 }
             }
             
-            impl<'r, 'h> core::iter::FusedIterator for CaptureMatches<'r, 'h> {}
+            impl<'r, 'h> ::iter::FusedIterator for CaptureMatches<'r, 'h> {}
             
             /// An iterator over all substrings delimited by a regex match.
             #[derive(Debug)]
@@ -6769,7 +14071,7 @@ pub mod regex
                 }
             }
             
-            impl<'r, 'h> core::iter::FusedIterator for Split<'r, 'h> {}
+            impl<'r, 'h> ::iter::FusedIterator for Split<'r, 'h> {}
             
             /// An iterator over at most `N` substrings delimited by a regex match.
             #[derive(Debug)]
@@ -6792,7 +14094,7 @@ pub mod regex
                 }
             }
             
-            impl<'r, 'h> core::iter::FusedIterator for SplitN<'r, 'h> {}
+            impl<'r, 'h> ::iter::FusedIterator for SplitN<'r, 'h> {}
             
             /// An iterator over the names of all capture groups in a regex.
             #[derive(Clone, Debug)]
@@ -6819,7 +14121,7 @@ pub mod regex
             
             impl<'r> ExactSizeIterator for CaptureNames<'r> {}
             
-            impl<'r> core::iter::FusedIterator for CaptureNames<'r> {}
+            impl<'r> ::iter::FusedIterator for CaptureNames<'r> {}
             
             /// An iterator over all group matches in a [`Captures`] value.
             #[derive(Clone, Debug)]
@@ -6851,7 +14153,7 @@ pub mod regex
             
             impl<'c, 'h> ExactSizeIterator for SubCaptureMatches<'c, 'h> {}
             
-            impl<'c, 'h> core::iter::FusedIterator for SubCaptureMatches<'c, 'h> {}
+            impl<'c, 'h> ::iter::FusedIterator for SubCaptureMatches<'c, 'h> {}
             
             /// A trait for types that can be used to replace matches in a haystack.
             pub trait Replacer {
@@ -6985,7 +14287,7 @@ pub mod regex
                 *,
             };
             /*
-            use alloc::string::String;
+            use ::string::String;
             
             use regex_automata::{meta, Input, PatternID, PatternSet, PatternSetIter};
             
@@ -6995,7 +14297,7 @@ pub mod regex
             #[derive(Clone)]
             pub struct RegexSet {
                 pub meta: meta::Regex,
-                pub patterns: alloc::sync::Arc<[String]>,
+                pub patterns: ::sync::Arc<[String]>,
             }
             
             impl RegexSet {
@@ -7158,7 +14460,7 @@ pub mod regex
             #[derive(Debug)]
             pub struct SetMatchesIntoIter {
                 patset: PatternSet,
-                it: core::ops::Range<usize>,
+                it: ::ops::Range<usize>,
             }
             
             impl Iterator for SetMatchesIntoIter {
@@ -7189,18 +14491,9 @@ pub mod regex
                 }
             }
             
-            impl core::iter::FusedIterator for SetMatchesIntoIter {}
+            impl ::iter::FusedIterator for SetMatchesIntoIter {}
             
             /// A borrowed iterator over the set of matches from a regex set.
-            ///
-            /// The lifetime `'a` refers to the lifetime of the [`SetMatches`] value that
-            /// created this iterator.
-            ///
-            /// This will always produces matches in ascending order, where the index
-            /// corresponds to the index of the regex that matched with respect to its
-            /// position when initially building the set.
-            ///
-            /// This iterator is created by the [`SetMatches::iter`] method.
             #[derive(Clone, Debug)]
             pub struct SetMatchesIter<'a>(PatternSetIter<'a>);
             
@@ -7222,10 +14515,10 @@ pub mod regex
                 }
             }
             
-            impl<'a> core::iter::FusedIterator for SetMatchesIter<'a> {}
+            impl<'a> ::iter::FusedIterator for SetMatchesIter<'a> {}
             
-            impl core::fmt::Debug for RegexSet {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::fmt::Debug for RegexSet {
+                fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result {
                     write!(f, "RegexSet({:?})", self.patterns())
                 }
             }
@@ -7238,7 +14531,7 @@ pub mod regex
                 *,
             };
             /*
-            use alloc::string::String;
+            use ::string::String;
             
             use regex_automata::{meta, Input, PatternID, PatternSet, PatternSetIter};
             
@@ -7248,7 +14541,7 @@ pub mod regex
             #[derive(Clone)]
             pub struct RegexSet {
                 pub meta: meta::Regex,
-                pub patterns: alloc::sync::Arc<[String]>,
+                pub patterns: ::sync::Arc<[String]>,
             }
             
             impl RegexSet {
@@ -7411,7 +14704,7 @@ pub mod regex
             #[derive(Debug)]
             pub struct SetMatchesIntoIter {
                 patset: PatternSet,
-                it: core::ops::Range<usize>,
+                it: ::ops::Range<usize>,
             }
             
             impl Iterator for SetMatchesIntoIter {
@@ -7442,7 +14735,7 @@ pub mod regex
                 }
             }
             
-            impl core::iter::FusedIterator for SetMatchesIntoIter {}
+            impl ::iter::FusedIterator for SetMatchesIntoIter {}
             
             /// A borrowed iterator over the set of matches from a regex set.
             #[derive(Clone, Debug)]
@@ -7466,10 +14759,10 @@ pub mod regex
                 }
             }
             
-            impl<'a> core::iter::FusedIterator for SetMatchesIter<'a> {}
+            impl<'a> ::iter::FusedIterator for SetMatchesIter<'a> {}
             
-            impl core::fmt::Debug for RegexSet {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            impl ::fmt::Debug for RegexSet {
+                fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result {
                     write!(f, "RegexSet({:?})", self.patterns())
                 }
             }
@@ -7490,16 +14783,16 @@ pub mod rusqlite
     /*
     pub use libsqlite3_sys as ffi;
     
-    use std::cell::RefCell;
-    use std::default::Default;
-    use std::ffi::{CStr, CString};
-    use std::fmt;
-    use std::os::raw::{c_char, c_int};
+    use ::cell::RefCell;
+    use ::default::Default;
+    use ::ffi::{CStr, CString};
+    use ::fmt;
+    use ::os::raw::{c_char, c_int};
     
-    use std::path::Path;
-    use std::result;
-    use std::str;
-    use std::sync::{Arc, Mutex};
+    use ::path::Path;
+    use ::result;
+    use ::str;
+    use ::sync::{Arc, Mutex};
     
     use crate::cache::StatementCache;
     use crate::inner_connection::InnerConnection;
@@ -7533,7 +14826,7 @@ pub mod rusqlite
             *,
         };
         /*
-        use std::mem;
+        use ::mem;
         */
         mod error
         {
@@ -7542,9 +14835,9 @@ pub mod rusqlite
                 *,
             };
             /*
-            use std::error;
-            use std::fmt;
-            use std::os::raw::c_int;
+            use ::error;
+            use ::fmt;
+            use ::os::raw::c_int;
             */
             /// Error Codes
             #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -7820,8 +15113,8 @@ pub mod rusqlite
                 NullFunctionPointer,
             }
             
-            impl ::std::fmt::Display for InitError {
-                fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+            impl ::fmt::Display for InitError {
+                fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
                     match *self {
                         InitError::VersionMismatch {
                             compile_time,
@@ -7842,27 +15135,27 @@ pub mod rusqlite
         extern "C"
         {
             pub fn sqlite3_auto_extension(
-                xEntryPoint: ::std::option::Option<
+                xEntryPoint: ::option::Option<
                     unsafe extern "C" fn(
                         db: *mut sqlite3,
-                        pzErrMsg: *mut *mut ::std::os::raw::c_char,
+                        pzErrMsg: *mut *mut ::os::raw::c_char,
                         _: *const sqlite3_api_routines,
-                    ) -> ::std::os::raw::c_int,
+                    ) -> ::os::raw::c_int,
                 >,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         
         extern "C"
         {
             pub fn sqlite3_cancel_auto_extension(
-                xEntryPoint: ::std::option::Option<
+                xEntryPoint: ::option::Option<
                     unsafe extern "C" fn(
                         db: *mut sqlite3,
-                        pzErrMsg: *mut *mut ::std::os::raw::c_char,
+                        pzErrMsg: *mut *mut ::os::raw::c_char,
                         _: *const sqlite3_api_routines,
-                    ) -> ::std::os::raw::c_int,
+                    ) -> ::os::raw::c_int,
                 >,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         
         pub const SQLITE_VERSION: &[u8; 7] = b"3.46.0\0";
@@ -8177,9 +15470,9 @@ pub mod rusqlite
         pub const SQLITE_LIMIT_VARIABLE_NUMBER: i32 = 9;
         pub const SQLITE_LIMIT_TRIGGER_DEPTH: i32 = 10;
         pub const SQLITE_LIMIT_WORKER_THREADS: i32 = 11;
-        pub const SQLITE_PREPARE_PERSISTENT: ::std::os::raw::c_uint = 1;
-        pub const SQLITE_PREPARE_NORMALIZE: ::std::os::raw::c_uint = 2;
-        pub const SQLITE_PREPARE_NO_VTAB: ::std::os::raw::c_uint = 4;
+        pub const SQLITE_PREPARE_PERSISTENT: ::os::raw::c_uint = 1;
+        pub const SQLITE_PREPARE_NORMALIZE: ::os::raw::c_uint = 2;
+        pub const SQLITE_PREPARE_NO_VTAB: ::os::raw::c_uint = 4;
         pub const SQLITE_INTEGER: i32 = 1;
         pub const SQLITE_FLOAT: i32 = 2;
         pub const SQLITE_BLOB: i32 = 4;
@@ -8326,10 +15619,10 @@ pub mod rusqlite
         pub const SQLITE_SCANSTAT_PARENTID: i32 = 6;
         pub const SQLITE_SCANSTAT_NCYCLE: i32 = 7;
         pub const SQLITE_SCANSTAT_COMPLEX: i32 = 1;
-        pub const SQLITE_SERIALIZE_NOCOPY: ::std::os::raw::c_uint = 1;
-        pub const SQLITE_DESERIALIZE_FREEONCLOSE: ::std::os::raw::c_uint = 1;
-        pub const SQLITE_DESERIALIZE_RESIZEABLE: ::std::os::raw::c_uint = 2;
-        pub const SQLITE_DESERIALIZE_READONLY: ::std::os::raw::c_uint = 4;
+        pub const SQLITE_SERIALIZE_NOCOPY: ::os::raw::c_uint = 1;
+        pub const SQLITE_DESERIALIZE_FREEONCLOSE: ::os::raw::c_uint = 1;
+        pub const SQLITE_DESERIALIZE_RESIZEABLE: ::os::raw::c_uint = 2;
+        pub const SQLITE_DESERIALIZE_READONLY: ::os::raw::c_uint = 4;
         pub const NOT_WITHIN: i32 = 0;
         pub const PARTLY_WITHIN: i32 = 1;
         pub const FULLY_WITHIN: i32 = 2;
@@ -8355,63 +15648,63 @@ pub mod rusqlite
         pub const FTS5_TOKENIZE_AUX: i32 = 8;
         pub const FTS5_TOKEN_COLOCATED: i32 = 1;
         extern "C" {
-            pub static sqlite3_version: [::std::os::raw::c_char; 0usize];
+            pub static sqlite3_version: [:: ::os::raw::c_char; 0usize];
         }
         extern "C" {
-            pub fn sqlite3_libversion() -> *const ::std::os::raw::c_char;
+            pub fn sqlite3_libversion() -> *const ::os::raw::c_char;
         }
         extern "C" {
-            pub fn sqlite3_sourceid() -> *const ::std::os::raw::c_char;
+            pub fn sqlite3_sourceid() -> *const ::os::raw::c_char;
         }
         extern "C" {
-            pub fn sqlite3_libversion_number() -> ::std::os::raw::c_int;
+            pub fn sqlite3_libversion_number() -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_compileoption_used(
-                zOptName: *const ::std::os::raw::c_char,
-            ) -> ::std::os::raw::c_int;
+                zOptName: *const ::os::raw::c_char,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_compileoption_get(N: ::std::os::raw::c_int) -> *const ::std::os::raw::c_char;
+            pub fn sqlite3_compileoption_get(N: ::os::raw::c_int) -> *const ::os::raw::c_char;
         }
         extern "C" {
-            pub fn sqlite3_threadsafe() -> ::std::os::raw::c_int;
+            pub fn sqlite3_threadsafe() -> ::os::raw::c_int;
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
         pub struct sqlite3 {
             _unused: [u8; 0],
         }
-        pub type sqlite_int64 = ::std::os::raw::c_longlong;
-        pub type sqlite_uint64 = ::std::os::raw::c_ulonglong;
+        pub type sqlite_int64 = ::os::raw::c_longlong;
+        pub type sqlite_uint64 = ::os::raw::c_ulonglong;
         pub type sqlite3_int64 = sqlite_int64;
         pub type sqlite3_uint64 = sqlite_uint64;
         extern "C" {
-            pub fn sqlite3_close(arg1: *mut sqlite3) -> ::std::os::raw::c_int;
+            pub fn sqlite3_close(arg1: *mut sqlite3) -> ::os::raw::c_int;
         }
-        pub type sqlite3_callback = ::std::option::Option<
+        pub type sqlite3_callback = ::option::Option<
             unsafe extern "C" fn(
-                arg1: *mut ::std::os::raw::c_void,
-                arg2: ::std::os::raw::c_int,
-                arg3: *mut *mut ::std::os::raw::c_char,
-                arg4: *mut *mut ::std::os::raw::c_char,
-            ) -> ::std::os::raw::c_int,
+                arg1: *mut ::os::raw::c_void,
+                arg2: ::os::raw::c_int,
+                arg3: *mut *mut ::os::raw::c_char,
+                arg4: *mut *mut ::os::raw::c_char,
+            ) -> ::os::raw::c_int,
         >;
         extern "C" {
             pub fn sqlite3_exec(
                 arg1: *mut sqlite3,
-                sql: *const ::std::os::raw::c_char,
-                callback: ::std::option::Option<
+                sql: *const ::os::raw::c_char,
+                callback: ::option::Option<
                     unsafe extern "C" fn(
-                        arg1: *mut ::std::os::raw::c_void,
-                        arg2: ::std::os::raw::c_int,
-                        arg3: *mut *mut ::std::os::raw::c_char,
-                        arg4: *mut *mut ::std::os::raw::c_char,
-                    ) -> ::std::os::raw::c_int,
+                        arg1: *mut ::os::raw::c_void,
+                        arg2: ::os::raw::c_int,
+                        arg3: *mut *mut ::os::raw::c_char,
+                        arg4: *mut *mut ::os::raw::c_char,
+                    ) -> ::os::raw::c_int,
                 >,
-                arg2: *mut ::std::os::raw::c_void,
-                errmsg: *mut *mut ::std::os::raw::c_char,
-            ) -> ::std::os::raw::c_int;
+                arg2: *mut ::os::raw::c_void,
+                errmsg: *mut *mut ::os::raw::c_char,
+            ) -> ::os::raw::c_int;
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
@@ -8421,110 +15714,110 @@ pub mod rusqlite
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
         pub struct sqlite3_io_methods {
-            pub iVersion: ::std::os::raw::c_int,
-            pub xClose: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut sqlite3_file) -> ::std::os::raw::c_int,
+            pub iVersion: ::os::raw::c_int,
+            pub xClose: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut sqlite3_file) -> ::os::raw::c_int,
             >,
-            pub xRead: ::std::option::Option<
+            pub xRead: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_file,
-                    arg2: *mut ::std::os::raw::c_void,
-                    iAmt: ::std::os::raw::c_int,
+                    arg2: *mut ::os::raw::c_void,
+                    iAmt: ::os::raw::c_int,
                     iOfst: sqlite3_int64,
-                ) -> ::std::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xWrite: ::std::option::Option<
+            pub xWrite: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_file,
-                    arg2: *const ::std::os::raw::c_void,
-                    iAmt: ::std::os::raw::c_int,
+                    arg2: *const ::os::raw::c_void,
+                    iAmt: ::os::raw::c_int,
                     iOfst: sqlite3_int64,
-                ) -> ::std::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xTruncate: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut sqlite3_file, size: sqlite3_int64) -> ::std::os::raw::c_int,
+            pub xTruncate: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut sqlite3_file, size: sqlite3_int64) -> ::os::raw::c_int,
             >,
-            pub xSync: ::std::option::Option<
+            pub xSync: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_file,
-                    flags: ::std::os::raw::c_int,
-                ) -> ::std::os::raw::c_int,
+                    flags: ::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xFileSize: ::std::option::Option<
+            pub xFileSize: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_file,
                     pSize: *mut sqlite3_int64,
-                ) -> ::std::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xLock: ::std::option::Option<
+            pub xLock: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_file,
-                    arg2: ::std::os::raw::c_int,
-                ) -> ::std::os::raw::c_int,
+                    arg2: ::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xUnlock: ::std::option::Option<
+            pub xUnlock: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_file,
-                    arg2: ::std::os::raw::c_int,
-                ) -> ::std::os::raw::c_int,
+                    arg2: ::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xCheckReservedLock: ::std::option::Option<
+            pub xCheckReservedLock: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_file,
-                    pResOut: *mut ::std::os::raw::c_int,
-                ) -> ::std::os::raw::c_int,
+                    pResOut: *mut ::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xFileControl: ::std::option::Option<
+            pub xFileControl: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_file,
-                    op: ::std::os::raw::c_int,
-                    pArg: *mut ::std::os::raw::c_void,
-                ) -> ::std::os::raw::c_int,
+                    op: ::os::raw::c_int,
+                    pArg: *mut ::os::raw::c_void,
+                ) -> ::os::raw::c_int,
             >,
-            pub xSectorSize: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut sqlite3_file) -> ::std::os::raw::c_int,
+            pub xSectorSize: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut sqlite3_file) -> ::os::raw::c_int,
             >,
-            pub xDeviceCharacteristics: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut sqlite3_file) -> ::std::os::raw::c_int,
+            pub xDeviceCharacteristics: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut sqlite3_file) -> ::os::raw::c_int,
             >,
-            pub xShmMap: ::std::option::Option<
+            pub xShmMap: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_file,
-                    iPg: ::std::os::raw::c_int,
-                    pgsz: ::std::os::raw::c_int,
-                    arg2: ::std::os::raw::c_int,
-                    arg3: *mut *mut ::std::os::raw::c_void,
-                ) -> ::std::os::raw::c_int,
+                    iPg: ::os::raw::c_int,
+                    pgsz: ::os::raw::c_int,
+                    arg2: ::os::raw::c_int,
+                    arg3: *mut *mut ::os::raw::c_void,
+                ) -> ::os::raw::c_int,
             >,
-            pub xShmLock: ::std::option::Option<
+            pub xShmLock: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_file,
-                    offset: ::std::os::raw::c_int,
-                    n: ::std::os::raw::c_int,
-                    flags: ::std::os::raw::c_int,
-                ) -> ::std::os::raw::c_int,
+                    offset: ::os::raw::c_int,
+                    n: ::os::raw::c_int,
+                    flags: ::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xShmBarrier: ::std::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_file)>,
-            pub xShmUnmap: ::std::option::Option<
+            pub xShmBarrier: ::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_file)>,
+            pub xShmUnmap: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_file,
-                    deleteFlag: ::std::os::raw::c_int,
-                ) -> ::std::os::raw::c_int,
+                    deleteFlag: ::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xFetch: ::std::option::Option<
-                unsafe extern "C" fn(
-                    arg1: *mut sqlite3_file,
-                    iOfst: sqlite3_int64,
-                    iAmt: ::std::os::raw::c_int,
-                    pp: *mut *mut ::std::os::raw::c_void,
-                ) -> ::std::os::raw::c_int,
-            >,
-            pub xUnfetch: ::std::option::Option<
+            pub xFetch: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_file,
                     iOfst: sqlite3_int64,
-                    p: *mut ::std::os::raw::c_void,
-                ) -> ::std::os::raw::c_int,
+                    iAmt: ::os::raw::c_int,
+                    pp: *mut *mut ::os::raw::c_void,
+                ) -> ::os::raw::c_int,
+            >,
+            pub xUnfetch: ::option::Option<
+                unsafe extern "C" fn(
+                    arg1: *mut sqlite3_file,
+                    iOfst: sqlite3_int64,
+                    p: *mut ::os::raw::c_void,
+                ) -> ::os::raw::c_int,
             >,
         }
         #[repr(C)]
@@ -8537,179 +15830,179 @@ pub mod rusqlite
         pub struct sqlite3_api_routines {
             _unused: [u8; 0],
         }
-        pub type sqlite3_filename = *const ::std::os::raw::c_char;
-        pub type sqlite3_syscall_ptr = ::std::option::Option<unsafe extern "C" fn()>;
+        pub type sqlite3_filename = *const ::os::raw::c_char;
+        pub type sqlite3_syscall_ptr = ::option::Option<unsafe extern "C" fn()>;
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
         pub struct sqlite3_vfs {
-            pub iVersion: ::std::os::raw::c_int,
-            pub szOsFile: ::std::os::raw::c_int,
-            pub mxPathname: ::std::os::raw::c_int,
+            pub iVersion: ::os::raw::c_int,
+            pub szOsFile: ::os::raw::c_int,
+            pub mxPathname: ::os::raw::c_int,
             pub pNext: *mut sqlite3_vfs,
-            pub zName: *const ::std::os::raw::c_char,
-            pub pAppData: *mut ::std::os::raw::c_void,
-            pub xOpen: ::std::option::Option<
+            pub zName: *const ::os::raw::c_char,
+            pub pAppData: *mut ::os::raw::c_void,
+            pub xOpen: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_vfs,
                     zName: sqlite3_filename,
                     arg2: *mut sqlite3_file,
-                    flags: ::std::os::raw::c_int,
-                    pOutFlags: *mut ::std::os::raw::c_int,
-                ) -> ::std::os::raw::c_int,
+                    flags: ::os::raw::c_int,
+                    pOutFlags: *mut ::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xDelete: ::std::option::Option<
+            pub xDelete: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_vfs,
-                    zName: *const ::std::os::raw::c_char,
-                    syncDir: ::std::os::raw::c_int,
-                ) -> ::std::os::raw::c_int,
+                    zName: *const ::os::raw::c_char,
+                    syncDir: ::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xAccess: ::std::option::Option<
+            pub xAccess: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_vfs,
-                    zName: *const ::std::os::raw::c_char,
-                    flags: ::std::os::raw::c_int,
-                    pResOut: *mut ::std::os::raw::c_int,
-                ) -> ::std::os::raw::c_int,
+                    zName: *const ::os::raw::c_char,
+                    flags: ::os::raw::c_int,
+                    pResOut: *mut ::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xFullPathname: ::std::option::Option<
+            pub xFullPathname: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_vfs,
-                    zName: *const ::std::os::raw::c_char,
-                    nOut: ::std::os::raw::c_int,
-                    zOut: *mut ::std::os::raw::c_char,
-                ) -> ::std::os::raw::c_int,
+                    zName: *const ::os::raw::c_char,
+                    nOut: ::os::raw::c_int,
+                    zOut: *mut ::os::raw::c_char,
+                ) -> ::os::raw::c_int,
             >,
-            pub xDlOpen: ::std::option::Option<
+            pub xDlOpen: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_vfs,
-                    zFilename: *const ::std::os::raw::c_char,
-                ) -> *mut ::std::os::raw::c_void,
+                    zFilename: *const ::os::raw::c_char,
+                ) -> *mut ::os::raw::c_void,
             >,
-            pub xDlError: ::std::option::Option<
+            pub xDlError: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_vfs,
-                    nByte: ::std::os::raw::c_int,
-                    zErrMsg: *mut ::std::os::raw::c_char,
+                    nByte: ::os::raw::c_int,
+                    zErrMsg: *mut ::os::raw::c_char,
                 ),
             >,
-            pub xDlSym: ::std::option::Option<
+            pub xDlSym: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_vfs,
-                    arg2: *mut ::std::os::raw::c_void,
-                    zSymbol: *const ::std::os::raw::c_char,
-                ) -> ::std::option::Option<
+                    arg2: *mut ::os::raw::c_void,
+                    zSymbol: *const ::os::raw::c_char,
+                ) -> ::option::Option<
                     unsafe extern "C" fn(
                         arg1: *mut sqlite3_vfs,
-                        arg2: *mut ::std::os::raw::c_void,
-                        zSymbol: *const ::std::os::raw::c_char,
+                        arg2: *mut ::os::raw::c_void,
+                        zSymbol: *const ::os::raw::c_char,
                     ),
                 >,
             >,
-            pub xDlClose: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut sqlite3_vfs, arg2: *mut ::std::os::raw::c_void),
+            pub xDlClose: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut sqlite3_vfs, arg2: *mut ::os::raw::c_void),
             >,
-            pub xRandomness: ::std::option::Option<
+            pub xRandomness: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_vfs,
-                    nByte: ::std::os::raw::c_int,
-                    zOut: *mut ::std::os::raw::c_char,
-                ) -> ::std::os::raw::c_int,
+                    nByte: ::os::raw::c_int,
+                    zOut: *mut ::os::raw::c_char,
+                ) -> ::os::raw::c_int,
             >,
-            pub xSleep: ::std::option::Option<
+            pub xSleep: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_vfs,
-                    microseconds: ::std::os::raw::c_int,
-                ) -> ::std::os::raw::c_int,
+                    microseconds: ::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xCurrentTime: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut sqlite3_vfs, arg2: *mut f64) -> ::std::os::raw::c_int,
+            pub xCurrentTime: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut sqlite3_vfs, arg2: *mut f64) -> ::os::raw::c_int,
             >,
-            pub xGetLastError: ::std::option::Option<
+            pub xGetLastError: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_vfs,
-                    arg2: ::std::os::raw::c_int,
-                    arg3: *mut ::std::os::raw::c_char,
-                ) -> ::std::os::raw::c_int,
+                    arg2: ::os::raw::c_int,
+                    arg3: *mut ::os::raw::c_char,
+                ) -> ::os::raw::c_int,
             >,
-            pub xCurrentTimeInt64: ::std::option::Option<
+            pub xCurrentTimeInt64: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_vfs,
                     arg2: *mut sqlite3_int64,
-                ) -> ::std::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xSetSystemCall: ::std::option::Option<
+            pub xSetSystemCall: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_vfs,
-                    zName: *const ::std::os::raw::c_char,
+                    zName: *const ::os::raw::c_char,
                     arg2: sqlite3_syscall_ptr,
-                ) -> ::std::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xGetSystemCall: ::std::option::Option<
+            pub xGetSystemCall: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_vfs,
-                    zName: *const ::std::os::raw::c_char,
+                    zName: *const ::os::raw::c_char,
                 ) -> sqlite3_syscall_ptr,
             >,
-            pub xNextSystemCall: ::std::option::Option<
+            pub xNextSystemCall: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_vfs,
-                    zName: *const ::std::os::raw::c_char,
-                ) -> *const ::std::os::raw::c_char,
+                    zName: *const ::os::raw::c_char,
+                ) -> *const ::os::raw::c_char,
             >,
         }
         extern "C" {
-            pub fn sqlite3_initialize() -> ::std::os::raw::c_int;
+            pub fn sqlite3_initialize() -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_shutdown() -> ::std::os::raw::c_int;
+            pub fn sqlite3_shutdown() -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_os_init() -> ::std::os::raw::c_int;
+            pub fn sqlite3_os_init() -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_os_end() -> ::std::os::raw::c_int;
+            pub fn sqlite3_os_end() -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_config(arg1: ::std::os::raw::c_int, ...) -> ::std::os::raw::c_int;
+            pub fn sqlite3_config(arg1: ::os::raw::c_int, ...) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_db_config(
                 arg1: *mut sqlite3,
-                op: ::std::os::raw::c_int,
+                op: ::os::raw::c_int,
                 ...
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
         pub struct sqlite3_mem_methods {
-            pub xMalloc: ::std::option::Option<
-                unsafe extern "C" fn(arg1: ::std::os::raw::c_int) -> *mut ::std::os::raw::c_void,
+            pub xMalloc: ::option::Option<
+                unsafe extern "C" fn(arg1: ::os::raw::c_int) -> *mut ::os::raw::c_void,
             >,
-            pub xFree: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-            pub xRealloc: ::std::option::Option<
+            pub xFree: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
+            pub xRealloc: ::option::Option<
                 unsafe extern "C" fn(
-                    arg1: *mut ::std::os::raw::c_void,
-                    arg2: ::std::os::raw::c_int,
-                ) -> *mut ::std::os::raw::c_void,
+                    arg1: *mut ::os::raw::c_void,
+                    arg2: ::os::raw::c_int,
+                ) -> *mut ::os::raw::c_void,
             >,
-            pub xSize: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void) -> ::std::os::raw::c_int,
+            pub xSize: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut ::os::raw::c_void) -> ::os::raw::c_int,
             >,
-            pub xRoundup: ::std::option::Option<
-                unsafe extern "C" fn(arg1: ::std::os::raw::c_int) -> ::std::os::raw::c_int,
+            pub xRoundup: ::option::Option<
+                unsafe extern "C" fn(arg1: ::os::raw::c_int) -> ::os::raw::c_int,
             >,
-            pub xInit: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void) -> ::std::os::raw::c_int,
+            pub xInit: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut ::os::raw::c_void) -> ::os::raw::c_int,
             >,
-            pub xShutdown: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-            pub pAppData: *mut ::std::os::raw::c_void,
+            pub xShutdown: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
+            pub pAppData: *mut ::os::raw::c_void,
         }
         extern "C" {
             pub fn sqlite3_extended_result_codes(
                 arg1: *mut sqlite3,
-                onoff: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                onoff: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_last_insert_rowid(arg1: *mut sqlite3) -> sqlite3_int64;
@@ -8718,13 +16011,13 @@ pub mod rusqlite
             pub fn sqlite3_set_last_insert_rowid(arg1: *mut sqlite3, arg2: sqlite3_int64);
         }
         extern "C" {
-            pub fn sqlite3_changes(arg1: *mut sqlite3) -> ::std::os::raw::c_int;
+            pub fn sqlite3_changes(arg1: *mut sqlite3) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_changes64(arg1: *mut sqlite3) -> sqlite3_int64;
         }
         extern "C" {
-            pub fn sqlite3_total_changes(arg1: *mut sqlite3) -> ::std::os::raw::c_int;
+            pub fn sqlite3_total_changes(arg1: *mut sqlite3) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_total_changes64(arg1: *mut sqlite3) -> sqlite3_int64;
@@ -8733,231 +16026,231 @@ pub mod rusqlite
             pub fn sqlite3_interrupt(arg1: *mut sqlite3);
         }
         extern "C" {
-            pub fn sqlite3_is_interrupted(arg1: *mut sqlite3) -> ::std::os::raw::c_int;
+            pub fn sqlite3_is_interrupted(arg1: *mut sqlite3) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_complete(sql: *const ::std::os::raw::c_char) -> ::std::os::raw::c_int;
+            pub fn sqlite3_complete(sql: *const ::os::raw::c_char) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_busy_handler(
                 arg1: *mut sqlite3,
-                arg2: ::std::option::Option<
+                arg2: ::option::Option<
                     unsafe extern "C" fn(
-                        arg1: *mut ::std::os::raw::c_void,
-                        arg2: ::std::os::raw::c_int,
-                    ) -> ::std::os::raw::c_int,
+                        arg1: *mut ::os::raw::c_void,
+                        arg2: ::os::raw::c_int,
+                    ) -> ::os::raw::c_int,
                 >,
-                arg3: *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                arg3: *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_busy_timeout(
                 arg1: *mut sqlite3,
-                ms: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                ms: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_get_table(
                 db: *mut sqlite3,
-                zSql: *const ::std::os::raw::c_char,
-                pazResult: *mut *mut *mut ::std::os::raw::c_char,
-                pnRow: *mut ::std::os::raw::c_int,
-                pnColumn: *mut ::std::os::raw::c_int,
-                pzErrmsg: *mut *mut ::std::os::raw::c_char,
-            ) -> ::std::os::raw::c_int;
+                zSql: *const ::os::raw::c_char,
+                pazResult: *mut *mut *mut ::os::raw::c_char,
+                pnRow: *mut ::os::raw::c_int,
+                pnColumn: *mut ::os::raw::c_int,
+                pzErrmsg: *mut *mut ::os::raw::c_char,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_free_table(result: *mut *mut ::std::os::raw::c_char);
+            pub fn sqlite3_free_table(result: *mut *mut ::os::raw::c_char);
         }
         extern "C" {
-            pub fn sqlite3_mprintf(arg1: *const ::std::os::raw::c_char, ...)
-                -> *mut ::std::os::raw::c_char;
+            pub fn sqlite3_mprintf(arg1: *const ::os::raw::c_char, ...)
+                -> *mut ::os::raw::c_char;
         }
         extern "C" {
             pub fn sqlite3_snprintf(
-                arg1: ::std::os::raw::c_int,
-                arg2: *mut ::std::os::raw::c_char,
-                arg3: *const ::std::os::raw::c_char,
+                arg1: ::os::raw::c_int,
+                arg2: *mut ::os::raw::c_char,
+                arg3: *const ::os::raw::c_char,
                 ...
-            ) -> *mut ::std::os::raw::c_char;
+            ) -> *mut ::os::raw::c_char;
         }
         extern "C" {
-            pub fn sqlite3_malloc(arg1: ::std::os::raw::c_int) -> *mut ::std::os::raw::c_void;
+            pub fn sqlite3_malloc(arg1: ::os::raw::c_int) -> *mut ::os::raw::c_void;
         }
         extern "C" {
-            pub fn sqlite3_malloc64(arg1: sqlite3_uint64) -> *mut ::std::os::raw::c_void;
+            pub fn sqlite3_malloc64(arg1: sqlite3_uint64) -> *mut ::os::raw::c_void;
         }
         extern "C" {
             pub fn sqlite3_realloc(
-                arg1: *mut ::std::os::raw::c_void,
-                arg2: ::std::os::raw::c_int,
-            ) -> *mut ::std::os::raw::c_void;
+                arg1: *mut ::os::raw::c_void,
+                arg2: ::os::raw::c_int,
+            ) -> *mut ::os::raw::c_void;
         }
         extern "C" {
             pub fn sqlite3_realloc64(
-                arg1: *mut ::std::os::raw::c_void,
+                arg1: *mut ::os::raw::c_void,
                 arg2: sqlite3_uint64,
-            ) -> *mut ::std::os::raw::c_void;
+            ) -> *mut ::os::raw::c_void;
         }
         extern "C" {
-            pub fn sqlite3_free(arg1: *mut ::std::os::raw::c_void);
+            pub fn sqlite3_free(arg1: *mut ::os::raw::c_void);
         }
         extern "C" {
-            pub fn sqlite3_msize(arg1: *mut ::std::os::raw::c_void) -> sqlite3_uint64;
+            pub fn sqlite3_msize(arg1: *mut ::os::raw::c_void) -> sqlite3_uint64;
         }
         extern "C" {
             pub fn sqlite3_memory_used() -> sqlite3_int64;
         }
         extern "C" {
-            pub fn sqlite3_memory_highwater(resetFlag: ::std::os::raw::c_int) -> sqlite3_int64;
+            pub fn sqlite3_memory_highwater(resetFlag: ::os::raw::c_int) -> sqlite3_int64;
         }
         extern "C" {
-            pub fn sqlite3_randomness(N: ::std::os::raw::c_int, P: *mut ::std::os::raw::c_void);
+            pub fn sqlite3_randomness(N: ::os::raw::c_int, P: *mut ::os::raw::c_void);
         }
         extern "C" {
             pub fn sqlite3_set_authorizer(
                 arg1: *mut sqlite3,
-                xAuth: ::std::option::Option<
+                xAuth: ::option::Option<
                     unsafe extern "C" fn(
-                        arg1: *mut ::std::os::raw::c_void,
-                        arg2: ::std::os::raw::c_int,
-                        arg3: *const ::std::os::raw::c_char,
-                        arg4: *const ::std::os::raw::c_char,
-                        arg5: *const ::std::os::raw::c_char,
-                        arg6: *const ::std::os::raw::c_char,
-                    ) -> ::std::os::raw::c_int,
+                        arg1: *mut ::os::raw::c_void,
+                        arg2: ::os::raw::c_int,
+                        arg3: *const ::os::raw::c_char,
+                        arg4: *const ::os::raw::c_char,
+                        arg5: *const ::os::raw::c_char,
+                        arg6: *const ::os::raw::c_char,
+                    ) -> ::os::raw::c_int,
                 >,
-                pUserData: *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                pUserData: *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_trace(
                 arg1: *mut sqlite3,
-                xTrace: ::std::option::Option<
+                xTrace: ::option::Option<
                     unsafe extern "C" fn(
-                        arg1: *mut ::std::os::raw::c_void,
-                        arg2: *const ::std::os::raw::c_char,
+                        arg1: *mut ::os::raw::c_void,
+                        arg2: *const ::os::raw::c_char,
                     ),
                 >,
-                arg2: *mut ::std::os::raw::c_void,
-            ) -> *mut ::std::os::raw::c_void;
+                arg2: *mut ::os::raw::c_void,
+            ) -> *mut ::os::raw::c_void;
         }
         extern "C" {
             pub fn sqlite3_profile(
                 arg1: *mut sqlite3,
-                xProfile: ::std::option::Option<
+                xProfile: ::option::Option<
                     unsafe extern "C" fn(
-                        arg1: *mut ::std::os::raw::c_void,
-                        arg2: *const ::std::os::raw::c_char,
+                        arg1: *mut ::os::raw::c_void,
+                        arg2: *const ::os::raw::c_char,
                         arg3: sqlite3_uint64,
                     ),
                 >,
-                arg2: *mut ::std::os::raw::c_void,
-            ) -> *mut ::std::os::raw::c_void;
+                arg2: *mut ::os::raw::c_void,
+            ) -> *mut ::os::raw::c_void;
         }
         extern "C" {
             pub fn sqlite3_trace_v2(
                 arg1: *mut sqlite3,
-                uMask: ::std::os::raw::c_uint,
-                xCallback: ::std::option::Option<
+                uMask: ::os::raw::c_uint,
+                xCallback: ::option::Option<
                     unsafe extern "C" fn(
-                        arg1: ::std::os::raw::c_uint,
-                        arg2: *mut ::std::os::raw::c_void,
-                        arg3: *mut ::std::os::raw::c_void,
-                        arg4: *mut ::std::os::raw::c_void,
-                    ) -> ::std::os::raw::c_int,
+                        arg1: ::os::raw::c_uint,
+                        arg2: *mut ::os::raw::c_void,
+                        arg3: *mut ::os::raw::c_void,
+                        arg4: *mut ::os::raw::c_void,
+                    ) -> ::os::raw::c_int,
                 >,
-                pCtx: *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                pCtx: *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_progress_handler(
                 arg1: *mut sqlite3,
-                arg2: ::std::os::raw::c_int,
-                arg3: ::std::option::Option<
-                    unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void) -> ::std::os::raw::c_int,
+                arg2: ::os::raw::c_int,
+                arg3: ::option::Option<
+                    unsafe extern "C" fn(arg1: *mut ::os::raw::c_void) -> ::os::raw::c_int,
                 >,
-                arg4: *mut ::std::os::raw::c_void,
+                arg4: *mut ::os::raw::c_void,
             );
         }
         extern "C" {
             pub fn sqlite3_open(
-                filename: *const ::std::os::raw::c_char,
+                filename: *const ::os::raw::c_char,
                 ppDb: *mut *mut sqlite3,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_open_v2(
-                filename: *const ::std::os::raw::c_char,
+                filename: *const ::os::raw::c_char,
                 ppDb: *mut *mut sqlite3,
-                flags: ::std::os::raw::c_int,
-                zVfs: *const ::std::os::raw::c_char,
-            ) -> ::std::os::raw::c_int;
+                flags: ::os::raw::c_int,
+                zVfs: *const ::os::raw::c_char,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_uri_parameter(
                 z: sqlite3_filename,
-                zParam: *const ::std::os::raw::c_char,
-            ) -> *const ::std::os::raw::c_char;
+                zParam: *const ::os::raw::c_char,
+            ) -> *const ::os::raw::c_char;
         }
         extern "C" {
             pub fn sqlite3_uri_boolean(
                 z: sqlite3_filename,
-                zParam: *const ::std::os::raw::c_char,
-                bDefault: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                zParam: *const ::os::raw::c_char,
+                bDefault: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_uri_int64(
                 arg1: sqlite3_filename,
-                arg2: *const ::std::os::raw::c_char,
+                arg2: *const ::os::raw::c_char,
                 arg3: sqlite3_int64,
             ) -> sqlite3_int64;
         }
         extern "C" {
             pub fn sqlite3_uri_key(
                 z: sqlite3_filename,
-                N: ::std::os::raw::c_int,
-            ) -> *const ::std::os::raw::c_char;
+                N: ::os::raw::c_int,
+            ) -> *const ::os::raw::c_char;
         }
         extern "C" {
-            pub fn sqlite3_filename_database(arg1: sqlite3_filename) -> *const ::std::os::raw::c_char;
+            pub fn sqlite3_filename_database(arg1: sqlite3_filename) -> *const ::os::raw::c_char;
         }
         extern "C" {
-            pub fn sqlite3_filename_journal(arg1: sqlite3_filename) -> *const ::std::os::raw::c_char;
+            pub fn sqlite3_filename_journal(arg1: sqlite3_filename) -> *const ::os::raw::c_char;
         }
         extern "C" {
-            pub fn sqlite3_filename_wal(arg1: sqlite3_filename) -> *const ::std::os::raw::c_char;
+            pub fn sqlite3_filename_wal(arg1: sqlite3_filename) -> *const ::os::raw::c_char;
         }
         extern "C" {
-            pub fn sqlite3_database_file_object(arg1: *const ::std::os::raw::c_char) -> *mut sqlite3_file;
+            pub fn sqlite3_database_file_object(arg1: *const ::os::raw::c_char) -> *mut sqlite3_file;
         }
         extern "C" {
             pub fn sqlite3_create_filename(
-                zDatabase: *const ::std::os::raw::c_char,
-                zJournal: *const ::std::os::raw::c_char,
-                zWal: *const ::std::os::raw::c_char,
-                nParam: ::std::os::raw::c_int,
-                azParam: *mut *const ::std::os::raw::c_char,
+                zDatabase: *const ::os::raw::c_char,
+                zJournal: *const ::os::raw::c_char,
+                zWal: *const ::os::raw::c_char,
+                nParam: ::os::raw::c_int,
+                azParam: *mut *const ::os::raw::c_char,
             ) -> sqlite3_filename;
         }
         extern "C" {
             pub fn sqlite3_free_filename(arg1: sqlite3_filename);
         }
         extern "C" {
-            pub fn sqlite3_errcode(db: *mut sqlite3) -> ::std::os::raw::c_int;
+            pub fn sqlite3_errcode(db: *mut sqlite3) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_extended_errcode(db: *mut sqlite3) -> ::std::os::raw::c_int;
+            pub fn sqlite3_extended_errcode(db: *mut sqlite3) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_errmsg(arg1: *mut sqlite3) -> *const ::std::os::raw::c_char;
+            pub fn sqlite3_errmsg(arg1: *mut sqlite3) -> *const ::os::raw::c_char;
         }
         extern "C" {
-            pub fn sqlite3_errstr(arg1: ::std::os::raw::c_int) -> *const ::std::os::raw::c_char;
+            pub fn sqlite3_errstr(arg1: ::os::raw::c_int) -> *const ::os::raw::c_char;
         }
         extern "C" {
-            pub fn sqlite3_error_offset(db: *mut sqlite3) -> ::std::os::raw::c_int;
+            pub fn sqlite3_error_offset(db: *mut sqlite3) -> ::os::raw::c_int;
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
@@ -8967,49 +16260,49 @@ pub mod rusqlite
         extern "C" {
             pub fn sqlite3_limit(
                 arg1: *mut sqlite3,
-                id: ::std::os::raw::c_int,
-                newVal: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                id: ::os::raw::c_int,
+                newVal: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_prepare_v2(
                 db: *mut sqlite3,
-                zSql: *const ::std::os::raw::c_char,
-                nByte: ::std::os::raw::c_int,
+                zSql: *const ::os::raw::c_char,
+                nByte: ::os::raw::c_int,
                 ppStmt: *mut *mut sqlite3_stmt,
-                pzTail: *mut *const ::std::os::raw::c_char,
-            ) -> ::std::os::raw::c_int;
+                pzTail: *mut *const ::os::raw::c_char,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_prepare_v3(
                 db: *mut sqlite3,
-                zSql: *const ::std::os::raw::c_char,
-                nByte: ::std::os::raw::c_int,
-                prepFlags: ::std::os::raw::c_uint,
+                zSql: *const ::os::raw::c_char,
+                nByte: ::os::raw::c_int,
+                prepFlags: ::os::raw::c_uint,
                 ppStmt: *mut *mut sqlite3_stmt,
-                pzTail: *mut *const ::std::os::raw::c_char,
-            ) -> ::std::os::raw::c_int;
+                pzTail: *mut *const ::os::raw::c_char,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_sql(pStmt: *mut sqlite3_stmt) -> *const ::std::os::raw::c_char;
+            pub fn sqlite3_sql(pStmt: *mut sqlite3_stmt) -> *const ::os::raw::c_char;
         }
         extern "C" {
-            pub fn sqlite3_expanded_sql(pStmt: *mut sqlite3_stmt) -> *mut ::std::os::raw::c_char;
+            pub fn sqlite3_expanded_sql(pStmt: *mut sqlite3_stmt) -> *mut ::os::raw::c_char;
         }
         extern "C" {
-            pub fn sqlite3_stmt_readonly(pStmt: *mut sqlite3_stmt) -> ::std::os::raw::c_int;
+            pub fn sqlite3_stmt_readonly(pStmt: *mut sqlite3_stmt) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_stmt_isexplain(pStmt: *mut sqlite3_stmt) -> ::std::os::raw::c_int;
+            pub fn sqlite3_stmt_isexplain(pStmt: *mut sqlite3_stmt) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_stmt_explain(
                 pStmt: *mut sqlite3_stmt,
-                eMode: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                eMode: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_stmt_busy(arg1: *mut sqlite3_stmt) -> ::std::os::raw::c_int;
+            pub fn sqlite3_stmt_busy(arg1: *mut sqlite3_stmt) -> ::os::raw::c_int;
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
@@ -9024,295 +16317,295 @@ pub mod rusqlite
         extern "C" {
             pub fn sqlite3_bind_blob(
                 arg1: *mut sqlite3_stmt,
-                arg2: ::std::os::raw::c_int,
-                arg3: *const ::std::os::raw::c_void,
-                n: ::std::os::raw::c_int,
-                arg4: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-            ) -> ::std::os::raw::c_int;
+                arg2: ::os::raw::c_int,
+                arg3: *const ::os::raw::c_void,
+                n: ::os::raw::c_int,
+                arg4: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_bind_blob64(
                 arg1: *mut sqlite3_stmt,
-                arg2: ::std::os::raw::c_int,
-                arg3: *const ::std::os::raw::c_void,
+                arg2: ::os::raw::c_int,
+                arg3: *const ::os::raw::c_void,
                 arg4: sqlite3_uint64,
-                arg5: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-            ) -> ::std::os::raw::c_int;
+                arg5: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_bind_double(
                 arg1: *mut sqlite3_stmt,
-                arg2: ::std::os::raw::c_int,
+                arg2: ::os::raw::c_int,
                 arg3: f64,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_bind_int(
                 arg1: *mut sqlite3_stmt,
-                arg2: ::std::os::raw::c_int,
-                arg3: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                arg2: ::os::raw::c_int,
+                arg3: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_bind_int64(
                 arg1: *mut sqlite3_stmt,
-                arg2: ::std::os::raw::c_int,
+                arg2: ::os::raw::c_int,
                 arg3: sqlite3_int64,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_bind_null(
                 arg1: *mut sqlite3_stmt,
-                arg2: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                arg2: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_bind_text(
                 arg1: *mut sqlite3_stmt,
-                arg2: ::std::os::raw::c_int,
-                arg3: *const ::std::os::raw::c_char,
-                arg4: ::std::os::raw::c_int,
-                arg5: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-            ) -> ::std::os::raw::c_int;
+                arg2: ::os::raw::c_int,
+                arg3: *const ::os::raw::c_char,
+                arg4: ::os::raw::c_int,
+                arg5: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_bind_text64(
                 arg1: *mut sqlite3_stmt,
-                arg2: ::std::os::raw::c_int,
-                arg3: *const ::std::os::raw::c_char,
+                arg2: ::os::raw::c_int,
+                arg3: *const ::os::raw::c_char,
                 arg4: sqlite3_uint64,
-                arg5: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-                encoding: ::std::os::raw::c_uchar,
-            ) -> ::std::os::raw::c_int;
+                arg5: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
+                encoding: ::os::raw::c_uchar,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_bind_value(
                 arg1: *mut sqlite3_stmt,
-                arg2: ::std::os::raw::c_int,
+                arg2: ::os::raw::c_int,
                 arg3: *const sqlite3_value,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_bind_pointer(
                 arg1: *mut sqlite3_stmt,
-                arg2: ::std::os::raw::c_int,
-                arg3: *mut ::std::os::raw::c_void,
-                arg4: *const ::std::os::raw::c_char,
-                arg5: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-            ) -> ::std::os::raw::c_int;
+                arg2: ::os::raw::c_int,
+                arg3: *mut ::os::raw::c_void,
+                arg4: *const ::os::raw::c_char,
+                arg5: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_bind_zeroblob(
                 arg1: *mut sqlite3_stmt,
-                arg2: ::std::os::raw::c_int,
-                n: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                arg2: ::os::raw::c_int,
+                n: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_bind_zeroblob64(
                 arg1: *mut sqlite3_stmt,
-                arg2: ::std::os::raw::c_int,
+                arg2: ::os::raw::c_int,
                 arg3: sqlite3_uint64,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_bind_parameter_count(arg1: *mut sqlite3_stmt) -> ::std::os::raw::c_int;
+            pub fn sqlite3_bind_parameter_count(arg1: *mut sqlite3_stmt) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_bind_parameter_name(
                 arg1: *mut sqlite3_stmt,
-                arg2: ::std::os::raw::c_int,
-            ) -> *const ::std::os::raw::c_char;
+                arg2: ::os::raw::c_int,
+            ) -> *const ::os::raw::c_char;
         }
         extern "C" {
             pub fn sqlite3_bind_parameter_index(
                 arg1: *mut sqlite3_stmt,
-                zName: *const ::std::os::raw::c_char,
-            ) -> ::std::os::raw::c_int;
+                zName: *const ::os::raw::c_char,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_clear_bindings(arg1: *mut sqlite3_stmt) -> ::std::os::raw::c_int;
+            pub fn sqlite3_clear_bindings(arg1: *mut sqlite3_stmt) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_column_count(pStmt: *mut sqlite3_stmt) -> ::std::os::raw::c_int;
+            pub fn sqlite3_column_count(pStmt: *mut sqlite3_stmt) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_column_name(
                 arg1: *mut sqlite3_stmt,
-                N: ::std::os::raw::c_int,
-            ) -> *const ::std::os::raw::c_char;
+                N: ::os::raw::c_int,
+            ) -> *const ::os::raw::c_char;
         }
         extern "C" {
             pub fn sqlite3_column_database_name(
                 arg1: *mut sqlite3_stmt,
-                arg2: ::std::os::raw::c_int,
-            ) -> *const ::std::os::raw::c_char;
+                arg2: ::os::raw::c_int,
+            ) -> *const ::os::raw::c_char;
         }
         extern "C" {
             pub fn sqlite3_column_table_name(
                 arg1: *mut sqlite3_stmt,
-                arg2: ::std::os::raw::c_int,
-            ) -> *const ::std::os::raw::c_char;
+                arg2: ::os::raw::c_int,
+            ) -> *const ::os::raw::c_char;
         }
         extern "C" {
             pub fn sqlite3_column_origin_name(
                 arg1: *mut sqlite3_stmt,
-                arg2: ::std::os::raw::c_int,
-            ) -> *const ::std::os::raw::c_char;
+                arg2: ::os::raw::c_int,
+            ) -> *const ::os::raw::c_char;
         }
         extern "C" {
             pub fn sqlite3_column_decltype(
                 arg1: *mut sqlite3_stmt,
-                arg2: ::std::os::raw::c_int,
-            ) -> *const ::std::os::raw::c_char;
+                arg2: ::os::raw::c_int,
+            ) -> *const ::os::raw::c_char;
         }
         extern "C" {
-            pub fn sqlite3_step(arg1: *mut sqlite3_stmt) -> ::std::os::raw::c_int;
+            pub fn sqlite3_step(arg1: *mut sqlite3_stmt) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_data_count(pStmt: *mut sqlite3_stmt) -> ::std::os::raw::c_int;
+            pub fn sqlite3_data_count(pStmt: *mut sqlite3_stmt) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_column_blob(
                 arg1: *mut sqlite3_stmt,
-                iCol: ::std::os::raw::c_int,
-            ) -> *const ::std::os::raw::c_void;
+                iCol: ::os::raw::c_int,
+            ) -> *const ::os::raw::c_void;
         }
         extern "C" {
-            pub fn sqlite3_column_double(arg1: *mut sqlite3_stmt, iCol: ::std::os::raw::c_int) -> f64;
+            pub fn sqlite3_column_double(arg1: *mut sqlite3_stmt, iCol: ::os::raw::c_int) -> f64;
         }
         extern "C" {
             pub fn sqlite3_column_int(
                 arg1: *mut sqlite3_stmt,
-                iCol: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                iCol: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_column_int64(
                 arg1: *mut sqlite3_stmt,
-                iCol: ::std::os::raw::c_int,
+                iCol: ::os::raw::c_int,
             ) -> sqlite3_int64;
         }
         extern "C" {
             pub fn sqlite3_column_text(
                 arg1: *mut sqlite3_stmt,
-                iCol: ::std::os::raw::c_int,
-            ) -> *const ::std::os::raw::c_uchar;
+                iCol: ::os::raw::c_int,
+            ) -> *const ::os::raw::c_uchar;
         }
         extern "C" {
             pub fn sqlite3_column_value(
                 arg1: *mut sqlite3_stmt,
-                iCol: ::std::os::raw::c_int,
+                iCol: ::os::raw::c_int,
             ) -> *mut sqlite3_value;
         }
         extern "C" {
             pub fn sqlite3_column_bytes(
                 arg1: *mut sqlite3_stmt,
-                iCol: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                iCol: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_column_type(
                 arg1: *mut sqlite3_stmt,
-                iCol: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                iCol: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_finalize(pStmt: *mut sqlite3_stmt) -> ::std::os::raw::c_int;
+            pub fn sqlite3_finalize(pStmt: *mut sqlite3_stmt) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_reset(pStmt: *mut sqlite3_stmt) -> ::std::os::raw::c_int;
+            pub fn sqlite3_reset(pStmt: *mut sqlite3_stmt) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_create_function_v2(
                 db: *mut sqlite3,
-                zFunctionName: *const ::std::os::raw::c_char,
-                nArg: ::std::os::raw::c_int,
-                eTextRep: ::std::os::raw::c_int,
-                pApp: *mut ::std::os::raw::c_void,
-                xFunc: ::std::option::Option<
+                zFunctionName: *const ::os::raw::c_char,
+                nArg: ::os::raw::c_int,
+                eTextRep: ::os::raw::c_int,
+                pApp: *mut ::os::raw::c_void,
+                xFunc: ::option::Option<
                     unsafe extern "C" fn(
                         arg1: *mut sqlite3_context,
-                        arg2: ::std::os::raw::c_int,
+                        arg2: ::os::raw::c_int,
                         arg3: *mut *mut sqlite3_value,
                     ),
                 >,
-                xStep: ::std::option::Option<
+                xStep: ::option::Option<
                     unsafe extern "C" fn(
                         arg1: *mut sqlite3_context,
-                        arg2: ::std::os::raw::c_int,
+                        arg2: ::os::raw::c_int,
                         arg3: *mut *mut sqlite3_value,
                     ),
                 >,
-                xFinal: ::std::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_context)>,
-                xDestroy: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-            ) -> ::std::os::raw::c_int;
+                xFinal: ::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_context)>,
+                xDestroy: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_create_window_function(
                 db: *mut sqlite3,
-                zFunctionName: *const ::std::os::raw::c_char,
-                nArg: ::std::os::raw::c_int,
-                eTextRep: ::std::os::raw::c_int,
-                pApp: *mut ::std::os::raw::c_void,
-                xStep: ::std::option::Option<
+                zFunctionName: *const ::os::raw::c_char,
+                nArg: ::os::raw::c_int,
+                eTextRep: ::os::raw::c_int,
+                pApp: *mut ::os::raw::c_void,
+                xStep: ::option::Option<
                     unsafe extern "C" fn(
                         arg1: *mut sqlite3_context,
-                        arg2: ::std::os::raw::c_int,
+                        arg2: ::os::raw::c_int,
                         arg3: *mut *mut sqlite3_value,
                     ),
                 >,
-                xFinal: ::std::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_context)>,
-                xValue: ::std::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_context)>,
-                xInverse: ::std::option::Option<
+                xFinal: ::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_context)>,
+                xValue: ::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_context)>,
+                xInverse: ::option::Option<
                     unsafe extern "C" fn(
                         arg1: *mut sqlite3_context,
-                        arg2: ::std::os::raw::c_int,
+                        arg2: ::os::raw::c_int,
                         arg3: *mut *mut sqlite3_value,
                     ),
                 >,
-                xDestroy: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-            ) -> ::std::os::raw::c_int;
+                xDestroy: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_aggregate_count(arg1: *mut sqlite3_context) -> ::std::os::raw::c_int;
+            pub fn sqlite3_aggregate_count(arg1: *mut sqlite3_context) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_expired(arg1: *mut sqlite3_stmt) -> ::std::os::raw::c_int;
+            pub fn sqlite3_expired(arg1: *mut sqlite3_stmt) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_transfer_bindings(
                 arg1: *mut sqlite3_stmt,
                 arg2: *mut sqlite3_stmt,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_global_recover() -> ::std::os::raw::c_int;
+            pub fn sqlite3_global_recover() -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_thread_cleanup();
         }
         extern "C" {
             pub fn sqlite3_memory_alarm(
-                arg1: ::std::option::Option<
+                arg1: ::option::Option<
                     unsafe extern "C" fn(
-                        arg1: *mut ::std::os::raw::c_void,
+                        arg1: *mut ::os::raw::c_void,
                         arg2: sqlite3_int64,
-                        arg3: ::std::os::raw::c_int,
+                        arg3: ::os::raw::c_int,
                     ),
                 >,
-                arg2: *mut ::std::os::raw::c_void,
+                arg2: *mut ::os::raw::c_void,
                 arg3: sqlite3_int64,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_value_blob(arg1: *mut sqlite3_value) -> *const ::std::os::raw::c_void;
+            pub fn sqlite3_value_blob(arg1: *mut sqlite3_value) -> *const ::os::raw::c_void;
         }
         extern "C" {
             pub fn sqlite3_value_double(arg1: *mut sqlite3_value) -> f64;
         }
         extern "C" {
-            pub fn sqlite3_value_int(arg1: *mut sqlite3_value) -> ::std::os::raw::c_int;
+            pub fn sqlite3_value_int(arg1: *mut sqlite3_value) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_value_int64(arg1: *mut sqlite3_value) -> sqlite3_int64;
@@ -9320,32 +16613,32 @@ pub mod rusqlite
         extern "C" {
             pub fn sqlite3_value_pointer(
                 arg1: *mut sqlite3_value,
-                arg2: *const ::std::os::raw::c_char,
-            ) -> *mut ::std::os::raw::c_void;
+                arg2: *const ::os::raw::c_char,
+            ) -> *mut ::os::raw::c_void;
         }
         extern "C" {
-            pub fn sqlite3_value_text(arg1: *mut sqlite3_value) -> *const ::std::os::raw::c_uchar;
+            pub fn sqlite3_value_text(arg1: *mut sqlite3_value) -> *const ::os::raw::c_uchar;
         }
         extern "C" {
-            pub fn sqlite3_value_bytes(arg1: *mut sqlite3_value) -> ::std::os::raw::c_int;
+            pub fn sqlite3_value_bytes(arg1: *mut sqlite3_value) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_value_type(arg1: *mut sqlite3_value) -> ::std::os::raw::c_int;
+            pub fn sqlite3_value_type(arg1: *mut sqlite3_value) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_value_numeric_type(arg1: *mut sqlite3_value) -> ::std::os::raw::c_int;
+            pub fn sqlite3_value_numeric_type(arg1: *mut sqlite3_value) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_value_nochange(arg1: *mut sqlite3_value) -> ::std::os::raw::c_int;
+            pub fn sqlite3_value_nochange(arg1: *mut sqlite3_value) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_value_frombind(arg1: *mut sqlite3_value) -> ::std::os::raw::c_int;
+            pub fn sqlite3_value_frombind(arg1: *mut sqlite3_value) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_value_encoding(arg1: *mut sqlite3_value) -> ::std::os::raw::c_int;
+            pub fn sqlite3_value_encoding(arg1: *mut sqlite3_value) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_value_subtype(arg1: *mut sqlite3_value) -> ::std::os::raw::c_uint;
+            pub fn sqlite3_value_subtype(arg1: *mut sqlite3_value) -> ::os::raw::c_uint;
         }
         extern "C" {
             pub fn sqlite3_value_dup(arg1: *const sqlite3_value) -> *mut sqlite3_value;
@@ -9356,11 +16649,11 @@ pub mod rusqlite
         extern "C" {
             pub fn sqlite3_aggregate_context(
                 arg1: *mut sqlite3_context,
-                nBytes: ::std::os::raw::c_int,
-            ) -> *mut ::std::os::raw::c_void;
+                nBytes: ::os::raw::c_int,
+            ) -> *mut ::os::raw::c_void;
         }
         extern "C" {
-            pub fn sqlite3_user_data(arg1: *mut sqlite3_context) -> *mut ::std::os::raw::c_void;
+            pub fn sqlite3_user_data(arg1: *mut sqlite3_context) -> *mut ::os::raw::c_void;
         }
         extern "C" {
             pub fn sqlite3_context_db_handle(arg1: *mut sqlite3_context) -> *mut sqlite3;
@@ -9368,47 +16661,47 @@ pub mod rusqlite
         extern "C" {
             pub fn sqlite3_get_auxdata(
                 arg1: *mut sqlite3_context,
-                N: ::std::os::raw::c_int,
-            ) -> *mut ::std::os::raw::c_void;
+                N: ::os::raw::c_int,
+            ) -> *mut ::os::raw::c_void;
         }
         extern "C" {
             pub fn sqlite3_set_auxdata(
                 arg1: *mut sqlite3_context,
-                N: ::std::os::raw::c_int,
-                arg2: *mut ::std::os::raw::c_void,
-                arg3: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
+                N: ::os::raw::c_int,
+                arg2: *mut ::os::raw::c_void,
+                arg3: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
             );
         }
         extern "C" {
             pub fn sqlite3_get_clientdata(
                 arg1: *mut sqlite3,
-                arg2: *const ::std::os::raw::c_char,
-            ) -> *mut ::std::os::raw::c_void;
+                arg2: *const ::os::raw::c_char,
+            ) -> *mut ::os::raw::c_void;
         }
         extern "C" {
             pub fn sqlite3_set_clientdata(
                 arg1: *mut sqlite3,
-                arg2: *const ::std::os::raw::c_char,
-                arg3: *mut ::std::os::raw::c_void,
-                arg4: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-            ) -> ::std::os::raw::c_int;
+                arg2: *const ::os::raw::c_char,
+                arg3: *mut ::os::raw::c_void,
+                arg4: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
+            ) -> ::os::raw::c_int;
         }
         pub type sqlite3_destructor_type =
-            ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>;
+            ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>;
         extern "C" {
             pub fn sqlite3_result_blob(
                 arg1: *mut sqlite3_context,
-                arg2: *const ::std::os::raw::c_void,
-                arg3: ::std::os::raw::c_int,
-                arg4: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
+                arg2: *const ::os::raw::c_void,
+                arg3: ::os::raw::c_int,
+                arg4: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
             );
         }
         extern "C" {
             pub fn sqlite3_result_blob64(
                 arg1: *mut sqlite3_context,
-                arg2: *const ::std::os::raw::c_void,
+                arg2: *const ::os::raw::c_void,
                 arg3: sqlite3_uint64,
-                arg4: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
+                arg4: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
             );
         }
         extern "C" {
@@ -9417,8 +16710,8 @@ pub mod rusqlite
         extern "C" {
             pub fn sqlite3_result_error(
                 arg1: *mut sqlite3_context,
-                arg2: *const ::std::os::raw::c_char,
-                arg3: ::std::os::raw::c_int,
+                arg2: *const ::os::raw::c_char,
+                arg3: ::os::raw::c_int,
             );
         }
         extern "C" {
@@ -9428,10 +16721,10 @@ pub mod rusqlite
             pub fn sqlite3_result_error_nomem(arg1: *mut sqlite3_context);
         }
         extern "C" {
-            pub fn sqlite3_result_error_code(arg1: *mut sqlite3_context, arg2: ::std::os::raw::c_int);
+            pub fn sqlite3_result_error_code(arg1: *mut sqlite3_context, arg2: ::os::raw::c_int);
         }
         extern "C" {
-            pub fn sqlite3_result_int(arg1: *mut sqlite3_context, arg2: ::std::os::raw::c_int);
+            pub fn sqlite3_result_int(arg1: *mut sqlite3_context, arg2: ::os::raw::c_int);
         }
         extern "C" {
             pub fn sqlite3_result_int64(arg1: *mut sqlite3_context, arg2: sqlite3_int64);
@@ -9442,18 +16735,18 @@ pub mod rusqlite
         extern "C" {
             pub fn sqlite3_result_text(
                 arg1: *mut sqlite3_context,
-                arg2: *const ::std::os::raw::c_char,
-                arg3: ::std::os::raw::c_int,
-                arg4: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
+                arg2: *const ::os::raw::c_char,
+                arg3: ::os::raw::c_int,
+                arg4: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
             );
         }
         extern "C" {
             pub fn sqlite3_result_text64(
                 arg1: *mut sqlite3_context,
-                arg2: *const ::std::os::raw::c_char,
+                arg2: *const ::os::raw::c_char,
                 arg3: sqlite3_uint64,
-                arg4: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-                encoding: ::std::os::raw::c_uchar,
+                arg4: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
+                encoding: ::os::raw::c_uchar,
             );
         }
         extern "C" {
@@ -9462,78 +16755,78 @@ pub mod rusqlite
         extern "C" {
             pub fn sqlite3_result_pointer(
                 arg1: *mut sqlite3_context,
-                arg2: *mut ::std::os::raw::c_void,
-                arg3: *const ::std::os::raw::c_char,
-                arg4: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
+                arg2: *mut ::os::raw::c_void,
+                arg3: *const ::os::raw::c_char,
+                arg4: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
             );
         }
         extern "C" {
-            pub fn sqlite3_result_zeroblob(arg1: *mut sqlite3_context, n: ::std::os::raw::c_int);
+            pub fn sqlite3_result_zeroblob(arg1: *mut sqlite3_context, n: ::os::raw::c_int);
         }
         extern "C" {
             pub fn sqlite3_result_zeroblob64(
                 arg1: *mut sqlite3_context,
                 n: sqlite3_uint64,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_result_subtype(arg1: *mut sqlite3_context, arg2: ::std::os::raw::c_uint);
+            pub fn sqlite3_result_subtype(arg1: *mut sqlite3_context, arg2: ::os::raw::c_uint);
         }
         extern "C" {
             pub fn sqlite3_create_collation_v2(
                 arg1: *mut sqlite3,
-                zName: *const ::std::os::raw::c_char,
-                eTextRep: ::std::os::raw::c_int,
-                pArg: *mut ::std::os::raw::c_void,
-                xCompare: ::std::option::Option<
+                zName: *const ::os::raw::c_char,
+                eTextRep: ::os::raw::c_int,
+                pArg: *mut ::os::raw::c_void,
+                xCompare: ::option::Option<
                     unsafe extern "C" fn(
-                        arg1: *mut ::std::os::raw::c_void,
-                        arg2: ::std::os::raw::c_int,
-                        arg3: *const ::std::os::raw::c_void,
-                        arg4: ::std::os::raw::c_int,
-                        arg5: *const ::std::os::raw::c_void,
-                    ) -> ::std::os::raw::c_int,
+                        arg1: *mut ::os::raw::c_void,
+                        arg2: ::os::raw::c_int,
+                        arg3: *const ::os::raw::c_void,
+                        arg4: ::os::raw::c_int,
+                        arg5: *const ::os::raw::c_void,
+                    ) -> ::os::raw::c_int,
                 >,
-                xDestroy: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-            ) -> ::std::os::raw::c_int;
+                xDestroy: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_collation_needed(
                 arg1: *mut sqlite3,
-                arg2: *mut ::std::os::raw::c_void,
-                arg3: ::std::option::Option<
+                arg2: *mut ::os::raw::c_void,
+                arg3: ::option::Option<
                     unsafe extern "C" fn(
-                        arg1: *mut ::std::os::raw::c_void,
+                        arg1: *mut ::os::raw::c_void,
                         arg2: *mut sqlite3,
-                        eTextRep: ::std::os::raw::c_int,
-                        arg3: *const ::std::os::raw::c_char,
+                        eTextRep: ::os::raw::c_int,
+                        arg3: *const ::os::raw::c_char,
                     ),
                 >,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_sleep(arg1: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
+            pub fn sqlite3_sleep(arg1: ::os::raw::c_int) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub static mut sqlite3_temp_directory: *mut ::std::os::raw::c_char;
+            pub static mut sqlite3_temp_directory: *mut ::os::raw::c_char;
         }
         extern "C" {
-            pub static mut sqlite3_data_directory: *mut ::std::os::raw::c_char;
+            pub static mut sqlite3_data_directory: *mut ::os::raw::c_char;
         }
         extern "C" {
             pub fn sqlite3_win32_set_directory(
-                type_: ::std::os::raw::c_ulong,
-                zValue: *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                type_: ::os::raw::c_ulong,
+                zValue: *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_win32_set_directory8(
-                type_: ::std::os::raw::c_ulong,
-                zValue: *const ::std::os::raw::c_char,
-            ) -> ::std::os::raw::c_int;
+                type_: ::os::raw::c_ulong,
+                zValue: *const ::os::raw::c_char,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_get_autocommit(arg1: *mut sqlite3) -> ::std::os::raw::c_int;
+            pub fn sqlite3_get_autocommit(arg1: *mut sqlite3) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_db_handle(arg1: *mut sqlite3_stmt) -> *mut sqlite3;
@@ -9541,26 +16834,26 @@ pub mod rusqlite
         extern "C" {
             pub fn sqlite3_db_name(
                 db: *mut sqlite3,
-                N: ::std::os::raw::c_int,
-            ) -> *const ::std::os::raw::c_char;
+                N: ::os::raw::c_int,
+            ) -> *const ::os::raw::c_char;
         }
         extern "C" {
             pub fn sqlite3_db_filename(
                 db: *mut sqlite3,
-                zDbName: *const ::std::os::raw::c_char,
+                zDbName: *const ::os::raw::c_char,
             ) -> sqlite3_filename;
         }
         extern "C" {
             pub fn sqlite3_db_readonly(
                 db: *mut sqlite3,
-                zDbName: *const ::std::os::raw::c_char,
-            ) -> ::std::os::raw::c_int;
+                zDbName: *const ::os::raw::c_char,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_txn_state(
                 arg1: *mut sqlite3,
-                zSchema: *const ::std::os::raw::c_char,
-            ) -> ::std::os::raw::c_int;
+                zSchema: *const ::os::raw::c_char,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_next_stmt(pDb: *mut sqlite3, pStmt: *mut sqlite3_stmt) -> *mut sqlite3_stmt;
@@ -9568,58 +16861,58 @@ pub mod rusqlite
         extern "C" {
             pub fn sqlite3_commit_hook(
                 arg1: *mut sqlite3,
-                arg2: ::std::option::Option<
-                    unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void) -> ::std::os::raw::c_int,
+                arg2: ::option::Option<
+                    unsafe extern "C" fn(arg1: *mut ::os::raw::c_void) -> ::os::raw::c_int,
                 >,
-                arg3: *mut ::std::os::raw::c_void,
-            ) -> *mut ::std::os::raw::c_void;
+                arg3: *mut ::os::raw::c_void,
+            ) -> *mut ::os::raw::c_void;
         }
         extern "C" {
             pub fn sqlite3_rollback_hook(
                 arg1: *mut sqlite3,
-                arg2: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-                arg3: *mut ::std::os::raw::c_void,
-            ) -> *mut ::std::os::raw::c_void;
+                arg2: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
+                arg3: *mut ::os::raw::c_void,
+            ) -> *mut ::os::raw::c_void;
         }
         extern "C" {
             pub fn sqlite3_autovacuum_pages(
                 db: *mut sqlite3,
-                arg1: ::std::option::Option<
+                arg1: ::option::Option<
                     unsafe extern "C" fn(
-                        arg1: *mut ::std::os::raw::c_void,
-                        arg2: *const ::std::os::raw::c_char,
-                        arg3: ::std::os::raw::c_uint,
-                        arg4: ::std::os::raw::c_uint,
-                        arg5: ::std::os::raw::c_uint,
-                    ) -> ::std::os::raw::c_uint,
+                        arg1: *mut ::os::raw::c_void,
+                        arg2: *const ::os::raw::c_char,
+                        arg3: ::os::raw::c_uint,
+                        arg4: ::os::raw::c_uint,
+                        arg5: ::os::raw::c_uint,
+                    ) -> ::os::raw::c_uint,
                 >,
-                arg2: *mut ::std::os::raw::c_void,
-                arg3: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-            ) -> ::std::os::raw::c_int;
+                arg2: *mut ::os::raw::c_void,
+                arg3: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_update_hook(
                 arg1: *mut sqlite3,
-                arg2: ::std::option::Option<
+                arg2: ::option::Option<
                     unsafe extern "C" fn(
-                        arg1: *mut ::std::os::raw::c_void,
-                        arg2: ::std::os::raw::c_int,
-                        arg3: *const ::std::os::raw::c_char,
-                        arg4: *const ::std::os::raw::c_char,
+                        arg1: *mut ::os::raw::c_void,
+                        arg2: ::os::raw::c_int,
+                        arg3: *const ::os::raw::c_char,
+                        arg4: *const ::os::raw::c_char,
                         arg5: sqlite3_int64,
                     ),
                 >,
-                arg3: *mut ::std::os::raw::c_void,
-            ) -> *mut ::std::os::raw::c_void;
+                arg3: *mut ::os::raw::c_void,
+            ) -> *mut ::os::raw::c_void;
         }
         extern "C" {
-            pub fn sqlite3_enable_shared_cache(arg1: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
+            pub fn sqlite3_enable_shared_cache(arg1: ::os::raw::c_int) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_release_memory(arg1: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
+            pub fn sqlite3_release_memory(arg1: ::os::raw::c_int) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_db_release_memory(arg1: *mut sqlite3) -> ::std::os::raw::c_int;
+            pub fn sqlite3_db_release_memory(arg1: *mut sqlite3) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_soft_heap_limit64(N: sqlite3_int64) -> sqlite3_int64;
@@ -9628,34 +16921,34 @@ pub mod rusqlite
             pub fn sqlite3_hard_heap_limit64(N: sqlite3_int64) -> sqlite3_int64;
         }
         extern "C" {
-            pub fn sqlite3_soft_heap_limit(N: ::std::os::raw::c_int);
+            pub fn sqlite3_soft_heap_limit(N: ::os::raw::c_int);
         }
         extern "C" {
             pub fn sqlite3_table_column_metadata(
                 db: *mut sqlite3,
-                zDbName: *const ::std::os::raw::c_char,
-                zTableName: *const ::std::os::raw::c_char,
-                zColumnName: *const ::std::os::raw::c_char,
-                pzDataType: *mut *const ::std::os::raw::c_char,
-                pzCollSeq: *mut *const ::std::os::raw::c_char,
-                pNotNull: *mut ::std::os::raw::c_int,
-                pPrimaryKey: *mut ::std::os::raw::c_int,
-                pAutoinc: *mut ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                zDbName: *const ::os::raw::c_char,
+                zTableName: *const ::os::raw::c_char,
+                zColumnName: *const ::os::raw::c_char,
+                pzDataType: *mut *const ::os::raw::c_char,
+                pzCollSeq: *mut *const ::os::raw::c_char,
+                pNotNull: *mut ::os::raw::c_int,
+                pPrimaryKey: *mut ::os::raw::c_int,
+                pAutoinc: *mut ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_load_extension(
                 db: *mut sqlite3,
-                zFile: *const ::std::os::raw::c_char,
-                zProc: *const ::std::os::raw::c_char,
-                pzErrMsg: *mut *mut ::std::os::raw::c_char,
-            ) -> ::std::os::raw::c_int;
+                zFile: *const ::os::raw::c_char,
+                zProc: *const ::os::raw::c_char,
+                pzErrMsg: *mut *mut ::os::raw::c_char,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_enable_load_extension(
                 db: *mut sqlite3,
-                onoff: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                onoff: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_reset_auto_extension();
@@ -9663,206 +16956,206 @@ pub mod rusqlite
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
         pub struct sqlite3_module {
-            pub iVersion: ::std::os::raw::c_int,
-            pub xCreate: ::std::option::Option<
+            pub iVersion: ::os::raw::c_int,
+            pub xCreate: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3,
-                    pAux: *mut ::std::os::raw::c_void,
-                    argc: ::std::os::raw::c_int,
-                    argv: *const *const ::std::os::raw::c_char,
+                    pAux: *mut ::os::raw::c_void,
+                    argc: ::os::raw::c_int,
+                    argv: *const *const ::os::raw::c_char,
                     ppVTab: *mut *mut sqlite3_vtab,
-                    arg2: *mut *mut ::std::os::raw::c_char,
-                ) -> ::std::os::raw::c_int,
+                    arg2: *mut *mut ::os::raw::c_char,
+                ) -> ::os::raw::c_int,
             >,
-            pub xConnect: ::std::option::Option<
+            pub xConnect: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3,
-                    pAux: *mut ::std::os::raw::c_void,
-                    argc: ::std::os::raw::c_int,
-                    argv: *const *const ::std::os::raw::c_char,
+                    pAux: *mut ::os::raw::c_void,
+                    argc: ::os::raw::c_int,
+                    argv: *const *const ::os::raw::c_char,
                     ppVTab: *mut *mut sqlite3_vtab,
-                    arg2: *mut *mut ::std::os::raw::c_char,
-                ) -> ::std::os::raw::c_int,
+                    arg2: *mut *mut ::os::raw::c_char,
+                ) -> ::os::raw::c_int,
             >,
-            pub xBestIndex: ::std::option::Option<
+            pub xBestIndex: ::option::Option<
                 unsafe extern "C" fn(
                     pVTab: *mut sqlite3_vtab,
                     arg1: *mut sqlite3_index_info,
-                ) -> ::std::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xDisconnect: ::std::option::Option<
-                unsafe extern "C" fn(pVTab: *mut sqlite3_vtab) -> ::std::os::raw::c_int,
+            pub xDisconnect: ::option::Option<
+                unsafe extern "C" fn(pVTab: *mut sqlite3_vtab) -> ::os::raw::c_int,
             >,
-            pub xDestroy: ::std::option::Option<
-                unsafe extern "C" fn(pVTab: *mut sqlite3_vtab) -> ::std::os::raw::c_int,
+            pub xDestroy: ::option::Option<
+                unsafe extern "C" fn(pVTab: *mut sqlite3_vtab) -> ::os::raw::c_int,
             >,
-            pub xOpen: ::std::option::Option<
+            pub xOpen: ::option::Option<
                 unsafe extern "C" fn(
                     pVTab: *mut sqlite3_vtab,
                     ppCursor: *mut *mut sqlite3_vtab_cursor,
-                ) -> ::std::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xClose: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut sqlite3_vtab_cursor) -> ::std::os::raw::c_int,
+            pub xClose: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut sqlite3_vtab_cursor) -> ::os::raw::c_int,
             >,
-            pub xFilter: ::std::option::Option<
+            pub xFilter: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_vtab_cursor,
-                    idxNum: ::std::os::raw::c_int,
-                    idxStr: *const ::std::os::raw::c_char,
-                    argc: ::std::os::raw::c_int,
+                    idxNum: ::os::raw::c_int,
+                    idxStr: *const ::os::raw::c_char,
+                    argc: ::os::raw::c_int,
                     argv: *mut *mut sqlite3_value,
-                ) -> ::std::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xNext: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut sqlite3_vtab_cursor) -> ::std::os::raw::c_int,
+            pub xNext: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut sqlite3_vtab_cursor) -> ::os::raw::c_int,
             >,
-            pub xEof: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut sqlite3_vtab_cursor) -> ::std::os::raw::c_int,
+            pub xEof: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut sqlite3_vtab_cursor) -> ::os::raw::c_int,
             >,
-            pub xColumn: ::std::option::Option<
+            pub xColumn: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_vtab_cursor,
                     arg2: *mut sqlite3_context,
-                    arg3: ::std::os::raw::c_int,
-                ) -> ::std::os::raw::c_int,
+                    arg3: ::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xRowid: ::std::option::Option<
+            pub xRowid: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_vtab_cursor,
                     pRowid: *mut sqlite3_int64,
-                ) -> ::std::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xUpdate: ::std::option::Option<
+            pub xUpdate: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_vtab,
-                    arg2: ::std::os::raw::c_int,
+                    arg2: ::os::raw::c_int,
                     arg3: *mut *mut sqlite3_value,
                     arg4: *mut sqlite3_int64,
-                ) -> ::std::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xBegin: ::std::option::Option<
-                unsafe extern "C" fn(pVTab: *mut sqlite3_vtab) -> ::std::os::raw::c_int,
+            pub xBegin: ::option::Option<
+                unsafe extern "C" fn(pVTab: *mut sqlite3_vtab) -> ::os::raw::c_int,
             >,
-            pub xSync: ::std::option::Option<
-                unsafe extern "C" fn(pVTab: *mut sqlite3_vtab) -> ::std::os::raw::c_int,
+            pub xSync: ::option::Option<
+                unsafe extern "C" fn(pVTab: *mut sqlite3_vtab) -> ::os::raw::c_int,
             >,
-            pub xCommit: ::std::option::Option<
-                unsafe extern "C" fn(pVTab: *mut sqlite3_vtab) -> ::std::os::raw::c_int,
+            pub xCommit: ::option::Option<
+                unsafe extern "C" fn(pVTab: *mut sqlite3_vtab) -> ::os::raw::c_int,
             >,
-            pub xRollback: ::std::option::Option<
-                unsafe extern "C" fn(pVTab: *mut sqlite3_vtab) -> ::std::os::raw::c_int,
+            pub xRollback: ::option::Option<
+                unsafe extern "C" fn(pVTab: *mut sqlite3_vtab) -> ::os::raw::c_int,
             >,
-            pub xFindFunction: ::std::option::Option<
+            pub xFindFunction: ::option::Option<
                 unsafe extern "C" fn(
                     pVtab: *mut sqlite3_vtab,
-                    nArg: ::std::os::raw::c_int,
-                    zName: *const ::std::os::raw::c_char,
-                    pxFunc: *mut ::std::option::Option<
+                    nArg: ::os::raw::c_int,
+                    zName: *const ::os::raw::c_char,
+                    pxFunc: *mut ::option::Option<
                         unsafe extern "C" fn(
                             arg1: *mut sqlite3_context,
-                            arg2: ::std::os::raw::c_int,
+                            arg2: ::os::raw::c_int,
                             arg3: *mut *mut sqlite3_value,
                         ),
                     >,
-                    ppArg: *mut *mut ::std::os::raw::c_void,
-                ) -> ::std::os::raw::c_int,
+                    ppArg: *mut *mut ::os::raw::c_void,
+                ) -> ::os::raw::c_int,
             >,
-            pub xRename: ::std::option::Option<
+            pub xRename: ::option::Option<
                 unsafe extern "C" fn(
                     pVtab: *mut sqlite3_vtab,
-                    zNew: *const ::std::os::raw::c_char,
-                ) -> ::std::os::raw::c_int,
+                    zNew: *const ::os::raw::c_char,
+                ) -> ::os::raw::c_int,
             >,
-            pub xSavepoint: ::std::option::Option<
+            pub xSavepoint: ::option::Option<
                 unsafe extern "C" fn(
                     pVTab: *mut sqlite3_vtab,
-                    arg1: ::std::os::raw::c_int,
-                ) -> ::std::os::raw::c_int,
+                    arg1: ::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xRelease: ::std::option::Option<
+            pub xRelease: ::option::Option<
                 unsafe extern "C" fn(
                     pVTab: *mut sqlite3_vtab,
-                    arg1: ::std::os::raw::c_int,
-                ) -> ::std::os::raw::c_int,
+                    arg1: ::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xRollbackTo: ::std::option::Option<
+            pub xRollbackTo: ::option::Option<
                 unsafe extern "C" fn(
                     pVTab: *mut sqlite3_vtab,
-                    arg1: ::std::os::raw::c_int,
-                ) -> ::std::os::raw::c_int,
+                    arg1: ::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xShadowName: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *const ::std::os::raw::c_char) -> ::std::os::raw::c_int,
+            pub xShadowName: ::option::Option<
+                unsafe extern "C" fn(arg1: *const ::os::raw::c_char) -> ::os::raw::c_int,
             >,
-            pub xIntegrity: ::std::option::Option<
+            pub xIntegrity: ::option::Option<
                 unsafe extern "C" fn(
                     pVTab: *mut sqlite3_vtab,
-                    zSchema: *const ::std::os::raw::c_char,
-                    zTabName: *const ::std::os::raw::c_char,
-                    mFlags: ::std::os::raw::c_int,
-                    pzErr: *mut *mut ::std::os::raw::c_char,
-                ) -> ::std::os::raw::c_int,
+                    zSchema: *const ::os::raw::c_char,
+                    zTabName: *const ::os::raw::c_char,
+                    mFlags: ::os::raw::c_int,
+                    pzErr: *mut *mut ::os::raw::c_char,
+                ) -> ::os::raw::c_int,
             >,
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
         pub struct sqlite3_index_info {
-            pub nConstraint: ::std::os::raw::c_int,
+            pub nConstraint: ::os::raw::c_int,
             pub aConstraint: *mut sqlite3_index_constraint,
-            pub nOrderBy: ::std::os::raw::c_int,
+            pub nOrderBy: ::os::raw::c_int,
             pub aOrderBy: *mut sqlite3_index_orderby,
             pub aConstraintUsage: *mut sqlite3_index_constraint_usage,
-            pub idxNum: ::std::os::raw::c_int,
-            pub idxStr: *mut ::std::os::raw::c_char,
-            pub needToFreeIdxStr: ::std::os::raw::c_int,
-            pub orderByConsumed: ::std::os::raw::c_int,
+            pub idxNum: ::os::raw::c_int,
+            pub idxStr: *mut ::os::raw::c_char,
+            pub needToFreeIdxStr: ::os::raw::c_int,
+            pub orderByConsumed: ::os::raw::c_int,
             pub estimatedCost: f64,
             pub estimatedRows: sqlite3_int64,
-            pub idxFlags: ::std::os::raw::c_int,
+            pub idxFlags: ::os::raw::c_int,
             pub colUsed: sqlite3_uint64,
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
         pub struct sqlite3_index_constraint {
-            pub iColumn: ::std::os::raw::c_int,
-            pub op: ::std::os::raw::c_uchar,
-            pub usable: ::std::os::raw::c_uchar,
-            pub iTermOffset: ::std::os::raw::c_int,
+            pub iColumn: ::os::raw::c_int,
+            pub op: ::os::raw::c_uchar,
+            pub usable: ::os::raw::c_uchar,
+            pub iTermOffset: ::os::raw::c_int,
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
         pub struct sqlite3_index_orderby {
-            pub iColumn: ::std::os::raw::c_int,
-            pub desc: ::std::os::raw::c_uchar,
+            pub iColumn: ::os::raw::c_int,
+            pub desc: ::os::raw::c_uchar,
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
         pub struct sqlite3_index_constraint_usage {
-            pub argvIndex: ::std::os::raw::c_int,
-            pub omit: ::std::os::raw::c_uchar,
+            pub argvIndex: ::os::raw::c_int,
+            pub omit: ::os::raw::c_uchar,
         }
         extern "C" {
             pub fn sqlite3_create_module_v2(
                 db: *mut sqlite3,
-                zName: *const ::std::os::raw::c_char,
+                zName: *const ::os::raw::c_char,
                 p: *const sqlite3_module,
-                pClientData: *mut ::std::os::raw::c_void,
-                xDestroy: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-            ) -> ::std::os::raw::c_int;
+                pClientData: *mut ::os::raw::c_void,
+                xDestroy: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_drop_modules(
                 db: *mut sqlite3,
-                azKeep: *mut *const ::std::os::raw::c_char,
-            ) -> ::std::os::raw::c_int;
+                azKeep: *mut *const ::os::raw::c_char,
+            ) -> ::os::raw::c_int;
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
         pub struct sqlite3_vtab {
             pub pModule: *const sqlite3_module,
-            pub nRef: ::std::os::raw::c_int,
-            pub zErrMsg: *mut ::std::os::raw::c_char,
+            pub nRef: ::os::raw::c_int,
+            pub zErrMsg: *mut ::os::raw::c_char,
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
@@ -9872,15 +17165,15 @@ pub mod rusqlite
         extern "C" {
             pub fn sqlite3_declare_vtab(
                 arg1: *mut sqlite3,
-                zSQL: *const ::std::os::raw::c_char,
-            ) -> ::std::os::raw::c_int;
+                zSQL: *const ::os::raw::c_char,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_overload_function(
                 arg1: *mut sqlite3,
-                zFuncName: *const ::std::os::raw::c_char,
-                nArg: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                zFuncName: *const ::os::raw::c_char,
+                nArg: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
@@ -9890,56 +17183,56 @@ pub mod rusqlite
         extern "C" {
             pub fn sqlite3_blob_open(
                 arg1: *mut sqlite3,
-                zDb: *const ::std::os::raw::c_char,
-                zTable: *const ::std::os::raw::c_char,
-                zColumn: *const ::std::os::raw::c_char,
+                zDb: *const ::os::raw::c_char,
+                zTable: *const ::os::raw::c_char,
+                zColumn: *const ::os::raw::c_char,
                 iRow: sqlite3_int64,
-                flags: ::std::os::raw::c_int,
+                flags: ::os::raw::c_int,
                 ppBlob: *mut *mut sqlite3_blob,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_blob_reopen(
                 arg1: *mut sqlite3_blob,
                 arg2: sqlite3_int64,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_blob_close(arg1: *mut sqlite3_blob) -> ::std::os::raw::c_int;
+            pub fn sqlite3_blob_close(arg1: *mut sqlite3_blob) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_blob_bytes(arg1: *mut sqlite3_blob) -> ::std::os::raw::c_int;
+            pub fn sqlite3_blob_bytes(arg1: *mut sqlite3_blob) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_blob_read(
                 arg1: *mut sqlite3_blob,
-                Z: *mut ::std::os::raw::c_void,
-                N: ::std::os::raw::c_int,
-                iOffset: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                Z: *mut ::os::raw::c_void,
+                N: ::os::raw::c_int,
+                iOffset: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_blob_write(
                 arg1: *mut sqlite3_blob,
-                z: *const ::std::os::raw::c_void,
-                n: ::std::os::raw::c_int,
-                iOffset: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                z: *const ::os::raw::c_void,
+                n: ::os::raw::c_int,
+                iOffset: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_vfs_find(zVfsName: *const ::std::os::raw::c_char) -> *mut sqlite3_vfs;
+            pub fn sqlite3_vfs_find(zVfsName: *const ::os::raw::c_char) -> *mut sqlite3_vfs;
         }
         extern "C" {
             pub fn sqlite3_vfs_register(
                 arg1: *mut sqlite3_vfs,
-                makeDflt: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                makeDflt: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_vfs_unregister(arg1: *mut sqlite3_vfs) -> ::std::os::raw::c_int;
+            pub fn sqlite3_vfs_unregister(arg1: *mut sqlite3_vfs) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_mutex_alloc(arg1: ::std::os::raw::c_int) -> *mut sqlite3_mutex;
+            pub fn sqlite3_mutex_alloc(arg1: ::os::raw::c_int) -> *mut sqlite3_mutex;
         }
         extern "C" {
             pub fn sqlite3_mutex_free(arg1: *mut sqlite3_mutex);
@@ -9948,7 +17241,7 @@ pub mod rusqlite
             pub fn sqlite3_mutex_enter(arg1: *mut sqlite3_mutex);
         }
         extern "C" {
-            pub fn sqlite3_mutex_try(arg1: *mut sqlite3_mutex) -> ::std::os::raw::c_int;
+            pub fn sqlite3_mutex_try(arg1: *mut sqlite3_mutex) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_mutex_leave(arg1: *mut sqlite3_mutex);
@@ -9956,29 +17249,29 @@ pub mod rusqlite
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
         pub struct sqlite3_mutex_methods {
-            pub xMutexInit: ::std::option::Option<unsafe extern "C" fn() -> ::std::os::raw::c_int>,
-            pub xMutexEnd: ::std::option::Option<unsafe extern "C" fn() -> ::std::os::raw::c_int>,
-            pub xMutexAlloc: ::std::option::Option<
-                unsafe extern "C" fn(arg1: ::std::os::raw::c_int) -> *mut sqlite3_mutex,
+            pub xMutexInit: ::option::Option<unsafe extern "C" fn() -> ::os::raw::c_int>,
+            pub xMutexEnd: ::option::Option<unsafe extern "C" fn() -> ::os::raw::c_int>,
+            pub xMutexAlloc: ::option::Option<
+                unsafe extern "C" fn(arg1: ::os::raw::c_int) -> *mut sqlite3_mutex,
             >,
-            pub xMutexFree: ::std::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_mutex)>,
-            pub xMutexEnter: ::std::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_mutex)>,
-            pub xMutexTry: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut sqlite3_mutex) -> ::std::os::raw::c_int,
+            pub xMutexFree: ::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_mutex)>,
+            pub xMutexEnter: ::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_mutex)>,
+            pub xMutexTry: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut sqlite3_mutex) -> ::os::raw::c_int,
             >,
-            pub xMutexLeave: ::std::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_mutex)>,
-            pub xMutexHeld: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut sqlite3_mutex) -> ::std::os::raw::c_int,
+            pub xMutexLeave: ::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_mutex)>,
+            pub xMutexHeld: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut sqlite3_mutex) -> ::os::raw::c_int,
             >,
-            pub xMutexNotheld: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut sqlite3_mutex) -> ::std::os::raw::c_int,
+            pub xMutexNotheld: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut sqlite3_mutex) -> ::os::raw::c_int,
             >,
         }
         extern "C" {
-            pub fn sqlite3_mutex_held(arg1: *mut sqlite3_mutex) -> ::std::os::raw::c_int;
+            pub fn sqlite3_mutex_held(arg1: *mut sqlite3_mutex) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_mutex_notheld(arg1: *mut sqlite3_mutex) -> ::std::os::raw::c_int;
+            pub fn sqlite3_mutex_notheld(arg1: *mut sqlite3_mutex) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_db_mutex(arg1: *mut sqlite3) -> *mut sqlite3_mutex;
@@ -9986,29 +17279,29 @@ pub mod rusqlite
         extern "C" {
             pub fn sqlite3_file_control(
                 arg1: *mut sqlite3,
-                zDbName: *const ::std::os::raw::c_char,
-                op: ::std::os::raw::c_int,
-                arg2: *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                zDbName: *const ::os::raw::c_char,
+                op: ::os::raw::c_int,
+                arg2: *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_test_control(op: ::std::os::raw::c_int, ...) -> ::std::os::raw::c_int;
+            pub fn sqlite3_test_control(op: ::os::raw::c_int, ...) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_keyword_count() -> ::std::os::raw::c_int;
+            pub fn sqlite3_keyword_count() -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_keyword_name(
-                arg1: ::std::os::raw::c_int,
-                arg2: *mut *const ::std::os::raw::c_char,
-                arg3: *mut ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                arg1: ::os::raw::c_int,
+                arg2: *mut *const ::os::raw::c_char,
+                arg3: *mut ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_keyword_check(
-                arg1: *const ::std::os::raw::c_char,
-                arg2: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                arg1: *const ::os::raw::c_char,
+                arg2: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
@@ -10019,71 +17312,71 @@ pub mod rusqlite
             pub fn sqlite3_str_new(arg1: *mut sqlite3) -> *mut sqlite3_str;
         }
         extern "C" {
-            pub fn sqlite3_str_finish(arg1: *mut sqlite3_str) -> *mut ::std::os::raw::c_char;
+            pub fn sqlite3_str_finish(arg1: *mut sqlite3_str) -> *mut ::os::raw::c_char;
         }
         extern "C" {
-            pub fn sqlite3_str_appendf(arg1: *mut sqlite3_str, zFormat: *const ::std::os::raw::c_char, ...);
+            pub fn sqlite3_str_appendf(arg1: *mut sqlite3_str, zFormat: *const ::os::raw::c_char, ...);
         }
         extern "C" {
             pub fn sqlite3_str_append(
                 arg1: *mut sqlite3_str,
-                zIn: *const ::std::os::raw::c_char,
-                N: ::std::os::raw::c_int,
+                zIn: *const ::os::raw::c_char,
+                N: ::os::raw::c_int,
             );
         }
         extern "C" {
-            pub fn sqlite3_str_appendall(arg1: *mut sqlite3_str, zIn: *const ::std::os::raw::c_char);
+            pub fn sqlite3_str_appendall(arg1: *mut sqlite3_str, zIn: *const ::os::raw::c_char);
         }
         extern "C" {
             pub fn sqlite3_str_appendchar(
                 arg1: *mut sqlite3_str,
-                N: ::std::os::raw::c_int,
-                C: ::std::os::raw::c_char,
+                N: ::os::raw::c_int,
+                C: ::os::raw::c_char,
             );
         }
         extern "C" {
             pub fn sqlite3_str_reset(arg1: *mut sqlite3_str);
         }
         extern "C" {
-            pub fn sqlite3_str_errcode(arg1: *mut sqlite3_str) -> ::std::os::raw::c_int;
+            pub fn sqlite3_str_errcode(arg1: *mut sqlite3_str) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_str_length(arg1: *mut sqlite3_str) -> ::std::os::raw::c_int;
+            pub fn sqlite3_str_length(arg1: *mut sqlite3_str) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_str_value(arg1: *mut sqlite3_str) -> *mut ::std::os::raw::c_char;
+            pub fn sqlite3_str_value(arg1: *mut sqlite3_str) -> *mut ::os::raw::c_char;
         }
         extern "C" {
             pub fn sqlite3_status(
-                op: ::std::os::raw::c_int,
-                pCurrent: *mut ::std::os::raw::c_int,
-                pHighwater: *mut ::std::os::raw::c_int,
-                resetFlag: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                op: ::os::raw::c_int,
+                pCurrent: *mut ::os::raw::c_int,
+                pHighwater: *mut ::os::raw::c_int,
+                resetFlag: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_status64(
-                op: ::std::os::raw::c_int,
+                op: ::os::raw::c_int,
                 pCurrent: *mut sqlite3_int64,
                 pHighwater: *mut sqlite3_int64,
-                resetFlag: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                resetFlag: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_db_status(
                 arg1: *mut sqlite3,
-                op: ::std::os::raw::c_int,
-                pCur: *mut ::std::os::raw::c_int,
-                pHiwtr: *mut ::std::os::raw::c_int,
-                resetFlg: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                op: ::os::raw::c_int,
+                pCur: *mut ::os::raw::c_int,
+                pHiwtr: *mut ::os::raw::c_int,
+                resetFlg: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_stmt_status(
                 arg1: *mut sqlite3_stmt,
-                op: ::std::os::raw::c_int,
-                resetFlg: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                op: ::os::raw::c_int,
+                resetFlg: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
@@ -10093,105 +17386,105 @@ pub mod rusqlite
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
         pub struct sqlite3_pcache_page {
-            pub pBuf: *mut ::std::os::raw::c_void,
-            pub pExtra: *mut ::std::os::raw::c_void,
+            pub pBuf: *mut ::os::raw::c_void,
+            pub pExtra: *mut ::os::raw::c_void,
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
         pub struct sqlite3_pcache_methods2 {
-            pub iVersion: ::std::os::raw::c_int,
-            pub pArg: *mut ::std::os::raw::c_void,
-            pub xInit: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void) -> ::std::os::raw::c_int,
+            pub iVersion: ::os::raw::c_int,
+            pub pArg: *mut ::os::raw::c_void,
+            pub xInit: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut ::os::raw::c_void) -> ::os::raw::c_int,
             >,
-            pub xShutdown: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-            pub xCreate: ::std::option::Option<
+            pub xShutdown: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
+            pub xCreate: ::option::Option<
                 unsafe extern "C" fn(
-                    szPage: ::std::os::raw::c_int,
-                    szExtra: ::std::os::raw::c_int,
-                    bPurgeable: ::std::os::raw::c_int,
+                    szPage: ::os::raw::c_int,
+                    szExtra: ::os::raw::c_int,
+                    bPurgeable: ::os::raw::c_int,
                 ) -> *mut sqlite3_pcache,
             >,
-            pub xCachesize: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut sqlite3_pcache, nCachesize: ::std::os::raw::c_int),
+            pub xCachesize: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut sqlite3_pcache, nCachesize: ::os::raw::c_int),
             >,
-            pub xPagecount: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut sqlite3_pcache) -> ::std::os::raw::c_int,
+            pub xPagecount: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut sqlite3_pcache) -> ::os::raw::c_int,
             >,
-            pub xFetch: ::std::option::Option<
+            pub xFetch: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_pcache,
-                    key: ::std::os::raw::c_uint,
-                    createFlag: ::std::os::raw::c_int,
+                    key: ::os::raw::c_uint,
+                    createFlag: ::os::raw::c_int,
                 ) -> *mut sqlite3_pcache_page,
             >,
-            pub xUnpin: ::std::option::Option<
+            pub xUnpin: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_pcache,
                     arg2: *mut sqlite3_pcache_page,
-                    discard: ::std::os::raw::c_int,
+                    discard: ::os::raw::c_int,
                 ),
             >,
-            pub xRekey: ::std::option::Option<
+            pub xRekey: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_pcache,
                     arg2: *mut sqlite3_pcache_page,
-                    oldKey: ::std::os::raw::c_uint,
-                    newKey: ::std::os::raw::c_uint,
+                    oldKey: ::os::raw::c_uint,
+                    newKey: ::os::raw::c_uint,
                 ),
             >,
-            pub xTruncate: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut sqlite3_pcache, iLimit: ::std::os::raw::c_uint),
+            pub xTruncate: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut sqlite3_pcache, iLimit: ::os::raw::c_uint),
             >,
-            pub xDestroy: ::std::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_pcache)>,
-            pub xShrink: ::std::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_pcache)>,
+            pub xDestroy: ::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_pcache)>,
+            pub xShrink: ::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_pcache)>,
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
         pub struct sqlite3_pcache_methods {
-            pub pArg: *mut ::std::os::raw::c_void,
-            pub xInit: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void) -> ::std::os::raw::c_int,
+            pub pArg: *mut ::os::raw::c_void,
+            pub xInit: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut ::os::raw::c_void) -> ::os::raw::c_int,
             >,
-            pub xShutdown: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-            pub xCreate: ::std::option::Option<
+            pub xShutdown: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
+            pub xCreate: ::option::Option<
                 unsafe extern "C" fn(
-                    szPage: ::std::os::raw::c_int,
-                    bPurgeable: ::std::os::raw::c_int,
+                    szPage: ::os::raw::c_int,
+                    bPurgeable: ::os::raw::c_int,
                 ) -> *mut sqlite3_pcache,
             >,
-            pub xCachesize: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut sqlite3_pcache, nCachesize: ::std::os::raw::c_int),
+            pub xCachesize: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut sqlite3_pcache, nCachesize: ::os::raw::c_int),
             >,
-            pub xPagecount: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut sqlite3_pcache) -> ::std::os::raw::c_int,
+            pub xPagecount: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut sqlite3_pcache) -> ::os::raw::c_int,
             >,
-            pub xFetch: ::std::option::Option<
+            pub xFetch: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_pcache,
-                    key: ::std::os::raw::c_uint,
-                    createFlag: ::std::os::raw::c_int,
-                ) -> *mut ::std::os::raw::c_void,
+                    key: ::os::raw::c_uint,
+                    createFlag: ::os::raw::c_int,
+                ) -> *mut ::os::raw::c_void,
             >,
-            pub xUnpin: ::std::option::Option<
+            pub xUnpin: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_pcache,
-                    arg2: *mut ::std::os::raw::c_void,
-                    discard: ::std::os::raw::c_int,
+                    arg2: *mut ::os::raw::c_void,
+                    discard: ::os::raw::c_int,
                 ),
             >,
-            pub xRekey: ::std::option::Option<
+            pub xRekey: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut sqlite3_pcache,
-                    arg2: *mut ::std::os::raw::c_void,
-                    oldKey: ::std::os::raw::c_uint,
-                    newKey: ::std::os::raw::c_uint,
+                    arg2: *mut ::os::raw::c_void,
+                    oldKey: ::os::raw::c_uint,
+                    newKey: ::os::raw::c_uint,
                 ),
             >,
-            pub xTruncate: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut sqlite3_pcache, iLimit: ::std::os::raw::c_uint),
+            pub xTruncate: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut sqlite3_pcache, iLimit: ::os::raw::c_uint),
             >,
-            pub xDestroy: ::std::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_pcache)>,
+            pub xDestroy: ::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_pcache)>,
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
@@ -10201,238 +17494,238 @@ pub mod rusqlite
         extern "C" {
             pub fn sqlite3_backup_init(
                 pDest: *mut sqlite3,
-                zDestName: *const ::std::os::raw::c_char,
+                zDestName: *const ::os::raw::c_char,
                 pSource: *mut sqlite3,
-                zSourceName: *const ::std::os::raw::c_char,
+                zSourceName: *const ::os::raw::c_char,
             ) -> *mut sqlite3_backup;
         }
         extern "C" {
             pub fn sqlite3_backup_step(
                 p: *mut sqlite3_backup,
-                nPage: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                nPage: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_backup_finish(p: *mut sqlite3_backup) -> ::std::os::raw::c_int;
+            pub fn sqlite3_backup_finish(p: *mut sqlite3_backup) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_backup_remaining(p: *mut sqlite3_backup) -> ::std::os::raw::c_int;
+            pub fn sqlite3_backup_remaining(p: *mut sqlite3_backup) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_backup_pagecount(p: *mut sqlite3_backup) -> ::std::os::raw::c_int;
+            pub fn sqlite3_backup_pagecount(p: *mut sqlite3_backup) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_unlock_notify(
                 pBlocked: *mut sqlite3,
-                xNotify: ::std::option::Option<
+                xNotify: ::option::Option<
                     unsafe extern "C" fn(
-                        apArg: *mut *mut ::std::os::raw::c_void,
-                        nArg: ::std::os::raw::c_int,
+                        apArg: *mut *mut ::os::raw::c_void,
+                        nArg: ::os::raw::c_int,
                     ),
                 >,
-                pNotifyArg: *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                pNotifyArg: *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_stricmp(
-                arg1: *const ::std::os::raw::c_char,
-                arg2: *const ::std::os::raw::c_char,
-            ) -> ::std::os::raw::c_int;
+                arg1: *const ::os::raw::c_char,
+                arg2: *const ::os::raw::c_char,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_strnicmp(
-                arg1: *const ::std::os::raw::c_char,
-                arg2: *const ::std::os::raw::c_char,
-                arg3: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                arg1: *const ::os::raw::c_char,
+                arg2: *const ::os::raw::c_char,
+                arg3: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_strglob(
-                zGlob: *const ::std::os::raw::c_char,
-                zStr: *const ::std::os::raw::c_char,
-            ) -> ::std::os::raw::c_int;
+                zGlob: *const ::os::raw::c_char,
+                zStr: *const ::os::raw::c_char,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_strlike(
-                zGlob: *const ::std::os::raw::c_char,
-                zStr: *const ::std::os::raw::c_char,
-                cEsc: ::std::os::raw::c_uint,
-            ) -> ::std::os::raw::c_int;
+                zGlob: *const ::os::raw::c_char,
+                zStr: *const ::os::raw::c_char,
+                cEsc: ::os::raw::c_uint,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_log(
-                iErrCode: ::std::os::raw::c_int,
-                zFormat: *const ::std::os::raw::c_char,
+                iErrCode: ::os::raw::c_int,
+                zFormat: *const ::os::raw::c_char,
                 ...
             );
         }
         extern "C" {
             pub fn sqlite3_wal_hook(
                 arg1: *mut sqlite3,
-                arg2: ::std::option::Option<
+                arg2: ::option::Option<
                     unsafe extern "C" fn(
-                        arg1: *mut ::std::os::raw::c_void,
+                        arg1: *mut ::os::raw::c_void,
                         arg2: *mut sqlite3,
-                        arg3: *const ::std::os::raw::c_char,
-                        arg4: ::std::os::raw::c_int,
-                    ) -> ::std::os::raw::c_int,
+                        arg3: *const ::os::raw::c_char,
+                        arg4: ::os::raw::c_int,
+                    ) -> ::os::raw::c_int,
                 >,
-                arg3: *mut ::std::os::raw::c_void,
-            ) -> *mut ::std::os::raw::c_void;
+                arg3: *mut ::os::raw::c_void,
+            ) -> *mut ::os::raw::c_void;
         }
         extern "C" {
             pub fn sqlite3_wal_autocheckpoint(
                 db: *mut sqlite3,
-                N: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                N: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_wal_checkpoint(
                 db: *mut sqlite3,
-                zDb: *const ::std::os::raw::c_char,
-            ) -> ::std::os::raw::c_int;
+                zDb: *const ::os::raw::c_char,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_wal_checkpoint_v2(
                 db: *mut sqlite3,
-                zDb: *const ::std::os::raw::c_char,
-                eMode: ::std::os::raw::c_int,
-                pnLog: *mut ::std::os::raw::c_int,
-                pnCkpt: *mut ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                zDb: *const ::os::raw::c_char,
+                eMode: ::os::raw::c_int,
+                pnLog: *mut ::os::raw::c_int,
+                pnCkpt: *mut ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_vtab_config(
                 arg1: *mut sqlite3,
-                op: ::std::os::raw::c_int,
+                op: ::os::raw::c_int,
                 ...
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_vtab_on_conflict(arg1: *mut sqlite3) -> ::std::os::raw::c_int;
+            pub fn sqlite3_vtab_on_conflict(arg1: *mut sqlite3) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_vtab_nochange(arg1: *mut sqlite3_context) -> ::std::os::raw::c_int;
+            pub fn sqlite3_vtab_nochange(arg1: *mut sqlite3_context) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_vtab_collation(
                 arg1: *mut sqlite3_index_info,
-                arg2: ::std::os::raw::c_int,
-            ) -> *const ::std::os::raw::c_char;
+                arg2: ::os::raw::c_int,
+            ) -> *const ::os::raw::c_char;
         }
         extern "C" {
-            pub fn sqlite3_vtab_distinct(arg1: *mut sqlite3_index_info) -> ::std::os::raw::c_int;
+            pub fn sqlite3_vtab_distinct(arg1: *mut sqlite3_index_info) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_vtab_in(
                 arg1: *mut sqlite3_index_info,
-                iCons: ::std::os::raw::c_int,
-                bHandle: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                iCons: ::os::raw::c_int,
+                bHandle: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_vtab_in_first(
                 pVal: *mut sqlite3_value,
                 ppOut: *mut *mut sqlite3_value,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_vtab_in_next(
                 pVal: *mut sqlite3_value,
                 ppOut: *mut *mut sqlite3_value,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_vtab_rhs_value(
                 arg1: *mut sqlite3_index_info,
-                arg2: ::std::os::raw::c_int,
+                arg2: ::os::raw::c_int,
                 ppVal: *mut *mut sqlite3_value,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_stmt_scanstatus(
                 pStmt: *mut sqlite3_stmt,
-                idx: ::std::os::raw::c_int,
-                iScanStatusOp: ::std::os::raw::c_int,
-                pOut: *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                idx: ::os::raw::c_int,
+                iScanStatusOp: ::os::raw::c_int,
+                pOut: *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_stmt_scanstatus_v2(
                 pStmt: *mut sqlite3_stmt,
-                idx: ::std::os::raw::c_int,
-                iScanStatusOp: ::std::os::raw::c_int,
-                flags: ::std::os::raw::c_int,
-                pOut: *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                idx: ::os::raw::c_int,
+                iScanStatusOp: ::os::raw::c_int,
+                flags: ::os::raw::c_int,
+                pOut: *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_stmt_scanstatus_reset(arg1: *mut sqlite3_stmt);
         }
         extern "C" {
-            pub fn sqlite3_db_cacheflush(arg1: *mut sqlite3) -> ::std::os::raw::c_int;
+            pub fn sqlite3_db_cacheflush(arg1: *mut sqlite3) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_preupdate_hook(
                 db: *mut sqlite3,
-                xPreUpdate: ::std::option::Option<
+                xPreUpdate: ::option::Option<
                     unsafe extern "C" fn(
-                        pCtx: *mut ::std::os::raw::c_void,
+                        pCtx: *mut ::os::raw::c_void,
                         db: *mut sqlite3,
-                        op: ::std::os::raw::c_int,
-                        zDb: *const ::std::os::raw::c_char,
-                        zName: *const ::std::os::raw::c_char,
+                        op: ::os::raw::c_int,
+                        zDb: *const ::os::raw::c_char,
+                        zName: *const ::os::raw::c_char,
                         iKey1: sqlite3_int64,
                         iKey2: sqlite3_int64,
                     ),
                 >,
-                arg1: *mut ::std::os::raw::c_void,
-            ) -> *mut ::std::os::raw::c_void;
+                arg1: *mut ::os::raw::c_void,
+            ) -> *mut ::os::raw::c_void;
         }
         extern "C" {
             pub fn sqlite3_preupdate_old(
                 arg1: *mut sqlite3,
-                arg2: ::std::os::raw::c_int,
+                arg2: ::os::raw::c_int,
                 arg3: *mut *mut sqlite3_value,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_preupdate_count(arg1: *mut sqlite3) -> ::std::os::raw::c_int;
+            pub fn sqlite3_preupdate_count(arg1: *mut sqlite3) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_preupdate_depth(arg1: *mut sqlite3) -> ::std::os::raw::c_int;
+            pub fn sqlite3_preupdate_depth(arg1: *mut sqlite3) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_preupdate_new(
                 arg1: *mut sqlite3,
-                arg2: ::std::os::raw::c_int,
+                arg2: ::os::raw::c_int,
                 arg3: *mut *mut sqlite3_value,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_preupdate_blobwrite(arg1: *mut sqlite3) -> ::std::os::raw::c_int;
+            pub fn sqlite3_preupdate_blobwrite(arg1: *mut sqlite3) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3_system_errno(arg1: *mut sqlite3) -> ::std::os::raw::c_int;
+            pub fn sqlite3_system_errno(arg1: *mut sqlite3) -> ::os::raw::c_int;
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
         pub struct sqlite3_snapshot {
-            pub hidden: [::std::os::raw::c_uchar; 48usize],
+            pub hidden: [:: ::os::raw::c_uchar; 48usize],
         }
         extern "C" {
             pub fn sqlite3_snapshot_get(
                 db: *mut sqlite3,
-                zSchema: *const ::std::os::raw::c_char,
+                zSchema: *const ::os::raw::c_char,
                 ppSnapshot: *mut *mut sqlite3_snapshot,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_snapshot_open(
                 db: *mut sqlite3,
-                zSchema: *const ::std::os::raw::c_char,
+                zSchema: *const ::os::raw::c_char,
                 pSnapshot: *mut sqlite3_snapshot,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_snapshot_free(arg1: *mut sqlite3_snapshot);
@@ -10441,85 +17734,85 @@ pub mod rusqlite
             pub fn sqlite3_snapshot_cmp(
                 p1: *mut sqlite3_snapshot,
                 p2: *mut sqlite3_snapshot,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_snapshot_recover(
                 db: *mut sqlite3,
-                zDb: *const ::std::os::raw::c_char,
-            ) -> ::std::os::raw::c_int;
+                zDb: *const ::os::raw::c_char,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3_serialize(
                 db: *mut sqlite3,
-                zSchema: *const ::std::os::raw::c_char,
+                zSchema: *const ::os::raw::c_char,
                 piSize: *mut sqlite3_int64,
-                mFlags: ::std::os::raw::c_uint,
-            ) -> *mut ::std::os::raw::c_uchar;
+                mFlags: ::os::raw::c_uint,
+            ) -> *mut ::os::raw::c_uchar;
         }
         extern "C" {
             pub fn sqlite3_deserialize(
                 db: *mut sqlite3,
-                zSchema: *const ::std::os::raw::c_char,
-                pData: *mut ::std::os::raw::c_uchar,
+                zSchema: *const ::os::raw::c_char,
+                pData: *mut ::os::raw::c_uchar,
                 szDb: sqlite3_int64,
                 szBuf: sqlite3_int64,
-                mFlags: ::std::os::raw::c_uint,
-            ) -> ::std::os::raw::c_int;
+                mFlags: ::os::raw::c_uint,
+            ) -> ::os::raw::c_int;
         }
         pub type sqlite3_rtree_dbl = f64;
         extern "C" {
             pub fn sqlite3_rtree_geometry_callback(
                 db: *mut sqlite3,
-                zGeom: *const ::std::os::raw::c_char,
-                xGeom: ::std::option::Option<
+                zGeom: *const ::os::raw::c_char,
+                xGeom: ::option::Option<
                     unsafe extern "C" fn(
                         arg1: *mut sqlite3_rtree_geometry,
-                        arg2: ::std::os::raw::c_int,
+                        arg2: ::os::raw::c_int,
                         arg3: *mut sqlite3_rtree_dbl,
-                        arg4: *mut ::std::os::raw::c_int,
-                    ) -> ::std::os::raw::c_int,
+                        arg4: *mut ::os::raw::c_int,
+                    ) -> ::os::raw::c_int,
                 >,
-                pContext: *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                pContext: *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
         pub struct sqlite3_rtree_geometry {
-            pub pContext: *mut ::std::os::raw::c_void,
-            pub nParam: ::std::os::raw::c_int,
+            pub pContext: *mut ::os::raw::c_void,
+            pub nParam: ::os::raw::c_int,
             pub aParam: *mut sqlite3_rtree_dbl,
-            pub pUser: *mut ::std::os::raw::c_void,
-            pub xDelUser: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
+            pub pUser: *mut ::os::raw::c_void,
+            pub xDelUser: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
         }
         extern "C" {
             pub fn sqlite3_rtree_query_callback(
                 db: *mut sqlite3,
-                zQueryFunc: *const ::std::os::raw::c_char,
-                xQueryFunc: ::std::option::Option<
-                    unsafe extern "C" fn(arg1: *mut sqlite3_rtree_query_info) -> ::std::os::raw::c_int,
+                zQueryFunc: *const ::os::raw::c_char,
+                xQueryFunc: ::option::Option<
+                    unsafe extern "C" fn(arg1: *mut sqlite3_rtree_query_info) -> ::os::raw::c_int,
                 >,
-                pContext: *mut ::std::os::raw::c_void,
-                xDestructor: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-            ) -> ::std::os::raw::c_int;
+                pContext: *mut ::os::raw::c_void,
+                xDestructor: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
+            ) -> ::os::raw::c_int;
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
         pub struct sqlite3_rtree_query_info {
-            pub pContext: *mut ::std::os::raw::c_void,
-            pub nParam: ::std::os::raw::c_int,
+            pub pContext: *mut ::os::raw::c_void,
+            pub nParam: ::os::raw::c_int,
             pub aParam: *mut sqlite3_rtree_dbl,
-            pub pUser: *mut ::std::os::raw::c_void,
-            pub xDelUser: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
+            pub pUser: *mut ::os::raw::c_void,
+            pub xDelUser: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
             pub aCoord: *mut sqlite3_rtree_dbl,
-            pub anQueue: *mut ::std::os::raw::c_uint,
-            pub nCoord: ::std::os::raw::c_int,
-            pub iLevel: ::std::os::raw::c_int,
-            pub mxLevel: ::std::os::raw::c_int,
+            pub anQueue: *mut ::os::raw::c_uint,
+            pub nCoord: ::os::raw::c_int,
+            pub iLevel: ::os::raw::c_int,
+            pub mxLevel: ::os::raw::c_int,
             pub iRowid: sqlite3_int64,
             pub rParentScore: sqlite3_rtree_dbl,
-            pub eParentWithin: ::std::os::raw::c_int,
-            pub eWithin: ::std::os::raw::c_int,
+            pub eParentWithin: ::os::raw::c_int,
+            pub eWithin: ::os::raw::c_int,
             pub rScore: sqlite3_rtree_dbl,
             pub apSqlParam: *mut *mut sqlite3_value,
         }
@@ -10536,9 +17829,9 @@ pub mod rusqlite
         extern "C" {
             pub fn sqlite3session_create(
                 db: *mut sqlite3,
-                zDb: *const ::std::os::raw::c_char,
+                zDb: *const ::os::raw::c_char,
                 ppSession: *mut *mut sqlite3_session,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3session_delete(pSession: *mut sqlite3_session);
@@ -10546,46 +17839,46 @@ pub mod rusqlite
         extern "C" {
             pub fn sqlite3session_object_config(
                 arg1: *mut sqlite3_session,
-                op: ::std::os::raw::c_int,
-                pArg: *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                op: ::os::raw::c_int,
+                pArg: *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3session_enable(
                 pSession: *mut sqlite3_session,
-                bEnable: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                bEnable: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3session_indirect(
                 pSession: *mut sqlite3_session,
-                bIndirect: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                bIndirect: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3session_attach(
                 pSession: *mut sqlite3_session,
-                zTab: *const ::std::os::raw::c_char,
-            ) -> ::std::os::raw::c_int;
+                zTab: *const ::os::raw::c_char,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3session_table_filter(
                 pSession: *mut sqlite3_session,
-                xFilter: ::std::option::Option<
+                xFilter: ::option::Option<
                     unsafe extern "C" fn(
-                        pCtx: *mut ::std::os::raw::c_void,
-                        zTab: *const ::std::os::raw::c_char,
-                    ) -> ::std::os::raw::c_int,
+                        pCtx: *mut ::os::raw::c_void,
+                        zTab: *const ::os::raw::c_char,
+                    ) -> ::os::raw::c_int,
                 >,
-                pCtx: *mut ::std::os::raw::c_void,
+                pCtx: *mut ::os::raw::c_void,
             );
         }
         extern "C" {
             pub fn sqlite3session_changeset(
                 pSession: *mut sqlite3_session,
-                pnChangeset: *mut ::std::os::raw::c_int,
-                ppChangeset: *mut *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                pnChangeset: *mut ::os::raw::c_int,
+                ppChangeset: *mut *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3session_changeset_size(pSession: *mut sqlite3_session) -> sqlite3_int64;
@@ -10593,20 +17886,20 @@ pub mod rusqlite
         extern "C" {
             pub fn sqlite3session_diff(
                 pSession: *mut sqlite3_session,
-                zFromDb: *const ::std::os::raw::c_char,
-                zTbl: *const ::std::os::raw::c_char,
-                pzErrMsg: *mut *mut ::std::os::raw::c_char,
-            ) -> ::std::os::raw::c_int;
+                zFromDb: *const ::os::raw::c_char,
+                zTbl: *const ::os::raw::c_char,
+                pzErrMsg: *mut *mut ::os::raw::c_char,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3session_patchset(
                 pSession: *mut sqlite3_session,
-                pnPatchset: *mut ::std::os::raw::c_int,
-                ppPatchset: *mut *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                pnPatchset: *mut ::os::raw::c_int,
+                ppPatchset: *mut *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3session_isempty(pSession: *mut sqlite3_session) -> ::std::os::raw::c_int;
+            pub fn sqlite3session_isempty(pSession: *mut sqlite3_session) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3session_memory_used(pSession: *mut sqlite3_session) -> sqlite3_int64;
@@ -10614,94 +17907,94 @@ pub mod rusqlite
         extern "C" {
             pub fn sqlite3changeset_start(
                 pp: *mut *mut sqlite3_changeset_iter,
-                nChangeset: ::std::os::raw::c_int,
-                pChangeset: *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                nChangeset: ::os::raw::c_int,
+                pChangeset: *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3changeset_start_v2(
                 pp: *mut *mut sqlite3_changeset_iter,
-                nChangeset: ::std::os::raw::c_int,
-                pChangeset: *mut ::std::os::raw::c_void,
-                flags: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                nChangeset: ::os::raw::c_int,
+                pChangeset: *mut ::os::raw::c_void,
+                flags: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3changeset_next(pIter: *mut sqlite3_changeset_iter) -> ::std::os::raw::c_int;
+            pub fn sqlite3changeset_next(pIter: *mut sqlite3_changeset_iter) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3changeset_op(
                 pIter: *mut sqlite3_changeset_iter,
-                pzTab: *mut *const ::std::os::raw::c_char,
-                pnCol: *mut ::std::os::raw::c_int,
-                pOp: *mut ::std::os::raw::c_int,
-                pbIndirect: *mut ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                pzTab: *mut *const ::os::raw::c_char,
+                pnCol: *mut ::os::raw::c_int,
+                pOp: *mut ::os::raw::c_int,
+                pbIndirect: *mut ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3changeset_pk(
                 pIter: *mut sqlite3_changeset_iter,
-                pabPK: *mut *mut ::std::os::raw::c_uchar,
-                pnCol: *mut ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                pabPK: *mut *mut ::os::raw::c_uchar,
+                pnCol: *mut ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3changeset_old(
                 pIter: *mut sqlite3_changeset_iter,
-                iVal: ::std::os::raw::c_int,
+                iVal: ::os::raw::c_int,
                 ppValue: *mut *mut sqlite3_value,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3changeset_new(
                 pIter: *mut sqlite3_changeset_iter,
-                iVal: ::std::os::raw::c_int,
+                iVal: ::os::raw::c_int,
                 ppValue: *mut *mut sqlite3_value,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3changeset_conflict(
                 pIter: *mut sqlite3_changeset_iter,
-                iVal: ::std::os::raw::c_int,
+                iVal: ::os::raw::c_int,
                 ppValue: *mut *mut sqlite3_value,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3changeset_fk_conflicts(
                 pIter: *mut sqlite3_changeset_iter,
-                pnOut: *mut ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                pnOut: *mut ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
-            pub fn sqlite3changeset_finalize(pIter: *mut sqlite3_changeset_iter) -> ::std::os::raw::c_int;
+            pub fn sqlite3changeset_finalize(pIter: *mut sqlite3_changeset_iter) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3changeset_invert(
-                nIn: ::std::os::raw::c_int,
-                pIn: *const ::std::os::raw::c_void,
-                pnOut: *mut ::std::os::raw::c_int,
-                ppOut: *mut *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                nIn: ::os::raw::c_int,
+                pIn: *const ::os::raw::c_void,
+                pnOut: *mut ::os::raw::c_int,
+                ppOut: *mut *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3changeset_concat(
-                nA: ::std::os::raw::c_int,
-                pA: *mut ::std::os::raw::c_void,
-                nB: ::std::os::raw::c_int,
-                pB: *mut ::std::os::raw::c_void,
-                pnOut: *mut ::std::os::raw::c_int,
-                ppOut: *mut *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                nA: ::os::raw::c_int,
+                pA: *mut ::os::raw::c_void,
+                nB: ::os::raw::c_int,
+                pB: *mut ::os::raw::c_void,
+                pnOut: *mut ::os::raw::c_int,
+                ppOut: *mut *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3changeset_upgrade(
                 db: *mut sqlite3,
-                zDb: *const ::std::os::raw::c_char,
-                nIn: ::std::os::raw::c_int,
-                pIn: *const ::std::os::raw::c_void,
-                pnOut: *mut ::std::os::raw::c_int,
-                ppOut: *mut *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                zDb: *const ::os::raw::c_char,
+                nIn: ::os::raw::c_int,
+                pIn: *const ::os::raw::c_void,
+                pnOut: *mut ::os::raw::c_int,
+                ppOut: *mut *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
@@ -10709,34 +18002,34 @@ pub mod rusqlite
             _unused: [u8; 0],
         }
         extern "C" {
-            pub fn sqlite3changegroup_new(pp: *mut *mut sqlite3_changegroup) -> ::std::os::raw::c_int;
+            pub fn sqlite3changegroup_new(pp: *mut *mut sqlite3_changegroup) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3changegroup_schema(
                 arg1: *mut sqlite3_changegroup,
                 arg2: *mut sqlite3,
-                zDb: *const ::std::os::raw::c_char,
-            ) -> ::std::os::raw::c_int;
+                zDb: *const ::os::raw::c_char,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3changegroup_add(
                 arg1: *mut sqlite3_changegroup,
-                nData: ::std::os::raw::c_int,
-                pData: *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                nData: ::os::raw::c_int,
+                pData: *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3changegroup_add_change(
                 arg1: *mut sqlite3_changegroup,
                 arg2: *mut sqlite3_changeset_iter,
-            ) -> ::std::os::raw::c_int;
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3changegroup_output(
                 arg1: *mut sqlite3_changegroup,
-                pnData: *mut ::std::os::raw::c_int,
-                ppData: *mut *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                pnData: *mut ::os::raw::c_int,
+                ppData: *mut *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3changegroup_delete(arg1: *mut sqlite3_changegroup);
@@ -10744,47 +18037,47 @@ pub mod rusqlite
         extern "C" {
             pub fn sqlite3changeset_apply(
                 db: *mut sqlite3,
-                nChangeset: ::std::os::raw::c_int,
-                pChangeset: *mut ::std::os::raw::c_void,
-                xFilter: ::std::option::Option<
+                nChangeset: ::os::raw::c_int,
+                pChangeset: *mut ::os::raw::c_void,
+                xFilter: ::option::Option<
                     unsafe extern "C" fn(
-                        pCtx: *mut ::std::os::raw::c_void,
-                        zTab: *const ::std::os::raw::c_char,
-                    ) -> ::std::os::raw::c_int,
+                        pCtx: *mut ::os::raw::c_void,
+                        zTab: *const ::os::raw::c_char,
+                    ) -> ::os::raw::c_int,
                 >,
-                xConflict: ::std::option::Option<
+                xConflict: ::option::Option<
                     unsafe extern "C" fn(
-                        pCtx: *mut ::std::os::raw::c_void,
-                        eConflict: ::std::os::raw::c_int,
+                        pCtx: *mut ::os::raw::c_void,
+                        eConflict: ::os::raw::c_int,
                         p: *mut sqlite3_changeset_iter,
-                    ) -> ::std::os::raw::c_int,
+                    ) -> ::os::raw::c_int,
                 >,
-                pCtx: *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                pCtx: *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3changeset_apply_v2(
                 db: *mut sqlite3,
-                nChangeset: ::std::os::raw::c_int,
-                pChangeset: *mut ::std::os::raw::c_void,
-                xFilter: ::std::option::Option<
+                nChangeset: ::os::raw::c_int,
+                pChangeset: *mut ::os::raw::c_void,
+                xFilter: ::option::Option<
                     unsafe extern "C" fn(
-                        pCtx: *mut ::std::os::raw::c_void,
-                        zTab: *const ::std::os::raw::c_char,
-                    ) -> ::std::os::raw::c_int,
+                        pCtx: *mut ::os::raw::c_void,
+                        zTab: *const ::os::raw::c_char,
+                    ) -> ::os::raw::c_int,
                 >,
-                xConflict: ::std::option::Option<
+                xConflict: ::option::Option<
                     unsafe extern "C" fn(
-                        pCtx: *mut ::std::os::raw::c_void,
-                        eConflict: ::std::os::raw::c_int,
+                        pCtx: *mut ::os::raw::c_void,
+                        eConflict: ::os::raw::c_int,
                         p: *mut sqlite3_changeset_iter,
-                    ) -> ::std::os::raw::c_int,
+                    ) -> ::os::raw::c_int,
                 >,
-                pCtx: *mut ::std::os::raw::c_void,
-                ppRebase: *mut *mut ::std::os::raw::c_void,
-                pnRebase: *mut ::std::os::raw::c_int,
-                flags: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                pCtx: *mut ::os::raw::c_void,
+                ppRebase: *mut *mut ::os::raw::c_void,
+                pnRebase: *mut ::os::raw::c_int,
+                flags: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
@@ -10792,23 +18085,23 @@ pub mod rusqlite
             _unused: [u8; 0],
         }
         extern "C" {
-            pub fn sqlite3rebaser_create(ppNew: *mut *mut sqlite3_rebaser) -> ::std::os::raw::c_int;
+            pub fn sqlite3rebaser_create(ppNew: *mut *mut sqlite3_rebaser) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3rebaser_configure(
                 arg1: *mut sqlite3_rebaser,
-                nRebase: ::std::os::raw::c_int,
-                pRebase: *const ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                nRebase: ::os::raw::c_int,
+                pRebase: *const ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3rebaser_rebase(
                 arg1: *mut sqlite3_rebaser,
-                nIn: ::std::os::raw::c_int,
-                pIn: *const ::std::os::raw::c_void,
-                pnOut: *mut ::std::os::raw::c_int,
-                ppOut: *mut *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                nIn: ::os::raw::c_int,
+                pIn: *const ::os::raw::c_void,
+                pnOut: *mut ::os::raw::c_int,
+                ppOut: *mut *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3rebaser_delete(p: *mut sqlite3_rebaser);
@@ -10816,392 +18109,392 @@ pub mod rusqlite
         extern "C" {
             pub fn sqlite3changeset_apply_strm(
                 db: *mut sqlite3,
-                xInput: ::std::option::Option<
+                xInput: ::option::Option<
                     unsafe extern "C" fn(
-                        pIn: *mut ::std::os::raw::c_void,
-                        pData: *mut ::std::os::raw::c_void,
-                        pnData: *mut ::std::os::raw::c_int,
-                    ) -> ::std::os::raw::c_int,
+                        pIn: *mut ::os::raw::c_void,
+                        pData: *mut ::os::raw::c_void,
+                        pnData: *mut ::os::raw::c_int,
+                    ) -> ::os::raw::c_int,
                 >,
-                pIn: *mut ::std::os::raw::c_void,
-                xFilter: ::std::option::Option<
+                pIn: *mut ::os::raw::c_void,
+                xFilter: ::option::Option<
                     unsafe extern "C" fn(
-                        pCtx: *mut ::std::os::raw::c_void,
-                        zTab: *const ::std::os::raw::c_char,
-                    ) -> ::std::os::raw::c_int,
+                        pCtx: *mut ::os::raw::c_void,
+                        zTab: *const ::os::raw::c_char,
+                    ) -> ::os::raw::c_int,
                 >,
-                xConflict: ::std::option::Option<
+                xConflict: ::option::Option<
                     unsafe extern "C" fn(
-                        pCtx: *mut ::std::os::raw::c_void,
-                        eConflict: ::std::os::raw::c_int,
+                        pCtx: *mut ::os::raw::c_void,
+                        eConflict: ::os::raw::c_int,
                         p: *mut sqlite3_changeset_iter,
-                    ) -> ::std::os::raw::c_int,
+                    ) -> ::os::raw::c_int,
                 >,
-                pCtx: *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                pCtx: *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3changeset_apply_v2_strm(
                 db: *mut sqlite3,
-                xInput: ::std::option::Option<
+                xInput: ::option::Option<
                     unsafe extern "C" fn(
-                        pIn: *mut ::std::os::raw::c_void,
-                        pData: *mut ::std::os::raw::c_void,
-                        pnData: *mut ::std::os::raw::c_int,
-                    ) -> ::std::os::raw::c_int,
+                        pIn: *mut ::os::raw::c_void,
+                        pData: *mut ::os::raw::c_void,
+                        pnData: *mut ::os::raw::c_int,
+                    ) -> ::os::raw::c_int,
                 >,
-                pIn: *mut ::std::os::raw::c_void,
-                xFilter: ::std::option::Option<
+                pIn: *mut ::os::raw::c_void,
+                xFilter: ::option::Option<
                     unsafe extern "C" fn(
-                        pCtx: *mut ::std::os::raw::c_void,
-                        zTab: *const ::std::os::raw::c_char,
-                    ) -> ::std::os::raw::c_int,
+                        pCtx: *mut ::os::raw::c_void,
+                        zTab: *const ::os::raw::c_char,
+                    ) -> ::os::raw::c_int,
                 >,
-                xConflict: ::std::option::Option<
+                xConflict: ::option::Option<
                     unsafe extern "C" fn(
-                        pCtx: *mut ::std::os::raw::c_void,
-                        eConflict: ::std::os::raw::c_int,
+                        pCtx: *mut ::os::raw::c_void,
+                        eConflict: ::os::raw::c_int,
                         p: *mut sqlite3_changeset_iter,
-                    ) -> ::std::os::raw::c_int,
+                    ) -> ::os::raw::c_int,
                 >,
-                pCtx: *mut ::std::os::raw::c_void,
-                ppRebase: *mut *mut ::std::os::raw::c_void,
-                pnRebase: *mut ::std::os::raw::c_int,
-                flags: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                pCtx: *mut ::os::raw::c_void,
+                ppRebase: *mut *mut ::os::raw::c_void,
+                pnRebase: *mut ::os::raw::c_int,
+                flags: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3changeset_concat_strm(
-                xInputA: ::std::option::Option<
+                xInputA: ::option::Option<
                     unsafe extern "C" fn(
-                        pIn: *mut ::std::os::raw::c_void,
-                        pData: *mut ::std::os::raw::c_void,
-                        pnData: *mut ::std::os::raw::c_int,
-                    ) -> ::std::os::raw::c_int,
+                        pIn: *mut ::os::raw::c_void,
+                        pData: *mut ::os::raw::c_void,
+                        pnData: *mut ::os::raw::c_int,
+                    ) -> ::os::raw::c_int,
                 >,
-                pInA: *mut ::std::os::raw::c_void,
-                xInputB: ::std::option::Option<
+                pInA: *mut ::os::raw::c_void,
+                xInputB: ::option::Option<
                     unsafe extern "C" fn(
-                        pIn: *mut ::std::os::raw::c_void,
-                        pData: *mut ::std::os::raw::c_void,
-                        pnData: *mut ::std::os::raw::c_int,
-                    ) -> ::std::os::raw::c_int,
+                        pIn: *mut ::os::raw::c_void,
+                        pData: *mut ::os::raw::c_void,
+                        pnData: *mut ::os::raw::c_int,
+                    ) -> ::os::raw::c_int,
                 >,
-                pInB: *mut ::std::os::raw::c_void,
-                xOutput: ::std::option::Option<
+                pInB: *mut ::os::raw::c_void,
+                xOutput: ::option::Option<
                     unsafe extern "C" fn(
-                        pOut: *mut ::std::os::raw::c_void,
-                        pData: *const ::std::os::raw::c_void,
-                        nData: ::std::os::raw::c_int,
-                    ) -> ::std::os::raw::c_int,
+                        pOut: *mut ::os::raw::c_void,
+                        pData: *const ::os::raw::c_void,
+                        nData: ::os::raw::c_int,
+                    ) -> ::os::raw::c_int,
                 >,
-                pOut: *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                pOut: *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3changeset_invert_strm(
-                xInput: ::std::option::Option<
+                xInput: ::option::Option<
                     unsafe extern "C" fn(
-                        pIn: *mut ::std::os::raw::c_void,
-                        pData: *mut ::std::os::raw::c_void,
-                        pnData: *mut ::std::os::raw::c_int,
-                    ) -> ::std::os::raw::c_int,
+                        pIn: *mut ::os::raw::c_void,
+                        pData: *mut ::os::raw::c_void,
+                        pnData: *mut ::os::raw::c_int,
+                    ) -> ::os::raw::c_int,
                 >,
-                pIn: *mut ::std::os::raw::c_void,
-                xOutput: ::std::option::Option<
+                pIn: *mut ::os::raw::c_void,
+                xOutput: ::option::Option<
                     unsafe extern "C" fn(
-                        pOut: *mut ::std::os::raw::c_void,
-                        pData: *const ::std::os::raw::c_void,
-                        nData: ::std::os::raw::c_int,
-                    ) -> ::std::os::raw::c_int,
+                        pOut: *mut ::os::raw::c_void,
+                        pData: *const ::os::raw::c_void,
+                        nData: ::os::raw::c_int,
+                    ) -> ::os::raw::c_int,
                 >,
-                pOut: *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                pOut: *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3changeset_start_strm(
                 pp: *mut *mut sqlite3_changeset_iter,
-                xInput: ::std::option::Option<
+                xInput: ::option::Option<
                     unsafe extern "C" fn(
-                        pIn: *mut ::std::os::raw::c_void,
-                        pData: *mut ::std::os::raw::c_void,
-                        pnData: *mut ::std::os::raw::c_int,
-                    ) -> ::std::os::raw::c_int,
+                        pIn: *mut ::os::raw::c_void,
+                        pData: *mut ::os::raw::c_void,
+                        pnData: *mut ::os::raw::c_int,
+                    ) -> ::os::raw::c_int,
                 >,
-                pIn: *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                pIn: *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3changeset_start_v2_strm(
                 pp: *mut *mut sqlite3_changeset_iter,
-                xInput: ::std::option::Option<
+                xInput: ::option::Option<
                     unsafe extern "C" fn(
-                        pIn: *mut ::std::os::raw::c_void,
-                        pData: *mut ::std::os::raw::c_void,
-                        pnData: *mut ::std::os::raw::c_int,
-                    ) -> ::std::os::raw::c_int,
+                        pIn: *mut ::os::raw::c_void,
+                        pData: *mut ::os::raw::c_void,
+                        pnData: *mut ::os::raw::c_int,
+                    ) -> ::os::raw::c_int,
                 >,
-                pIn: *mut ::std::os::raw::c_void,
-                flags: ::std::os::raw::c_int,
-            ) -> ::std::os::raw::c_int;
+                pIn: *mut ::os::raw::c_void,
+                flags: ::os::raw::c_int,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3session_changeset_strm(
                 pSession: *mut sqlite3_session,
-                xOutput: ::std::option::Option<
+                xOutput: ::option::Option<
                     unsafe extern "C" fn(
-                        pOut: *mut ::std::os::raw::c_void,
-                        pData: *const ::std::os::raw::c_void,
-                        nData: ::std::os::raw::c_int,
-                    ) -> ::std::os::raw::c_int,
+                        pOut: *mut ::os::raw::c_void,
+                        pData: *const ::os::raw::c_void,
+                        nData: ::os::raw::c_int,
+                    ) -> ::os::raw::c_int,
                 >,
-                pOut: *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                pOut: *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3session_patchset_strm(
                 pSession: *mut sqlite3_session,
-                xOutput: ::std::option::Option<
+                xOutput: ::option::Option<
                     unsafe extern "C" fn(
-                        pOut: *mut ::std::os::raw::c_void,
-                        pData: *const ::std::os::raw::c_void,
-                        nData: ::std::os::raw::c_int,
-                    ) -> ::std::os::raw::c_int,
+                        pOut: *mut ::os::raw::c_void,
+                        pData: *const ::os::raw::c_void,
+                        nData: ::os::raw::c_int,
+                    ) -> ::os::raw::c_int,
                 >,
-                pOut: *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                pOut: *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3changegroup_add_strm(
                 arg1: *mut sqlite3_changegroup,
-                xInput: ::std::option::Option<
+                xInput: ::option::Option<
                     unsafe extern "C" fn(
-                        pIn: *mut ::std::os::raw::c_void,
-                        pData: *mut ::std::os::raw::c_void,
-                        pnData: *mut ::std::os::raw::c_int,
-                    ) -> ::std::os::raw::c_int,
+                        pIn: *mut ::os::raw::c_void,
+                        pData: *mut ::os::raw::c_void,
+                        pnData: *mut ::os::raw::c_int,
+                    ) -> ::os::raw::c_int,
                 >,
-                pIn: *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                pIn: *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3changegroup_output_strm(
                 arg1: *mut sqlite3_changegroup,
-                xOutput: ::std::option::Option<
+                xOutput: ::option::Option<
                     unsafe extern "C" fn(
-                        pOut: *mut ::std::os::raw::c_void,
-                        pData: *const ::std::os::raw::c_void,
-                        nData: ::std::os::raw::c_int,
-                    ) -> ::std::os::raw::c_int,
+                        pOut: *mut ::os::raw::c_void,
+                        pData: *const ::os::raw::c_void,
+                        nData: ::os::raw::c_int,
+                    ) -> ::os::raw::c_int,
                 >,
-                pOut: *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                pOut: *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3rebaser_rebase_strm(
                 pRebaser: *mut sqlite3_rebaser,
-                xInput: ::std::option::Option<
+                xInput: ::option::Option<
                     unsafe extern "C" fn(
-                        pIn: *mut ::std::os::raw::c_void,
-                        pData: *mut ::std::os::raw::c_void,
-                        pnData: *mut ::std::os::raw::c_int,
-                    ) -> ::std::os::raw::c_int,
+                        pIn: *mut ::os::raw::c_void,
+                        pData: *mut ::os::raw::c_void,
+                        pnData: *mut ::os::raw::c_int,
+                    ) -> ::os::raw::c_int,
                 >,
-                pIn: *mut ::std::os::raw::c_void,
-                xOutput: ::std::option::Option<
+                pIn: *mut ::os::raw::c_void,
+                xOutput: ::option::Option<
                     unsafe extern "C" fn(
-                        pOut: *mut ::std::os::raw::c_void,
-                        pData: *const ::std::os::raw::c_void,
-                        nData: ::std::os::raw::c_int,
-                    ) -> ::std::os::raw::c_int,
+                        pOut: *mut ::os::raw::c_void,
+                        pData: *const ::os::raw::c_void,
+                        nData: ::os::raw::c_int,
+                    ) -> ::os::raw::c_int,
                 >,
-                pOut: *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                pOut: *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         extern "C" {
             pub fn sqlite3session_config(
-                op: ::std::os::raw::c_int,
-                pArg: *mut ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int;
+                op: ::os::raw::c_int,
+                pArg: *mut ::os::raw::c_void,
+            ) -> ::os::raw::c_int;
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
         pub struct Fts5Context {
             _unused: [u8; 0],
         }
-        pub type fts5_extension_function = ::std::option::Option<
+        pub type fts5_extension_function = ::option::Option<
             unsafe extern "C" fn(
                 pApi: *const Fts5ExtensionApi,
                 pFts: *mut Fts5Context,
                 pCtx: *mut sqlite3_context,
-                nVal: ::std::os::raw::c_int,
+                nVal: ::os::raw::c_int,
                 apVal: *mut *mut sqlite3_value,
             ),
         >;
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
         pub struct Fts5PhraseIter {
-            pub a: *const ::std::os::raw::c_uchar,
-            pub b: *const ::std::os::raw::c_uchar,
+            pub a: *const ::os::raw::c_uchar,
+            pub b: *const ::os::raw::c_uchar,
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
         pub struct Fts5ExtensionApi {
-            pub iVersion: ::std::os::raw::c_int,
-            pub xUserData: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut Fts5Context) -> *mut ::std::os::raw::c_void,
+            pub iVersion: ::os::raw::c_int,
+            pub xUserData: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut Fts5Context) -> *mut ::os::raw::c_void,
             >,
-            pub xColumnCount: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut Fts5Context) -> ::std::os::raw::c_int,
+            pub xColumnCount: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut Fts5Context) -> ::os::raw::c_int,
             >,
-            pub xRowCount: ::std::option::Option<
+            pub xRowCount: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut Fts5Context,
                     pnRow: *mut sqlite3_int64,
-                ) -> ::std::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xColumnTotalSize: ::std::option::Option<
+            pub xColumnTotalSize: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut Fts5Context,
-                    iCol: ::std::os::raw::c_int,
+                    iCol: ::os::raw::c_int,
                     pnToken: *mut sqlite3_int64,
-                ) -> ::std::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xTokenize: ::std::option::Option<
+            pub xTokenize: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut Fts5Context,
-                    pText: *const ::std::os::raw::c_char,
-                    nText: ::std::os::raw::c_int,
-                    pCtx: *mut ::std::os::raw::c_void,
-                    xToken: ::std::option::Option<
+                    pText: *const ::os::raw::c_char,
+                    nText: ::os::raw::c_int,
+                    pCtx: *mut ::os::raw::c_void,
+                    xToken: ::option::Option<
                         unsafe extern "C" fn(
-                            arg1: *mut ::std::os::raw::c_void,
-                            arg2: ::std::os::raw::c_int,
-                            arg3: *const ::std::os::raw::c_char,
-                            arg4: ::std::os::raw::c_int,
-                            arg5: ::std::os::raw::c_int,
-                            arg6: ::std::os::raw::c_int,
-                        ) -> ::std::os::raw::c_int,
+                            arg1: *mut ::os::raw::c_void,
+                            arg2: ::os::raw::c_int,
+                            arg3: *const ::os::raw::c_char,
+                            arg4: ::os::raw::c_int,
+                            arg5: ::os::raw::c_int,
+                            arg6: ::os::raw::c_int,
+                        ) -> ::os::raw::c_int,
                     >,
-                ) -> ::std::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xPhraseCount: ::std::option::Option<
-                unsafe extern "C" fn(arg1: *mut Fts5Context) -> ::std::os::raw::c_int,
+            pub xPhraseCount: ::option::Option<
+                unsafe extern "C" fn(arg1: *mut Fts5Context) -> ::os::raw::c_int,
             >,
-            pub xPhraseSize: ::std::option::Option<
+            pub xPhraseSize: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut Fts5Context,
-                    iPhrase: ::std::os::raw::c_int,
-                ) -> ::std::os::raw::c_int,
+                    iPhrase: ::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xInstCount: ::std::option::Option<
+            pub xInstCount: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut Fts5Context,
-                    pnInst: *mut ::std::os::raw::c_int,
-                ) -> ::std::os::raw::c_int,
+                    pnInst: *mut ::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xInst: ::std::option::Option<
+            pub xInst: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut Fts5Context,
-                    iIdx: ::std::os::raw::c_int,
-                    piPhrase: *mut ::std::os::raw::c_int,
-                    piCol: *mut ::std::os::raw::c_int,
-                    piOff: *mut ::std::os::raw::c_int,
-                ) -> ::std::os::raw::c_int,
+                    iIdx: ::os::raw::c_int,
+                    piPhrase: *mut ::os::raw::c_int,
+                    piCol: *mut ::os::raw::c_int,
+                    piOff: *mut ::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
             pub xRowid:
-                ::std::option::Option<unsafe extern "C" fn(arg1: *mut Fts5Context) -> sqlite3_int64>,
-            pub xColumnText: ::std::option::Option<
+                ::option::Option<unsafe extern "C" fn(arg1: *mut Fts5Context) -> sqlite3_int64>,
+            pub xColumnText: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut Fts5Context,
-                    iCol: ::std::os::raw::c_int,
-                    pz: *mut *const ::std::os::raw::c_char,
-                    pn: *mut ::std::os::raw::c_int,
-                ) -> ::std::os::raw::c_int,
+                    iCol: ::os::raw::c_int,
+                    pz: *mut *const ::os::raw::c_char,
+                    pn: *mut ::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xColumnSize: ::std::option::Option<
+            pub xColumnSize: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut Fts5Context,
-                    iCol: ::std::os::raw::c_int,
-                    pnToken: *mut ::std::os::raw::c_int,
-                ) -> ::std::os::raw::c_int,
+                    iCol: ::os::raw::c_int,
+                    pnToken: *mut ::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xQueryPhrase: ::std::option::Option<
+            pub xQueryPhrase: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut Fts5Context,
-                    iPhrase: ::std::os::raw::c_int,
-                    pUserData: *mut ::std::os::raw::c_void,
-                    arg2: ::std::option::Option<
+                    iPhrase: ::os::raw::c_int,
+                    pUserData: *mut ::os::raw::c_void,
+                    arg2: ::option::Option<
                         unsafe extern "C" fn(
                             arg1: *const Fts5ExtensionApi,
                             arg2: *mut Fts5Context,
-                            arg3: *mut ::std::os::raw::c_void,
-                        ) -> ::std::os::raw::c_int,
+                            arg3: *mut ::os::raw::c_void,
+                        ) -> ::os::raw::c_int,
                     >,
-                ) -> ::std::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xSetAuxdata: ::std::option::Option<
+            pub xSetAuxdata: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut Fts5Context,
-                    pAux: *mut ::std::os::raw::c_void,
-                    xDelete: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-                ) -> ::std::os::raw::c_int,
+                    pAux: *mut ::os::raw::c_void,
+                    xDelete: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
+                ) -> ::os::raw::c_int,
             >,
-            pub xGetAuxdata: ::std::option::Option<
+            pub xGetAuxdata: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut Fts5Context,
-                    bClear: ::std::os::raw::c_int,
-                ) -> *mut ::std::os::raw::c_void,
+                    bClear: ::os::raw::c_int,
+                ) -> *mut ::os::raw::c_void,
             >,
-            pub xPhraseFirst: ::std::option::Option<
+            pub xPhraseFirst: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut Fts5Context,
-                    iPhrase: ::std::os::raw::c_int,
+                    iPhrase: ::os::raw::c_int,
                     arg2: *mut Fts5PhraseIter,
-                    arg3: *mut ::std::os::raw::c_int,
-                    arg4: *mut ::std::os::raw::c_int,
-                ) -> ::std::os::raw::c_int,
+                    arg3: *mut ::os::raw::c_int,
+                    arg4: *mut ::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xPhraseNext: ::std::option::Option<
+            pub xPhraseNext: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut Fts5Context,
                     arg2: *mut Fts5PhraseIter,
-                    piCol: *mut ::std::os::raw::c_int,
-                    piOff: *mut ::std::os::raw::c_int,
+                    piCol: *mut ::os::raw::c_int,
+                    piOff: *mut ::os::raw::c_int,
                 ),
             >,
-            pub xPhraseFirstColumn: ::std::option::Option<
+            pub xPhraseFirstColumn: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut Fts5Context,
-                    iPhrase: ::std::os::raw::c_int,
+                    iPhrase: ::os::raw::c_int,
                     arg2: *mut Fts5PhraseIter,
-                    arg3: *mut ::std::os::raw::c_int,
-                ) -> ::std::os::raw::c_int,
+                    arg3: *mut ::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xPhraseNextColumn: ::std::option::Option<
+            pub xPhraseNextColumn: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut Fts5Context,
                     arg2: *mut Fts5PhraseIter,
-                    piCol: *mut ::std::os::raw::c_int,
+                    piCol: *mut ::os::raw::c_int,
                 ),
             >,
-            pub xQueryToken: ::std::option::Option<
+            pub xQueryToken: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut Fts5Context,
-                    iPhrase: ::std::os::raw::c_int,
-                    iToken: ::std::os::raw::c_int,
-                    ppToken: *mut *const ::std::os::raw::c_char,
-                    pnToken: *mut ::std::os::raw::c_int,
-                ) -> ::std::os::raw::c_int,
+                    iPhrase: ::os::raw::c_int,
+                    iToken: ::os::raw::c_int,
+                    ppToken: *mut *const ::os::raw::c_char,
+                    pnToken: *mut ::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xInstToken: ::std::option::Option<
+            pub xInstToken: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut Fts5Context,
-                    iIdx: ::std::os::raw::c_int,
-                    iToken: ::std::os::raw::c_int,
-                    arg2: *mut *const ::std::os::raw::c_char,
-                    arg3: *mut ::std::os::raw::c_int,
-                ) -> ::std::os::raw::c_int,
+                    iIdx: ::os::raw::c_int,
+                    iToken: ::os::raw::c_int,
+                    arg2: *mut *const ::os::raw::c_char,
+                    arg3: *mut ::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
         }
         #[repr(C)]
@@ -11212,64 +18505,64 @@ pub mod rusqlite
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
         pub struct fts5_tokenizer {
-            pub xCreate: ::std::option::Option<
+            pub xCreate: ::option::Option<
                 unsafe extern "C" fn(
-                    arg1: *mut ::std::os::raw::c_void,
-                    azArg: *mut *const ::std::os::raw::c_char,
-                    nArg: ::std::os::raw::c_int,
+                    arg1: *mut ::os::raw::c_void,
+                    azArg: *mut *const ::os::raw::c_char,
+                    nArg: ::os::raw::c_int,
                     ppOut: *mut *mut Fts5Tokenizer,
-                ) -> ::std::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xDelete: ::std::option::Option<unsafe extern "C" fn(arg1: *mut Fts5Tokenizer)>,
-            pub xTokenize: ::std::option::Option<
+            pub xDelete: ::option::Option<unsafe extern "C" fn(arg1: *mut Fts5Tokenizer)>,
+            pub xTokenize: ::option::Option<
                 unsafe extern "C" fn(
                     arg1: *mut Fts5Tokenizer,
-                    pCtx: *mut ::std::os::raw::c_void,
-                    flags: ::std::os::raw::c_int,
-                    pText: *const ::std::os::raw::c_char,
-                    nText: ::std::os::raw::c_int,
-                    xToken: ::std::option::Option<
+                    pCtx: *mut ::os::raw::c_void,
+                    flags: ::os::raw::c_int,
+                    pText: *const ::os::raw::c_char,
+                    nText: ::os::raw::c_int,
+                    xToken: ::option::Option<
                         unsafe extern "C" fn(
-                            pCtx: *mut ::std::os::raw::c_void,
-                            tflags: ::std::os::raw::c_int,
-                            pToken: *const ::std::os::raw::c_char,
-                            nToken: ::std::os::raw::c_int,
-                            iStart: ::std::os::raw::c_int,
-                            iEnd: ::std::os::raw::c_int,
-                        ) -> ::std::os::raw::c_int,
+                            pCtx: *mut ::os::raw::c_void,
+                            tflags: ::os::raw::c_int,
+                            pToken: *const ::os::raw::c_char,
+                            nToken: ::os::raw::c_int,
+                            iStart: ::os::raw::c_int,
+                            iEnd: ::os::raw::c_int,
+                        ) -> ::os::raw::c_int,
                     >,
-                ) -> ::std::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
         }
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
         pub struct fts5_api {
-            pub iVersion: ::std::os::raw::c_int,
-            pub xCreateTokenizer: ::std::option::Option<
+            pub iVersion: ::os::raw::c_int,
+            pub xCreateTokenizer: ::option::Option<
                 unsafe extern "C" fn(
                     pApi: *mut fts5_api,
-                    zName: *const ::std::os::raw::c_char,
-                    pUserData: *mut ::std::os::raw::c_void,
+                    zName: *const ::os::raw::c_char,
+                    pUserData: *mut ::os::raw::c_void,
                     pTokenizer: *mut fts5_tokenizer,
-                    xDestroy: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-                ) -> ::std::os::raw::c_int,
+                    xDestroy: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
+                ) -> ::os::raw::c_int,
             >,
-            pub xFindTokenizer: ::std::option::Option<
+            pub xFindTokenizer: ::option::Option<
                 unsafe extern "C" fn(
                     pApi: *mut fts5_api,
-                    zName: *const ::std::os::raw::c_char,
-                    ppUserData: *mut *mut ::std::os::raw::c_void,
+                    zName: *const ::os::raw::c_char,
+                    ppUserData: *mut *mut ::os::raw::c_void,
                     pTokenizer: *mut fts5_tokenizer,
-                ) -> ::std::os::raw::c_int,
+                ) -> ::os::raw::c_int,
             >,
-            pub xCreateFunction: ::std::option::Option<
+            pub xCreateFunction: ::option::Option<
                 unsafe extern "C" fn(
                     pApi: *mut fts5_api,
-                    zName: *const ::std::os::raw::c_char,
-                    pUserData: *mut ::std::os::raw::c_void,
+                    zName: *const ::os::raw::c_char,
+                    pUserData: *mut ::os::raw::c_void,
                     xFunction: fts5_extension_function,
-                    xDestroy: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-                ) -> ::std::os::raw::c_int,
+                    xDestroy: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
+                ) -> ::os::raw::c_int,
             >,
         }
         
@@ -11280,7 +18573,7 @@ pub mod rusqlite
         
         #[must_use]
         pub fn SQLITE_TRANSIENT() -> sqlite3_destructor_type {
-            Some(unsafe { mem::transmute::<isize, unsafe extern "C" fn(*mut std::ffi::c_void)>(-1_isize) })
+            Some(unsafe { mem::transmute::<isize, unsafe extern "C" fn(*mut ::ffi::c_void)>(-1_isize) })
         }
         
         #[allow(clippy::all)]
@@ -11313,11 +18606,11 @@ pub mod rusqlite
         use crate::types::FromSqlError;
         use crate::types::Type;
         use crate::{errmsg_to_string, ffi, Result};
-        use std::error;
-        use std::fmt;
-        use std::os::raw::c_int;
-        use std::path::PathBuf;
-        use std::str;
+        use ::error;
+        use ::fmt;
+        use ::os::raw::c_int;
+        use ::path::PathBuf;
+        use ::str;
         */
         /// Enum listing possible errors from rusqlite.
         #[derive(Debug)]
@@ -11337,8 +18630,6 @@ pub mod rusqlite
         
             /// Error when SQLite gives us an integral value outside the range of the
             /// requested type (e.g., trying to get the value 1000 into a `u8`).
-            /// The associated `usize` is the column index,
-            /// and the associated `i64` is the value returned by SQLite.
             IntegralValueOutOfRange(usize, i64),
         
             /// Error converting a string to UTF-8.
@@ -11346,7 +18637,7 @@ pub mod rusqlite
         
             /// Error converting a string to a C-compatible string because it contained
             /// an embedded nul.
-            NulError(std::ffi::NulError),
+            NulError( ::ffi::NulError),
         
             /// Error when using SQL named parameters and passing a parameter name not
             /// present in the SQL.
@@ -11393,8 +18684,7 @@ pub mod rusqlite
             /// Error when the SQL contains multiple statements.
             MultipleStatement,
             /// Error when the number of bound parameters does not match the number of
-            /// parameters in the query. The first `usize` is how many parameters were
-            /// given, the 2nd is how many were expected.
+            /// parameters in the query.
             InvalidParameterCount(usize, usize),
         }
         
@@ -11429,9 +18719,9 @@ pub mod rusqlite
             }
         }
         
-        impl From<std::ffi::NulError> for Error {
+        impl From< ::ffi::NulError> for Error {
             #[cold]
-            fn from(err: std::ffi::NulError) -> Error {
+            fn from(err: ::ffi::NulError) -> Error {
                 Error::NulError(err)
             }
         }
@@ -11583,9 +18873,7 @@ pub mod rusqlite
         }
         
         /// Transform Rust error to SQLite error (message and code).
-        /// # Safety
-        /// This function is unsafe because it uses raw pointer
-        pub unsafe fn to_sqlite_error(e: &Error, err_msg: *mut *mut std::os::raw::c_char) -> c_int {
+        pub unsafe fn to_sqlite_error(e: &Error, err_msg: *mut *mut ::os::raw::c_char) -> c_int {
             use crate::util::alloc;
             match e {
                 Error::SqliteFailure(err, s) => {
@@ -11655,8 +18943,8 @@ pub mod rusqlite
         use super::ffi;
         use crate::error::{check, to_sqlite_error};
         use crate::{Connection, Error, Result};
-        use std::os::raw::{c_char, c_int};
-        use std::panic::catch_unwind;
+        use ::os::raw::{c_char, c_int};
+        use ::panic::catch_unwind;
         */
         /// Automatic extension initialization routine
         pub type AutoExtension = fn(Connection) -> Result<()>;
@@ -11669,13 +18957,6 @@ pub mod rusqlite
         ) -> c_int;
         
         /// Bridge between `RawAutoExtension` and `AutoExtension`
-        ///
-        /// # Safety
-        /// * Opening a database from an auto-extension handler will lead to
-        ///   an endless recursion of the auto-handler triggering itself
-        ///   indirectly for each newly-opened database.
-        /// * Results are undefined if the given db is closed by an auto-extension.
-        /// * The list of auto-extensions should not be manipulated from an auto-extension.
         pub unsafe fn init_auto_extension(
             db: *mut ffi::sqlite3,
             pz_err_msg: *mut *mut c_char,
@@ -11693,13 +18974,6 @@ pub mod rusqlite
         }
         
         /// Register au auto-extension
-        ///
-        /// # Safety
-        /// * Opening a database from an auto-extension handler will lead to
-        ///   an endless recursion of the auto-handler triggering itself
-        ///   indirectly for each newly-opened database.
-        /// * Results are undefined if the given db is closed by an auto-extension.
-        /// * The list of auto-extensions should not be manipulated from an auto-extension.
         pub unsafe fn register_auto_extension(ax: RawAutoExtension) -> Result<()> {
             check(ffi::sqlite3_auto_extension(Some(ax)))
         }
@@ -11724,11 +18998,11 @@ pub mod rusqlite
             *,
         };
         /*
-        use std::mem;
-        use std::os::raw::{c_int, c_void};
-        use std::panic::catch_unwind;
-        use std::ptr;
-        use std::time::Duration;
+        use ::mem;
+        use ::os::raw::{c_int, c_void};
+        use ::panic::catch_unwind;
+        use ::ptr;
+        use ::time::Duration;
         
         use crate::ffi;
         use crate::{Connection, InnerConnection, Result};
@@ -11736,19 +19010,7 @@ pub mod rusqlite
         
         impl Connection {
             /// Set a busy handler that sleeps for a specified amount of time when a
-            /// table is locked. The handler will sleep multiple times until at
-            /// least "ms" milliseconds of sleeping have accumulated.
-            ///
-            /// Calling this routine with an argument equal to zero turns off all busy
-            /// handlers.
-            ///
-            /// There can only be a single busy handler for a particular database
-            /// connection at any given moment. If another busy handler was defined
-            /// (using [`busy_handler`](Connection::busy_handler)) prior to calling this
-            /// routine, that other busy handler is cleared.
-            ///
-            /// Newly created connections currently have a default busy timeout of
-            /// 5000ms, but this may be subject to change.
+            /// table is locked.
             pub fn busy_timeout(&self, timeout: Duration) -> Result<()> {
                 let ms: i32 = timeout
                     .as_secs()
@@ -11760,26 +19022,6 @@ pub mod rusqlite
             }
         
             /// Register a callback to handle `SQLITE_BUSY` errors.
-            ///
-            /// If the busy callback is `None`, then `SQLITE_BUSY` is returned
-            /// immediately upon encountering the lock. The argument to the busy
-            /// handler callback is the number of times that the
-            /// busy handler has been invoked previously for the
-            /// same locking event. If the busy callback returns `false`, then no
-            /// additional attempts are made to access the
-            /// database and `SQLITE_BUSY` is returned to the
-            /// application. If the callback returns `true`, then another attempt
-            /// is made to access the database and the cycle repeats.
-            ///
-            /// There can only be a single busy handler defined for each database
-            /// connection. Setting a new busy handler clears any previously set
-            /// handler. Note that calling [`busy_timeout()`](Connection::busy_timeout)
-            /// or evaluating `PRAGMA busy_timeout=N` will change the busy handler
-            /// and thus clear any previously set busy handler.
-            ///
-            /// Newly created connections default to a
-            /// [`busy_timeout()`](Connection::busy_timeout) handler with a timeout
-            /// of 5000ms, although this is subject to change.
             pub fn busy_handler(&self, callback: Option<fn(i32) -> bool>) -> Result<()> {
                 unsafe extern "C" fn busy_handler_callback(p_arg: *mut c_void, count: c_int) -> c_int {
                     let handler_fn: fn(i32) -> bool = mem::transmute(p_arg);
@@ -11797,8 +19039,7 @@ pub mod rusqlite
         }
         
         impl InnerConnection {
-            #[inline]
-            fn busy_timeout(&mut self, timeout: c_int) -> Result<()> {
+            #[inline] fn busy_timeout(&mut self, timeout: c_int) -> Result<()> {
                 let r = unsafe { ffi::sqlite3_busy_timeout(self.db, timeout) };
                 self.decode_result(r)
             }
@@ -11816,55 +19057,25 @@ pub mod rusqlite
         use crate::raw_statement::RawStatement;
         use crate::{Connection, PrepFlags, Result, Statement};
         use hashlink::LruCache;
-        use std::cell::RefCell;
-        use std::ops::{Deref, DerefMut};
-        use std::sync::Arc;
+        use ::cell::RefCell;
+        use ::ops::{Deref, DerefMut};
+        use ::sync::Arc;
         */
         impl Connection {
             /// Prepare a SQL statement for execution, returning a previously prepared
-            /// (but not currently in-use) statement if one is available. The
-            /// returned statement will be cached for reuse by future calls to
-            /// [`prepare_cached`](Connection::prepare_cached) once it is dropped.
-            ///
-            /// ```rust,no_run
-            /// # use rusqlite::{Connection, Result};
-            /// fn insert_new_people(conn: &Connection) -> Result<()> {
-            ///     {
-            ///         let mut stmt = conn.prepare_cached("INSERT INTO People (name) VALUES (?1)")?;
-            ///         stmt.execute(["Joe Smith"])?;
-            ///     }
-            ///     {
-            ///         // This will return the same underlying SQLite statement handle without
-            ///         // having to prepare it again.
-            ///         let mut stmt = conn.prepare_cached("INSERT INTO People (name) VALUES (?1)")?;
-            ///         stmt.execute(["Bob Jones"])?;
-            ///     }
-            ///     Ok(())
-            /// }
-            /// ```
-            ///
-            /// # Failure
-            ///
-            /// Will return `Err` if `sql` cannot be converted to a C-compatible string
-            /// or if the underlying SQLite call fails.
-            #[inline]
-            pub fn prepare_cached(&self, sql: &str) -> Result<CachedStatement<'_>> {
+            /// (but not currently in-use) statement if one is available.
+            #[inline] pub fn prepare_cached(&self, sql: &str) -> Result<CachedStatement<'_>> {
                 self.cache.get(self, sql)
             }
         
             /// Set the maximum number of cached prepared statements this connection
-            /// will hold. By default, a connection will hold a relatively small
-            /// number of cached statements. If you need more, or know that you
-            /// will not use cached statements, you
-            /// can set the capacity manually using this method.
-            #[inline]
-            pub fn set_prepared_statement_cache_capacity(&self, capacity: usize) {
+            /// will hold.
+            #[inline] pub fn set_prepared_statement_cache_capacity(&self, capacity: usize) {
                 self.cache.set_capacity(capacity);
             }
         
             /// Remove/finalize all prepared statements currently in the cache.
-            #[inline]
-            pub fn flush_prepared_statement_cache(&self) {
+            #[inline] pub fn flush_prepared_statement_cache(&self) {
                 self.cache.flush();
             }
         }
@@ -11877,10 +19088,6 @@ pub mod rusqlite
         unsafe impl Send for StatementCache {}
         
         /// Cacheable statement.
-        ///
-        /// Statement will return automatically to the cache by default.
-        /// If you want the statement to be discarded, call
-        /// [`discard()`](CachedStatement::discard) on it.
         pub struct CachedStatement<'conn> {
             stmt: Option<Statement<'conn>>,
             cache: &'conn StatementCache,
@@ -11889,23 +19096,20 @@ pub mod rusqlite
         impl<'conn> Deref for CachedStatement<'conn> {
             type Target = Statement<'conn>;
         
-            #[inline]
-            fn deref(&self) -> &Statement<'conn> {
+            #[inline] fn deref(&self) -> &Statement<'conn> {
                 self.stmt.as_ref().unwrap()
             }
         }
         
         impl<'conn> DerefMut for CachedStatement<'conn> {
-            #[inline]
-            fn deref_mut(&mut self) -> &mut Statement<'conn> {
+            #[inline] fn deref_mut(&mut self) -> &mut Statement<'conn> {
                 self.stmt.as_mut().unwrap()
             }
         }
         
         impl Drop for CachedStatement<'_> {
             #[allow(unused_must_use)]
-            #[inline]
-            fn drop(&mut self) {
+            #[inline] fn drop(&mut self) {
                 if let Some(stmt) = self.stmt.take() {
                     self.cache.cache_stmt(unsafe { stmt.into_raw() });
                 }
@@ -11913,8 +19117,7 @@ pub mod rusqlite
         }
         
         impl CachedStatement<'_> {
-            #[inline]
-            fn new<'conn>(stmt: Statement<'conn>, cache: &'conn StatementCache) -> CachedStatement<'conn> {
+            #[inline] fn new<'conn>(stmt: Statement<'conn>, cache: &'conn StatementCache) -> CachedStatement<'conn> {
                 CachedStatement {
                     stmt: Some(stmt),
                     cache,
@@ -11923,31 +19126,22 @@ pub mod rusqlite
         
             /// Discard the statement, preventing it from being returned to its
             /// [`Connection`]'s collection of cached statements.
-            #[inline]
-            pub fn discard(mut self) {
+            #[inline] pub fn discard(mut self) {
                 self.stmt = None;
             }
         }
         
         impl StatementCache {
             /// Create a statement cache.
-            #[inline]
-            pub fn with_capacity(capacity: usize) -> StatementCache {
+            #[inline] pub fn with_capacity(capacity: usize) -> StatementCache {
                 StatementCache(RefCell::new(LruCache::new(capacity)))
             }
         
-            #[inline]
-            fn set_capacity(&self, capacity: usize) {
+            #[inline] fn set_capacity(&self, capacity: usize) {
                 self.0.borrow_mut().set_capacity(capacity);
             }
         
             // Search the cache for a prepared-statement object that implements `sql`.
-            // If no such prepared-statement can be found, allocate and prepare a new one.
-            //
-            // # Failure
-            //
-            // Will return `Err` if no cached statement can be found and the underlying
-            // SQLite prepare call fails.
             fn get<'conn>(
                 &'conn self,
                 conn: &'conn Connection,
@@ -11982,8 +19176,7 @@ pub mod rusqlite
                 }
             }
         
-            #[inline]
-            fn flush(&self) {
+            #[inline] fn flush(&self) {
                 let mut cache = self.0.borrow_mut();
                 cache.clear();
             }
@@ -11997,7 +19190,7 @@ pub mod rusqlite
             *,
         };
         /*
-        use std::str;
+        use ::str;
         
         use crate::{Error, Result, Statement};
         */
@@ -12043,36 +19236,12 @@ pub mod rusqlite
         
             /// Return the number of columns in the result set returned by the prepared
             /// statement.
-            ///
-            /// If associated DB schema can be altered concurrently, you should make
-            /// sure that current statement has already been stepped once before
-            /// calling this method.
-            #[inline]
-            pub fn column_count(&self) -> usize {
+            #[inline] pub fn column_count(&self) -> usize {
                 self.stmt.column_count()
             }
         
-            /// Check that column name reference lifetime is limited:
-            /// https://www.sqlite.org/c3ref/column_name.html
-            /// > The returned string pointer is valid...
-            ///
-            /// `column_name` reference can become invalid if `stmt` is reprepared
-            /// (because of schema change) when `query_row` is called. So we assert
-            /// that a compilation error happens if this reference is kept alive:
-            /// ```compile_fail
-            /// use rusqlite::{Connection, Result};
-            /// fn main() -> Result<()> {
-            ///     let db = Connection::open_in_memory()?;
-            ///     let mut stmt = db.prepare("SELECT 1 as x")?;
-            ///     let column_name = stmt.column_name(0)?;
-            ///     let x = stmt.query_row([], |r| r.get::<_, i64>(0))?; // E0502
-            ///     assert_eq!(1, x);
-            ///     assert_eq!("x", column_name);
-            ///     Ok(())
-            /// }
-            /// ```
-            #[inline]
-            pub(super) fn column_name_unwrap(&self, col: usize) -> &str {
+            /// Check that column name reference lifetime is limited.
+            #[inline] pub fn column_name_unwrap(&self, col: usize) -> &str {
                 // Just panic if the bounds are wrong for now, we never call this
                 // without checking first.
                 self.column_name(col).expect("Column out of bounds")
@@ -12080,21 +19249,7 @@ pub mod rusqlite
         
             /// Returns the name assigned to a particular column in the result set
             /// returned by the prepared statement.
-            ///
-            /// If associated DB schema can be altered concurrently, you should make
-            /// sure that current statement has already been stepped once before
-            /// calling this method.
-            ///
-            /// ## Failure
-            ///
-            /// Returns an `Error::InvalidColumnIndex` if `idx` is outside the valid
-            /// column range for this row.
-            ///
-            /// # Panics
-            ///
-            /// Panics when column name is not valid UTF-8.
-            #[inline]
-            pub fn column_name(&self, col: usize) -> Result<&str> {
+            #[inline] pub fn column_name(&self, col: usize) -> Result<&str> {
                 self.stmt
                     .column_name(col)
                     // clippy::or_fun_call (nightly) vs clippy::unnecessary-lazy-evaluations (stable)
@@ -12107,20 +19262,7 @@ pub mod rusqlite
             }
         
             /// Returns the column index in the result set for a given column name.
-            ///
-            /// If there is no AS clause then the name of the column is unspecified and
-            /// may change from one release of SQLite to the next.
-            ///
-            /// If associated DB schema can be altered concurrently, you should make
-            /// sure that current statement has already been stepped once before
-            /// calling this method.
-            ///
-            /// # Failure
-            ///
-            /// Will return an `Error::InvalidColumnName` when there is no column with
-            /// the specified `name`.
-            #[inline]
-            pub fn column_index(&self, name: &str) -> Result<usize> {
+            #[inline] pub fn column_index(&self, name: &str) -> Result<usize> {
                 let bytes = name.as_bytes();
                 let n = self.column_count();
                 for i in 0..n {
@@ -12159,7 +19301,7 @@ pub mod rusqlite
             *,
         };
         /*
-        use std::os::raw::c_int;
+        use ::os::raw::c_int;
         
         use crate::error::check;
         use crate::ffi;
@@ -12167,7 +19309,6 @@ pub mod rusqlite
         */
         
         /// Database Connection Configuration Options
-        /// See [Database Connection Configuration Options](https://sqlite.org/c3ref/c_dbconfig_enable_fkey.html) for details.
         #[repr(i32)]
         #[derive(Copy, Clone, Debug)]
         #[allow(non_snake_case, non_camel_case_types)]
@@ -12201,8 +19342,7 @@ pub mod rusqlite
         
         impl Connection {
             /// Returns the current value of a `config`.
-            #[inline]
-            pub fn db_config(&self, config: DbConfig) -> Result<bool> {
+            #[inline] pub fn db_config(&self, config: DbConfig) -> Result<bool> {
                 let c = self.db.borrow();
                 unsafe {
                     let mut val = 0;
@@ -12217,8 +19357,7 @@ pub mod rusqlite
             }
         
             /// Make configuration changes to a database connection
-            #[inline]
-            pub fn set_db_config(&self, config: DbConfig, new_val: bool) -> Result<bool> {
+            #[inline] pub fn set_db_config(&self, config: DbConfig, new_val: bool) -> Result<bool> {
                 let c = self.db.borrow_mut();
                 unsafe {
                     let mut val = 0;
@@ -12241,13 +19380,13 @@ pub mod rusqlite
             *,
         };
         /*
-        use std::ffi::CStr;
-        use std::os::raw::{c_char, c_int};
+        use ::ffi::CStr;
+        use ::os::raw::{c_char, c_int};
         #[cfg(feature = "load_extension")]
-        use std::path::Path;
-        use std::ptr;
-        use std::str;
-        use std::sync::{Arc, Mutex};
+        use ::path::Path;
+        use ::ptr;
+        use ::str;
+        use ::sync::{Arc, Mutex};
         
         use super::ffi;
         use super::str_for_sqlite;
@@ -12265,10 +19404,9 @@ pub mod rusqlite
         
         unsafe impl Send for InnerConnection {}
         
-        impl InnerConnection {
-            #[allow(clippy::mutex_atomic, clippy::arc_with_non_send_sync)] // See unsafe impl Send / Sync for InterruptHandle
-            #[inline]
-            pub unsafe fn new(db: *mut ffi::sqlite3, owned: bool) -> InnerConnection {
+        impl InnerConnection
+        {
+            #[inline] pub unsafe fn new(db: *mut ffi::sqlite3, owned: bool) -> InnerConnection {
                 InnerConnection {
                     db,
                     interrupt_lock: Arc::new(Mutex::new(db)),
@@ -12339,13 +19477,11 @@ pub mod rusqlite
                 }
             }
         
-            #[inline]
-            pub fn db(&self) -> *mut ffi::sqlite3 {
+            #[inline] pub fn db(&self) -> *mut ffi::sqlite3 {
                 self.db
             }
         
-            #[inline]
-            pub fn decode_result(&self, code: c_int) -> Result<()> {
+            #[inline] pub fn decode_result(&self, code: c_int) -> Result<()> {
                 unsafe { InnerConnection::decode_result_raw(self.db(), code) }
             }
         
@@ -12357,8 +19493,7 @@ pub mod rusqlite
                     Err(error_from_handle(db, code))
                 }
             }
-        
-            #[allow(clippy::mutex_atomic)]
+            
             pub fn close(&mut self) -> Result<()> {
                 if self.db.is_null() {
                     return Ok(());
@@ -12387,15 +19522,13 @@ pub mod rusqlite
                 }
             }
         
-            #[inline]
-            pub fn get_interrupt_handle(&self) -> InterruptHandle {
+            #[inline] pub fn get_interrupt_handle(&self) -> InterruptHandle {
                 InterruptHandle {
                     db_lock: Arc::clone(&self.interrupt_lock),
                 }
             }
         
-            #[inline]
-            pub fn last_insert_rowid(&self) -> i64 {
+            #[inline] pub fn last_insert_rowid(&self) -> i64 {
                 unsafe { ffi::sqlite3_last_insert_rowid(self.db()) }
             }
         
@@ -12431,22 +19564,19 @@ pub mod rusqlite
                 }))
             }
                     
-            #[inline]
-            pub fn changes(&self) -> u64 {
+            #[inline] pub fn changes(&self) -> u64 {
                 unsafe {
                     ffi::sqlite3_changes(self.db()) as u64
                 }
             }
         
-            #[inline]
-            pub fn total_changes(&self) -> u64 {
+            #[inline] pub fn total_changes(&self) -> u64 {
                 unsafe {
                     ffi::sqlite3_total_changes(self.db()) as u64
                 }
             }
         
-            #[inline]
-            pub fn is_autocommit(&self) -> bool {
+            #[inline] pub fn is_autocommit(&self) -> bool {
                 unsafe { ffi::sqlite3_get_autocommit(self.db()) != 0 }
             }
         
@@ -12487,9 +19617,7 @@ pub mod rusqlite
         }
         
         impl Drop for InnerConnection {
-            #[allow(unused_must_use)]
-            #[inline]
-            fn drop(&mut self) {
+            #[inline] fn drop(&mut self) {
                 self.close();
             }
         }
@@ -12514,24 +19642,21 @@ pub mod rusqlite
         
         impl Sealed for [&(dyn ToSql + Send + Sync); 0] {}
         impl Params for [&(dyn ToSql + Send + Sync); 0] {
-            #[inline]
-            fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
+            #[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
                 stmt.ensure_parameter_count(0)
             }
         }
         
         impl Sealed for &[&dyn ToSql] {}
         impl Params for &[&dyn ToSql] {
-            #[inline]
-            fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
+            #[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
                 stmt.bind_parameters(self)
             }
         }
         
         impl Sealed for &[(&str, &dyn ToSql)] {}
         impl Params for &[(&str, &dyn ToSql)] {
-            #[inline]
-            fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
+            #[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
                 stmt.bind_parameters_named(self)
             }
         }
@@ -12540,8 +19665,7 @@ pub mod rusqlite
         // by macros.
         impl Sealed for () {}
         impl Params for () {
-            #[inline]
-            fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
+            #[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
                 stmt.ensure_parameter_count(0)
             }
         }
@@ -12549,8 +19673,7 @@ pub mod rusqlite
         // I'm pretty sure you could tweak the `single_tuple_impl` to accept this.
         impl<T: ToSql> Sealed for (T,) {}
         impl<T: ToSql> Params for (T,) {
-            #[inline]
-            fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
+            #[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
                 stmt.ensure_parameter_count(1)?;
                 stmt.raw_bind_parameter(1, self.0)?;
                 Ok(())
@@ -12644,8 +19767,7 @@ pub mod rusqlite
             I: IntoIterator,
             I::Item: ToSql,
         {
-            #[inline]
-            fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
+            #[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
                 stmt.bind_parameters(self.0)
             }
         }
@@ -12659,7 +19781,7 @@ pub mod rusqlite
             *,
         };
         /*
-        use std::ops::Deref;
+        use ::ops::Deref;
 
         use crate::ffi;
         use crate::types::{ToSql, ToSqlOutput, ValueRef};
@@ -12720,7 +19842,7 @@ pub mod rusqlite
                         self.push_real(r);
                     }
                     ValueRef::Text(s) => {
-                        let s = std::str::from_utf8(s)?;
+                        let s = ::str::from_utf8(s)?;
                         self.push_string_literal(s);
                     }
                     _ => {
@@ -12928,9 +20050,9 @@ pub mod rusqlite
         use super::StatementStatus;
         use crate::util::ParamIndexCache;
         use crate::util::SqliteMallocString;
-        use std::ffi::{c_int, CStr};
-        use std::ptr;
-        use std::sync::Arc;
+        use ::ffi::{c_int, CStr};
+        use ::ptr;
+        use ::sync::Arc;
         */
         #[derive(Debug)]
         pub struct RawStatement 
@@ -12952,18 +20074,15 @@ pub mod rusqlite
                 }
             }
 
-            #[inline]
-            pub fn is_null(&self) -> bool {
+            #[inline] pub fn is_null(&self) -> bool {
                 self.ptr.is_null()
             }
 
-            #[inline]
-            pub fn set_statement_cache_key(&mut self, p: impl Into<Arc<str>>) {
+            #[inline] pub fn set_statement_cache_key(&mut self, p: impl Into<Arc<str>>) {
                 self.statement_cache_key = Some(p.into());
             }
 
-            #[inline]
-            pub fn statement_cache_key(&self) -> Option<Arc<str>> {
+            #[inline] pub fn statement_cache_key(&self) -> Option<Arc<str>> {
                 self.statement_cache_key.clone()
             }
 
@@ -12972,18 +20091,15 @@ pub mod rusqlite
                 self.ptr
             }
 
-            #[inline]
-            pub fn column_count(&self) -> usize {
+            #[inline] pub fn column_count(&self) -> usize {
                 unsafe { ffi::sqlite3_column_count(self.ptr) as usize }
             }
 
-            #[inline]
-            pub fn column_type(&self, idx: usize) -> c_int {
+            #[inline] pub fn column_type(&self, idx: usize) -> c_int {
                 unsafe { ffi::sqlite3_column_type(self.ptr, idx as c_int) }
             }
 
-            #[inline]
-            pub fn column_name(&self, idx: usize) -> Option<&CStr> {
+            #[inline] pub fn column_name(&self, idx: usize) -> Option<&CStr> {
                 let idx = idx as c_int;
                 if idx < 0 || idx >= self.column_count() as c_int {
                     return None;
@@ -12998,18 +20114,15 @@ pub mod rusqlite
                 }
             }
 
-            #[inline]
-            pub fn reset(&self) -> c_int {
+            #[inline] pub fn reset(&self) -> c_int {
                 unsafe { ffi::sqlite3_reset(self.ptr) }
             }
 
-            #[inline]
-            pub fn bind_parameter_count(&self) -> usize {
+            #[inline] pub fn bind_parameter_count(&self) -> usize {
                 unsafe { ffi::sqlite3_bind_parameter_count(self.ptr) as usize }
             }
 
-            #[inline]
-            pub fn bind_parameter_index(&self, name: &str) -> Option<usize> {
+            #[inline] pub fn bind_parameter_index(&self, name: &str) -> Option<usize> {
                 self.cache.get_or_insert_with(name, |param_cstr| {
                     let r = unsafe { ffi::sqlite3_bind_parameter_index(self.ptr, param_cstr.as_ptr()) };
                     match r {
@@ -13019,8 +20132,7 @@ pub mod rusqlite
                 })
             }
 
-            #[inline]
-            pub fn bind_parameter_name(&self, index: i32) -> Option<&CStr> {
+            #[inline] pub fn bind_parameter_name(&self, index: i32) -> Option<&CStr> {
                 unsafe {
                     let name = ffi::sqlite3_bind_parameter_name(self.ptr, index);
                     if name.is_null() {
@@ -13031,15 +20143,13 @@ pub mod rusqlite
                 }
             }
 
-            #[inline]
-            pub fn clear_bindings(&mut self) {
+            #[inline] pub fn clear_bindings(&mut self) {
                 unsafe {
                     ffi::sqlite3_clear_bindings(self.ptr);
                 } // rc is always SQLITE_OK
             }
 
-            #[inline]
-            pub fn sql(&self) -> Option<&CStr> {
+            #[inline] pub fn sql(&self) -> Option<&CStr> {
                 if self.ptr.is_null() {
                     None
                 } else {
@@ -13047,30 +20157,25 @@ pub mod rusqlite
                 }
             }
 
-            #[inline]
-            pub fn finalize(mut self) -> c_int {
+            #[inline] pub fn finalize(mut self) -> c_int {
                 self.finalize_()
             }
 
-            #[inline]
-            fn finalize_(&mut self) -> c_int {
+            #[inline] fn finalize_(&mut self) -> c_int {
                 let r = unsafe { ffi::sqlite3_finalize(self.ptr) };
                 self.ptr = ptr::null_mut();
                 r
             }
             
-            #[inline]
-            pub fn readonly(&self) -> bool {
+            #[inline] pub fn readonly(&self) -> bool {
                 unsafe { ffi::sqlite3_stmt_readonly(self.ptr) != 0 }
             }
 
-            #[inline]
-            pub fn expanded_sql(&self) -> Option<SqliteMallocString> {
+            #[inline] pub fn expanded_sql(&self) -> Option<SqliteMallocString> {
                 unsafe { expanded_sql(self.ptr) }
             }
 
-            #[inline]
-            pub fn get_status(&self, status: StatementStatus, reset: bool) -> i32 {
+            #[inline] pub fn get_status(&self, status: StatementStatus, reset: bool) -> i32 {
                 unsafe { stmt_status(self.ptr, status, reset) }
             }
         }
@@ -13105,7 +20210,7 @@ pub mod rusqlite
         /*
         use fallible_iterator::FallibleIterator;
         use fallible_streaming_iterator::FallibleStreamingIterator;
-        use std::convert;
+        use ::convert;
 
         use super::{Error, Result, Statement};
         use crate::types::{FromSql, FromSqlError, ValueRef};
@@ -13118,8 +20223,7 @@ pub mod rusqlite
         }
 
         impl<'stmt> Rows<'stmt> {
-            #[inline]
-            fn reset(&mut self) -> Result<()> {
+            #[inline] fn reset(&mut self) -> Result<()> {
                 if let Some(stmt) = self.stmt.take() {
                     stmt.reset()
                 } else {
@@ -13129,16 +20233,14 @@ pub mod rusqlite
 
             /// Attempt to get the next row from the query.
             #[expect(clippy::should_implement_trait)]
-            #[inline]
-            pub fn next(&mut self) -> Result<Option<&Row<'stmt>>> {
+            #[inline] pub fn next(&mut self) -> Result<Option<&Row<'stmt>>> {
                 self.advance()?;
                 Ok((*self).get())
             }
 
             /// Map over this `Rows`, converting it to a [`Map`], which
             /// implements `FallibleIterator`.
-            #[inline]
-            pub fn map<F, B>(self, f: F) -> Map<'stmt, F>
+            #[inline] pub fn map<F, B>(self, f: F) -> Map<'stmt, F>
             where
                 F: FnMut(&Row<'_>) -> Result<B>,
             {
@@ -13147,8 +20249,7 @@ pub mod rusqlite
 
             /// Map over this `Rows`, converting it to a [`MappedRows`], which
             /// implements `Iterator`.
-            #[inline]
-            pub fn mapped<F, B>(self, f: F) -> MappedRows<'stmt, F>
+            #[inline] pub fn mapped<F, B>(self, f: F) -> MappedRows<'stmt, F>
             where
                 F: FnMut(&Row<'_>) -> Result<B>,
             {
@@ -13158,8 +20259,7 @@ pub mod rusqlite
             /// Map over this `Rows` with a fallible function, converting it to a
             /// [`AndThenRows`], which implements `Iterator` (instead of
             /// `FallibleStreamingIterator`).
-            #[inline]
-            pub fn and_then<F, T, E>(self, f: F) -> AndThenRows<'stmt, F>
+            #[inline] pub fn and_then<F, T, E>(self, f: F) -> AndThenRows<'stmt, F>
             where
                 F: FnMut(&Row<'_>) -> Result<T, E>,
             {
@@ -13174,16 +20274,14 @@ pub mod rusqlite
         }
 
         impl<'stmt> Rows<'stmt> {
-            #[inline]
-            pub fn new(stmt: &'stmt Statement<'stmt>) -> Self {
+            #[inline] pub fn new(stmt: &'stmt Statement<'stmt>) -> Self {
                 Rows {
                     stmt: Some(stmt),
                     row: None,
                 }
             }
 
-            #[inline]
-            pub fn get_expected_row(&mut self) -> Result<&Row<'stmt>> {
+            #[inline] pub fn get_expected_row(&mut self) -> Result<&Row<'stmt>> {
                 match self.next()? {
                     Some(row) => Ok(row),
                     None => Err(Error::QueryReturnedNoRows),
@@ -13193,8 +20291,7 @@ pub mod rusqlite
 
         impl Drop for Rows<'_> {
             #[expect(unused_must_use)]
-            #[inline]
-            fn drop(&mut self) {
+            #[inline] fn drop(&mut self) {
                 self.reset();
             }
         }
@@ -13207,15 +20304,13 @@ pub mod rusqlite
             f: F,
         }
 
-        impl<F, B> FallibleIterator for Map<'_, F>
-        where
+        impl<F, B> FallibleIterator for Map<'_, F> where 
             F: FnMut(&Row<'_>) -> Result<B>,
         {
             type Error = Error;
             type Item = B;
 
-            #[inline]
-            fn next(&mut self) -> Result<Option<B>> {
+            #[inline] fn next(&mut self) -> Result<Option<B>> {
                 match self.rows.next()? {
                     Some(v) => Ok(Some((self.f)(v)?)),
                     None => Ok(None),
@@ -13230,14 +20325,12 @@ pub mod rusqlite
             map: F,
         }
 
-        impl<T, F> Iterator for MappedRows<'_, F>
-        where
+        impl<T, F> Iterator for MappedRows<'_, F> where 
             F: FnMut(&Row<'_>) -> Result<T>,
         {
             type Item = Result<T>;
 
-            #[inline]
-            fn next(&mut self) -> Option<Result<T>> {
+            #[inline] fn next(&mut self) -> Option<Result<T>> {
                 let map = &mut self.map;
                 self.rows
                     .next()
@@ -13254,15 +20347,13 @@ pub mod rusqlite
             map: F,
         }
 
-        impl<T, E, F> Iterator for AndThenRows<'_, F>
-        where
+        impl<T, E, F> Iterator for AndThenRows<'_, F> where 
             E: From<Error>,
             F: FnMut(&Row<'_>) -> Result<T, E>,
         {
             type Item = Result<T, E>;
 
-            #[inline]
-            fn next(&mut self) -> Option<Self::Item> {
+            #[inline] fn next(&mut self) -> Option<Self::Item> {
                 let map = &mut self.map;
                 self.rows
                     .next()
@@ -13280,8 +20371,7 @@ pub mod rusqlite
             type Error = Error;
             type Item = Row<'stmt>;
 
-            #[inline]
-            fn advance(&mut self) -> Result<()> {
+            #[inline] fn advance(&mut self) -> Result<()> {
                 if let Some(stmt) = self.stmt {
                     match stmt.step() {
                         Ok(true) => {
@@ -13305,8 +20395,7 @@ pub mod rusqlite
                 }
             }
 
-            #[inline]
-            fn get(&self) -> Option<&Row<'stmt>> {
+            #[inline] fn get(&self) -> Option<&Row<'stmt>> {
                 self.row.as_ref()
             }
         }
@@ -13320,10 +20409,8 @@ pub mod rusqlite
             /// Get the value of a particular column of the result row.
             #[track_caller]
             pub fn get_unwrap<I: RowIndex, T: FromSql>(&self, idx: I) -> T {
-                self.get(idx).unwrap()
-            }
-
-            /// Get the value of a particular column of the result row.
+                self.get(idx).unwrap() }
+              /// Get the value of a particular column of the result row.
             #[track_caller]
             pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
                 let idx = idx.idx(self.stmt)?;
@@ -13369,8 +20456,8 @@ pub mod rusqlite
         /// Debug `Row` like an ordered `Map<Result<&str>, Result<(Type, ValueRef)>>`
         /// with column name as key except that for `Type::Blob` only its size is
         /// printed (not its content).
-        impl std::fmt::Debug for Row<'_> {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        impl ::fmt::Debug for Row<'_> {
+            fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result {
                 let mut dm = f.debug_map();
                 for c in 0..self.stmt.column_count() {
                     let name = self.stmt.column_name(c).expect("valid column index");
@@ -13404,26 +20491,18 @@ pub mod rusqlite
                 }
                 dm.finish()
             }
-        }
-
-        mod sealed {
-            /// This trait exists just to ensure that the only impls of `trait RowIndex`
-            /// that are allowed are ones in this crate.
-            pub trait Sealed {}
-            impl Sealed for usize {}
-            impl Sealed for &str {}
-        }
+        } 
 
         /// A trait implemented by types that can index into columns of a row.
-        pub trait RowIndex: sealed::Sealed {
+        pub trait RowIndex
+        {
             /// Returns the index of the appropriate column, or `Error` if no such
             /// column exists.
             fn idx(&self, stmt: &Statement<'_>) -> Result<usize>;
         }
 
         impl RowIndex for usize {
-            #[inline]
-            fn idx(&self, stmt: &Statement<'_>) -> Result<usize> {
+            #[inline] fn idx(&self, stmt: &Statement<'_>) -> Result<usize> {
                 if *self >= stmt.column_count() {
                     Err(Error::InvalidColumnIndex(*self))
                 } else {
@@ -13433,8 +20512,7 @@ pub mod rusqlite
         }
 
         impl RowIndex for &'_ str {
-            #[inline]
-            fn idx(&self, stmt: &Statement<'_>) -> Result<usize> {
+            #[inline] fn idx(&self, stmt: &Statement<'_>) -> Result<usize> {
                 stmt.column_index(self)
             }
         }
@@ -13444,7 +20522,6 @@ pub mod rusqlite
                 impl<'a, $($field,)*> convert::TryFrom<&'a Row<'a>> for ($($field,)*) where $($field: FromSql,)* {
                     type Error = crate::Error;
                     
-                    #[allow(unused_assignments, unused_variables, unused_mut)]
                     fn try_from(row: &'a Row<'a>) -> Result<Self> {
                         let mut index = 0;
                         $(
@@ -13478,11 +20555,11 @@ pub mod rusqlite
             *,
         };
         /*
-        use std::ffi::{c_int, c_void};
+        use ::ffi::{c_int, c_void};
         #[cfg(feature = "array")]
-        use std::rc::Rc;
-        use std::slice::from_raw_parts;
-        use std::{fmt, mem, ptr, str};
+        use ::rc::Rc;
+        use ::slice::from_raw_parts;
+        use ::{fmt, mem, ptr, str};
 
         use super::ffi;
         use super::{len_as_c_int, str_for_sqlite};
@@ -13502,15 +20579,11 @@ pub mod rusqlite
 
         impl Statement<'_> {
             /// Execute the prepared statement.
-            #[inline]
-            pub fn execute<P: Params>(&mut self, params: P) -> Result<usize> {
+            #[inline] pub fn execute<P: Params>(&mut self, params: P) -> Result<usize> {
                 params.__bind_in(self)?;
-                self.execute_with_bound_parameters()
-            }
-
-            /// Execute an INSERT and return the ROWID.
-            #[inline]
-            pub fn insert<P: Params>(&mut self, params: P) -> Result<i64> {
+                self.execute_with_bound_parameters() }
+              /// Execute an INSERT and return the ROWID.
+            #[inline] pub fn insert<P: Params>(&mut self, params: P) -> Result<i64> {
                 let changes = self.execute(params)?;
                 match changes {
                     1 => Ok(self.conn.last_insert_rowid()),
@@ -13520,8 +20593,7 @@ pub mod rusqlite
 
             /// Execute the prepared statement, returning a handle to the resulting
             /// rows.
-            #[inline]
-            pub fn query<P: Params>(&mut self, params: P) -> Result<Rows<'_>> {
+            #[inline] pub fn query<P: Params>(&mut self, params: P) -> Result<Rows<'_>> {
                 params.__bind_in(self)?;
                 Ok(Rows::new(self))
             }
@@ -13538,9 +20610,8 @@ pub mod rusqlite
 
             /// Executes the prepared statement and maps a function over the resulting
             /// rows, where the function returns a `Result` with `Error` type
-            /// implementing `std::convert::From<Error>` (so errors can be unified).
-            #[inline]
-            pub fn query_and_then<T, E, P, F>(&mut self, params: P, f: F) -> Result<AndThenRows<'_, F>>
+            /// implementing ` ::convert::From<Error>` (so errors can be unified).
+            #[inline] pub fn query_and_then<T, E, P, F>(&mut self, params: P, f: F) -> Result<AndThenRows<'_, F>>
             where
                 P: Params,
                 E: From<Error>,
@@ -13551,8 +20622,7 @@ pub mod rusqlite
 
             /// Return `true` if a query in the SQL statement it executes returns one
             /// or more rows and `false` if the SQL returns an empty set.
-            #[inline]
-            pub fn exists<P: Params>(&mut self, params: P) -> Result<bool> {
+            #[inline] pub fn exists<P: Params>(&mut self, params: P) -> Result<bool> {
                 let mut rows = self.query(params)?;
                 let exists = rows.next()?.is_some();
                 Ok(exists)
@@ -13586,29 +20656,23 @@ pub mod rusqlite
             }
 
             /// Consumes the statement.
-            #[inline]
-            pub fn finalize(mut self) -> Result<()> {
-                self.finalize_()
-            }
-
-            /// Return the (one-based) index of an SQL parameter given its name.
-            #[inline]
-            pub fn parameter_index(&self, name: &str) -> Result<Option<usize>> {
+            #[inline] pub fn finalize(mut self) -> Result<()> {
+                self.finalize_() }
+              /// Return the (one-based) index of an SQL parameter given its name.
+            #[inline] pub fn parameter_index(&self, name: &str) -> Result<Option<usize>> {
                 Ok(self.stmt.bind_parameter_index(name))
             }
 
             /// Return the SQL parameter name given its (one-based) index (the inverse
             /// of [`Statement::parameter_index`]).
-            #[inline]
-            pub fn parameter_name(&self, index: usize) -> Option<&'_ str> {
+            #[inline] pub fn parameter_name(&self, index: usize) -> Option<&'_ str> {
                 self.stmt.bind_parameter_name(index as i32).map(|name| {
                     name.to_str()
                         .expect("Invalid UTF-8 sequence in parameter name")
                 })
             }
 
-            #[inline]
-            pub fn bind_parameters<P>(&mut self, params: P) -> Result<()>
+            #[inline] pub fn bind_parameters<P>(&mut self, params: P) -> Result<()>
             where
                 P: IntoIterator,
                 P::Item: ToSql,
@@ -13629,8 +20693,7 @@ pub mod rusqlite
                 }
             }
 
-            #[inline]
-            pub fn ensure_parameter_count(&self, n: usize) -> Result<()> {
+            #[inline] pub fn ensure_parameter_count(&self, n: usize) -> Result<()> {
                 let count = self.parameter_count();
                 if count != n {
                     Err(Error::InvalidParameterCount(n, count))
@@ -13639,8 +20702,7 @@ pub mod rusqlite
                 }
             }
 
-            #[inline]
-            pub fn bind_parameters_named<S: BindIndex, T: ToSql>(
+            #[inline] pub fn bind_parameters_named<S: BindIndex, T: ToSql>(
                 &mut self,
                 params: &[(S, T)],
             ) -> Result<()> {
@@ -13653,14 +20715,10 @@ pub mod rusqlite
             }
 
             /// Return the number of parameters that can be bound to this statement.
-            #[inline]
-            pub fn parameter_count(&self) -> usize {
-                self.stmt.bind_parameter_count()
-            }
-
-            /// Low level API to directly bind a parameter to a given index.
-            #[inline]
-            pub fn raw_bind_parameter<I: BindIndex, T: ToSql>(
+            #[inline] pub fn parameter_count(&self) -> usize {
+                self.stmt.bind_parameter_count() }
+              /// Low level API to directly bind a parameter to a given index.
+            #[inline] pub fn raw_bind_parameter<I: BindIndex, T: ToSql>(
                 &mut self,
                 one_based_index: I,
                 param: T,
@@ -13670,15 +20728,11 @@ pub mod rusqlite
 
             /// Low level API to execute a statement given that all parameters were
             /// bound explicitly with the [`Statement::raw_bind_parameter`] API.
-            #[inline]
-            pub fn raw_execute(&mut self) -> Result<usize> {
-                self.execute_with_bound_parameters()
-            }
-
-            /// Low level API to get `Rows` for this query given that all parameters
+            #[inline] pub fn raw_execute(&mut self) -> Result<usize> {
+                self.execute_with_bound_parameters() }
+              /// Low level API to get `Rows` for this query given that all parameters
             /// were bound explicitly with the [`Statement::raw_bind_parameter`] API.
-            #[inline]
-            pub fn raw_query(&mut self) -> Rows<'_> {
+            #[inline] pub fn raw_query(&mut self) -> Rows<'_> {
                 Rows::new(self)
             }
             
@@ -13716,8 +20770,7 @@ pub mod rusqlite
                 })
             }
 
-            #[inline]
-            fn execute_with_bound_parameters(&mut self) -> Result<usize> {
+            #[inline] fn execute_with_bound_parameters(&mut self) -> Result<usize> {
                 self.check_update()?;
                 let r = self.stmt.step();
                 let rr = self.stmt.reset();
@@ -13731,8 +20784,7 @@ pub mod rusqlite
                 }
             }
 
-            #[inline]
-            fn finalize_(&mut self) -> Result<()> {
+            #[inline] fn finalize_(&mut self) -> Result<()> {
                 let mut stmt = unsafe { RawStatement::new(ptr::null_mut()) };
                 mem::swap(&mut stmt, &mut self.stmt);
                 self.conn.decode_result(stmt.finalize())
@@ -13747,8 +20799,7 @@ pub mod rusqlite
             }
 
             /// Get the value for one of the status counters for this statement.
-            #[inline]
-            pub fn get_status(&self, status: StatementStatus) -> i32 {
+            #[inline] pub fn get_status(&self, status: StatementStatus) -> i32 {
                 self.stmt.get_status(status, false)
             }
 
@@ -13759,14 +20810,10 @@ pub mod rusqlite
                 self.stmt.get_status(status, true)
             }
             /// Returns true if the statement is read only.
-            #[inline]
-            pub fn readonly(&self) -> bool {
+            #[inline] pub fn readonly(&self) -> bool {
                 self.stmt.readonly()
             }
-
-            /// Safety: This is unsafe, because using `sqlite3_stmt` after the
-            /// connection has closed is illegal, but `RawStatement` does not enforce
-            /// this, as it loses our protective `'conn` lifetime bound.
+            
             #[inline]
             pub unsafe fn into_raw(mut self) -> RawStatement {
                 let mut stmt = RawStatement::new(ptr::null_mut());
@@ -13801,19 +20848,17 @@ pub mod rusqlite
 
         impl Drop for Statement<'_> {
             #[expect(unused_must_use)]
-            #[inline]
-            fn drop(&mut self) {
+            #[inline] fn drop(&mut self) {
                 self.finalize_();
             }
         }
 
         impl Statement<'_> {
-            #[inline]
-            pub(super) fn new(conn: &Connection, stmt: RawStatement) -> Statement<'_> {
+            #[inline] pub fn new(conn: &Connection, stmt: RawStatement) -> Statement<'_> {
                 Statement { conn, stmt }
             }
 
-            pub(super) fn value_ref(&self, col: usize) -> ValueRef<'_> {
+            pub fn value_ref(&self, col: usize) -> ValueRef<'_> {
                 let raw = unsafe { self.stmt.ptr() };
 
                 match self.stmt.column_type(col) {
@@ -13869,8 +20914,7 @@ pub mod rusqlite
                 }
             }
 
-            #[inline]
-            pub(super) fn step(&self) -> Result<bool> {
+            #[inline] pub fn step(&self) -> Result<bool> {
                 match self.stmt.step() {
                     ffi::SQLITE_ROW => Ok(true),
                     ffi::SQLITE_DONE => Ok(false),
@@ -13878,8 +20922,7 @@ pub mod rusqlite
                 }
             }
 
-            #[inline]
-            pub(super) fn reset(&self) -> Result<()> {
+            #[inline] pub fn reset(&self) -> Result<()> {
                 match self.stmt.reset() {
                     ffi::SQLITE_OK => Ok(()),
                     code => Err(self.conn.decode_result(code).unwrap_err()),
@@ -13888,12 +20931,6 @@ pub mod rusqlite
         }
 
         /// Prepared statement status counters.
-        ///
-        /// See `https://www.sqlite.org/c3ref/c_stmtstatus_counter.html`
-        /// for explanations of each.
-        ///
-        /// Note that depending on your version of SQLite, all of these
-        /// may not be available.
         #[repr(i32)]
         #[derive(Clone, Copy, PartialEq, Eq)]
         #[non_exhaustive]
@@ -13927,7 +20964,7 @@ pub mod rusqlite
         };
         /*
         use crate::{Connection, Result};
-        use std::ops::Deref;
+        use ::ops::Deref;
         */
         /// Options for transaction behavior.
         #[derive(Copy, Clone)]
@@ -13981,14 +21018,12 @@ pub mod rusqlite
         impl Transaction<'_> {
             /// Begin a new transaction. Cannot be nested; see `savepoint` for nested
             /// transactions.
-            #[inline]
-            pub fn new(conn: &mut Connection, behavior: TransactionBehavior) -> Result<Transaction<'_>> {
+            #[inline] pub fn new(conn: &mut Connection, behavior: TransactionBehavior) -> Result<Transaction<'_>> {
                 Self::new_unchecked(conn, behavior)
             }
 
             /// Begin a new transaction, failing if a transaction is open.
-            #[inline]
-            pub fn new_unchecked(
+            #[inline] pub fn new_unchecked(
                 conn: &Connection,
                 behavior: TransactionBehavior,
             ) -> Result<Transaction<'_>> {
@@ -14005,14 +21040,12 @@ pub mod rusqlite
 
             /// Starts a new [savepoint](http://www.sqlite.org/lang_savepoint.html), allowing nested
             /// transactions.
-            #[inline]
-            pub fn savepoint(&mut self) -> Result<Savepoint<'_>> {
+            #[inline] pub fn savepoint(&mut self) -> Result<Savepoint<'_>> {
                 Savepoint::new_(self.conn)
             }
 
             /// Create a new savepoint with a custom savepoint name. See `savepoint()`.
-            #[inline]
-            pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint<'_>> {
+            #[inline] pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint<'_>> {
                 Savepoint::with_name_(self.conn, name)
             }
 
@@ -14026,44 +21059,37 @@ pub mod rusqlite
 
             /// Configure the transaction to perform the specified action when it is
             /// dropped.
-            #[inline]
-            pub fn set_drop_behavior(&mut self, drop_behavior: DropBehavior) {
+            #[inline] pub fn set_drop_behavior(&mut self, drop_behavior: DropBehavior) {
                 self.drop_behavior = drop_behavior;
             }
 
             /// A convenience method which consumes and commits a transaction.
-            #[inline]
-            pub fn commit(mut self) -> Result<()> {
+            #[inline] pub fn commit(mut self) -> Result<()> {
                 self.commit_()
             }
 
-            #[inline]
-            fn commit_(&mut self) -> Result<()> {
+            #[inline] fn commit_(&mut self) -> Result<()> {
                 self.conn.execute_batch("COMMIT")?;
                 Ok(())
             }
 
             /// A convenience method which consumes and rolls back a transaction.
-            #[inline]
-            pub fn rollback(mut self) -> Result<()> {
+            #[inline] pub fn rollback(mut self) -> Result<()> {
                 self.rollback_()
             }
 
-            #[inline]
-            fn rollback_(&mut self) -> Result<()> {
+            #[inline] fn rollback_(&mut self) -> Result<()> {
                 self.conn.execute_batch("ROLLBACK")?;
                 Ok(())
             }
 
             /// Consumes the transaction, committing or rolling back according to the
             /// current setting (see `drop_behavior`).
-            #[inline]
-            pub fn finish(mut self) -> Result<()> {
+            #[inline] pub fn finish(mut self) -> Result<()> {
                 self.finish_()
             }
 
-            #[inline]
-            fn finish_(&mut self) -> Result<()> {
+            #[inline] fn finish_(&mut self) -> Result<()> {
                 if self.conn.is_autocommit() {
                     return Ok(());
                 }
@@ -14079,23 +21105,20 @@ pub mod rusqlite
         impl Deref for Transaction<'_> {
             type Target = Connection;
 
-            #[inline]
-            fn deref(&self) -> &Connection {
+            #[inline] fn deref(&self) -> &Connection {
                 self.conn
             }
         }
 
         #[expect(unused_must_use)]
         impl Drop for Transaction<'_> {
-            #[inline]
-            fn drop(&mut self) {
+            #[inline] fn drop(&mut self) {
                 self.finish_();
             }
         }
 
         impl Savepoint<'_> {
-            #[inline]
-            fn with_name_<T: Into<String>>(conn: &Connection, name: T) -> Result<Savepoint<'_>> {
+            #[inline] fn with_name_<T: Into<String>>(conn: &Connection, name: T) -> Result<Savepoint<'_>> {
                 let name = name.into();
                 conn.execute_batch(&format!("SAVEPOINT {name}"))
                     .map(|()| Savepoint {
@@ -14106,32 +21129,27 @@ pub mod rusqlite
                     })
             }
 
-            #[inline]
-            fn new_(conn: &Connection) -> Result<Savepoint<'_>> {
+            #[inline] fn new_(conn: &Connection) -> Result<Savepoint<'_>> {
                 Savepoint::with_name_(conn, "_rusqlite_sp")
             }
 
             /// Begin a new savepoint. Can be nested.
-            #[inline]
-            pub fn new(conn: &mut Connection) -> Result<Savepoint<'_>> {
+            #[inline] pub fn new(conn: &mut Connection) -> Result<Savepoint<'_>> {
                 Savepoint::new_(conn)
             }
 
             /// Begin a new savepoint with a user-provided savepoint name.
-            #[inline]
-            pub fn with_name<T: Into<String>>(conn: &mut Connection, name: T) -> Result<Savepoint<'_>> {
+            #[inline] pub fn with_name<T: Into<String>>(conn: &mut Connection, name: T) -> Result<Savepoint<'_>> {
                 Savepoint::with_name_(conn, name)
             }
 
             /// Begin a nested savepoint.
-            #[inline]
-            pub fn savepoint(&mut self) -> Result<Savepoint<'_>> {
+            #[inline] pub fn savepoint(&mut self) -> Result<Savepoint<'_>> {
                 Savepoint::new_(self.conn)
             }
 
             /// Begin a nested savepoint with a user-provided savepoint name.
-            #[inline]
-            pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint<'_>> {
+            #[inline] pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint<'_>> {
                 Savepoint::with_name_(self.conn, name)
             }
 
@@ -14145,40 +21163,34 @@ pub mod rusqlite
 
             /// Configure the savepoint to perform the specified action when it is
             /// dropped.
-            #[inline]
-            pub fn set_drop_behavior(&mut self, drop_behavior: DropBehavior) {
+            #[inline] pub fn set_drop_behavior(&mut self, drop_behavior: DropBehavior) {
                 self.drop_behavior = drop_behavior;
             }
 
             /// A convenience method which consumes and commits a savepoint.
-            #[inline]
-            pub fn commit(mut self) -> Result<()> {
+            #[inline] pub fn commit(mut self) -> Result<()> {
                 self.commit_()
             }
 
-            #[inline]
-            fn commit_(&mut self) -> Result<()> {
+            #[inline] fn commit_(&mut self) -> Result<()> {
                 self.conn.execute_batch(&format!("RELEASE {}", self.name))?;
                 self.committed = true;
                 Ok(())
             }
 
             /// A convenience method which rolls back a savepoint.
-            #[inline]
-            pub fn rollback(&mut self) -> Result<()> {
+            #[inline] pub fn rollback(&mut self) -> Result<()> {
                 self.conn
                     .execute_batch(&format!("ROLLBACK TO {}", self.name))
             }
 
             /// Consumes the savepoint, committing or rolling back according to the
             /// current setting (see `drop_behavior`).
-            #[inline]
-            pub fn finish(mut self) -> Result<()> {
+            #[inline] pub fn finish(mut self) -> Result<()> {
                 self.finish_()
             }
 
-            #[inline]
-            fn finish_(&mut self) -> Result<()> {
+            #[inline] fn finish_(&mut self) -> Result<()> {
                 if self.committed {
                     return Ok(());
                 }
@@ -14196,16 +21208,14 @@ pub mod rusqlite
         impl Deref for Savepoint<'_> {
             type Target = Connection;
 
-            #[inline]
-            fn deref(&self) -> &Connection {
+            #[inline] fn deref(&self) -> &Connection {
                 self.conn
             }
         }
 
         #[expect(unused_must_use)]
         impl Drop for Savepoint<'_> {
-            #[inline]
-            fn drop(&mut self) {
+            #[inline] fn drop(&mut self) {
                 self.finish_();
             }
         }
@@ -14224,14 +21234,12 @@ pub mod rusqlite
 
         impl Connection {
             /// Begin a new transaction with the default behavior (DEFERRED).
-            #[inline]
-            pub fn transaction(&mut self) -> Result<Transaction<'_>> {
+            #[inline] pub fn transaction(&mut self) -> Result<Transaction<'_>> {
                 Transaction::new(self, self.transaction_behavior)
             }
 
             /// Begin a new transaction with a specified behavior.
-            #[inline]
-            pub fn transaction_with_behavior(
+            #[inline] pub fn transaction_with_behavior(
                 &mut self,
                 behavior: TransactionBehavior,
             ) -> Result<Transaction<'_>> {
@@ -14244,14 +21252,12 @@ pub mod rusqlite
             }
 
             /// Begin a new savepoint with the default behavior (DEFERRED).
-            #[inline]
-            pub fn savepoint(&mut self) -> Result<Savepoint<'_>> {
+            #[inline] pub fn savepoint(&mut self) -> Result<Savepoint<'_>> {
                 Savepoint::new(self)
             }
 
             /// Begin a new savepoint with a specified name.
-            #[inline]
-            pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint<'_>> {
+            #[inline] pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint<'_>> {
                 Savepoint::with_name(self, name)
             }
 
@@ -14283,7 +21289,7 @@ pub mod rusqlite
         pub use self::value::Value;
         pub use self::value_ref::ValueRef;
 
-        use std::fmt;
+        use ::fmt;
         */
         mod from_sql
         {
@@ -14293,9 +21299,9 @@ pub mod rusqlite
             };
             /*
             use super::{Value, ValueRef};
-            use std::borrow::Cow;
-            use std::error::Error;
-            use std::fmt;
+            use ::borrow::Cow;
+            use ::error::Error;
+            use ::fmt;
             */
             /// Enum listing possible errors from [`FromSql`] trait.
             #[derive(Debug)]
@@ -14412,17 +21418,17 @@ pub mod rusqlite
             from_sql_integral!(u64);
             from_sql_integral!(usize);
 
-            from_sql_integral!(non_zero std::num::NonZeroIsize, isize);
-            from_sql_integral!(non_zero std::num::NonZeroI8, i8);
-            from_sql_integral!(non_zero std::num::NonZeroI16, i16);
-            from_sql_integral!(non_zero std::num::NonZeroI32, i32);
-            from_sql_integral!(non_zero std::num::NonZeroI64, i64);
+            from_sql_integral!(non_zero ::num::NonZeroIsize, isize);
+            from_sql_integral!(non_zero ::num::NonZeroI8, i8);
+            from_sql_integral!(non_zero ::num::NonZeroI16, i16);
+            from_sql_integral!(non_zero ::num::NonZeroI32, i32);
+            from_sql_integral!(non_zero ::num::NonZeroI64, i64);
 
-            from_sql_integral!(non_zero std::num::NonZeroUsize, usize);
-            from_sql_integral!(non_zero std::num::NonZeroU8, u8);
-            from_sql_integral!(non_zero std::num::NonZeroU16, u16);
-            from_sql_integral!(non_zero std::num::NonZeroU32, u32);
-            from_sql_integral!(non_zero std::num::NonZeroU64, u64);
+            from_sql_integral!(non_zero ::num::NonZeroUsize, usize);
+            from_sql_integral!(non_zero ::num::NonZeroU8, u8);
+            from_sql_integral!(non_zero ::num::NonZeroU16, u16);
+            from_sql_integral!(non_zero ::num::NonZeroU32, u32);
+            from_sql_integral!(non_zero ::num::NonZeroU64, u64);
 
             impl FromSql for i64 {
                 #[inline]
@@ -14474,14 +21480,14 @@ pub mod rusqlite
                 }
             }
 
-            impl FromSql for std::rc::Rc<str> {
+            impl FromSql for ::rc::Rc<str> {
                 #[inline]
                 fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
                     value.as_str().map(Into::into)
                 }
             }
 
-            impl FromSql for std::sync::Arc<str> {
+            impl FromSql for ::sync::Arc<str> {
                 #[inline]
                 fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
                     value.as_str().map(Into::into)
@@ -14502,17 +21508,17 @@ pub mod rusqlite
                 }
             }
 
-            impl FromSql for std::rc::Rc<[u8]> {
+            impl FromSql for ::rc::Rc<[u8]> {
                 #[inline]
                 fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-                    value.as_blob().map(std::rc::Rc::<[u8]>::from)
+                    value.as_blob().map( ::rc::Rc::<[u8]>::from)
                 }
             }
 
-            impl FromSql for std::sync::Arc<[u8]> {
+            impl FromSql for ::sync::Arc<[u8]> {
                 #[inline]
                 fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-                    value.as_blob().map(std::sync::Arc::<[u8]>::from)
+                    value.as_blob().map( ::sync::Arc::<[u8]>::from)
                 }
             }
 
@@ -14575,7 +21581,7 @@ pub mod rusqlite
             #[cfg(feature = "array")]
             use crate::vtab::array::Array;
             use crate::{Error, Result};
-            use std::borrow::Cow;
+            use ::borrow::Cow;
             */
             /// `ToSqlOutput` represents the possible output types for implementers of the
             /// [`ToSql`] trait.
@@ -14588,9 +21594,7 @@ pub mod rusqlite
                 /// An owned SQLite-representable value.
                 Owned(Value),
             }
-
-            // Generically allow any type that can be converted into a ValueRef
-            // to be converted into a ToSqlOutput as well.
+            
             impl<'a, T: ?Sized> From<&'a T> for ToSqlOutput<'a>
             where
                 &'a T: Into<ValueRef<'a>>,
@@ -14630,14 +21634,14 @@ pub mod rusqlite
             from_value!(f64);
             from_value!(Vec<u8>);
 
-            from_value!(non_zero std::num::NonZeroI8);
-            from_value!(non_zero std::num::NonZeroI16);
-            from_value!(non_zero std::num::NonZeroI32);
-            from_value!(non_zero std::num::NonZeroI64);
-            from_value!(non_zero std::num::NonZeroIsize);
-            from_value!(non_zero std::num::NonZeroU8);
-            from_value!(non_zero std::num::NonZeroU16);
-            from_value!(non_zero std::num::NonZeroU32);
+            from_value!(non_zero ::num::NonZeroI8);
+            from_value!(non_zero ::num::NonZeroI16);
+            from_value!(non_zero ::num::NonZeroI32);
+            from_value!(non_zero ::num::NonZeroI64);
+            from_value!(non_zero ::num::NonZeroIsize);
+            from_value!(non_zero ::num::NonZeroU8);
+            from_value!(non_zero ::num::NonZeroU16);
+            from_value!(non_zero ::num::NonZeroU32);
             
             from_value!(uuid::Uuid);
 
@@ -14672,14 +21676,14 @@ pub mod rusqlite
                 }
             }
 
-            impl<T: ToSql + ?Sized> ToSql for std::rc::Rc<T> {
+            impl<T: ToSql + ?Sized> ToSql for ::rc::Rc<T> {
                 #[inline]
                 fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
                     self.as_ref().to_sql()
                 }
             }
 
-            impl<T: ToSql + ?Sized> ToSql for std::sync::Arc<T> {
+            impl<T: ToSql + ?Sized> ToSql for ::sync::Arc<T> {
                 #[inline]
                 fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
                     self.as_ref().to_sql()
@@ -14710,14 +21714,14 @@ pub mod rusqlite
             to_sql_self!(f32);
             to_sql_self!(f64);
 
-            to_sql_self!(std::num::NonZeroI8);
-            to_sql_self!(std::num::NonZeroI16);
-            to_sql_self!(std::num::NonZeroI32);
-            to_sql_self!(std::num::NonZeroI64);
-            to_sql_self!(std::num::NonZeroIsize);
-            to_sql_self!(std::num::NonZeroU8);
-            to_sql_self!(std::num::NonZeroU16);
-            to_sql_self!(std::num::NonZeroU32);
+            to_sql_self!( ::num::NonZeroI8);
+            to_sql_self!( ::num::NonZeroI16);
+            to_sql_self!( ::num::NonZeroI32);
+            to_sql_self!( ::num::NonZeroI64);
+            to_sql_self!( ::num::NonZeroIsize);
+            to_sql_self!( ::num::NonZeroU8);
+            to_sql_self!( ::num::NonZeroU16);
+            to_sql_self!( ::num::NonZeroU32);
             to_sql_self!(uuid::Uuid);
 
             macro_rules! to_sql_self_fallible(
@@ -14751,8 +21755,8 @@ pub mod rusqlite
             
             to_sql_self_fallible!(u64);
             to_sql_self_fallible!(usize);
-            to_sql_self_fallible!(non_zero std::num::NonZeroU64);
-            to_sql_self_fallible!(non_zero std::num::NonZeroUsize);
+            to_sql_self_fallible!(non_zero ::num::NonZeroU64);
+            to_sql_self_fallible!(non_zero ::num::NonZeroUsize);
 
             impl<T: ?Sized> ToSql for &'_ T
             where
@@ -15042,7 +22046,7 @@ pub mod rusqlite
                 pub fn as_str(&self) -> FromSqlResult<&'a str> {
                     match *self {
                         ValueRef::Text(t) => {
-                            std::str::from_utf8(t).map_err(|e| FromSqlError::Other(Box::new(e)))
+                            ::str::from_utf8(t).map_err(|e| FromSqlError::Other(Box::new(e)))
                         }
                         _ => Err(FromSqlError::InvalidType),
                     }
@@ -15055,7 +22059,7 @@ pub mod rusqlite
                 pub fn as_str_or_null(&self) -> FromSqlResult<Option<&'a str>> {
                     match *self {
                         ValueRef::Null => Ok(None),
-                        ValueRef::Text(t) => std::str::from_utf8(t)
+                        ValueRef::Text(t) => ::str::from_utf8(t)
                             .map_err(|e| FromSqlError::Other(Box::new(e)))
                             .map(Some),
                         _ => Err(FromSqlError::InvalidType),
@@ -15116,7 +22120,7 @@ pub mod rusqlite
                         ValueRef::Integer(i) => Self::Integer(i),
                         ValueRef::Real(r) => Self::Real(r),
                         ValueRef::Text(s) => {
-                            let s = std::str::from_utf8(s).expect("invalid UTF-8");
+                            let s = ::str::from_utf8(s).expect("invalid UTF-8");
                             Self::Text(s.to_string())
                         }
                         ValueRef::Blob(b) => Self::Blob(b.to_vec()),
@@ -15223,8 +22227,7 @@ pub mod rusqlite
     
     /// A macro making it more convenient to longer lists of
     /// parameters as a `&[&dyn ToSql]`.
-    #[macro_export]
-    macro_rules! params {
+    #[macro_export] macro_rules! params {
         () => {
             &[] as &[&dyn $crate::ToSql]
         };
@@ -15235,8 +22238,7 @@ pub mod rusqlite
     
     /// A macro making it more convenient to pass lists of named parameters
     /// as a `&[(&str, &dyn ToSql)]`.
-    #[macro_export]
-    macro_rules! named_params {
+    #[macro_export] macro_rules! named_params {
         () => {
             &[] as &[(&str, &dyn $crate::ToSql)]
         };
@@ -15297,7 +22299,7 @@ pub mod rusqlite
     
     #[cfg(unix)]
     fn path_to_cstring(p: &Path) -> Result<CString> {
-        use std::os::unix::ffi::OsStrExt;
+        use ::os::unix::ffi::OsStrExt;
         Ok(CString::new(p.as_os_str().as_bytes())?)
     }
     
@@ -15567,7 +22569,7 @@ pub mod rusqlite
         /// Flags for opening SQLite database connections.
         #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
         #[repr(C)]
-        pub struct OpenFlags: ::std::os::raw::c_int {
+        pub struct OpenFlags: ::os::raw::c_int {
             /// The database is opened in read-only mode.
             /// If the database does not already exist, an error is returned.
             const SQLITE_OPEN_READ_ONLY = ffi::SQLITE_OPEN_READONLY;
@@ -15615,7 +22617,7 @@ pub mod rusqlite
         /// [sqlite3_prepare_v3](https://sqlite.org/c3ref/c_prepare_normalize.html) for details.
         #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
         #[repr(C)]
-        pub struct PrepFlags: ::std::os::raw::c_uint {
+        pub struct PrepFlags: ::os::raw::c_uint {
             /// A hint to the query planner that the prepared statement will be retained for a long time and probably reused many times.
             const SQLITE_PREPARE_PERSISTENT = 0x01;
             /// Causes the SQL compiler to return an error (error code SQLITE_ERROR) if the statement uses any virtual tables.
@@ -15653,7 +22655,7 @@ pub mod structopt
     /*
     pub use structopt_derive::*;
     
-    use std::ffi::OsString;
+    use ::ffi::OsString;
     
     /// Re-export of clap
     pub use clap;
@@ -15694,7 +22696,7 @@ pub mod structopt
             /*
             use crate::spanned::Sp;
             
-            use std::env;
+            use ::env;
             
             use heck::{CamelCase, KebabCase, MixedCase, ShoutySnakeCase, SnakeCase};
             use proc_macro2::{Span, TokenStream};
@@ -15831,7 +22833,7 @@ pub mod structopt
                         methods: vec![],
                         parser: Sp::call_site((
                             Sp::call_site(Parser::TryFromStr),
-                            quote!(::std::str::FromStr::from_str),
+                            quote!(:: ::str::FromStr::from_str),
                         )),
                         about: None,
                         author: None,
@@ -15947,8 +22949,8 @@ pub mod structopt
             
                                         let parser: Sp<_> = Parser::from_ident(spec.kind).into();
                                         let function = match *parser {
-                                            FromStr | FromOsStr => quote!(::std::convert::From::from),
-                                            TryFromStr => quote!(::std::str::FromStr::from_str),
+                                            FromStr | FromOsStr => quote!(:: ::convert::From::from),
+                                            TryFromStr => quote!(:: ::str::FromStr::from_str),
                                             TryFromOsStr => span_error!(
                                                 parser.span(),
                                                 "cannot omit parser function name with `try_from_os_str`"
@@ -16344,7 +23346,7 @@ pub mod structopt
                 *,
             };
             /*
-            use std::iter::FromIterator;
+            use ::iter::FromIterator;
             
             use proc_macro_error::{span_error, ResultExt};
             use syn::{
@@ -16561,7 +23563,7 @@ pub mod structopt
             /*
             use proc_macro2::{Ident, Span, TokenStream};
             use quote::{quote_spanned, ToTokens};
-            use std::ops::{Deref, DerefMut};
+            use ::ops::{Deref, DerefMut};
             use syn::LitStr;
             */
             /// An entity with a span attached.
@@ -16894,7 +23896,7 @@ pub mod structopt
         }
         
         fn gen_clap(attrs: &[Attribute]) -> GenOutput {
-            let name = std::env::var("CARGO_PKG_NAME").ok().unwrap_or_default();
+            let name = ::env::var("CARGO_PKG_NAME").ok().unwrap_or_default();
         
             let attrs = Attrs::from_struct(attrs, Sp::call_site(name), Sp::call_site(DEFAULT_CASING));
             let tokens = {
@@ -17144,16 +24146,14 @@ pub mod structopt
         fn from_clap(matches: &clap::ArgMatches<'_>) -> Self;
     
         /// Gets the struct from the command line arguments.
-        fn from_args() -> Self
-        where
+        fn from_args() -> Self where 
             Self: Sized,
         {
             Self::from_clap(&Self::clap().get_matches())
         }
     
         /// Gets the struct from any iterator such as a `Vec` of your making.
-        fn from_iter<I>(iter: I) -> Self
-        where
+        fn from_iter<I>(iter: I) -> Self where 
             Self: Sized,
             I: IntoIterator,
             I::Item: Into<OsString> + Clone,
@@ -17162,8 +24162,7 @@ pub mod structopt
         }
     
         /// Gets the struct from any iterator such as a `Vec` of your making.
-        fn from_iter_safe<I>(iter: I) -> Result<Self, clap::Error>
-        where
+        fn from_iter_safe<I>(iter: I) -> Result<Self, clap::Error> where 
             Self: Sized,
             I: IntoIterator,
             I::Item: Into<OsString> + Clone,
@@ -17548,7 +24547,7 @@ pub mod uuid
         impl<'a> InvalidUuid<'a> {
             /// Converts the lightweight error type into detailed diagnostics.
             pub fn into_err(self) -> Error {
-                let input_str = match std::str::from_utf8(self.0) {
+                let input_str = match ::str::from_utf8(self.0) {
                     Ok(s) => s,
                     Err(_) => return Error(ErrorKind::InvalidUTF8),
                 };
@@ -17667,7 +24666,7 @@ pub mod uuid
         /*
         use crate::{
             error::*,
-            std::{convert::TryFrom, str},
+            ::{convert::TryFrom, str},
             Uuid,
         };
         */
@@ -17847,13 +24846,12 @@ pub mod uuid
         };
         /*
         use crate::{
-            std::{borrow::Borrow, fmt, ptr, str},
+            ::{borrow::Borrow, fmt, ptr, str},
             Uuid, Variant,
         };
         */
-        impl std::fmt::Debug for Uuid {
-            #[inline]
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        impl ::fmt::Debug for Uuid {
+            #[inline] fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 fmt::LowerHex::fmt(self, f)
             }
         }
@@ -17882,8 +24880,7 @@ pub mod uuid
         }
         
         impl fmt::UpperHex for Uuid {
-            #[inline]
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            #[inline] fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 fmt::UpperHex::fmt(self.as_hyphenated(), f)
             }
         }
@@ -17920,8 +24917,7 @@ pub mod uuid
             }
         
             /// Get a borrowed [`Hyphenated`] formatter.
-            #[inline]
-            pub fn as_hyphenated(&self) -> &Hyphenated {
+            #[inline] pub fn as_hyphenated(&self) -> &Hyphenated {
                 // SAFETY: `Uuid` and `Hyphenated` have the same ABI
                 unsafe { &*(self as *const Uuid as *const Hyphenated) }
             }
@@ -17933,8 +24929,7 @@ pub mod uuid
             }
         
             /// Get a borrowed [`Simple`] formatter.
-            #[inline]
-            pub fn as_simple(&self) -> &Simple {
+            #[inline] pub fn as_simple(&self) -> &Simple {
                 // SAFETY: `Uuid` and `Simple` have the same ABI
                 unsafe { &*(self as *const Uuid as *const Simple) }
             }
@@ -17946,8 +24941,7 @@ pub mod uuid
             }
         
             /// Get a borrowed [`Urn`] formatter.
-            #[inline]
-            pub fn as_urn(&self) -> &Urn {
+            #[inline] pub fn as_urn(&self) -> &Urn {
                 // SAFETY: `Uuid` and `Urn` have the same ABI
                 unsafe { &*(self as *const Uuid as *const Urn) }
             }
@@ -17959,8 +24953,7 @@ pub mod uuid
             }
         
             /// Get a borrowed [`Braced`] formatter.
-            #[inline]
-            pub fn as_braced(&self) -> &Braced {
+            #[inline] pub fn as_braced(&self) -> &Braced {
                 // SAFETY: `Uuid` and `Braced` have the same ABI
                 unsafe { &*(self as *const Uuid as *const Braced) }
             }
@@ -18075,16 +25068,14 @@ pub mod uuid
             /// Writes the [`Uuid`] as a lower-case hyphenated string to
             /// `buffer`, and returns the subslice of the buffer that contains the
             /// encoded UUID.
-            #[inline]
-            pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str {
+            #[inline] pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str {
                 encode_hyphenated(self.0.as_bytes(), buffer, false)
             }
         
             /// Writes the [`Uuid`] as an upper-case hyphenated string to
             /// `buffer`, and returns the subslice of the buffer that contains the
             /// encoded UUID.
-            #[inline]
-            pub fn encode_upper<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str {
+            #[inline] pub fn encode_upper<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str {
                 encode_hyphenated(self.0.as_bytes(), buffer, true)
             }
         
@@ -18111,16 +25102,14 @@ pub mod uuid
             /// Writes the [`Uuid`] as a lower-case hyphenated string surrounded by
             /// braces to `buffer`, and returns the subslice of the buffer that contains
             /// the encoded UUID.
-            #[inline]
-            pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str {
+            #[inline] pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str {
                 encode_braced(self.0.as_bytes(), buffer, false)
             }
         
             /// Writes the [`Uuid`] as an upper-case hyphenated string surrounded by
             /// braces to `buffer`, and returns the subslice of the buffer that contains
             /// the encoded UUID.
-            #[inline]
-            pub fn encode_upper<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str {
+            #[inline] pub fn encode_upper<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str {
                 encode_braced(self.0.as_bytes(), buffer, true)
             }
         
@@ -18146,15 +25135,13 @@ pub mod uuid
         
             /// Writes the [`Uuid`] as a lower-case simple string to `buffer`,
             /// and returns the subslice of the buffer that contains the encoded UUID.
-            #[inline]
-            pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str {
+            #[inline] pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str {
                 encode_simple(self.0.as_bytes(), buffer, false)
             }
         
             /// Writes the [`Uuid`] as an upper-case simple string to `buffer`,
             /// and returns the subslice of the buffer that contains the encoded UUID.
-            #[inline]
-            pub fn encode_upper<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str {
+            #[inline] pub fn encode_upper<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str {
                 encode_simple(self.0.as_bytes(), buffer, true)
             }
         
@@ -18181,16 +25168,14 @@ pub mod uuid
             /// Writes the [`Uuid`] as a lower-case URN string to
             /// `buffer`, and returns the subslice of the buffer that contains the
             /// encoded UUID.
-            #[inline]
-            pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str {
+            #[inline] pub fn encode_lower<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str {
                 encode_urn(self.0.as_bytes(), buffer, false)
             }
         
             /// Writes the [`Uuid`] as an upper-case URN string to
             /// `buffer`, and returns the subslice of the buffer that contains the
             /// encoded UUID.
-            #[inline]
-            pub fn encode_upper<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str {
+            #[inline] pub fn encode_upper<'buf>(&self, buffer: &'buf mut [u8]) -> &'buf mut str {
                 encode_urn(self.0.as_bytes(), buffer, true)
             }
         
@@ -18734,13 +25719,13 @@ pub mod yaml_rust
             *,
         };
         /*
-        use std::collections::BTreeMap;
-        use std::ops::Index;
-        use std::string;
-        use std::i64;
-        use std::f64;
-        use std::mem;
-        use std::vec;
+        use ::collections::BTreeMap;
+        use ::ops::Index;
+        use ::string;
+        use ::i64;
+        use ::f64;
+        use ::mem;
+        use ::vec;
         use parser::*;
         use scanner::{TScalarStyle, ScanError, TokenType, Marker};
         use linked_hash_map::LinkedHashMap;
@@ -19309,16 +26294,14 @@ pub mod yaml_rust
                     token_available: false,
                 }
             }
-            #[inline]
-            pub fn get_error(&self) -> Option<ScanError> {
+            #[inline] pub fn get_error(&self) -> Option<ScanError> {
                 match self.error {
                     None => None,
                     Some(ref e) => Some(e.clone()),
                 }
             }
         
-            #[inline]
-            fn lookahead(&mut self, count: usize) {
+            #[inline] fn lookahead(&mut self, count: usize) {
                 if self.buffer.len() >= count {
                     return;
                 }
@@ -19326,8 +26309,7 @@ pub mod yaml_rust
                     self.buffer.push_back(self.rdr.next().unwrap_or('\0'));
                 }
             }
-            #[inline]
-            fn skip(&mut self) {
+            #[inline] fn skip(&mut self) {
                 let c = self.buffer.pop_front().unwrap();
         
                 self.mark.index += 1;
@@ -19338,8 +26320,7 @@ pub mod yaml_rust
                     self.mark.col += 1;
                 }
             }
-            #[inline]
-            fn skip_line(&mut self) {
+            #[inline] fn skip_line(&mut self) {
                 if self.buffer[0] == '\r' && self.buffer[1] == '\n' {
                     self.skip();
                     self.skip();
@@ -19347,33 +26328,26 @@ pub mod yaml_rust
                     self.skip();
                 }
             }
-            #[inline]
-            fn ch(&self) -> char {
+            #[inline] fn ch(&self) -> char {
                 self.buffer[0]
             }
-            #[inline]
-            fn ch_is(&self, c: char) -> bool {
+            #[inline] fn ch_is(&self, c: char) -> bool {
                 self.buffer[0] == c
             }
             #[allow(dead_code)]
-            #[inline]
-            fn eof(&self) -> bool {
+            #[inline] fn eof(&self) -> bool {
                 self.ch_is('\0')
             }
-            #[inline]
-            pub fn stream_started(&self) -> bool {
+            #[inline] pub fn stream_started(&self) -> bool {
                 self.stream_start_produced
             }
-            #[inline]
-            pub fn stream_ended(&self) -> bool {
+            #[inline] pub fn stream_ended(&self) -> bool {
                 self.stream_end_produced
             }
-            #[inline]
-            pub fn mark(&self) -> Marker {
+            #[inline] pub fn mark(&self) -> Marker {
                 self.mark
             }
-            #[inline]
-            fn read_break(&mut self, s: &mut String) {
+            #[inline] fn read_break(&mut self, s: &mut String) {
                 if self.buffer[0] == '\r' && self.buffer[1] == '\n' {
                     s.push('\n');
                     self.skip();
@@ -20689,7 +27663,7 @@ pub mod yaml_rust
         };
         /*
         use scanner::*;
-        use std::collections::HashMap;
+        use ::collections::HashMap;
         */
         #[derive(Clone, Copy, PartialEq, Debug, Eq)]
         enum State {
@@ -21513,9 +28487,9 @@ pub mod yaml_rust
             *,
         };
         /*
-        use std::fmt::{self, Display};
-        use std::convert::From;
-        use std::error::Error;
+        use ::fmt::{self, Display};
+        use ::convert::From;
+        use ::error::Error;
         use yaml::{Hash, Yaml};
         */
         #[derive(Copy, Clone, Debug)]
@@ -21837,7 +28811,7 @@ pub mod calculator
     };
     /*
     // via: https://github.com/pest-parser/book/blob/b6a42eb7/examples/calculator/src/main.rs
-    use std::num::Wrapping as W;
+    use ::num::Wrapping as W;
     
     use pest::Parser;
     use pest::iterators::{Pair, Pairs};
@@ -21913,8 +28887,8 @@ pub mod completers
         *,
     };
     /*
-    use std::path::Path;
-    use std::sync::Arc;
+    use ::path::Path;
+    use ::sync::Arc;
     
     use lineread::complete::{Completer, Completion};
     use lineread::prompter::Prompter;
@@ -21939,10 +28913,10 @@ pub mod completers
             *
         };
         /*
-        use std::borrow::Cow;
-        use std::fs::File;
-        use std::io::{Read, Write};
-        use std::path::Path;
+        use ::borrow::Cow;
+        use ::fs::File;
+        use ::io::{Read, Write};
+        use ::path::Path;
         
         use lineread::complete::escape;
         use lineread::complete::escaped_word_start;
@@ -22135,8 +29109,8 @@ pub mod completers
             *
         };
         /*
-        use std::env;
-        use std::sync::Arc;
+        use ::env;
+        use ::sync::Arc;
         
         use lineread::complete::{Completer, Completion, Suffix};
         use lineread::prompter::Prompter;
@@ -22205,9 +29179,9 @@ pub mod completers
             *
         };
         /*
-        use std::env;
-        use std::fs::File;
-        use std::io::{BufRead, BufReader, Write};
+        use ::env;
+        use ::fs::File;
+        use ::io::{BufRead, BufReader, Write};
         
         use regex::Regex;
         
@@ -22305,14 +29279,14 @@ pub mod completers
             *
         };
         /*
-        use std::collections::HashSet;
-        use std::env;
-        use std::fs::read_dir;
-        use std::io::Write;
-        use std::iter::FromIterator;
-        use std::os::unix::fs::PermissionsExt;
-        use std::path::MAIN_SEPARATOR;
-        use std::sync::Arc;
+        use ::collections::HashSet;
+        use ::env;
+        use ::fs::read_dir;
+        use ::io::Write;
+        use ::iter::FromIterator;
+        use ::os::unix::fs::PermissionsExt;
+        use ::path::MAIN_SEPARATOR;
+        use ::sync::Arc;
         
         use lineread::complete::{Completer, Completion, Suffix};
         use lineread::terminal::Terminal;
@@ -22599,8 +29573,8 @@ pub mod completers
             *
         };
         /*
-        use std::fs::File;
-        use std::io::{BufRead, BufReader};
+        use ::fs::File;
+        use ::io::{BufRead, BufReader};
         
         use regex::Regex;
         
@@ -22665,7 +29639,7 @@ pub mod completers
         };
         /*
         use regex::Regex;
-        use std::env;
+        use ::env;
         
         use crate::libs;
         use crate::tools;
@@ -22861,15 +29835,15 @@ pub mod core
         *,
     };
     /*
-    use std::env;
-    use std::ffi::{CStr, CString};
-    use std::fs::File;
-    use std::io::{Read, Write};
-    use std::os::unix::io::FromRawFd;
-    use std::os::fd::RawFd;
-    use std::process;
+    use ::env;
+    use ::ffi::{CStr, CString};
+    use ::fs::File;
+    use ::io::{Read, Write};
+    use ::os::unix::io::FromRawFd;
+    use ::os::fd::RawFd;
+    use ::process;
     
-    use nix::unistd::{execve, ForkResult};
+    use nix::uni ::{execve, ForkResult};
     use libs::pipes::pipe;
     
     use crate::builtins;
@@ -23115,8 +30089,6 @@ pub mod core
     
     /// Run a single command.
     /// e.g. the `sort -k2` part of `ps ax | sort -k2 | head`
-    #[allow(clippy::needless_range_loop)]
-    #[allow(clippy::too_many_arguments)]
     fn run_single_program(
         sh: &mut shell::Shell,
         cl: &CommandLine,
@@ -23565,8 +30537,8 @@ pub mod execute
         *,
     };
     /*
-    use std::collections::HashMap;
-    use std::io::{self, Read, Write};
+    use ::collections::HashMap;
+    use ::io::{self, Read, Write};
     
     use regex::Regex;
     
@@ -23664,16 +30636,13 @@ pub mod execute
         match CommandLine::from_line(line, sh) {
             Ok(cl) => {
                 if cl.is_empty() {
-                    // for commands with only envs, e.g.
-                    // $ FOO=1 BAR=2
-                    // we need to define these **Shell Variables**.
                     if !cl.envs.is_empty() {
                         set_shell_vars(sh, &cl.envs);
                     }
                     return CommandResult::new();
                 }
     
-                let (term_given, cr) = core::run_pipeline(sh, &cl, tty, capture, log_cmd);
+                let (term_given, cr) = ::run_pipeline(sh, &cl, tty, capture, log_cmd);
                 if term_given {
                     unsafe {
                         let gid = libc::getpgid(0);
@@ -23699,7 +30668,7 @@ pub mod execute
     
         match CommandLine::from_line(line, sh) {
             Ok(c) => {
-                let (term_given, cr) = core::run_pipeline(sh, &c, false, true, false);
+                let (term_given, cr) = ::run_pipeline(sh, &c, false, true, false);
                 if term_given {
                     unsafe {
                         let gid = libc::getpgid(0);
@@ -23729,11 +30698,11 @@ pub mod history
         *,
     };
     /*
-    use std::collections::HashMap;
-    use std::env;
-    use std::fs;
-    use std::io::Write;
-    use std::path::Path;
+    use ::collections::HashMap;
+    use ::env;
+    use ::fs;
+    use ::io::Write;
+    use ::path::Path;
     
     use lineread::terminal::DefaultTerminal;
     use lineread::Interface;
@@ -23970,14 +30939,14 @@ pub mod highlight
         *,
     };
     /*
-    use std::ops::Range;
-    use std::sync::Arc;
-    use std::collections::HashSet;
-    use std::path::Path;
-    use std::env;
-    use std::fs;
-    use std::sync::Mutex;
-    use std::os::unix::fs::PermissionsExt;
+    use ::ops::Range;
+    use ::sync::Arc;
+    use ::collections::HashSet;
+    use ::path::Path;
+    use ::env;
+    use ::fs;
+    use ::sync::Mutex;
+    use ::os::unix::fs::PermissionsExt;
     
     use lineread::highlighting::{Highlighter, Style};
     
@@ -23987,7 +30956,7 @@ pub mod highlight
     */
     pub struct CicadaHighlighter;
     
-    // ANSI color codes wrapped with \x01 and \x02 for lineread
+    /// ANSI color codes wrapped with \x01 and \x02 for lineread
     const GREEN: &str = "\x01\x1b[0;32m\x02";
     
     lazy_static! {
@@ -24032,7 +31001,6 @@ pub mod highlight
                         if let Ok(file_type) = entry.file_type() {
                             if file_type.is_file() || file_type.is_symlink() {
                                 if let Ok(metadata) = entry.metadata() {
-                                    // Check if file is executable
                                     if metadata.permissions().mode() & 0o111 != 0 {
                                         if let Some(name) = entry.file_name().to_str() {
                                             commands.insert(name.to_string());
@@ -24068,8 +31036,6 @@ pub mod highlight
     
     fn find_token_range_heuristic(line: &str, start_byte: usize, token: &(String, String)) -> Option<Range<usize>> {
         let (sep, word) = token;
-    
-        // Find the start of the token, skipping leading whitespace from the search start position
         let mut search_area = &line[start_byte..];
         let token_start_byte = if let Some(non_ws_offset) = search_area.find(|c: char| !c.is_whitespace()) {
             // Calculate the actual byte index of the first non-whitespace character
@@ -24079,24 +31045,19 @@ pub mod highlight
         };
     
         search_area = &line[token_start_byte..];
-    
-        // Estimate the end byte based on the token structure
+        
         let mut estimated_len = 0;
         let mut current_search_offset = 0;
-    
-        // Match separator prefix if needed (e.g., `"` or `'`)
+        
         if !sep.is_empty() && search_area.starts_with(sep) {
             estimated_len += sep.len();
             current_search_offset += sep.len();
         }
-    
-        // Match the word content
-        // Use starts_with for a basic check, assuming the word appears next
+        
         if search_area[current_search_offset..].starts_with(word) {
              estimated_len += word.len();
              current_search_offset += word.len();
-    
-             // Match separator suffix if needed
+             
             if !sep.is_empty() && search_area[current_search_offset..].starts_with(sep) {
                 estimated_len += sep.len();
             }
@@ -24104,19 +31065,13 @@ pub mod highlight
             Some(token_start_byte..(token_start_byte + estimated_len))
     
         } else if word.is_empty() && !sep.is_empty() && search_area.starts_with(sep) && search_area[sep.len()..].starts_with(sep) {
-             // Handle empty quoted string like "" or ''
              estimated_len += sep.len() * 2;
              Some(token_start_byte..(token_start_byte + estimated_len))
         }
         else {
-            // Fallback: Maybe it's just the word without quotes, or a separator like `|`
             if search_area.starts_with(word) {
                  Some(token_start_byte..(token_start_byte + word.len()))
             } else {
-                 // Could not reliably map the token back to the original string segment
-                 // This might happen with complex escapes or parser ambiguities
-                 // As a basic fallback, consume up to the next space or end of line? Unsafe.
-                 // Return None to signal failure for this token.
                  None
             }
         }
@@ -24131,7 +31086,6 @@ pub mod highlight
     
             let line_info = parser_line::parse_line(line);
             if line_info.tokens.is_empty() {
-                // If parser returns no tokens, style whole line as default
                 styles.push((0..line.len(), Style::Default));
                 return styles;
             }
@@ -24178,8 +31132,7 @@ pub mod highlight
                     }
                 }
             }
-    
-            // Style any remaining characters after the last processed token
+            
             if current_byte_idx < line.len() {
                 styles.push((current_byte_idx..line.len(), Style::Default));
             }
@@ -24283,7 +31236,7 @@ pub mod libs
         };
         /*
         use nix::Result;
-        use nix::unistd::{fork as nix_fork, ForkResult};
+        use nix::uni ::{fork as nix_fork, ForkResult};
         */
         // make fork "safe again", in order not to touch the code in core.rs,
         // see https://github.com/nix-rust/nix/issues/586
@@ -24374,11 +31327,11 @@ pub mod libs
             *,
         };
         /*
-        use std::borrow::Cow;
-        use std::env;
-        use std::fs::read_dir;
-        use std::io::{ErrorKind, Write};
-        use std::os::unix::fs::PermissionsExt;
+        use ::borrow::Cow;
+        use ::env;
+        use ::fs::read_dir;
+        use ::io::{ErrorKind, Write};
+        use ::os::unix::fs::PermissionsExt;
         
         use regex::Regex;
         
@@ -24534,9 +31487,8 @@ pub mod libs
         };
         /*
         use libc::{c_int, c_ulong, winsize, STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
-        use std::mem::zeroed;
+        use ::mem::zeroed;
         */
-        // Unfortunately the actual command is not standardised...
         #[cfg(any(target_os = "linux", target_os = "android"))]
         static TIOCGWINSZ: c_ulong = 0x5413;
         
@@ -24624,7 +31576,7 @@ pub mod libs
                 return true;
             }
         
-            if let Ok(term_program) = std::env::var("TERM_PROGRAM") {
+            if let Ok(term_program) = ::env::var("TERM_PROGRAM") {
                 if term_program == "vscode" {
                     return true;
                 }
@@ -24653,12 +31605,12 @@ pub mod libs
             *,
         };
         /*
-        use std::os::fd::RawFd;
+        use ::os::fd::RawFd;
         use nix::Error;
-        use std::mem;
+        use ::mem;
         use libc::c_int;
         */
-        pub fn pipe() -> std::result::Result<(RawFd, RawFd), Error> {
+        pub fn pipe() -> ::result::Result<(RawFd, RawFd), Error> {
             let mut fds = mem::MaybeUninit::<[c_int; 2]>::uninit();
             let res = unsafe { libc::pipe(fds.as_mut_ptr() as *mut c_int) };
             Error::result(res)?;
@@ -24728,13 +31680,8 @@ pub mod parsers
             result
         }
         
-        /// Parse command line for multiple commands. Examples:
-        /// >>> line_to_cmds("echo foo && echo bar; echo end");
-        /// vec!["echo foo", "&&", "echo bar", ";", "echo end"]
-        /// >>> line_to_cmds("man awk | grep version");
-        /// vec!["man awk | grep version"]
+        /// Parse command line for multiple commands.
         pub fn line_to_cmds(line: &str) -> Vec<String> {
-            // Special characters: http://tldp.org/LDP/abs/html/special-chars.html
             let mut result = Vec::new();
             let mut sep = String::new();
             let mut token = String::new();
@@ -24851,7 +31798,6 @@ pub mod parsers
         /// }
         // #[allow(clippy::cyclomatic_complexity)]
         pub fn parse_line(line: &str) -> LineInfo {
-            // FIXME: let rewrite this parse part and make it a separated lib
             let mut result = Vec::new();
             if tools::is_arithmetic(line) {
                 for x in line.split(' ') {
@@ -24861,9 +31807,6 @@ pub mod parsers
             }
         
             let mut sep = String::new();
-            // `sep_second` is for commands like this:
-            //    export DIR=`brew --prefix openssl`/include
-            // it only could have non-empty value when sep is empty.
             let mut sep_second = String::new();
             let mut token = String::new();
             let mut has_backslash = false;
@@ -24872,21 +31815,10 @@ pub mod parsers
             let mut skip_next = false;
             let mut has_dollar = false;
             let mut parens_left_ignored = false;
-        
-            // for cmds like: `ll foo\>bar end` -> `ll 'foo>bar' end`
             let mut sep_made = String::new();
-        
-            // using semi_ok makes quite dirty here
-            // it is mainly for path completion like:
-            // $ ls "foo b<TAB>
-            // # then got `"foo bar"/`, then hit tab again:
-            // $ ls "foo bar"/<TAB>
-            // # should got:
-            // $ ls "foo bar/the-single-file.txt"
-            // also using semi_ok makes the following command works as expected:
-            // $ touch "foo"/bar.txt  # create bar.txt under ./foo directory
             let mut semi_ok = false;
             let count_chars = line.chars().count();
+            
             for (i, c) in line.chars().enumerate() {
                 if skip_next {
                     skip_next = false;
@@ -25314,7 +32246,7 @@ pub mod prompt
             *,
         };
         /*
-        use std::env;
+        use ::env;
         
         use crate::execute;
         use crate::libs;
@@ -25471,10 +32403,10 @@ pub mod prompt
             *,
         };
         /*
-        use std::env;
-        use std::fs::File;
-        use std::io::{Read, Write};
-        use std::path::Path;
+        use ::env;
+        use ::fs::File;
+        use ::io::{Read, Write};
+        use ::path::Path;
         
         use crate::libs;
         use crate::shell;
@@ -25943,7 +32875,7 @@ pub mod prompt
             *,
         };
         /*
-        use std::io;
+        use ::io;
         use lineread::{Function, Prompter, Terminal};
         
         use crate::parsers::parser_line;
@@ -26014,7 +32946,7 @@ pub mod rcfile
         *,
     };
     /*
-    use std::path::Path;
+    use ::path::Path;
     
     use crate::scripting;
     use crate::shell;
@@ -26070,8 +33002,8 @@ pub mod run
     use crate::shell::Shell;
     use crate::types::{CommandResult, CommandLine, Command};
 
-    use std::env;
-    use std::path::Path;
+    use ::env;
+    use ::path::Path;
     
     use crate::builtins::utils::print_stderr_with_capture;
     use crate::parsers;
@@ -26094,14 +33026,14 @@ pub mod run
     use crate::types::{CommandResult, CommandLine, Command};
 
     #![allow(unreachable_code)]
-    use std::process;
+    use ::process;
     
     use crate::builtins::utils::print_stderr_with_capture;
     use crate::shell::Shell;
     use crate::types::{CommandResult, CommandLine, Command};
 
     use regex::Regex;
-    use std::env;
+    use ::env;
     
     use crate::libs;
     use crate::parsers;
@@ -26118,7 +33050,7 @@ pub mod run
     use crate::shell::{self, Shell};
     use crate::types::{CommandResult, CommandLine, Command};
 
-    use std::path::Path;
+    use ::path::Path;
     
     use rusqlite::Connection as Conn;
     use structopt::StructOpt;
@@ -26136,7 +33068,7 @@ pub mod run
     use crate::shell::Shell;
     use crate::types::{CommandResult, CommandLine, Command};
 
-    use std::io;
+    use ::io;
     
     use crate::builtins::utils::print_stderr_with_capture;
     use crate::shell::Shell;
@@ -26159,7 +33091,7 @@ pub mod run
     use crate::types::{CommandResult, CommandLine, Command};
 
     use clap::{Parser, CommandFactory};
-    use std::io::Error;
+    use ::io::Error;
     use crate::builtins::utils::print_stderr_with_capture;
     use crate::builtins::utils::print_stdout_with_capture;
     use crate::parsers;
@@ -26178,18 +33110,18 @@ pub mod run
     use crate::shell::Shell;
     use crate::types::{CommandResult, CommandLine, Command};
 
-    use std::fs::File;
-    use std::io::Write;
-    use std::os::unix::io::{FromRawFd, RawFd};
+    use ::fs::File;
+    use ::io::Write;
+    use ::os::unix::io::{FromRawFd, RawFd};
     
     use errno::errno;
     
     use crate::tools;
     use crate::types::{Command, CommandLine, CommandResult, Redirection};
 
-    use std::env;
-    use std::fs;
-    use std::path::Path;
+    use ::env;
+    use ::fs;
+    use ::path::Path;
     
     use crate::builtins::utils::print_stderr_with_capture;
     use crate::builtins::utils::print_stdout_with_capture;
@@ -27614,9 +34546,9 @@ pub mod scripting
         *,
     };
     /*
-    use std::fs::File;
-    use std::io::{Read, Write, ErrorKind};
-    use std::path::Path;
+    use ::fs::File;
+    use ::io::{Read, Write, ErrorKind};
+    use ::path::Path;
     
     use pest::iterators::Pair;
     use regex::{Regex, RegexBuilder};
@@ -28075,10 +35007,10 @@ pub mod shell
     };
     /*
     use errno::errno;
-    use std::collections::{HashMap, HashSet};
-    use std::env;
-    use std::io::Write;
-    use std::mem;
+    use ::collections::{HashMap, HashSet};
+    use ::env;
+    use ::io::Write;
+    use ::mem;
     
     use regex::Regex;
     use uuid::Uuid;
@@ -28923,7 +35855,7 @@ pub mod shell
                 let cmd_result = match CommandLine::from_line(&cmd, sh) {
                     Ok(c) => {
                         log!("run subcmd dollar: {:?}", &cmd);
-                        let (term_given, cr) = core::run_pipeline(sh, &c, true, true, false);
+                        let (term_given, cr) = ::run_pipeline(sh, &c, true, true, false);
                         if term_given {
                             unsafe {
                                 let gid = libc::getpgid(0);
@@ -28973,7 +35905,7 @@ pub mod shell
                 log!("run subcmd dot1: {:?}", token);
                 let cr = match CommandLine::from_line(token, sh) {
                     Ok(c) => {
-                        let (term_given, _cr) = core::run_pipeline(sh, &c, true, true, false);
+                        let (term_given, _cr) = ::run_pipeline(sh, &c, true, true, false);
                         if term_given {
                             unsafe {
                                 let gid = libc::getpgid(0);
@@ -29021,7 +35953,7 @@ pub mod shell
     
                         let cr = match CommandLine::from_line(&cap[2], sh) {
                             Ok(c) => {
-                                let (term_given, _cr) = core::run_pipeline(sh, &c, true, true, false);
+                                let (term_given, _cr) = ::run_pipeline(sh, &c, true, true, false);
                                 if term_given {
                                     unsafe {
                                         let gid = libc::getpgid(0);
@@ -29109,9 +36041,9 @@ pub mod signals
     use errno::{errno, set_errno};
     use nix::sys::signal;
     use nix::sys::wait::{WaitPidFlag as WF, WaitStatus as WS, waitpid};
-    use nix::unistd::Pid;
-    use std::sync::Mutex;
-    use std::collections::{HashMap, HashSet};
+    use nix::uni ::Pid;
+    use ::sync::Mutex;
+    use ::collections::{HashMap, HashSet};
     */
     lazy_static! {
         static ref REAP_MAP: Mutex<HashMap<i32, i32>> = Mutex::new(HashMap::new());
@@ -29260,8 +36192,8 @@ pub mod types
     };
     /*
     use regex::Regex;
-    use std::collections::{HashMap, HashSet};
-    use std::fmt;
+    use ::collections::{HashMap, HashSet};
+    use ::fmt;
     
     use crate::parsers;
     use crate::parsers::parser_line::tokens_to_redirections;
@@ -29688,7 +36620,7 @@ fn main() {
     if libs::progopts::is_script(&args) {
         log!("run script: {:?} ", &args);
         let status = scripting::run_script(&mut sh, &args);
-        std::process::exit(status);
+        ::process::exit(status);
     }
 
     if libs::progopts::is_command_string(&args) {
@@ -29697,7 +36629,7 @@ fn main() {
         let line = tools::env_args_to_command_line();
         log!("run with -c args: {}", &line);
         execute::run_command_line(&mut sh, &line, false, false);
-        std::process::exit(sh.previous_status);
+        ::process::exit(sh.previous_status);
     }
 
     if libs::progopts::is_non_tty() {
@@ -29835,4 +36767,4 @@ fn main() {
     }
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// 29838
+// 36770
