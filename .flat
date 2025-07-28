@@ -5981,7 +5981,7 @@ get_label_id:
 	pop	_edi
 	mov	eax,[eax+4]
 	ret
-  
+
   extend_tree:
 	mov	_edx,cell[free_additional_memory]
 	lea	eax,[edx+8]
@@ -11389,9 +11389,6 @@ calculate_logical_expression:
         call    get_value_for_comparison
         cmp     bl,[_esp+8]
         cmp     _ebx,[_esp+16]
-else
-        cmp     _ebx,[_esp+8]
-end if
         jne     values_not_relative
       check_values_registers:
         cmp     _ecx,[_esp]
@@ -30919,4 +30916,4 @@ section '.reloc' fixups data readable discardable
   	dd 0,8
   end if
 /*
-30922*/
+30919*/
