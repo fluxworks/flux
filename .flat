@@ -17,6 +17,13 @@ _ebp equ rbp
 _esi equ rsi
 _edi equ rdi
 cell equ qword
+
+macro equal to, [from]
+{
+	cmp al, from
+	je to
+}
+
 /*
 Flat Assembler x64 | Start
 Copyright (c) 2020-2025, AppBranch; All rights reserved. */
@@ -99,39 +106,31 @@ get_params:
       mov   esi, eax
       mov   edi, params
 			/**/
-    	find_command_start:
+  	find_command_start:
       lodsb
-      cmp   al, 20h
-      je    find_command_start
-      cmp   al, 22h
-      je    skip_quoted_name
+			equal find_command_start, ' '
+			equal skip_quoted_name, '"'
 			/**/
-    	skip_name:
+  	skip_name:
       lodsb
-      cmp   al, 20h
-      je    find_param
+			equal find_param, ' '
       or    al, al
       jz    all_params
       jmp   skip_name
 /**/
 skip_quoted_name:
       lodsb
-      cmp   al, 22h
-      je    find_param
+			equal find_param, '"'
       or    al, al
       jz    all_params
       jmp   skip_quoted_name
 /**/
 find_param:
       lodsb
-      cmp   al, 20h
-      je    find_param
-      cmp   al, '-'
-      je    option_param
-      cmp   al, 0Dh
-      je    all_params
-      cmp   al, 0Ah
-      je    all_params
+			equal ' ', find_param
+			equal '-', option_param
+			equal all_params, 0xD, 0xA
+			
       or    al, al
       jz    all_params
       cmp   [ input_file ], 0
@@ -144,31 +143,25 @@ get_output_file:
       jne   bad_params
       mov   [output_file], edi
 			/**/
-			process_param:
-      cmp   al, 22h
-      je    string_param
-			/**/
-    	copy_param:
+		process_param:			
+			equal string_param, '"'
+  	copy_param:
       cmp   edi, params+1000h
       jae   bad_params
       stosb
-      lodsb
-      cmp   al, 20h
-      je    param_end
-      cmp   al, 0Dh
-      je    param_end
-      cmp   al, 22h
-      je    param_end
+
+			lodsb
+			equal param_end, ' ', 0xD, '"' 
+			
       or    al, al
       jz    param_end
       jmp   copy_param
 /**/
 string_param:
       lodsb
-      cmp   al,22h
-      je    string_param_end
-      cmp   al,0Dh
-      je    param_end
+			equal string_param_end, '"'
+			equal param_end, 0xD
+			
       or    al,al
       jz    param_end
       cmp   edi, params+1000h
@@ -178,24 +171,12 @@ string_param:
 /**/
 option_param:
       lodsb
-      cmp   al, 'm'
-      je    memory_option
-      cmp   al, 'M'
-      je    memory_option
-      cmp   al, 'p'
-      je    passes_option
-      cmp   al, 'P'
-      je    passes_option
-      cmp   al, 'd'
-      je    definition_option
-      cmp   al, 'D'
-      je    definition_option
-      cmp   al, 's'
-      je    symbols_option
-      cmp   al, 'S'
-      je    symbols_option
-			/**/
-    	bad_params:
+			equal memory_option, 'm', 'M'
+			equal passes_option, 'p', 'P'
+			equal definition_option, 'd', 'D'
+			equal symbols_option, 's', 'S'
+		/**/
+  	bad_params:
       stc
       ret
 /**/
@@ -205,10 +186,7 @@ get_option_value:
 				/**/
 				get_option_digit:
         lodsb
-        cmp   al, 20h
-        je    option_value_ok
-        cmp   al, 0Dh
-        je    option_value_ok
+				equal option_value_ok, ' ', 0xD
         or    al, al
         jz    option_value_ok
         sub   al, 30h
