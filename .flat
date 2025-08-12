@@ -83,7 +83,7 @@ jmp exit_program
 get_params:
 mov [ input_file ], 0
 mov [ output_file ], 0
-mov [ symbols_file ], 0
+mov [ symbolics_file ], 0
 mov [ memory_setting ], 0
 mov [ passes_limit ], 100
 call cell[ GetCommandLine ]
@@ -156,7 +156,7 @@ lodsb
 equal memory_option, 'm', 'M'
 equal passes_option, 'p', 'P'
 equal definition_option, 'd', 'D'
-equal symbols_option, 's', 'S'
+equal symbolics_option, 's', 'S'
 /**/
 bad_params:
 stc
@@ -241,13 +241,13 @@ pop _edi
 jc bad_params
 jmp find_param
 /**/
-symbols_option:
-mov [ symbols_file ], edi
-find_symbols_file_name:
+symbolics_option:
+mov [ symbolics_file ], edi
+find_symbolics_file_name:
 lodsb
 cmp al, 20h
 jne process_param
-jmp find_symbols_file_name
+jmp find_symbolics_file_name
 /**/
 param_end:
 dec esi
@@ -970,541 +970,405 @@ strands: 		ret
 				inc r15
 				jnz strands.emit
 				ret
-/**/
-error_prefix db 'error: ', 0
-error_suffix db '.'
-cr_lf db 0Dh,0Ah,0
-line_number_start db ' [ ', 0
-line_data_start db ':', 0Dh,0Ah,0
-preprocessed_instruction_prefix db 'processed: ', 0
 /*
-Flat Assembler x64 | Errors */
-out_of_memory:
-push _out_of_memory
-jmp fatal_error
-stack_overflow:
-push _stack_overflow
-jmp fatal_error
-main_file_not_found:
-push _main_file_not_found
-jmp fatal_error
-write_failed:
-push _write_failed
-jmp fatal_error
-
-unexpected_end_of_file:
-push _unexpected_end_of_file
-jmp general_error
-code_cannot_be_generated:
-push _code_cannot_be_generated
-jmp general_error
-format_limitations_exceeded:
-push _format_limitations_exceeded
-jmp general_error
-invalid_definition:
-push _invalid_definition
-general_error:
-cmp [ symbols_file ], 0
-je fatal_error
-call dump_preprocessed_source
-jmp fatal_error
-
-file_not_found:
-push _file_not_found
-jmp error_with_source
-error_reading_file:
-push _error_reading_file
-jmp error_with_source
-invalid_file_format:
-push _invalid_file_format
-jmp error_with_source
-invalid_macro_arguments:
-push _invalid_macro_arguments
-jmp error_with_source
-incomplete_macro:
-push _incomplete_macro
-jmp error_with_source
-unexpected_characters:
-push _unexpected_characters
-jmp error_with_source
-invalid_argument:
-push _invalid_argument
-jmp error_with_source
-illegal_instruction:
-push _illegal_instruction
-jmp error_with_source
-invalid_operand:
-push _invalid_operand
-jmp error_with_source
-invalid_operand_size:
-push _invalid_operand_size
-jmp error_with_source
-operand_size_not_specified:
-push _operand_size_not_specified
-jmp error_with_source
-operand_sizes_do_not_match:
-push _operand_sizes_do_not_match
-jmp error_with_source
-invalid_address_size:
-push _invalid_address_size
-jmp error_with_source
-address_sizes_do_not_agree:
-push _address_sizes_do_not_agree
-jmp error_with_source
-disallowed_combination_of_registers:
-push _disallowed_combination_of_registers
-jmp error_with_source
-long_immediate_not_encodable:
-push _long_immediate_not_encodable
-jmp error_with_source
-relative_jump_out_of_range:
-push _relative_jump_out_of_range
-jmp error_with_source
-invalid_expression:
-push _invalid_expression
-jmp error_with_source
-invalid_address:
-push _invalid_address
-jmp error_with_source
-invalid_value:
-push _invalid_value
-jmp error_with_source
-value_out_of_range:
-push _value_out_of_range
-jmp error_with_source
-undefined_symbol:
-mov edi,message
-mov esi, _undefined_symbol
-call strands.emit
-push message
-cmp [ error_info],0
-je error_with_source
-mov esi, [ error_info]
-mov esi, [ esi+24 ]
-or esi, esi
-jz error_with_source
-mov byte [ edi-1 ], 20h
-call write_quoted_symbol_name
-jmp error_with_source 
-/**/
-write_quoted_symbol_name:
-mov al, 27h
-stosb
-movzx ecx, byte [ esi-1 ]
-rep movs byte [ edi ], [ esi ]
-mov ax, 27h
-stosw
-ret
-/**/
-symbol_out_of_scope:
-mov edi,message
-mov esi, _symbol_out_of_scope_1
-call strands.emit
-cmp [ error_info],0
-je finish_symbol_out_of_scope_message
-mov esi, [ error_info]
-mov esi, [ esi+24 ]
-or esi, esi
-jz finish_symbol_out_of_scope_message
-mov byte [ edi-1 ], 20h
-call write_quoted_symbol_name
-finish_symbol_out_of_scope_message:
-mov byte [ edi-1 ], 20h
-mov esi, _symbol_out_of_scope_2
-call strands.emit
-push message
-jmp error_with_source
-invalid_use_of_symbol:
-push _invalid_use_of_symbol
-jmp error_with_source
-name_too_long:
-push _name_too_long
-jmp error_with_source
-invalid_name:
-push _invalid_name
-jmp error_with_source
-reserved_word_used_as_symbol:
-push _reserved_word_used_as_symbol
-jmp error_with_source
-symbol_already_defined:
-push _symbol_already_defined
-jmp error_with_source
-missing_end_quote:
-push _missing_end_quote
-jmp error_with_source
-missing_end_directive:
-push _missing_end_directive
-jmp error_with_source
-unexpected_instruction:
-push _unexpected_instruction
-jmp error_with_source
-extra_characters_on_line:
-push _extra_characters_on_line
-jmp error_with_source
-section_not_aligned_enough:
-push _section_not_aligned_enough
-jmp error_with_source
-setting_already_specified:
-push _setting_already_specified
-jmp error_with_source
-data_already_defined:
-push _data_already_defined
-jmp error_with_source
-too_many_repeats:
-push _too_many_repeats
-jmp error_with_source
-assertion_failed:
-push _assertion_failed
-jmp error_with_source
-invoked_error:
-push _invoked_error
-error_with_source:
-cmp [ symbols_file ], 0
-je assembler_error
-call dump_preprocessed_source
-call restore_preprocessed_source
-jmp assembler_error
+flat | symbols | C style terminated ASCII strands */
+symbols: ret
 /*
-Flat Assembler x64 | Emitter */
-dump_symbols:
-mov edi, [ code_start ]
-call setup_dump_header
-mov esi, [ input_file ]
-call strands.emit
-cmp edi, [ tagged_blocks ]
-jae out_of_memory
-mov eax, edi
-sub eax, ebx
-mov [ ebx-40h+0Ch ], eax
-mov esi, [ output_file ]
-call strands.emit
-cmp edi, [ tagged_blocks ]
-jae out_of_memory
-mov edx, [ symbols_stream ]
-mov _ebp, cell[ free_additional_memory ]
-and [ number_of_sections ], 0
-cmp [ output_format ], 4
-je prepare_strings_table
-cmp [ output_format ], 5
-jne strings_table_ready
-bt [ format_flags ], 0
-jc strings_table_ready
-prepare_strings_table:
-cmp edx,ebp
-je strings_table_ready
-mov al, [ edx ]
-test al, al
-jz prepare_string
-cmp al, 80h
-je prepare_string
-add edx, 0Ch
-cmp al, 0C0h
-jb prepare_strings_table
-add edx,4
-jmp prepare_strings_table
-prepare_string:
-mov esi, edi
-sub esi, ebx
-xchg esi, [ edx+4 ]
-test al, al
-jz prepare_section_string
-or dword [ edx+4 ], 1 shl 31
-add edx, 0Ch
-prepare_external_string:
-mov ecx, [ esi ]
-add esi, 4
-rep movs byte [ edi ], [ esi ]
-mov byte [ edi ], 0
-inc edi
-cmp edi, [ tagged_blocks ]
-jae out_of_memory
-jmp prepare_strings_table
-prepare_section_string:
-mov ecx, [ number_of_sections ]
-mov eax, ecx
-inc eax
-mov [ number_of_sections ], eax
-xchg eax, [ edx+4 ]
-shl ecx, 2
-add _ecx, cell[ free_additional_memory ]
-mov [ ecx ], eax
-add edx,20h
-test esi, esi
-jz prepare_default_section_string
-cmp [ output_format ], 5
-jne prepare_external_string
-bt [ format_flags ], 0
-jc prepare_external_string
-mov esi, [ esi ]
-add esi, [ resource_data]
-copy_elf_section_name:
-lods byte [ esi ]
-cmp edi, [ tagged_blocks ]
-jae out_of_memory
-stos byte [ edi ]
-test al, al
-jnz copy_elf_section_name
-jmp prepare_strings_table
-prepare_default_section_string:
-mov eax, '.fla'
-stos dword [ edi ]
-mov ax, 't'
-stos word [ edi ]
-cmp edi, [ tagged_blocks ]
-jae out_of_memory
-jmp prepare_strings_table
-strings_table_ready:
-mov edx, [ tagged_blocks ]
-mov _ebp, cell[ memory_end ]
-sub ebp, [ labels_list ]
-add ebp,edx
-prepare_labels_dump:
-cmp edx,ebp
-je labels_dump_ok
-mov eax, [ edx+24 ]
-test eax, eax
-jz label_dump_name_ok
-cmp _eax, cell[ memory_start ]
-jb label_name_outside_source
-cmp eax, [ source_start ]
-ja label_name_outside_source
-sub _eax, cell[ memory_start ]
-dec eax
-mov [ edx+24 ], eax
-jmp label_dump_name_ok
-label_name_outside_source:
-mov esi, eax
-mov eax, edi
-sub eax, ebx
-or eax, 1 shl 31
-mov [ edx+24 ], eax
-movzx ecx, byte [ esi-1 ]
-lea eax, [ edi+ecx+1 ]
-cmp edi, [ tagged_blocks ]
-jae out_of_memory
-rep movsb
-xor al, al
-stosb
-label_dump_name_ok:
-mov eax, [ edx+28 ]
-test eax, eax
-jz label_dump_line_ok
-sub _eax, cell[ memory_start ]
-mov [ edx+28 ], eax
-label_dump_line_ok:
-test byte [ edx+9 ], 4
-jz convert_base_symbol_for_label
-xor eax, eax
-mov [ edx ], eax
-mov [ edx+4 ], eax
-jmp base_symbol_for_label_ok
-convert_base_symbol_for_label:
-mov eax, [ edx+20 ]
-test eax, eax
-jz base_symbol_for_label_ok
-cmp eax, [ symbols_stream ]
-mov eax, [ eax+4 ]
-jae base_symbol_for_label_ok
-xor eax, eax
-base_symbol_for_label_ok:
-mov [ edx+20 ], eax
-mov ax, [ current_pass]
-cmp ax, [ edx+16 ]
-je label_defined_flag_ok
-and byte [ edx+8 ], not 1
-label_defined_flag_ok:
-cmp ax, [ edx+18 ]
-je label_used_flag_ok
-and byte [ edx+8 ], not 8
-label_used_flag_ok:
-add edx,LABEL_STRUCTURE_SIZE
-jmp prepare_labels_dump
-labels_dump_ok:
-mov eax, edi
-sub eax, ebx
-mov [ ebx-40h+14h ], eax
-add eax, 40h
-mov [ ebx-40h+18h ], eax
-mov _ecx, cell[ memory_end ]
-sub ecx, [ labels_list ]
-mov [ ebx-40h+1Ch ], ecx
-add eax, ecx
-mov [ ebx-40h+20h ], eax
-mov ecx, [ source_start ]
-sub _ecx, cell[ memory_start ]
-mov [ ebx-40h+24h ], ecx
-add eax, ecx
-mov [ ebx-40h+28h ], eax
-mov eax, [ number_of_sections ]
-shl eax, 2
-mov [ ebx-40h+34h ], eax
-call prepare_preprocessed_source
-mov esi, [ labels_list ]
-mov ebp,edi
-make_lines_dump:
-cmp esi, [ tagged_blocks ]
-je lines_dump_ok
-mov eax, [ esi-4 ]
-mov ecx, [ esi-8 ]
-sub esi, 8
-sub esi, ecx
-cmp eax, 1
-je process_line_dump
-cmp eax, 2
-jne make_lines_dump
-add dword [ ebx-40h+3Ch ], 8
-jmp make_lines_dump
-process_line_dump:
-push _ebx
-mov ebx, [ esi+8 ]
-mov eax, [ esi+4 ]
-sub eax, [ code_start ]
-add eax, [ headers_size ]
-test byte [ ebx+0Ah ], 1
-jz store_offset
-xor eax, eax
-store_offset:
-stos dword [ edi ]
-mov eax, [ esi ]
-sub _eax, cell[ memory_start ]
-stos dword [ edi ]
-mov eax, [ esi+4 ]
-xor edx, edx
-xor cl, cl
-sub eax, [ ebx ]
-sbb edx, [ ebx+4 ]
-sbb cl, [ ebx+8 ]
-stos dword [ edi ]
-mov eax, edx
-stos dword [ edi ]
-mov eax, [ ebx+10h ]
-stos dword [ edi ]
-mov eax, [ ebx+14h ]
-test eax, eax
-jz base_symbol_for_line_ok
-cmp eax, [ symbols_stream ]
-mov eax, [ eax+4 ]
-jae base_symbol_for_line_ok
-xor eax, eax
-base_symbol_for_line_ok:
-stos dword [ edi ]
-mov al, [ ebx+9 ]
-stos byte [ edi ]
-mov al, [ esi+10h ]
-stos byte [ edi ]
-mov al, [ ebx+0Ah ]
-and al, 1
-stos byte [ edi ]
-mov al, cl
-stos byte [ edi ]
-pop _ebx
-cmp edi, [ tagged_blocks ]
-jae out_of_memory
-mov eax, edi
-sub eax, 1Ch
-sub eax, ebp
-mov [ esi ], eax
-jmp make_lines_dump
-lines_dump_ok:
-mov edx,edi
-mov _eax, cell[ current_offset ]
-sub eax, [ code_start ]
-add eax, [ headers_size ]
-stos dword [ edi ]
-mov ecx, edi
-sub ecx, ebx
-sub ecx, [ ebx-40h+14h ]
-mov [ ebx-40h+2Ch ], ecx
-add ecx, [ ebx-40h+28h ]
-mov [ ebx-40h+30h ], ecx
-add ecx, [ ebx-40h+34h ]
-mov [ ebx-40h+38h ], ecx
-find_inexisting_offsets:
-sub edx,1Ch
-cmp edx,ebp
-jb write_symbols
-test byte [ edx+1Ah ], 1
-jnz find_inexisting_offsets
-cmp eax, [ edx ]
-jb correct_inexisting_offset
-mov eax, [ edx ]
-jmp find_inexisting_offsets
-correct_inexisting_offset:
-and dword [ edx ], 0
-or byte [ edx+1Ah ], 2
-jmp find_inexisting_offsets
-write_symbols:
-mov edx, [ symbols_file ]
-call create
-jc write_failed
-mov edx, [ code_start ]
-mov ecx, [ edx+14h ]
-add ecx, 40h
-call write
-jc write_failed
-mov edx, [ tagged_blocks ]
-mov _ecx, cell[ memory_end ]
-sub ecx, [ labels_list ]
-call write
-jc write_failed
-mov _edx, cell[ memory_start ]
-mov ecx, [ source_start ]
-sub ecx, edx
-call write
-jc write_failed
-mov edx,ebp
-mov ecx, edi
-sub ecx, edx
-call write
-jc write_failed
-mov _edx, cell[ free_additional_memory ]
-mov ecx, [ number_of_sections ]
-shl ecx, 2
-call write
-jc write_failed
-mov esi, [ labels_list ]
-mov _edi, cell[ memory_start ]
-make_references_dump:
-cmp esi, [ tagged_blocks ]
-je references_dump_ok
-mov eax, [ esi-4 ]
-mov ecx, [ esi-8 ]
-sub esi, 8
-sub esi, ecx
-cmp eax, 2
-je dump_reference
-cmp eax, 1
-jne make_references_dump
-mov edx, [ esi ]
-jmp make_references_dump
-dump_reference:
-mov _eax, cell[ memory_end ]
-sub eax, [ esi ]
-sub eax, LABEL_STRUCTURE_SIZE
-stosd
-mov eax, edx
-stosd
-cmp edi, [ tagged_blocks ]
-jb make_references_dump
-jmp out_of_memory
-references_dump_ok:
-mov _edx, cell[ memory_start ]
-mov ecx, edi
-sub ecx, edx
-call write
-jc write_failed
-call close
-ret
-/**/
-setup_dump_header:
-xor eax, eax
-mov ecx, 40h shr 2
-rep stos dword [ edi ]
-mov ebx, edi
-mov dword [ ebx-40h ], 'fas'+1Ah shl 24
-mov dword [ ebx-40h+4 ], VERSION_MAJOR + VERSION_MINOR shl 8 + 40h shl 16
-mov dword [ ebx-40h+10h ], 40h
-ret
+::symbols | emit | Emit Symbol into file | dump_symbols: */
+		.emit:
+				mov edi, [ code_start ]
+				call symbols.create_header
+				mov esi, [ input_file ]
+				call strands.emit
+				cmp edi, [ tagged_blocks ]
+				jae out_of_memory
+				mov eax, edi
+				sub eax, ebx
+				mov [ ebx-40h+0Ch ], eax
+				mov esi, [ output_file ]
+				call strands.emit
+				cmp edi, [ tagged_blocks ]
+				jae out_of_memory
+				mov edx, [ symbolics_stream ]
+				mov _ebp, cell[ free_additional_memory ]
+				and [ number_of_sections ], 0
+				cmp [ output_format ], 4
+				je symbols.create_prepared_strands
+				cmp [ output_format ], 5
+				jne symbols.created_prepared_strands
+				bt [ format_flags ], 0
+				jc symbols.created_prepared_strands
+			/*
+			prepare_strings_table: */
+			.create_prepared_strands:
+				cmp edx,ebp
+				je symbols.created_prepared_strands
+				mov al, [ edx ]
+				test al, al
+				jz symbols.create_prepared_strand
+				cmp al, 80h
+				je symbols.create_prepared_strand
+				add edx, 0Ch
+				cmp al, 0C0h
+				jb symbols.create_prepared_strands
+				add edx,4
+				jmp symbols.create_prepared_strands
+			/*
+			prepare_string: */
+			.create_prepared_strand:
+				mov esi, edi
+				sub esi, ebx
+				xchg esi, [ edx+4 ]
+				test al, al
+				jz symbols.create_prepared_section
+				or dword [ edx+4 ], 1 shl 31
+				add edx, 0Ch
+			/*
+			prepare_external_string: */
+			.create_prepared_external:
+				mov ecx, [ esi ]
+				add esi, 4
+				rep movs byte [ edi ], [ esi ]
+				mov byte [ edi ], 0
+				inc edi
+				cmp edi, [ tagged_blocks ]
+				jae out_of_memory
+				jmp symbols.create_prepared_strands
+			/*
+			prepare_section_string: */
+			.create_prepared_section:
+				mov ecx, [ number_of_sections ]
+				mov eax, ecx
+				inc eax
+				mov [ number_of_sections ], eax
+				xchg eax, [ edx+4 ]
+				shl ecx, 2
+				add _ecx, cell[ free_additional_memory ]
+				mov [ ecx ], eax
+				add edx,20h
+				test esi, esi
+				jz symbols.create_default_section
+				cmp [ output_format ], 5
+				jne symbols.create_prepared_external
+				bt [ format_flags ], 0
+				jc symbols.create_prepared_external
+				mov esi, [ esi ]
+				add esi, [ resource_data]
+			/*
+			copy_elf_section_name: */
+			.emit_prepared_section_name:
+				lods byte [ esi ]
+				cmp edi, [ tagged_blocks ]
+				jae out_of_memory
+				stos byte [ edi ]
+				test al, al
+				jnz symbols.emit_prepared_section_name
+				jmp symbols.create_prepared_strands
+			/*
+			prepare_default_section_string: */
+			.create_default_section:
+				mov eax, '.fla'
+				stos dword [ edi ]
+				mov ax, 't'
+				stos word [ edi ]
+				cmp edi, [ tagged_blocks ]
+				jae out_of_memory
+				jmp symbols.create_prepared_strands
+			/*
+			strings_table_ready: */
+			.created_prepared_strands:
+				mov edx, [ tagged_blocks ]
+				mov _ebp, cell[ memory_end ]
+				sub ebp, [ labels_list ]
+				add ebp,edx
+			/*	
+			prepare_labels_dump: */
+			.create_labels:
+				cmp edx,ebp
+				je symbols.created_labels
+				mov eax, [ edx+24 ]
+				test eax, eax
+				jz symbols.created_label
+				cmp _eax, cell[ memory_start ]
+				jb symbols.create_external_label
+				cmp eax, [ source_start ]
+				ja symbols.create_external_label
+				sub _eax, cell[ memory_start ]
+				dec eax
+				mov [ edx+24 ], eax
+				jmp symbols.created_label
+			/*
+			label_name_outside_source: */
+			.create_external_label:
+				mov esi, eax
+				mov eax, edi
+				sub eax, ebx
+				or eax, 1 shl 31
+				mov [ edx+24 ], eax
+				movzx ecx, byte [ esi-1 ]
+				lea eax, [ edi+ecx+1 ]
+				cmp edi, [ tagged_blocks ]
+				jae out_of_memory
+				rep movsb
+				xor al, al
+				stosb
+			/*
+			label_dump_name_ok: */
+			.created_label:
+				mov eax, [ edx+28 ]
+				test eax, eax
+				jz symbols.created_line
+				sub _eax, cell[ memory_start ]
+				mov [ edx+28 ], eax
+			/*
+			label_dump_line_ok: */
+			.created_line:
+				test byte [ edx+9 ], 4
+				jz symbols.create_base
+				xor eax, eax
+				mov [ edx ], eax
+				mov [ edx+4 ], eax
+				jmp symbols.created_base
+			/*
+			convert_base_symbol_for_label: */
+			.create_base:
+				mov eax, [ edx+20 ]
+				test eax, eax
+				jz symbols.created_base
+				cmp eax, [ symbolics_stream ]
+				mov eax, [ eax+4 ]
+				jae symbols.created_base
+				xor eax, eax
+			/*
+			base_symbol_for_label_ok:*/
+			.created_base:
+				mov [ edx+20 ], eax
+				mov ax, [ current_pass]
+				cmp ax, [ edx+16 ]
+				je symbols.create_flag
+				and byte [ edx+8 ], not 1
+			/*
+			label_defined_flag_ok:*/
+			.create_flag:
+				cmp ax, [ edx+18 ]
+				je symbols.created_flag
+				and byte [ edx+8 ], not 8
+			/*
+			label_used_flag_ok: */
+			.created_flag:
+				add edx,LABEL_STRUCTURE_SIZE
+				jmp symbols.create_labels
+			/*
+			labels_dump_ok:*/
+			.created_labels:
+				mov eax, edi
+				sub eax, ebx
+				mov [ ebx-40h+14h ], eax
+				add eax, 40h
+				mov [ ebx-40h+18h ], eax
+				mov _ecx, cell[ memory_end ]
+				sub ecx, [ labels_list ]
+				mov [ ebx-40h+1Ch ], ecx
+				add eax, ecx
+				mov [ ebx-40h+20h ], eax
+				mov ecx, [ source_start ]
+				sub _ecx, cell[ memory_start ]
+				mov [ ebx-40h+24h ], ecx
+				add eax, ecx
+				mov [ ebx-40h+28h ], eax
+				mov eax, [ number_of_sections ]
+				shl eax, 2
+				mov [ ebx-40h+34h ], eax
+				call prepare_preprocessed_source
+				mov esi, [ labels_list ]
+				mov ebp,edi
+			/*	
+			make_lines_dump: */
+			.create_lines:
+				cmp esi, [ tagged_blocks ]
+				je symbols.created_lines
+				mov eax, [ esi-4 ]
+				mov ecx, [ esi-8 ]
+				sub esi, 8
+				sub esi, ecx
+				cmp eax, 1
+				je symbols.read_line
+				cmp eax, 2
+				jne symbols.create_lines
+				add dword [ ebx-40h+3Ch ], 8
+				jmp symbols.create_lines
+			/*
+			process_line_dump:*/
+			.read_line:
+				push _ebx
+				mov ebx, [ esi+8 ]
+				mov eax, [ esi+4 ]
+				sub eax, [ code_start ]
+				add eax, [ headers_size ]
+				test byte [ ebx+0Ah ], 1
+				jz symbols.create_offset
+				xor eax, eax
+			/*
+			store_offset:*/
+			.create_offset:
+				stos dword [ edi ]
+				mov eax, [ esi ]
+				sub _eax, cell[ memory_start ]
+				stos dword [ edi ]
+				mov eax, [ esi+4 ]
+				xor edx, edx
+				xor cl, cl
+				sub eax, [ ebx ]
+				sbb edx, [ ebx+4 ]
+				sbb cl, [ ebx+8 ]
+				stos dword [ edi ]
+				mov eax, edx
+				stos dword [ edi ]
+				mov eax, [ ebx+10h ]
+				stos dword [ edi ]
+				mov eax, [ ebx+14h ]
+				test eax, eax
+				jz symbols.created_line_base
+				cmp eax, [ symbolics_stream ]
+				mov eax, [ eax+4 ]
+				jae symbols.created_line_base
+				xor eax, eax
+			/*
+			base_symbol_for_line_ok:*/
+			.created_line_base:
+				stos dword [ edi ]
+				mov al, [ ebx+9 ]
+				stos byte [ edi ]
+				mov al, [ esi+10h ]
+				stos byte [ edi ]
+				mov al, [ ebx+0Ah ]
+				and al, 1
+				stos byte [ edi ]
+				mov al, cl
+				stos byte [ edi ]
+				pop _ebx
+				cmp edi, [ tagged_blocks ]
+				jae out_of_memory
+				mov eax, edi
+				sub eax, 1Ch
+				sub eax, ebp
+				mov [ esi ], eax
+				jmp symbols.create_lines
+			/*
+			lines_dump_ok:*/
+			.created_lines:
+				mov edx,edi
+				mov _eax, cell[ current_offset ]
+				sub eax, [ code_start ]
+				add eax, [ headers_size ]
+				stos dword [ edi ]
+				mov ecx, edi
+				sub ecx, ebx
+				sub ecx, [ ebx-40h+14h ]
+				mov [ ebx-40h+2Ch ], ecx
+				add ecx, [ ebx-40h+28h ]
+				mov [ ebx-40h+30h ], ecx
+				add ecx, [ ebx-40h+34h ]
+				mov [ ebx-40h+38h ], ecx
+			/*
+			find_inexisting_offsets:*/
+			.read_offsets:
+				sub edx,1Ch
+				cmp edx,ebp
+				jb symbols.create
+				test byte [ edx+1Ah ], 1
+				jnz symbols.read_offsets
+				cmp eax, [ edx ]
+				jb symbols.emit_offset
+				mov eax, [ edx ]
+				jmp symbols.read_offsets
+			/*
+			correct_inexisting_offset:*/
+			.emit_offset:
+				and dword [ edx ], 0
+				or byte [ edx+1Ah ], 2
+				jmp symbols.read_offsets
+			/*
+			write_symbols: */
+			.create:
+				mov edx, [ symbolics_file ]
+				call create
+				jc write_failed
+				mov edx, [ code_start ]
+				mov ecx, [ edx+14h ]
+				add ecx, 40h
+				call write
+				jc write_failed
+				mov edx, [ tagged_blocks ]
+				mov _ecx, cell[ memory_end ]
+				sub ecx, [ labels_list ]
+				call write
+				jc write_failed
+				mov _edx, cell[ memory_start ]
+				mov ecx, [ source_start ]
+				sub ecx, edx
+				call write
+				jc write_failed
+				mov edx,ebp
+				mov ecx, edi
+				sub ecx, edx
+				call write
+				jc write_failed
+				mov _edx, cell[ free_additional_memory ]
+				mov ecx, [ number_of_sections ]
+				shl ecx, 2
+				call write
+				jc write_failed
+				mov esi, [ labels_list ]
+				mov _edi, cell[ memory_start ]
+			/*
+			make_references_dump: */
+			.create_references:
+				cmp esi, [ tagged_blocks ]
+				je symbols.created_references
+				mov eax, [ esi-4 ]
+				mov ecx, [ esi-8 ]
+				sub esi, 8
+				sub esi, ecx
+				cmp eax, 2
+				je symbols.create_reference
+				cmp eax, 1
+				jne symbols.create_references
+				mov edx, [ esi ]
+				jmp symbols.create_references
+			/*
+			dump_reference:*/
+			.create_reference:
+				mov _eax, cell[ memory_end ]
+				sub eax, [ esi ]
+				sub eax, LABEL_STRUCTURE_SIZE
+				stosd
+				mov eax, edx
+				stosd
+				cmp edi, [ tagged_blocks ]
+				jb symbols.create_references
+				jmp out_of_memory
+			/*
+			references_dump_ok: */
+			.created_references:
+				mov _edx, cell[ memory_start ]
+				mov ecx, edi
+				sub ecx, edx
+				call write
+				jc write_failed
+				call close
+				ret
+			/*
+			setup_dump_header: */
+			.create_header:
+				xor eax, eax
+				mov ecx, 40h shr 2
+				rep stos dword [ edi ]
+				mov ebx, edi
+				mov dword [ ebx-40h ], 'fas'+1Ah shl 24
+				mov dword [ ebx-40h+4 ], VERSION_MAJOR + VERSION_MINOR shl 8 + 40h shl 16
+				mov dword [ ebx-40h+10h ], 40h
+				ret
 /**/
 prepare_preprocessed_source:
 mov _esi, cell[ memory_start ]
@@ -1530,6 +1394,7 @@ sub [ esi + 12 ], eax
 prepare_next_preprocessed_line:
 call skip_preprocessed_line
 jmp prepare_preprocessed_line
+ret
 preprocessed_source_ok:
 ret
 /**/
@@ -1585,7 +1450,7 @@ ret
 /**/
 dump_preprocessed_source:
 mov _edi, cell[ free_additional_memory ]
-call setup_dump_header
+call symbols.create_header
 mov esi, [ input_file ]
 call strands.emit
 cmp _edi, cell[ additional_memory_end ]
@@ -1602,7 +1467,7 @@ mov [ ebx-40h+20h ], eax
 call prepare_preprocessed_source
 sub _esi, cell[ memory_start ]
 mov [ ebx-40h+24h ], esi
-mov edx, [ symbols_file ]
+mov edx, [ symbolics_file ]
 call create
 jc write_failed
 mov _edx, cell[ free_additional_memory ]
@@ -1641,7 +1506,7 @@ mov byte [ edi+eax ], 0
 loop mark_symbol_characters
 /*
 Symbols have been marked. */
-mov esi, _symbols_marked
+mov esi, _symbolics_marked
 call display_string
 /*
 */
@@ -4022,7 +3887,7 @@ mov cell[struc_name ], _eax
 push _esi _edi _edx
 add_matched_symbol:
 cmp _edi, [ _esp ]
-je matched_symbols_ok
+je matched_symbolics_ok
 mov esi, [ edi ]
 inc esi
 lods byte [ esi ]
@@ -4036,7 +3901,7 @@ sub ecx, eax
 mov dword [ edx+8 ], ecx
 add edi,12
 jmp add_matched_symbol
-matched_symbols_ok:
+matched_symbolics_ok:
 pop _edx _edi _esi
 jmp instant_macro_parameters_ok
 
@@ -4569,7 +4434,7 @@ shl eax, 8
 mov al, cl
 mov ebp,eax
 mov ebx, macro_symbols
-follow_macro_symbols_tree:
+follow_macro_symbolics_tree:
 mov edx, [ ebx ]
 or edx, edx
 jz no_such_macro_symbol
@@ -4578,7 +4443,7 @@ shr ebp,1
 adc eax, 0
 lea ebx, [ edx+eax*4 ]
 or ebp,ebp
-jnz follow_macro_symbols_tree
+jnz follow_macro_symbolics_tree
 add ebx, 8
 clc
 ret
@@ -4740,8 +4605,8 @@ stos dword [ edi ]
 inc [ parsed_lines]
 add esi, 16
 parse_line:
-mov [ formatter_symbols_allowed],0
-mov [ decorator_symbols_allowed],0
+mov [ formatter_symbolics_allowed],0
+mov [ decorator_symbolics_allowed],0
 cmp byte [ esi ], 1Ah
 jne empty_instruction
 push _edi
@@ -5205,7 +5070,7 @@ cmp bx,data_directive-instruction_handler
 je parse_formatter_argument
 jmp parse_argument
 parse_formatter_argument:
-or [ formatter_symbols_allowed ], -1
+or [ formatter_symbolics_allowed ], -1
 parse_argument:
 lea eax, [ edi+100h ]
 cmp eax, [ labels_list ]
@@ -5245,7 +5110,7 @@ cmp al, '`'
 je unallowed_character
 cmp al, 3Bh
 je foreign_argument
-cmp [ decorator_symbols_allowed],0
+cmp [ decorator_symbolics_allowed],0
 je not_a_separator
 cmp al, '-'
 je separator
@@ -5333,7 +5198,7 @@ jne allow_embedded_instruction
 movs byte [ edi ], [ esi ]
 jmp allow_embedded_instruction
 parse_segment_directive:
-or [ formatter_symbols_allowed ], -1
+or [ formatter_symbolics_allowed ], -1
 parse_label_directive:
 cmp byte [ esi ], 1Ah
 jne argument_parsed
@@ -5380,9 +5245,9 @@ movzx ecx, byte [ esi ]
 inc esi
 push _esi _ecx
 push _edi
-or [ formatter_symbols_allowed ], -1
+or [ formatter_symbolics_allowed ], -1
 call get_symbol
-mov [ formatter_symbols_allowed],0
+mov [ formatter_symbolics_allowed],0
 pop _edi
 jc parse_public_label
 cmp al, 1Dh
@@ -5569,16 +5434,16 @@ call parse_expression
 jmp expression_argument_parsed
 forced_expression:
 xor al, al
-xchg al, [ formatter_symbols_allowed]
+xchg al, [ formatter_symbolics_allowed]
 push _eax
 call parse_expression
 forced_expression_parsed:
 pop _eax
-mov [ formatter_symbols_allowed ], al
+mov [ formatter_symbolics_allowed ], al
 jmp argument_parsed
 forced_multipart_expression:
 xor al, al
-xchg al, [ formatter_symbols_allowed]
+xchg al, [ formatter_symbolics_allowed]
 push _eax
 call parse_expression
 cmp byte [ esi ], ':'
@@ -5653,10 +5518,10 @@ unallowed_character:
 mov al, 0FFh
 jmp separator
 open_decorator:
-inc [ decorator_symbols_allowed]
+inc [ decorator_symbolics_allowed]
 jmp separator
 close_decorator:
-dec [ decorator_symbols_allowed]
+dec [ decorator_symbolics_allowed]
 jmp separator
 close_parenthesis:
 mov al, 92h
@@ -5794,14 +5659,14 @@ lea edi, [ ebx+eax ]
 mov esi, converted
 mov ecx, ebp
 repe cmps byte [ esi ], [ edi ]
-ja symbols_up
-jb symbols_down
+ja symbolics_up
+jb symbolics_down
 mov ax, [ edi ]
 cmp al, 18h
 jb symbol_ok
 cmp al, 1Fh
 je decorator_symbol
-cmp [ formatter_symbols_allowed],0
+cmp [ formatter_symbolics_allowed],0
 je no_symbol
 symbol_ok:
 pop _esi
@@ -5810,7 +5675,7 @@ clc
 ret
 /**/
 decorator_symbol:
-cmp [ decorator_symbols_allowed],0
+cmp [ decorator_symbolics_allowed],0
 jne symbol_ok
 no_symbol:
 pop _esi
@@ -5818,10 +5683,10 @@ mov ecx, ebp
 stc
 ret
 /**/
-symbols_down:
+symbolics_down:
 shr edx,1
 jmp scan_symbols
-symbols_up:
+symbolics_up:
 lea ebx, [ edi+ecx+2 ]
 shr edx,1
 adc edx, -1
@@ -7335,7 +7200,7 @@ je compare_symbols
 cmp al, 0F7h
 je compare_symbol_types
 cmp al, 0F6h
-je scan_symbols_list
+je scan_symbolics_list
 non_preevaluable_logical_value:
 mov ecx, esi
 mov esi, ebx
@@ -7423,13 +7288,13 @@ jmp preevaluated_true
 different_type:
 pop _esi
 jmp preevaluated_false
-scan_symbols_list:
+scan_symbolics_list:
 push _edi _esi
 lea esi, [ edx+1 ]
 sub edx, ebx
 lods byte [ esi ]
 cmp al, '<'
-jne invalid_symbols_list
+jne invalid_symbolics_list
 get_next_from_list:
 mov edi,esi
 get_from_list:
@@ -7438,7 +7303,7 @@ je compare_in_list
 cmp byte [ esi ], '>'
 je compare_in_list
 cmp _esi, [ _esp ]
-jae invalid_symbols_list
+jae invalid_symbolics_list
 call skip_symbol
 jmp get_from_list
 compare_in_list:
@@ -7454,13 +7319,13 @@ skip_rest_of_list:
 cmp byte [ esi ], '>'
 je check_list_end
 cmp _esi, [ _esp ]
-jae invalid_symbols_list
+jae invalid_symbolics_list
 call skip_symbol
 jmp skip_rest_of_list
 check_list_end:
 inc esi
 cmp _esi, [ _esp ]
-jne invalid_symbols_list
+jne invalid_symbolics_list
 pop _esi _edi
 jmp preevaluated_true
 not_equal_in_list:
@@ -7470,10 +7335,10 @@ lods byte [ esi ]
 cmp al, ','
 je get_next_from_list
 cmp _esi, [ _esp ]
-jne invalid_symbols_list
+jne invalid_symbolics_list
 pop _esi _edi
 jmp preevaluated_false
-invalid_symbols_list:
+invalid_symbolics_list:
 pop _esi _edi
 jmp invalid_logical_value
 /*
@@ -7526,7 +7391,7 @@ call close_pass
 mov eax, [ labels_list ]
 check_symbols:
 cmp _eax, cell[ memory_end ]
-jae symbols_checked
+jae symbolics_checked
 test byte [ eax+8 ], 8
 jz symbol_defined_ok
 mov cx, [ current_pass]
@@ -7585,7 +7450,7 @@ check_next_symbol:
 add eax, LABEL_STRUCTURE_SIZE
 jmp check_symbols
 /**/
-symbols_checked:
+symbolics_checked:
 cmp [ next_pass_needed ], 0
 jne next_pass
 mov _eax, cell[ error_line ]
@@ -7684,7 +7549,7 @@ new_line:
 lods dword [ esi ]
 mov cell[ current_line ], _eax
 and [ prefix_flags ], 0
-cmp [ symbols_file ], 0
+cmp [ symbolics_file ], 0
 je continue_line
 cmp [ next_pass_needed ], 0
 jne continue_line
@@ -10848,7 +10713,7 @@ mov [ esi+13 ], bl
 ret
 /**/
 store_label_reference:
-cmp [ symbols_file ], 0
+cmp [ symbolics_file ], 0
 je label_reference_ok
 cmp [ next_pass_needed ], 0
 jne label_reference_ok
@@ -12271,7 +12136,7 @@ inc edi
 mov [ structures_buffer],edi
 mov [ output_file ], edi
 output_path_ok:
-cmp [ symbols_file ], 0
+cmp [ symbolics_file ], 0
 je labels_table_ok
 mov _ecx, cell[ memory_end ]
 sub ecx, [ labels_list ]
@@ -12331,8 +12196,8 @@ write_output:
 call write_code
 output_written:
 call close
-cmp [ symbols_file ], 0
-jne dump_symbols
+cmp [ symbolics_file ], 0
+jne symbols.emit
 ret
 /**/
 write_code:
@@ -14530,7 +14395,7 @@ ret
 /**/
 format_coff:
 mov _eax, cell[ additional_memory ]
-mov [ symbols_stream ], eax
+mov [ symbolics_stream ], eax
 mov ebx, eax
 add eax, 20h
 cmp eax, [ structures_buffer]
@@ -14738,7 +14603,7 @@ close_coff:
 call close_coff_section
 cmp [ next_pass_needed ], 0
 je coff_closed
-mov eax, [ symbols_stream ]
+mov eax, [ symbolics_stream ]
 mov cell[ free_additional_memory ], _eax
 coff_closed:
 ret
@@ -14773,12 +14638,12 @@ pop _ebx
 mov [ ebx+4 ], eax
 mov eax, [ number_of_sections ]
 mov [ ebx+2 ], ax
-mov esi, [ symbols_stream ]
+mov esi, [ symbolics_stream ]
 xor eax, eax
 xor ecx, ecx
 enumerate_symbols:
 cmp _esi, cell[ free_additional_memory ]
-je symbols_enumerated
+je symbolics_enumerated
 mov dl, [ esi ]
 or dl,dl
 jz enumerate_section
@@ -14827,7 +14692,7 @@ inc eax
 jmp enumerate_symbols
 /**/
 prepare_default_section:
-mov ebx, [ symbols_stream ]
+mov ebx, [ symbolics_stream ]
 cmp dword [ ebx+0Ch ], 0
 jne default_section_ok
 cmp [ number_of_sections ], 0
@@ -14836,7 +14701,7 @@ mov edx, ebx
 find_references_to_default_section:
 cmp _ebx, cell[ free_additional_memory ]
 jne check_reference
-add [ symbols_stream ], 20h
+add [ symbolics_stream ], 20h
 ret
 /**/
 check_reference:
@@ -14873,13 +14738,13 @@ default_section_ok:
 inc [ number_of_sections ]
 ret
 /**/
-symbols_enumerated:
+symbolics_enumerated:
 mov [ ebx+0Ch ], eax
 mov ebp,edi
 sub ebp, ebx
 push _ebp
 lea edi, [ ebx+14h ]
-mov esi, [ symbols_stream ]
+mov esi, [ symbolics_stream ]
 find_section:
 cmp _esi, cell[ free_additional_memory ]
 je sections_finished
@@ -15005,16 +14870,16 @@ mov ecx, [ edx+0Ch ]
 imul ecx, 12h shr 1
 xor eax, eax
 shr ecx, 1
-jnc zero_symbols_table
+jnc zero_symbolics_table
 stos word [ edi ]
-zero_symbols_table:
+zero_symbolics_table:
 rep stos dword [ edi ]
 mov edx, edi
 stos dword [ edi ]
-mov esi, [ symbols_stream ]
-make_symbols_table:
+mov esi, [ symbolics_stream ]
+make_symbolics_table:
 cmp _esi, cell[ free_additional_memory ]
-je symbols_table_ok
+je symbolics_table_ok
 mov al, [ esi ]
 cmp al, 0C0h
 jae add_public_symbol
@@ -15023,7 +14888,7 @@ jae add_extrn_symbol
 or al, al
 jz add_section_symbol
 add esi, 0Ch
-jmp make_symbols_table
+jmp make_symbolics_table
 /**/
 add_section_symbol:
 call store_symbol_name
@@ -15032,14 +14897,14 @@ mov [ ebx+0Ch ], ax
 mov byte [ ebx+10h ], 3
 add esi, 20h
 add ebx, 12h
-jmp make_symbols_table
+jmp make_symbolics_table
 /**/
 add_extrn_symbol:
 call store_symbol_name
 mov byte [ ebx+10h ], 2
 add esi, 0Ch
 add ebx, 12h
-jmp make_symbols_table
+jmp make_symbolics_table
 /**/
 add_public_symbol:
 call store_symbol_name
@@ -15097,7 +14962,7 @@ store_symbol_class:
 mov byte [ ebx+10h ], al
 add esi, 10h
 add ebx, 12h
-jmp make_symbols_table
+jmp make_symbolics_table
 /**/
 alias_symbol:
 bt [ format_flags ], 0
@@ -15115,13 +14980,13 @@ mov [ ebx ], ecx
 mov byte [ ebx+4 ], 3
 add esi, 10h
 add ebx, 12h
-jmp make_symbols_table
+jmp make_symbolics_table
 /**/
 public_constant:
 mov word [ ebx+0Ch ], 0FFFFh
 jmp public_symbol_section_ok
 /**/
-symbols_table_ok:
+symbolics_table_ok:
 mov eax, edi
 sub eax, edx
 mov [ edx ], eax
@@ -15193,7 +15058,7 @@ je format_elf_exe
 elf_header_ok:
 mov byte [ edx+10h ], 1
 mov _eax, cell[ additional_memory ]
-mov [ symbols_stream ], eax
+mov [ symbolics_stream ], eax
 mov ebx, eax
 add eax, 20h
 cmp eax, [ structures_buffer]
@@ -15369,7 +15234,7 @@ jc close_elf_exe
 call close_coff_section
 cmp [ next_pass_needed ], 0
 je elf_closed
-mov eax, [ symbols_stream ]
+mov eax, [ symbolics_stream ]
 mov cell[ free_additional_memory ], _eax
 elf_closed:
 ret
@@ -15387,7 +15252,7 @@ xor al, al
 rep stos byte [ edi ]
 push _edi
 call prepare_default_section
-mov esi, [ symbols_stream ]
+mov esi, [ symbolics_stream ]
 mov _edi, cell[ free_additional_memory ]
 xor eax, eax
 mov ecx, 4
@@ -15478,7 +15343,7 @@ jne find_next_section
 inc dx
 jz format_limitations_exceeded
 mov [ current_section ], edx
-mov esi, [ symbols_stream ]
+mov esi, [ symbolics_stream ]
 find_other_symbols:
 cmp _esi, cell[ free_additional_memory ]
 je elf_symbol_table_ok
@@ -16048,7 +15913,7 @@ pop _eax
 mov [ ebx ], eax
 mov [ ebx+4 ], edx
 mov [ ebx+8 ], cl
-mov [ symbols_stream ], edi
+mov [ symbolics_stream ], edi
 jmp format_defined
 /**/
 format_elf64_exe:
@@ -16161,9 +16026,9 @@ mov ebx, [ number_of_sections ]
 shl ebx, 5
 add ebx, [ code_start ]
 add ebx, 34h
-cmp ebx, [ symbols_stream ]
+cmp ebx, [ symbolics_stream ]
 jb new_elf_segment
-mov ebx, [ symbols_stream ]
+mov ebx, [ symbolics_stream ]
 sub ebx, 20h
 push _edi
 mov edi, ebx
@@ -16206,7 +16071,7 @@ jecxz elf_segment_type_ok
 mov edx, [ code_start ]
 add edx, 34h
 scan_elf_segment_types:
-cmp edx, [ symbols_stream ]
+cmp edx, [ symbolics_stream ]
 jae elf_segment_type_ok
 cmp [ edx ], ah
 je data_already_defined
@@ -16251,7 +16116,7 @@ jmp instruction_assembled
 close_elf_segment:
 cmp [ number_of_sections ], 0
 jne finish_elf_segment
-cmp edi, [ symbols_stream ]
+cmp edi, [ symbolics_stream ]
 jne first_elf_segment_ok
 push _edi
 mov edi, [ code_start ]
@@ -16302,9 +16167,9 @@ mov ebx, [ number_of_sections ]
 imul ebx, 38h
 add ebx, [ code_start ]
 add ebx, 40h
-cmp ebx, [ symbols_stream ]
+cmp ebx, [ symbolics_stream ]
 jb new_elf64_segment
-mov ebx, [ symbols_stream ]
+mov ebx, [ symbolics_stream ]
 sub ebx, 38h
 push _edi
 mov edi, ebx
@@ -16347,7 +16212,7 @@ jecxz elf64_segment_type_ok
 mov edx, [ code_start ]
 add edx, 40h
 scan_elf64_segment_types:
-cmp edx, [ symbols_stream ]
+cmp edx, [ symbolics_stream ]
 jae elf64_segment_type_ok
 cmp [ edx ], ah
 je data_already_defined
@@ -16388,7 +16253,7 @@ jmp elf_segment_addressing_setup
 close_elf64_segment:
 cmp [ number_of_sections ], 0
 jne finish_elf64_segment
-cmp edi, [ symbols_stream ]
+cmp edi, [ symbolics_stream ]
 jne first_elf64_segment_ok
 push _edi
 mov edi, [ code_start ]
@@ -16445,7 +16310,7 @@ mov [ edx+2Ch ], ax
 shl eax, 5
 add eax, edx
 add eax, 34h
-cmp eax, [ symbols_stream ]
+cmp eax, [ symbolics_stream ]
 je elf_exe_ok
 or [ next_pass_needed ], -1
 elf_exe_ok:
@@ -16460,7 +16325,7 @@ mov [ edx+38h ], ax
 imul eax, 38h
 add eax, edx
 add eax, 40h
-cmp eax, [ symbols_stream ]
+cmp eax, [ symbolics_stream ]
 je elf64_exe_ok
 or [ next_pass_needed ], -1
 elf64_exe_ok:
@@ -28184,13 +28049,204 @@ displacement_compressed:
         displacement_compression_ok:
         mov ecx, ebp
         ret
+/*
+Flat Assembler x64 | Errors */
+out_of_memory:
+push _out_of_memory
+jmp fatal_error
+stack_overflow:
+push _stack_overflow
+jmp fatal_error
+main_file_not_found:
+push _main_file_not_found
+jmp fatal_error
+write_failed:
+push _write_failed
+jmp fatal_error
+
+unexpected_end_of_file:
+push _unexpected_end_of_file
+jmp general_error
+code_cannot_be_generated:
+push _code_cannot_be_generated
+jmp general_error
+format_limitations_exceeded:
+push _format_limitations_exceeded
+jmp general_error
+invalid_definition:
+push _invalid_definition
+general_error:
+cmp [ symbolics_file ], 0
+je fatal_error
+call dump_preprocessed_source
+jmp fatal_error
+
+file_not_found:
+push _file_not_found
+jmp error_with_source
+error_reading_file:
+push _error_reading_file
+jmp error_with_source
+invalid_file_format:
+push _invalid_file_format
+jmp error_with_source
+invalid_macro_arguments:
+push _invalid_macro_arguments
+jmp error_with_source
+incomplete_macro:
+push _incomplete_macro
+jmp error_with_source
+unexpected_characters:
+push _unexpected_characters
+jmp error_with_source
+invalid_argument:
+push _invalid_argument
+jmp error_with_source
+illegal_instruction:
+push _illegal_instruction
+jmp error_with_source
+invalid_operand:
+push _invalid_operand
+jmp error_with_source
+invalid_operand_size:
+push _invalid_operand_size
+jmp error_with_source
+operand_size_not_specified:
+push _operand_size_not_specified
+jmp error_with_source
+operand_sizes_do_not_match:
+push _operand_sizes_do_not_match
+jmp error_with_source
+invalid_address_size:
+push _invalid_address_size
+jmp error_with_source
+address_sizes_do_not_agree:
+push _address_sizes_do_not_agree
+jmp error_with_source
+disallowed_combination_of_registers:
+push _disallowed_combination_of_registers
+jmp error_with_source
+long_immediate_not_encodable:
+push _long_immediate_not_encodable
+jmp error_with_source
+relative_jump_out_of_range:
+push _relative_jump_out_of_range
+jmp error_with_source
+invalid_expression:
+push _invalid_expression
+jmp error_with_source
+invalid_address:
+push _invalid_address
+jmp error_with_source
+invalid_value:
+push _invalid_value
+jmp error_with_source
+value_out_of_range:
+push _value_out_of_range
+jmp error_with_source
+undefined_symbol:
+mov edi,message
+mov esi, _undefined_symbol
+call strands.emit
+push message
+cmp [ error_info],0
+je error_with_source
+mov esi, [ error_info]
+mov esi, [ esi+24 ]
+or esi, esi
+jz error_with_source
+mov byte [ edi-1 ], 20h
+call write_quoted_symbol_name
+jmp error_with_source 
 /**/
+write_quoted_symbol_name:
+mov al, 27h
+stosb
+movzx ecx, byte [ esi-1 ]
+rep movs byte [ edi ], [ esi ]
+mov ax, 27h
+stosw
+ret
+/**/
+symbol_out_of_scope:
+mov edi,message
+mov esi, _symbol_out_of_scope_1
+call strands.emit
+cmp [ error_info],0
+je finish_symbol_out_of_scope_message
+mov esi, [ error_info]
+mov esi, [ esi+24 ]
+or esi, esi
+jz finish_symbol_out_of_scope_message
+mov byte [ edi-1 ], 20h
+call write_quoted_symbol_name
+finish_symbol_out_of_scope_message:
+mov byte [ edi-1 ], 20h
+mov esi, _symbol_out_of_scope_2
+call strands.emit
+push message
+jmp error_with_source
+invalid_use_of_symbol:
+push _invalid_use_of_symbol
+jmp error_with_source
+name_too_long:
+push _name_too_long
+jmp error_with_source
+invalid_name:
+push _invalid_name
+jmp error_with_source
+reserved_word_used_as_symbol:
+push _reserved_word_used_as_symbol
+jmp error_with_source
+symbol_already_defined:
+push _symbol_already_defined
+jmp error_with_source
+missing_end_quote:
+push _missing_end_quote
+jmp error_with_source
+missing_end_directive:
+push _missing_end_directive
+jmp error_with_source
+unexpected_instruction:
+push _unexpected_instruction
+jmp error_with_source
+extra_characters_on_line:
+push _extra_characters_on_line
+jmp error_with_source
+section_not_aligned_enough:
+push _section_not_aligned_enough
+jmp error_with_source
+setting_already_specified:
+push _setting_already_specified
+jmp error_with_source
+data_already_defined:
+push _data_already_defined
+jmp error_with_source
+too_many_repeats:
+push _too_many_repeats
+jmp error_with_source
+assertion_failed:
+push _assertion_failed
+jmp error_with_source
+invoked_error:
+push _invoked_error
+error_with_source:
+cmp [ symbolics_file ], 0
+je assembler_error
+call dump_preprocessed_source
+call restore_preprocessed_source
+jmp assembler_error
+ret
 /*
 Flat Assembler x64 | Tables */
-include_variable db 'INCLUDE', 0
-
-symbol_characters db 27
-db 9,0Ah,0Dh,1Ah,20h,'+-/*=<>()[]{}:,|&~#`;\'
+		error_prefix db 'error: ', 0
+		error_suffix db '.'
+		cr_lf db 0Dh,0Ah,0
+		line_number_start db ' [ ', 0
+		line_data_start db ':', 0Dh,0Ah,0
+		preprocessed_instruction_prefix db 'processed: ', 0
+		include_variable db 'INCLUDE', 0
+		symbol_characters db 27, 9, 0Ah, 0Dh, 1Ah, 20h, '+-/*=<>()[]{}:,|&~#`;\'
 
 preprocessor_directives:
 db 6,'define'
@@ -28279,21 +28335,21 @@ db 4,'word',2
 db 0
 
 symbolics:
-	dw symbols_1-symbolics,(symbols_2-symbols_1)/(1+2)
-	dw symbols_2-symbolics,(symbols_3-symbols_2)/(2+2)
-	dw symbols_3-symbolics,(symbols_4-symbols_3)/(3+2)
-	dw symbols_4-symbolics,(symbols_5-symbols_4)/(4+2)
-	dw symbols_5-symbolics,(symbols_6-symbols_5)/(5+2)
-	dw symbols_6-symbolics,(symbols_7-symbols_6)/(6+2)
-	dw symbols_7-symbolics,(symbols_8-symbols_7)/(7+2)
-	dw symbols_8-symbolics,(symbols_9-symbols_8)/(8+2)
-	dw symbols_9-symbolics,(symbols_10-symbols_9)/(9+2)
-	dw symbols_10-symbolics,(symbols_11-symbols_10)/(10+2)
-	dw symbols_11-symbolics,(symbols_end-symbols_11)/(11+2)
+	dw symbolics_1-symbolics,(symbolics_2-symbolics_1)/(1+2)
+	dw symbolics_2-symbolics,(symbolics_3-symbolics_2)/(2+2)
+	dw symbolics_3-symbolics,(symbolics_4-symbolics_3)/(3+2)
+	dw symbolics_4-symbolics,(symbolics_5-symbolics_4)/(4+2)
+	dw symbolics_5-symbolics,(symbolics_6-symbolics_5)/(5+2)
+	dw symbolics_6-symbolics,(symbolics_7-symbolics_6)/(6+2)
+	dw symbolics_7-symbolics,(symbolics_8-symbolics_7)/(7+2)
+	dw symbolics_8-symbolics,(symbolics_9-symbolics_8)/(8+2)
+	dw symbolics_9-symbolics,(symbolics_10-symbolics_9)/(9+2)
+	dw symbolics_10-symbolics,(symbolics_11-symbolics_10)/(10+2)
+	dw symbolics_11-symbolics,(symbolics_end-symbolics_11)/(11+2)
 
-symbols_1:
+symbolics_1:
 db 'z',1Fh,0
-symbols_2:
+symbolics_2:
 db 'ah',10h,04h
 db 'al',10h,10h
 db 'ax',10h,20h
@@ -28335,7 +28391,7 @@ db 'si',10h,26h
 db 'sp',10h,24h
 db 'ss',10h,33h
 db 'st',10h,0A0h
-symbols_3:
+symbolics_3:
 db 'bpl',10h,15h
 db 'cr0',14h,00h
 db 'cr1',14h,01h
@@ -28423,7 +28479,7 @@ db 'tr5',14h,45h
 db 'tr6',14h,46h
 db 'tr7',14h,47h
 db 'wdm',1Bh,81h
-symbols_4:
+symbolics_4:
 db '1to2',1Fh,11h
 db '1to4',1Fh,12h
 db '1to8',1Fh,13h
@@ -28506,7 +28562,7 @@ db 'zmm6',10h,66h
 db 'zmm7',10h,67h
 db 'zmm8',10h,68h
 db 'zmm9',10h,69h
-symbols_5:
+symbolics_5:
 db '1to16',1Fh,14h
 db 'dword',11h,4
 db 'elf64',18h,58h
@@ -28589,7 +28645,7 @@ db 'zmm29',10h,7Dh
 db 'zmm30',10h,7Eh
 db 'zmm31',10h,7Fh
 db 'zword',11h,64
-symbols_6:
+symbolics_6:
 db 'binary',18h,10h
 db 'dqword',11h,16
 db 'export',1Ah,0
@@ -28598,30 +28654,30 @@ db 'import',1Ah,1
 db 'native',1Bh,1
 db 'qqword',11h,32
 db 'static',1Dh,1
-symbols_7:
+symbolics_7:
 db 'console',1Bh,3
 db 'dqqword',11h,64
 db 'dynamic',1Eh,2
 db 'efiboot',1Bh,11
-symbols_8:
+symbolics_8:
 db 'gnustack',1Eh,51h
 db 'linkinfo',19h,9
 db 'readable',19h,30
 db 'resource',1Ah,2
 db 'writable',19h,31
-symbols_9:
+symbolics_9:
 db 'shareable',19h,28
 db 'writeable',19h,31
-symbols_10:
+symbolics_10:
 db 'efiruntime',1Bh,12
 db 'executable',19h,29
 db 'gnuehframe',1Eh,50h
 db 'linkremove',19h,11
-symbols_11:
+symbolics_11:
 db 'discardable',19h,25
 db 'interpreter',1Eh,3
 db 'notpageable',19h,27
-symbols_end:
+symbolics_end:
 
 instructions:
 dw instructions_2-instructions,(instructions_3-instructions_2)/(2+3)
@@ -32502,7 +32558,7 @@ _memory_suffix db ' kilobytes memory)', 0Dh,0Ah,0
 _passes_suffix db ' Passes, ', 0
 _seconds_suffix db ' seconds, ', 0
 _bytes_suffix db ' bytes.', 0Dh,0Ah,0
-_symbols_marked db ' Symbols have been marked.', 0Dh,0Ah,0
+_symbolics_marked db ' Symbols have been marked.', 0Dh,0Ah,0
 _processing_predefinitions db ' Processing predefinitions...', 0Dh,0Ah,0
 
 align 4
@@ -32532,7 +32588,7 @@ symbol_identifier dq ?
 initial_definitions dd ?
 input_file dd ?
 output_file dd ?
-symbols_file dd ?
+symbolics_file dd ?
 passes_limit dw ?
 /*
 flat | strands | length*/
@@ -32576,7 +32632,7 @@ address_high dd ?
 uncompressed_displacement dd ?
 format_flags dd ?
 resolver_flags dd ?
-symbols_stream dd ?
+symbolics_stream dd ?
 number_of_relocations dd ?
 number_of_sections dd ?
 stub_size dd ?
@@ -32648,8 +32704,8 @@ evex_mode db ?
 macro_status db ?
 skip_default_argument_value db ?
 prefix_flags db ?
-formatter_symbols_allowed db ?
-decorator_symbols_allowed db ?
+formatter_symbolics_allowed db ?
+decorator_symbolics_allowed db ?
 free_address_range db ?
 
 characters rb 100h
@@ -34342,4 +34398,4 @@ if $=$$
 dd 0,8
 end if
 /*
-34345 */
+34401*/
