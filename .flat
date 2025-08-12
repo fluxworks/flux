@@ -953,6 +953,17 @@ movzx ecx, word [ buffer+12 ]
 add eax, ecx
 adc edx, 0
 ret
+/*
+flat | strand | C style terminated ASCII strands */
+strand: 		ret
+		/*
+		strand | emit | Load From [ESI] To Store In [ EDI ], until Terminator is found. | copy_asciiz: */
+		.emit:
+				lods byte [ esi ]
+				stos byte [ edi ]
+				test al, al
+				jnz strand.emit
+				ret
 /**/
 error_prefix db 'error: ', 0
 error_suffix db '.'
@@ -1058,7 +1069,7 @@ jmp error_with_source
 undefined_symbol:
 mov edi,message
 mov esi, _undefined_symbol
-call copy_asciiz
+call strand.emit
 push message
 cmp [ error_info],0
 je error_with_source
@@ -1068,13 +1079,7 @@ or esi, esi
 jz error_with_source
 mov byte [ edi-1 ], 20h
 call write_quoted_symbol_name
-jmp error_with_source
-copy_asciiz:
-lods byte [ esi ]
-stos byte [ edi ]
-test al, al
-jnz copy_asciiz
-ret
+jmp error_with_source 
 /**/
 write_quoted_symbol_name:
 mov al, 27h
@@ -1088,7 +1093,7 @@ ret
 symbol_out_of_scope:
 mov edi,message
 mov esi, _symbol_out_of_scope_1
-call copy_asciiz
+call strand.emit
 cmp [ error_info],0
 je finish_symbol_out_of_scope_message
 mov esi, [ error_info]
@@ -1100,7 +1105,7 @@ call write_quoted_symbol_name
 finish_symbol_out_of_scope_message:
 mov byte [ edi-1 ], 20h
 mov esi, _symbol_out_of_scope_2
-call copy_asciiz
+call strand.emit
 push message
 jmp error_with_source
 invalid_use_of_symbol:
@@ -1159,14 +1164,14 @@ dump_symbols:
 mov edi, [ code_start ]
 call setup_dump_header
 mov esi, [ input_file ]
-call copy_asciiz
+call strand.emit
 cmp edi, [ tagged_blocks ]
 jae out_of_memory
 mov eax, edi
 sub eax, ebx
 mov [ ebx-40h+0Ch ], eax
 mov esi, [ output_file ]
-call copy_asciiz
+call strand.emit
 cmp edi, [ tagged_blocks ]
 jae out_of_memory
 mov edx, [ symbols_stream ]
@@ -1576,7 +1581,7 @@ dump_preprocessed_source:
 mov _edi, cell[ free_additional_memory ]
 call setup_dump_header
 mov esi, [ input_file ]
-call copy_asciiz
+call strand.emit
 cmp _edi, cell[ additional_memory_end ]
 jae out_of_memory
 mov eax, edi
@@ -34327,4 +34332,4 @@ if $=$$
 dd 0,8
 end if
 /*
-34330*/
+34335*/
