@@ -954,15 +954,21 @@ add eax, ecx
 adc edx, 0
 ret
 /*
-flat | strand | C style terminated ASCII strands */
-strand: 		ret
+flat | strands | C style terminated ASCII strands */
+strands: 		ret
 		/*
 		strand | emit | Load From [ESI] To Store In [ EDI ], until Terminator is found. | copy_asciiz: */
 		.emit:
 				lods byte [ esi ]
 				stos byte [ edi ]
 				test al, al
-				jnz strand.emit
+				jnz strands.emitted
+				mov cell [ strands.length ], r15
+				xor r15, r15
+				ret
+		.emitted:
+				inc r15
+				jnz strands.emit
 				ret
 /**/
 error_prefix db 'error: ', 0
@@ -1069,7 +1075,7 @@ jmp error_with_source
 undefined_symbol:
 mov edi,message
 mov esi, _undefined_symbol
-call strand.emit
+call strands.emit
 push message
 cmp [ error_info],0
 je error_with_source
@@ -1093,7 +1099,7 @@ ret
 symbol_out_of_scope:
 mov edi,message
 mov esi, _symbol_out_of_scope_1
-call strand.emit
+call strands.emit
 cmp [ error_info],0
 je finish_symbol_out_of_scope_message
 mov esi, [ error_info]
@@ -1105,7 +1111,7 @@ call write_quoted_symbol_name
 finish_symbol_out_of_scope_message:
 mov byte [ edi-1 ], 20h
 mov esi, _symbol_out_of_scope_2
-call strand.emit
+call strands.emit
 push message
 jmp error_with_source
 invalid_use_of_symbol:
@@ -1164,14 +1170,14 @@ dump_symbols:
 mov edi, [ code_start ]
 call setup_dump_header
 mov esi, [ input_file ]
-call strand.emit
+call strands.emit
 cmp edi, [ tagged_blocks ]
 jae out_of_memory
 mov eax, edi
 sub eax, ebx
 mov [ ebx-40h+0Ch ], eax
 mov esi, [ output_file ]
-call strand.emit
+call strands.emit
 cmp edi, [ tagged_blocks ]
 jae out_of_memory
 mov edx, [ symbols_stream ]
@@ -1581,7 +1587,7 @@ dump_preprocessed_source:
 mov _edi, cell[ free_additional_memory ]
 call setup_dump_header
 mov esi, [ input_file ]
-call strand.emit
+call strands.emit
 cmp _edi, cell[ additional_memory_end ]
 jae out_of_memory
 mov eax, edi
@@ -5774,9 +5780,9 @@ cmp cl,11
 ja no_symbol
 sub cl,1
 jc no_symbol
-movzx ebx, word [ symbols+ecx*4 ]
-add ebx, symbols
-movzx edx,word [ symbols+ecx*4+2 ]
+movzx ebx, word [ symbolics+ecx*4 ]
+add ebx, symbolics
+movzx edx,word [ symbolics+ecx*4+2 ]
 scan_symbols:
 or edx, edx
 jz no_symbol
@@ -28272,18 +28278,18 @@ db 5,'qword',8
 db 4,'word',2
 db 0
 
-symbols:
-dw symbols_1-symbols,(symbols_2-symbols_1)/(1+2)
-dw symbols_2-symbols,(symbols_3-symbols_2)/(2+2)
-dw symbols_3-symbols,(symbols_4-symbols_3)/(3+2)
-dw symbols_4-symbols,(symbols_5-symbols_4)/(4+2)
-dw symbols_5-symbols,(symbols_6-symbols_5)/(5+2)
-dw symbols_6-symbols,(symbols_7-symbols_6)/(6+2)
-dw symbols_7-symbols,(symbols_8-symbols_7)/(7+2)
-dw symbols_8-symbols,(symbols_9-symbols_8)/(8+2)
-dw symbols_9-symbols,(symbols_10-symbols_9)/(9+2)
-dw symbols_10-symbols,(symbols_11-symbols_10)/(10+2)
-dw symbols_11-symbols,(symbols_end-symbols_11)/(11+2)
+symbolics:
+	dw symbols_1-symbolics,(symbols_2-symbols_1)/(1+2)
+	dw symbols_2-symbolics,(symbols_3-symbols_2)/(2+2)
+	dw symbols_3-symbolics,(symbols_4-symbols_3)/(3+2)
+	dw symbols_4-symbolics,(symbols_5-symbols_4)/(4+2)
+	dw symbols_5-symbolics,(symbols_6-symbols_5)/(5+2)
+	dw symbols_6-symbolics,(symbols_7-symbols_6)/(6+2)
+	dw symbols_7-symbolics,(symbols_8-symbols_7)/(7+2)
+	dw symbols_8-symbolics,(symbols_9-symbols_8)/(8+2)
+	dw symbols_9-symbolics,(symbols_10-symbols_9)/(9+2)
+	dw symbols_10-symbolics,(symbols_11-symbols_10)/(10+2)
+	dw symbols_11-symbolics,(symbols_end-symbols_11)/(11+2)
 
 symbols_1:
 db 'z',1Fh,0
@@ -32529,6 +32535,10 @@ output_file dd ?
 symbols_file dd ?
 passes_limit dw ?
 /*
+flat | strands | length*/
+strands.length dq ?
+
+/*
 Flat Assembler x64 | Internal Variables */
 
 current_pass dw ?
@@ -34332,4 +34342,4 @@ if $=$$
 dd 0,8
 end if
 /*
-34335*/
+34345 */
