@@ -2044,21 +2044,50 @@ macros: ret
 			mov ebp,esi
 			inc esi
 			inc [ counter_limit ]
-		/*
-		get_macro_arguments:*/
 		.get_macro_arguments:
-			call get_macro_argument
+			call macros.get_macro_argument
 			lods byte [ esi ]
 			cmp al, ','
-			je next_argument
+			je macros.next_argument
 			cmp al, ']'
-			je next_arguments_group
+			je macros.next_arguments_group
 			cmp al, '&'
 			je arguments_end
 			dec esi
 			jmp arguments_end
 			ret
-
+		
+		.next_argument:
+			cmp byte [ ebx ], ','
+			jne macros.process_macro_arguments
+			inc ebx
+			jmp macros.process_macro_arguments
+			ret
+			
+		.next_arguments_group:
+			cmp byte [ ebx ], ','
+			jne arguments_end
+			inc ebx
+			inc [ counter_limit ]
+			mov esi, ebp
+			jmp macros.process_macro_arguments
+			ret
+			
+		.get_macro_argument:
+			lods byte [ esi ]
+			movzx ecx, al
+			mov _eax, cell[ counter_limit ]
+			call add_macro_symbol
+			add esi, ecx
+			xor eax, eax
+			mov [ default_argument_value ], eax
+			cmp byte [ esi ], '*'
+			je required_value
+			cmp byte [ esi ], ':'
+			je get_default_value
+			cmp byte [ esi ], '='
+			jne default_value_ok
+			ret
 
 process_postponed:
 mov edx,hash_tree
@@ -3447,34 +3476,8 @@ ret
 
 
 
-next_argument:
-cmp byte [ ebx ], ','
-jne macros.process_macro_arguments
-inc ebx
-jmp macros.process_macro_arguments
-next_arguments_group:
-cmp byte [ ebx ], ','
-jne arguments_end
-inc ebx
-inc [ counter_limit ]
-mov esi, ebp
-jmp macros.process_macro_arguments
-ret
 
-get_macro_argument:
-lods byte [ esi ]
-movzx ecx, al
-mov _eax, cell[ counter_limit ]
-call add_macro_symbol
-add esi, ecx
-xor eax, eax
-mov [ default_argument_value ], eax
-cmp byte [ esi ], '*'
-je required_value
-cmp byte [ esi ], ':'
-je get_default_value
-cmp byte [ esi ], '='
-jne default_value_ok
+
 get_default_value:
 inc esi
 mov [ default_argument_value ], esi
@@ -3704,7 +3707,7 @@ get_irp_parameter:
 inc [ counter_limit ]
 mov esi, [ instant_macro_start ]
 inc esi
-call get_macro_argument
+call macros.get_macro_argument
 cmp byte [ ebx ], ','
 jne irp_parameters_end
 inc ebx
@@ -34537,4 +34540,4 @@ if $=$$
 dd 0,8
 end if
 /*
-34540*/
+34330*/
