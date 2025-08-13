@@ -1746,9 +1746,9 @@ macros: ret
 			mov edi,esi
 			lods byte [ esi ]
 			cmp al, '`'
-			je symbol_conversion
+			je macros.symbol_conversion
 			cmp al, '#'
-			je concatenation
+			je macros.append
 			cmp al, 1Ah
 			je macros.read_operator_symbol
 			cmp al, 3Bh
@@ -1761,6 +1761,25 @@ macros: ret
 			mov edi,esi
 			ret
 		/*
+		after_macro_operators:*/
+		.signal_operators:
+			lods byte [ esi ]
+			cmp al, '`'
+			je macros.symbol_conversion
+			cmp al, '#'
+			je macros.append
+			stos byte [ edi ]
+			cmp al, 1Ah
+			je macros.signal_operator_symbol
+			cmp al, 3Bh
+			je macros.test_operators
+			cmp al, 22h
+			je macros.created_operator_symbol_strand
+			xor dl,dl
+			or al, al
+			jnz macros.signal_operators
+			ret			
+		/*
 		no_more_macro_operators:*/
 		.test_operators:
 			mov edi, ebp
@@ -1772,15 +1791,32 @@ macros: ret
 			mov ebx, esi
 			lods byte [ esi ]
 			movzx ecx, al
-			jecxz .create_operator_symbol
+			jecxz macros.create_operator_symbol
 			mov edi,esi
 			cmp byte [ esi ], '\'
-			je escaped_symbol
+			je macros.escaped_symbol
 		/*
 		symbol_before_macro_operators_ok:*/
 		.create_operator_symbol:
 			add esi, ecx
 			jmp macros.read_operators
+			ret
+		/*
+		symbol_after_macro_operators: */
+		.signal_operator_symbol:
+			mov dl,1Ah
+			mov ebx, edi
+			lods byte [ esi ]
+			stos byte [ edi ]
+			movzx ecx, al
+			jecxz macros.signal_operator_symbol_ok
+			cmp byte [ esi ], '\'
+			je macros.escaped_symbol
+		/*
+		symbol_after_macro_operatorss_ok:*/
+		.signal_operator_symbol_ok:
+			rep movs byte [ edi ], [ esi ]
+			jmp macros.signal_operators
 			ret
 		/*
 		string_before_macro_operators:*/
@@ -1790,57 +1826,72 @@ macros: ret
 			lods dword [ esi ]
 			add esi, eax
 			jmp macros.read_operators
-			escaped_symbol:
+			ret
+		/*
+		string_after_macro_operators:*/
+		.created_operator_symbol_strand:
+			mov dl,22h
+			mov ebx, edi
+			lods dword [ esi ]
+			stos dword [ edi ]
+			mov ecx, eax
+			rep movs byte [ edi ], [ esi ]
+			jmp macros.signal_operators
+			ret
+			
+			.escaped_symbol:
 			dec byte [ edi-1 ]
 			dec ecx
 			inc esi
 			cmp ecx, 1
 			rep movs byte [ edi ], [ esi ]
-			jne after_macro_operators
+			jne macros.signal_operators
 			mov al, [ esi-1 ]
 			mov ecx, ebx
 			mov ebx, characters
 			xlat byte [ ebx ]
 			mov ebx, ecx
 			or al, al
-			jnz after_macro_operators
+			jnz macros.signal_operators
 			sub edi,3
 			mov al, [ esi-1 ]
 			stos byte [ edi ]
 			xor dl,dl
-			jmp after_macro_operators
-			reduce_symbol_conversion:
+			jmp macros.signal_operators
+			.reduce_symbol_conversion:
 			inc esi
-			symbol_conversion:
+			.symbol_conversion:
 			mov edx,esi
 			mov al, [ esi ]
 			cmp al, 1Ah
-			jne symbol_character_conversion
+			jne macros.symbol_character_conversion
 			lods word [ esi ]
 			movzx ecx, ah
 			lea ebx, [ edi+3 ]
-			jecxz convert_to_quoted_string
+			jecxz macros.convert_to_quoted_string
 			cmp byte [ esi ], '\'
-			jne convert_to_quoted_string
+			jne macros.convert_to_quoted_string
 			inc esi
 			dec ecx
 			dec ebx
-			jmp convert_to_quoted_string
-			symbol_character_conversion:
+			jmp macros.convert_to_quoted_string
+			ret
+			
+			.symbol_character_conversion:
 			cmp al, 22h
-			je after_macro_operators
+			je macros.signal_operators
 			cmp al, '`'
-			je reduce_symbol_conversion
+			je macros.reduce_symbol_conversion
 			lea ebx, [ edi+5 ]
 			xor ecx, ecx
 			or al, al
-			jz convert_to_quoted_string
+			jz macros.convert_to_quoted_string
 			cmp al, '#'
-			je convert_to_quoted_string
+			je macros.convert_to_quoted_string
 			inc ecx
-			convert_to_quoted_string:
+			.convert_to_quoted_string:
 			sub ebx, edx
-			ja shift_line_data
+			ja macros.shift_line_data
 			mov al, 22h
 			mov dl,al
 			stos byte [ edi ]
@@ -1850,8 +1901,11 @@ macros: ret
 			rep movs byte [ edi ], [ esi ]
 			cmp edi,esi
 			je macros.read_operators
-			jmp after_macro_operators
-			shift_line_data:
+			jmp macros.signal_operators
+			ret
+		/*
+		shift_line_data:*/
+		.shift_line_data:
 			push _ecx
 			mov edx,esi
 			lea esi, [ ebp-1 ]
@@ -1870,116 +1924,140 @@ macros: ret
 			mov [ edi ], eax
 			lea esi, [ edi+4+eax ]
 			jmp macros.read_operators
-			concatenation:
+			ret
+		/*	
+		concatenation:*/
+		.append:
 			cmp dl,1Ah
-			je symbol_concatenation
+			je macros.symbol_concatenation
 			cmp dl,22h
-			je string_concatenation
-			no_concatenation:
+			je macros.string_concatenation
+			.no_concatenation:
 			cmp esi, edi
 			je macros.read_operators
-			jmp after_macro_operators
-			symbol_concatenation:
+			jmp macros.signal_operators
+			ret
+			
+			.symbol_concatenation:
 			cmp byte [ esi ], 1Ah
-			jne no_concatenation
+			jne macros.no_concatenation
 			inc esi
 			lods byte [ esi ]
 			movzx ecx, al
-			jecxz do_symbol_concatenation
+			jecxz macros.do_symbol_concatenation
 			cmp byte [ esi ], '\'
-			je concatenate_escaped_symbol
-			do_symbol_concatenation:
+			je macros.concatenate_escaped_symbol
+			
+			.do_symbol_concatenation:
 			add [ ebx ], cl
 			jc name_too_long
 			rep movs byte [ edi ], [ esi ]
-			jmp after_macro_operators
-			concatenate_escaped_symbol:
+			jmp macros.signal_operators
+			ret
+			
+			.concatenate_escaped_symbol:
 			inc esi
 			dec ecx
-			jz do_symbol_concatenation
+			jz macros.do_symbol_concatenation
 			movzx eax, byte [ esi ]
 			cmp byte [ characters+eax ], 0
-			jne do_symbol_concatenation
+			jne macros.do_symbol_concatenation
 			sub esi, 3
-			jmp no_concatenation
-			string_concatenation:
+			jmp macros.no_concatenation
+			ret
+			
+			.string_concatenation:
 			cmp byte [ esi ], 22h
-			je do_string_concatenation
+			je macros.do_string_concatenation
 			cmp byte [ esi ], '`'
-			jne no_concatenation
-			concatenate_converted_symbol:
+			jne macros.no_concatenation
+			
+			.concatenate_converted_symbol:
 			inc esi
 			mov al, [ esi ]
 			cmp al, '`'
-			je concatenate_converted_symbol
+			je macros.concatenate_converted_symbol
 			cmp al, 22h
-			je do_string_concatenation
+			je macros.do_string_concatenation
 			cmp al, 1Ah
-			jne concatenate_converted_symbol_character
+			jne macros.concatenate_converted_symbol_character
 			inc esi
 			lods byte [ esi ]
 			movzx ecx, al
-			jecxz finish_concatenating_converted_symbol
+			jecxz macros.finish_concatenating_converted_symbol
 			cmp byte [ esi ], '\'
-			jne finish_concatenating_converted_symbol
+			jne macros.finish_concatenating_converted_symbol
 			inc esi
 			dec ecx
-			finish_concatenating_converted_symbol:
+			.finish_concatenating_converted_symbol:
 			add [ ebx ], ecx
 			rep movs byte [ edi ], [ esi ]
-			jmp after_macro_operators
-			concatenate_converted_symbol_character:
+			jmp macros.signal_operators
+			ret 
+			
+			.concatenate_converted_symbol_character:
 			or al, al
-			jz after_macro_operators
+			jz macros.signal_operators
 			cmp al, '#'
-			je after_macro_operators
+			je macros.signal_operators
 			inc dword [ ebx ]
 			movs byte [ edi ], [ esi ]
-			jmp after_macro_operators
-			do_string_concatenation:
+			jmp macros.signal_operators
+			ret
+			
+			.do_string_concatenation:
 			inc esi
 			lods dword [ esi ]
 			mov ecx, eax
 			add [ ebx ], eax
 			rep movs byte [ edi ], [ esi ]
-			after_macro_operators:
-			lods byte [ esi ]
-			cmp al, '`'
-			je symbol_conversion
-			cmp al, '#'
-			je concatenation
-			stos byte [ edi ]
-			cmp al, 1Ah
-			je symbol_after_macro_operators
-			cmp al, 3Bh
-			je macros.test_operators
-			cmp al, 22h
-			je string_after_macro_operators
-			xor dl,dl
-			or al, al
-			jnz after_macro_operators
+			jmp macros.signal_operators
 			ret
-			/**/
-			symbol_after_macro_operators:
-			mov dl,1Ah
-			mov ebx, edi
+		/*	
+		use_macro:*/
+		.signal:
+			push cell[ free_additional_memory ]
+			push cell[macro_symbols]
+			mov [ macro_symbols],0
+			push cell[counter_limit ]
+			mov r8d, [ edx+4 ]
+			push r8
+			mov dword [ edx+4 ], 1
+			push _edx
+			mov ebx, esi
+			mov esi, [ edx+8 ]
+			mov eax, [ edx+12 ]
+			mov [ macro_line ], _eax
+			mov [ counter_limit ], 0
+			xor ebp,ebp
+		/*
+		.process_macro_arguments:*/
+		.process_macro_arguments:
+			mov al, [ esi ]
+			or al, al
+			jz arguments_end
+			cmp al, '{'
+			je arguments_end
+			inc esi
+			cmp al, '['
+			jne macros.get_macro_arguments
+			mov ebp,esi
+			inc esi
+			inc [ counter_limit ]
+		/*
+		get_macro_arguments:*/
+		.get_macro_arguments:
+			call get_macro_argument
 			lods byte [ esi ]
-			stos byte [ edi ]
-			movzx ecx, al
-			jecxz symbol_after_macro_operatorss_ok
-			cmp byte [ esi ], '\'
-			je escaped_symbol
-			symbol_after_macro_operatorss_ok:
-			rep movs byte [ edi ], [ esi ]
-			jmp after_macro_operators
-			string_after_macro_operators:
-			mov dl,22h
-			mov ebx, edi
-			lods dword [ esi ]
-			stos dword [ edi ]
-			mov ecx, eax
-			rep movs byte [ edi ], [ esi ]
-			jmp after_macro_operators
+			cmp al, ','
+			je next_argument
+			cmp al, ']'
+			je next_arguments_group
+			cmp al, '&'
+			je arguments_end
+			dec esi
+			jmp arguments_end
+			ret
 
 
 process_postponed:
@@ -2015,12 +2093,13 @@ jmp incomplete_macro
 preprocessing_finished:
 mov [ source_start ], edi
 ret
-/**/
+
 use_postponed_macro:
-lea esi, [ edi-1 ]
-push _ecx _esi
-mov [ struc_name ], 0
-jmp use_macro
+		lea esi, [ edi-1 ]
+		push _ecx _esi
+		mov [ struc_name ], 0
+		jmp macros.signal
+		ret
 
 preprocess_file:
 push cell[memory_end ]
@@ -2543,7 +2622,9 @@ call get_preprocessor_symbol
 jc not_macro
 mov byte [ ebx-2 ], 3Bh
 mov [ struc_name ], 0
-jmp use_macro
+jmp macros.signal
+ret
+
 not_macro:
 mov cell[struc_name ], _esi
 add esi, ecx
@@ -2606,7 +2687,9 @@ pop _esi
 add esi, [ edx+12 ]
 add esi, 3
 pop _edx
-jmp use_macro
+jmp macros.signal
+ret
+
 struc_name_ok:
 mov _edx, cell[ struc_name]
 movzx eax, byte [ edx-1 ]
@@ -2626,7 +2709,9 @@ inc al
 mov [ edx+1 ], al
 pop _esi _edx
 inc esi
-jmp use_macro
+jmp macros.signal
+ret
+
 preprocess_label:
 dec esi
 sub esi, ecx
@@ -3362,56 +3447,20 @@ ret
 
 
 
-use_macro:
-push cell[ free_additional_memory ]
-push cell[macro_symbols]
-mov [ macro_symbols],0
-push cell[counter_limit ]
-mov r8d, [ edx+4 ]
-push r8
-mov dword [ edx+4 ], 1
-push _edx
-mov ebx, esi
-mov esi, [ edx+8 ]
-mov eax, [ edx+12 ]
-mov [ macro_line ], _eax
-mov [ counter_limit ], 0
-xor ebp,ebp
-process_macro_arguments:
-mov al, [ esi ]
-or al, al
-jz arguments_end
-cmp al, '{'
-je arguments_end
-inc esi
-cmp al, '['
-jne get_macro_arguments
-mov ebp,esi
-inc esi
-inc [ counter_limit ]
-get_macro_arguments:
-call get_macro_argument
-lods byte [ esi ]
-cmp al, ','
-je next_argument
-cmp al, ']'
-je next_arguments_group
-cmp al, '&'
-je arguments_end
-dec esi
-jmp arguments_end
 next_argument:
 cmp byte [ ebx ], ','
-jne process_macro_arguments
+jne macros.process_macro_arguments
 inc ebx
-jmp process_macro_arguments
+jmp macros.process_macro_arguments
 next_arguments_group:
 cmp byte [ ebx ], ','
 jne arguments_end
 inc ebx
 inc [ counter_limit ]
 mov esi, ebp
-jmp process_macro_arguments
+jmp macros.process_macro_arguments
+ret
+
 get_macro_argument:
 lods byte [ esi ]
 movzx ecx, al
@@ -34488,4 +34537,4 @@ if $=$$
 dd 0,8
 end if
 /*
-34330*/
+34540*/
