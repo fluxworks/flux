@@ -1815,9 +1815,9 @@ macros:		ret
 			add esi, eax
 			lods byte [ esi ]
 			cmp al, ':'
-			je macro_argument_with_default_value
+			je .macro_argument_with_default_value
 			cmp al, '='
-			je macro_argument_with_default_value
+			je .macro_argument_with_default_value
 			cmp al, '*'
 			jne .signal_rule_ok
 			lods byte [ esi ]
@@ -1844,7 +1844,7 @@ macros:		ret
 		.create_rule:
 			push cell [ macro_status ]
 			or [ macro_status ], 10h
-			push cell[counter]
+			push cell[ counter ]
 			push cell[macro_block]
 			push cell[macro_block_line ]
 			push cell[macro_block_line_number]
@@ -1854,20 +1854,20 @@ macros:		ret
 			push cell[ current_line ]
 			lods byte [ _esi]
 			cmp al, '{'
-			je macro_instructions_start
+			je .macro_instructions_start
 			or al, al
 			jnz unexpected_characters
 			.find_macro_instructions:
-			mov cell[macro_line ], _esi
+			mov cell[ macro_line ], _esi
 			add _esi,16+2
 			lods byte [ _esi]
 			or al, al
 			jz .find_macro_instructions
 			cmp al, '{'
-			je macro_instructions_start
+			je .macro_instructions_start
 			cmp al, ';'
 			jne unexpected_characters
-			call skip_foreign_symbol
+			call .skip_foreign_symbol
 			jmp .find_macro_instructions
 			ret
 			
@@ -1891,7 +1891,7 @@ macros:		ret
 			inc esi
 			mov [ default_argument_value ], esi
 			or [ skip_default_argument_value ], -1
-			call skip_macro_argument_value
+			call .skip_macro_argument_value
 			jmp .read_required_default_rule
 			ret
 
@@ -1904,13 +1904,13 @@ macros:		ret
 			mov [ skip_default_argument_value ], 0
 			cmp byte [ ebx ], '&'
 			je .read_rule_overload
-			call skip_macro_argument_value
+			call .skip_macro_argument_value
 			call .signal_rules_ok
 			jmp .read_rule_loaded
 			ret
 
 		.read_rule_overload:
-			call skip_foreign_line
+			call .skip_foreign_line
 			dec esi
 			mov eax, [ edx+12 ]
 			mov ecx, esi
@@ -2441,20 +2441,20 @@ macros:		ret
 			mov _eax, cell[ macro_line ]
 			mov cell[macro_block_line ], _eax
 			mov cell[macro_block_line_number],_ecx
-			jmp process_macro_line
+			jmp .process_macro_line
 			ret
 
 		.close_macro_block:
 			cmp _esi, cell[ macro_block]
-			je block_closed
-			cmp dword[counter],0
-			je block_closed
-			jl reverse_counter
-			mov _eax, cell[ counter]
+			je .block_closed
+			cmp dword[ counter ],0
+			je .block_closed
+			jl .reverse_counter
+			mov _eax, cell[ counter ]
 			cmp _eax, cell[ counter_limit ]
-			je block_closed
-			inc [ counter]
-			jmp continue_block
+			je .block_closed
+			inc [ counter ]
+			jmp .continue_block
 			ret
 
 		.skip_macro_symbol:
@@ -2470,10 +2470,470 @@ macros:		ret
 			jmp .skip_macro_block
 			ret
 			
+		.continue_block:
+			mov _esi, cell[ macro_block]
+			mov _eax, cell[ macro_block_line ]
+			mov cell[ macro_line ], _eax
+			mov _ecx, cell[ macro_block_line_number ]
+			stc
+			ret
+			
+		.block_closed:
+			clc
+			ret
+			
+		.common_block:
+			call .close_macro_block
+			jc .process_macro_line
+			mov [ counter],0
+			jmp .new_macro_block
+			ret
+
+		.forward_block:
+			cmp [ counter_limit ], 0
+			je .common_block
+			call .close_macro_block
+			jc .process_macro_line
+			mov [ counter],1
+			jmp .new_macro_block
+			ret
+			
+		.reverse_block:
+			cmp [ counter_limit ], 0
+			je .common_block
+			call .close_macro_block
+			jc .process_macro_line
+			mov _eax, cell[ counter_limit ]
+			or eax, 80000000h
+			mov cell[ counter ], _eax
+			jmp .new_macro_block
+			ret
+			
+		.reverse_counter:
+			mov _eax, cell[ counter ]
+			dec eax
+			cmp eax, 80000000h
+			je .block_closed
+			mov cell[ counter ], _eax
+			jmp .continue_block
+			ret
+			
+		.macro_block_processed:
+			call .close_macro_block
+			jc .process_macro_line
+			pop cell[ current_line ]
+			add _esp,24 ;skip _eax,struc_name,struc_label
+			pop cell[macro_block_line_number]
+			pop cell[macro_block_line ]
+			pop cell[macro_block]
+			pop cell[ counter ]
+			pop _eax ;restore macro_status
+			and al, 0F0h
+			and [ macro_status ], 0Fh
+			or [ macro_status ], al
+			ret
+			
+		.process_macro_line:
+			lods byte [ esi ]
+			or al, al
+			jz .process_next_line
+			cmp al, '}'
+			je .macro_block_processed
+			dec esi
+			mov cell[ current_line ], _edi
+			lea eax, [ edi+10h ]
+			cmp _eax, cell[ memory_end ]
+			jae out_of_memory
+			mov _eax, [ _esp+8 ]
+			or eax, eax
+			jz .instant_macro_line_header
+			stos dword [ edi ]
+			mov eax, ecx
+			stos dword [ edi ]
+			mov _eax, [ _esp ]
+			stos dword [ edi ]
+			mov _eax, cell[ macro_line ]
+			stos dword [ edi ]
+			jmp .macro_line_header_ok
+			ret
+			
+		.process_next_line:
+			inc ecx
+			mov cell[ macro_line ], _esi
+			add esi, 16+2
+			jmp .process_macro_line
+			ret
+			
+		.macro_line_processed:
+			mov byte [ edi ], 0
+			inc edi
+			push _eax
+			call preprocess_line
+			pop _eax
+			pop _ecx _ebx
+			cmp al, '}'
+			je .macro_block_processed
+			jmp .process_next_line
+			ret
+			
+		.skip_foreign_symbol:
+			lods byte [ esi ]
+			movzx eax, al
+			add esi, eax
+			jmp .skip_foreign_line
+			ret
+			
+		.skip_foreign_line:
+			lods byte [ esi ]
+			cmp al, 1Ah
+			je .skip_foreign_symbol
+			cmp al, 3Bh
+			je .skip_foreign_symbol
+			cmp al, 22h
+			je .skip_foreign_string
+			or al, al
+			jnz .skip_foreign_line
+			ret
+
+		.skip_foreign_string:
+			lods dword [ esi ]
+			add esi, eax
+			jmp .skip_foreign_line
+			ret
+
+		.macro_foreign_line:
+			call .skip_foreign_symbol
+			jmp .macro_line_processed
+			ret
+			
+		.macro_instructions_start:
+			mov ecx, 80000000h
+			mov cell[macro_block],_esi
+			mov _eax, cell[ macro_line ]
+			mov cell[macro_block_line ], _eax
+			mov cell[macro_block_line_number],_ecx
+			xor eax, eax
+			mov cell[ counter ], _eax
+			cmp cell[counter_limit ], _eax
+			je .process_macro_line
+			inc [ counter ]
+			jmp .process_macro_line
+			ret
+
+		.instant_macro_line_header:
+			mov _eax, [ _esp ] ;current_line
+			add eax, 16
+			jmp .find_defining_directive
+			ret
+
+		.find_defining_directive:
+			inc eax
+			cmp byte [ eax-1 ], 3Bh
+			je .defining_directive_ok
+			cmp byte [ eax-1 ], 1Ah
+			jne .find_defining_directive
+			push _eax
+			movzx eax, byte [ eax ]
+			inc eax
+			add [ _esp], _eax ;current_line
+			pop _eax
+			jmp .find_defining_directive
+			ret
+
+		.defining_directive_ok:
+			stos dword [ edi ]
+			mov eax, ecx
+			stos dword [ edi ]
+			mov _eax, cell[ macro_line ]
+			stos dword [ edi ]
+			stos dword [ edi ]
+			jmp .macro_line_header_ok
+			ret
+			
+		.macro_line_header_ok:
+			or [ macro_status ], 20h
+			push _ebx _ecx
+			test [ macro_status ], 0Fh
+			jz .process_macro_line_element
+			mov ax, 3Bh
+			stos word [ edi ]
+			jmp .process_macro_line_element
+			ret
+		
+		.process_macro_line_element:
+			lea eax, [ edi+100h ]
+			cmp _eax, cell[ memory_end ]
+			jae out_of_memory
+			lods byte [ esi ]
+			cmp al, '}'
+			je .macro_line_processed
+			or al, al
+			jz .macro_line_processed
+			cmp al, 1Ah
+			je .process_macro_symbol
+			cmp al, 3Bh
+			je .macro_foreign_line
+			and [ macro_status ], not 20h
+			stos byte [ edi ]
+			cmp al, 22h
+			jne .process_macro_line_element
+			jmp .copy_macro_string
+			ret
+			
+		.copy_macro_string:
+			mov ecx, [ esi ]
+			add ecx, 4
+			call move_data
+			jmp .process_macro_line_element
+			ret
+
+		.process_macro_symbol:
+			push _esi _edi
+			test [ macro_status ], 20h
+			jz not_macro_directive
+			movzx ecx, byte [ esi ]
+			inc esi
+			mov edi, macro_directives
+			call get_directive
+			jnc .process_macro_directive
+			dec esi
+			jmp not_macro_directive
+			ret
+
+		.process_macro_directive:
+			mov edx,eax
+			pop _edi _eax
+			mov byte [ edi ], 0
+			inc edi
+			pop _ecx _ebx
+			jmp near _edx
+			ret
+		
+		.macro_argument_with_default_value:
+			or [ skip_default_argument_value ], -1
+			call .skip_macro_argument_value
+			inc esi
+			jmp .signal_rule_ok
+			ret
+
+		.skip_macro_argument_value:
+			cmp byte [ esi ], '<'
+			jne .simple_argument
+			mov ecx, 1
+			inc esi
+			jmp .enclosed_argument
+			ret
+			
+		.enclosed_argument:
+			lods byte [ esi ]
+			or al, al
+			jz invalid_macro_arguments
+			cmp al, 1Ah
+			je .enclosed_symbol
+			cmp al, 22h
+			je .enclosed_string
+			cmp al, '>'
+			je .enclosed_argument_end
+			cmp al, '<'
+			jne .enclosed_argument
+			inc ecx
+			jmp .enclosed_argument
+			ret
+
+		.enclosed_symbol:
+			movzx eax, byte [ esi ]
+			inc esi
+			add esi, eax
+			jmp .enclosed_argument
+			ret
+
+		.enclosed_string:
+			lods dword [ esi ]
+			add esi, eax
+			jmp .enclosed_argument
+			ret
+			
+		.enclosed_argument_end:
+			loop .enclosed_argument
+			lods byte [ esi ]
+			or al, al
+			jz .argument_value_end
+			cmp al, ','
+			je .argument_value_end
+			cmp [ skip_default_argument_value ], 0
+			je invalid_macro_arguments
+			cmp al, '{'
+			je .argument_value_end
+			cmp al, '&'
+			je .argument_value_end
+			or ebp,ebp
+			jz invalid_macro_arguments
+			cmp al, ']'
+			je .argument_value_end
+			jmp invalid_macro_arguments
+			ret
+
+		.simple_argument:
+			lods byte [ esi ]
+			or al, al
+			jz .argument_value_end
+			cmp al, ','
+			je .argument_value_end
+			cmp al, 22h
+			je .argument_string
+			cmp al, 1Ah
+			je .argument_symbol
+			cmp [ skip_default_argument_value ], 0
+			je .simple_argument
+			cmp al, '{'
+			je .argument_value_end
+			cmp al, '&'
+			je .argument_value_end
+			or ebp,ebp
+			jz .simple_argument
+			cmp al, ']'
+			je .argument_value_end
+			jmp .argument_symbol
+			ret
+		
+		.argument_symbol:
+			movzx eax, byte [ esi ]
+			inc esi
+			add esi, eax
+			jmp .simple_argument
+			ret
+
+		.argument_string:
+			lods dword [ esi ]
+			add esi, eax
+			jmp .simple_argument
+			ret
+			
+		.argument_value_end:
+			dec esi
+			ret
+		
+		.define_instant_macro:
+			mov al, [ macro_status ]
+			and al, 0F0h
+			or al, 8+1
+			mov [ macro_status ], al
+			mov _eax, cell[ current_line ]
+			mov cell[error_line ], _eax
+			mov [ instant_macro_start ], esi
+			cmp [ base_code ], 10h
+			je prepare_match
+			jmp skip_parameters
+			ret
+
+		.replace_macro_symbol:
+			pop _edi _eax
+			mov ecx, [ edx+8 ]
+			mov edx, [ edx+12 ]
+			or edx, edx
+			jz .replace_macro_counter
+			and ecx, not 80000000h
+			xchg esi, edx
+			call move_data
+			mov esi, edx
+			jmp .process_macro_line_element
+			ret
+
+		.group_macro_symbol:
+			xor eax, eax
+			cmp dword[ counter ],eax
+			je .replace_macro_symbol
+			push _esi _edx
+			sub esi, ecx
+			call .read_symbol
+			mov ebx, edx
+			pop _edx _esi
+			jc .replace_macro_symbol
+			cmp edx, ebx
+			ja .replace_macro_symbol
+			mov edx, ebx
+			jmp .replace_macro_symbol
+			ret
+
+		.multiple_macro_symbol_values:
+			inc eax
+			push _eax
+			call .read_symbol
+			pop _eax
+			jc not_macro_symbol
+			pop _edi
+			push _ecx
+			mov ecx, [ edx+8 ]
+			mov edx, [ edx+12 ]
+			xchg esi, edx
+			btr ecx, 31
+			jc .enclose_macro_symbol_value
+			rep movs byte [ edi ], [ esi ]
+			jmp .macro_symbol_value_ok
+			ret
+
+		.enclose_macro_symbol_value:
+			mov byte [ edi ], '<'
+			inc edi
+			rep movs byte [ edi ], [ esi ]
+			mov byte [ edi ], '>'
+			inc edi
+			
+		.macro_symbol_value_ok:
+			cmp _eax, cell[ counter_limit ]
+			je .multiple_macro_symbol_values_ok
+			mov byte [ edi ], ','
+			inc edi
+			mov esi, edx
+			pop _ecx
+			push _edi
+			sub esi, ecx
+			jmp .multiple_macro_symbol_values
+			ret
+
+		.multiple_macro_symbol_values_ok:
+			pop _ecx _eax
+			mov esi, edx
+			jmp .process_macro_line_element
+			ret
+
+		.replace_macro_counter:
+			mov _eax, cell[ counter ]
+			and eax, not 80000000h
+			jz .group_macro_counter
+			add ecx, eax
+			dec ecx
+			call store_number_symbol
+			jmp .process_macro_line_element
+			ret
+
+		.group_macro_counter:
+			mov edx,ecx
+			xor ecx, ecx
+			
+		.multiple_macro_counter_values:
+			push _ecx _edx
+			add ecx, edx
+			call store_number_symbol
+			pop _edx _ecx
+			inc ecx
+			cmp _ecx, cell[ counter_limit ]
+			je .process_macro_line_element
+			mov byte [ edi ], ','
+			inc edi
+			jmp .multiple_macro_counter_values
+			ret
+
+		.purge_macro:
+			xor ch, ch
+			jmp restore_preprocessor_symbol
+			ret
+		
+		
+			
 preprocess_file:
 push cell[memory_end ]
 push _esi
-
 mov al, 2
 xor edx, edx
 call lseek
@@ -3357,104 +3817,6 @@ mov ch, 1
 jmp macros.create_rule_handle
 ret
 
-
-
-macro_argument_with_default_value:
-or [ skip_default_argument_value ], -1
-call skip_macro_argument_value
-inc esi
-jmp macros.signal_rule_ok
-ret
-
-skip_macro_argument_value:
-cmp byte [ esi ], '<'
-jne simple_argument
-mov ecx, 1
-inc esi
-enclosed_argument:
-lods byte [ esi ]
-or al, al
-jz invalid_macro_arguments
-cmp al, 1Ah
-je enclosed_symbol
-cmp al, 22h
-je enclosed_string
-cmp al, '>'
-je enclosed_argument_end
-cmp al, '<'
-jne enclosed_argument
-inc ecx
-jmp enclosed_argument
-ret
-
-enclosed_symbol:
-movzx eax, byte [ esi ]
-inc esi
-add esi, eax
-jmp enclosed_argument
-ret
-
-enclosed_string:
-lods dword [ esi ]
-add esi, eax
-jmp enclosed_argument
-enclosed_argument_end:
-loop enclosed_argument
-lods byte [ esi ]
-or al, al
-jz argument_value_end
-cmp al, ','
-je argument_value_end
-cmp [ skip_default_argument_value ], 0
-je invalid_macro_arguments
-cmp al, '{'
-je argument_value_end
-cmp al, '&'
-je argument_value_end
-or ebp,ebp
-jz invalid_macro_arguments
-cmp al, ']'
-je argument_value_end
-jmp invalid_macro_arguments
-ret
-
-simple_argument:
-lods byte [ esi ]
-or al, al
-jz argument_value_end
-cmp al, ','
-je argument_value_end
-cmp al, 22h
-je argument_string
-cmp al, 1Ah
-je argument_symbol
-cmp [ skip_default_argument_value ], 0
-je simple_argument
-cmp al, '{'
-je argument_value_end
-cmp al, '&'
-je argument_value_end
-or ebp,ebp
-jz simple_argument
-cmp al, ']'
-je argument_value_end
-argument_symbol:
-movzx eax, byte [ esi ]
-inc esi
-add esi, eax
-jmp simple_argument
-ret
-
-argument_string:
-lods dword [ esi ]
-add esi, eax
-jmp simple_argument
-argument_value_end:
-dec esi
-ret
-
-
-
 postpone_directive:
 push _esi
 mov esi, edx
@@ -3479,36 +3841,29 @@ ret
 
 rept_directive:
 mov [ base_code ], 0
-jmp define_instant_macro
+jmp macros.define_instant_macro
 ret
 
 irp_directive:
 mov [ base_code ], 1
-jmp define_instant_macro
+jmp macros.define_instant_macro
 ret
 
 irps_directive:
 mov [ base_code ], 2
-jmp define_instant_macro
+jmp macros.define_instant_macro
 ret
 
 irpv_directive:
 mov [ base_code ], 3
-jmp define_instant_macro
+jmp macros.define_instant_macro
 ret
 
 match_directive:
 mov [ base_code ], 10h
-define_instant_macro:
-mov al, [ macro_status ]
-and al, 0F0h
-or al, 8+1
-mov [ macro_status ], al
-mov _eax, cell[ current_line ]
-mov cell[error_line ], _eax
-mov [ instant_macro_start ], esi
-cmp [ base_code ], 10h
-je prepare_match
+jmp macros.define_instant_macro
+ret
+
 skip_parameters:
 lods byte [ esi ]
 or al, al
@@ -3582,14 +3937,6 @@ lods dword [ esi ]
 add esi, eax
 jmp skip_pattern
 pattern_skipped:
-ret
-
-purge_macro:
-xor ch, ch
-jmp restore_preprocessor_symbol
-purge_struc:
-mov ch, 1
-jmp restore_preprocessor_symbol
 ret
 
 restore_equ_constant:
@@ -3743,7 +4090,7 @@ use_instant_macro:
 push _edi cell[ current_line ] _esi
 mov _eax, cell[ error_line ]
 mov cell[ current_line ], _eax
-mov cell[macro_line ], _eax
+mov cell[ macro_line ], _eax
 mov esi, [ instant_macro_start ]
 cmp [ base_code ], 10h
 jae do_match
@@ -3873,7 +4220,7 @@ ret
 irp_with_default_value:
 xor ebp,ebp
 or [ skip_default_argument_value ], -1
-call skip_macro_argument_value
+call macros.skip_macro_argument_value
 cmp byte [ esi ], ','
 jne invalid_macro_arguments
 inc esi
@@ -4209,224 +4556,19 @@ pop _edx _edi _esi
 jmp instant_macro_parameters_ok
 ret
 
-macro_instructions_start:
-mov ecx, 80000000h
-mov cell[macro_block],_esi
-mov _eax, cell[ macro_line ]
-mov cell[macro_block_line ], _eax
-mov cell[macro_block_line_number],_ecx
-xor eax, eax
-mov cell[counter], _eax
-cmp cell[counter_limit ], _eax
-je process_macro_line
-inc [ counter]
-process_macro_line:
-lods byte [ esi ]
-or al, al
-jz process_next_line
-cmp al, '}'
-je macro_block_processed
-dec esi
-mov cell[ current_line ], _edi
-lea eax, [ edi+10h ]
-cmp _eax, cell[ memory_end ]
-jae out_of_memory
-mov _eax, [ _esp+8 ]
-or eax, eax
-jz instant_macro_line_header
-stos dword [ edi ]
-mov eax, ecx
-stos dword [ edi ]
-mov _eax, [ _esp ]
-stos dword [ edi ]
-mov _eax, cell[ macro_line ]
-stos dword [ edi ]
-jmp macro_line_header_ok
-ret
-
-instant_macro_line_header:
-mov _eax, [ _esp ] ;current_line
-add eax, 16
-find_defining_directive:
-inc eax
-cmp byte [ eax-1 ], 3Bh
-je defining_directive_ok
-cmp byte [ eax-1 ], 1Ah
-jne find_defining_directive
-push _eax
-movzx eax, byte [ eax ]
-inc eax
-add [ _esp], _eax ;current_line
-pop _eax
-jmp find_defining_directive
-ret
-
-defining_directive_ok:
-stos dword [ edi ]
-mov eax, ecx
-stos dword [ edi ]
-mov _eax, cell[ macro_line ]
-stos dword [ edi ]
-stos dword [ edi ]
-macro_line_header_ok:
-or [ macro_status ], 20h
-push _ebx _ecx
-test [ macro_status ], 0Fh
-jz process_macro_line_element
-mov ax, 3Bh
-stos word [ edi ]
-process_macro_line_element:
-lea eax, [ edi+100h ]
-cmp _eax, cell[ memory_end ]
-jae out_of_memory
-lods byte [ esi ]
-cmp al, '}'
-je macro_line_processed
-or al, al
-jz macro_line_processed
-cmp al, 1Ah
-je process_macro_symbol
-cmp al, 3Bh
-je macro_foreign_line
-and [ macro_status ], not 20h
-stos byte [ edi ]
-cmp al, 22h
-jne process_macro_line_element
-copy_macro_string:
-mov ecx, [ esi ]
-add ecx, 4
-call move_data
-jmp process_macro_line_element
-ret
-
-process_macro_symbol:
-push _esi _edi
-test [ macro_status ], 20h
-jz not_macro_directive
-movzx ecx, byte [ esi ]
-inc esi
-mov edi,macro_directives
-call get_directive
-jnc process_macro_directive
-dec esi
-jmp not_macro_directive
-ret
-
-process_macro_directive:
-mov edx,eax
-pop _edi _eax
-mov byte [ edi ], 0
-inc edi
-pop _ecx _ebx
-jmp near _edx
-ret
-
 not_macro_directive:
 and [ macro_status ], not 20h
 movzx ecx, byte [ esi ]
 inc esi
-mov _eax, cell[ counter]
+mov _eax, cell[ counter ]
 call macros.read_symbol
-jnc group_macro_symbol
+jnc macros.group_macro_symbol
 xor eax, eax
-cmp dword[counter],eax
-je multiple_macro_symbol_values
+cmp dword[ counter ],eax
+je macros.multiple_macro_symbol_values
 call macros.read_symbol
 jc not_macro_symbol
-replace_macro_symbol:
-pop _edi _eax
-mov ecx, [ edx+8 ]
-mov edx, [ edx+12 ]
-or edx, edx
-jz replace_macro_counter
-and ecx, not 80000000h
-xchg esi, edx
-call move_data
-mov esi, edx
-jmp process_macro_line_element
-ret
-
-group_macro_symbol:
-xor eax, eax
-cmp dword[counter],eax
-je replace_macro_symbol
-push _esi _edx
-sub esi, ecx
-call macros.read_symbol
-mov ebx, edx
-pop _edx _esi
-jc replace_macro_symbol
-cmp edx, ebx
-ja replace_macro_symbol
-mov edx, ebx
-jmp replace_macro_symbol
-ret
-
-multiple_macro_symbol_values:
-inc eax
-push _eax
-call macros.read_symbol
-pop _eax
-jc not_macro_symbol
-pop _edi
-push _ecx
-mov ecx, [ edx+8 ]
-mov edx, [ edx+12 ]
-xchg esi, edx
-btr ecx, 31
-jc enclose_macro_symbol_value
-rep movs byte [ edi ], [ esi ]
-jmp macro_symbol_value_ok
-ret
-
-enclose_macro_symbol_value:
-mov byte [ edi ], '<'
-inc edi
-rep movs byte [ edi ], [ esi ]
-mov byte [ edi ], '>'
-inc edi
-macro_symbol_value_ok:
-cmp _eax, cell[ counter_limit ]
-je multiple_macro_symbol_values_ok
-mov byte [ edi ], ','
-inc edi
-mov esi, edx
-pop _ecx
-push _edi
-sub esi, ecx
-jmp multiple_macro_symbol_values
-ret
-
-multiple_macro_symbol_values_ok:
-pop _ecx _eax
-mov esi, edx
-jmp process_macro_line_element
-ret
-
-replace_macro_counter:
-mov _eax, cell[ counter]
-and eax, not 80000000h
-jz group_macro_counter
-add ecx, eax
-dec ecx
-call store_number_symbol
-jmp process_macro_line_element
-ret
-
-group_macro_counter:
-mov edx,ecx
-xor ecx, ecx
-multiple_macro_counter_values:
-push _ecx _edx
-add ecx, edx
-call store_number_symbol
-pop _edx _ecx
-inc ecx
-cmp _ecx, cell[ counter_limit ]
-je process_macro_line_element
-mov byte [ edi ], ','
-inc edi
-jmp multiple_macro_counter_values
+jmp macros.replace_macro_symbol
 ret
 
 store_number_symbol:
@@ -4495,7 +4637,7 @@ xchg esi, ebx
 copy_raw_symbol:
 movzx ecx, al
 rep movs byte [ edi ], [ esi ]
-jmp process_macro_line_element
+jmp macros.process_macro_line_element
 ret
 
 copy_struc_name:
@@ -4507,11 +4649,11 @@ rep movs byte [ edi ], [ esi ]
 xchg esi, ebx
 mov _eax, [ _esp+16+24 ] ;macro_block_line
 cmp byte [ eax ], 3Bh
-je process_macro_line_element
+je macros.process_macro_line_element
 cmp byte [ eax ], 1Ah
 jne disable_replaced_struc_name
 mov byte [ eax ], 3Bh
-jmp process_macro_line_element
+jmp macros.process_macro_line_element
 ret
 
 disable_replaced_struc_name:
@@ -4526,64 +4668,13 @@ rep movs byte [ edi ], [ esi ]
 cld
 mov word [ eax ], 3Bh
 pop _edi _esi
-jmp process_macro_line_element
+jmp macros.process_macro_line_element
 ret
 
-skip_foreign_symbol:
-lods byte [ esi ]
-movzx eax, al
-add esi, eax
-skip_foreign_line:
-lods byte [ esi ]
-cmp al, 1Ah
-je skip_foreign_symbol
-cmp al, 3Bh
-je skip_foreign_symbol
-cmp al, 22h
-je skip_foreign_string
-or al, al
-jnz skip_foreign_line
-ret
-
-skip_foreign_string:
-lods dword [ esi ]
-add esi, eax
-jmp skip_foreign_line
-ret
-
-macro_foreign_line:
-call skip_foreign_symbol
-macro_line_processed:
-mov byte [ edi ], 0
-inc edi
-push _eax
-call preprocess_line
-pop _eax
-pop _ecx _ebx
-cmp al, '}'
-je macro_block_processed
-process_next_line:
-inc ecx
-mov cell[macro_line ], _esi
-add esi, 16+2
-jmp process_macro_line
-ret
-
-macro_block_processed:
-call macros.close_macro_block
-jc process_macro_line
-pop cell[ current_line ]
-add _esp,24 ;skip _eax,struc_name,struc_label
-pop cell[macro_block_line_number]
-pop cell[macro_block_line ]
-pop cell[macro_block]
-pop cell[counter]
-pop _eax ;restore macro_status
-and al, 0F0h
-and [ macro_status ], 0Fh
-or [ macro_status ], al
-ret
-
+purge_struc:
+	mov ch, 1
+	jmp restore_preprocessor_symbol
+	ret
 
 local_symbols:
 lods byte [ esi ]
@@ -4596,7 +4687,7 @@ make_local_symbol:
 push _ecx
 lods byte [ esi ]
 movzx ecx, al
-mov _eax, cell[ counter]
+mov _eax, cell[ counter ]
 call macros.create_symbol
 mov [ edx+12 ], edi
 movzx eax, [ locals_counter]
@@ -4652,9 +4743,9 @@ counter_ok:
 pop _ecx
 lods byte [ esi ]
 cmp al, '}'
-je macro_block_processed
+je macros.macro_block_processed
 or al, al
-jz process_next_line
+jz macros.process_next_line
 cmp al, ','
 jne extra_characters_on_line
 dec edi
@@ -4664,52 +4755,9 @@ je make_local_symbol
 jmp invalid_argument
 ret
 
-common_block:
-call macros.close_macro_block
-jc process_macro_line
-mov [ counter],0
-jmp macros.new_macro_block
-ret
-
-forward_block:
-cmp [ counter_limit ], 0
-je common_block
-call macros.close_macro_block
-jc process_macro_line
-mov [ counter],1
-jmp macros.new_macro_block
-ret
-
-
-reverse_block:
-cmp [ counter_limit ], 0
-je common_block
-call macros.close_macro_block
-jc process_macro_line
-mov _eax, cell[ counter_limit ]
-or eax, 80000000h
-mov cell[counter], _eax
-jmp macros.new_macro_block
 
 
 
-reverse_counter:
-mov _eax, cell[ counter]
-dec eax
-cmp eax, 80000000h
-je block_closed
-mov cell[counter], _eax
-continue_block:
-mov _esi, cell[ macro_block]
-mov _eax, cell[ macro_block_line ]
-mov cell[macro_line ], _eax
-mov _ecx, cell[ macro_block_line_number]
-stc
-ret
-/**/
-block_closed:
-clc
-ret
 
 include_file:
 lods byte [ esi ]
@@ -4794,6 +4842,8 @@ and al, 0F0h
 and [ macro_status ], 0Fh
 or [ macro_status ], al
 jmp line_preprocessed
+ret
+
 /*
 Flat Assembler x64 | Parser */
 parser:
@@ -4932,10 +4982,12 @@ dec esi
 mov [ parenthesis_stack],0
 call parse_argument
 jmp parse_next_line
+ret
+
 empty_line:
 add esi, 16
 skip_rest_of_line:
-call skip_foreign_line
+call macros.skip_foreign_line
 parse_next_line:
 cmp esi, [ source_start ]
 jb parser_loop
@@ -4945,6 +4997,8 @@ je blocks_stack_ok
 pop _eax
 pop cell[ current_line ]
 jmp missing_end_directive
+ret
+
 blocks_stack_ok:
 xor al, al
 stos byte [ edi ]
@@ -4952,7 +5006,7 @@ add edi,0Fh
 and edi,not 0Fh
 mov [ code_start ], edi
 ret
-/**/
+
 parse_block:
 mov _eax,_esp
 sub _eax, cell[ stack_limit ]
@@ -5290,6 +5344,8 @@ je parse_formatter_argument
 cmp bx,data_directive-instruction_handler
 je parse_formatter_argument
 jmp parse_argument
+ret
+
 parse_formatter_argument:
 or [ formatter_symbolics_allowed ], -1
 parse_argument:
@@ -5335,6 +5391,7 @@ cmp [ decorator_symbolics_allowed],0
 je not_a_separator
 cmp al, '-'
 je separator
+
 not_a_separator:
 dec esi
 cmp al, 1Ah
@@ -5356,10 +5413,14 @@ jne check_argument
 pop _edi
 movs byte [ edi ], [ esi ]
 jmp argument_parsed
+ret
+
 foreign_argument:
 dec esi
-call skip_foreign_line
+call macros.skip_foreign_line
 jmp contents_parsed
+ret
+
 symbol_argument:
 pop _edi
 stos word [ edi ]
@@ -7698,7 +7759,7 @@ mov dword [ adjustment],eax
 mov dword [ adjustment+4 ], eax
 mov [ addressing_space ], eax
 mov cell[error_line ], _eax
-mov cell[counter], _eax
+mov cell[ counter ], _eax
 mov [ format_flags ], eax
 mov [ number_of_relocations],eax
 mov [ undefined_data_end ], eax
@@ -8572,7 +8633,7 @@ cmp byte [ esi ], ':'
 jne times_argument_ok
 inc esi
 times_argument_ok:
-push cell[counter]
+push cell[ counter ]
 push cell[counter_limit ]
 mov cell[counter_limit ], _eax
 mov [ counter],1
@@ -8585,9 +8646,9 @@ push _esi
 or [ prefix_flags ], 1
 call continue_line
 mov _eax, cell[ counter_limit ]
-cmp dword[counter],eax
+cmp dword[ counter ],eax
 je times_done
-inc [ counter]
+inc [ counter ]
 pop _esi
 jmp times_loop
 /**/
@@ -8879,7 +8940,7 @@ mov word [ ebx ], repeat_directive-instruction_handler
 xchg _eax, cell[ counter_limit ]
 mov [ ebx+10h ], eax
 mov eax, 1
-xchg _eax, cell[ counter]
+xchg _eax, cell[ counter ]
 mov [ ebx+14h ], eax
 mov [ ebx+8 ], esi
 mov _eax, cell[ current_line ]
@@ -8892,14 +8953,14 @@ jnz unexpected_instruction
 call find_structure_data
 jc unexpected_instruction
 mov _eax, cell[ counter_limit ]
-inc [ counter]
-cmp dword[counter],eax
+inc [ counter ]
+cmp dword[ counter ],eax
 jbe continue_repeating
 stop_repeat:
 mov eax, [ ebx+10h ]
 mov cell[counter_limit ], _eax
 mov eax, [ ebx+14h ]
-mov cell[counter], _eax
+mov cell[ counter ], _eax
 call remove_structure_data
 jmp instruction_assembled
 /**/
@@ -8928,7 +8989,7 @@ jnz unexpected_instruction
 call allocate_structure_data
 mov word [ ebx ], while_directive-instruction_handler
 mov eax, 1
-xchg _eax, cell[ counter]
+xchg _eax, cell[ counter ]
 mov [ ebx+10h ], eax
 mov [ ebx+8 ], esi
 mov _eax, cell[ current_line ]
@@ -8947,7 +9008,7 @@ stop_while:
 call find_end_while
 pop _ebx
 mov eax, [ ebx+10h ]
-mov cell[counter], _eax
+mov cell[ counter ], _eax
 call remove_structure_data
 jmp instruction_assembled
 /**/
@@ -8962,7 +9023,7 @@ call find_structure_data
 jc unexpected_instruction
 mov eax, [ ebx+4 ]
 mov cell[ current_line ], _eax
-inc [ counter]
+inc [ counter ]
 jz too_many_repeats
 mov esi, [ ebx+8 ]
 jmp do_while
@@ -10234,7 +10295,7 @@ mov eax, [ eax+18h ]
 jmp make_current_offset_label
 /**/
 counter_label:
-mov _eax, cell[ counter]
+mov _eax, cell[ counter ]
 make_dword_label_value:
 stos dword [ edi ]
 xor eax, eax
@@ -28548,7 +28609,7 @@ dw match_directive-directive_handler
 db 8,'postpone'
 dw postpone_directive-directive_handler
 db 5,'purge'
-dw purge_macro-directive_handler
+dw macros.purge_macro-directive_handler
 db 4,'rept'
 dw rept_directive-directive_handler
 db 7,'restore'
@@ -28561,13 +28622,13 @@ db 0
 
 macro_directives:
 db 6,'common'
-dw common_block-directive_handler
+dw macros.common_block-directive_handler
 db 7,'forward'
-dw forward_block-directive_handler
+dw macros.forward_block-directive_handler
 db 5,'local'
 dw local_symbols-directive_handler
 db 7,'reverse'
-dw reverse_block-directive_handler
+dw macros.reverse_block-directive_handler
 db 0
 
 operators:
