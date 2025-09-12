@@ -5,21 +5,201 @@ Cicada is a simple Unix shell written in Rust. */
 (
     dead_code,
     missing_abi,
+    missing_docs, 
     non_camel_case_types,
     non_snake_case,
     non_upper_case_globals,
+    nonstandard_style,
     redundant_semicolons,
+    unsafe_op_in_unsafe_fn,
     unused_imports,
 )]
+
+#[macro_use]
+pub mod macros
+{
+    use ::
+    {
+        *,
+    };
+    
+    /// A macro for defining #[cfg] if-else statements.
+    macro_rules! cfg_if 
+    {
+        ($
+        (
+            if #[cfg($($meta:meta),*)] { $($it:item)* }
+        ) else * else
+        {
+            $($it2:item)*
+        }) =>
+        {
+            __cfg_if_items!
+            {
+                () ;
+                $( ( ($($meta),*) ($($it)*) ), )*
+                ( () ($($it2)*) ),
+            }
+        }
+    }
+
+    macro_rules! __cfg_if_items
+    {
+        (($($not:meta,)*) ; ) => {};
+        (($($not:meta,)*) ; ( ($($m:meta),*) ($($it:item)*) ), $($rest:tt)*) =>
+        {
+            __cfg_if_apply! { cfg(all($($m,)* not(any($($not),*)))), $($it)* }
+            __cfg_if_items! { ($($not,)* $($m,)*) ; $($rest)* }
+        }
+    }
+
+    macro_rules! __cfg_if_apply
+    {
+        ($m:meta, $($it:item)*) => { $(#[$m] $it)* }
+    }
+
+    macro_rules! s
+    {
+        ($(pub struct $i:ident { $($field:tt)* })*) => 
+        ($(
+            __item!
+            {
+                #[repr(C)]
+                pub struct $i { $($field)* }
+            }
+            
+            impl Copy for $i {}
+            impl Clone for $i
+            { 
+                fn clone(&self) -> $i { *self }
+            }
+        )*)
+    }
+
+    macro_rules! f
+    {
+        ($(pub fn $i:ident($($arg:ident: $argty:ty),*) -> $ret:ty 
+        {
+            $($body:stmt);*
+        })*) => 
+        ($(
+            #[inline] pub unsafe extern fn $i($($arg: $argty),*) -> $ret
+            {
+                $($body);*
+            }
+        )*)
+    }
+
+    macro_rules! __item
+    {
+        ($i:item) => ($i)
+    }
+    
+    macro_rules! println_stderr
+    {
+        ($fmt:expr) => (
+            match writeln!(&mut ::io::stderr(), $fmt) {
+                Ok(_) => {}
+                Err(e) => println!("write to stderr failed: {:?}", e)
+            }
+        );
+        ($fmt:expr, $($arg:tt)*) => (
+            match writeln!(&mut ::io::stderr(), $fmt, $($arg)*) {
+                Ok(_) => {}
+                Err(e) => println!("write to stderr failed: {:?}", e)
+            }
+        );
+    }
+
+    macro_rules! compile_error
+    {
+        ($msg:expr $(,)?) => {{ /* compiler built-in */ }};
+    }
+
+    macro_rules! is_aarch64_feature_detected
+    {
+        ($t: tt) => {
+            compile_error!(
+                r#"
+            is_aarch64_feature_detected can only be used on AArch64 targets.
+            You can prevent it from being used in other architectures by
+            guarding it behind a cfg(target_arch) as follows:
+
+                #[cfg(target_arch = "aarch64")] {
+                    if is_aarch64_feature_detected(...) { ... }
+                }
+            "#
+            )
+        };
+    }
+
+    macro_rules! log {
+        ($($tt:tt)*) => {
+            #[cfg(feature = "logging")]
+            {
+                $($tt)*
+            }
+        }
+    }
+
+    macro_rules! debug {
+        ($($tt:tt)*) => { log!(log::debug!($($tt)*)) }
+    }
+
+    macro_rules! trace {
+        ($($tt:tt)*) => { log!(log::trace!($($tt)*)) }
+    }
+
+}
+
+pub mod arch
+{
+    pub use std::arch::{*};
+}
 
 pub mod boxed
 {
     pub use std::boxed::{ * };
 }
 
+pub mod collections
+{
+    pub use std::collections::{ * };
+}
+
+pub mod env
+{
+    pub use std::env::{ * };
+}
+
+pub mod ffi
+{
+    pub use std::ffi::{*};
+}
+
+pub mod fmt
+{
+    pub use std::fmt::{*};
+}
+
+pub mod fs
+{
+    pub use std::fs::{ * };
+}
+
 pub mod error
 {
     pub use std::error::{ * };
+}
+
+pub mod io
+{
+    pub use std::io::{ * };
+}
+
+pub mod iter
+{
+    pub use std::iter::{*};
 }
 
 pub mod libc
@@ -30,80 +210,7 @@ pub mod libc
         {
             *,
         };
-        /// A macro for defining #[cfg] if-else statements.
-        macro_rules! cfg_if 
-        {
-            ($
-            (
-                if #[cfg($($meta:meta),*)] { $($it:item)* }
-            ) else * else
-            {
-                $($it2:item)*
-            }) =>
-            {
-                __cfg_if_items!
-                {
-                    () ;
-                    $( ( ($($meta),*) ($($it)*) ), )*
-                    ( () ($($it2)*) ),
-                }
-            }
-        }
-
-        macro_rules! __cfg_if_items
-        {
-            (($($not:meta,)*) ; ) => {};
-            (($($not:meta,)*) ; ( ($($m:meta),*) ($($it:item)*) ), $($rest:tt)*) =>
-            {
-                __cfg_if_apply! { cfg(all($($m,)* not(any($($not),*)))), $($it)* }
-                __cfg_if_items! { ($($not,)* $($m,)*) ; $($rest)* }
-            }
-        }
-
-        macro_rules! __cfg_if_apply
-        {
-            ($m:meta, $($it:item)*) => { $(#[$m] $it)* }
-        }
-
-        macro_rules! s
-        {
-            ($(pub struct $i:ident { $($field:tt)* })*) => 
-            ($(
-                __item!
-                {
-                    #[repr(C)]
-                    pub struct $i { $($field)* }
-                }
-                
-                impl Copy for $i {}
-                impl Clone for $i
-                { 
-                    fn clone(&self) -> $i { *self }
-                }
-            )*)
-        }
-
-        macro_rules! f
-        {
-            ($(pub fn $i:ident($($arg:ident: $argty:ty),*) -> $ret:ty 
-            {
-                $($body:stmt);*
-            })*) => 
-            ($(
-                #[inline] pub unsafe extern fn $i($($arg: $argty),*) -> $ret
-                {
-                    $($body);*
-                }
-            )*)
-        }
-
-        macro_rules! __item
-        {
-            ($i:item) => ($i)
-        }
     }
-
-
     // Use repr(u8) as LLVM expects `void*` to be the same as `i8*` to help enable
     // more optimization opportunities around it recognizing things like
     // malloc/free.
@@ -2884,8 +2991,8 @@ pub mod libc
                             /*
                             //! x86_64-specific definitions for 64-bit linux-like values
 
-                            use crate::prelude::*;
-                            use crate::{off64_t, off_t};*/
+                            use ::prelude::*;
+                            use ::{off64_t, off_t};*/
 
                             pub type wchar_t = i32;
                             pub type nlink_t = u64;
@@ -5620,14 +5727,4694 @@ pub mod libc
     }
 }
 
+pub mod marker
+{
+    pub use std::marker::{ * };
+}
+
 pub mod mem
 {
     pub use std::mem::{ * };
+
+    pub mod chr
+    {
+        /*!
+        This library provides heavily optimized routines for string search primitives.*/
+        use ::
+        {
+            *
+        };
+        /*
+        #![deny(missing_docs)]
+        #![no_std]
+        // It's just not worth trying to squash all dead code warnings. Pretty
+        // unfortunate IMO. Not really sure how to fix this other than to either
+        // live with it or sprinkle a whole mess of `cfg` annotations everywhere.
+        #![cfg_attr(
+            not(any(
+                all(target_arch = "x86_64", target_feature = "sse2"),
+                target_arch = "wasm32",
+                target_arch = "aarch64",
+            )),
+            allow(dead_code)
+        )]
+        // Same deal for miri.
+        #![cfg_attr(miri, allow(dead_code, unused_macros))]
+
+        // Supporting 8-bit (or others) would be fine. If you need it, please submit a
+        // bug report at https://github.com/BurntSushi/memchr
+        #[cfg(not(any(
+            target_pointer_width = "16",
+            target_pointer_width = "32",
+            target_pointer_width = "64"
+        )))]
+        compile_error!("memchr currently not supported on non-{16,32,64}");
+
+        #[cfg(any(test, feature = "std"))]
+        extern crate std;
+
+        #[cfg(any(test, feature = "alloc"))]
+        extern crate alloc;
+
+        pub use crate::memchr::{
+            memchr, memchr2, memchr2_iter, memchr3, memchr3_iter, memchr_iter,
+            memrchr, memrchr2, memrchr2_iter, memrchr3, memrchr3_iter, memrchr_iter,
+            Memchr, Memchr2, Memchr3,
+        };
+        */
+        pub mod arch
+        {
+            use ::
+            {
+                *,
+            };
+            /*!
+            A module with low-level architecture dependent routines. */
+
+            pub mod all
+            {
+                /*!
+                Contains architecture independent routines. */
+                use ::
+                {
+                    *,
+                };
+                /*
+                */
+
+                pub mod memchr
+                {
+                    /*!
+                    Provides architecture independent implementations of `memchr` and friends. */
+                    use ::
+                    {
+                        *,
+                    };
+                    /*
+                    use crate::{arch::generic::memchr as generic, ext::Pointer};
+                    */
+                    /// The number of bytes in a single `usize` value.
+                    const USIZE_BYTES: usize = (usize::BITS / 8) as usize;
+                    /// The bits that must be zero for a `*const usize` to be properly aligned.
+                    const USIZE_ALIGN: usize = USIZE_BYTES - 1;
+                    /// Finds all occurrences of a single byte in a haystack.
+                    #[derive(Clone, Copy, Debug)]
+                    pub struct One
+                    {
+                        s1: u8,
+                        v1: usize,
+                    }
+
+                    impl One
+                    {
+                        /// The number of bytes we examine per each iteration of our search loop.
+                        const LOOP_BYTES: usize = 2 * USIZE_BYTES;
+                        /// Create a new searcher that finds occurrences of the byte given.
+                        #[inline] pub fn new(needle: u8) -> One { One { s1: needle, v1: splat(needle) } }
+                        /// Return the first occurrence of the needle in the given haystack.
+                        #[inline] pub fn find(&self, haystack: &[u8]) -> Option<usize> {
+                            unsafe {
+                                generic::search_slice_with_raw(haystack, |s, e| {
+                                    self.find_raw(s, e)
+                                })
+                            }
+                        }
+                        /// Return the last occurrence of the needle in the given haystack.
+                        #[inline] pub fn rfind(&self, haystack: &[u8]) -> Option<usize> {
+                            unsafe {
+                                generic::search_slice_with_raw(haystack, |s, e| {
+                                    self.rfind_raw(s, e)
+                                })
+                            }
+                        }
+                        /// Counts all occurrences of this byte in the given haystack.
+                        #[inline] pub fn count(&self, haystack: &[u8]) -> usize 
+                        {
+                            unsafe {
+                                let start = haystack.as_ptr();
+                                let end = start.add(haystack.len());
+                                self.count_raw(start, end)
+                            }
+                        }
+                        /// Like `find`, but accepts and returns raw pointers.
+                        #[inline] pub unsafe fn find_raw
+                        (
+                            &self,
+                            start: *const u8,
+                            end: *const u8,
+                        ) -> Option<*const u8>
+                        {
+                            if start >= end {
+                                return None;
+                            }
+                            let confirm = |b| self.confirm(b);
+                            let len = end.distance(start);
+                            if len < USIZE_BYTES {
+                                return generic::fwd_byte_by_byte(start, end, confirm);
+                            }
+                            
+                            let chunk = start.cast::<usize>().read_unaligned();
+                            if self.has_needle(chunk) {
+                                return generic::fwd_byte_by_byte(start, end, confirm);
+                            }
+                            
+                            let mut cur =
+                                start.add(USIZE_BYTES - (start.as_usize() & USIZE_ALIGN));
+                            debug_assert!(cur > start);
+                            if len <= One::LOOP_BYTES {
+                                return generic::fwd_byte_by_byte(cur, end, confirm);
+                            }
+                            debug_assert!(end.sub(One::LOOP_BYTES) >= start);
+                            while cur <= end.sub(One::LOOP_BYTES) {
+                                debug_assert_eq!(0, cur.as_usize() % USIZE_BYTES);
+
+                                let a = cur.cast::<usize>().read();
+                                let b = cur.add(USIZE_BYTES).cast::<usize>().read();
+                                if self.has_needle(a) || self.has_needle(b) {
+                                    break;
+                                }
+                                cur = cur.add(One::LOOP_BYTES);
+                            }
+                            generic::fwd_byte_by_byte(cur, end, confirm)
+                        }
+                        /// Like `rfind`, but accepts and returns raw pointers.
+                        #[inline] pub unsafe fn rfind_raw
+                        (
+                            &self,
+                            start: *const u8,
+                            end: *const u8,
+                        ) -> Option<*const u8> 
+                        {
+                            if start >= end {
+                                return None;
+                            }
+                            let confirm = |b| self.confirm(b);
+                            let len = end.distance(start);
+                            if len < USIZE_BYTES {
+                                return generic::rev_byte_by_byte(start, end, confirm);
+                            }
+
+                            let chunk = end.sub(USIZE_BYTES).cast::<usize>().read_unaligned();
+                            if self.has_needle(chunk) {
+                                return generic::rev_byte_by_byte(start, end, confirm);
+                            }
+
+                            let mut cur = end.sub(end.as_usize() & USIZE_ALIGN);
+                            debug_assert!(start <= cur && cur <= end);
+                            if len <= One::LOOP_BYTES {
+                                return generic::rev_byte_by_byte(start, cur, confirm);
+                            }
+                            while cur >= start.add(One::LOOP_BYTES) {
+                                debug_assert_eq!(0, cur.as_usize() % USIZE_BYTES);
+
+                                let a = cur.sub(2 * USIZE_BYTES).cast::<usize>().read();
+                                let b = cur.sub(1 * USIZE_BYTES).cast::<usize>().read();
+                                if self.has_needle(a) || self.has_needle(b) {
+                                    break;
+                                }
+                                cur = cur.sub(One::LOOP_BYTES);
+                            }
+                            generic::rev_byte_by_byte(start, cur, confirm)
+                        }
+                        /// Counts all occurrences of this byte in the given haystack represented by raw pointers.
+                        #[inline] pub unsafe fn count_raw(&self, start: *const u8, end: *const u8) -> usize 
+                        {
+                            if start >= end {
+                                return 0;
+                            }
+                            let confirm = |b| self.confirm(b);
+                            let len = end.distance(start);
+                            if len < USIZE_BYTES {
+                                return generic::count_byte_by_byte(start, end, confirm);
+                            }
+                            
+                            let mut cur =
+                                start.add(USIZE_BYTES - (start.as_usize() & USIZE_ALIGN));
+                            debug_assert!(cur > start);
+                            
+                            let mut count = generic::count_byte_by_byte(start, cur, confirm);
+                            if len <= One::LOOP_BYTES {
+                                return count + generic::count_byte_by_byte(cur, end, confirm);
+                            }
+                            debug_assert!(end.sub(One::LOOP_BYTES) >= start);
+                            while cur <= end.sub(One::LOOP_BYTES) {
+                                debug_assert_eq!(0, cur.as_usize() % USIZE_BYTES);
+
+                                let a = cur.cast::<usize>().read();
+                                let b = cur.add(USIZE_BYTES).cast::<usize>().read();
+                                count += self.count_bytes(a);
+                                count += self.count_bytes(b);
+                                cur = cur.add(One::LOOP_BYTES);
+                            }
+                            count += generic::count_byte_by_byte(cur, end, confirm);
+                            count
+                        }
+                        /// Returns an iterator over all occurrences of the needle byte in the given haystack.
+                        pub fn iter<'a, 'h>(&'a self, haystack: &'h [u8]) -> OneIter<'a, 'h> { OneIter { searcher: self, it: generic::Iter::new(haystack) } }
+
+                        #[inline( always )] fn has_needle(&self, chunk: usize) -> bool { has_zero_byte(self.v1 ^ chunk) }
+
+                        #[inline( always )] fn count_bytes(&self, chunk: usize) -> usize { count_bytes(self.v1 ^ chunk) }
+
+                        #[inline( always )] fn confirm(&self, haystack_byte: u8) -> bool { self.s1 == haystack_byte }
+                    }
+                    /// An iterator over all occurrences of a single byte in a haystack.
+                    #[derive(Clone, Debug)]
+                    pub struct OneIter<'a, 'h>
+                    {
+                        /// The underlying memchr searcher.
+                        searcher: &'a One,
+                        /// Generic iterator implementation.
+                        it: generic::Iter<'h>,
+                    }
+
+                    impl<'a, 'h> Iterator for OneIter<'a, 'h>
+                    {
+                        type Item = usize;
+
+                        #[inline] fn next(&mut self) -> Option<usize> 
+                        {
+                            unsafe { self.it.next(|s, e| self.searcher.find_raw(s, e)) }
+                        }
+
+                        #[inline] fn count(self) -> usize
+                        {
+                            self.it.count(|s, e| 
+                            {
+                                unsafe { self.searcher.count_raw(s, e) }
+                            })
+                        }
+
+                        #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.it.size_hint() }
+                    }
+
+                    impl<'a, 'h> DoubleEndedIterator for OneIter<'a, 'h> 
+                    {
+                        #[inline] fn next_back(&mut self) -> Option<usize> 
+                        {
+                            unsafe { self.it.next_back(|s, e| self.searcher.rfind_raw(s, e)) }
+                        }
+                    }
+                    /// Finds all occurrences of two bytes in a haystack.
+                    #[derive(Clone, Copy, Debug)]
+                    pub struct Two 
+                    {
+                        s1: u8,
+                        s2: u8,
+                        v1: usize,
+                        v2: usize,
+                    }
+
+                    impl Two 
+                    {
+                        /// Create a new searcher that finds occurrences of the two needle bytes given.
+                        #[inline] pub fn new(needle1: u8, needle2: u8) -> Two 
+                        {
+                            Two 
+                            {
+                                s1: needle1,
+                                s2: needle2,
+                                v1: splat(needle1),
+                                v2: splat(needle2),
+                            }
+                        }
+                        /// Return the first occurrence of one of the needle bytes in the given haystack.
+                        #[inline] pub fn find(&self, haystack: &[u8]) -> Option<usize> 
+                        {
+                            unsafe
+                            {
+                                generic::search_slice_with_raw(haystack, |s, e| {
+                                    self.find_raw(s, e)
+                                })
+                            }
+                        }
+                        /// Return the last occurrence of one of the needle bytes in the given haystack.
+                        #[inline] pub fn rfind(&self, haystack: &[u8]) -> Option<usize> 
+                        {
+                            unsafe {
+                                generic::search_slice_with_raw(haystack, |s, e| {
+                                    self.rfind_raw(s, e)
+                                })
+                            }
+                        }
+                        /// Like `find`, but accepts and returns raw pointers.
+                        #[inline] pub unsafe fn find_raw
+                        (
+                            &self,
+                            start: *const u8,
+                            end: *const u8,
+                        ) -> Option<*const u8>
+                        {
+                            if start >= end {
+                                return None;
+                            }
+                            let confirm = |b| self.confirm(b);
+                            let len = end.distance(start);
+                            if len < USIZE_BYTES {
+                                return generic::fwd_byte_by_byte(start, end, confirm);
+                            }
+                            
+                            let chunk = start.cast::<usize>().read_unaligned();
+                            if self.has_needle(chunk) {
+                                return generic::fwd_byte_by_byte(start, end, confirm);
+                            }
+                            
+                            let mut cur =
+                                start.add(USIZE_BYTES - (start.as_usize() & USIZE_ALIGN));
+                            debug_assert!(cur > start);
+                            debug_assert!(end.sub(USIZE_BYTES) >= start);
+                            while cur <= end.sub(USIZE_BYTES) {
+                                debug_assert_eq!(0, cur.as_usize() % USIZE_BYTES);
+
+                                let chunk = cur.cast::<usize>().read();
+                                if self.has_needle(chunk) {
+                                    break;
+                                }
+                                cur = cur.add(USIZE_BYTES);
+                            }
+                            generic::fwd_byte_by_byte(cur, end, confirm)
+                        }
+                        /// Like `rfind`, but accepts and returns raw pointers.
+                        #[inline] pub unsafe fn rfind_raw
+                        (
+                            &self,
+                            start: *const u8,
+                            end: *const u8,
+                        ) -> Option<*const u8> 
+                        {
+                            if start >= end {
+                                return None;
+                            }
+                            let confirm = |b| self.confirm(b);
+                            let len = end.distance(start);
+                            if len < USIZE_BYTES {
+                                return generic::rev_byte_by_byte(start, end, confirm);
+                            }
+
+                            let chunk = end.sub(USIZE_BYTES).cast::<usize>().read_unaligned();
+                            if self.has_needle(chunk) {
+                                return generic::rev_byte_by_byte(start, end, confirm);
+                            }
+
+                            let mut cur = end.sub(end.as_usize() & USIZE_ALIGN);
+                            debug_assert!(start <= cur && cur <= end);
+                            while cur >= start.add(USIZE_BYTES) {
+                                debug_assert_eq!(0, cur.as_usize() % USIZE_BYTES);
+
+                                let chunk = cur.sub(USIZE_BYTES).cast::<usize>().read();
+                                if self.has_needle(chunk) {
+                                    break;
+                                }
+                                cur = cur.sub(USIZE_BYTES);
+                            }
+                            generic::rev_byte_by_byte(start, cur, confirm)
+                        }
+                        /// Returns an iterator over all occurrences of one of the needle bytes in the given haystack.
+                        pub fn iter<'a, 'h>(&'a self, haystack: &'h [u8]) -> TwoIter<'a, 'h> { TwoIter { searcher: self, it: generic::Iter::new(haystack) } }
+
+                        #[inline( always )] fn has_needle(&self, chunk: usize) -> bool { has_zero_byte(self.v1 ^ chunk) || has_zero_byte(self.v2 ^ chunk) }
+
+                        #[inline( always )] fn confirm(&self, haystack_byte: u8) -> bool { self.s1 == haystack_byte || self.s2 == haystack_byte }
+                    }
+                    /// An iterator over all occurrences of two possible bytes in a haystack.
+                    #[derive(Clone, Debug)]
+                    pub struct TwoIter<'a, 'h>
+                    {
+                        /// The underlying memchr searcher.
+                        searcher: &'a Two,
+                        /// Generic iterator implementation.
+                        it: generic::Iter<'h>,
+                    }
+
+                    impl<'a, 'h> Iterator for TwoIter<'a, 'h>
+                    {
+                        type Item = usize;
+                        #[inline] fn next(&mut self) -> Option<usize>
+                        {
+                            unsafe { self.it.next(|s, e| self.searcher.find_raw(s, e)) }
+                        }
+
+                        #[inline] fn size_hint(&self) -> (usize, Option<usize>) {
+                            self.it.size_hint()
+                        }
+                    }
+
+                    impl<'a, 'h> DoubleEndedIterator for TwoIter<'a, 'h>
+                    {
+                        #[inline] fn next_back(&mut self) -> Option<usize> 
+                        {
+                            unsafe { self.it.next_back(|s, e| self.searcher.rfind_raw(s, e)) }
+                        }
+                    }
+                    /// Finds all occurrences of three bytes in a haystack.
+                    #[derive(Clone, Copy, Debug)]
+                    pub struct Three 
+                    {
+                        s1: u8,
+                        s2: u8,
+                        s3: u8,
+                        v1: usize,
+                        v2: usize,
+                        v3: usize,
+                    }
+
+                    impl Three
+                    {
+                        /// Create a new searcher that finds occurrences of the three needle bytes given.
+                        #[inline] pub fn new(needle1: u8, needle2: u8, needle3: u8) -> Three
+                        {
+                            Three
+                            {
+                                s1: needle1,
+                                s2: needle2,
+                                s3: needle3,
+                                v1: splat(needle1),
+                                v2: splat(needle2),
+                                v3: splat(needle3),
+                            }
+                        }
+                        /// Return the first occurrence of one of the needle bytes in the given haystack.
+                        #[inline] pub fn find(&self, haystack: &[u8]) -> Option<usize> 
+                        {
+                            unsafe
+                            {
+                                generic::search_slice_with_raw(haystack, |s, e| {
+                                    self.find_raw(s, e)
+                                })
+                            }
+                        }
+                        /// Return the last occurrence of one of the needle bytes in the given haystack.
+                        #[inline] pub fn rfind(&self, haystack: &[u8]) -> Option<usize> 
+                        {
+                            unsafe 
+                            {
+                                generic::search_slice_with_raw(haystack, |s, e| {
+                                    self.rfind_raw(s, e)
+                                })
+                            }
+                        }
+                        /// Like `find`, but accepts and returns raw pointers.
+                        #[inline] pub unsafe fn find_raw
+                        (
+                            &self,
+                            start: *const u8,
+                            end: *const u8,
+                        ) -> Option<*const u8>
+                        {
+                            if start >= end {
+                                return None;
+                            }
+                            let confirm = |b| self.confirm(b);
+                            let len = end.distance(start);
+                            if len < USIZE_BYTES {
+                                return generic::fwd_byte_by_byte(start, end, confirm);
+                            }
+                            
+                            let chunk = start.cast::<usize>().read_unaligned();
+                            if self.has_needle(chunk) {
+                                return generic::fwd_byte_by_byte(start, end, confirm);
+                            }
+                            
+                            let mut cur =
+                                start.add(USIZE_BYTES - (start.as_usize() & USIZE_ALIGN));
+                            debug_assert!(cur > start);
+                            debug_assert!(end.sub(USIZE_BYTES) >= start);
+                            while cur <= end.sub(USIZE_BYTES) {
+                                debug_assert_eq!(0, cur.as_usize() % USIZE_BYTES);
+
+                                let chunk = cur.cast::<usize>().read();
+                                if self.has_needle(chunk) {
+                                    break;
+                                }
+                                cur = cur.add(USIZE_BYTES);
+                            }
+                            generic::fwd_byte_by_byte(cur, end, confirm)
+                        }
+                        /// Like `rfind`, but accepts and returns raw pointers.
+                        #[inline] pub unsafe fn rfind_raw
+                        (
+                            &self,
+                            start: *const u8,
+                            end: *const u8,
+                        ) -> Option<*const u8>
+                        {
+                            if start >= end {
+                                return None;
+                            }
+                            let confirm = |b| self.confirm(b);
+                            let len = end.distance(start);
+                            if len < USIZE_BYTES {
+                                return generic::rev_byte_by_byte(start, end, confirm);
+                            }
+
+                            let chunk = end.sub(USIZE_BYTES).cast::<usize>().read_unaligned();
+                            if self.has_needle(chunk) {
+                                return generic::rev_byte_by_byte(start, end, confirm);
+                            }
+
+                            let mut cur = end.sub(end.as_usize() & USIZE_ALIGN);
+                            debug_assert!(start <= cur && cur <= end);
+                            while cur >= start.add(USIZE_BYTES) {
+                                debug_assert_eq!(0, cur.as_usize() % USIZE_BYTES);
+
+                                let chunk = cur.sub(USIZE_BYTES).cast::<usize>().read();
+                                if self.has_needle(chunk) {
+                                    break;
+                                }
+                                cur = cur.sub(USIZE_BYTES);
+                            }
+                            generic::rev_byte_by_byte(start, cur, confirm)
+                        }
+                        /// Returns an iterator over all occurrences of one of the needle bytes in the given haystack.
+                        pub fn iter<'a, 'h>(&'a self, haystack: &'h [u8]) -> ThreeIter<'a, 'h>
+                        {
+                            ThreeIter { searcher: self, it: generic::Iter::new(haystack) }
+                        }
+
+                        #[inline( always )] fn has_needle(&self, chunk: usize) -> bool
+                        {
+                            has_zero_byte(self.v1 ^ chunk)
+                                || has_zero_byte(self.v2 ^ chunk)
+                                || has_zero_byte(self.v3 ^ chunk)
+                        }
+
+                        #[inline( always )] fn confirm(&self, haystack_byte: u8) -> bool
+                        {
+                            self.s1 == haystack_byte
+                                || self.s2 == haystack_byte
+                                || self.s3 == haystack_byte
+                        }
+                    }
+                    /// An iterator over all occurrences of three possible bytes in a haystack.
+                    #[derive(Clone, Debug)]
+                    pub struct ThreeIter<'a, 'h>
+                    {
+                        /// The underlying memchr searcher.
+                        searcher: &'a Three,
+                        /// Generic iterator implementation.
+                        it: generic::Iter<'h>,
+                    }
+
+                    impl<'a, 'h> Iterator for ThreeIter<'a, 'h>
+                    {
+                        type Item = usize;
+                        #[inline] fn next(&mut self) -> Option<usize>
+                        {
+                            unsafe { self.it.next(|s, e| self.searcher.find_raw(s, e)) }
+                        }
+
+                        #[inline] fn size_hint(&self) -> (usize, Option<usize>) {
+                            self.it.size_hint()
+                        }
+                    }
+
+                    impl<'a, 'h> DoubleEndedIterator for ThreeIter<'a, 'h>
+                    {
+                        #[inline] fn next_back(&mut self) -> Option<usize> 
+                        {
+                            unsafe { self.it.next_back(|s, e| self.searcher.rfind_raw(s, e)) }
+                        }
+                    }
+                    /// Return `true` if `x` contains any zero byte.
+                    #[inline( always )] fn has_zero_byte(x: usize) -> bool 
+                    {
+                        const LO: usize = splat(0x01);
+                        const HI: usize = splat(0x80);
+
+                        (x.wrapping_sub(LO) & !x & HI) != 0
+                    }
+
+                    #[inline( always )] fn count_bytes(chunk: usize) -> usize
+                    {
+                        const LO: usize = splat(0x01);
+                        const HI: usize = splat(0x80);
+
+                        (chunk.wrapping_sub(LO) & !chunk & HI).count_ones() as usize
+                    }
+                    /// Repeat the given byte into a word size number.
+                    #[inline(always)] const fn splat(b: u8) -> usize { (b as usize) * (usize::MAX / 255) }
+                }
+
+                pub mod packedpair
+                {
+                    use ::
+                    {
+                        *,
+                    };
+                    /*
+                    */
+                }
+
+                pub mod rabinkarp
+                {
+                    use ::
+                    {
+                        *,
+                    };
+                    /*
+                    */
+                }
+
+                pub mod shiftor
+                {
+                    use ::
+                    {
+                        *,
+                    };
+                    /*
+                    */
+                }
+
+                pub mod twoway
+                {
+                    use ::
+                    {
+                        *,
+                    };
+                    /*
+                    */
+                }
+                /// Returns true if and only if `needle` is a prefix of `haystack`.
+                #[inline( always )] pub fn is_prefix(haystack: &[u8], needle: &[u8]) -> bool 
+                { needle.len() <= haystack.len() && is_equal(&haystack[..needle.len()], needle) }
+                /// Returns true if and only if `needle` is a suffix of `haystack`.
+                #[inline( always )] pub fn is_suffix(haystack: &[u8], needle: &[u8]) -> bool 
+                {
+                    needle.len() <= haystack.len() && is_equal(&haystack[haystack.len() - needle.len()..], needle)
+                }
+                /// Compare corresponding bytes in `x` and `y` for equality.
+                #[inline( always )] pub fn is_equal(x: &[u8], y: &[u8]) -> bool 
+                {
+                    if x.len() != y.len() { return false; }
+                    
+                    unsafe { is_equal_raw(x.as_ptr(), y.as_ptr(), x.len()) }
+                }
+                /// Compare `n` bytes at the given pointers for equality.
+                #[inline(always)] pub unsafe fn is_equal_raw
+                (
+                    mut x: *const u8,
+                    mut y: *const u8,
+                    n: usize,
+                ) -> bool 
+                {
+                    if n < 4 {
+                        return match n {
+                            0 => true,
+                            1 => x.read() == y.read(),
+                            2 => {
+                                x.cast::<u16>().read_unaligned()
+                                    == y.cast::<u16>().read_unaligned()
+                            }
+                            
+                            3 => x.cast::<[u8; 3]>().read() == y.cast::<[u8; 3]>().read(),
+                            _ => unreachable!(),
+                        };
+                    }
+                    
+                    let xend = x.add(n.wrapping_sub(4));
+                    let yend = y.add(n.wrapping_sub(4));
+                    while x < xend 
+                    {
+                        let vx = x.cast::<u32>().read_unaligned();
+                        let vy = y.cast::<u32>().read_unaligned();
+                        if vx != vy {
+                            return false;
+                        }
+                        x = x.add(4);
+                        y = y.add(4);
+                    }
+                    let vx = xend.cast::<u32>().read_unaligned();
+                    let vy = yend.cast::<u32>().read_unaligned();
+                    vx == vy
+                }
+            }
+
+            pub mod generic
+            {
+                use ::
+                {
+                    *,
+                };
+                /*
+                */
+            }
+
+            pub mod x86_64
+            {
+                use ::
+                {
+                    *,
+                };
+                /*
+                */
+            }
+        }
+
+        pub mod cow
+        {
+            use ::
+            {
+                *,
+            };
+            /// A specialized copy-on-write byte string.
+            #[derive(Clone, Debug)]
+            pub struct CowBytes<'a>(Imp<'a>);
+
+            #[derive(Clone, Debug)]
+            enum Imp<'a> 
+            {
+                Borrowed(&'a [u8]),
+                Owned( ::boxed::Box<[u8]>),
+            }
+            
+            impl<'a> ops::Deref for CowBytes<'a> 
+            {
+                type Target = [u8];
+                #[inline(always)] fn deref(&self) -> &[u8] { self.as_slice() }
+            }
+
+            impl<'a> CowBytes<'a>
+            {
+                /// Create a new borrowed CowBytes.
+                #[inline( always )] pub fn new<B: ?Sized + AsRef<[u8]>>(bytes: &'a B) -> CowBytes<'a> { CowBytes(Imp::new(bytes.as_ref())) }
+                /// Create a new owned CowBytes.
+                #[inline( always )] fn new_owned(bytes: ::boxed::Box<[u8]>) -> CowBytes<'static> { CowBytes(Imp::Owned(bytes)) }
+                /// Return a borrowed byte string, regardless of whether this is an owned or borrowed byte string internally.
+                #[inline( always )] pub fn as_slice(&self) -> &[u8] { self.0.as_slice() }
+                /// Return an owned version of this copy-on-write byte string.
+                #[inline( always )] pub fn into_owned(self) -> CowBytes<'static>
+                {
+                    match self.0
+                    {
+                        Imp::Borrowed(b) => { CowBytes::new_owned( ::boxed::Box::from(b)) }
+                        Imp::Owned(b) => CowBytes::new_owned(b),
+                    }
+                }
+            }
+
+            impl<'a> Imp<'a>
+            {
+                #[inline( always )] pub fn new(bytes: &'a [u8]) -> Imp<'a> { Imp::Borrowed(bytes) }
+                
+                #[inline( always )] pub fn as_slice(&self) -> &[u8]
+                {
+                    match self 
+                    {
+                        Imp::Owned(ref x) => x,
+                        Imp::Borrowed(x) => x,
+                    }
+                }
+            }
+        }
+
+        pub mod ext
+        {
+            use ::
+            {
+                *,
+            };
+            /*
+            */
+            /// A trait for adding some helper routines to pointers.
+            pub trait Pointer
+            {
+                /// Returns the distance, in units of `T`, between `self` and `origin`.
+                unsafe fn distance(self, origin: Self) -> usize;
+
+                /// Casts this pointer to `usize`.
+                fn as_usize(self) -> usize;
+            }
+
+            impl<T> Pointer for *const T
+            {
+                unsafe fn distance(self, origin: *const T) -> usize { usize::try_from(self.offset_from(origin)).unwrap_unchecked() }
+
+                fn as_usize(self) -> usize { self as usize }
+            }
+
+            impl<T> Pointer for *mut T 
+            {
+                unsafe fn distance(self, origin: *mut T) -> usize { (self as *const T).distance(origin as *const T) }
+
+                fn as_usize(self) -> usize { (self as *const T).as_usize() }
+            }
+            /// A trait for adding some helper routines to raw bytes.
+            pub trait Byte
+            {
+                /// Converts this byte to a `char` if it's ASCII. Otherwise panics.
+                fn to_char(self) -> char;
+            }
+
+            impl Byte for u8
+            {
+                fn to_char(self) -> char
+                {
+                    assert!(self.is_ascii());
+                    char::from(self)
+                }
+            }
+
+        }
+
+        pub mod memchr
+        {
+            use ::
+            {
+                ::iter::Rev,
+                *,
+            };
+            /*
+            */
+            use super::arch::generic::memchr as generic;
+            /// Search for the first occurrence of a byte in a slice.
+            #[inline] pub fn memchr(needle: u8, haystack: &[u8]) -> Option<usize>
+            {
+                unsafe 
+                {
+                    generic::search_slice_with_raw(haystack, |start, end| {
+                        memchr_raw(needle, start, end)
+                    })
+                }
+            }
+            /// Search for the last occurrence of a byte in a slice.
+            #[inline] pub fn memrchr(needle: u8, haystack: &[u8]) -> Option<usize>
+            {
+                unsafe
+                {
+                    generic::search_slice_with_raw(haystack, |start, end| {
+                        memrchr_raw(needle, start, end)
+                    })
+                }
+            }
+            /// Search for the first occurrence of two possible bytes in a haystack.
+            #[inline] pub fn memchr2(needle1: u8, needle2: u8, haystack: &[u8]) -> Option<usize>
+            {
+                unsafe {
+                    generic::search_slice_with_raw(haystack, |start, end| {
+                        memchr2_raw(needle1, needle2, start, end)
+                    })
+                }
+            }
+            /// Search for the last occurrence of two possible bytes in a haystack.
+            #[inline] pub fn memrchr2(needle1: u8, needle2: u8, haystack: &[u8]) -> Option<usize>
+            {
+                unsafe
+                {
+                    generic::search_slice_with_raw(haystack, |start, end| {
+                        memrchr2_raw(needle1, needle2, start, end)
+                    })
+                }
+            }
+            /// Search for the first occurrence of three possible bytes in a haystack.
+            #[inline] pub fn memchr3
+            (
+                needle1: u8,
+                needle2: u8,
+                needle3: u8,
+                haystack: &[u8],
+            ) -> Option<usize>
+            {
+                unsafe 
+                {
+                    generic::search_slice_with_raw(haystack, |start, end|
+                    {
+                        memchr3_raw(needle1, needle2, needle3, start, end)
+                    })
+                }
+            }
+            /// Search for the last occurrence of three possible bytes in a haystack.
+            #[inline] pub fn memrchr3
+            (
+                needle1: u8,
+                needle2: u8,
+                needle3: u8,
+                haystack: &[u8],
+            ) -> Option<usize>
+            {
+                unsafe 
+                {
+                    generic::search_slice_with_raw(haystack, |start, end|
+                    {
+                        memrchr3_raw(needle1, needle2, needle3, start, end)
+                    })
+                }
+            }
+            /// Returns an iterator over all occurrences of the needle in a haystack.
+            #[inline] pub fn memchr_iter<'h>(needle: u8, haystack: &'h [u8]) -> Memchr<'h> { Memchr::new(needle, haystack) }
+            /// Returns an iterator over all occurrences of the needle in a haystack, in reverse.
+            #[inline] pub fn memrchr_iter(needle: u8, haystack: &[u8]) -> Rev<Memchr<'_>>
+            { Memchr::new(needle, haystack).rev() }
+            /// Returns an iterator over all occurrences of the needles in a haystack.
+            #[inline] pub fn memchr2_iter<'h>
+            (
+                needle1: u8,
+                needle2: u8,
+                haystack: &'h [u8],
+            ) -> Memchr2<'h> 
+            { Memchr2::new(needle1, needle2, haystack) }
+            /// Returns an iterator over all occurrences of the needles in a haystack, in reverse.
+            #[inline] pub fn memrchr2_iter
+            (
+                needle1: u8,
+                needle2: u8,
+                haystack: &[u8],
+            ) -> Rev<Memchr2<'_>>
+            { Memchr2::new(needle1, needle2, haystack).rev() }
+            /// Returns an iterator over all occurrences of the needles in a haystack.
+            #[inline] pub fn memchr3_iter<'h>
+            (
+                needle1: u8,
+                needle2: u8,
+                needle3: u8,
+                haystack: &'h [u8],
+            ) -> Memchr3<'h>
+            { Memchr3::new(needle1, needle2, needle3, haystack) }
+            /// Returns an iterator over all occurrences of the needles in a haystack, in reverse.
+            #[inline] pub fn memrchr3_iter
+            (
+                needle1: u8,
+                needle2: u8,
+                needle3: u8,
+                haystack: &[u8],
+            ) -> Rev<Memchr3<'_>>
+            {
+                Memchr3::new(needle1, needle2, needle3, haystack).rev()
+            }
+            /// An iterator over all occurrences of a single byte in a haystack.
+            #[derive(Clone, Debug)]
+            pub struct Memchr<'h>
+            {
+                needle1: u8,
+                it: super::arch::generic::memchr::Iter<'h>,
+            }
+
+            impl<'h> Memchr<'h>
+            {
+                /// Returns an iterator over all occurrences of the needle byte in the given haystack.
+                #[inline] pub fn new(needle1: u8, haystack: &'h [u8]) -> Memchr<'h>
+                {
+                    Memchr
+                    {
+                        needle1,
+                        it: super::arch::generic::memchr::Iter::new(haystack),
+                    }
+                }
+            }
+
+            impl<'h> Iterator for Memchr<'h>
+            {
+                type Item = usize;
+                #[inline] fn next(&mut self) -> Option<usize> 
+                {
+                    unsafe 
+                    {
+                        self.it.next(|s, e| memchr_raw(self.needle1, s, e))
+                    }
+                }
+
+                #[inline] fn count(self) -> usize 
+                {
+                    self.it.count(|s, e| 
+                    {
+                        unsafe { count_raw(self.needle1, s, e) }
+                    })
+                }
+
+                #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.it.size_hint() }
+            }
+
+            impl<'h> DoubleEndedIterator for Memchr<'h>
+            {
+                #[inline] fn next_back(&mut self) -> Option<usize> 
+                {
+                    unsafe { self.it.next_back(|s, e| memrchr_raw(self.needle1, s, e)) }
+                }
+            }
+
+            impl<'h> ::iter::FusedIterator for Memchr<'h> {}
+
+            /// An iterator over all occurrences of two possible bytes in a haystack.
+            #[derive(Clone, Debug)]
+            pub struct Memchr2<'h> 
+            {
+                needle1: u8,
+                needle2: u8,
+                it: super::arch::generic::memchr::Iter<'h>,
+            }
+
+            impl<'h> Memchr2<'h>
+            {
+                /// Returns an iterator over all occurrences of the needle bytes in the given haystack.
+                #[inline] pub fn new(needle1: u8, needle2: u8, haystack: &'h [u8]) -> Memchr2<'h>
+                {
+                    Memchr2
+                    {
+                        needle1,
+                        needle2,
+                        it: super::arch::generic::memchr::Iter::new(haystack),
+                    }
+                }
+            }
+
+            impl<'h> Iterator for Memchr2<'h>
+            {
+                type Item = usize;
+                #[inline] fn next(&mut self) -> Option<usize>
+                {
+                    unsafe 
+                    {
+                        self.it.next(|s, e| memchr2_raw(self.needle1, self.needle2, s, e))
+                    }
+                }
+
+                #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.it.size_hint() }
+            }
+
+            impl<'h> DoubleEndedIterator for Memchr2<'h> 
+            {
+                #[inline] fn next_back(&mut self) -> Option<usize> 
+                {
+                    unsafe {
+                        self.it.next_back(|s, e| {
+                            memrchr2_raw(self.needle1, self.needle2, s, e)
+                        })
+                    }
+                }
+            }
+
+            impl<'h> ::iter::FusedIterator for Memchr2<'h> {}
+
+            /// An iterator over all occurrences of three possible bytes in a haystack.
+            #[derive(Clone, Debug)]
+            pub struct Memchr3<'h>
+            {
+                needle1: u8,
+                needle2: u8,
+                needle3: u8,
+                it: super::arch::generic::memchr::Iter<'h>,
+            }
+
+            impl<'h> Memchr3<'h>
+            {
+                /// Returns an iterator over all occurrences of the needle bytes in the
+                /// given haystack.
+                #[inline] pub fn new
+                (
+                    needle1: u8,
+                    needle2: u8,
+                    needle3: u8,
+                    haystack: &'h [u8],
+                ) -> Memchr3<'h> {
+                    Memchr3 {
+                        needle1,
+                        needle2,
+                        needle3,
+                        it: super::arch::generic::memchr::Iter::new(haystack),
+                    }
+                }
+            }
+
+            impl<'h> Iterator for Memchr3<'h>
+            {
+                type Item = usize;
+                #[inline] fn next(&mut self) -> Option<usize>
+                {
+                    unsafe
+                    {
+                        self.it.next(|s, e| {
+                            memchr3_raw(self.needle1, self.needle2, self.needle3, s, e)
+                        })
+                    }
+                }
+
+                #[inline] fn size_hint(&self) -> (usize, Option<usize>) 
+                {
+                    self.it.size_hint()
+                }
+            }
+
+            impl<'h> DoubleEndedIterator for Memchr3<'h>
+            {
+                #[inline] fn next_back(&mut self) -> Option<usize>
+                {
+                    unsafe 
+                    {
+                        self.it.next_back(|s, e| {
+                            memrchr3_raw(self.needle1, self.needle2, self.needle3, s, e)
+                        })
+                    }
+                }
+            }
+
+            impl<'h> ::iter::FusedIterator for Memchr3<'h> {}
+
+            /// memchr, but using raw pointers to represent the haystack.
+            #[inline] unsafe fn memchr_raw
+            (
+                needle: u8,
+                start: *const u8,
+                end: *const u8,
+            ) -> Option<*const u8>
+            {
+                #[cfg(target_arch = "x86_64")]
+                {
+                    super::arch::x86_64::memchr::memchr_raw(needle, start, end)
+                }
+                #[cfg(target_arch = "wasm32")]
+                {
+                    super::arch::wasm32::memchr::memchr_raw(needle, start, end)
+                }
+                #[cfg(target_arch = "aarch64")]
+                {
+                    super::arch::aarch64::memchr::memchr_raw(needle, start, end)
+                }
+                #[cfg(not(any(
+                    target_arch = "x86_64",
+                    target_arch = "wasm32",
+                    target_arch = "aarch64"
+                )))]
+                {
+                    super::arch::all::memchr::One::new(needle).find_raw(start, end)
+                }
+            }
+            /// memrchr, but using raw pointers to represent the haystack.
+            #[inline] unsafe fn memrchr_raw
+            (
+                needle: u8,
+                start: *const u8,
+                end: *const u8,
+            ) -> Option<*const u8>
+            {
+                #[cfg(target_arch = "x86_64")]
+                {
+                    super::arch::x86_64::memchr::memrchr_raw(needle, start, end)
+                }
+                #[cfg(target_arch = "aarch64")]
+                {
+                    super::arch::aarch64::memchr::memrchr_raw(needle, start, end)
+                }
+            }
+            /// memchr2, but using raw pointers to represent the haystack.
+            #[inline] unsafe fn memchr2_raw
+            (
+                needle1: u8,
+                needle2: u8,
+                start: *const u8,
+                end: *const u8,
+            ) -> Option<*const u8>
+            {
+                #[cfg(target_arch = "x86_64")]
+                {
+                    super::arch::x86_64::memchr::memchr2_raw(needle1, needle2, start, end)
+                }
+                #[cfg(target_arch = "aarch64")]
+                {
+                    super::arch::aarch64::memchr::memchr2_raw(needle1, needle2, start, end)
+                }
+            }
+            /// memrchr2, but using raw pointers to represent the haystack.
+            #[inline] unsafe fn memrchr2_raw
+            (
+                needle1: u8,
+                needle2: u8,
+                start: *const u8,
+                end: *const u8,
+            ) -> Option<*const u8>
+            {
+                #[cfg(target_arch = "x86_64")]
+                {
+                    super::arch::x86_64::memchr::memrchr2_raw(needle1, needle2, start, end)
+                }
+                #[cfg(target_arch = "aarch64")]
+                {
+                    super::arch::aarch64::memchr::memrchr2_raw(
+                        needle1, needle2, start, end,
+                    )
+                }
+            }
+            /// memchr3, but using raw pointers to represent the haystack.
+            #[inline] unsafe fn memchr3_raw
+            (
+                needle1: u8,
+                needle2: u8,
+                needle3: u8,
+                start: *const u8,
+                end: *const u8,
+            ) -> Option<*const u8>
+            {
+                #[cfg(target_arch = "x86_64")]
+                {
+                    super::arch::x86_64::memchr::memchr3_raw(
+                        needle1, needle2, needle3, start, end,
+                    )
+                }
+                #[cfg(target_arch = "aarch64")]
+                {
+                    super::arch::aarch64::memchr::memchr3_raw(
+                        needle1, needle2, needle3, start, end,
+                    )
+                }
+            }
+            /// memrchr3, but using raw pointers to represent the haystack.
+            #[inline] unsafe fn memrchr3_raw
+            (
+                needle1: u8,
+                needle2: u8,
+                needle3: u8,
+                start: *const u8,
+                end: *const u8,
+            ) -> Option<*const u8> 
+            {
+                #[cfg(target_arch = "x86_64")]
+                {
+                    super::arch::x86_64::memchr::memrchr3_raw(
+                        needle1, needle2, needle3, start, end,
+                    )
+                }
+                #[cfg(target_arch = "aarch64")]
+                {
+                    super::arch::aarch64::memchr::memrchr3_raw(
+                        needle1, needle2, needle3, start, end,
+                    )
+                }
+            }
+            /// Count all matching bytes, but using raw pointers to represent the haystack.
+            #[inline] unsafe fn count_raw(needle: u8, start: *const u8, end: *const u8) -> usize
+            {
+                #[cfg(target_arch = "x86_64")]
+                {
+                    super::arch::x86_64::memchr::count_raw(needle, start, end)
+                }
+                #[cfg(target_arch = "aarch64")]
+                {
+                    super::arch::aarch64::memchr::count_raw(needle, start, end)
+                }
+            }
+        }
+
+        pub mod memmem
+        {
+            /*!
+            This module provides forward and reverse substring search routines. */
+            use ::
+            {
+                *,
+            };
+            /*
+            // This is exported here for use in the super::arch::all::twoway
+            // implementation. This is essentially an abstraction breaker. Namely, the
+            // public API of twoway doesn't support providing a prefilter, but its crate
+            // internal API does. The main reason for this is that I didn't want to do the
+            // API design required to support it without a concrete use case.
+            pub use crate::memmem::searcher::Pre;
+
+            use crate::{
+                arch::all::{
+                    packedpair::{DefaultFrequencyRank, HeuristicFrequencyRank},
+                    rabinkarp,
+                },
+                cow::CowBytes,
+                memmem::searcher::{PrefilterState, Searcher, SearcherRev},
+            };
+            */
+            pub mod searcher
+            {
+                use ::
+                {
+                    *,
+                };
+                /*
+                use super::arch::all::{
+                    packedpair::{HeuristicFrequencyRank, Pair},
+                    rabinkarp, twoway,
+                };
+
+                #[cfg(target_arch = "aarch64")]
+                use super::arch::aarch64::neon::packedpair as neon;
+                #[cfg(target_arch = "wasm32")]
+                use super::arch::wasm32::simd128::packedpair as simd128;
+                #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+                use super::arch::x86_64::{
+                    avx2::packedpair as avx2, sse2::packedpair as sse2,
+                };
+                */
+                /// A "meta" substring searcher.
+                ///
+                /// To a first approximation, this chooses what it believes to be the "best"
+                /// substring search implemnetation based on the needle at construction time.
+                /// Then, every call to `find` will execute that particular implementation. To
+                /// a second approximation, multiple substring search algorithms may be used,
+                /// depending on the haystack. For example, for supremely short haystacks,
+                /// Rabin-Karp is typically used.
+                ///
+                /// See the documentation on `Prefilter` for an explanation of the dispatching
+                /// mechanism. The quick summary is that an enum has too much overhead and
+                /// we can't use dynamic dispatch via traits because we need to work in a
+                /// core-only environment. (Dynamic dispatch works in core-only, but you
+                /// need `&dyn Trait` and we really need a `Box<dyn Trait>` here. The latter
+                /// requires `alloc`.) So instead, we use a union and an appropriately paired
+                /// free function to read from the correct field on the union and execute the
+                /// chosen substring search implementation.
+                #[derive(Clone)]
+                pub struct Searcher 
+                {
+                    call: SearcherKindFn,
+                    kind: SearcherKind,
+                    rabinkarp: rabinkarp::Finder,
+                }
+
+                impl Searcher 
+                {
+                    /// Creates a new "meta" substring searcher that attempts to choose the
+                    /// best algorithm based on the needle, heuristics and what the current
+                    /// target supports.
+                    #[inline] pub fn new<R: HeuristicFrequencyRank>
+                    (
+                        prefilter: PrefilterConfig,
+                        ranker: R,
+                        needle: &[u8],
+                    ) -> Searcher 
+                    {
+                        let rabinkarp = rabinkarp::Finder::new(needle);
+                        if needle.len() <= 1 {
+                            return if needle.is_empty() {
+                                trace!("building empty substring searcher");
+                                Searcher {
+                                    call: searcher_kind_empty,
+                                    kind: SearcherKind { empty: () },
+                                    rabinkarp,
+                                }
+                            } else {
+                                trace!("building one-byte substring searcher");
+                                debug_assert_eq!(1, needle.len());
+                                Searcher {
+                                    call: searcher_kind_one_byte,
+                                    kind: SearcherKind { one_byte: needle[0] },
+                                    rabinkarp,
+                                }
+                            };
+                        }
+                        let pair = match Pair::with_ranker(needle, &ranker) {
+                            Some(pair) => pair,
+                            None => return Searcher::twoway(needle, rabinkarp, None),
+                        };
+                        debug_assert_ne!(
+                            pair.index1(),
+                            pair.index2(),
+                            "pair offsets should not be equivalent"
+                        );
+                        #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+                        {
+                            if let Some(pp) = avx2::Finder::with_pair(needle, pair) {
+                                if do_packed_search(needle) {
+                                    trace!("building x86_64 AVX2 substring searcher");
+                                    let kind = SearcherKind { avx2: pp };
+                                    Searcher { call: searcher_kind_avx2, kind, rabinkarp }
+                                } else if prefilter.is_none() {
+                                    Searcher::twoway(needle, rabinkarp, None)
+                                } else {
+                                    let prestrat = Prefilter::avx2(pp, needle);
+                                    Searcher::twoway(needle, rabinkarp, Some(prestrat))
+                                }
+                            } else if let Some(pp) = sse2::Finder::with_pair(needle, pair) {
+                                if do_packed_search(needle) {
+                                    trace!("building x86_64 SSE2 substring searcher");
+                                    let kind = SearcherKind { sse2: pp };
+                                    Searcher { call: searcher_kind_sse2, kind, rabinkarp }
+                                } else if prefilter.is_none() {
+                                    Searcher::twoway(needle, rabinkarp, None)
+                                } else {
+                                    let prestrat = Prefilter::sse2(pp, needle);
+                                    Searcher::twoway(needle, rabinkarp, Some(prestrat))
+                                }
+                            } else if prefilter.is_none() {
+                                Searcher::twoway(needle, rabinkarp, None)
+                            } else {
+                                // We're pretty unlikely to get to this point, but it is
+                                // possible to be running on x86_64 without SSE2. Namely, it's
+                                // really up to the OS whether it wants to support vector
+                                // registers or not.
+                                let prestrat = Prefilter::fallback(ranker, pair, needle);
+                                Searcher::twoway(needle, rabinkarp, prestrat)
+                            }
+                        }
+                        #[cfg(target_arch = "aarch64")]
+                        {
+                            if let Some(pp) = neon::Finder::with_pair(needle, pair) {
+                                if do_packed_search(needle) {
+                                    trace!("building aarch64 neon substring searcher");
+                                    let kind = SearcherKind { neon: pp };
+                                    Searcher { call: searcher_kind_neon, kind, rabinkarp }
+                                } else if prefilter.is_none() {
+                                    Searcher::twoway(needle, rabinkarp, None)
+                                } else {
+                                    let prestrat = Prefilter::neon(pp, needle);
+                                    Searcher::twoway(needle, rabinkarp, Some(prestrat))
+                                }
+                            } else if prefilter.is_none() {
+                                Searcher::twoway(needle, rabinkarp, None)
+                            } else {
+                                let prestrat = Prefilter::fallback(ranker, pair, needle);
+                                Searcher::twoway(needle, rabinkarp, prestrat)
+                            }
+                        }
+                    }
+                    /// Creates a new searcher that always uses the Two-Way algorithm. This is
+                    /// typically used when vector algorithms are unavailable or inappropriate.
+                    /// (For example, when the needle is "too long.")
+                    ///
+                    /// If a prefilter is given, then the searcher returned will be accelerated
+                    /// by the prefilter.
+                    #[inline] fn twoway
+                    (
+                        needle: &[u8],
+                        rabinkarp: rabinkarp::Finder,
+                        prestrat: Option<Prefilter>,
+                    ) -> Searcher 
+                    {
+                        let finder = twoway::Finder::new(needle);
+                        match prestrat {
+                            None => {
+                                trace!("building scalar two-way substring searcher");
+                                let kind = SearcherKind { two_way: finder };
+                                Searcher { call: searcher_kind_two_way, kind, rabinkarp }
+                            }
+                            Some(prestrat) => {
+                                trace!(
+                                    "building scalar two-way \
+                                    substring searcher with a prefilter"
+                                );
+                                let two_way_with_prefilter =
+                                    TwoWayWithPrefilter { finder, prestrat };
+                                let kind = SearcherKind { two_way_with_prefilter };
+                                Searcher {
+                                    call: searcher_kind_two_way_with_prefilter,
+                                    kind,
+                                    rabinkarp,
+                                }
+                            }
+                        }
+                    }
+                    /// Searches the given haystack for the given needle.
+                    #[inline( always )] pub fn find
+                    (
+                        &self,
+                        prestate: &mut PrefilterState,
+                        haystack: &[u8],
+                        needle: &[u8],
+                    ) -> Option<usize>
+                    {
+                        if haystack.len() < needle.len() {
+                            None
+                        } else 
+                        {
+                            unsafe { (self.call)(self, prestate, haystack, needle) }
+                        }
+                    }
+                }
+
+                impl ::fmt::Debug for Searcher 
+                {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result 
+                    {
+                        f.debug_struct("Searcher")
+                        .field("call", &"<searcher function>")
+                        .field("kind", &"<searcher kind union>")
+                        .field("rabinkarp", &self.rabinkarp)
+                        .finish()
+                    }
+                }
+                /// A union indicating one of several possible substring search implementations
+                /// that are in active use.
+                #[derive(Clone, Copy)]
+                union SearcherKind
+                {
+                    empty: (),
+                    one_byte: u8,
+                    two_way: twoway::Finder,
+                    two_way_with_prefilter: TwoWayWithPrefilter,
+                    #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+                    sse2: ::arch::x86_64::sse2::packedpair::Finder,
+                    #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+                    avx2: ::arch::x86_64::avx2::packedpair::Finder,
+                    #[cfg(target_arch = "wasm32")]
+                    simd128: ::arch::wasm32::simd128::packedpair::Finder,
+                    #[cfg(target_arch = "aarch64")]
+                    neon: ::arch::aarch64::neon::packedpair::Finder,
+                }
+                /// A two-way substring searcher with a prefilter.
+                #[derive(Copy, Clone, Debug)]
+                struct TwoWayWithPrefilter
+                {
+                    finder: twoway::Finder,
+                    prestrat: Prefilter,
+                }
+                /// The type of a substring search function.
+                type SearcherKindFn = unsafe fn
+                (
+                    searcher: &Searcher,
+                    prestate: &mut PrefilterState,
+                    haystack: &[u8],
+                    needle: &[u8],
+                ) -> Option<usize>;
+                /// Reads from the `empty` field of `SearcherKind` to handle the case of
+                /// searching for the empty needle. Works on all platforms.
+                unsafe fn searcher_kind_empty
+                (
+                    _searcher: &Searcher,
+                    _prestate: &mut PrefilterState,
+                    _haystack: &[u8],
+                    _needle: &[u8],
+                ) -> Option<usize> { Some(0) }
+                /// Reads from the `one_byte` field of `SearcherKind` to handle the case of searching for a single byte needle.
+                unsafe fn searcher_kind_one_byte
+                (
+                    searcher: &Searcher,
+                    _prestate: &mut PrefilterState,
+                    haystack: &[u8],
+                    _needle: &[u8],
+                ) -> Option<usize> 
+                {
+                    let needle = searcher.kind.one_byte;
+                    ::mem::chr(needle, haystack)
+                }
+                /// Reads from the `two_way` field of `SearcherKind` to handle the case of 
+                /// searching for an arbitrary needle without prefilter acceleration.
+                unsafe fn searcher_kind_two_way
+                (
+                    searcher: &Searcher,
+                    _prestate: &mut PrefilterState,
+                    haystack: &[u8],
+                    needle: &[u8],
+                ) -> Option<usize> 
+                {
+                    if rabinkarp::is_fast(haystack, needle) { searcher.rabinkarp.find(haystack, needle) }                    
+                    else { searcher.kind.two_way.find(haystack, needle) }
+                }
+                /// Reads from the `two_way_with_prefilter` field of `SearcherKind` to handle
+                /// the case of searching for an arbitrary needle with prefilter acceleration.
+                unsafe fn searcher_kind_two_way_with_prefilter
+                (
+                    searcher: &Searcher,
+                    prestate: &mut PrefilterState,
+                    haystack: &[u8],
+                    needle: &[u8],
+                ) -> Option<usize> 
+                {
+                    if rabinkarp::is_fast(haystack, needle)
+                    {
+                        searcher.rabinkarp.find(haystack, needle)
+                    }
+                    else
+                    {
+                        let TwoWayWithPrefilter { ref finder, ref prestrat } =
+                            searcher.kind.two_way_with_prefilter;
+                        let pre = Pre { prestate, prestrat };
+                        finder.find_with_prefilter(Some(pre), haystack, needle)
+                    }
+                }
+                /// Reads from the `sse2` field of `SearcherKind` to execute the x86_64 SSE2
+                /// vectorized substring search implementation.
+                #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+                unsafe fn searcher_kind_sse2
+                (
+                    searcher: &Searcher,
+                    _prestate: &mut PrefilterState,
+                    haystack: &[u8],
+                    needle: &[u8],
+                ) -> Option<usize>
+                {
+                    let finder = &searcher.kind.sse2;
+
+                    if haystack.len() < finder.min_haystack_len() { searcher.rabinkarp.find(haystack, needle) }
+                    else { finder.find(haystack, needle) }
+                }
+                /// Reads from the `avx2` field of `SearcherKind` to execute the x86_64 AVX2
+                /// vectorized substring search implementation.
+                #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+                unsafe fn searcher_kind_avx2
+                (
+                    searcher: &Searcher,
+                    _prestate: &mut PrefilterState,
+                    haystack: &[u8],
+                    needle: &[u8],
+                ) -> Option<usize>
+                {
+                    let finder = &searcher.kind.avx2;
+
+                    if haystack.len() < finder.min_haystack_len() { searcher.rabinkarp.find(haystack, needle) }
+                    else { finder.find(haystack, needle) }
+                }
+                /// A reverse substring searcher.
+                #[derive(Clone, Debug)]
+                pub struct SearcherRev 
+                {
+                    kind: SearcherRevKind,
+                    rabinkarp: rabinkarp::FinderRev,
+                }
+                /// The kind of the reverse searcher.
+                #[derive(Clone, Debug)]
+                enum SearcherRevKind 
+                {
+                    Empty,
+                    OneByte { needle: u8 },
+                    TwoWay { finder: twoway::FinderRev },
+                }
+
+                impl SearcherRev 
+                {
+                    /// Creates a new searcher for finding occurrences of the given needle in reverse.
+                    #[inline] pub fn new(needle: &[u8]) -> SearcherRev
+                    {
+                        let kind = if needle.len() <= 1 
+                        {
+                            if needle.is_empty() {
+                                trace!("building empty reverse substring searcher");
+                                SearcherRevKind::Empty
+                            } else {
+                                trace!("building one-byte reverse substring searcher");
+                                debug_assert_eq!(1, needle.len());
+                                SearcherRevKind::OneByte { needle: needle[0] }
+                            }
+                        }
+                        else 
+                        {
+                            trace!("building scalar two-way reverse substring searcher");
+                            let finder = twoway::FinderRev::new(needle);
+                            SearcherRevKind::TwoWay { finder }
+                        };
+
+                        let rabinkarp = rabinkarp::FinderRev::new(needle);
+                        SearcherRev { kind, rabinkarp }
+                    }
+                    /// Searches the given haystack for the last occurrence of the given needle.
+                    #[inline] pub fn rfind
+                    (
+                        &self,
+                        haystack: &[u8],
+                        needle: &[u8],
+                    ) -> Option<usize>
+                    {
+                        if haystack.len() < needle.len() { return None; }
+
+                        match self.kind
+                        {
+                            SearcherRevKind::Empty => Some(haystack.len()),
+                            SearcherRevKind::OneByte { needle } => { ::mem::chr(needle, haystack) }
+                            SearcherRevKind::TwoWay { ref finder } => 
+                            {
+                                if rabinkarp::is_fast(haystack, needle) {
+                                    self.rabinkarp.rfind(haystack, needle)
+                                } else {
+                                    finder.rfind(haystack, needle)
+                                }
+                            }
+                        }
+                    }
+                }
+                /// Prefilter controls whether heuristics are used to accelerate searching.
+                #[non_exhaustive] #[derive(Clone, Copy, Debug)]                
+                pub enum PrefilterConfig 
+                {
+                    /// Never used a prefilter in substring search.
+                    None,
+                    /// Automatically detect whether a heuristic prefilter should be used.
+                    Auto,
+                }
+
+                impl Default for PrefilterConfig 
+                {
+                    fn default() -> PrefilterConfig { PrefilterConfig::Auto }
+                }
+
+                impl PrefilterConfig 
+                {
+                    /// Returns true when this prefilter is set to the `None` variant.
+                    fn is_none(&self) -> bool { matches!(*self, PrefilterConfig::None) }
+                }
+                /// The implementation of a prefilter.
+                #[derive(Clone, Copy)]
+                struct Prefilter
+                {
+                    call: PrefilterKindFn,
+                    kind: PrefilterKind,
+                    rarest_byte: u8,
+                    rarest_offset: u8,
+                }
+
+                impl Prefilter
+                {
+                    /// Return a "fallback" prefilter, but only if it is believed to be
+                    /// effective.
+                    #[inline] fn fallback<R: HeuristicFrequencyRank>(
+                        ranker: R,
+                        pair: Pair,
+                        needle: &[u8],
+                    ) -> Option<Prefilter> {
+                        /// The maximum frequency rank permitted for the fallback prefilter.
+                        /// If the rarest byte in the needle has a frequency rank above this
+                        /// value, then no prefilter is used if the fallback prefilter would
+                        /// otherwise be selected.
+                        const MAX_FALLBACK_RANK: u8 = 250;
+
+                        trace!("building fallback prefilter");
+                        let rarest_offset = pair.index1();
+                        let rarest_byte = needle[usize::from(rarest_offset)];
+                        let rarest_rank = ranker.rank(rarest_byte);
+                        if rarest_rank > MAX_FALLBACK_RANK {
+                            None
+                        } else {
+                            let finder = super::arch::all::packedpair::Finder::with_pair(
+                                needle,
+                                pair.clone(),
+                            )?;
+                            let call = prefilter_kind_fallback;
+                            let kind = PrefilterKind { fallback: finder };
+                            Some(Prefilter { call, kind, rarest_byte, rarest_offset })
+                        }
+                    }
+                    /// Return a prefilter using a x86_64 SSE2 vector algorithm.
+                    #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+                    #[inline] fn sse2(finder: sse2::Finder, needle: &[u8]) -> Prefilter {
+                        trace!("building x86_64 SSE2 prefilter");
+                        let rarest_offset = finder.pair().index1();
+                        let rarest_byte = needle[usize::from(rarest_offset)];
+                        Prefilter {
+                            call: prefilter_kind_sse2,
+                            kind: PrefilterKind { sse2: finder },
+                            rarest_byte,
+                            rarest_offset,
+                        }
+                    }
+                    /// Return a prefilter using a x86_64 AVX2 vector algorithm.
+                    #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+                    #[inline] fn avx2(finder: avx2::Finder, needle: &[u8]) -> Prefilter {
+                        trace!("building x86_64 AVX2 prefilter");
+                        let rarest_offset = finder.pair().index1();
+                        let rarest_byte = needle[usize::from(rarest_offset)];
+                        Prefilter {
+                            call: prefilter_kind_avx2,
+                            kind: PrefilterKind { avx2: finder },
+                            rarest_byte,
+                            rarest_offset,
+                        }
+                    }
+                    /// Return a prefilter using a wasm32 simd128 vector algorithm.
+                    #[cfg(target_arch = "wasm32")]
+                    #[inline] fn simd128(finder: simd128::Finder, needle: &[u8]) -> Prefilter {
+                        trace!("building wasm32 simd128 prefilter");
+                        let rarest_offset = finder.pair().index1();
+                        let rarest_byte = needle[usize::from(rarest_offset)];
+                        Prefilter {
+                            call: prefilter_kind_simd128,
+                            kind: PrefilterKind { simd128: finder },
+                            rarest_byte,
+                            rarest_offset,
+                        }
+                    }
+                    /// Return a prefilter using a aarch64 neon vector algorithm.
+                    #[cfg(target_arch = "aarch64")]
+                    #[inline] fn neon(finder: neon::Finder, needle: &[u8]) -> Prefilter {
+                        trace!("building aarch64 neon prefilter");
+                        let rarest_offset = finder.pair().index1();
+                        let rarest_byte = needle[usize::from(rarest_offset)];
+                        Prefilter {
+                            call: prefilter_kind_neon,
+                            kind: PrefilterKind { neon: finder },
+                            rarest_byte,
+                            rarest_offset,
+                        }
+                    }
+                    /// Return a *candidate* position for a match.
+                    ///
+                    /// When this returns an offset, it implies that a match could begin at
+                    /// that offset, but it may not. That is, it is possible for a false
+                    /// positive to be returned.
+                    ///
+                    /// When `None` is returned, then it is guaranteed that there are no
+                    /// matches for the needle in the given haystack. That is, it is impossible
+                    /// for a false negative to be returned.
+                    ///
+                    /// The purpose of this routine is to look for candidate matching positions
+                    /// as quickly as possible before running a (likely) slower confirmation
+                    /// step.
+                    #[inline] fn find(&self, haystack: &[u8]) -> Option<usize> {
+                        // SAFETY: By construction, we've ensured that the function in
+                        // `self.call` is properly paired with the union used in `self.kind`.
+                        unsafe { (self.call)(self, haystack) }
+                    }
+                    /// A "simple" prefilter that just looks for the occurrence of the rarest
+                    /// byte from the needle. This is generally only used for very small
+                    /// haystacks.
+                    #[inline] fn find_simple(&self, haystack: &[u8]) -> Option<usize> {
+                        // We don't use crate::memchr here because the haystack should be small
+                        // enough that memchr won't be able to use vector routines anyway. So
+                        // we just skip straight to the fallback implementation which is likely
+                        // faster. (A byte-at-a-time loop is only used when the haystack is
+                        // smaller than `size_of::<usize>()`.)
+                        super::arch::all::memchr::One::new(self.rarest_byte)
+                            .find(haystack)
+                            .map(|i| i.saturating_sub(usize::from(self.rarest_offset)))
+                    }
+                }
+
+                impl ::fmt::Debug for Prefilter 
+                {
+                    fn fmt(&self, f: &mut ::fmt::Formatter) -> ::fmt::Result {
+                        f.debug_struct("Prefilter")
+                            .field("call", &"<prefilter function>")
+                            .field("kind", &"<prefilter kind union>")
+                            .field("rarest_byte", &self.rarest_byte)
+                            .field("rarest_offset", &self.rarest_offset)
+                            .finish()
+                    }
+                }
+                /// A union indicating one of several possible prefilters that are in active use.
+                #[derive(Clone, Copy)]
+                union PrefilterKind
+                {
+                    fallback: ::arch::all::packedpair::Finder,
+                    #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+                    sse2: ::arch::x86_64::sse2::packedpair::Finder,
+                    #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+                    avx2: ::arch::x86_64::avx2::packedpair::Finder,
+                }
+                /// The type of a prefilter function.
+                type PrefilterKindFn = unsafe fn(strat: &Prefilter, haystack: &[u8]) -> Option<usize>;
+                /// Reads from the `fallback` field of `PrefilterKind` to execute the fallback prefilter.
+                unsafe fn prefilter_kind_fallback
+                (
+                    strat: &Prefilter,
+                    haystack: &[u8],
+                ) -> Option<usize>
+                { strat.kind.fallback.find_prefilter(haystack) }
+                /// Reads from the `sse2` field of `PrefilterKind` to execute the x86_64 SSE2 prefilter.
+                #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+                unsafe fn prefilter_kind_sse2
+                (
+                    strat: &Prefilter,
+                    haystack: &[u8],
+                ) -> Option<usize>
+                {
+                    let finder = &strat.kind.sse2;
+                    if haystack.len() < finder.min_haystack_len() { strat.find_simple(haystack) }
+                    else { finder.find_prefilter(haystack) }
+                }
+                /// Reads from the `avx2` field of `PrefilterKind` to execute the x86_64 AVX2 prefilter.
+                #[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+                unsafe fn prefilter_kind_avx2
+                (
+                    strat: &Prefilter,
+                    haystack: &[u8],
+                ) -> Option<usize>
+                {
+                    let finder = &strat.kind.avx2;
+                    if haystack.len() < finder.min_haystack_len()
+                    {
+                        strat.find_simple(haystack)
+                    } 
+                    else
+                    {
+                        finder.find_prefilter(haystack)
+                    }
+                }
+                /// PrefilterState tracks state associated with the effectiveness of a prefilter.
+                #[derive(Clone, Copy, Debug)]
+                pub struct PrefilterState
+                {
+                    /// The number of skips that has been executed.
+                    skips: u32,
+                    /// The total number of bytes that have been skipped.
+                    skipped: u32,
+                }
+
+                impl PrefilterState
+                {
+                    /// The minimum number of skip attempts to try before considering whether a prefilter is effective or not.
+                    const MIN_SKIPS: u32 = 50;
+                    /// The minimum amount of bytes that skipping must average.
+                    const MIN_SKIP_BYTES: u32 = 8;
+                    /// Create a fresh prefilter state.
+                    #[inline] pub fn new() -> PrefilterState { PrefilterState { skips: 1, skipped: 0 } }
+                    /// Update this state with the number of bytes skipped on the last invocation of the prefilter.
+                    #[inline] fn update(&mut self, skipped: usize)
+                    {
+                        self.skips = self.skips.saturating_add(1);
+                        self.skipped = match u32::try_from(skipped)
+                        {
+                            Err(_) => ::u32::MAX,
+                            Ok(skipped) => self.skipped.saturating_add(skipped),
+                        };
+                    }
+                    /// Return true if and only if this state indicates that a prefilter is still effective.
+                    #[inline] fn is_effective(&mut self) -> bool
+                    {
+                        if self.is_inert() { return false; }
+
+                        if self.skips() < PrefilterState::MIN_SKIPS { return true; }
+
+                        if self.skipped >= PrefilterState::MIN_SKIP_BYTES * self.skips() { return true; }
+                        
+                        self.skips = 0;
+                        false
+                    }
+                    /// Returns true if the prefilter this state represents should no longer be used.
+                    #[inline] fn is_inert(&self) -> bool { self.skips == 0 }
+                    /// Returns the total number of times the prefilter has been used.
+                    #[inline] fn skips(&self) -> u32 { self.skips.saturating_sub(1) }
+                }
+                /// A combination of prefilter effectiveness state and the prefilter itself.
+                #[derive(Debug)]
+                pub struct Pre<'a>
+                {
+                    /// State that tracks the effectiveness of a prefilter.
+                    prestate: &'a mut PrefilterState,
+                    /// The actual prefilter.
+                    prestrat: &'a Prefilter,
+                }
+
+                impl<'a> Pre<'a>
+                {
+                    /// Call this prefilter on the given haystack with the given needle.
+                    #[inline] pub fn find(&mut self, haystack: &[u8]) -> Option<usize>
+                    {
+                        let result = self.prestrat.find(haystack);
+                        self.prestate.update(result.unwrap_or(haystack.len()));
+                        result
+                    }
+                    /// Return true if and only if this prefilter should be used.
+                    #[inline] pub fn is_effective(&mut self) -> bool { self.prestate.is_effective() }
+                }
+                /// Returns true if the needle has the right characteristics for a vector algorithm to handle the entirety of substring search.
+                #[inline] fn do_packed_search(needle: &[u8]) -> bool
+                {
+                    /// The minimum length of a needle required for this algorithm.
+                    const MIN_LEN: usize = 2;
+                    /// The maximum length of a needle required for this algorithm.
+                    const MAX_LEN: usize = 32;
+                    MIN_LEN <= needle.len() && needle.len() <= MAX_LEN
+                }
+
+            }
+            /// Returns an iterator over all non-overlapping occurrences of a substring in a haystack.
+            #[inline] pub fn find_iter<'h, 'n, N: 'n + ?Sized + AsRef<[u8]>>( haystack: &'h [u8], needle: &'n N ) -> FindIter<'h, 'n>
+            { FindIter::new(haystack, Finder::new(needle)) }
+            /// Returns a reverse iterator over all non-overlapping occurrences of a substring in a haystack.
+            #[inline] pub fn rfind_iter<'h, 'n, N: 'n + ?Sized + AsRef<[u8]>>( haystack: &'h [u8], needle: &'n N ) -> FindRevIter<'h, 'n>
+            { FindRevIter::new(haystack, FinderRev::new(needle)) }
+            /// Returns the index of the first occurrence of the given needle.
+            #[inline] pub fn find(haystack: &[u8], needle: &[u8]) -> Option<usize>
+            {
+                if haystack.len() < 64 { rabinkarp::Finder::new(needle).find(haystack, needle) }
+                else { Finder::new(needle).find(haystack) }
+            }
+            /// Returns the index of the last occurrence of the given needle.
+            #[inline] pub fn rfind(haystack: &[u8], needle: &[u8]) -> Option<usize>
+            {
+                if haystack.len() < 64 { rabinkarp::FinderRev::new(needle).rfind(haystack, needle) }
+                else { FinderRev::new(needle).rfind(haystack) }
+            }
+            /// An iterator over non-overlapping substring matches.
+            #[derive(Debug)]
+            pub struct FindIter<'h, 'n>
+            {
+                haystack: &'h [u8],
+                prestate: PrefilterState,
+                finder: Finder<'n>,
+                pos: usize,
+            }
+
+            impl<'h, 'n> FindIter<'h, 'n>
+            {
+                #[inline( always )] pub fn new
+                (
+                    haystack: &'h [u8],
+                    finder: Finder<'n>,
+                ) -> FindIter<'h, 'n>
+                {
+                    let prestate = PrefilterState::new();
+                    FindIter { haystack, prestate, finder, pos: 0 }
+                }
+                /// Convert this iterator into its owned variant, such that it no longer borrows the finder and needle.
+                #[inline] pub fn into_owned(self) -> FindIter<'h, 'static>
+                {
+                    FindIter
+                    {
+                        haystack: self.haystack,
+                        prestate: self.prestate,
+                        finder: self.finder.into_owned(),
+                        pos: self.pos,
+                    }
+                }
+            }
+
+            impl<'h, 'n> Iterator for FindIter<'h, 'n>
+            {
+                type Item = usize;
+                fn next(&mut self) -> Option<usize>
+                {
+                    let needle = self.finder.needle();
+                    let haystack = self.haystack.get(self.pos..)?;
+                    let idx = self.finder.searcher.find(&mut self.prestate, haystack, needle)?;
+                    let pos = self.pos + idx;
+                    self.pos = pos + needle.len().max(1);
+                    Some(pos)
+                }
+
+                fn size_hint(&self) -> (usize, Option<usize>)
+                {
+                    match self.haystack.len().checked_sub(self.pos)
+                    {
+                        None => (0, Some(0)),
+                        Some(haystack_len) => match self.finder.needle().len()
+                        {
+                            0 =>
+                            (
+                                haystack_len.saturating_add(1),
+                                haystack_len.checked_add(1),
+                            ),
+                            needle_len => (0, Some(haystack_len / needle_len)),
+                        },
+                    }
+                }
+            }
+            /// An iterator over non-overlapping substring matches in reverse.
+            #[derive(Debug)]
+            pub struct FindRevIter<'h, 'n>
+            {
+                haystack: &'h [u8],
+                finder: FinderRev<'n>,
+                /// When searching with an empty needle, this gets set to `None` after
+                /// we've yielded the last element at `0`.
+                pos: Option<usize>,
+            }
+
+            impl<'h, 'n> FindRevIter<'h, 'n>
+            {
+                #[inline( always )] pub fn new
+                (
+                    haystack: &'h [u8],
+                    finder: FinderRev<'n>,
+                ) -> FindRevIter<'h, 'n>
+                {
+                    let pos = Some(haystack.len());
+                    FindRevIter { haystack, finder, pos }
+                }
+                /// Convert this iterator into its owned variant, such that it no longer borrows the finder and needle.
+                #[inline] pub fn into_owned(self) -> FindRevIter<'h, 'static>
+                {
+                    FindRevIter {
+                        haystack: self.haystack,
+                        finder: self.finder.into_owned(),
+                        pos: self.pos,
+                    }
+                }
+            }
+
+            impl<'h, 'n> Iterator for FindRevIter<'h, 'n>
+            {
+                type Item = usize;
+                fn next(&mut self) -> Option<usize>
+                {
+                    let pos = match self.pos
+                    {
+                        None => return None,
+                        Some(pos) => pos,
+                    };
+
+                    let result = self.finder.rfind(&self.haystack[..pos]);
+                    match result
+                    {
+                        None => None,
+                        Some(i) =>
+                        {
+                            if pos == i { self.pos = pos.checked_sub(1); }
+                            else { self.pos = Some(i); }
+
+                            Some(i)
+                        }
+                    }
+                }
+            }
+            /// A single substring searcher fixed to a particular needle.
+            #[derive(Clone, Debug)]
+            pub struct Finder<'n>
+             {
+                needle: CowBytes<'n>,
+                searcher: Searcher,
+            }
+
+            impl<'n> Finder<'n>
+            {
+                /// Create a new finder for the given needle.
+                #[inline] pub fn new<B: ?Sized + AsRef<[u8]>>(needle: &'n B) -> Finder<'n> { FinderBuilder::new().build_forward(needle) }
+                /// Returns the index of the first occurrence of this needle in the given haystack.
+                #[inline] pub fn find(&self, haystack: &[u8]) -> Option<usize>
+                {
+                    let mut prestate = PrefilterState::new();
+                    let needle = self.needle.as_slice();
+                    self.searcher.find(&mut prestate, haystack, needle)
+                }
+                /// Returns an iterator over all occurrences of a substring in a haystack.
+                #[inline] pub fn find_iter<'a, 'h>
+                (
+                    &'a self,
+                    haystack: &'h [u8],
+                ) -> FindIter<'h, 'a>
+                {
+                    FindIter::new(haystack, self.as_ref())
+                }
+                /// Convert this finder into its owned variant, such that it no longer borrows the needle.
+                #[inline] pub fn into_owned(self) -> Finder<'static>
+                {
+                    Finder
+                    {
+                        needle: self.needle.into_owned(),
+                        searcher: self.searcher.clone(),
+                    }
+                }
+                /// Convert this finder into its borrowed variant.
+                #[inline] pub fn as_ref(&self) -> Finder<'_>
+                {
+                    Finder
+                    {
+                        needle: CowBytes::new(self.needle()),
+                        searcher: self.searcher.clone(),
+                    }
+                }
+                /// Returns the needle that this finder searches for.
+                #[inline] pub fn needle(&self) -> &[u8]
+                {
+                    self.needle.as_slice()
+                }
+            }
+            /// A single substring reverse searcher fixed to a particular needle.
+            #[derive(Clone, Debug)]
+            pub struct FinderRev<'n>
+            {
+                needle: CowBytes<'n>,
+                searcher: SearcherRev,
+            }
+
+            impl<'n> FinderRev<'n> 
+            {
+                /// Create a new reverse finder for the given needle.
+                #[inline] pub fn new<B: ?Sized + AsRef<[u8]>>(needle: &'n B) -> FinderRev<'n>
+                {
+                    FinderBuilder::new().build_reverse(needle)
+                }
+                /// Returns the index of the last occurrence of this needle in the given haystack.
+                pub fn rfind<B: AsRef<[u8]>>(&self, haystack: B) -> Option<usize>
+                {
+                    self.searcher.rfind(haystack.as_ref(), self.needle.as_slice())
+                }
+                /// Returns a reverse iterator over all occurrences of a substring in a haystack.
+                #[inline] pub fn rfind_iter<'a, 'h>
+                (
+                    &'a self,
+                    haystack: &'h [u8],
+                ) -> FindRevIter<'h, 'a>
+                {
+                    FindRevIter::new(haystack, self.as_ref())
+                }
+                /// Convert this finder into its owned variant, such that it no longer borrows the needle.
+                #[inline] pub fn into_owned(self) -> FinderRev<'static>
+                {
+                    FinderRev
+                    {
+                        needle: self.needle.into_owned(),
+                        searcher: self.searcher.clone(),
+                    }
+                }
+                /// Convert this finder into its borrowed variant.
+                #[inline] pub fn as_ref(&self) -> FinderRev<'_>
+                {
+                    FinderRev
+                    {
+                        needle: CowBytes::new(self.needle()),
+                        searcher: self.searcher.clone(),
+                    }
+                }
+                /// Returns the needle that this finder searches for.
+                #[inline] pub fn needle(&self) -> &[u8] { self.needle.as_slice() }
+            }
+            /// A builder for constructing non-default forward or reverse memmem finders.
+            #[derive(Clone, Debug, Default)]
+            pub struct FinderBuilder
+            {
+                prefilter: Prefilter,
+            }
+
+            impl FinderBuilder
+            {
+                /// Create a new finder builder with default settings.
+                pub fn new() -> FinderBuilder { FinderBuilder::default() }
+                /// Build a forward finder using the given needle from the current settings.
+                pub fn build_forward<'n, B: ?Sized + AsRef<[u8]>>
+                (
+                    &self,
+                    needle: &'n B,
+                ) -> Finder<'n>
+                {
+                    self.build_forward_with_ranker(DefaultFrequencyRank, needle)
+                }
+                /// Build a forward finder using the given needle and a 
+                /// custom heuristic for determining the frequency of a given byte in the dataset.
+                pub fn build_forward_with_ranker
+                <
+                    'n,
+                    R: HeuristicFrequencyRank,
+                    B: ?Sized + AsRef<[u8]>,
+                >
+                (
+                    &self,
+                    ranker: R,
+                    needle: &'n B,
+                ) -> Finder<'n>
+                {
+                    let needle = needle.as_ref();
+                    Finder
+                    {
+                        needle: CowBytes::new(needle),
+                        searcher: Searcher::new(self.prefilter, ranker, needle),
+                    }
+                }
+                /// Build a reverse finder using the given needle from the current settings.
+                pub fn build_reverse<'n, B: ?Sized + AsRef<[u8]>>
+                (
+                    &self,
+                    needle: &'n B,
+                ) -> FinderRev<'n>
+                {
+                    let needle = needle.as_ref();
+                    FinderRev
+                    {
+                        needle: CowBytes::new(needle),
+                        searcher: SearcherRev::new(needle),
+                    }
+                }
+                /// Configure the prefilter setting for the finder.
+                pub fn prefilter(&mut self, prefilter: Prefilter) -> &mut FinderBuilder
+                {
+                    self.prefilter = prefilter;
+                    self
+                }
+            }
+        }
+
+        pub mod vector
+        {
+            /// Traits for describing vector operations used by vectorized searchers.
+            use ::
+            {
+                *,
+            };
+            /*
+            */
+            /// A trait for describing vector operations used by vectorized searchers.
+            pub trait Vector: Copy + ::fmt::Debug
+            {
+                /// The number of bits in the vector.
+                const BITS: usize;
+                /// The number of bytes in the vector.
+                const BYTES: usize;
+                /// The bits that must be zero in order for a `*const u8` pointer to be correctly aligned to read vector values.
+                const ALIGN: usize;
+                /// The type of the value returned by `Vector::movemask`.
+                type Mask: MoveMask;
+                /// Create a vector with 8-bit lanes with the given byte repeated into each lane.
+                unsafe fn splat(byte: u8) -> Self;
+                /// Read a vector-size number of bytes from the given pointer.
+                unsafe fn load_aligned(data: *const u8) -> Self;
+                /// Read a vector-size number of bytes from the given pointer.
+                unsafe fn load_unaligned(data: *const u8) -> Self;
+                /// _mm_movemask_epi8 or _mm256_movemask_epi8
+                unsafe fn movemask(self) -> Self::Mask;
+                /// _mm_cmpeq_epi8 or _mm256_cmpeq_epi8
+                unsafe fn cmpeq(self, vector2: Self) -> Self;
+                /// _mm_and_si128 or _mm256_and_si256
+                unsafe fn and(self, vector2: Self) -> Self;
+                /// _mm_or or _mm256_or_si256
+                unsafe fn or(self, vector2: Self) -> Self;
+                /// Returns true if and only if `Self::movemask` would return a mask that contains at least one non-zero bit.
+                unsafe fn movemask_will_have_non_zero(self) -> bool { self.movemask().has_non_zero() }
+            }
+            /// A trait that abstracts over a vector-to-scalar operation called "move mask."
+            pub trait MoveMask: Copy + ::fmt::Debug 
+            {
+                /// Return a mask that is all zeros except for the least significant `n` lanes in a corresponding vector.
+                fn all_zeros_except_least_significant(n: usize) -> Self;
+                /// Returns true if and only if this mask has a a non-zero bit anywhere.
+                fn has_non_zero(self) -> bool;
+                /// Returns the number of bits set to 1 in this mask.
+                fn count_ones(self) -> usize;
+                /// Does a bitwise `and` operation between `self` and `other`.
+                fn and(self, other: Self) -> Self;
+                /// Does a bitwise `or` operation between `self` and `other`.
+                fn or(self, other: Self) -> Self;
+                /// Returns a mask that is equivalent to `self` but with the least significant 1-bit set to 0.
+                fn clear_least_significant_bit(self) -> Self;
+                /// Returns the offset of the first non-zero lane this mask represents.
+                fn first_offset(self) -> usize;
+                /// Returns the offset of the last non-zero lane this mask represents.
+                fn last_offset(self) -> usize;
+            }
+            /// This is a "sensible" movemask implementation where each bit represents whether the most significant bit is set 
+            /// in each corresponding lane of a vector.
+            #[derive(Clone, Copy, Debug)]
+            pub struct SensibleMoveMask(u32);
+
+            impl SensibleMoveMask
+            {
+                /// Get the mask in a form suitable for computing offsets.
+                #[inline(always)] fn get_for_offset(self) -> u32
+                {
+                    #[cfg(target_endian = "big")]
+                    {
+                        self.0.swap_bytes()
+                    }
+                    #[cfg(target_endian = "little")]
+                    {
+                        self.0
+                    }
+                }
+            }
+
+            impl MoveMask for SensibleMoveMask 
+            {
+                #[inline( always )] fn all_zeros_except_least_significant(n: usize) -> SensibleMoveMask
+                {
+                    debug_assert!(n < 32); 
+                    SensibleMoveMask(!((1 << n) - 1))
+                }
+                #[inline( always )] fn has_non_zero(self) -> bool { self.0 != 0 }
+                #[inline( always )] fn count_ones(self) -> usize { self.0.count_ones() as usize }
+                #[inline( always )] fn and(self, other: SensibleMoveMask) -> SensibleMoveMask { SensibleMoveMask(self.0 & other.0) }
+                #[inline( always )] fn or(self, other: SensibleMoveMask) -> SensibleMoveMask { SensibleMoveMask(self.0 | other.0) }
+                #[inline( always )] fn clear_least_significant_bit(self) -> SensibleMoveMask { SensibleMoveMask(self.0 & (self.0 - 1)) }
+                #[inline( always )] fn first_offset(self) -> usize { self.get_for_offset().trailing_zeros() as usize }
+                #[inline( always )] fn last_offset(self) -> usize { 32 - self.get_for_offset().leading_zeros() as usize - 1 }
+            }
+
+            #[cfg(target_arch = "x86_64")]
+            mod x86sse2
+            {
+                use ::arch::x86_64::*;
+
+                use super::{SensibleMoveMask, Vector};
+
+                impl Vector for __m128i
+                {
+                    const BITS: usize = 128;
+                    const BYTES: usize = 16;
+                    const ALIGN: usize = Self::BYTES - 1;
+
+                    type Mask = SensibleMoveMask;
+
+                    #[inline(always)]
+                    unsafe fn splat(byte: u8) -> __m128i {
+                        _mm_set1_epi8(byte as i8)
+                    }
+
+                    #[inline(always)]
+                    unsafe fn load_aligned(data: *const u8) -> __m128i {
+                        _mm_load_si128(data as *const __m128i)
+                    }
+
+                    #[inline(always)]
+                    unsafe fn load_unaligned(data: *const u8) -> __m128i {
+                        _mm_loadu_si128(data as *const __m128i)
+                    }
+
+                    #[inline(always)]
+                    unsafe fn movemask(self) -> SensibleMoveMask {
+                        SensibleMoveMask(_mm_movemask_epi8(self) as u32)
+                    }
+
+                    #[inline(always)]
+                    unsafe fn cmpeq(self, vector2: Self) -> __m128i {
+                        _mm_cmpeq_epi8(self, vector2)
+                    }
+
+                    #[inline(always)]
+                    unsafe fn and(self, vector2: Self) -> __m128i {
+                        _mm_and_si128(self, vector2)
+                    }
+
+                    #[inline(always)]
+                    unsafe fn or(self, vector2: Self) -> __m128i {
+                        _mm_or_si128(self, vector2)
+                    }
+                }
+            }
+            #[cfg(target_arch = "x86_64")]
+            mod x86avx2
+            {
+                use ::arch::x86_64::*;
+
+                use super::{SensibleMoveMask, Vector};
+
+                impl Vector for __m256i
+                {
+                    const BITS: usize = 256;
+                    const BYTES: usize = 32;
+                    const ALIGN: usize = Self::BYTES - 1;
+
+                    type Mask = SensibleMoveMask;
+
+                    #[inline(always)]
+                    unsafe fn splat(byte: u8) -> __m256i {
+                        _mm256_set1_epi8(byte as i8)
+                    }
+
+                    #[inline(always)]
+                    unsafe fn load_aligned(data: *const u8) -> __m256i {
+                        _mm256_load_si256(data as *const __m256i)
+                    }
+
+                    #[inline(always)]
+                    unsafe fn load_unaligned(data: *const u8) -> __m256i {
+                        _mm256_loadu_si256(data as *const __m256i)
+                    }
+
+                    #[inline(always)]
+                    unsafe fn movemask(self) -> SensibleMoveMask {
+                        SensibleMoveMask(_mm256_movemask_epi8(self) as u32)
+                    }
+
+                    #[inline(always)]
+                    unsafe fn cmpeq(self, vector2: Self) -> __m256i {
+                        _mm256_cmpeq_epi8(self, vector2)
+                    }
+
+                    #[inline(always)]
+                    unsafe fn and(self, vector2: Self) -> __m256i {
+                        _mm256_and_si256(self, vector2)
+                    }
+
+                    #[inline(always)]
+                    unsafe fn or(self, vector2: Self) -> __m256i {
+                        _mm256_or_si256(self, vector2)
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub mod ops
+{
+    pub use std::ops::{ * };
+}
+
+pub mod os
+{
+    pub mod unix
+    {
+        pub use std::os::unix::{ * };
+    }
+
+    pub use std::os::{ * };
+}
+
+pub mod path
+{
+    pub use std::path::{ * };
+}
+
+pub mod process
+{
+    pub use std::process::{ * };
+}
+
+pub mod ptr
+{
+    pub use std::ptr::{ * };
+}
+
+pub mod regex
+{
+    /*!
+    This crate provides routines for searching strings for matches of a [regular expression] (aka "regex"). */
+    use ::
+    {
+        *,
+    };
+    /*
+    #![no_std]
+    #![deny(missing_docs)]
+    #![cfg_attr(feature = "pattern", feature(pattern))]
+    #![warn(missing_debug_implementations)]
+
+    #[cfg(doctest)]
+    doc_comment::doctest!("../README.md");
+
+    extern crate alloc;
+    #[cfg(any(test, feature = "std"))]
+    extern crate std;
+    pub use crate::error::Error;
+
+    pub use crate::{builders::string::*, regex::string::*, regexset::string::*};
+    */
+
+    pub mod automata
+    {
+        use ::
+        {
+            *,
+        };
+        /*
+        */
+    }
+
+    pub mod builders
+    {
+        /*
+        This module defines an internal builder that encapsulates all interaction with meta::Regex construction, 
+        and then 4 public API builders that wrap around it. */
+        use ::
+        {
+            regex::
+            {
+                automata::
+                {
+                    meta::{ self },
+                    nfa::thompson::{ WhichCaptures },
+                    util::{ syntax }, MatchKind,
+                },
+                error::{ Error },
+            },
+            string::{ String, ToString },
+            sync::{ Arc },
+            vec::{ self, Vec },
+            *,
+        };
+        /*
+        */
+        /// A builder for constructing a `Regex`, `bytes::Regex`, `RegexSet` or a `bytes::RegexSet`.
+        #[derive(Clone, Debug)]
+        struct Builder
+        {
+            pats: Vec<String>,
+            metac: meta::Config,
+            syntaxc: syntax::Config,
+        }
+
+        impl Default for Builder 
+        {
+            fn default() -> Builder {
+                let metac = meta::Config::new()
+                    .nfa_size_limit(Some(10 * (1 << 20)))
+                    .hybrid_cache_capacity(2 * (1 << 20));
+                Builder { pats: vec![], metac, syntaxc: syntax::Config::default() }
+            }
+        }
+
+        impl Builder 
+        {
+            fn new<I, S>(patterns: I) -> Builder
+            where
+                S: AsRef<str>,
+                I: IntoIterator<Item = S>,
+            {
+                let mut b = Builder::default();
+                b.pats.extend(patterns.into_iter().map(|p| p.as_ref().to_string()));
+                b
+            }
+
+            fn build_one_string(&self) -> Result<crate::Regex, Error> {
+                assert_eq!(1, self.pats.len());
+                let metac = self
+                    .metac
+                    .clone()
+                    .match_kind(MatchKind::LeftmostFirst)
+                    .utf8_empty(true);
+                let syntaxc = self.syntaxc.clone().utf8(true);
+                let pattern = Arc::from(self.pats[0].as_str());
+                meta::Builder::new()
+                    .configure(metac)
+                    .syntax(syntaxc)
+                    .build(&pattern)
+                    .map(|meta| crate::Regex { meta, pattern })
+                    .map_err(Error::from_meta_build_error)
+            }
+
+            fn build_one_bytes(&self) -> Result<crate::bytes::Regex, Error> {
+                assert_eq!(1, self.pats.len());
+                let metac = self
+                    .metac
+                    .clone()
+                    .match_kind(MatchKind::LeftmostFirst)
+                    .utf8_empty(false);
+                let syntaxc = self.syntaxc.clone().utf8(false);
+                let pattern = Arc::from(self.pats[0].as_str());
+                meta::Builder::new()
+                    .configure(metac)
+                    .syntax(syntaxc)
+                    .build(&pattern)
+                    .map(|meta| crate::bytes::Regex { meta, pattern })
+                    .map_err(Error::from_meta_build_error)
+            }
+
+            fn build_many_string(&self) -> Result<crate::RegexSet, Error> {
+                let metac = self
+                    .metac
+                    .clone()
+                    .match_kind(MatchKind::All)
+                    .utf8_empty(true)
+                    .which_captures(WhichCaptures::None);
+                let syntaxc = self.syntaxc.clone().utf8(true);
+                let patterns = Arc::from(self.pats.as_slice());
+                meta::Builder::new()
+                    .configure(metac)
+                    .syntax(syntaxc)
+                    .build_many(&patterns)
+                    .map(|meta| crate::RegexSet { meta, patterns })
+                    .map_err(Error::from_meta_build_error)
+            }
+
+            fn build_many_bytes(&self) -> Result<crate::bytes::RegexSet, Error> {
+                let metac = self
+                    .metac
+                    .clone()
+                    .match_kind(MatchKind::All)
+                    .utf8_empty(false)
+                    .which_captures(WhichCaptures::None);
+                let syntaxc = self.syntaxc.clone().utf8(false);
+                let patterns = Arc::from(self.pats.as_slice());
+                meta::Builder::new()
+                    .configure(metac)
+                    .syntax(syntaxc)
+                    .build_many(&patterns)
+                    .map(|meta| crate::bytes::RegexSet { meta, patterns })
+                    .map_err(Error::from_meta_build_error)
+            }
+
+            fn case_insensitive(&mut self, yes: bool) -> &mut Builder {
+                self.syntaxc = self.syntaxc.case_insensitive(yes);
+                self
+            }
+
+            fn multi_line(&mut self, yes: bool) -> &mut Builder {
+                self.syntaxc = self.syntaxc.multi_line(yes);
+                self
+            }
+
+            fn dot_matches_new_line(&mut self, yes: bool) -> &mut Builder {
+                self.syntaxc = self.syntaxc.dot_matches_new_line(yes);
+                self
+            }
+
+            fn crlf(&mut self, yes: bool) -> &mut Builder {
+                self.syntaxc = self.syntaxc.crlf(yes);
+                self
+            }
+
+            fn line_terminator(&mut self, byte: u8) -> &mut Builder {
+                self.metac = self.metac.clone().line_terminator(byte);
+                self.syntaxc = self.syntaxc.line_terminator(byte);
+                self
+            }
+
+            fn swap_greed(&mut self, yes: bool) -> &mut Builder {
+                self.syntaxc = self.syntaxc.swap_greed(yes);
+                self
+            }
+
+            fn ignore_whitespace(&mut self, yes: bool) -> &mut Builder {
+                self.syntaxc = self.syntaxc.ignore_whitespace(yes);
+                self
+            }
+
+            fn unicode(&mut self, yes: bool) -> &mut Builder {
+                self.syntaxc = self.syntaxc.unicode(yes);
+                self
+            }
+
+            fn octal(&mut self, yes: bool) -> &mut Builder {
+                self.syntaxc = self.syntaxc.octal(yes);
+                self
+            }
+
+            fn size_limit(&mut self, limit: usize) -> &mut Builder {
+                self.metac = self.metac.clone().nfa_size_limit(Some(limit));
+                self
+            }
+
+            fn dfa_size_limit(&mut self, limit: usize) -> &mut Builder {
+                self.metac = self.metac.clone().hybrid_cache_capacity(limit);
+                self
+            }
+
+            fn nest_limit(&mut self, limit: u32) -> &mut Builder {
+                self.syntaxc = self.syntaxc.nest_limit(limit);
+                self
+            }
+        }
+
+        pub mod string
+        {
+            use ::regex::{error::Error, Regex, RegexSet};
+
+            use super::Builder;
+
+            /// A configurable builder for a [`Regex`].
+            #[derive(Clone, Debug)]
+            pub struct RegexBuilder
+            {
+                builder: Builder,
+            }
+
+            impl RegexBuilder
+            {
+                /// Create a new builder with a default configuration for the given
+                /// pattern.
+                pub fn new(pattern: &str) -> RegexBuilder {
+                    RegexBuilder { builder: Builder::new([pattern]) }
+                }
+                /// Compiles the pattern given to `RegexBuilder::new` with the
+                /// configuration set on this builder.
+                pub fn build(&self) -> Result<Regex, Error> {
+                    self.builder.build_one_string()
+                }
+                /// This configures Unicode mode for the entire pattern.
+                pub fn unicode(&mut self, yes: bool) -> &mut RegexBuilder
+                {
+                    self.builder.unicode(yes);
+                    self
+                }
+                /// This configures whether to enable case insensitive matching for the entire pattern.
+                pub fn case_insensitive(&mut self, yes: bool) -> &mut RegexBuilder
+                {
+                    self.builder.case_insensitive(yes);
+                    self
+                }
+                /// This configures multi-line mode for the entire pattern.
+                pub fn multi_line(&mut self, yes: bool) -> &mut RegexBuilder
+                {
+                    self.builder.multi_line(yes);
+                    self
+                }
+                /// This configures dot-matches-new-line mode for the entire pattern.
+                pub fn dot_matches_new_line(
+                    &mut self,
+                    yes: bool,
+                ) -> &mut RegexBuilder
+                {
+                    self.builder.dot_matches_new_line(yes);
+                    self
+                }
+                /// This configures CRLF mode for the entire pattern.
+                pub fn crlf(&mut self, yes: bool) -> &mut RegexBuilder
+                {
+                    self.builder.crlf(yes);
+                    self
+                }
+                /// Configures the line terminator to be used by the regex.
+                pub fn line_terminator(&mut self, byte: u8) -> &mut RegexBuilder
+                {
+                    self.builder.line_terminator(byte);
+                    self
+                }
+                /// This configures swap-greed mode for the entire pattern.
+                pub fn swap_greed(&mut self, yes: bool) -> &mut RegexBuilder
+                {
+                    self.builder.swap_greed(yes);
+                    self
+                }
+                /// This configures verbose mode for the entire pattern.
+                pub fn ignore_whitespace(&mut self, yes: bool) -> &mut RegexBuilder
+                {
+                    self.builder.ignore_whitespace(yes);
+                    self
+                }
+                /// This configures octal mode for the entire pattern.
+                pub fn octal(&mut self, yes: bool) -> &mut RegexBuilder
+                {
+                    self.builder.octal(yes);
+                    self
+                }
+                /// Sets the approximate size limit, in bytes, of the compiled regex.
+                pub fn size_limit(&mut self, bytes: usize) -> &mut RegexBuilder
+                {
+                    self.builder.size_limit(bytes);
+                    self
+                }
+                /// Set the approximate capacity, in bytes, of the cache of transitions used by the lazy DFA.
+                pub fn dfa_size_limit(&mut self, bytes: usize) -> &mut RegexBuilder
+                {
+                    self.builder.dfa_size_limit(bytes);
+                    self
+                }
+                /// Set the nesting limit for this parser.
+                pub fn nest_limit(&mut self, limit: u32) -> &mut RegexBuilder
+                {
+                    self.builder.nest_limit(limit);
+                    self
+                }
+            }
+            /// A configurable builder for a [`RegexSet`].
+            #[derive(Clone, Debug)]
+            pub struct RegexSetBuilder
+            {
+                builder: Builder,
+            }
+
+            impl RegexSetBuilder
+            {
+                /// Create a new builder with a default configuration for the given
+                /// patterns.
+                pub fn new<I, S>(patterns: I) -> RegexSetBuilder
+                where
+                    I: IntoIterator<Item = S>,
+                    S: AsRef<str>,
+                {
+                    RegexSetBuilder { builder: Builder::new(patterns) }
+                }
+                /// Compiles the patterns given to `RegexSetBuilder::new` with the
+                /// configuration set on this builder.
+                pub fn build(&self) -> Result<RegexSet, Error> {
+                    self.builder.build_many_string()
+                }
+                /// This configures Unicode mode for the all of the patterns.
+                pub fn unicode(&mut self, yes: bool) -> &mut RegexSetBuilder
+                {
+                    self.builder.unicode(yes);
+                    self
+                }
+                /// This configures whether to enable case insensitive matching for all
+                /// of the patterns.
+                pub fn case_insensitive(&mut self, yes: bool) -> &mut RegexSetBuilder
+                {
+                    self.builder.case_insensitive(yes);
+                    self
+                }
+                /// This configures multi-line mode for all of the patterns.
+                pub fn multi_line(&mut self, yes: bool) -> &mut RegexSetBuilder
+                {
+                    self.builder.multi_line(yes);
+                    self
+                }
+                /// This configures dot-matches-new-line mode for the entire pattern.
+                pub fn dot_matches_new_line
+                (
+                    &mut self,
+                    yes: bool,
+                ) -> &mut RegexSetBuilder
+                {
+                    self.builder.dot_matches_new_line(yes);
+                    self
+                }
+                /// This configures CRLF mode for all of the patterns.
+                pub fn crlf(&mut self, yes: bool) -> &mut RegexSetBuilder
+                {
+                    self.builder.crlf(yes);
+                    self
+                }
+                /// Configures the line terminator to be used by the regex.
+                pub fn line_terminator(&mut self, byte: u8) -> &mut RegexSetBuilder
+                {
+                    self.builder.line_terminator(byte);
+                    self
+                }
+                /// This configures swap-greed mode for all of the patterns.
+                pub fn swap_greed(&mut self, yes: bool) -> &mut RegexSetBuilder
+                {
+                    self.builder.swap_greed(yes);
+                    self
+                }
+                /// This configures verbose mode for all of the patterns.
+                pub fn ignore_whitespace
+                (
+                    &mut self,
+                    yes: bool,
+                ) -> &mut RegexSetBuilder
+                {
+                    self.builder.ignore_whitespace(yes);
+                    self
+                }
+                /// This configures octal mode for all of the patterns.
+                pub fn octal(&mut self, yes: bool) -> &mut RegexSetBuilder
+                {
+                    self.builder.octal(yes);
+                    self
+                }
+                /// Sets the approximate size limit, in bytes, of the compiled regex.
+                pub fn size_limit(&mut self, bytes: usize) -> &mut RegexSetBuilder
+                {
+                    self.builder.size_limit(bytes);
+                    self
+                }
+                /// Set the approximate capacity, in bytes, of the cache of transitions
+                /// used by the lazy DFA.
+                pub fn dfa_size_limit
+                (
+                    &mut self,
+                    bytes: usize,
+                ) -> &mut RegexSetBuilder
+                {
+                    self.builder.dfa_size_limit(bytes);
+                    self
+                }
+                /// Set the nesting limit for this parser.
+                pub fn nest_limit(&mut self, limit: u32) -> &mut RegexSetBuilder
+                {
+                    self.builder.nest_limit(limit);
+                    self
+                }
+            }
+        }
+
+        pub mod bytes 
+        {
+            use ::regex::
+            {
+                bytes::{Regex, RegexSet},
+                error::Error,
+            };
+
+            use super::Builder;
+
+            /// A configurable builder for a [`Regex`].
+            ///
+            /// This builder can be used to programmatically set flags such as `i`
+            /// (case insensitive) and `x` (for verbose mode). This builder can also be
+            /// used to configure things like the line terminator and a size limit on
+            /// the compiled regular expression.
+            #[derive(Clone, Debug)]
+            pub struct RegexBuilder {
+                builder: Builder,
+            }
+
+            impl RegexBuilder {
+                /// Create a new builder with a default configuration for the given
+                /// pattern.
+                ///
+                /// If the pattern is invalid or exceeds the configured size limits,
+                /// then an error will be returned when [`RegexBuilder::build`] is
+                /// called.
+                pub fn new(pattern: &str) -> RegexBuilder {
+                    RegexBuilder { builder: Builder::new([pattern]) }
+                }
+                /// Compiles the pattern given to `RegexBuilder::new` with the
+                /// configuration set on this builder.
+                ///
+                /// If the pattern isn't a valid regex or if a configured size limit
+                /// was exceeded, then an error is returned.
+                pub fn build(&self) -> Result<Regex, Error> {
+                    self.builder.build_one_bytes()
+                }
+                /// This configures Unicode mode for the entire pattern.
+                ///
+                /// Enabling Unicode mode does a number of things:
+                ///
+                /// * Most fundamentally, it causes the fundamental atom of matching
+                /// to be a single codepoint. When Unicode mode is disabled, it's a
+                /// single byte. For example, when Unicode mode is enabled, `.` will
+                /// match `💩` once, where as it will match 4 times when Unicode mode
+                /// is disabled. (Since the UTF-8 encoding of `💩` is 4 bytes long.)
+                /// * Case insensitive matching uses Unicode simple case folding rules.
+                /// * Unicode character classes like `\p{Letter}` and `\p{Greek}` are
+                /// available.
+                /// * Perl character classes are Unicode aware. That is, `\w`, `\s` and
+                /// `\d`.
+                /// * The word boundary assertions, `\b` and `\B`, use the Unicode
+                /// definition of a word character.
+                ///
+                /// Note that unlike the top-level `Regex` for searching `&str`, it
+                /// is permitted to disable Unicode mode even if the resulting pattern
+                /// could match invalid UTF-8. For example, `(?-u:.)` is not a valid
+                /// pattern for a top-level `Regex`, but is valid for a `bytes::Regex`.
+                ///
+                /// For more details on the Unicode support in this crate, see the
+                /// [Unicode section](crate#unicode) in this crate's top-level
+                /// documentation.
+                ///
+                /// The default for this is `true`.
+                ///
+                /// # Example
+                ///
+                /// ```
+                /// use regex::bytes::RegexBuilder;
+                ///
+                /// let re = RegexBuilder::new(r"\w")
+                ///     .unicode(false)
+                ///     .build()
+                ///     .unwrap();
+                /// // Normally greek letters would be included in \w, but since
+                /// // Unicode mode is disabled, it only matches ASCII letters.
+                /// assert!(!re.is_match("δ".as_bytes()));
+                ///
+                /// let re = RegexBuilder::new(r"s")
+                ///     .case_insensitive(true)
+                ///     .unicode(false)
+                ///     .build()
+                ///     .unwrap();
+                /// // Normally 'ſ' is included when searching for 's' case
+                /// // insensitively due to Unicode's simple case folding rules. But
+                /// // when Unicode mode is disabled, only ASCII case insensitive rules
+                /// // are used.
+                /// assert!(!re.is_match("ſ".as_bytes()));
+                /// ```
+                ///
+                /// Since this builder is for constructing a [`bytes::Regex`](Regex),
+                /// one can disable Unicode mode even if it would match invalid UTF-8:
+                ///
+                /// ```
+                /// use regex::bytes::RegexBuilder;
+                ///
+                /// let re = RegexBuilder::new(r".")
+                ///     .unicode(false)
+                ///     .build()
+                ///     .unwrap();
+                /// // Normally greek letters would be included in \w, but since
+                /// // Unicode mode is disabled, it only matches ASCII letters.
+                /// assert!(re.is_match(b"\xFF"));
+                /// ```
+                pub fn unicode(&mut self, yes: bool) -> &mut RegexBuilder
+                {
+                    self.builder.unicode(yes);
+                    self
+                }
+                /// This configures whether to enable case insensitive matching for the
+                /// entire pattern.
+                ///
+                /// This setting can also be configured using the inline flag `i`
+                /// in the pattern. For example, `(?i:foo)` matches `foo` case
+                /// insensitively while `(?-i:foo)` matches `foo` case sensitively.
+                ///
+                /// The default for this is `false`.
+                ///
+                /// # Example
+                ///
+                /// ```
+                /// use regex::bytes::RegexBuilder;
+                ///
+                /// let re = RegexBuilder::new(r"foo(?-i:bar)quux")
+                ///     .case_insensitive(true)
+                ///     .build()
+                ///     .unwrap();
+                /// assert!(re.is_match(b"FoObarQuUx"));
+                /// // Even though case insensitive matching is enabled in the builder,
+                /// // it can be locally disabled within the pattern. In this case,
+                /// // `bar` is matched case sensitively.
+                /// assert!(!re.is_match(b"fooBARquux"));
+                /// ```
+                pub fn case_insensitive(&mut self, yes: bool) -> &mut RegexBuilder
+                {
+                    self.builder.case_insensitive(yes);
+                    self
+                }
+                /// This configures multi-line mode for the entire pattern.
+                ///
+                /// Enabling multi-line mode changes the behavior of the `^` and `$`
+                /// anchor assertions. Instead of only matching at the beginning and
+                /// end of a haystack, respectively, multi-line mode causes them to
+                /// match at the beginning and end of a line *in addition* to the
+                /// beginning and end of a haystack. More precisely, `^` will match at
+                /// the position immediately following a `\n` and `$` will match at the
+                /// position immediately preceding a `\n`.
+                ///
+                /// The behavior of this option can be impacted by other settings too:
+                ///
+                /// * The [`RegexBuilder::line_terminator`] option changes `\n` above
+                /// to any ASCII byte.
+                /// * The [`RegexBuilder::crlf`] option changes the line terminator to
+                /// be either `\r` or `\n`, but never at the position between a `\r`
+                /// and `\n`.
+                ///
+                /// This setting can also be configured using the inline flag `m` in
+                /// the pattern.
+                ///
+                /// The default for this is `false`.
+                ///
+                /// # Example
+                ///
+                /// ```
+                /// use regex::bytes::RegexBuilder;
+                ///
+                /// let re = RegexBuilder::new(r"^foo$")
+                ///     .multi_line(true)
+                ///     .build()
+                ///     .unwrap();
+                /// assert_eq!(Some(1..4), re.find(b"\nfoo\n").map(|m| m.range()));
+                /// ```
+                pub fn multi_line(&mut self, yes: bool) -> &mut RegexBuilder
+                {
+                    self.builder.multi_line(yes);
+                    self
+                }
+                /// This configures dot-matches-new-line mode for the entire pattern.
+                ///
+                /// Perhaps surprisingly, the default behavior for `.` is not to match
+                /// any character, but rather, to match any character except for the
+                /// line terminator (which is `\n` by default). When this mode is
+                /// enabled, the behavior changes such that `.` truly matches any
+                /// character.
+                ///
+                /// This setting can also be configured using the inline flag `s` in
+                /// the pattern. For example, `(?s:.)` and `\p{any}` are equivalent
+                /// regexes.
+                ///
+                /// The default for this is `false`.
+                ///
+                /// # Example
+                ///
+                /// ```
+                /// use regex::bytes::RegexBuilder;
+                ///
+                /// let re = RegexBuilder::new(r"foo.bar")
+                ///     .dot_matches_new_line(true)
+                ///     .build()
+                ///     .unwrap();
+                /// let hay = b"foo\nbar";
+                /// assert_eq!(Some(&b"foo\nbar"[..]), re.find(hay).map(|m| m.as_bytes()));
+                /// ```
+                pub fn dot_matches_new_line(
+                    &mut self,
+                    yes: bool,
+                ) -> &mut RegexBuilder
+                {
+                    self.builder.dot_matches_new_line(yes);
+                    self
+                }
+                /// This configures CRLF mode for the entire pattern.
+                ///
+                /// When CRLF mode is enabled, both `\r` ("carriage return" or CR for
+                /// short) and `\n` ("line feed" or LF for short) are treated as line
+                /// terminators. This results in the following:
+                ///
+                /// * Unless dot-matches-new-line mode is enabled, `.` will now match
+                /// any character except for `\n` and `\r`.
+                /// * When multi-line mode is enabled, `^` will match immediately
+                /// following a `\n` or a `\r`. Similarly, `$` will match immediately
+                /// preceding a `\n` or a `\r`. Neither `^` nor `$` will ever match
+                /// between `\r` and `\n`.
+                ///
+                /// This setting can also be configured using the inline flag `R` in
+                /// the pattern.
+                ///
+                /// The default for this is `false`.
+                ///
+                /// # Example
+                ///
+                /// ```
+                /// use regex::bytes::RegexBuilder;
+                ///
+                /// let re = RegexBuilder::new(r"^foo$")
+                ///     .multi_line(true)
+                ///     .crlf(true)
+                ///     .build()
+                ///     .unwrap();
+                /// let hay = b"\r\nfoo\r\n";
+                /// // If CRLF mode weren't enabled here, then '$' wouldn't match
+                /// // immediately after 'foo', and thus no match would be found.
+                /// assert_eq!(Some(&b"foo"[..]), re.find(hay).map(|m| m.as_bytes()));
+                /// ```
+                ///
+                /// This example demonstrates that `^` will never match at a position
+                /// between `\r` and `\n`. (`$` will similarly not match between a `\r`
+                /// and a `\n`.)
+                ///
+                /// ```
+                /// use regex::bytes::RegexBuilder;
+                ///
+                /// let re = RegexBuilder::new(r"^")
+                ///     .multi_line(true)
+                ///     .crlf(true)
+                ///     .build()
+                ///     .unwrap();
+                /// let hay = b"\r\n\r\n";
+                /// let ranges: Vec<_> = re.find_iter(hay).map(|m| m.range()).collect();
+                /// assert_eq!(ranges, vec![0..0, 2..2, 4..4]);
+                /// ```
+                pub fn crlf(&mut self, yes: bool) -> &mut RegexBuilder
+                {
+                    self.builder.crlf(yes);
+                    self
+                }
+                /// Configures the line terminator to be used by the regex.
+                ///
+                /// The line terminator is relevant in two ways for a particular regex:
+                ///
+                /// * When dot-matches-new-line mode is *not* enabled (the default),
+                /// then `.` will match any character except for the configured line
+                /// terminator.
+                /// * When multi-line mode is enabled (not the default), then `^` and
+                /// `$` will match immediately after and before, respectively, a line
+                /// terminator.
+                ///
+                /// In both cases, if CRLF mode is enabled in a particular context,
+                /// then it takes precedence over any configured line terminator.
+                ///
+                /// This option cannot be configured from within the pattern.
+                ///
+                /// The default line terminator is `\n`.
+                ///
+                /// # Example
+                ///
+                /// This shows how to treat the NUL byte as a line terminator. This can
+                /// be a useful heuristic when searching binary data.
+                ///
+                /// ```
+                /// use regex::bytes::RegexBuilder;
+                ///
+                /// let re = RegexBuilder::new(r"^foo$")
+                ///     .multi_line(true)
+                ///     .line_terminator(b'\x00')
+                ///     .build()
+                ///     .unwrap();
+                /// let hay = b"\x00foo\x00";
+                /// assert_eq!(Some(1..4), re.find(hay).map(|m| m.range()));
+                /// ```
+                ///
+                /// This example shows that the behavior of `.` is impacted by this
+                /// setting as well:
+                ///
+                /// ```
+                /// use regex::bytes::RegexBuilder;
+                ///
+                /// let re = RegexBuilder::new(r".")
+                ///     .line_terminator(b'\x00')
+                ///     .build()
+                ///     .unwrap();
+                /// assert!(re.is_match(b"\n"));
+                /// assert!(!re.is_match(b"\x00"));
+                /// ```
+                ///
+                /// This shows that building a regex will work even when the byte
+                /// given is not ASCII. This is unlike the top-level `Regex` API where
+                /// matching invalid UTF-8 is not allowed.
+                ///
+                /// Note though that you must disable Unicode mode. This is required
+                /// because Unicode mode requires matching one codepoint at a time,
+                /// and there is no way to match a non-ASCII byte as if it were a
+                /// codepoint.
+                ///
+                /// ```
+                /// use regex::bytes::RegexBuilder;
+                ///
+                /// assert!(
+                ///     RegexBuilder::new(r".")
+                ///         .unicode(false)
+                ///         .line_terminator(0x80)
+                ///         .build()
+                ///         .is_ok(),
+                /// );
+                /// ```
+                pub fn line_terminator(&mut self, byte: u8) -> &mut RegexBuilder
+                {
+                    self.builder.line_terminator(byte);
+                    self
+                }
+                /// This configures swap-greed mode for the entire pattern.
+                ///
+                /// When swap-greed mode is enabled, patterns like `a+` will become
+                /// non-greedy and patterns like `a+?` will become greedy. In other
+                /// words, the meanings of `a+` and `a+?` are switched.
+                ///
+                /// This setting can also be configured using the inline flag `U` in
+                /// the pattern.
+                ///
+                /// The default for this is `false`.
+                ///
+                /// # Example
+                ///
+                /// ```
+                /// use regex::bytes::RegexBuilder;
+                ///
+                /// let re = RegexBuilder::new(r"a+")
+                ///     .swap_greed(true)
+                ///     .build()
+                ///     .unwrap();
+                /// assert_eq!(Some(&b"a"[..]), re.find(b"aaa").map(|m| m.as_bytes()));
+                /// ```
+                pub fn swap_greed(&mut self, yes: bool) -> &mut RegexBuilder
+                {
+                    self.builder.swap_greed(yes);
+                    self
+                }
+                /// This configures verbose mode for the entire pattern.
+                ///
+                /// When enabled, whitespace will treated as insignificant in the
+                /// pattern and `#` can be used to start a comment until the next new
+                /// line.
+                ///
+                /// Normally, in most places in a pattern, whitespace is treated
+                /// literally. For example ` +` will match one or more ASCII whitespace
+                /// characters.
+                ///
+                /// When verbose mode is enabled, `\#` can be used to match a literal
+                /// `#` and `\ ` can be used to match a literal ASCII whitespace
+                /// character.
+                ///
+                /// Verbose mode is useful for permitting regexes to be formatted and
+                /// broken up more nicely. This may make them more easily readable.
+                ///
+                /// This setting can also be configured using the inline flag `x` in
+                /// the pattern.
+                ///
+                /// The default for this is `false`.
+                ///
+                /// # Example
+                ///
+                /// ```
+                /// use regex::bytes::RegexBuilder;
+                ///
+                /// let pat = r"
+                ///     \b
+                ///     (?<first>\p{Uppercase}\w*)  # always start with uppercase letter
+                ///     [\s--\n]+                   # whitespace should separate names
+                ///     (?: # middle name can be an initial!
+                ///         (?:(?<initial>\p{Uppercase})\.|(?<middle>\p{Uppercase}\w*))
+                ///         [\s--\n]+
+                ///     )?
+                ///     (?<last>\p{Uppercase}\w*)
+                ///     \b
+                /// ";
+                /// let re = RegexBuilder::new(pat)
+                ///     .ignore_whitespace(true)
+                ///     .build()
+                ///     .unwrap();
+                ///
+                /// let caps = re.captures(b"Harry Potter").unwrap();
+                /// assert_eq!(&b"Harry"[..], &caps["first"]);
+                /// assert_eq!(&b"Potter"[..], &caps["last"]);
+                ///
+                /// let caps = re.captures(b"Harry J. Potter").unwrap();
+                /// assert_eq!(&b"Harry"[..], &caps["first"]);
+                /// // Since a middle name/initial isn't required for an overall match,
+                /// // we can't assume that 'initial' or 'middle' will be populated!
+                /// assert_eq!(
+                ///     Some(&b"J"[..]),
+                ///     caps.name("initial").map(|m| m.as_bytes()),
+                /// );
+                /// assert_eq!(None, caps.name("middle").map(|m| m.as_bytes()));
+                /// assert_eq!(&b"Potter"[..], &caps["last"]);
+                ///
+                /// let caps = re.captures(b"Harry James Potter").unwrap();
+                /// assert_eq!(&b"Harry"[..], &caps["first"]);
+                /// // Since a middle name/initial isn't required for an overall match,
+                /// // we can't assume that 'initial' or 'middle' will be populated!
+                /// assert_eq!(None, caps.name("initial").map(|m| m.as_bytes()));
+                /// assert_eq!(
+                ///     Some(&b"James"[..]),
+                ///     caps.name("middle").map(|m| m.as_bytes()),
+                /// );
+                /// assert_eq!(&b"Potter"[..], &caps["last"]);
+                /// ```
+                pub fn ignore_whitespace(&mut self, yes: bool) -> &mut RegexBuilder
+                {
+                    self.builder.ignore_whitespace(yes);
+                    self
+                }
+                /// This configures octal mode for the entire pattern.
+                ///
+                /// Octal syntax is a little-known way of uttering Unicode codepoints
+                /// in a pattern. For example, `a`, `\x61`, `\u0061` and `\141` are all
+                /// equivalent patterns, where the last example shows octal syntax.
+                ///
+                /// While supporting octal syntax isn't in and of itself a problem,
+                /// it does make good error messages harder. That is, in PCRE based
+                /// regex engines, syntax like `\1` invokes a backreference, which is
+                /// explicitly unsupported this library. However, many users expect
+                /// backreferences to be supported. Therefore, when octal support
+                /// is disabled, the error message will explicitly mention that
+                /// backreferences aren't supported.
+                ///
+                /// The default for this is `false`.
+                ///
+                /// # Example
+                ///
+                /// ```
+                /// use regex::bytes::RegexBuilder;
+                ///
+                /// // Normally this pattern would not compile, with an error message
+                /// // about backreferences not being supported. But with octal mode
+                /// // enabled, octal escape sequences work.
+                /// let re = RegexBuilder::new(r"\141")
+                ///     .octal(true)
+                ///     .build()
+                ///     .unwrap();
+                /// assert!(re.is_match(b"a"));
+                /// ```
+                pub fn octal(&mut self, yes: bool) -> &mut RegexBuilder
+                {
+                    self.builder.octal(yes);
+                    self
+                }
+                /// Sets the approximate size limit, in bytes, of the compiled regex.
+                ///
+                /// This roughly corresponds to the number of heap memory, in
+                /// bytes, occupied by a single regex. If the regex would otherwise
+                /// approximately exceed this limit, then compiling that regex will
+                /// fail.
+                ///
+                /// The main utility of a method like this is to avoid compiling
+                /// regexes that use an unexpected amount of resources, such as
+                /// time and memory. Even if the memory usage of a large regex is
+                /// acceptable, its search time may not be. Namely, worst case time
+                /// complexity for search is `O(m * n)`, where `m ~ len(pattern)` and
+                /// `n ~ len(haystack)`. That is, search time depends, in part, on the
+                /// size of the compiled regex. This means that putting a limit on the
+                /// size of the regex limits how much a regex can impact search time.
+                ///
+                /// For more information about regex size limits, see the section on
+                /// [untrusted inputs](crate#untrusted-input) in the top-level crate
+                /// documentation.
+                ///
+                /// The default for this is some reasonable number that permits most
+                /// patterns to compile successfully.
+                ///
+                /// # Example
+                ///
+                /// ```
+                /// # if !cfg!(target_pointer_width = "64") { return; } // see #1041
+                /// use regex::bytes::RegexBuilder;
+                ///
+                /// // It may surprise you how big some seemingly small patterns can
+                /// // be! Since \w is Unicode aware, this generates a regex that can
+                /// // match approximately 140,000 distinct codepoints.
+                /// assert!(RegexBuilder::new(r"\w").size_limit(45_000).build().is_err());
+                /// ```
+                pub fn size_limit(&mut self, bytes: usize) -> &mut RegexBuilder
+                {
+                    self.builder.size_limit(bytes);
+                    self
+                }
+                /// Set the approximate capacity, in bytes, of the cache of transitions
+                /// used by the lazy DFA.
+                ///
+                /// While the lazy DFA isn't always used, in tends to be the most
+                /// commonly use regex engine in default configurations. It tends to
+                /// adopt the performance profile of a fully build DFA, but without the
+                /// downside of taking worst case exponential time to build.
+                ///
+                /// The downside is that it needs to keep a cache of transitions and
+                /// states that are built while running a search, and this cache
+                /// can fill up. When it fills up, the cache will reset itself. Any
+                /// previously generated states and transitions will then need to be
+                /// re-generated. If this happens too many times, then this library
+                /// will bail out of using the lazy DFA and switch to a different regex
+                /// engine.
+                ///
+                /// If your regex provokes this particular downside of the lazy DFA,
+                /// then it may be beneficial to increase its cache capacity. This will
+                /// potentially reduce the frequency of cache resetting (ideally to
+                /// `0`). While it won't fix all potential performance problems with
+                /// the lazy DFA, increasing the cache capacity does fix some.
+                ///
+                /// There is no easy way to determine, a priori, whether increasing
+                /// this cache capacity will help. In general, the larger your regex,
+                /// the more cache it's likely to use. But that isn't an ironclad rule.
+                /// For example, a regex like `[01]*1[01]{N}` would normally produce a
+                /// fully build DFA that is exponential in size with respect to `N`.
+                /// The lazy DFA will prevent exponential space blow-up, but it cache
+                /// is likely to fill up, even when it's large and even for smallish
+                /// values of `N`.
+                ///
+                /// If you aren't sure whether this helps or not, it is sensible to
+                /// set this to some arbitrarily large number in testing, such as
+                /// `usize::MAX`. Namely, this represents the amount of capacity that
+                /// *may* be used. It's probably not a good idea to use `usize::MAX` in
+                /// production though, since it implies there are no controls on heap
+                /// memory used by this library during a search. In effect, set it to
+                /// whatever you're willing to allocate for a single regex search.
+                pub fn dfa_size_limit(&mut self, bytes: usize) -> &mut RegexBuilder
+                {
+                    self.builder.dfa_size_limit(bytes);
+                    self
+                }
+                /// Set the nesting limit for this parser.
+                ///
+                /// The nesting limit controls how deep the abstract syntax tree is
+                /// allowed to be. If the AST exceeds the given limit (e.g., with too
+                /// many nested groups), then an error is returned by the parser.
+                ///
+                /// The purpose of this limit is to act as a heuristic to prevent stack
+                /// overflow for consumers that do structural induction on an AST using
+                /// explicit recursion. While this crate never does this (instead using
+                /// constant stack space and moving the call stack to the heap), other
+                /// crates may.
+                ///
+                /// This limit is not checked until the entire AST is parsed.
+                /// Therefore, if callers want to put a limit on the amount of heap
+                /// space used, then they should impose a limit on the length, in
+                /// bytes, of the concrete pattern string. In particular, this is
+                /// viable since this parser implementation will limit itself to heap
+                /// space proportional to the length of the pattern string. See also
+                /// the [untrusted inputs](crate#untrusted-input) section in the
+                /// top-level crate documentation for more information about this.
+                ///
+                /// Note that a nest limit of `0` will return a nest limit error for
+                /// most patterns but not all. For example, a nest limit of `0` permits
+                /// `a` but not `ab`, since `ab` requires an explicit concatenation,
+                /// which results in a nest depth of `1`. In general, a nest limit is
+                /// not something that manifests in an obvious way in the concrete
+                /// syntax, therefore, it should not be used in a granular way.
+                ///
+                /// # Example
+                ///
+                /// ```
+                /// use regex::bytes::RegexBuilder;
+                ///
+                /// assert!(RegexBuilder::new(r"a").nest_limit(0).build().is_ok());
+                /// assert!(RegexBuilder::new(r"ab").nest_limit(0).build().is_err());
+                /// ```
+                pub fn nest_limit(&mut self, limit: u32) -> &mut RegexBuilder
+                {
+                    self.builder.nest_limit(limit);
+                    self
+                }
+            }
+            /// A configurable builder for a [`RegexSet`].
+            ///
+            /// This builder can be used to programmatically set flags such as `i`
+            /// (case insensitive) and `x` (for verbose mode). This builder can also be
+            /// used to configure things like the line terminator and a size limit on
+            /// the compiled regular expression.
+            #[derive(Clone, Debug)]
+            pub struct RegexSetBuilder {
+                builder: Builder,
+            }
+
+            impl RegexSetBuilder {
+                /// Create a new builder with a default configuration for the given
+                /// patterns.
+                ///
+                /// If the patterns are invalid or exceed the configured size limits,
+                /// then an error will be returned when [`RegexSetBuilder::build`] is
+                /// called.
+                pub fn new<I, S>(patterns: I) -> RegexSetBuilder
+                where
+                    I: IntoIterator<Item = S>,
+                    S: AsRef<str>,
+                {
+                    RegexSetBuilder { builder: Builder::new(patterns) }
+                }
+                /// Compiles the patterns given to `RegexSetBuilder::new` with the
+                /// configuration set on this builder.
+                ///
+                /// If the patterns aren't valid regexes or if a configured size limit
+                /// was exceeded, then an error is returned.
+                pub fn build(&self) -> Result<RegexSet, Error> {
+                    self.builder.build_many_bytes()
+                }
+                /// This configures Unicode mode for the all of the patterns.
+                ///
+                /// Enabling Unicode mode does a number of things:
+                ///
+                /// * Most fundamentally, it causes the fundamental atom of matching
+                /// to be a single codepoint. When Unicode mode is disabled, it's a
+                /// single byte. For example, when Unicode mode is enabled, `.` will
+                /// match `💩` once, where as it will match 4 times when Unicode mode
+                /// is disabled. (Since the UTF-8 encoding of `💩` is 4 bytes long.)
+                /// * Case insensitive matching uses Unicode simple case folding rules.
+                /// * Unicode character classes like `\p{Letter}` and `\p{Greek}` are
+                /// available.
+                /// * Perl character classes are Unicode aware. That is, `\w`, `\s` and
+                /// `\d`.
+                /// * The word boundary assertions, `\b` and `\B`, use the Unicode
+                /// definition of a word character.
+                ///
+                /// Note that unlike the top-level `RegexSet` for searching `&str`,
+                /// it is permitted to disable Unicode mode even if the resulting
+                /// pattern could match invalid UTF-8. For example, `(?-u:.)` is not
+                /// a valid pattern for a top-level `RegexSet`, but is valid for a
+                /// `bytes::RegexSet`.
+                ///
+                /// For more details on the Unicode support in this crate, see the
+                /// [Unicode section](crate#unicode) in this crate's top-level
+                /// documentation.
+                ///
+                /// The default for this is `true`.
+                ///
+                /// # Example
+                ///
+                /// ```
+                /// use regex::bytes::RegexSetBuilder;
+                ///
+                /// let re = RegexSetBuilder::new([r"\w"])
+                ///     .unicode(false)
+                ///     .build()
+                ///     .unwrap();
+                /// // Normally greek letters would be included in \w, but since
+                /// // Unicode mode is disabled, it only matches ASCII letters.
+                /// assert!(!re.is_match("δ".as_bytes()));
+                ///
+                /// let re = RegexSetBuilder::new([r"s"])
+                ///     .case_insensitive(true)
+                ///     .unicode(false)
+                ///     .build()
+                ///     .unwrap();
+                /// // Normally 'ſ' is included when searching for 's' case
+                /// // insensitively due to Unicode's simple case folding rules. But
+                /// // when Unicode mode is disabled, only ASCII case insensitive rules
+                /// // are used.
+                /// assert!(!re.is_match("ſ".as_bytes()));
+                /// ```
+                ///
+                /// Since this builder is for constructing a
+                /// [`bytes::RegexSet`](RegexSet), one can disable Unicode mode even if
+                /// it would match invalid UTF-8:
+                ///
+                /// ```
+                /// use regex::bytes::RegexSetBuilder;
+                ///
+                /// let re = RegexSetBuilder::new([r"."])
+                ///     .unicode(false)
+                ///     .build()
+                ///     .unwrap();
+                /// // Normally greek letters would be included in \w, but since
+                /// // Unicode mode is disabled, it only matches ASCII letters.
+                /// assert!(re.is_match(b"\xFF"));
+                /// ```
+                pub fn unicode(&mut self, yes: bool) -> &mut RegexSetBuilder
+                {
+                    self.builder.unicode(yes);
+                    self
+                }
+                /// This configures whether to enable case insensitive matching for all
+                /// of the patterns.
+                ///
+                /// This setting can also be configured using the inline flag `i`
+                /// in the pattern. For example, `(?i:foo)` matches `foo` case
+                /// insensitively while `(?-i:foo)` matches `foo` case sensitively.
+                ///
+                /// The default for this is `false`.
+                ///
+                /// # Example
+                ///
+                /// ```
+                /// use regex::bytes::RegexSetBuilder;
+                ///
+                /// let re = RegexSetBuilder::new([r"foo(?-i:bar)quux"])
+                ///     .case_insensitive(true)
+                ///     .build()
+                ///     .unwrap();
+                /// assert!(re.is_match(b"FoObarQuUx"));
+                /// // Even though case insensitive matching is enabled in the builder,
+                /// // it can be locally disabled within the pattern. In this case,
+                /// // `bar` is matched case sensitively.
+                /// assert!(!re.is_match(b"fooBARquux"));
+                /// ```
+                pub fn case_insensitive(&mut self, yes: bool) -> &mut RegexSetBuilder
+                {
+                    self.builder.case_insensitive(yes);
+                    self
+                }
+                /// This configures multi-line mode for all of the patterns.
+                ///
+                /// Enabling multi-line mode changes the behavior of the `^` and `$`
+                /// anchor assertions. Instead of only matching at the beginning and
+                /// end of a haystack, respectively, multi-line mode causes them to
+                /// match at the beginning and end of a line *in addition* to the
+                /// beginning and end of a haystack. More precisely, `^` will match at
+                /// the position immediately following a `\n` and `$` will match at the
+                /// position immediately preceding a `\n`.
+                ///
+                /// The behavior of this option can be impacted by other settings too:
+                ///
+                /// * The [`RegexSetBuilder::line_terminator`] option changes `\n`
+                /// above to any ASCII byte.
+                /// * The [`RegexSetBuilder::crlf`] option changes the line terminator
+                /// to be either `\r` or `\n`, but never at the position between a `\r`
+                /// and `\n`.
+                ///
+                /// This setting can also be configured using the inline flag `m` in
+                /// the pattern.
+                ///
+                /// The default for this is `false`.
+                ///
+                /// # Example
+                ///
+                /// ```
+                /// use regex::bytes::RegexSetBuilder;
+                ///
+                /// let re = RegexSetBuilder::new([r"^foo$"])
+                ///     .multi_line(true)
+                ///     .build()
+                ///     .unwrap();
+                /// assert!(re.is_match(b"\nfoo\n"));
+                /// ```
+                pub fn multi_line(&mut self, yes: bool) -> &mut RegexSetBuilder
+                {
+                    self.builder.multi_line(yes);
+                    self
+                }
+                /// This configures dot-matches-new-line mode for the entire pattern.
+                ///
+                /// Perhaps surprisingly, the default behavior for `.` is not to match
+                /// any character, but rather, to match any character except for the
+                /// line terminator (which is `\n` by default). When this mode is
+                /// enabled, the behavior changes such that `.` truly matches any
+                /// character.
+                ///
+                /// This setting can also be configured using the inline flag `s` in
+                /// the pattern. For example, `(?s:.)` and `\p{any}` are equivalent
+                /// regexes.
+                ///
+                /// The default for this is `false`.
+                ///
+                /// # Example
+                ///
+                /// ```
+                /// use regex::bytes::RegexSetBuilder;
+                ///
+                /// let re = RegexSetBuilder::new([r"foo.bar"])
+                ///     .dot_matches_new_line(true)
+                ///     .build()
+                ///     .unwrap();
+                /// let hay = b"foo\nbar";
+                /// assert!(re.is_match(hay));
+                /// ```
+                pub fn dot_matches_new_line(
+                    &mut self,
+                    yes: bool,
+                ) -> &mut RegexSetBuilder
+                {
+                    self.builder.dot_matches_new_line(yes);
+                    self
+                }
+                /// This configures CRLF mode for all of the patterns.
+                ///
+                /// When CRLF mode is enabled, both `\r` ("carriage return" or CR for
+                /// short) and `\n` ("line feed" or LF for short) are treated as line
+                /// terminators. This results in the following:
+                ///
+                /// * Unless dot-matches-new-line mode is enabled, `.` will now match
+                /// any character except for `\n` and `\r`.
+                /// * When multi-line mode is enabled, `^` will match immediately
+                /// following a `\n` or a `\r`. Similarly, `$` will match immediately
+                /// preceding a `\n` or a `\r`. Neither `^` nor `$` will ever match
+                /// between `\r` and `\n`.
+                ///
+                /// This setting can also be configured using the inline flag `R` in
+                /// the pattern.
+                ///
+                /// The default for this is `false`.
+                ///
+                /// # Example
+                ///
+                /// ```
+                /// use regex::bytes::RegexSetBuilder;
+                ///
+                /// let re = RegexSetBuilder::new([r"^foo$"])
+                ///     .multi_line(true)
+                ///     .crlf(true)
+                ///     .build()
+                ///     .unwrap();
+                /// let hay = b"\r\nfoo\r\n";
+                /// // If CRLF mode weren't enabled here, then '$' wouldn't match
+                /// // immediately after 'foo', and thus no match would be found.
+                /// assert!(re.is_match(hay));
+                /// ```
+                ///
+                /// This example demonstrates that `^` will never match at a position
+                /// between `\r` and `\n`. (`$` will similarly not match between a `\r`
+                /// and a `\n`.)
+                ///
+                /// ```
+                /// use regex::bytes::RegexSetBuilder;
+                ///
+                /// let re = RegexSetBuilder::new([r"^\n"])
+                ///     .multi_line(true)
+                ///     .crlf(true)
+                ///     .build()
+                ///     .unwrap();
+                /// assert!(!re.is_match(b"\r\n"));
+                /// ```
+                pub fn crlf(&mut self, yes: bool) -> &mut RegexSetBuilder
+                {
+                    self.builder.crlf(yes);
+                    self
+                }
+                /// Configures the line terminator to be used by the regex.
+                ///
+                /// The line terminator is relevant in two ways for a particular regex:
+                ///
+                /// * When dot-matches-new-line mode is *not* enabled (the default),
+                /// then `.` will match any character except for the configured line
+                /// terminator.
+                /// * When multi-line mode is enabled (not the default), then `^` and
+                /// `$` will match immediately after and before, respectively, a line
+                /// terminator.
+                ///
+                /// In both cases, if CRLF mode is enabled in a particular context,
+                /// then it takes precedence over any configured line terminator.
+                ///
+                /// This option cannot be configured from within the pattern.
+                ///
+                /// The default line terminator is `\n`.
+                ///
+                /// # Example
+                ///
+                /// This shows how to treat the NUL byte as a line terminator. This can
+                /// be a useful heuristic when searching binary data.
+                ///
+                /// ```
+                /// use regex::bytes::RegexSetBuilder;
+                ///
+                /// let re = RegexSetBuilder::new([r"^foo$"])
+                ///     .multi_line(true)
+                ///     .line_terminator(b'\x00')
+                ///     .build()
+                ///     .unwrap();
+                /// let hay = b"\x00foo\x00";
+                /// assert!(re.is_match(hay));
+                /// ```
+                ///
+                /// This example shows that the behavior of `.` is impacted by this
+                /// setting as well:
+                ///
+                /// ```
+                /// use regex::bytes::RegexSetBuilder;
+                ///
+                /// let re = RegexSetBuilder::new([r"."])
+                ///     .line_terminator(b'\x00')
+                ///     .build()
+                ///     .unwrap();
+                /// assert!(re.is_match(b"\n"));
+                /// assert!(!re.is_match(b"\x00"));
+                /// ```
+                ///
+                /// This shows that building a regex will work even when the byte given
+                /// is not ASCII. This is unlike the top-level `RegexSet` API where
+                /// matching invalid UTF-8 is not allowed.
+                ///
+                /// Note though that you must disable Unicode mode. This is required
+                /// because Unicode mode requires matching one codepoint at a time,
+                /// and there is no way to match a non-ASCII byte as if it were a
+                /// codepoint.
+                ///
+                /// ```
+                /// use regex::bytes::RegexSetBuilder;
+                ///
+                /// assert!(
+                ///     RegexSetBuilder::new([r"."])
+                ///         .unicode(false)
+                ///         .line_terminator(0x80)
+                ///         .build()
+                ///         .is_ok(),
+                /// );
+                /// ```
+                pub fn line_terminator(&mut self, byte: u8) -> &mut RegexSetBuilder
+                {
+                    self.builder.line_terminator(byte);
+                    self
+                }
+                /// This configures swap-greed mode for all of the patterns.
+                ///
+                /// When swap-greed mode is enabled, patterns like `a+` will become
+                /// non-greedy and patterns like `a+?` will become greedy. In other
+                /// words, the meanings of `a+` and `a+?` are switched.
+                ///
+                /// This setting can also be configured using the inline flag `U` in
+                /// the pattern.
+                ///
+                /// Note that this is generally not useful for a `RegexSet` since a
+                /// `RegexSet` can only report whether a pattern matches or not. Since
+                /// greediness never impacts whether a match is found or not (only the
+                /// offsets of the match), it follows that whether parts of a pattern
+                /// are greedy or not doesn't matter for a `RegexSet`.
+                ///
+                /// The default for this is `false`.
+                pub fn swap_greed(&mut self, yes: bool) -> &mut RegexSetBuilder
+                {
+                    self.builder.swap_greed(yes);
+                    self
+                }
+                /// This configures verbose mode for all of the patterns.
+                ///
+                /// When enabled, whitespace will treated as insignificant in the
+                /// pattern and `#` can be used to start a comment until the next new
+                /// line.
+                ///
+                /// Normally, in most places in a pattern, whitespace is treated
+                /// literally. For example ` +` will match one or more ASCII whitespace
+                /// characters.
+                ///
+                /// When verbose mode is enabled, `\#` can be used to match a literal
+                /// `#` and `\ ` can be used to match a literal ASCII whitespace
+                /// character.
+                ///
+                /// Verbose mode is useful for permitting regexes to be formatted and
+                /// broken up more nicely. This may make them more easily readable.
+                ///
+                /// This setting can also be configured using the inline flag `x` in
+                /// the pattern.
+                ///
+                /// The default for this is `false`.
+                ///
+                /// # Example
+                ///
+                /// ```
+                /// use regex::bytes::RegexSetBuilder;
+                ///
+                /// let pat = r"
+                ///     \b
+                ///     (?<first>\p{Uppercase}\w*)  # always start with uppercase letter
+                ///     [\s--\n]+                   # whitespace should separate names
+                ///     (?: # middle name can be an initial!
+                ///         (?:(?<initial>\p{Uppercase})\.|(?<middle>\p{Uppercase}\w*))
+                ///         [\s--\n]+
+                ///     )?
+                ///     (?<last>\p{Uppercase}\w*)
+                ///     \b
+                /// ";
+                /// let re = RegexSetBuilder::new([pat])
+                ///     .ignore_whitespace(true)
+                ///     .build()
+                ///     .unwrap();
+                /// assert!(re.is_match(b"Harry Potter"));
+                /// assert!(re.is_match(b"Harry J. Potter"));
+                /// assert!(re.is_match(b"Harry James Potter"));
+                /// assert!(!re.is_match(b"harry J. Potter"));
+                /// ```
+                pub fn ignore_whitespace(
+                    &mut self,
+                    yes: bool,
+                ) -> &mut RegexSetBuilder
+                {
+                    self.builder.ignore_whitespace(yes);
+                    self
+                }
+                /// This configures octal mode for all of the patterns.
+                ///
+                /// Octal syntax is a little-known way of uttering Unicode codepoints
+                /// in a pattern. For example, `a`, `\x61`, `\u0061` and `\141` are all
+                /// equivalent patterns, where the last example shows octal syntax.
+                ///
+                /// While supporting octal syntax isn't in and of itself a problem,
+                /// it does make good error messages harder. That is, in PCRE based
+                /// regex engines, syntax like `\1` invokes a backreference, which is
+                /// explicitly unsupported this library. However, many users expect
+                /// backreferences to be supported. Therefore, when octal support
+                /// is disabled, the error message will explicitly mention that
+                /// backreferences aren't supported.
+                ///
+                /// The default for this is `false`.
+                ///
+                /// # Example
+                ///
+                /// ```
+                /// use regex::bytes::RegexSetBuilder;
+                ///
+                /// // Normally this pattern would not compile, with an error message
+                /// // about backreferences not being supported. But with octal mode
+                /// // enabled, octal escape sequences work.
+                /// let re = RegexSetBuilder::new([r"\141"])
+                ///     .octal(true)
+                ///     .build()
+                ///     .unwrap();
+                /// assert!(re.is_match(b"a"));
+                /// ```
+                pub fn octal(&mut self, yes: bool) -> &mut RegexSetBuilder
+                {
+                    self.builder.octal(yes);
+                    self
+                }
+                /// Sets the approximate size limit, in bytes, of the compiled regex.
+                ///
+                /// This roughly corresponds to the number of heap memory, in
+                /// bytes, occupied by a single regex. If the regex would otherwise
+                /// approximately exceed this limit, then compiling that regex will
+                /// fail.
+                ///
+                /// The main utility of a method like this is to avoid compiling
+                /// regexes that use an unexpected amount of resources, such as
+                /// time and memory. Even if the memory usage of a large regex is
+                /// acceptable, its search time may not be. Namely, worst case time
+                /// complexity for search is `O(m * n)`, where `m ~ len(pattern)` and
+                /// `n ~ len(haystack)`. That is, search time depends, in part, on the
+                /// size of the compiled regex. This means that putting a limit on the
+                /// size of the regex limits how much a regex can impact search time.
+                ///
+                /// For more information about regex size limits, see the section on
+                /// [untrusted inputs](crate#untrusted-input) in the top-level crate
+                /// documentation.
+                ///
+                /// The default for this is some reasonable number that permits most
+                /// patterns to compile successfully.
+                ///
+                /// # Example
+                ///
+                /// ```
+                /// # if !cfg!(target_pointer_width = "64") { return; } // see #1041
+                /// use regex::bytes::RegexSetBuilder;
+                ///
+                /// // It may surprise you how big some seemingly small patterns can
+                /// // be! Since \w is Unicode aware, this generates a regex that can
+                /// // match approximately 140,000 distinct codepoints.
+                /// assert!(
+                ///     RegexSetBuilder::new([r"\w"])
+                ///         .size_limit(45_000)
+                ///         .build()
+                ///         .is_err()
+                /// );
+                /// ```
+                pub fn size_limit(&mut self, bytes: usize) -> &mut RegexSetBuilder
+                {
+                    self.builder.size_limit(bytes);
+                    self
+                }
+                /// Set the approximate capacity, in bytes, of the cache of transitions
+                /// used by the lazy DFA.
+                ///
+                /// While the lazy DFA isn't always used, in tends to be the most
+                /// commonly use regex engine in default configurations. It tends to
+                /// adopt the performance profile of a fully build DFA, but without the
+                /// downside of taking worst case exponential time to build.
+                ///
+                /// The downside is that it needs to keep a cache of transitions and
+                /// states that are built while running a search, and this cache
+                /// can fill up. When it fills up, the cache will reset itself. Any
+                /// previously generated states and transitions will then need to be
+                /// re-generated. If this happens too many times, then this library
+                /// will bail out of using the lazy DFA and switch to a different regex
+                /// engine.
+                ///
+                /// If your regex provokes this particular downside of the lazy DFA,
+                /// then it may be beneficial to increase its cache capacity. This will
+                /// potentially reduce the frequency of cache resetting (ideally to
+                /// `0`). While it won't fix all potential performance problems with
+                /// the lazy DFA, increasing the cache capacity does fix some.
+                ///
+                /// There is no easy way to determine, a priori, whether increasing
+                /// this cache capacity will help. In general, the larger your regex,
+                /// the more cache it's likely to use. But that isn't an ironclad rule.
+                /// For example, a regex like `[01]*1[01]{N}` would normally produce a
+                /// fully build DFA that is exponential in size with respect to `N`.
+                /// The lazy DFA will prevent exponential space blow-up, but it cache
+                /// is likely to fill up, even when it's large and even for smallish
+                /// values of `N`.
+                ///
+                /// If you aren't sure whether this helps or not, it is sensible to
+                /// set this to some arbitrarily large number in testing, such as
+                /// `usize::MAX`. Namely, this represents the amount of capacity that
+                /// *may* be used. It's probably not a good idea to use `usize::MAX` in
+                /// production though, since it implies there are no controls on heap
+                /// memory used by this library during a search. In effect, set it to
+                /// whatever you're willing to allocate for a single regex search.
+                pub fn dfa_size_limit(
+                    &mut self,
+                    bytes: usize,
+                ) -> &mut RegexSetBuilder
+                {
+                    self.builder.dfa_size_limit(bytes);
+                    self
+                }
+                /// Set the nesting limit for this parser.
+                ///
+                /// The nesting limit controls how deep the abstract syntax tree is
+                /// allowed to be. If the AST exceeds the given limit (e.g., with too
+                /// many nested groups), then an error is returned by the parser.
+                ///
+                /// The purpose of this limit is to act as a heuristic to prevent stack
+                /// overflow for consumers that do structural induction on an AST using
+                /// explicit recursion. While this crate never does this (instead using
+                /// constant stack space and moving the call stack to the heap), other
+                /// crates may.
+                ///
+                /// This limit is not checked until the entire AST is parsed.
+                /// Therefore, if callers want to put a limit on the amount of heap
+                /// space used, then they should impose a limit on the length, in
+                /// bytes, of the concrete pattern string. In particular, this is
+                /// viable since this parser implementation will limit itself to heap
+                /// space proportional to the length of the pattern string. See also
+                /// the [untrusted inputs](crate#untrusted-input) section in the
+                /// top-level crate documentation for more information about this.
+                ///
+                /// Note that a nest limit of `0` will return a nest limit error for
+                /// most patterns but not all. For example, a nest limit of `0` permits
+                /// `a` but not `ab`, since `ab` requires an explicit concatenation,
+                /// which results in a nest depth of `1`. In general, a nest limit is
+                /// not something that manifests in an obvious way in the concrete
+                /// syntax, therefore, it should not be used in a granular way.
+                ///
+                /// # Example
+                ///
+                /// ```
+                /// use regex::bytes::RegexSetBuilder;
+                ///
+                /// assert!(RegexSetBuilder::new([r"a"]).nest_limit(0).build().is_ok());
+                /// assert!(RegexSetBuilder::new([r"ab"]).nest_limit(0).build().is_err());
+                /// ```
+                pub fn nest_limit(&mut self, limit: u32) -> &mut RegexSetBuilder
+                {
+                    self.builder.nest_limit(limit);
+                    self
+                }
+            }
+        }
+    }
+
+    pub mod bytes
+    {
+        /*!
+        Search for regex matches in `&[u8]` haystacks. */
+        use ::
+        {
+            *,
+        };
+        /*
+        pub use crate::{builders::bytes::*, regex::bytes::*, regexset::bytes::*};
+        */
+    }
+
+    pub mod error
+    {
+        use ::
+        {
+            regex::automata::meta,
+            string::{String, ToString},
+            *,
+        };
+        /*
+        */
+        /// An error that occurred during parsing or compiling a regular expression.
+        #[non_exhaustive]
+        #[derive(Clone, PartialEq)]
+        pub enum Error
+        {
+            /// A syntax error.
+            Syntax(String),
+            /// The compiled program exceeded the set size limit.
+            CompiledTooBig(usize),
+        }
+
+        impl Error
+        {
+            pub fn from_meta_build_error(err: meta::BuildError) -> Error
+            {
+                if let Some(size_limit) = err.size_limit() {
+                    Error::CompiledTooBig(size_limit)
+                } else if let Some(ref err) = err.syntax_error() {
+                    Error::Syntax(err.to_string())
+                } else {
+                    Error::Syntax(err.to_string())
+                }
+            }
+        }
+        
+        impl ::error::Error for Error
+        {
+            #[allow(deprecated)]
+            fn description(&self) -> &str {
+                match *self {
+                    Error::Syntax(ref err) => err,
+                    Error::CompiledTooBig(_) => "compiled program too big",
+                }
+            }
+        }
+
+        impl ::fmt::Display for Error
+        {
+            fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result {
+                match *self {
+                    Error::Syntax(ref err) => err.fmt(f),
+                    Error::CompiledTooBig(limit) => write!(
+                        f,
+                        "Compiled regex exceeds size limit of {limit} bytes."
+                    ),
+                }
+            }
+        }
+        
+        impl ::fmt::Debug for Error
+        {
+            fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result {
+                match *self {
+                    Error::Syntax(ref err) => {
+                        let hr: String = ::iter::repeat('~').take(79).collect();
+                        writeln!(f, "Syntax(")?;
+                        writeln!(f, "{hr}")?;
+                        writeln!(f, "{err}")?;
+                        writeln!(f, "{hr}")?;
+                        write!(f, ")")?;
+                        Ok(())
+                    }
+                    Error::CompiledTooBig(limit) => {
+                        f.debug_tuple("CompiledTooBig").field(&limit).finish()
+                    }
+                }
+            }
+        }
+    }
+
+    pub mod find_byte
+    {
+        use ::
+        {
+            *,
+        };
+        /*
+        */
+        /// Searches for the given needle in the given haystack.
+        pub fn find_byte(needle: u8, haystack: &[u8]) -> Option<usize>
+        {
+            fn imp(needle: u8, haystack: &[u8]) -> Option<usize> 
+            {
+                ::mem::chr::memchr(needle, haystack)
+            }
+
+            imp(needle, haystack)
+        }
+
+    }
+
+    pub mod pattern
+    {
+        use ::
+        {
+            *,
+        };
+        /*
+        */
+    }
+
+    pub mod regex
+    {
+        use ::
+        {
+            *,
+        };
+        /*
+        */
+    }
+
+    pub mod regexset
+    {
+        use ::
+        {
+            *,
+        };
+        /*
+        */
+    }
+
+    pub mod syntax
+    {
+        use ::
+        {
+            *,
+        };
+        /*
+        */
+    }
+    /// Escapes all regular expression meta characters in `pattern`.
+    ///
+    /// The string returned may be safely used as a literal in a regular
+    /// expression.
+    pub fn escape(pattern: &str) -> ::string::String {
+        ::regex::syntax::escape(pattern)
+    }
+
 }
 
 pub mod result
 {
     pub use std::result::{ * };
+}
+
+pub mod str
+{
+    pub use std::str::{ * };
+}
+
+pub mod string
+{
+    pub use std::string::{ * };
+}
+
+pub mod sync
+{
+    pub use std::sync::{ * };
+}
+
+pub mod system
+{
+    pub mod common
+    {
+        use ::
+        {
+            *,
+        };
+    }
+}
+
+pub mod tools
+{
+    use ::
+    { 
+        *,
+    };
+    /*
+    use std::collections::HashMap;
+    use std::env;
+    use std::fs::File;
+    use std::fs::OpenOptions;
+    use std::io::Write;
+    use std::os::unix::io::IntoRawFd;
+    use std::path::{Path, PathBuf};
+
+    use regex::Regex;
+
+    use ::execute;
+    use ::libs::re::re_contains;
+    use ::parsers;
+    use ::shell;
+    */
+    pub fn is_signal_handler_enabled() -> bool
+    {
+        env::var("CICADA_ENABLE_SIG_HANDLER").is_ok_and(|x| x == "1")
+    }
+
+    pub fn get_user_name() -> String
+    {
+        match env::var("USER") {
+            Ok(x) => {
+                return x;
+            }
+            Err(e) => {
+                log!("cicada: env USER error: {}", e);
+            }
+        }
+        let cmd_result = execute::run("whoami");
+        cmd_result.stdout.trim().to_string()
+    }
+
+    pub fn get_user_home() -> String
+    {
+        match env::var("HOME") {
+            Ok(x) => x,
+            Err(e) => {
+                println_stderr!("cicada: env HOME error: {}", e);
+                String::new()
+            }
+        }
+    }
+
+    pub fn get_config_dir() -> String
+    {
+        if let Ok(x) = env::var("XDG_CONFIG_HOME") {
+            format!("{}/cicada", x)
+        } else {
+            let home = get_user_home();
+            format!("{}/.config/cicada", home)
+        }
+    }
+
+    pub fn get_user_completer_dir() -> String
+    {
+        let dir_config = get_config_dir();
+        format!("{}/completers", dir_config)
+    }
+
+    pub fn unquote(s: &str) -> String
+    {
+        let args = parsers::parser_line::line_to_plain_tokens(s);
+        if args.is_empty() {
+            return String::new();
+        }
+        args[0].clone()
+    }
+
+    pub fn is_env(line: &str) -> bool
+    {
+        re_contains(line, r"^[a-zA-Z_][a-zA-Z0-9_]*=.*$")
+    }
+
+    // #[allow(clippy::trivial_regex)]
+    pub fn extend_bangbang(sh: &shell::Shell, line: &mut String)
+    {
+        if !re_contains(line, r"!!") {
+            return;
+        }
+        if sh.previous_cmd.is_empty() {
+            return;
+        }
+
+        let re = Regex::new(r"!!").unwrap();
+        let mut replaced = false;
+        let mut new_line = String::new();
+        let linfo = parsers::parser_line::parse_line(line);
+        for (sep, token) in linfo.tokens {
+            if !sep.is_empty() {
+                new_line.push_str(&sep);
+            }
+
+            if re_contains(&token, r"!!") && sep != "'" {
+                let line2 = token.clone();
+                let result = re.replace_all(&line2, sh.previous_cmd.as_str());
+                new_line.push_str(&result);
+                replaced = true;
+            } else {
+                new_line.push_str(&token);
+            }
+
+            if !sep.is_empty() {
+                new_line.push_str(&sep);
+            }
+            new_line.push(' ');
+        }
+
+        *line = new_line.trim_end().to_string();
+        // print full line after extending
+        if replaced {
+            println!("{}", line);
+        }
+    }
+
+    pub fn wrap_sep_string(sep: &str, s: &str) -> String
+    {
+        let mut _token = String::new();
+        let mut met_subsep = false;
+        // let set previous_subsep to any char except '`' or '"'
+        let mut previous_subsep = 'N';
+        for c in s.chars() {
+            // handle cmds like: export DIR=`brew --prefix openssl`/include
+            // or like: export foo="hello world"
+            if sep.is_empty() && (c == '`' || c == '"') {
+                if !met_subsep {
+                    met_subsep = true;
+                    previous_subsep = c;
+                } else if c == previous_subsep {
+                    met_subsep = false;
+                    previous_subsep = 'N';
+                }
+            }
+            if c.to_string() == sep {
+                _token.push('\\');
+            }
+            if c == ' ' && sep.is_empty() && !met_subsep {
+                _token.push('\\');
+            }
+            _token.push(c);
+        }
+        format!("{}{}{}", sep, _token, sep)
+    }
+
+    pub fn env_args_to_command_line() -> String
+    {
+        let mut result = String::new();
+        let env_args = env::args();
+        if env_args.len() <= 1 {
+            return result;
+        }
+        for (i, arg) in env_args.enumerate() {
+            if i == 0 || arg == "-c" {
+                continue;
+            }
+            result.push_str(arg.as_str());
+        }
+        result
+    }
+
+    extern "C"
+    {
+        fn gethostname(name: *mut libc::c_char, size: ::libc::size_t) -> libc::c_int;
+    }
+
+    /// via: https://gist.github.com/conradkleinespel/6c8174aee28fa22bfe26
+    pub fn get_hostname() -> String
+    {
+        let len = 255;
+        let mut buf = Vec::<u8>::with_capacity(len);
+
+        let ptr = buf.as_mut_slice().as_mut_ptr();
+
+        let err = unsafe { gethostname(ptr as *mut libc::c_char, len as libc::size_t) } as i32;
+
+        match err {
+            0 => {
+                let real_len;
+                let mut i = 0;
+                loop {
+                    let byte = unsafe { *(((ptr as u64) + (i as u64)) as *const u8) };
+                    if byte == 0 {
+                        real_len = i;
+                        break;
+                    }
+
+                    i += 1;
+                }
+                unsafe { buf.set_len(real_len) }
+                String::from_utf8_lossy(buf.as_slice()).into_owned()
+            }
+            _ => String::from("unknown"),
+        }
+    }
+
+    pub fn is_arithmetic(line: &str) -> bool
+    {
+        if !re_contains(line, r"[0-9]+") {
+            return false;
+        }
+        if !re_contains(line, r"\+|\-|\*|/|\^") {
+            return false;
+        }
+        re_contains(line, r"^[ 0-9\.\(\)\+\-\*/\^]+[\.0-9 \)]$")
+    }
+
+    pub fn create_raw_fd_from_file(file_name: &str, append: bool) -> Result<i32, String>
+    {
+        let mut oos = OpenOptions::new();
+        if append {
+            oos.append(true);
+        } else {
+            oos.write(true);
+            oos.truncate(true);
+        }
+        match oos.create(true).open(file_name) {
+            Ok(x) => {
+                let fd = x.into_raw_fd();
+                Ok(fd)
+            }
+            Err(e) => Err(format!("{}", e)),
+        }
+    }
+
+    pub fn get_fd_from_file(file_name: &str) -> i32
+    {
+        let path = Path::new(file_name);
+        let display = path.display();
+        let file = match File::open(path) {
+            Err(why) => {
+                println_stderr!("cicada: {}: {}", display, why);
+                return -1;
+            }
+            Ok(file) => file,
+        };
+        file.into_raw_fd()
+    }
+
+    pub fn escape_path(path: &str) -> String
+    {
+        let re = Regex::new(r##"(?P<c>[!\(\)<>,\?\]\[\{\} \\'"`*\^#|$&;])"##).unwrap();
+        re.replace_all(path, "\\$c").to_string()
+    }
+
+    pub fn get_current_dir() -> String
+    {
+        let mut current_dir = PathBuf::new();
+        match env::current_dir() {
+            Ok(x) => current_dir = x,
+            Err(e) => {
+                println_stderr!("env current_dir() failed: {}", e);
+            }
+        }
+        let mut str_current_dir = "";
+        match current_dir.to_str() {
+            Some(x) => str_current_dir = x,
+            None => {
+                println_stderr!("current_dir to str failed.");
+            }
+        }
+        str_current_dir.to_string()
+    }
+
+    pub fn split_into_fields
+    (
+        sh: &shell::Shell,
+        line: &str,
+        envs: &HashMap<String, String>,
+    ) -> Vec<String>
+    {
+        let ifs_chars;
+        if envs.contains_key("IFS") {
+            ifs_chars = envs[&"IFS".to_string()].chars().collect();
+        } else if let Some(x) = sh.get_env("IFS") {
+            ifs_chars = x.chars().collect();
+        } else if let Ok(x) = env::var("IFS") {
+            ifs_chars = x.chars().collect();
+        } else {
+            ifs_chars = vec![];
+        }
+
+        if ifs_chars.is_empty() {
+            line.split(&[' ', '\t', '\n'][..])
+                .map(|x| x.to_string())
+                .collect()
+        } else {
+            line.split(&ifs_chars[..]).map(|x| x.to_string()).collect()
+        }
+    }
+
+    pub fn is_builtin(s: &str) -> bool
+    {
+        let builtins = [
+            "alias", "bg", "cd", "cinfo", "exec", "exit", "export", "fg", "history", "jobs", "read",
+            "source", "ulimit", "unalias", "vox", "minfd", "set", "unset", "unpath",
+        ];
+        builtins.contains(&s)
+    }
+
+    pub fn init_path_env()
+    {
+        // order matters. took from `runc spec`
+        let mut paths: Vec<String> = vec![];
+        for x in [
+            "/usr/local/sbin",
+            "/usr/local/bin",
+            "/usr/sbin",
+            "/usr/bin",
+            "/sbin",
+            "/bin",
+        ] {
+            if Path::new(x).exists() {
+                paths.push(x.to_string());
+            }
+        }
+
+        if let Ok(env_path) = env::var("PATH") {
+            for x in env_path.split(":") {
+                if !paths.contains(&x.to_string()) {
+                    paths.push(x.to_string());
+                }
+            }
+        }
+        let paths = paths.join(":");
+        env::set_var("PATH", paths);
+    }
+
+    pub fn is_shell_altering_command(line: &str) -> bool
+    {
+        let line = line.trim();
+        if re_contains(line, r"^[A-Za-z_][A-Za-z0-9_]*=.*$") {
+            return true;
+        }
+        line.starts_with("alias ")
+            || line.starts_with("export ")
+            || line.starts_with("unalias ")
+            || line.starts_with("unset ")
+            || line.starts_with("source ")
+    }
+}
+
+pub mod vec
+{
+    pub use std::vec::{ * };
 }
 
 
@@ -5638,6 +10425,7 @@ pub fn domain() -> Result<(), Box<dyn std::error::Error>>
         libc::signal(libc::SIGPIPE, libc::SIG_DFL);
         libc::signal(libc::SIGTSTP, libc::SIG_IGN);
         libc::signal(libc::SIGQUIT, libc::SIG_IGN);
+        tools::init_path_env();
         /*
         Return.*/
         Ok(())
@@ -5648,4 +10436,4 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>>
 {
     domain()
 }
-// 5651 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// 10439 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
